@@ -1,0 +1,184 @@
+.step-container {
+  width: 100%;
+  max-width: 480px; /* Mobile width constraint, can serve as Card on Desktop */
+  margin: 0 auto;
+  background-color: var(--bg-card);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+@media (min-width: 640px) {
+  .step-container {
+    min-height: auto;
+    height: 90vh;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background-color: var(--bg-card);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.step-scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 24px;
+}
+
+/* Progress Section */
+.progress-section {
+  margin-top: 10px;
+  margin-bottom: 24px;
+}
+
+.progress-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.step-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-blue);
+  letter-spacing: 0.05em;
+}
+
+.step-details-link {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.progress-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.progress-segment {
+  height: 4px;
+  flex: 1;
+  background-color: #e2e8f0;
+  border-radius: 2px;
+}
+
+.progress-segment.active {
+  background-color: var(--primary-blue);
+}
+
+/* Title Section */
+.order-title-section {
+  margin-bottom: 24px;
+}
+
+.order-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.order-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* Form Body */
+.form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row > * {
+  flex: 1;
+}
+
+/* Section Labels */
+.section-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Contact Pills */
+.contact-type-options {
+  display: flex;
+  gap: 12px;
+}
+
+.contact-pill {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: white;
+  transition: all 0.2s;
+  min-width: 60px;
+}
+
+.contact-pill.active {
+  background-color: var(--primary-blue);
+  color: white;
+  border-color: var(--primary-blue);
+}
+
+/* Supply Source */
+.supply-source-section {
+  margin-top: 4px;
+}
+
+/* Footer */
+.step-footer {
+  padding: 16px 24px;
+  background-color: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.next-btn {
+  width: 100%;
+  background-color: var(--primary-blue);
+  color: white;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.next-btn:hover {
+  background-color: var(--primary-blue-hover);
+}
