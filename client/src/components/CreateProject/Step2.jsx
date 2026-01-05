@@ -2,85 +2,72 @@ import React, { useState } from "react";
 import DepartmentCard from "./DepartmentCard";
 import Input from "../ui/Input";
 import BackArrow from "../icons/BackArrow";
+import {
+  GraphicsIcon,
+  StockIcon,
+  PackagingIcon,
+  CameraIcon,
+  PrinterIcon,
+  DiamondIcon,
+} from "../icons/DeptIcons1";
+import {
+  LargeFormatIcon,
+  SewingIcon,
+  ShirtIcon,
+  ScissorsIcon,
+  CardIcon,
+  ToolsIcon,
+  GlobeIcon,
+} from "../icons/DeptIcons2";
+import {
+  WoodIcon,
+  HammerIcon,
+  SignIcon,
+  FactoryIcon,
+} from "../icons/DeptIcons3";
 import "./Step2.css";
-
-// Generic Icon for departments for now (to keep it simple as we have 24+ depts)
-const DeptIcon = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect
-      x="3"
-      y="3"
-      width="7"
-      height="7"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <rect
-      x="14"
-      y="3"
-      width="7"
-      height="7"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <rect
-      x="14"
-      y="14"
-      width="7"
-      height="7"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <rect
-      x="3"
-      y="14"
-      width="7"
-      height="7"
-      rx="1"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-  </svg>
-);
 
 const Step2 = ({ onNext, onBack }) => {
   const [selectedDepts, setSelectedDepts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
   const allDepartments = [
-    { id: "graphics", label: "Graphics" },
-    { id: "stock", label: "Stock" },
-    { id: "packaging", label: "Packaging" },
-    { id: "photography", label: "Photography" },
-    { id: "dtf", label: "DTF Printing" },
-    { id: "uv-dtf", label: "UV DTF Printing" },
-    { id: "uv-printing", label: "UV Printing" },
-    { id: "engraving", label: "Engraving" },
-    { id: "large-format", label: "Large Format" },
-    { id: "digital-press", label: "Digital Press" },
-    { id: "digital-heat-press", label: "Digital Heat Press" },
-    { id: "offset-press", label: "Offset Press" },
-    { id: "screen-printing", label: "Screen Printing" },
-    { id: "embroidery", label: "Embroidery" },
-    { id: "sublimation", label: "Sublimation" },
-    { id: "digital-cutting", label: "Digital Cutting" },
-    { id: "pvc-id", label: "PVC ID Cards" },
-    { id: "business-cards", label: "Business Cards" },
-    { id: "installation", label: "Installation" },
-    { id: "overseas", label: "Overseas" },
-    { id: "woodme", label: "Woodme" },
-    { id: "fabrication", label: "Fabrication" },
-    { id: "signage", label: "Signage" },
-    { id: "outside-production", label: "Outside Production" },
+    { id: "graphics", label: "Graphics", icon: <GraphicsIcon /> },
+    { id: "stock", label: "Stock", icon: <StockIcon /> },
+    { id: "packaging", label: "Packaging", icon: <PackagingIcon /> },
+    { id: "photography", label: "Photography", icon: <CameraIcon /> },
+    { id: "dtf", label: "DTF Printing", icon: <PrinterIcon /> },
+    { id: "uv-dtf", label: "UV DTF Printing", icon: <PrinterIcon /> },
+    { id: "uv-printing", label: "UV Printing", icon: <PrinterIcon /> },
+    { id: "engraving", label: "Engraving", icon: <DiamondIcon /> },
+    { id: "large-format", label: "Large Format", icon: <LargeFormatIcon /> },
+    { id: "digital-press", label: "Digital Press", icon: <PrinterIcon /> },
+    {
+      id: "digital-heat-press",
+      label: "Digital Heat Press",
+      icon: <SewingIcon />,
+    }, // Used Sewing as generic machine
+    { id: "offset-press", label: "Offset Press", icon: <PrinterIcon /> },
+    {
+      id: "screen-printing",
+      label: "Screen Printing",
+      icon: <LargeFormatIcon />,
+    }, // Simulating screen frame
+    { id: "embroidery", label: "Embroidery", icon: <SewingIcon /> },
+    { id: "sublimation", label: "Sublimation", icon: <ShirtIcon /> },
+    { id: "digital-cutting", label: "Digital Cutting", icon: <ScissorsIcon /> },
+    { id: "pvc-id", label: "PVC ID Cards", icon: <CardIcon /> },
+    { id: "business-cards", label: "Business Cards", icon: <CardIcon /> },
+    { id: "installation", label: "Installation", icon: <ToolsIcon /> },
+    { id: "overseas", label: "Overseas", icon: <GlobeIcon /> },
+    { id: "woodme", label: "Woodme", icon: <WoodIcon /> },
+    { id: "fabrication", label: "Fabrication", icon: <HammerIcon /> },
+    { id: "signage", label: "Signage", icon: <SignIcon /> },
+    {
+      id: "outside-production",
+      label: "Outside Production",
+      icon: <FactoryIcon />,
+    },
   ];
 
   const filteredDepts = allDepartments.filter((dept) =>
@@ -161,7 +148,7 @@ const Step2 = ({ onNext, onBack }) => {
             <DepartmentCard
               key={dept.id}
               label={dept.label}
-              icon={<DeptIcon />}
+              icon={dept.icon}
               selected={selectedDepts.includes(dept.id)}
               onClick={() => toggleDept(dept.id)}
             />
