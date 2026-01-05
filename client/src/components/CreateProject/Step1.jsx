@@ -39,11 +39,12 @@ const Step1 = ({ onNext }) => {
         {/* Progress */}
         <div className="progress-section">
           <div className="progress-text">
-            <span className="step-indicator">STEP 1 OF 4</span>
+            <span className="step-indicator">STEP 1 OF 5</span>
             <span className="step-details-link">Details</span>
           </div>
           <div className="progress-bar">
             <div className="progress-segment active"></div>
+            <div className="progress-segment"></div>
             <div className="progress-segment"></div>
             <div className="progress-segment"></div>
             <div className="progress-segment"></div>

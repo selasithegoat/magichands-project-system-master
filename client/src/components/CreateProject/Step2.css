@@ -4,12 +4,35 @@
   font-weight: 500;
 }
 
+.progress-section {
+  margin-top: 10px;
+  margin-bottom: 24px;
+}
+
+.progress-text-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.step-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-blue);
+  letter-spacing: 0.05em;
+}
+
+.step-details-link {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .progress-bar-simple {
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin-top: 8px;
-  margin-bottom: 24px;
 }
 
 .progress-pill {
@@ -17,7 +40,11 @@
   height: 4px;
   background-color: #e2e8f0;
   border-radius: 2px;
+  flex: 1; /* Make it stretch if needed, or keep fixed width but centered */
 }
+
+/* ... keep other styles ... */
+/* Simplified for this update, but I should probably overwrite the whole file or append */
 
 .progress-pill.active {
   background-color: var(--primary-blue);
