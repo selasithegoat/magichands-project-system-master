@@ -1,0 +1,262 @@
+/* Stepper */
+.stepper-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.stepper-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 4px solid white; /* Border mimicking gap */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px transparent;
+}
+
+.step-circle.completed {
+  background-color: var(--primary-blue);
+  color: white;
+}
+
+.step-circle.active {
+  background-color: var(--primary-blue);
+  color: white;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+}
+
+.step-line {
+  width: 12px;
+  height: 2px;
+  background-color: var(--primary-blue);
+  border-radius: 1px;
+}
+
+.progress-text-center {
+  text-align: center;
+}
+
+/* Page Titles */
+.page-title-section-left {
+  margin-bottom: 24px;
+}
+
+.page-title-left {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.page-subtitle-left {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Review Cards */
+.review-card {
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.review-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-box-blue {
+  color: var(--primary-blue);
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.edit-icon-btn {
+  color: var(--primary-blue);
+  padding: 4px;
+}
+
+/* Grids */
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.review-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.review-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-item label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.review-value {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.review-value.bold {
+  font-weight: 700;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+}
+
+/* Badges */
+.badge-pink {
+  background-color: #fce7f3;
+  color: #be185d;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-yellow {
+  background-color: #fef3c7;
+  color: #b45309;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Attachments */
+.review-section-simple {
+  margin-bottom: 24px;
+}
+
+.section-label-simple {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.attachment-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #ffffff;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.file-size {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Verification */
+.verification-section {
+  margin-bottom: 32px;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.checkbox-container input {
+  width: 16px;
+  height: 16px;
+}
+
+.checkbox-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.verification-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-left: 24px;
+}
+
+/* Buttons */
+.btn-outline {
+  padding: 12px 24px;
+  border: 1px solid var(--border-color);
+  background-color: white;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  width: 48%;
+}
+
+.btn-primary-green {
+  background-color: #10b981; /* Green */
+  color: white;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 48%;
+  transition: background-color 0.2s;
+}
+
+.btn-primary-green:hover {
+  background-color: #059669;
+}
