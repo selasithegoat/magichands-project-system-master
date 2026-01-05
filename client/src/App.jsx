@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Step1 from "./components/CreateProject/Step1";
 import Step2 from "./components/CreateProject/Step2";
 import Step3 from "./components/CreateProject/Step3";
+import Step4 from "./components/CreateProject/Step4";
 
 function App() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -19,6 +20,7 @@ function App() {
       {currentStep === 1 && <Step1 onNext={handleNext} />}
       {currentStep === 2 && <Step2 onNext={handleNext} onBack={handleBack} />}
       {currentStep === 3 && <Step3 onNext={handleNext} onBack={handleBack} />}
+      {currentStep === 4 && <Step4 onNext={handleNext} onBack={handleBack} />}
     </>
   );
 }
