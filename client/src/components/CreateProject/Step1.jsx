@@ -11,6 +11,7 @@ import HomeIcon from "../icons/HomeIcon";
 import CartIcon from "../icons/CartIcon";
 import PersonIcon from "../icons/PersonIcon";
 import "./Step1.css";
+import ProgressBar from "../ui/ProgressBar";
 
 const Step1 = ({ onNext }) => {
   // State for form fields
@@ -37,19 +38,7 @@ const Step1 = ({ onNext }) => {
 
       <div className="step-scrollable-content">
         {/* Progress */}
-        <div className="progress-section">
-          <div className="progress-text">
-            <span className="step-indicator">STEP 1 OF 5</span>
-            <span className="step-details-link">Details</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-segment active"></div>
-            <div className="progress-segment"></div>
-            <div className="progress-segment"></div>
-            <div className="progress-segment"></div>
-            <div className="progress-segment"></div>
-          </div>
-        </div>
+        <ProgressBar currentStep={1} />
 
         {/* Title */}
         <div className="order-title-section">

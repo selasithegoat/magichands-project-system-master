@@ -4,6 +4,7 @@ import BackArrow from "../icons/BackArrow";
 import TrashIcon from "../icons/TrashIcon";
 import PlusCircleIcon from "../icons/PlusCircleIcon";
 import "./Step3.css";
+import ProgressBar from "../ui/ProgressBar";
 
 const Step3 = ({ onNext, onBack }) => {
   const [items, setItems] = useState([
@@ -55,19 +56,7 @@ const Step3 = ({ onNext, onBack }) => {
 
       <div className="step-scrollable-content">
         {/* Progress Bar */}
-        <div className="progress-section">
-          <div className="progress-text">
-            <span className="step-indicator">STEP 3 OF 5</span>
-            <span className="step-details-link">Order Items</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-segment active"></div>
-            <div className="progress-segment active"></div>
-            <div className="progress-segment active"></div>
-            <div className="progress-segment"></div>
-            <div className="progress-segment"></div>
-          </div>
-        </div>
+        <ProgressBar currentStep={3} />
 
         {/* Title */}
         <div className="page-title-section">

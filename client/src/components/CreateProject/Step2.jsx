@@ -26,6 +26,7 @@ import {
   FactoryIcon,
 } from "../icons/DeptIcons3";
 import "./Step2.css";
+import ProgressBar from "../ui/ProgressBar";
 
 const Step2 = ({ onNext, onBack }) => {
   const [selectedDepts, setSelectedDepts] = useState([]);
@@ -93,19 +94,7 @@ const Step2 = ({ onNext, onBack }) => {
 
       <div className="step-scrollable-content">
         {/* Progress Bar */}
-        <div className="progress-section">
-          <div className="progress-text-simple">
-            <span className="step-indicator">STEP 2 OF 5</span>
-            <span className="step-details-link">Departments</span>
-          </div>
-          <div className="progress-bar-simple">
-            <div className="progress-pill active"></div>
-            <div className="progress-pill active"></div>
-            <div className="progress-pill"></div>
-            <div className="progress-pill"></div>
-            <div className="progress-pill"></div>
-          </div>
-        </div>
+        <ProgressBar currentStep={2} />
 
         {/* Title */}
         <div className="page-title-section">

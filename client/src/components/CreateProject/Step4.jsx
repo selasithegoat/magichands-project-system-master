@@ -8,6 +8,7 @@ import PlusCircleIcon from "../icons/PlusCircleIcon";
 import WarningIcon from "../icons/WarningIcon";
 import RobotArmIcon from "../icons/RobotArmIcon";
 import "./Step4.css";
+import ProgressBar from "../ui/ProgressBar";
 
 const Step4 = ({ onNext, onBack }) => {
   const [uncontrollableFactors, setUncontrollableFactors] = useState([
@@ -94,19 +95,7 @@ const Step4 = ({ onNext, onBack }) => {
 
       <div className="step-scrollable-content">
         {/* Progress Bar */}
-        <div className="progress-section">
-          <div className="progress-text">
-            <span className="step-indicator">Step 4 of 5</span>
-            <span className="step-details-link">Risk Management</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-segment active"></div>
-            <div className="progress-segment active"></div>
-            <div className="progress-segment active"></div>
-            <div className="progress-segment active"></div>
-            <div className="progress-segment"></div>
-          </div>
-        </div>
+        <ProgressBar currentStep={4} />
 
         {/* Title */}
         <div className="page-title-section">
