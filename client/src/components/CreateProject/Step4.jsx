@@ -98,7 +98,6 @@ const Step4 = ({ onNext, onBack }) => {
           <div className="progress-text">
             <span className="step-indicator">Step 4 of 5</span>
             <span className="step-details-link">Risk Management</span>
-            <span className="step-percent">60%</span>
           </div>
           <div className="progress-bar">
             <div className="progress-segment active"></div>
