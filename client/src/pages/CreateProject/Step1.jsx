@@ -1,17 +1,17 @@
 import React, { useState } from "react";
-import Input from "../ui/Input";
-import Select from "../ui/Select";
-import CardOption from "../ui/CardOption";
-import UserAvatar from "../ui/UserAvatar";
-import BackArrow from "../icons/BackArrow";
-import CalendarIcon from "../icons/CalendarIcon";
-import ClockIcon from "../icons/ClockIcon";
-import LocationIcon from "../icons/LocationIcon";
-import HomeIcon from "../icons/HomeIcon";
-import CartIcon from "../icons/CartIcon";
-import PersonIcon from "../icons/PersonIcon";
+import Input from "../../components/ui/Input";
+import Select from "../../components/ui/Select";
+import CardOption from "../../components/ui/CardOption";
+import UserAvatar from "../../components/ui/UserAvatar";
+import BackArrow from "../../components/icons/BackArrow";
+import CalendarIcon from "../../components/icons/CalendarIcon";
+import ClockIcon from "../../components/icons/ClockIcon";
+import LocationIcon from "../../components/icons/LocationIcon";
+import HomeIcon from "../../components/icons/HomeIcon";
+import CartIcon from "../../components/icons/CartIcon";
+import PersonIcon from "../../components/icons/PersonIcon";
 import "./Step1.css";
-import ProgressBar from "../ui/ProgressBar";
+import ProgressBar from "../../components/ui/ProgressBar";
 
 const Step1 = ({ onNext }) => {
   // State for form fields

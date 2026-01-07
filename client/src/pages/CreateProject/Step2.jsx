@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import DepartmentCard from "./DepartmentCard";
-import Input from "../ui/Input";
-import BackArrow from "../icons/BackArrow";
+import Input from "../../components/ui/Input";
+import BackArrow from "../../components/icons/BackArrow";
 import {
   GraphicsIcon,
   StockIcon,
@@ -9,8 +9,8 @@ import {
   CameraIcon,
   PrinterIcon,
   DiamondIcon,
-} from "../icons/DeptIcons1";
-import {
+} from "../../components/icons/DeptIcons1";
+import {  
   LargeFormatIcon,
   SewingIcon,
   ShirtIcon,
@@ -18,15 +18,15 @@ import {
   CardIcon,
   ToolsIcon,
   GlobeIcon,
-} from "../icons/DeptIcons2";
+} from "../../components/icons/DeptIcons2";
 import {
   WoodIcon,
   HammerIcon,
   SignIcon,
   FactoryIcon,
-} from "../icons/DeptIcons3";
+} from "../../components/icons/DeptIcons3";
 import "./Step2.css";
-import ProgressBar from "../ui/ProgressBar";
+import ProgressBar from "../../components/ui/ProgressBar";
 
 const Step2 = ({ onNext, onBack }) => {
   const [selectedDepts, setSelectedDepts] = useState([]);

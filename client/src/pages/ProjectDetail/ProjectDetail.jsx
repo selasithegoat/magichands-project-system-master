@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 import "./ProjectDetail.css";
-import UserAvatar from "../ui/UserAvatar";
-import BackArrow from "../icons/BackArrow";
-import EditIcon from "../icons/EditIcon";
-import LocationIcon from "../icons/LocationIcon";
-import CalendarIcon from "../icons/CalendarIcon";
-import ClockIcon from "../icons/ClockIcon";
-import WarningIcon from "../icons/WarningIcon";
-import CheckIcon from "../icons/CheckIcon";
-import PlusCircleIcon from "../icons/PlusCircleIcon";
-import FolderIcon from "../icons/FolderIcon";
+import UserAvatar from "../../components/ui/UserAvatar";
+import BackArrow from "../../components/icons/BackArrow";
+import EditIcon from "../../components/icons/EditIcon";
+import LocationIcon from "../../components/icons/LocationIcon";
+import CalendarIcon from "../../components/icons/CalendarIcon";
+import ClockIcon from "../../components/icons/ClockIcon";
+import WarningIcon from "../../components/icons/WarningIcon";
+import CheckIcon from "../../components/icons/CheckIcon";
+import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
+import FolderIcon from "../../components/icons/FolderIcon";
 // Department icons might be needed if dynamic, for now using dots or generic
 
 const ProjectDetail = () => {

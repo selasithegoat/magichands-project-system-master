@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import Input from "../ui/Input";
-import Select from "../ui/Select";
-import TextArea from "../ui/TextArea";
-import BackArrow from "../icons/BackArrow";
-import TrashIcon from "../icons/TrashIcon";
-import PlusCircleIcon from "../icons/PlusCircleIcon";
-import WarningIcon from "../icons/WarningIcon";
-import RobotArmIcon from "../icons/RobotArmIcon";
+import Input from "../../components/ui/Input";
+import Select from "../../components/ui/Select";
+import TextArea from "../../components/ui/TextArea";
+import BackArrow from "../../components/icons/BackArrow";
+import TrashIcon from "../../components/icons/TrashIcon";
+import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
+import WarningIcon from "../../components/icons/WarningIcon";
+import RobotArmIcon from "../../components/icons/RobotArmIcon";
 import "./Step4.css";
-import ProgressBar from "../ui/ProgressBar";
+import ProgressBar from "../../components/ui/ProgressBar";
 
 const Step4 = ({ onNext, onBack }) => {
   const [uncontrollableFactors, setUncontrollableFactors] = useState([

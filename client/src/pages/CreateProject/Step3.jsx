@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import Input from "../ui/Input";
-import BackArrow from "../icons/BackArrow";
-import TrashIcon from "../icons/TrashIcon";
-import PlusCircleIcon from "../icons/PlusCircleIcon";
+import Input from "../../components/ui/Input";
+import BackArrow from "../../components/icons/BackArrow";
+import TrashIcon from "../../components/icons/TrashIcon";
+import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import "./Step3.css";
-import ProgressBar from "../ui/ProgressBar";
+import ProgressBar from "../../components/ui/ProgressBar";
 
 const Step3 = ({ onNext, onBack }) => {
   const [items, setItems] = useState([

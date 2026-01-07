@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import BackArrow from "../icons/BackArrow";
-import FolderIcon from "../icons/FolderIcon";
-import BuildingIcon from "../icons/BuildingIcon";
-import DollarIcon from "../icons/DollarIcon";
-import EditIcon from "../icons/EditIcon";
-import FileIcon from "../icons/FileIcon";
-import CheckIcon from "../icons/CheckIcon";
-import UserAvatar from "../ui/UserAvatar";
+import BackArrow from "../../components/icons/BackArrow";
+import FolderIcon from "../../components/icons/FolderIcon";
+import BuildingIcon from "../../components/icons/BuildingIcon";
+import DollarIcon from "../../components/icons/DollarIcon";
+import EditIcon from "../../components/icons/EditIcon";
+import FileIcon from "../../components/icons/FileIcon";
+import CheckIcon from "../../components/icons/CheckIcon";
+import UserAvatar from "../../components/ui/UserAvatar";
 import "./Step5.css";
 
 const Step5 = ({ onBack }) => {

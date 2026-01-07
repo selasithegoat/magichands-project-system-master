@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import Step1 from "./components/CreateProject/Step1";
-import Step2 from "./components/CreateProject/Step2";
-import Step3 from "./components/CreateProject/Step3";
-import Step4 from "./components/CreateProject/Step4";
-import Step5 from "./components/CreateProject/Step5";
-import ProjectDetail from "./components/ProjectDetail/ProjectDetail";
+import Step1 from "./pages/CreateProject/Step1";
+import Step2 from "./pages/CreateProject/Step2";
+import Step3 from "./pages/CreateProject/Step3";
+import Step4 from "./pages/CreateProject/Step4";
+import Step5 from "./pages/CreateProject/Step5";
+import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
 
 function App() {
   const [view, setView] = useState("detail"); // 'create' or 'detail'
