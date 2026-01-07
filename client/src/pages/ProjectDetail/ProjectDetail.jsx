@@ -12,6 +12,8 @@ import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
 import ProjectExecution from "./ProjectExecution";
 import ProjectUpdates from "./ProjectUpdates";
+import ProjectChallenges from "./ProjectChallenges";
+import ProjectHistory from "./ProjectHistory";
 // Department icons might be needed if dynamic, for now using dots or generic
 
 const ProjectDetail = () => {
@@ -71,6 +73,8 @@ const ProjectDetail = () => {
         )}
         {activeTab === "Execution" && <ProjectExecution />}
         {activeTab === "Updates" && <ProjectUpdates />}
+        {activeTab === "Challenges" && <ProjectChallenges />}
+        {activeTab === "History" && <ProjectHistory />}
       </main>
     </div>
   );

@@ -1,0 +1,430 @@
+.challenges-container {
+  padding: 1.5rem 2rem;
+  max-width: 100%; /* Expanded to fit the 5-column table */
+  background-color: #fff;
+  border-radius: 12px;
+  /* The design implies a card container or just the main area. 
+       If this is inside the main-column/tab-content, it might not need white bg itself 
+       if the background is already white? 
+       Actually, looking at the image, it seems to have a white card look with rounded corners.
+       Let's stick to the container style. */
+}
+
+/* Header Section */
+.challenges-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.flag-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  background-color: #fef2f2;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.challenges-title-group h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.challenge-count-badge {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.challenges-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Action Button - moved to top right flex in JSX */
+.report-challenge-btn {
+  /* width: 100%; Removed full width */
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.report-challenge-btn:hover {
+  background-color: #1d4ed8;
+}
+
+/* Table / List */
+.challenges-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-header {
+  display: flex;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 1rem;
+  gap: 1.5rem; /* Gap between columns */
+}
+
+.header-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+/* Column Widths (Flex) */
+.col-issue {
+  flex: 2;
+  min-width: 200px;
+}
+.col-assistance {
+  flex: 2;
+  min-width: 200px;
+}
+.col-status {
+  flex: 1;
+  min-width: 120px;
+}
+.col-reported {
+  flex: 1.5; /* wider for name+date */
+  min-width: 150px;
+}
+.col-resolved {
+  flex: 1;
+  min-width: 100px;
+}
+
+/* Challenge Item */
+.challenge-item {
+  display: flex;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+.challenge-item:first-child {
+  padding-top: 0;
+}
+
+/* Issue Column */
+.issue-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+}
+.issue-desc {
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Assistance Column */
+.assistance-text {
+  font-size: 0.8125rem;
+  color: #475569;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Status Column */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: #f1f5f9;
+  color: #475569;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #94a3b8;
+}
+
+.status-pill.escalated {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+.status-pill.escalated .status-dot {
+  background-color: #dc2626;
+}
+
+.status-pill.open {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+.status-pill.open .status-dot {
+  background-color: #2563eb;
+}
+
+.status-pill.resolved {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+.status-pill.resolved .status-dot {
+  width: 8px;
+  height: 4px; /* Checkmark simulation? Design implies check icon or just text. Image has check icon in Verified green. Let's start with dot or check. The image shows a check icon for resolved. */
+  /* Wait, the image shows "Resolved" with check icon. The dot logic works for Open/Escalated.*/
+  background-color: transparent;
+  /* To act as checkmark space if using icon. 
+       Actually let's just use CSS checks or Font for simplicity. */
+  border-left: 2px solid #16a34a;
+  border-bottom: 2px solid #16a34a;
+  transform: rotate(-45deg);
+  border-radius: 0;
+  margin-top: -2px;
+}
+
+/* Reported By Column */
+.col-reported {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.reporter-initials {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: #f1f5f9;
+  color: #64748b;
+  flex-shrink: 0;
+}
+.reporter-initials.purple {
+  background-color: #f3e8ff;
+  color: #9333ea;
+}
+.reporter-initials.pink {
+  background-color: #fce7f3;
+  color: #db2777;
+}
+
+.reporter-info {
+  display: flex;
+  flex-direction: column;
+}
+.reporter-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+.reporter-date {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+/* Resolved Column */
+.resolved-placeholder {
+  color: #cbd5e1;
+  font-weight: 300;
+}
+.resolved-date-text {
+  font-size: 0.8125rem;
+  color: #0f172a;
+  font-weight: 600;
+  white-space: pre-wrap; /* For line break */
+  display: block;
+}
+
+/* No Strikethrough needed as per new image */
+
+/* Footer Pagination */
+.challenges-footer {
+  display: flex;
+  justify-content: space-between; /* Space between text and controls */
+  align-items: center;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  /* maybe border top? */
+}
+
+.footer-text {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+.view-archived-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.pagination-btn {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.375rem 1rem;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  cursor: not-allowed; /* Disabled look in design */
+}
+/* If active/clickable styles needed later */
+
+/* RESPONSIVE STYLES */
+@media (max-width: 900px) {
+  /* Hide Table Header */
+  .list-header {
+    display: none;
+  }
+
+  /* Stack list items like cards */
+  .challenges-list {
+    gap: 1rem;
+  }
+
+  .challenge-item {
+    flex-direction: column;
+    background-color: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.25rem;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  /* Reset column widths/flex */
+ .col-reported{
+  display: flex;
+  flex-direction: column;
+ }
+
+
+  .col-issue,
+  .col-assistance,
+  .col-status,
+  .col-reported,
+  .col-resolved {
+    flex: auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Add Labels via before pseudo-element */
+  .col-assistance::before {
+    content: "Assistance Provided";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-status::before {
+    content: "Status";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-reported::before {
+    content: "Reported By";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-resolved::before {
+    content: "Resolved Date";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Issue Title slightly bigger in card view */
+  .issue-title {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Adjust Status Pill alignment */
+  .col-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Layout adjustments for Card Look */
+  .challenges-header {
+    flex-wrap: wrap; /* allow wrapping on very small screens */
+  }
+  .report-challenge-btn {
+    /* Keep button visible and accessible */
+  }
+
+  .challenges-container {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .challenges-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .report-challenge-btn {
+    width: 100%; /* Full width button on mobile */
+    margin-top: 0.5rem;
+  }
+
+  .challenges-title-group h3 {
+    font-size: 1.125rem;
+  }
+
+  .challenges-footer {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+}
