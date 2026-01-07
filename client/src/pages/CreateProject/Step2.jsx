@@ -10,7 +10,7 @@ import {
   PrinterIcon,
   DiamondIcon,
 } from "../../components/icons/DeptIcons1";
-import {  
+import {
   LargeFormatIcon,
   SewingIcon,
   ShirtIcon,
@@ -28,7 +28,7 @@ import {
 import "./Step2.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step2 = ({ onNext, onBack }) => {
+const Step2 = ({ onNext, onBack, onCancel }) => {
   const [selectedDepts, setSelectedDepts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -89,7 +89,9 @@ const Step2 = ({ onNext, onBack }) => {
           <BackArrow />
         </button>
         <h1 className="header-title">New Project</h1>
-        <button className="cancel-btn">Cancel</button>
+        <button className="cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
 
       <div className="step-scrollable-content">

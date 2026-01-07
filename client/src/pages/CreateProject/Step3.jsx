@@ -6,7 +6,7 @@ import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import "./Step3.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step3 = ({ onNext, onBack }) => {
+const Step3 = ({ onNext, onBack, onCancel }) => {
   const [items, setItems] = useState([
     {
       id: 1,
@@ -51,7 +51,9 @@ const Step3 = ({ onNext, onBack }) => {
           <BackArrow />
         </button>
         <h1 className="header-title">New Project</h1>
-        <div style={{ width: 24 }}></div>
+        <button className="cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
 
       <div className="step-scrollable-content">

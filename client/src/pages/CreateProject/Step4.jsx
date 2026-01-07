@@ -10,7 +10,7 @@ import RobotArmIcon from "../../components/icons/RobotArmIcon";
 import "./Step4.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step4 = ({ onNext, onBack }) => {
+const Step4 = ({ onNext, onBack, onCancel }) => {
   const [uncontrollableFactors, setUncontrollableFactors] = useState([
     {
       id: 1,
@@ -90,7 +90,9 @@ const Step4 = ({ onNext, onBack }) => {
           <BackArrow />
         </button>
         <h1 className="header-title">New Project</h1>
-        <div style={{ width: 24 }}></div>
+        <button className="cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
 
       <div className="step-scrollable-content">
