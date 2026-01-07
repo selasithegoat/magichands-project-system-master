@@ -9,7 +9,7 @@ import CheckIcon from "../../components/icons/CheckIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
 import "./Step5.css";
 
-const Step5 = ({ onBack }) => {
+const Step5 = ({ onBack, onCancel }) => {
   const [isChecked, setIsChecked] = useState(false);
 
   return (
@@ -20,7 +20,9 @@ const Step5 = ({ onBack }) => {
           <BackArrow />
         </button>
         <h1 className="header-title">Review & Submit</h1>
-        <div style={{ width: 24 }}></div>
+        <button className="cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
 
       <div className="step-scrollable-content">
