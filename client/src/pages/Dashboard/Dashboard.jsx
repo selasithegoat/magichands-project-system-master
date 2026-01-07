@@ -125,7 +125,7 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
-const Dashboard = ({ onNavigateProject }) => {
+const Dashboard = ({ onNavigateProject, onCreateProject }) => {
   return (
     <div className="dashboard-container">
       {/* Header */}
@@ -417,7 +417,7 @@ const Dashboard = ({ onNavigateProject }) => {
       </div>
 
       {/* FAB */}
-      <button className="fab-btn">
+      <button className="fab-btn" onClick={onCreateProject}>
         <PlusIcon />
       </button>
     </div>

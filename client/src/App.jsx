@@ -56,7 +56,10 @@ function App() {
       </div>
 
       {view === "dashboard" ? (
-        <Dashboard onNavigateProject={() => setView("detail")} />
+        <Dashboard
+          onNavigateProject={() => setView("detail")}
+          onCreateProject={() => setView("create")}
+        />
       ) : view === "detail" ? (
         <ProjectDetail />
       ) : (
