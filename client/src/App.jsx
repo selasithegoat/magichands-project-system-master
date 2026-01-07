@@ -3,11 +3,10 @@ import Step1 from "./pages/CreateProject/Step1";
 import Step2 from "./pages/CreateProject/Step2";
 import Step3 from "./pages/CreateProject/Step3";
 import Step4 from "./pages/CreateProject/Step4";
-import Step5 from "./pages/CreateProject/Step5";
-import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
+import Dashboard from "./pages/Dashboard/Dashboard";
 
 function App() {
-  const [view, setView] = useState("detail"); // 'create' or 'detail'
+  const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail'
   const [currentStep, setCurrentStep] = useState(1);
 
   const handleNext = () => {
@@ -19,7 +18,12 @@ function App() {
   };
 
   const toggleView = () => {
-    setView((prev) => (prev === "create" ? "detail" : "create"));
+    // Simple cycler for demo purposes: Dashboard -> Detail -> Create -> Dashboard
+    setView((prev) => {
+      if (prev === "dashboard") return "detail";
+      if (prev === "detail") return "create";
+      return "dashboard";
+    });
   };
 
   return (
@@ -41,11 +45,19 @@ function App() {
             borderRadius: "4px",
           }}
         >
-          Switch View ({view === "create" ? "Show Detail" : "Show Create"})
+          Switch View (
+          {view === "dashboard"
+            ? "Show Detail"
+            : view === "detail"
+            ? "Show Create"
+            : "Show Dashboard"}
+          )
         </button>
       </div>
 
-      {view === "detail" ? (
+      {view === "dashboard" ? (
+        <Dashboard onNavigateProject={() => setView("detail")} />
+      ) : view === "detail" ? (
         <ProjectDetail />
       ) : (
         <>
