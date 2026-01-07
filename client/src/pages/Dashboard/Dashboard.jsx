@@ -153,7 +153,14 @@ const Dashboard = ({ onNavigateProject, onCreateProject }) => {
           <a href="#" className="nav-item active">
             Dashboard
           </a>
-          <a href="#" className="nav-item">
+          <a
+            href="#"
+            className="nav-item"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateProject();
+            }}
+          >
             Projects
             <span className="nav-badge">12</span>
           </a>

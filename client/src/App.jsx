@@ -5,6 +5,7 @@ import Step3 from "./pages/CreateProject/Step3";
 import Step4 from "./pages/CreateProject/Step4";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Step5 from "./pages/CreateProject/Step5";
+import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
 import ConfirmationModal from "./components/ui/ConfirmationModal";
 
 function App() {
