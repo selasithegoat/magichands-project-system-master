@@ -367,7 +367,8 @@ const QuickActionsCard = () => {
       </div>
       <div className="actions-grid">
         <button className="action-btn primary">
-          <CheckIcon color="#fff" width="20" height="20" /> Mark Step
+          <CheckIcon className="check-mark primary" width="20" height="20" />{" "}
+          Mark Step
         </button>
         <button className="action-btn">
           <EditIcon width="20" height="20" /> Add Update
@@ -391,8 +392,8 @@ const ApprovalsCard = () => {
       </div>
       <div className="approval-list">
         <div className="approval-item">
-          <div className="approval-status">
-            <CheckIcon color="#22c55e" width="16" height="16" />
+          <div className="approval-status completed">
+            <CheckIcon className="check-mark primary" width="14" height="14" />
           </div>
           <div className="approval-content">
             <span className="approval-title">Scope Approval</span>
@@ -400,8 +401,8 @@ const ApprovalsCard = () => {
           </div>
         </div>
         <div className="approval-item">
-          <div className="approval-status">
-            <CheckIcon color="#22c55e" width="16" height="16" />
+          <div className="approval-status completed">
+            <CheckIcon className="check-mark primary" width="14" height="14" />
           </div>
           <div className="approval-content">
             <span className="approval-title">Dept Engagement</span>
@@ -409,16 +410,8 @@ const ApprovalsCard = () => {
           </div>
         </div>
         <div className="approval-item active">
-          <div className="approval-status">
-            {/* Empty circle for active/pending */}
-            <div
-              style={{
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                border: "2px solid #3b82f6",
-              }}
-            ></div>
+          <div className="approval-status active">
+            <div className="active-dot"></div>
           </div>
           <div className="approval-content">
             <button className="nudge-btn">Nudge</button>
@@ -431,16 +424,7 @@ const ApprovalsCard = () => {
           </div>
         </div>
         <div className="approval-item">
-          <div className="approval-status">
-            <div
-              style={{
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                border: "2px solid #e2e8f0",
-              }}
-            ></div>
-          </div>
+          <div className="approval-status pending"></div>
           <div className="approval-content">
             <span className="approval-title" style={{ color: "#94a3b8" }}>
               Invoice Generation
@@ -448,16 +432,7 @@ const ApprovalsCard = () => {
           </div>
         </div>
         <div className="approval-item">
-          <div className="approval-status">
-            <div
-              style={{
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                border: "2px solid #e2e8f0",
-              }}
-            ></div>
-          </div>
+          <div className="approval-status pending"></div>
           <div className="approval-content">
             <span className="approval-title" style={{ color: "#94a3b8" }}>
               Quality Control

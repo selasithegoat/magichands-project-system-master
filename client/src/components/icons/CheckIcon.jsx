@@ -1,7 +1,9 @@
 import React from "react";
+import "./CheckIcon.css";
 
-const CheckIcon = () => (
+const CheckIcon = ({ className = "" }) => (
   <svg
+    className={className}
     width="12"
     height="12"
     viewBox="0 0 12 12"
@@ -10,7 +12,6 @@ const CheckIcon = () => (
   >
     <path
       d="M10 3L4.5 8.5L2 6"
-      stroke="white"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"

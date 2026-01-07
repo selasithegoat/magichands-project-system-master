@@ -1,6 +1,7 @@
 import React from "react";
 import CheckIcon from "../../components/icons/CheckIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
+import "./ProjectExecution.css";
 
 const steps = [
   {
@@ -101,7 +102,9 @@ const TimelineStep = ({ step, isLast }) => {
       {/* Left Indicator Column */}
       <div className="step-indicator-col">
         <div className={`step-icon ${step.status}`}>
-          {isCompleted && <CheckIcon color="#fff" width="20" height="20" />}
+          {isCompleted && (
+            <CheckIcon className="check-mark primary" width="20" height="20" />
+          )}
           {isActive && <div className="active-dot-inner"></div>}
           {isPending && <span>{step.id}</span>}
         </div>
@@ -121,7 +124,11 @@ const TimelineStep = ({ step, isLast }) => {
             <p className="step-desc-active">{step.description}</p>
             <button className="mark-complete-btn">
               <div className="btn-check-circle">
-                <CheckIcon color="#2563eb" width="12" height="12" />
+                <CheckIcon
+                  className="check-mark secondary"
+                  width="12"
+                  height="12"
+                />
               </div>
               {step.action}
             </button>
@@ -145,7 +152,11 @@ const TimelineStep = ({ step, isLast }) => {
             {step.note && (
               <div className="step-note-box">
                 <div className="note-check">
-                  <CheckIcon color="#fff" width="10" height="10" />
+                  <CheckIcon
+                    className="check-mark primary"
+                    width="10"
+                    height="10"
+                  />
                 </div>
                 <span>{step.note}</span>
               </div>

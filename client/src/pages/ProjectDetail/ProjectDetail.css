@@ -450,30 +450,61 @@
   display: flex;
   gap: 1rem;
   position: relative;
+  min-height: 2.5rem;
 }
 
 .approval-item:not(:last-child)::before {
   content: "";
   position: absolute;
-  left: 11px; /* Center of checkbox (24px/2 - 1px) */
+  left: 12px; /* Center of 24px icon + 2px border? No, width/2 */
+  /* If width is 24px, center is 12px. Line width 2px. Left 11px? */
+  /* Let's redefine widths. */
   top: 24px;
-  bottom: -24px;
+  bottom: -12px;
   width: 2px;
   background-color: #f1f5f9;
+  z-index: 0;
 }
 
 .approval-status {
   width: 24px;
   height: 24px;
+  border-radius: 50%;
   display: flex;
   justify-content: center;
-  padding-top: 2px;
+  align-items: center;
   background-color: #fff;
   z-index: 1;
+  border: 2px solid #fff; /* White border for separation */
+  box-shadow: 0 0 0 1px #e2e8f0; /* Default ring */
+  flex-shrink: 0;
+}
+
+.approval-status.completed {
+  background-color: #22c55e;
+  box-shadow: none;
+}
+
+.approval-status.active {
+  box-shadow: 0 0 0 2px #3b82f6; /* Blue ring */
+  background-color: #fff;
+}
+
+.approval-status.pending {
+  box-shadow: 0 0 0 2px #e2e8f0; /* Gray ring */
+  background-color: #fff;
+}
+
+.active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #3b82f6;
 }
 
 .approval-content {
   flex: 1;
+  padding-top: 2px;
 }
 
 .approval-title {
@@ -492,14 +523,24 @@
   background-color: #eff6ff;
   border-radius: var(--radius-md);
   padding: 0.75rem;
-  margin-left: -0.75rem; /* Compensate for padding to keep line aligned */
+  margin-left: -0.75rem;
   margin-right: -0.75rem;
 }
+
 .approval-item.active .approval-status {
-  background-color: transparent;
+  /* It has a border and ring defined above */
 }
-.approval-item.active .approval-item:not(:last-child)::before {
-  left: 11px + 0.75rem;
+
+/* Adjust line position for active item */
+/* If padding is added, the line position relative to container shifts?
+   No, pseudo element is on approval-item. 
+   If item has padding, 'left' needs adjustment. 
+   Padding-left is 0.75rem (12px).
+   So 'left' should be 12px + 12px = 24px?
+   Let's check.
+*/
+.approval-item.active:not(:last-child)::before {
+  left: 23px; /* 11px + 12px padding */
 }
 
 .nudge-btn {
@@ -521,311 +562,4 @@
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
-}
-
-/* Redesigned Execution Timeline */
-.execution-container {
-  padding: 1.5rem 2rem;
-  max-width: 700px;
-}
-
-.timeline {
-  display: flex;
-  flex-direction: column;
-}
-
-.timeline-step {
-  display: flex;
-  gap: 2rem;
-  position: relative;
-  padding-bottom: 2rem;
-}
-
-.timeline-step.last-step {
-  padding-bottom: 0;
-}
-
-/* Indicators */
-.step-indicator-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 40px;
-  position: relative;
-}
-
-.step-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  background-color: #fff;
-  font-weight: 700;
-  color: #94a3b8;
-}
-
-.step-icon.completed {
-  background-color: #22c55e;
-}
-
-.step-icon.active {
-  border: 2px solid #3b82f6;
-}
-
-.active-dot-inner {
-  width: 12px;
-  height: 12px;
-  background-color: #3b82f6;
-  border-radius: 50%;
-}
-
-.step-icon.pending {
-  border: 2px solid #e2e8f0;
-}
-
-.step-line {
-  position: absolute;
-  top: 36px;
-  bottom: -36px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  background-color: #f1f5f9;
-  z-index: 1;
-}
-
-/* Step Content Styles */
-.step-content-col {
-  flex: 1;
-  padding-top: 0.25rem;
-}
-
-.step-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.step-label {
-  font-size: 0.75rem;
-  color: #22c55e;
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-bottom: 0.25rem;
-  display: block;
-}
-
-.timeline-step.active .step-label {
-  color: #3b82f6;
-}
-.timeline-step.pending .step-label {
-  color: #94a3b8;
-}
-
-.step-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.step-title.strikethrough {
-  text-decoration: line-through;
-}
-
-.step-date {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  white-space: nowrap;
-}
-
-/* COMPLETED PILLS */
-.completed-by-pill {
-  display: inline-flex;
-  align-items: center;
-  background-color: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 6px;
-  padding: 0.25rem 0.5rem;
-  margin-top: 0.5rem;
-  gap: 0.5rem;
-}
-
-.pill-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-}
-
-.pill-tag {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.625rem;
-  font-weight: 700;
-}
-.pill-tag.blue {
-  background: #dbeafe;
-  color: #2563eb;
-}
-.pill-tag.purple {
-  background: #f3e8ff;
-  color: #9333ea;
-}
-
-.pill-text {
-  font-size: 0.75rem;
-  color: #475569;
-}
-
-/* NOTE BOX */
-.step-note-box {
-  margin-top: 0.5rem;
-  background-color: #fffbeb;
-  border: 1px solid #fef3c7;
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  color: #1e293b;
-  font-weight: 500;
-  width: fit-content;
-}
-
-.note-check {
-  background-color: #22c55e;
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ACTIVE CARD */
-.active-card-wrapper {
-  /* No padding here, handled inside active-card or alignment */
-}
-
-.active-card {
-  border: 2px solid #2563eb; /* Blue border */
-  border-radius: var(--radius-lg);
-  background-color: #fff;
-  padding: 1.5rem;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
-  position: relative;
-  top: -1rem; /* Adjust alignment to icon */
-}
-
-.step-header-active {
-  margin-bottom: 0.75rem;
-}
-
-.step-title-active {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0;
-}
-
-.step-desc-active {
-  font-size: 0.875rem;
-  color: #64748b;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
-  max-width: 90%;
-}
-
-.mark-complete-btn {
-  width: 100%;
-  background-color: #2563eb;
-  color: #fff;
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: none;
-  font-weight: 600;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.mark-complete-btn:hover {
-  background-color: #1d4ed8;
-}
-
-.btn-check-circle {
-  width: 18px;
-  height: 18px;
-  background: #fff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* PENDING STYLES */
-.pending-desc {
-  font-size: 0.875rem;
-  color: #94a3b8;
-  margin-top: 0.25rem;
-}
-
-.pending-form-card {
-  background-color: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 1rem;
-  margin-top: 0.5rem;
-}
-
-.pending-form-card label {
-  font-size: 0.7rem;
-  color: #64748b;
-  font-weight: 700;
-  text-transform: uppercase;
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.pending-input-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.pending-input-row input {
-  flex: 1;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  color: #334155;
-}
-
-.save-btn {
-  background-color: #e2e8f0;
-  color: #475569;
-  font-weight: 600;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.input-suffix {
-  font-size: 0.875rem;
-  color: #94a3b8;
 }
