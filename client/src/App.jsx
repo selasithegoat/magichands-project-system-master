@@ -8,6 +8,8 @@ import Step5 from "./pages/CreateProject/Step5";
 import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
 import ConfirmationModal from "./components/ui/ConfirmationModal";
 
+import Layout from "./components/layout/Layout";
+
 function App() {
   const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail'
   const [currentStep, setCurrentStep] = useState(1);
@@ -41,6 +43,17 @@ function App() {
     });
   };
 
+  // Simplified navigation handlers
+  const navigateToDashboard = () => {
+    setView("dashboard");
+    setCurrentStep(1);
+  };
+  const navigateToProject = () => setView("detail");
+  const navigateToCreate = () => {
+    setView("create");
+    setCurrentStep(1);
+  };
+
   return (
     <>
       <div
@@ -70,44 +83,50 @@ function App() {
         </button>
       </div>
 
-      {view === "dashboard" ? (
-        <Dashboard
-          onNavigateProject={() => setView("detail")}
-          onCreateProject={() => setView("create")}
-        />
-      ) : view === "detail" ? (
-        <ProjectDetail />
-      ) : (
-        <>
-          {currentStep === 1 && (
-            <Step1 onNext={handleNext} onCancel={handleCancelProject} />
-          )}
-          {currentStep === 2 && (
-            <Step2
-              onNext={handleNext}
-              onBack={handleBack}
-              onCancel={handleCancelProject}
-            />
-          )}
-          {currentStep === 3 && (
-            <Step3
-              onNext={handleNext}
-              onBack={handleBack}
-              onCancel={handleCancelProject}
-            />
-          )}
-          {currentStep === 4 && (
-            <Step4
-              onNext={handleNext}
-              onBack={handleBack}
-              onCancel={handleCancelProject}
-            />
-          )}
-          {currentStep === 5 && (
-            <Step5 onBack={handleBack} onCancel={handleCancelProject} />
-          )}
-        </>
-      )}
+      <Layout
+        onNavigateDashboard={navigateToDashboard}
+        onNavigateProject={navigateToProject}
+        onCreateProject={navigateToCreate}
+      >
+        {view === "dashboard" ? (
+          <Dashboard
+            onNavigateProject={navigateToProject}
+            onCreateProject={navigateToCreate}
+          />
+        ) : view === "detail" ? (
+          <ProjectDetail />
+        ) : (
+          <>
+            {currentStep === 1 && (
+              <Step1 onNext={handleNext} onCancel={handleCancelProject} />
+            )}
+            {currentStep === 2 && (
+              <Step2
+                onNext={handleNext}
+                onBack={handleBack}
+                onCancel={handleCancelProject}
+              />
+            )}
+            {currentStep === 3 && (
+              <Step3
+                onNext={handleNext}
+                onBack={handleBack}
+                onCancel={handleCancelProject}
+              />
+            )}
+            {currentStep === 4 && (
+              <Step4
+                onNext={handleNext}
+                onBack={handleBack}
+                onCancel={handleCancelProject}
+              />
+            )}
+            {currentStep === 5 && (
+              <Step5 onBack={handleBack} onCancel={handleCancelProject} />
+            )}
+          </>
+        )}
+      </Layout>
 
       <ConfirmationModal
         isOpen={showCancelModal}
