@@ -1,0 +1,214 @@
+.updates-container {
+  padding: 1.5rem 2rem;
+  max-width: 600px;
+}
+
+.updates-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.updates-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.updates-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.count-badge {
+  background-color: #e2e8f0;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.add-update-btn {
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-update-btn:hover {
+  background-color: #1d4ed8;
+}
+
+.updates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.update-card {
+  background-color: #fff;
+  border: 1px solid #f1f5f9; /* Subtle border */
+  border-radius: 10px;
+  padding: 1.25rem;
+  /* Design shows distinct shadow/card look */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.update-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.user-info {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.user-avatar-updates {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-initials {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #f3e8ff; /* Light purple for Mike T */
+  color: #9333ea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.user-initials.blue {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+.system-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.user-text-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.user-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.user-role {
+  font-size: 0.8125rem;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.update-time {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 0.125rem;
+}
+
+.update-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+}
+
+.update-tag.production {
+  background-color: #fef9c3;
+  color: #a16207;
+  border: 1px solid #fef08a;
+}
+
+.update-tag.client {
+  background-color: #f3e8ff;
+  color: #9333ea;
+  border: 1px solid #e9d5ff;
+}
+
+.update-tag.general {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.update-content {
+  font-size: 0.9375rem;
+  color: #334155;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.update-content-text {
+  margin: 0;
+}
+
+/* System update italics for changed status */
+.update-content-text em {
+  font-style: italic;
+  color: #475569;
+}
+.status-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.update-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+  cursor: pointer;
+}
+.update-attachment:hover {
+  background-color: #f1f5f9;
+}
+
+.caught-up-message {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.8125rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
