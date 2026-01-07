@@ -10,6 +10,7 @@ import WarningIcon from "../../components/icons/WarningIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
 import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
+import ProjectExecution from "./ProjectExecution";
 // Department icons might be needed if dynamic, for now using dots or generic
 
 const ProjectDetail = () => {
@@ -51,18 +52,23 @@ const ProjectDetail = () => {
       </header>
 
       <main className="project-content">
-        <div className="main-column">
-          <ProjectInfoCard />
-          <DepartmentsCard />
-          <OrderItemsCard />
-          <RisksCard />
-          <ProductionRisksCard />
-        </div>
-        <div className="side-column">
-          <ProgressCard />
-          <QuickActionsCard />
-          <ApprovalsCard />
-        </div>
+        {activeTab === "Overview" && (
+          <>
+            <div className="main-column">
+              <ProjectInfoCard />
+              <DepartmentsCard />
+              <OrderItemsCard />
+              <RisksCard />
+              <ProductionRisksCard />
+            </div>
+            <div className="side-column">
+              <ProgressCard />
+              <QuickActionsCard />
+              <ApprovalsCard />
+            </div>
+          </>
+        )}
+        {activeTab === "Execution" && <ProjectExecution />}
       </main>
     </div>
   );
