@@ -13,7 +13,7 @@ import PersonIcon from "../../components/icons/PersonIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step1 = ({ onNext }) => {
+const Step1 = ({ onNext, onCancel }) => {
   // State for form fields
   const [lead, setLead] = useState({ value: "sarah", label: "Sarah Jenkins" });
   const [supplySource, setSupplySource] = useState("in-house");
@@ -33,7 +33,9 @@ const Step1 = ({ onNext }) => {
           <BackArrow />
         </button>
         <h1 className="header-title">Create Project</h1>
-        <div style={{ width: 24 }}></div> {/* Spacer */}
+        <button className="cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
 
       <div className="step-scrollable-content">

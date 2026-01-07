@@ -4,6 +4,8 @@ import Step2 from "./pages/CreateProject/Step2";
 import Step3 from "./pages/CreateProject/Step3";
 import Step4 from "./pages/CreateProject/Step4";
 import Dashboard from "./pages/Dashboard/Dashboard";
+import Step5 from "./pages/CreateProject/Step5";
+import ConfirmationModal from "./components/ui/ConfirmationModal";
 
 function App() {
   const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail'
@@ -15,6 +17,18 @@ function App() {
 
   const handleBack = () => {
     setCurrentStep((prev) => prev - 1);
+  };
+
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
+  const handleCancelProject = () => {
+    setShowCancelModal(true);
+  };
+
+  const confirmCancel = () => {
+    setShowCancelModal(false);
+    setView("dashboard");
+    setCurrentStep(1); // Reset form
   };
 
   const toggleView = () => {
@@ -64,19 +78,43 @@ function App() {
         <ProjectDetail />
       ) : (
         <>
-          {currentStep === 1 && <Step1 onNext={handleNext} />}
+          {currentStep === 1 && (
+            <Step1 onNext={handleNext} onCancel={handleCancelProject} />
+          )}
           {currentStep === 2 && (
-            <Step2 onNext={handleNext} onBack={handleBack} />
+            <Step2
+              onNext={handleNext}
+              onBack={handleBack}
+              onCancel={handleCancelProject}
+            />
           )}
           {currentStep === 3 && (
-            <Step3 onNext={handleNext} onBack={handleBack} />
+            <Step3
+              onNext={handleNext}
+              onBack={handleBack}
+              onCancel={handleCancelProject}
+            />
           )}
           {currentStep === 4 && (
-            <Step4 onNext={handleNext} onBack={handleBack} />
+            <Step4
+              onNext={handleNext}
+              onBack={handleBack}
+              onCancel={handleCancelProject}
+            />
           )}
-          {currentStep === 5 && <Step5 onBack={handleBack} />}
+          {currentStep === 5 && (
+            <Step5 onBack={handleBack} onCancel={handleCancelProject} />
+          )}
         </>
       )}
+
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        title="Cancel Project?"
+        message="Are you sure you want to cancel? All progress will be lost."
+        onConfirm={confirmCancel}
+        onCancel={() => setShowCancelModal(false)}
+      />
     </>
   );
 }
