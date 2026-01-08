@@ -173,7 +173,7 @@ const Layout = ({
             <span className="nav-badge">12</span>
           </a>
           <a href="#" className="nav-item">
-            Departments
+            History
           </a>
           <a href="#" className="nav-item">
             Settings
@@ -294,7 +294,7 @@ const Layout = ({
               </a>
               <a href="#" className="drawer-item">
                 <UsersIcon />
-                Departments
+                History
               </a>
               <a href="#" className="drawer-item">
                 <SettingsIcon />
