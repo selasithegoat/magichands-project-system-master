@@ -40,7 +40,7 @@ const ProjectDetail = () => {
         </div>
         <div className="project-subtitle">Annual Tech Conference Setup</div>
         <nav className="header-nav">
-          {["Overview", "Execution", "Updates", "Challenges", "History"].map(
+          {["Overview", "Execution", "Updates", "Challenges", "Activities"].map(
             (tab) => (
               <a
                 key={tab}
@@ -74,7 +74,7 @@ const ProjectDetail = () => {
         {activeTab === "Execution" && <ProjectExecution />}
         {activeTab === "Updates" && <ProjectUpdates />}
         {activeTab === "Challenges" && <ProjectChallenges />}
-        {activeTab === "History" && <ProjectHistory />}
+        {activeTab === "Activities" && <ProjectHistory />}
       </main>
     </div>
   );
