@@ -102,6 +102,7 @@ const Profile = ({ onSignOut }) => {
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(false);
   const [contact, setContact] = useState("+233 (0) XX XXX XXXX");
+  const [employeeType, setEmployeeType] = useState("Staff");
 
   return (
     <div className="profile-container">
@@ -119,9 +120,9 @@ const Profile = ({ onSignOut }) => {
             <div className="profile-info-main">
               <div className="profile-name-row">
                 <h1>Akwasi John</h1>
-                <span className="role-badge">PROJECT LEAD</span>
+                <span className="role-badge">{employeeType}</span>
               </div>
-              <p className="profile-handle">@akwasij • Graphics Dept</p>
+              <p className="profile-handle">Graphics Dept</p>
               <p className="profile-bio">
                 Senior Project Lead specializing in visual design and team
                 management. Passionate about creating seamless user experiences
@@ -195,7 +196,10 @@ const Profile = ({ onSignOut }) => {
               <div className="form-group">
                 <label>Employee Type</label>
                 <div className="select-wrapper">
-                  <select defaultValue="Staff">
+                  <select
+                    value={employeeType}
+                    onChange={(e) => setEmployeeType(e.target.value)}
+                  >
                     <option>Staff</option>
                     <option>NSP</option>
                     <option>Intern</option>
