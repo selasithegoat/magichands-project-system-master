@@ -40,14 +40,14 @@
   box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
 }
 
-.step-line {
+.stepper-horizontal-line {
   width: 12px;
   height: 2px;
   background-color: #e2e8f0; /* Default gray line */
   border-radius: 1px;
 }
 
-.step-line.completed {
+.stepper-horizontal-line.completed {
   background-color: var(--primary-blue, #2563eb);
 }
 

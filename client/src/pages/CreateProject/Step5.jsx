@@ -34,7 +34,7 @@ const Step5 = ({ onBack, onCancel }) => {
                 <div className="step-circle completed">
                   <CheckIcon />
                 </div>
-                <div className="step-line"></div>
+                <div className="stepper-horizontal-line"></div>
               </React.Fragment>
             ))}
             <div className="step-circle active">5</div>

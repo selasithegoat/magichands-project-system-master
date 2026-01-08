@@ -30,7 +30,7 @@ const ProgressBar = ({ currentStep, totalSteps = 5 }) => {
               {/* Line (except after the last item) */}
               {!isLastItem && (
                 <div
-                  className={`step-line ${
+                  className={`stepper-horizontal-line ${
                     step < currentStep ? "completed" : ""
                   }`}
                 ></div>
