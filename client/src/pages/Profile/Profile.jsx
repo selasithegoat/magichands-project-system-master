@@ -101,6 +101,7 @@ const LogOutIcon = () => (
 const Profile = ({ onSignOut }) => {
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(false);
+  const [contact, setContact] = useState("+233 (0) XX XXX XXXX");
 
   return (
     <div className="profile-container">
@@ -126,11 +127,9 @@ const Profile = ({ onSignOut }) => {
                 management. Passionate about creating seamless user experiences
                 and optimizing workflow efficiency.
               </p>
-              <div className="profile-contact-box">
-                <label>Contact (phone)</label>
-                <div className="contact-value">
-                  <span>📞</span> +233 (0) XX XXX XXXX
-                </div>
+              <label>Contact (phone)</label>
+              <div className="contact-value">
+                <span>📞</span> {contact}
               </div>
             </div>
           </div>
@@ -207,6 +206,14 @@ const Profile = ({ onSignOut }) => {
               <div className="form-group">
                 <label>Department</label>
                 <input type="text" defaultValue="Graphics Dept" />
+              </div>
+              <div className="form-group">
+                <label>Contact</label>
+                <input
+                  type="text"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                />
               </div>
             </div>
             <div className="form-actions">
