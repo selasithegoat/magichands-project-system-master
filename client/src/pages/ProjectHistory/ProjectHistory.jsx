@@ -208,85 +208,87 @@ const ProjectHistory = ({ onBack }) => {
           <span className="project-count">2 Projects</span>
         </div>
 
-        {/* Card 1 */}
-        <div className="history-card">
-          <div className="card-top-row">
-            <span className="order-id-tag">ORD-2023-884</span>
-            <span className="status-badge delivered">
-              <CheckCircle /> Delivered
-            </span>
-          </div>
-          <h3 className="card-title">Office Renovation Phase 1</h3>
+        <div className="history-cards-grid">
+          {/* Card 1 */}
+          <div className="history-card">
+            <div className="card-top-row">
+              <span className="order-id-tag">ORD-2023-884</span>
+              <span className="status-badge delivered">
+                <CheckCircle /> Delivered
+              </span>
+            </div>
+            <h3 className="card-title">Office Renovation Phase 1</h3>
 
-          <div className="card-info-grid">
-            <div className="info-item">
-              <div className="info-icon">
-                <BuildingIcon />
+            <div className="card-info-grid">
+              <div className="info-item">
+                <div className="info-icon">
+                  <BuildingIcon />
+                </div>
+                <div className="info-content">
+                  <span className="info-label">Client</span>
+                  <span className="info-value">Acme Corp</span>
+                </div>
               </div>
-              <div className="info-content">
-                <span className="info-label">Client</span>
-                <span className="info-value">Acme Corp</span>
+              <div className="info-item">
+                <div className="info-icon">
+                  <CalendarIcon />
+                </div>
+                <div className="info-content">
+                  <span className="info-label">Delivered On</span>
+                  <span className="info-value">Oct 24, 2023</span>
+                </div>
               </div>
             </div>
-            <div className="info-item">
-              <div className="info-icon">
-                <CalendarIcon />
-              </div>
-              <div className="info-content">
-                <span className="info-label">Delivered On</span>
-                <span className="info-value">Oct 24, 2023</span>
-              </div>
-            </div>
-          </div>
 
-          <div className="card-actions">
-            <button className="action-btn btn-secondary">
-              <EyeIcon /> View Details
-            </button>
-            <button className="action-btn btn-primary-outline">
-              <RefreshIcon /> Reopen
-            </button>
-          </div>
-        </div>
-
-        {/* Card 2 */}
-        <div className="history-card">
-          <div className="card-top-row">
-            <span className="order-id-tag">ORD-2023-882</span>
-            <span className="status-badge delivered">
-              <CheckCircle /> Delivered
-            </span>
-          </div>
-          <h3 className="card-title">Q3 Marketing Campaign</h3>
-
-          <div className="card-info-grid">
-            <div className="info-item">
-              <div className="info-icon">
-                <BuildingIcon />
-              </div>
-              <div className="info-content">
-                <span className="info-label">Client</span>
-                <span className="info-value">Stark Industries</span>
-              </div>
-            </div>
-            <div className="info-item">
-              <div className="info-icon">
-                <CalendarIcon />
-              </div>
-              <div className="info-content">
-                <span className="info-label">Delivered On</span>
-                <span className="info-value">Oct 15, 2023</span>
-              </div>
+            <div className="card-actions">
+              <button className="action-btn btn-secondary">
+                <EyeIcon /> View Details
+              </button>
+              <button className="action-btn btn-primary-outline">
+                <RefreshIcon /> Reopen
+              </button>
             </div>
           </div>
 
-          <div className="card-actions">
-            <button className="action-btn btn-secondary">
-              <EyeIcon /> View Details
-            </button>
-            <button className="action-btn btn-primary-outline">
-              <RefreshIcon /> Reopen
-            </button>
+          {/* Card 2 */}
+          <div className="history-card">
+            <div className="card-top-row">
+              <span className="order-id-tag">ORD-2023-882</span>
+              <span className="status-badge delivered">
+                <CheckCircle /> Delivered
+              </span>
+            </div>
+            <h3 className="card-title">Q3 Marketing Campaign</h3>
+
+            <div className="card-info-grid">
+              <div className="info-item">
+                <div className="info-icon">
+                  <BuildingIcon />
+                </div>
+                <div className="info-content">
+                  <span className="info-label">Client</span>
+                  <span className="info-value">Stark Industries</span>
+                </div>
+              </div>
+              <div className="info-item">
+                <div className="info-icon">
+                  <CalendarIcon />
+                </div>
+                <div className="info-content">
+                  <span className="info-label">Delivered On</span>
+                  <span className="info-value">Oct 15, 2023</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="card-actions">
+              <button className="action-btn btn-secondary">
+                <EyeIcon /> View Details
+              </button>
+              <button className="action-btn btn-primary-outline">
+                <RefreshIcon /> Reopen
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -298,44 +300,46 @@ const ProjectHistory = ({ onBack }) => {
           <span className="project-count">1 Project</span>
         </div>
 
-        {/* Card 3 */}
-        <div className="history-card">
-          <div className="card-top-row">
-            <span className="order-id-tag">ORD-2023-865</span>
-            <span className="status-badge archived">
-              <ArchiveIcon /> Archived
-            </span>
-          </div>
-          <h3 className="card-title">Internal Audit Q2</h3>
+        <div className="history-cards-grid">
+          {/* Card 3 */}
+          <div className="history-card">
+            <div className="card-top-row">
+              <span className="order-id-tag">ORD-2023-865</span>
+              <span className="status-badge archived">
+                <ArchiveIcon /> Archived
+              </span>
+            </div>
+            <h3 className="card-title">Internal Audit Q2</h3>
 
-          <div className="card-info-grid">
-            <div className="info-item">
-              <div className="info-icon">
-                <BuildingIcon />
+            <div className="card-info-grid">
+              <div className="info-item">
+                <div className="info-icon">
+                  <BuildingIcon />
+                </div>
+                <div className="info-content">
+                  <span className="info-label">Department</span>
+                  <span className="info-value">Finance Dept.</span>
+                </div>
               </div>
-              <div className="info-content">
-                <span className="info-label">Department</span>
-                <span className="info-value">Finance Dept.</span>
+              <div className="info-item">
+                <div className="info-icon">
+                  <CalendarIcon />
+                </div>
+                <div className="info-content">
+                  <span className="info-label">Completed On</span>
+                  <span className="info-value">Sep 28, 2023</span>
+                </div>
               </div>
             </div>
-            <div className="info-item">
-              <div className="info-icon">
-                <CalendarIcon />
-              </div>
-              <div className="info-content">
-                <span className="info-label">Completed On</span>
-                <span className="info-value">Sep 28, 2023</span>
-              </div>
-            </div>
-          </div>
 
-          <div className="card-actions">
-            <button
-              className="action-btn btn-secondary"
-              style={{ width: "100%" }}
-            >
-              <EyeIcon /> View Details Only
-            </button>
+            <div className="card-actions">
+              <button
+                className="action-btn btn-secondary"
+                style={{ width: "100%" }}
+              >
+                <EyeIcon /> View Details Only
+              </button>
+            </div>
           </div>
         </div>
       </div>
