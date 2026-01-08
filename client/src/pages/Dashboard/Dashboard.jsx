@@ -125,7 +125,11 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
-const Dashboard = ({ onNavigateProject, onCreateProject }) => {
+const Dashboard = ({
+  onNavigateProject,
+  onCreateProject,
+  onSeeAllProjects,
+}) => {
   return (
     <div className="dashboard-container">
       {/* Top Navigation Header Removed - Moved to Layout */}
@@ -196,7 +200,9 @@ const Dashboard = ({ onNavigateProject, onCreateProject }) => {
           {/* Recent Projects */}
           <div className="section-header">
             <h3 className="section-title">Recent Projects</h3>
-            <button className="see-all-btn">See All</button>
+            <button className="see-all-btn" onClick={onSeeAllProjects}>
+              See All
+            </button>
           </div>
 
           <div className="projects-list">

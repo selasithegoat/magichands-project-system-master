@@ -98,6 +98,7 @@ function App() {
           <Dashboard
             onNavigateProject={navigateToProjectDetail} // Cards go to Detail
             onCreateProject={navigateToCreate}
+            onSeeAllProjects={navigateToProjectsTab}
           />
         ) : view === "detail" ? (
           <ProjectDetail />
