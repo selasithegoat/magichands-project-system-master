@@ -129,6 +129,24 @@
   min-width: 300px;
 }
 
+@media (max-width: 1024px) {
+  .project-content {
+    flex-direction: column;
+    overflow-y: auto; /* Ensure scrolling works when stacked */
+  }
+
+  .main-column,
+  .side-column {
+    min-width: 100%; /* Take full width on smaller screens */
+    width: 100%;
+  }
+
+  .project-detail-container {
+    height: auto;
+    overflow: visible;
+  }
+}
+
 /* Cards */
 .detail-card {
   background-color: #fff;

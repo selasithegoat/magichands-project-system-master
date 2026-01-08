@@ -2,6 +2,7 @@
 .execution-container {
   padding: 1.5rem 2rem;
   max-width: 700px;
+  margin: 0 auto;
 }
 
 .timeline {
