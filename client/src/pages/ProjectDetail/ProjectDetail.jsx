@@ -13,7 +13,7 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import ProjectExecution from "./ProjectExecution";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
-import ProjectHistory from "./ProjectHistory";
+import ProjectActivity from "./ProjectActivity";
 import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 // Department icons might be needed if dynamic, for now using dots or generic
 
@@ -75,7 +75,7 @@ const ProjectDetail = () => {
         {activeTab === "Execution" && <ProjectExecution />}
         {activeTab === "Updates" && <ProjectUpdates />}
         {activeTab === "Challenges" && <ProjectChallenges />}
-        {activeTab === "Activities" && <ProjectHistory />}
+        {activeTab === "Activities" && <ProjectActivity />}
       </main>
     </div>
   );

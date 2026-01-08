@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import "./ProjectHistory.css";
+import "./ProjectActivity.css";
 // Icons
 import SearchIcon from "../../components/icons/SearchIcon";
 import EditIcon from "../../components/icons/EditIcon";
@@ -67,11 +67,11 @@ const historyData = [
   },
 ];
 
-const ProjectHistory = () => {
+const ProjectActivity = () => {
   const [filter, setFilter] = useState("All Activity");
 
   return (
-    <div className="history-container">
+    <div className="activity-container">
       {/* Search and Filters */}
       <div className="history-controls">
         <div className="search-bar-wrapper">
@@ -201,4 +201,4 @@ const ProjectHistory = () => {
   );
 };
 
-export default ProjectHistory;
+export default ProjectActivity;
