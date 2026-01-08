@@ -6,12 +6,13 @@ import Step4 from "./pages/CreateProject/Step4";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Step5 from "./pages/CreateProject/Step5";
 import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
+import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
 import ConfirmationModal from "./components/ui/ConfirmationModal";
 
 import Layout from "./components/layout/Layout";
 
 function App() {
-  const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail'
+  const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail', 'history'
   const [currentStep, setCurrentStep] = useState(1);
 
   const handleNext = () => {
@@ -49,6 +50,7 @@ function App() {
     setCurrentStep(1);
   };
   const navigateToProject = () => setView("detail");
+  const navigateToHistory = () => setView("history");
   const navigateToCreate = () => {
     setView("create");
     setCurrentStep(1);
@@ -87,6 +89,7 @@ function App() {
         activeView={view} // Pass the current view state
         onNavigateDashboard={navigateToDashboard}
         onNavigateProject={navigateToProject}
+        onNavigateHistory={navigateToHistory}
         onCreateProject={navigateToCreate}
       >
         {view === "dashboard" ? (
@@ -96,6 +99,8 @@ function App() {
           />
         ) : view === "detail" ? (
           <ProjectDetail />
+        ) : view === "history" ? (
+          <ProjectHistory onBack={navigateToDashboard} />
         ) : (
           <>
             {currentStep === 1 && (

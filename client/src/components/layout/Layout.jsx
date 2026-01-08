@@ -117,6 +117,7 @@ const Layout = ({
   children,
   onNavigateDashboard,
   onNavigateProject,
+  onNavigateHistory,
   onCreateProject,
   activeView, // Receive activeView
 }) => {
@@ -172,12 +173,19 @@ const Layout = ({
             Projects
             <span className="nav-badge">12</span>
           </a>
-          <a href="#" className="nav-item">
+          <a
+            href="#"
+            className={`nav-item ${activeView === "history" ? "active" : ""}`}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateHistory();
+            }}
+          >
             History
           </a>
-          <a href="#" className="nav-item">
+          {/* <a href="#" className="nav-item">
             Settings
-          </a>
+          </a> */}
         </nav>
 
         <div className="header-actions">
@@ -292,7 +300,17 @@ const Layout = ({
                 </div>
                 New Project
               </a>
-              <a href="#" className="drawer-item">
+              <a
+                href="#"
+                className={`drawer-item ${
+                  activeView === "history" ? "active" : ""
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsMobileMenuOpen(false);
+                  onNavigateHistory();
+                }}
+              >
                 <UsersIcon />
                 History
               </a>
