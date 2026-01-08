@@ -84,6 +84,7 @@ function App() {
       </div>
 
       <Layout
+        activeView={view} // Pass the current view state
         onNavigateDashboard={navigateToDashboard}
         onNavigateProject={navigateToProject}
         onCreateProject={navigateToCreate}

@@ -118,6 +118,7 @@ const Layout = ({
   onNavigateDashboard,
   onNavigateProject,
   onCreateProject,
+  activeView, // Receive activeView
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -152,7 +153,7 @@ const Layout = ({
         <nav className="main-nav">
           <a
             href="#"
-            className="nav-item active"
+            className={`nav-item ${activeView === "dashboard" ? "active" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               onNavigateDashboard();
@@ -162,7 +163,7 @@ const Layout = ({
           </a>
           <a
             href="#"
-            className="nav-item"
+            className={`nav-item ${activeView === "detail" ? "active" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               onNavigateProject();
@@ -238,7 +239,9 @@ const Layout = ({
             <nav className="drawer-menu">
               <a
                 href="#"
-                className="drawer-item active"
+                className={`drawer-item ${
+                  activeView === "dashboard" ? "active" : ""
+                }`}
                 onClick={(e) => {
                   e.preventDefault();
                   setIsMobileMenuOpen(false);
@@ -250,7 +253,9 @@ const Layout = ({
               </a>
               <a
                 href="#"
-                className="drawer-item"
+                className={`drawer-item ${
+                  activeView === "detail" ? "active" : ""
+                }`}
                 onClick={(e) => {
                   e.preventDefault();
                   setIsMobileMenuOpen(false);
@@ -263,7 +268,9 @@ const Layout = ({
               </a>
               <a
                 href="#"
-                className="drawer-item"
+                className={`drawer-item ${
+                  activeView === "create" ? "active" : ""
+                }`}
                 onClick={(e) => {
                   e.preventDefault();
                   setIsMobileMenuOpen(false);
