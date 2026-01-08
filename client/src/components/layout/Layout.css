@@ -2,17 +2,23 @@
 
 /* --- Main Navigation Header --- */
 .main-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   background-color: #fff;
-  padding: 1rem 2rem;
   border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
   z-index: 50;
   width: 100%;
   box-sizing: border-box;
+  /* Removed padding/flex from here, moved to inner */
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 80%; /* Requested 80% width */
+  margin: 0 auto;
+  padding: 1rem 0; /* Padding inside the 80% container */
 }
 
 .header-brand {
@@ -125,6 +131,11 @@
 /* Responsive Styles */
 @media (max-width: 768px) {
   .main-header {
+    /* No change needed for bg */
+  }
+
+  .header-inner {
+    width: 100%; /* Full width on mobile */
     padding: 1rem;
   }
 
@@ -276,4 +287,20 @@
   cursor: pointer;
   width: 100%;
   padding: 0.5rem 0;
+}
+
+.layout-container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Page Content */
+.layout-content {
+  width: 80%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 0;
+  box-sizing: border-box;
 }

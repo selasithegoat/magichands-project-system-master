@@ -58,11 +58,9 @@
 
 body {
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #eef2f6; /* Outer background */
-  padding: 20px;
+  background-color: #f3f4f6; /* Use variable or keep code */
+  margin: 0;
+  /* Removed flex centering that was squashing the layout */
 }
 
 button {
