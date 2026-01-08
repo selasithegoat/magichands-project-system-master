@@ -164,7 +164,7 @@ const Layout = ({
           </a>
           <a
             href="#"
-            className={`nav-item ${activeView === "detail" ? "active" : ""}`}
+            className={`nav-item ${activeView === "projects" ? "active" : ""}`}
             onClick={(e) => {
               e.preventDefault();
               onNavigateProject();
@@ -262,7 +262,7 @@ const Layout = ({
               <a
                 href="#"
                 className={`drawer-item ${
-                  activeView === "detail" ? "active" : ""
+                  activeView === "projects" ? "active" : ""
                 }`}
                 onClick={(e) => {
                   e.preventDefault();

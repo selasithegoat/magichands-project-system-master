@@ -7,12 +7,13 @@ import Dashboard from "./pages/Dashboard/Dashboard";
 import Step5 from "./pages/CreateProject/Step5";
 import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
 import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
+import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
 import ConfirmationModal from "./components/ui/ConfirmationModal";
 
 import Layout from "./components/layout/Layout";
 
 function App() {
-  const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail', 'history'
+  const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail', 'history', 'projects'
   const [currentStep, setCurrentStep] = useState(1);
 
   const handleNext = () => {
@@ -49,7 +50,8 @@ function App() {
     setView("dashboard");
     setCurrentStep(1);
   };
-  const navigateToProject = () => setView("detail");
+  const navigateToProjectDetail = () => setView("detail");
+  const navigateToProjectsTab = () => setView("projects");
   const navigateToHistory = () => setView("history");
   const navigateToCreate = () => {
     setView("create");
@@ -88,19 +90,24 @@ function App() {
       <Layout
         activeView={view} // Pass the current view state
         onNavigateDashboard={navigateToDashboard}
-        onNavigateProject={navigateToProject}
+        onNavigateProject={navigateToProjectsTab} // Navbar "Projects" goes to empty tab
         onNavigateHistory={navigateToHistory}
         onCreateProject={navigateToCreate}
       >
         {view === "dashboard" ? (
           <Dashboard
-            onNavigateProject={navigateToProject}
+            onNavigateProject={navigateToProjectDetail} // Cards go to Detail
             onCreateProject={navigateToCreate}
           />
         ) : view === "detail" ? (
           <ProjectDetail />
         ) : view === "history" ? (
           <ProjectHistory onBack={navigateToDashboard} />
+        ) : view === "projects" ? (
+          <OngoingProjects
+            onNavigateDetail={navigateToProjectDetail}
+            onBack={navigateToDashboard}
+          />
         ) : (
           <>
             {currentStep === 1 && (

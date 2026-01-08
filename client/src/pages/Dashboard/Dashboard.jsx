@@ -236,7 +236,7 @@ const Dashboard = ({ onNavigateProject, onCreateProject }) => {
             </div>
 
             {/* Project 2 */}
-            <div className="project-card">
+            <div className="project-card" onClick={onNavigateProject}>
               <div className="project-card-header">
                 <div>
                   <span className="project-id">#MH-2024-02</span>
@@ -279,7 +279,7 @@ const Dashboard = ({ onNavigateProject, onCreateProject }) => {
             </div>
 
             {/* Project 3 */}
-            <div className="project-card">
+            <div className="project-card" onClick={onNavigateProject}>
               <div className="project-card-header">
                 <div>
                   <span className="project-id">#MH-2024-05</span>
