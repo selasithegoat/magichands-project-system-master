@@ -118,6 +118,7 @@ const Layout = ({
   onNavigateDashboard,
   onNavigateProject,
   onNavigateHistory,
+  onNavigateProfile,
   onCreateProject,
   activeView, // Receive activeView
 }) => {
@@ -209,7 +210,13 @@ const Layout = ({
               </svg>
               <span className="notif-dot"></span>
             </button>
-            <div className="user-profile-mini">AJ</div>
+            <div
+              className="user-profile-mini"
+              onClick={onNavigateProfile}
+              style={{ cursor: "pointer" }}
+            >
+              AJ
+            </div>
           </div>
         </div>
       </header>

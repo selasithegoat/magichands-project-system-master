@@ -8,6 +8,7 @@ import Step5 from "./pages/CreateProject/Step5";
 import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
 import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
 import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
+import Profile from "./pages/Profile/Profile";
 import ConfirmationModal from "./components/ui/ConfirmationModal";
 
 import Layout from "./components/layout/Layout";
@@ -53,6 +54,7 @@ function App() {
   const navigateToProjectDetail = () => setView("detail");
   const navigateToProjectsTab = () => setView("projects");
   const navigateToHistory = () => setView("history");
+  const navigateToProfile = () => setView("profile");
   const navigateToCreate = () => {
     setView("create");
     setCurrentStep(1);
@@ -92,6 +94,7 @@ function App() {
         onNavigateDashboard={navigateToDashboard}
         onNavigateProject={navigateToProjectsTab} // Navbar "Projects" goes to empty tab
         onNavigateHistory={navigateToHistory}
+        onNavigateProfile={navigateToProfile}
         onCreateProject={navigateToCreate}
       >
         {view === "dashboard" ? (
@@ -109,6 +112,8 @@ function App() {
             onNavigateDetail={navigateToProjectDetail}
             onBack={navigateToDashboard}
           />
+        ) : view === "profile" ? (
+          <Profile onSignOut={() => console.log("Sign Out")} />
         ) : (
           <>
             {currentStep === 1 && (
