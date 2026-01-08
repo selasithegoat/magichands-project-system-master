@@ -14,6 +14,7 @@ import ProjectExecution from "./ProjectExecution";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
 import ProjectHistory from "./ProjectHistory";
+import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 // Department icons might be needed if dynamic, for now using dots or generic
 
 const ProjectDetail = () => {
@@ -305,47 +306,7 @@ const ProgressCard = () => {
       </div>
       <div className="chart-container">
         {/* Simple SVG Donut Chart */}
-        <svg width="120" height="120" viewBox="0 0 120 120">
-          <circle
-            cx="60"
-            cy="60"
-            r="50"
-            fill="none"
-            stroke="#e2e8f0"
-            strokeWidth="10"
-          />
-          <circle
-            cx="60"
-            cy="60"
-            r="50"
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="10"
-            strokeDasharray="314"
-            strokeDashoffset="78"
-            transform="rotate(-90 60 60)"
-          />
-          <text
-            x="60"
-            y="55"
-            textAnchor="middle"
-            fontSize="20"
-            fontWeight="700"
-            fill="#1e293b"
-          >
-            75%
-          </text>
-          <text
-            x="60"
-            y="75"
-            textAnchor="middle"
-            fontSize="10"
-            fontWeight="600"
-            fill="#64748b"
-          >
-            COMPLETE
-          </text>
-        </svg>
+        <ProgressDonutIcon percentage={75} />
       </div>
       <div className="progress-stats">
         <div className="stat-box">

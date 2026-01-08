@@ -1,25 +1,6 @@
 import React from "react";
 
-// For clean extraction, I'll inline the SVG icons in Header.jsx as well if they are not in separate files.
-// Based on Layout.jsx, they are defined LOCALLY. I will extract them to this file or reuse.
-
-// Icons (Copying from Layout.jsx for self-containment)
-const MenuIconSvg = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="3" y1="12" x2="21" y2="12"></line>
-    <line x1="3" y1="6" x2="21" y2="6"></line>
-    <line x1="3" y1="18" x2="21" y2="18"></line>
-  </svg>
-);
+import MenuIcon from "../icons/MenuIcon";
 
 const Header = ({
   activeView,
@@ -34,7 +15,7 @@ const Header = ({
       <div className="header-inner">
         <div className="header-brand">
           <button className="hamburger-btn" onClick={onToggleMobileMenu}>
-            <MenuIconSvg />
+            <MenuIcon />
           </button>
           <div className="logo-icon">
             <svg
