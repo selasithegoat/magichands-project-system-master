@@ -97,9 +97,46 @@ const logoutUser = (req, res) => {
   res.status(200).json({ message: "Logged out successfully" });
 };
 
+// @desc    Update user profile
+// @route   PUT /api/auth/profile
+// @access  Private
+const updateProfile = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (user) {
+    user.firstName = req.body.firstName || user.firstName;
+    user.lastName = req.body.lastName || user.lastName;
+    user.email = req.body.email || user.email; // Note: add validation/uniqueness check if critical
+    user.department = req.body.department || user.department;
+    user.employeeType = req.body.employeeType || user.employeeType;
+    user.contact = req.body.contact || user.contact;
+    // user.bio = req.body.bio || user.bio; // Add if needed
+
+    // If implementing avatar, handle it here usually with file upload middleware
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      employeeId: updatedUser.employeeId,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      email: updatedUser.email,
+      department: updatedUser.department,
+      employeeType: updatedUser.employeeType,
+      contact: updatedUser.contact,
+    });
+  } else {
+    res.status(404);
+    throw new Error("User not found");
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   logoutUser,
   getMe,
+  updateProfile,
 };

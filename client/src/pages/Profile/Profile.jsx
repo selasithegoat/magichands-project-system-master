@@ -13,8 +13,79 @@ import LogOutIcon from "../../components/icons/LogOutIcon";
 const Profile = ({ onSignOut }) => {
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(false);
-  const [contact, setContact] = useState("+233 (0) XX XXX XXXX");
-  const [employeeType, setEmployeeType] = useState("Staff");
+
+  // User Data State
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    employeeType: "Staff",
+    department: "",
+    contact: "",
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: '' }
+
+  // Fetch user data on mount
+  React.useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/auth/me", {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFormData({
+            firstName: data.firstName || "",
+            lastName: data.lastName || "",
+            email: data.email || "",
+            employeeType: data.employeeType || "Staff",
+            department: data.department || "",
+            contact: data.contact || "",
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch profile", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: "Profile updated successfully!" });
+      } else {
+        setMessage({ type: "error", text: "Failed to update profile." });
+      }
+    } catch (error) {
+      console.error("Error updating profile", error);
+      setMessage({ type: "error", text: "An error occurred." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="profile-container">Loading...</div>;
 
   return (
     <div className="profile-container">
@@ -24,17 +95,20 @@ const Profile = ({ onSignOut }) => {
         <div className="profile-header-card">
           <div className="profile-wrapper">
             <div className="profile-avatar-large">
-              AJ
+              {formData.firstName ? formData.firstName[0] : "U"}
+              {formData.lastName ? formData.lastName[0] : ""}
               <button className="edit-avatar-btn">
                 <EditIcon width="12" height="12" />
               </button>
             </div>
             <div className="profile-info-main">
               <div className="profile-name-row">
-                <h1>Akwasi John</h1>
-                <span className="role-badge">{employeeType}</span>
+                <h1>
+                  {formData.firstName} {formData.lastName}
+                </h1>
+                <span className="role-badge">{formData.employeeType}</span>
               </div>
-              <p className="profile-handle">Graphics Dept</p>
+              <p className="profile-handle">{formData.department}</p>
               <p className="profile-bio">
                 Senior Project Lead specializing in visual design and team
                 management. Passionate about creating seamless user experiences
@@ -42,7 +116,7 @@ const Profile = ({ onSignOut }) => {
               </p>
               <label>Contact (phone)</label>
               <div className="contact-value">
-                <span>📞</span> {contact}
+                <span>📞</span> {formData.contact || "Not set"}
               </div>
             </div>
           </div>
@@ -92,25 +166,57 @@ const Profile = ({ onSignOut }) => {
               </h3>
               <span className="completion-badge">85% Complete</span>
             </div>
+
+            {message && (
+              <div
+                style={{
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "4px",
+                  backgroundColor:
+                    message.type === "success" ? "#d4edda" : "#f8d7da",
+                  color: message.type === "success" ? "#155724" : "#721c24",
+                }}
+              >
+                {message.text}
+              </div>
+            )}
+
             <div className="form-grid">
               <div className="form-group">
                 <label>First Name</label>
-                <input type="text" defaultValue="Akwasi" />
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                />
               </div>
               <div className="form-group">
                 <label>Last Name</label>
-                <input type="text" defaultValue="John" />
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                />
               </div>
               <div className="form-group full-width">
                 <label>Email Address</label>
-                <input type="email" defaultValue="akwasi.john@magichands.co" />
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                />
               </div>
               <div className="form-group">
                 <label>Employee Type</label>
                 <div className="select-wrapper">
                   <select
-                    value={employeeType}
-                    onChange={(e) => setEmployeeType(e.target.value)}
+                    name="employeeType"
+                    value={formData.employeeType}
+                    onChange={handleChange}
                   >
                     <option>Staff</option>
                     <option>NSP</option>
@@ -121,19 +227,31 @@ const Profile = ({ onSignOut }) => {
               </div>
               <div className="form-group">
                 <label>Department</label>
-                <input type="text" defaultValue="Graphics Dept" />
+                <input
+                  type="text"
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                />
               </div>
               <div className="form-group">
                 <label>Contact</label>
                 <input
                   type="text"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
+                  name="contact"
+                  value={formData.contact}
+                  onChange={handleChange}
                 />
               </div>
             </div>
             <div className="form-actions">
-              <button className="save-btn">Save Changes</button>
+              <button
+                className="save-btn"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           </div>
 
