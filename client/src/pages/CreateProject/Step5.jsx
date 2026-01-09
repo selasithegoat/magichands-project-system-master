@@ -14,15 +14,42 @@ import "./Step5.css";
 const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showToast, setShowToast] = useState({
+    show: false,
+    message: "",
+    type: "",
+  });
+  const [isFadingOut, setIsFadingOut] = useState(false);
 
   const handleCreateClick = async () => {
     if (!isChecked) {
-      alert("Please verify the information before submitting.");
+      triggerToast("Please verify the information before submitting.", "error");
       return;
     }
     setIsCreating(true);
     await onCreate();
     setIsCreating(false);
+  };
+
+  const handleDownloadClick = () => {
+    if (!isChecked) {
+      triggerToast(
+        "Please verify the information before downloading.",
+        "error"
+      );
+    }
+  };
+
+  const triggerToast = (message, type = "success") => {
+    setShowToast({ show: true, message, type });
+    setIsFadingOut(false);
+    setTimeout(() => {
+      setIsFadingOut(true);
+      setTimeout(() => {
+        setShowToast({ show: false, message: "", type: "" });
+        setIsFadingOut(false);
+      }, 500); // Wait for fade out
+    }, 3000);
   };
 
   // Helper to format date
@@ -37,6 +64,18 @@ const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
 
   return (
     <div className="step-container">
+      {/* Toast Notification */}
+      {showToast.show && (
+        <div
+          className={`toast-message ${showToast.type} ${
+            isFadingOut ? "fading-out" : ""
+          }`}
+        >
+          {showToast.type === "success" ? <CheckIcon /> : null}
+          {showToast.message}
+        </div>
+      )}
+
       {/* Header */}
       <div className="step-header">
         <button className="back-btn" onClick={onBack}>
@@ -89,21 +128,40 @@ const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
               <div className="file-size">Auto-generated</div>
             </div>
 
-            <PDFDownloadLink
-              document={<ProjectSummaryPDF formData={formData} />}
-              fileName={`Project_${formData.projectName || "Draft"}.pdf`}
-              style={{
-                textDecoration: "none",
-                padding: "8px 16px",
-                color: "#fff",
-                backgroundColor: "#3B82F6",
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: "500",
-              }}
-            >
-              {({ loading }) => (loading ? "Generating..." : "Download PDF")}
-            </PDFDownloadLink>
+            {isChecked ? (
+              <PDFDownloadLink
+                document={<ProjectSummaryPDF formData={formData} />}
+                fileName={`Project_${formData.projectName || "Draft"}.pdf`}
+                style={{
+                  textDecoration: "none",
+                  padding: "8px 16px",
+                  color: "#fff",
+                  backgroundColor: "#3B82F6",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: "500",
+                }}
+              >
+                {({ loading }) => (loading ? "Generating..." : "Download PDF")}
+              </PDFDownloadLink>
+            ) : (
+              <button
+                onClick={handleDownloadClick}
+                style={{
+                  textDecoration: "none",
+                  padding: "8px 16px",
+                  color: "#fff",
+                  backgroundColor: "#94A3B8", // Greyed out but clickable
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: "500",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Download PDF
+              </button>
+            )}
           </div>
         </div>
         {/* Project Basics */}
