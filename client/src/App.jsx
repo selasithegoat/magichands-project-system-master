@@ -17,6 +17,29 @@ import Layout from "./components/layout/Layout";
 function App() {
   const [view, setView] = useState("login"); // 'login', 'dashboard', 'create', 'detail', 'history', 'projects'
   const [currentStep, setCurrentStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Check for active session on load
+  React.useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/auth/me", {
+          credentials: "include", // Send cookie
+        });
+
+        if (res.ok) {
+          // Session valid
+          setView("dashboard");
+        }
+      } catch (err) {
+        // Not authorized, stay on login
+        console.log("No active session");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkSession();
+  }, []);
 
   const handleNext = () => {
     setCurrentStep((prev) => prev + 1);
@@ -60,6 +83,21 @@ function App() {
     setView("create");
     setCurrentStep(1);
   };
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <>

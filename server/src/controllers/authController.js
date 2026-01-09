@@ -28,11 +28,20 @@ const registerUser = async (req, res) => {
   });
 
   if (user) {
+    const token = generateToken(user._id);
+
+    // Send HTTP-only cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+      sameSite: "strict", // Prevent CSRF
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
     res.status(201).json({
       _id: user.id,
       name: user.name,
       employeeId: user.employeeId,
-      token: generateToken(user._id),
     });
   } else {
     res.status(400).json({ message: "Invalid user data" });
@@ -49,11 +58,20 @@ const loginUser = async (req, res) => {
   const user = await User.findOne({ employeeId });
 
   if (user && (await user.matchPassword(password))) {
+    const token = generateToken(user._id);
+
+    // Send HTTP-only cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
     res.json({
       _id: user.id,
       name: user.name,
       employeeId: user.employeeId,
-      token: generateToken(user._id),
     });
   } else {
     res.status(401).json({ message: "Invalid credentials" });
@@ -68,8 +86,20 @@ const getMe = async (req, res) => {
   res.status(200).json(req.user);
 };
 
+// @desc    Logout user / Clear cookie
+// @route   POST /api/auth/logout
+// @access  Public
+const logoutUser = (req, res) => {
+  res.cookie("token", "", {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+  res.status(200).json({ message: "Logged out successfully" });
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  logoutUser,
   getMe,
 };

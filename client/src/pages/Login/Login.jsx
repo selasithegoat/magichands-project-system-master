@@ -119,6 +119,7 @@ const Login = ({ onLogin }) => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // Send cookies
         body: JSON.stringify({ employeeId, password }),
       });
 

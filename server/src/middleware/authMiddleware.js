@@ -4,14 +4,11 @@ const User = require("../models/User");
 const protect = async (req, res, next) => {
   let token;
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
-    try {
-      // Get token from header
-      token = req.headers.authorization.split(" ")[1];
+  // Check for token in cookies specifically
+  token = req.cookies.token;
 
+  if (token) {
+    try {
       // Verify token
       const decoded = jwt.verify(
         token,
@@ -21,14 +18,21 @@ const protect = async (req, res, next) => {
       // Get user from the token
       req.user = await User.findById(decoded.id).select("-password");
 
+      // Sliding Expiration: Refresh the cookie if the token is valid
+      // Note: We are re-setting the same token but extending the cookie lifetime
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 15 * 60 * 1000, // Reset to 15 minutes
+      });
+
       next();
     } catch (error) {
       console.error(error);
       res.status(401).json({ message: "Not authorized" });
     }
-  }
-
-  if (!token) {
+  } else {
     res.status(401).json({ message: "Not authorized, no token" });
   }
 };
