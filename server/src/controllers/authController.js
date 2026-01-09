@@ -7,7 +7,7 @@ const generateToken = require("../utils/generateToken");
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-  const { name, employeeId, password } = req.body;
+  const { name, employeeId, password, email, firstName, lastName } = req.body;
 
   if (!name || !employeeId || !password) {
     return res.status(400).json({ message: "Please add all fields" });
@@ -25,6 +25,9 @@ const registerUser = async (req, res) => {
     name,
     employeeId,
     password,
+    email,
+    firstName,
+    lastName,
   });
 
   if (user) {
@@ -133,10 +136,24 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Get all users (for dropdowns)
+// @route   GET /api/auth/users
+// @access  Private
+const getUsers = async (req, res) => {
+  try {
+    const users = await User.find({}).select("name firstName lastName _id"); // Removed avatar as it might cause issues if not in schema
+    res.json(users);
+  } catch (error) {
+    console.error("Error in getUsers:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   logoutUser,
   getMe,
   updateProfile,
+  getUsers, // [NEW]
 };

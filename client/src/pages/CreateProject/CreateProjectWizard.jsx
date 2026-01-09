@@ -11,6 +11,22 @@ const CreateProjectWizard = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  /* Step 1 State */
+  const [formData, setFormData] = useState({
+    orderDate: new Date().toISOString().split("T")[0],
+    receivedTime: "10:00",
+    lead: null, // { value, label, avatar } or raw user object
+    projectName: "",
+    deliveryDate: new Date().toISOString().split("T")[0],
+    deliveryTime: "14:00",
+    deliveryLocation: "",
+    contactType: "MH",
+    supplySource: "in-house",
+  });
+
+  const handleUpdateFormData = (updates) => {
+    setFormData((prev) => ({ ...prev, ...updates }));
+  };
 
   const handleNext = () => {
     setCurrentStep((prev) => prev + 1);
@@ -32,7 +48,12 @@ const CreateProjectWizard = () => {
   return (
     <>
       {currentStep === 1 && (
-        <Step1 onNext={handleNext} onCancel={handleCancelProject} />
+        <Step1
+          formData={formData}
+          setFormData={handleUpdateFormData}
+          onNext={handleNext}
+          onCancel={handleCancelProject}
+        />
       )}
       {currentStep === 2 && (
         <Step2

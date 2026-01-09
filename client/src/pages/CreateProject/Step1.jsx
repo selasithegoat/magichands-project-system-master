@@ -13,17 +13,48 @@ import PersonIcon from "../../components/icons/PersonIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step1 = ({ onNext, onCancel }) => {
-  // State for form fields
-  const [lead, setLead] = useState({ value: "sarah", label: "Sarah Jenkins" });
-  const [supplySource, setSupplySource] = useState("in-house");
-  const [contactType, setContactType] = useState("MH"); // MH, None, 3rd Party
+const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
+  const [leads, setLeads] = useState([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
 
-  const leads = [
-    { value: "sarah", label: "Sarah Jenkins", avatar: true },
-    { value: "mike", label: "Mike Ross", avatar: true },
-    { value: "jessica", label: "Jessica Pearson", avatar: true },
-  ];
+  // Fetch users for generic dropdown
+  React.useEffect(() => {
+    const fetchUsers = async () => {
+      setIsLoadingLeads(true);
+      try {
+        const res = await fetch("http://localhost:5000/api/auth/users", {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const users = await res.json();
+          const mappedUsers = users.map((u) => ({
+            value: u._id,
+            label: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.name,
+            avatar: true, // Assuming avatar logic exists in UserAvatar
+          }));
+          setLeads(mappedUsers);
+        }
+      } catch (err) {
+        console.error("Failed to fetch users", err);
+      } finally {
+        setIsLoadingLeads(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const handleChange = (field, value) => {
+    setFormData({ [field]: value });
+  };
+
+  const handleNextStep = () => {
+    // Basic Validation
+    if (!formData.projectName || !formData.lead) {
+      alert("Please fill in Project Name and select a Lead.");
+      return;
+    }
+    onNext();
+  };
 
   return (
     <div className="step-container">
@@ -52,21 +83,21 @@ const Step1 = ({ onNext, onCancel }) => {
 
         {/* Form Body */}
         <div className="form-body">
-          {/* Row 1: Date & Time (Readonly style in design, but we'll make them Inputs) */}
+          {/* Row 1: Date & Time */}
           <div className="form-row">
             <Input
               type="date"
               label="Order Date"
-              value={new Date().toISOString().split("T")[0]}
+              value={formData.orderDate}
+              onChange={(e) => handleChange("orderDate", e.target.value)}
               icon={<CalendarIcon />}
-              readOnly
             />
             <Input
               type="time"
               label="Received Time"
-              value={new Date().toISOString().split("T")[1]}
+              value={formData.receivedTime}
+              onChange={(e) => handleChange("receivedTime", e.target.value)}
               icon={<ClockIcon />}
-              readOnly
             />
           </div>
 
@@ -74,8 +105,9 @@ const Step1 = ({ onNext, onCancel }) => {
           <Select
             label="Lead Assignment"
             options={leads}
-            value={lead}
-            onChange={setLead}
+            value={formData.lead}
+            onChange={(val) => handleChange("lead", val)}
+            placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
             renderValue={(option) => (
               <>
                 <UserAvatar />
@@ -94,6 +126,8 @@ const Step1 = ({ onNext, onCancel }) => {
           <Input
             label="Project Name"
             placeholder="e.g. Summer Campaign Banner"
+            value={formData.projectName}
+            onChange={(e) => handleChange("projectName", e.target.value)}
           />
 
           {/* Row: Delivery Date & Time */}
@@ -101,13 +135,15 @@ const Step1 = ({ onNext, onCancel }) => {
             <Input
               type="date"
               label="Delivery Date"
-              value={new Date().toISOString().split("T")[0]}
+              value={formData.deliveryDate}
+              onChange={(e) => handleChange("deliveryDate", e.target.value)}
               icon={<CalendarIcon />}
             />
             <Input
               type="time"
               label="Time"
-              value={new Date().toISOString().split("T")[1]}
+              value={formData.deliveryTime}
+              onChange={(e) => handleChange("deliveryTime", e.target.value)}
               icon={<ClockIcon />}
             />
           </div>
@@ -116,6 +152,8 @@ const Step1 = ({ onNext, onCancel }) => {
           <Input
             label="Delivery Location"
             placeholder="e.g. 123 Business Park, Warehouse B"
+            value={formData.deliveryLocation}
+            onChange={(e) => handleChange("deliveryLocation", e.target.value)}
             icon={<LocationIcon />}
           />
 
@@ -127,9 +165,9 @@ const Step1 = ({ onNext, onCancel }) => {
                 <button
                   key={type}
                   className={`contact-pill ${
-                    contactType === type ? "active" : ""
+                    formData.contactType === type ? "active" : ""
                   }`}
-                  onClick={() => setContactType(type)}
+                  onClick={() => handleChange("contactType", type)}
                 >
                   {type}
                 </button>
@@ -143,20 +181,20 @@ const Step1 = ({ onNext, onCancel }) => {
             <CardOption
               icon={<HomeIcon />}
               label="In-house"
-              checked={supplySource === "in-house"}
-              onChange={() => setSupplySource("in-house")}
+              checked={formData.supplySource === "in-house"}
+              onChange={() => handleChange("supplySource", "in-house")}
             />
             <CardOption
               icon={<CartIcon />}
               label="Purchase"
-              checked={supplySource === "purchase"}
-              onChange={() => setSupplySource("purchase")}
+              checked={formData.supplySource === "purchase"}
+              onChange={() => handleChange("supplySource", "purchase")}
             />
             <CardOption
               icon={<PersonIcon />}
               label="Client Supply"
-              checked={supplySource === "client-supply"}
-              onChange={() => setSupplySource("client-supply")}
+              checked={formData.supplySource === "client-supply"}
+              onChange={() => handleChange("supplySource", "client-supply")}
             />
           </div>
         </div>
@@ -164,7 +202,7 @@ const Step1 = ({ onNext, onCancel }) => {
 
       {/* Footer */}
       <div className="step-footer">
-        <button className="next-btn" onClick={onNext}>
+        <button className="next-btn" onClick={handleNextStep}>
           Next Step
           <svg
             width="20"

@@ -1,5 +1,6 @@
 const express = require("express");
 const authRoutes = require("./routes/authRoutes");
+const projectRoutes = require("./routes/projectRoutes"); // [NEW]
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -27,12 +28,14 @@ app.use(express.json());
 // Base Route
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/projects", projectRoutes); // [NEW]
 
 app.get("/", (req, res) => {
   res.send("MagicHands Server is Running");
 });
 
 // Start Server
+// Restart trigger
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
