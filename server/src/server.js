@@ -18,8 +18,13 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:5173", // Enable CORS for client
-    credentials: true, // Allow cookies
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      // Allow any origin
+      callback(null, true);
+    },
+    credentials: true,
   })
 );
 app.use(cookieParser());

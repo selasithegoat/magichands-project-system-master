@@ -36,8 +36,8 @@ const registerUser = async (req, res) => {
     // Send HTTP-only cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
-      sameSite: "strict", // Prevent CSRF
+      secure: true, // Always secure for ngrok/cross-site
+      sameSite: "none", // Allow cross-site for ngrok
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
 
@@ -66,8 +66,8 @@ const loginUser = async (req, res) => {
     // Send HTTP-only cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: true, // Always secure for ngrok/cross-site
+      sameSite: "none", // Allow cross-site for ngrok
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
 

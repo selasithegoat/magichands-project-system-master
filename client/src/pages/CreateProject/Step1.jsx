@@ -22,7 +22,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
     const fetchUsers = async () => {
       setIsLoadingLeads(true);
       try {
-        const res = await fetch("http://localhost:5000/api/auth/users", {
+        const res = await fetch("/api/auth/users", {
           credentials: "include",
         });
         if (res.ok) {

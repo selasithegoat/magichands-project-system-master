@@ -74,7 +74,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     setMessage(null);
     setIsFadingOut(false);
     try {
-      const res = await fetch("http://localhost:5000/api/auth/profile", {
+      const res = await fetch("/api/auth/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
