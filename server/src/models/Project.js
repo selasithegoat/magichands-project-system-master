@@ -47,6 +47,25 @@ const ProjectSchema = new mongoose.Schema(
         qty: Number,
       },
     ], // Step 3: List of items
+    uncontrollableFactors: [
+      {
+        description: String,
+        responsible: {
+          label: String,
+          value: String,
+        },
+        status: {
+          label: String,
+          value: String,
+        },
+      },
+    ], // Step 4
+    productionRisks: [
+      {
+        description: String,
+        preventive: String,
+      },
+    ], // Step 4
     status: {
       type: String,
       enum: ["Draft", "In Progress", "Completed", "On Hold"],

@@ -30,6 +30,8 @@ const CreateProjectWizard = () => {
         supplySource: "in-house",
         departments: [], // Step 2
         items: [], // Step 3
+        uncontrollableFactors: [], // Step 4
+        productionRisks: [], // Step 4
       },
     };
   };
@@ -124,6 +126,8 @@ const CreateProjectWizard = () => {
       )}
       {currentStep === 4 && (
         <Step4
+          formData={formData}
+          setFormData={handleUpdateFormData}
           onNext={handleNext}
           onBack={handleBack}
           onCancel={handleCancelProject}

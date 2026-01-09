@@ -234,6 +234,63 @@ const ProjectSummaryPDF = ({ formData }) => {
           )}
         </View>
 
+        {/* Risks */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Risk Assessment</Text>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: "bold",
+              color: "#475569",
+              marginBottom: 4,
+            }}
+          >
+            Uncontrollable Factors:
+          </Text>
+          {formData.uncontrollableFactors &&
+          formData.uncontrollableFactors.length > 0 ? (
+            formData.uncontrollableFactors.map((item, index) => (
+              <View key={index} style={styles.row}>
+                <Text style={{ fontSize: 9, color: "#334155" }}>
+                  • {item.description} (Resp: {item.responsible?.label || "N/A"}
+                  )
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={{ fontSize: 9, color: "#94A3B8", marginBottom: 5 }}>
+              None
+            </Text>
+          )}
+
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: "bold",
+              color: "#475569",
+              marginTop: 8,
+              marginBottom: 4,
+            }}
+          >
+            Production Risks:
+          </Text>
+          {formData.productionRisks && formData.productionRisks.length > 0 ? (
+            formData.productionRisks.map((item, index) => (
+              <View key={index} style={{ marginBottom: 3 }}>
+                <Text style={{ fontSize: 9, color: "#334155" }}>
+                  • {item.description}
+                </Text>
+                <Text style={{ fontSize: 8, color: "#64748B", marginLeft: 8 }}>
+                  {" "}
+                  Preventive: {item.preventive}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={{ fontSize: 9, color: "#94A3B8" }}>None</Text>
+          )}
+        </View>
+
         {/* Footer */}
         <View style={styles.footer}>
           <Text>

@@ -10,24 +10,7 @@ import RobotArmIcon from "../../components/icons/RobotArmIcon";
 import "./Step4.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step4 = ({ onNext, onBack, onCancel }) => {
-  const [uncontrollableFactors, setUncontrollableFactors] = useState([
-    {
-      id: 1,
-      description: "Supplier Delay on Raw Material X",
-      responsible: { label: "Sarah Jenkins", value: "sarah" },
-      status: { label: "Identified", value: "identified" },
-    },
-  ]);
-
-  const [productionRisks, setProductionRisks] = useState([
-    {
-      id: 1,
-      description: "Possible color mismatch on batch 2 dye.",
-      preventive: "Double check pantone reference before mixing.",
-    },
-  ]);
-
+const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const responsibleOptions = [
     { label: "Sarah Jenkins", value: "sarah" },
     { label: "Mike Ross", value: "mike" },
@@ -41,46 +24,61 @@ const Step4 = ({ onNext, onBack, onCancel }) => {
   // Logic for Uncontrollable Factors
   const addUncontrollable = () => {
     const newId = Date.now();
-    setUncontrollableFactors([
-      ...uncontrollableFactors,
-      { id: newId, description: "", responsible: null, status: null },
-    ]);
+    const currentFactors = formData.uncontrollableFactors || [];
+    setFormData({
+      uncontrollableFactors: [
+        ...currentFactors,
+        { id: newId, description: "", responsible: null, status: null },
+      ],
+    });
   };
 
   const removeUncontrollable = (id) => {
-    setUncontrollableFactors(
-      uncontrollableFactors.filter((item) => item.id !== id)
-    );
+    const currentFactors = formData.uncontrollableFactors || [];
+    setFormData({
+      uncontrollableFactors: currentFactors.filter((item) => item.id !== id),
+    });
   };
 
   const updateUncontrollable = (id, field, value) => {
-    setUncontrollableFactors(
-      uncontrollableFactors.map((item) =>
+    const currentFactors = formData.uncontrollableFactors || [];
+    setFormData({
+      uncontrollableFactors: currentFactors.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
-      )
-    );
+      ),
+    });
   };
 
   // Logic for Production Risks
   const addRisk = () => {
     const newId = Date.now();
-    setProductionRisks([
-      ...productionRisks,
-      { id: newId, description: "", preventive: "" },
-    ]);
+    const currentRisks = formData.productionRisks || [];
+    setFormData({
+      productionRisks: [
+        ...currentRisks,
+        { id: newId, description: "", preventive: "" },
+      ],
+    });
   };
 
   const removeRisk = (id) => {
-    setProductionRisks(productionRisks.filter((item) => item.id !== id));
+    const currentRisks = formData.productionRisks || [];
+    setFormData({
+      productionRisks: currentRisks.filter((item) => item.id !== id),
+    });
   };
 
   const updateRisk = (id, field, value) => {
-    setProductionRisks(
-      productionRisks.map((item) =>
+    const currentRisks = formData.productionRisks || [];
+    setFormData({
+      productionRisks: currentRisks.map((item) =>
         item.id === id ? { ...item, [field]: value } : item
-      )
-    );
+      ),
+    });
   };
+
+  const uncontrollableFactors = formData.uncontrollableFactors || [];
+  const productionRisks = formData.productionRisks || [];
 
   return (
     <div className="step-container">

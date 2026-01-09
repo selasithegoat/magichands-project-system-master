@@ -6,6 +6,7 @@ import DollarIcon from "../../components/icons/DollarIcon";
 import EditIcon from "../../components/icons/EditIcon";
 import FileIcon from "../../components/icons/FileIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
+import WarningIcon from "../../components/icons/WarningIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ProjectSummaryPDF from "./ProjectSummaryPDF";
@@ -115,6 +116,71 @@ const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
         </div>
 
         {/* Review Cards */}
+
+        {/* Risk Assessment (Step 4) */}
+        <div className="review-card">
+          <div className="review-card-header">
+            <div className="header-left">
+              <div className="icon-box-blue">
+                <WarningIcon />
+              </div>
+              <span className="card-title">Risk Assessment</span>
+            </div>
+          </div>
+
+          <div className="review-grid">
+            <div className="review-item" style={{ gridColumn: "1 / -1" }}>
+              <label>Uncontrollable Factors</label>
+              <div className="review-value">
+                {formData.uncontrollableFactors &&
+                formData.uncontrollableFactors.length > 0
+                  ? formData.uncontrollableFactors.map((f, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          marginBottom: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <span
+                          className="badge-pink"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          High Priority
+                        </span>
+                        <span>{f.description}</span>
+                      </div>
+                    ))
+                  : "None"}
+              </div>
+            </div>
+            <div
+              className="review-item"
+              style={{ gridColumn: "1 / -1", marginTop: 10 }}
+            >
+              <label>Production Risks</label>
+              <div
+                className="review-value"
+                style={{ fontSize: "0.9rem", color: "#64748B" }}
+              >
+                {formData.productionRisks && formData.productionRisks.length > 0
+                  ? formData.productionRisks.map((r, i) => (
+                      <div key={i} style={{ marginBottom: 4 }}>
+                        • {r.description}{" "}
+                        <span
+                          style={{ fontStyle: "italic", fontSize: "0.8rem" }}
+                        >
+                          (Preventive: {r.preventive || "N/A"})
+                        </span>
+                      </div>
+                    ))
+                  : "None"}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Attachments / Downloads */}
         <div className="review-section-simple">
