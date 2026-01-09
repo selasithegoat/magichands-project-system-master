@@ -64,8 +64,7 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         <div className="page-title-section">
           <h2 className="page-title">Order Quantity Breakdown</h2>
           <p className="page-subtitle">
-            Please list all items, their location breakdown, and quantities
-            required.
+            Please list all items, their breakdown, and quantities required.
           </p>
         </div>
 
