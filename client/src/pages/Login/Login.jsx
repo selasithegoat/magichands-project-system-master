@@ -4,6 +4,7 @@ import "./Login.css";
 // If 'SystemIcon' or 'SettingsIcon' isn't quite right, we'll build a custom SVG.
 // Using 'SettingsIcon' as a placeholder for the crossed tools, or I will create an inline SVG that looks like the wrench/hammer in the image.
 import XIcon from "../../components/icons/XIcon";
+import Spinner from "../../components/ui/Spinner";
 
 const ToolsLogo = () => (
   <svg
@@ -229,7 +230,20 @@ const Login = ({ onLogin }) => {
 
           {/* Submit */}
           <button type="submit" className="login-submit-btn" disabled={loading}>
-            {loading ? "Signing In..." : "Sign In to Portal"}
+            {loading ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                <Spinner /> Signing In...
+              </div>
+            ) : (
+              "Sign In to Portal"
+            )}
           </button>
         </form>
 
