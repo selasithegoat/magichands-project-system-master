@@ -6,36 +6,36 @@ import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import "./Step3.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step3 = ({ onNext, onBack, onCancel }) => {
-  const [items, setItems] = useState([
-    {
-      id: 1,
-      description: "Office Chairs Model X",
-      breakdown: "Lobby Area",
-      qty: 15,
-    },
-    {
-      id: 2,
-      description: "Conference Table Large",
-      breakdown: "Main Meeting Room",
-      qty: 1,
-    },
-  ]);
+const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+  const items = formData.items || [];
+
+  // Initialize with default items if empty (optional, but good for demo)
+  // React.useEffect(() => {
+  //   if (items.length === 0) {
+  //      setFormData({ items: [ ...defaultItems ] });
+  //   }
+  // }, []);
 
   const addItem = () => {
     const newId =
       items.length > 0 ? Math.max(...items.map((i) => i.id)) + 1 : 1;
-    setItems([...items, { id: newId, description: "", breakdown: "", qty: 0 }]);
+    const newItems = [
+      ...items,
+      { id: newId, description: "", breakdown: "", qty: 0 },
+    ];
+    setFormData({ items: newItems });
   };
 
   const deleteItem = (id) => {
-    setItems(items.filter((item) => item.id !== id));
+    const newItems = items.filter((item) => item.id !== id);
+    setFormData({ items: newItems });
   };
 
   const updateItem = (id, field, value) => {
-    setItems(
-      items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    const newItems = items.map((item) =>
+      item.id === id ? { ...item, [field]: value } : item
     );
+    setFormData({ items: newItems });
   };
 
   const totalItems = items.reduce(

@@ -28,8 +28,9 @@ import {
 import "./Step2.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step2 = ({ onNext, onBack, onCancel }) => {
-  const [selectedDepts, setSelectedDepts] = useState([]);
+const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+  // Use formData.departments (default to [])
+  const selectedDepts = formData.departments || [];
   const [searchTerm, setSearchTerm] = useState("");
 
   const allDepartments = [
@@ -76,9 +77,10 @@ const Step2 = ({ onNext, onBack, onCancel }) => {
   );
 
   const toggleDept = (id) => {
-    setSelectedDepts((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+    const newDepts = selectedDepts.includes(id)
+      ? selectedDepts.filter((item) => item !== id)
+      : [...selectedDepts, id];
+    setFormData({ departments: newDepts });
   };
 
   return (

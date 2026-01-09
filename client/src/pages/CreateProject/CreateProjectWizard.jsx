@@ -28,6 +28,8 @@ const CreateProjectWizard = () => {
         deliveryLocation: "",
         contactType: "MH",
         supplySource: "in-house",
+        departments: [], // Step 2
+        items: [], // Step 3
       },
     };
   };
@@ -79,6 +81,8 @@ const CreateProjectWizard = () => {
       )}
       {currentStep === 2 && (
         <Step2
+          formData={formData}
+          setFormData={handleUpdateFormData}
           onNext={handleNext}
           onBack={handleBack}
           onCancel={handleCancelProject}
@@ -86,6 +90,8 @@ const CreateProjectWizard = () => {
       )}
       {currentStep === 3 && (
         <Step3
+          formData={formData}
+          setFormData={handleUpdateFormData}
           onNext={handleNext}
           onBack={handleBack}
           onCancel={handleCancelProject}

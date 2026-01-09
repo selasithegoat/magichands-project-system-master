@@ -50,6 +50,11 @@ async function createProject() {
     deliveryLocation: "Warehouse A",
     contactType: "MH",
     supplySource: "in-house",
+    departments: ["graphics", "uv-printing"], // Step 2
+    items: [
+      { description: "Test Item 1", breakdown: "Room A", qty: 10 },
+      { description: "Test Item 2", breakdown: "Room B", qty: 5 },
+    ], // Step 3
   };
 
   const res = await fetch(`${BASE_URL}/projects`, {

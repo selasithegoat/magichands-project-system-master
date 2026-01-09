@@ -39,6 +39,14 @@ const ProjectSchema = new mongoose.Schema(
         enum: ["in-house", "purchase", "client-supply"],
       },
     },
+    departments: [String], // Step 2: List of department IDs
+    items: [
+      {
+        description: String,
+        breakdown: String,
+        qty: Number,
+      },
+    ], // Step 3: List of items
     status: {
       type: String,
       enum: ["Draft", "In Progress", "Completed", "On Hold"],

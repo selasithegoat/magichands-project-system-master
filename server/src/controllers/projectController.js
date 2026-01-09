@@ -16,6 +16,8 @@ const createProject = async (req, res) => {
       deliveryLocation,
       contactType,
       supplySource,
+      departments, // [NEW] Step 2
+      items, // [NEW] Step 3
     } = req.body;
 
     // Basic validation
@@ -40,6 +42,8 @@ const createProject = async (req, res) => {
         contactType,
         supplySource,
       },
+      departments: departments || [],
+      items: items || [],
       currentStep: 2, // Move to step 2 after creation
       createdBy: req.user._id, // Assumes auth middleware populates req.user
     });
