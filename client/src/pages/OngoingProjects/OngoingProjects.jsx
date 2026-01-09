@@ -122,9 +122,7 @@ const OngoingProjects = ({ onNavigateDetail, onBack }) => {
             <div className="card-header-row">
               <span className={`status-pill ${p.statusClass}`}>{p.status}</span>
               <button className="card-menu-btn">
-                <button className="card-menu-btn">
-                  <ThreeDotsIcon />
-                </button>
+                <ThreeDotsIcon />
               </button>
             </div>
 
