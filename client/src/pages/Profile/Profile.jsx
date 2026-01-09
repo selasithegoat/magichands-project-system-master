@@ -10,7 +10,7 @@ import UploadIcon from "../../components/icons/UploadIcon";
 import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
 
-const Profile = ({ onSignOut }) => {
+const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(false);
 
@@ -23,36 +23,46 @@ const Profile = ({ onSignOut }) => {
     department: "",
     contact: "",
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!user); // If user prop exists, not loading
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: '' }
+  const [isFadingOut, setIsFadingOut] = useState(false);
 
-  // Fetch user data on mount
+  // Sync state with user prop when it changes
   React.useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/auth/me", {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setFormData({
-            firstName: data.firstName || "",
-            lastName: data.lastName || "",
-            email: data.email || "",
-            employeeType: data.employeeType || "Staff",
-            department: data.department || "",
-            contact: data.contact || "",
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch profile", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProfile();
-  }, []);
+    if (user) {
+      setFormData({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        employeeType: user.employeeType || "Staff",
+        department: user.department || "",
+        contact: user.contact || "",
+      });
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Handle Toast Timeout
+  React.useEffect(() => {
+    if (message) {
+      // Start fade out after 4.5s
+      const fadeTimer = setTimeout(() => {
+        setIsFadingOut(true);
+      }, 4500);
+
+      // Remove after 5s
+      const removeTimer = setTimeout(() => {
+        setMessage(null);
+        setIsFadingOut(false);
+      }, 5000);
+
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(removeTimer);
+      };
+    }
+  }, [message]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -62,6 +72,7 @@ const Profile = ({ onSignOut }) => {
   const handleSave = async () => {
     setSaving(true);
     setMessage(null);
+    setIsFadingOut(false);
     try {
       const res = await fetch("http://localhost:5000/api/auth/profile", {
         method: "PUT",
@@ -74,6 +85,7 @@ const Profile = ({ onSignOut }) => {
 
       if (res.ok) {
         setMessage({ type: "success", text: "Profile updated successfully!" });
+        if (onUpdateProfile) onUpdateProfile(); // Refresh app state
       } else {
         setMessage({ type: "error", text: "Failed to update profile." });
       }
@@ -91,6 +103,7 @@ const Profile = ({ onSignOut }) => {
     <div className="profile-container">
       {/* Top Section: Header & Stats */}
       <div className="profile-top-grid">
+        {/* ... (rest of top grid remains same) ... */}
         {/* Profile Card */}
         <div className="profile-header-card">
           <div className="profile-wrapper">
@@ -169,15 +182,15 @@ const Profile = ({ onSignOut }) => {
 
             {message && (
               <div
-                style={{
-                  padding: "10px",
-                  marginBottom: "15px",
-                  borderRadius: "4px",
-                  backgroundColor:
-                    message.type === "success" ? "#d4edda" : "#f8d7da",
-                  color: message.type === "success" ? "#155724" : "#721c24",
-                }}
+                className={`toast-message ${message.type} ${
+                  isFadingOut ? "fading-out" : ""
+                }`}
               >
+                {message.type === "success" ? (
+                  <CheckCircleIcon width="16" height="16" />
+                ) : (
+                  "⚠️"
+                )}
                 {message.text}
               </div>
             )}

@@ -6,6 +6,7 @@ import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
 import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
 import Profile from "./pages/Profile/Profile";
 import Layout from "./components/layout/Layout";
+import Spinner from "./components/ui/Spinner"; // Import Spinner
 
 import {
   Routes,
@@ -16,37 +17,56 @@ import {
 } from "react-router-dom";
 import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
 
+// Helper to wrap protected content in Layout
+const ProtectedLayout = ({ children, activeView, user, navigate }) => (
+  <Layout
+    activeView={activeView}
+    user={user} // Pass user to Layout
+    onNavigateDashboard={() => navigate("/")}
+    onNavigateProject={() => navigate("/projects")}
+    onNavigateHistory={() => navigate("/history")}
+    onNavigateProfile={() => navigate("/profile")}
+    onCreateProject={() => navigate("/create")}
+  >
+    {children}
+  </Layout>
+);
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  const fetchUser = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/me", {
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const userData = await res.json();
+        setUser(userData);
+        // If on login page and authorized, go to dashboard
+        if (location.pathname === "/login") {
+          navigate("/");
+        }
+      } else {
+        // If unauthorized and trying to access protected route, go to login
+        if (location.pathname !== "/login") {
+          navigate("/login");
+        }
+      }
+    } catch (err) {
+      navigate("/login");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Check for active session on load
   React.useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/auth/me", {
-          credentials: "include",
-        });
-
-        if (res.ok) {
-          // If on login page and authorized, go to dashboard
-          if (location.pathname === "/login") {
-            navigate("/");
-          }
-        } else {
-          // If unauthorized and trying to access protected route, go to login
-          if (location.pathname !== "/login") {
-            navigate("/login");
-          }
-        }
-      } catch (err) {
-        navigate("/login");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkSession();
+    fetchUser();
   }, []);
 
   const handleLogout = async () => {
@@ -55,6 +75,7 @@ function App() {
         method: "POST",
         credentials: "include",
       });
+      setUser(null); // Clear user state
       navigate("/login");
     } catch (error) {
       console.error("Logout failed", error);
@@ -72,34 +93,25 @@ function App() {
           height: "100vh",
         }}
       >
-        Loading...
+        <Spinner />
       </div>
     );
   }
 
-  // Helper to wrap protected content in Layout
-  const ProtectedLayout = ({ children, activeView }) => (
-    <Layout
-      activeView={activeView}
-      onNavigateDashboard={() => navigate("/")}
-      onNavigateProject={() => navigate("/projects")}
-      onNavigateHistory={() => navigate("/history")}
-      onNavigateProfile={() => navigate("/profile")}
-      onCreateProject={() => navigate("/create")}
-    >
-      {children}
-    </Layout>
-  );
-
   return (
     <Routes>
-      <Route path="/login" element={<Login onLogin={() => navigate("/")} />} />
+      <Route path="/login" element={<Login onLogin={fetchUser} />} />
 
       <Route
         path="/"
         element={
-          <ProtectedLayout activeView="dashboard">
+          <ProtectedLayout
+            activeView="dashboard"
+            user={user}
+            navigate={navigate}
+          >
             <Dashboard
+              user={user} // Pass user to Dashboard
               onNavigateProject={() => navigate("/detail")}
               onCreateProject={() => navigate("/create")}
               onSeeAllProjects={() => navigate("/projects")}
@@ -111,7 +123,7 @@ function App() {
       <Route
         path="/create"
         element={
-          <ProtectedLayout activeView="create">
+          <ProtectedLayout activeView="create" user={user} navigate={navigate}>
             <CreateProjectWizard />
           </ProtectedLayout>
         }
@@ -120,7 +132,7 @@ function App() {
       <Route
         path="/detail"
         element={
-          <ProtectedLayout activeView="detail">
+          <ProtectedLayout activeView="detail" user={user} navigate={navigate}>
             <ProjectDetail />
           </ProtectedLayout>
         }
@@ -129,7 +141,11 @@ function App() {
       <Route
         path="/projects"
         element={
-          <ProtectedLayout activeView="projects">
+          <ProtectedLayout
+            activeView="projects"
+            user={user}
+            navigate={navigate}
+          >
             <OngoingProjects
               onNavigateDetail={() => navigate("/detail")}
               onBack={() => navigate("/")}
@@ -141,7 +157,7 @@ function App() {
       <Route
         path="/history"
         element={
-          <ProtectedLayout activeView="history">
+          <ProtectedLayout activeView="history" user={user} navigate={navigate}>
             <ProjectHistory onBack={() => navigate("/")} />
           </ProtectedLayout>
         }
@@ -150,8 +166,12 @@ function App() {
       <Route
         path="/profile"
         element={
-          <ProtectedLayout activeView="profile">
-            <Profile onSignOut={handleLogout} />
+          <ProtectedLayout activeView="profile" user={user} navigate={navigate}>
+            <Profile
+              user={user}
+              onUpdateProfile={fetchUser}
+              onSignOut={handleLogout}
+            />
           </ProtectedLayout>
         }
       />

@@ -14,6 +14,7 @@ const Dashboard = ({
   onNavigateProject,
   onCreateProject,
   onSeeAllProjects,
+  user,
 }) => {
   return (
     <div className="dashboard-container">
@@ -23,7 +24,8 @@ const Dashboard = ({
       <div className="dashboard-page-header">
         <div className="dashboard-date">Thursday, Oct 24</div>
         <h1 className="dashboard-greeting">
-          Hello, Alex <span className="wave-emoji">👋</span>
+          Hello, {user ? user.firstName : "User"}{" "}
+          <span className="wave-emoji">👋</span>
         </h1>
         <p className="dashboard-subtitle">Here's your project overview.</p>
       </div>

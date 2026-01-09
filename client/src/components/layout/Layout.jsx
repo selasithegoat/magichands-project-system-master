@@ -34,16 +34,30 @@ const Layout = ({
   onNavigateHistory,
   onNavigateProfile,
   onCreateProject,
-  activeView, // Receive activeView
+  activeView,
+  user, // Receive user
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Helper to get initials
+  const getInitials = () => {
+    if (!user) return "U";
+    const f = user.firstName ? user.firstName[0] : "";
+    const l = user.lastName ? user.lastName[0] : "";
+    return (f + l).toUpperCase() || "U";
+  };
+
+  const getFullName = () => {
+    if (!user) return "User";
+    return `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.name;
+  };
 
   return (
     <div className="layout-container">
       {/* Top Navigation Header */}
-      {/* Top Navigation Header */}
       <Header
         activeView={activeView}
+        user={user}
         onNavigateDashboard={onNavigateDashboard}
         onNavigateProject={onNavigateProject}
         onNavigateHistory={onNavigateHistory}
@@ -149,10 +163,12 @@ const Layout = ({
 
             <div className="drawer-footer">
               <div className="drawer-user">
-                <div className="user-profile-mini">AJ</div>
+                <div className="user-profile-mini">{getInitials()}</div>
                 <div className="drawer-user-info">
-                  <span className="user-name">Alex Morgan</span>
-                  <span className="user-role">Project Manager</span>
+                  <span className="user-name">{getFullName()}</span>
+                  <span className="user-role">
+                    {user?.employeeType || "User"}
+                  </span>
                 </div>
               </div>
               <button className="drawer-logout">

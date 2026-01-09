@@ -4,12 +4,20 @@ import MenuIcon from "../icons/MenuIcon";
 
 const Header = ({
   activeView,
+  user,
   onNavigateDashboard,
   onNavigateProject,
   onNavigateHistory,
   onNavigateProfile,
   onToggleMobileMenu,
 }) => {
+  const getInitials = () => {
+    if (!user) return "U";
+    const f = user.firstName ? user.firstName[0] : "";
+    const l = user.lastName ? user.lastName[0] : "";
+    return (f + l).toUpperCase() || "U";
+  };
+
   return (
     <header className="main-header">
       <div className="header-inner">
@@ -89,7 +97,7 @@ const Header = ({
             onClick={onNavigateProfile}
             style={{ cursor: "pointer" }}
           >
-            AJ
+            {getInitials()}
           </div>
         </div>
       </div>
