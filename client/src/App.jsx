@@ -84,6 +84,21 @@ function App() {
     setCurrentStep(1);
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch("http://localhost:5000/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      // Regardless of server response (even if cookie missing), clear client state
+      setView("login");
+    } catch (error) {
+      console.error("Logout failed", error);
+      // Still force logout on client
+      setView("login");
+    }
+  };
+
   if (isLoading) {
     return (
       <div
@@ -155,7 +170,7 @@ function App() {
               onBack={navigateToDashboard}
             />
           ) : view === "profile" ? (
-            <Profile onSignOut={() => console.log("Sign Out")} />
+            <Profile onSignOut={handleLogout} />
           ) : (
             <>
               {currentStep === 1 && (
