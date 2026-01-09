@@ -9,20 +9,41 @@ import ConfirmationModal from "../../components/ui/ConfirmationModal";
 
 const CreateProjectWizard = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1);
+
+  // Load initial state from localStorage or default
+  const getInitialState = () => {
+    const saved = localStorage.getItem("projectWizardData");
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return {
+      currentStep: 1,
+      formData: {
+        orderDate: new Date().toISOString().split("T")[0],
+        receivedTime: "10:00",
+        lead: null,
+        projectName: "",
+        deliveryDate: new Date().toISOString().split("T")[0],
+        deliveryTime: "14:00",
+        deliveryLocation: "",
+        contactType: "MH",
+        supplySource: "in-house",
+      },
+    };
+  };
+
+  const initialState = getInitialState();
+  const [currentStep, setCurrentStep] = useState(initialState.currentStep);
+  const [formData, setFormData] = useState(initialState.formData);
   const [showCancelModal, setShowCancelModal] = useState(false);
-  /* Step 1 State */
-  const [formData, setFormData] = useState({
-    orderDate: new Date().toISOString().split("T")[0],
-    receivedTime: "10:00",
-    lead: null, // { value, label, avatar } or raw user object
-    projectName: "",
-    deliveryDate: new Date().toISOString().split("T")[0],
-    deliveryTime: "14:00",
-    deliveryLocation: "",
-    contactType: "MH",
-    supplySource: "in-house",
-  });
+
+  // Save to localStorage whenever state changes
+  React.useEffect(() => {
+    localStorage.setItem(
+      "projectWizardData",
+      JSON.stringify({ currentStep, formData })
+    );
+  }, [currentStep, formData]);
 
   const handleUpdateFormData = (updates) => {
     setFormData((prev) => ({ ...prev, ...updates }));
@@ -41,6 +62,7 @@ const CreateProjectWizard = () => {
   };
 
   const confirmCancel = () => {
+    localStorage.removeItem("projectWizardData"); // Clear draft
     setShowCancelModal(false);
     navigate("/"); // Go back to dashboard
   };
