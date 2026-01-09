@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Step1 from "./pages/CreateProject/Step1";
+import Login from "./pages/Login/Login";
 import Step2 from "./pages/CreateProject/Step2";
 import Step3 from "./pages/CreateProject/Step3";
 import Step4 from "./pages/CreateProject/Step4";
@@ -14,7 +15,7 @@ import ConfirmationModal from "./components/ui/ConfirmationModal";
 import Layout from "./components/layout/Layout";
 
 function App() {
-  const [view, setView] = useState("dashboard"); // 'dashboard', 'create', 'detail', 'history', 'projects'
+  const [view, setView] = useState("login"); // 'login', 'dashboard', 'create', 'detail', 'history', 'projects'
   const [currentStep, setCurrentStep] = useState(1);
 
   const handleNext = () => {
@@ -89,63 +90,67 @@ function App() {
         </button>
       </div>
 
-      <Layout
-        activeView={view} // Pass the current view state
-        onNavigateDashboard={navigateToDashboard}
-        onNavigateProject={navigateToProjectsTab} // Navbar "Projects" goes to empty tab
-        onNavigateHistory={navigateToHistory}
-        onNavigateProfile={navigateToProfile}
-        onCreateProject={navigateToCreate}
-      >
-        {view === "dashboard" ? (
-          <Dashboard
-            onNavigateProject={navigateToProjectDetail} // Cards go to Detail
-            onCreateProject={navigateToCreate}
-            onSeeAllProjects={navigateToProjectsTab}
-          />
-        ) : view === "detail" ? (
-          <ProjectDetail />
-        ) : view === "history" ? (
-          <ProjectHistory onBack={navigateToDashboard} />
-        ) : view === "projects" ? (
-          <OngoingProjects
-            onNavigateDetail={navigateToProjectDetail}
-            onBack={navigateToDashboard}
-          />
-        ) : view === "profile" ? (
-          <Profile onSignOut={() => console.log("Sign Out")} />
-        ) : (
-          <>
-            {currentStep === 1 && (
-              <Step1 onNext={handleNext} onCancel={handleCancelProject} />
-            )}
-            {currentStep === 2 && (
-              <Step2
-                onNext={handleNext}
-                onBack={handleBack}
-                onCancel={handleCancelProject}
-              />
-            )}
-            {currentStep === 3 && (
-              <Step3
-                onNext={handleNext}
-                onBack={handleBack}
-                onCancel={handleCancelProject}
-              />
-            )}
-            {currentStep === 4 && (
-              <Step4
-                onNext={handleNext}
-                onBack={handleBack}
-                onCancel={handleCancelProject}
-              />
-            )}
-            {currentStep === 5 && (
-              <Step5 onBack={handleBack} onCancel={handleCancelProject} />
-            )}
-          </>
-        )}
-      </Layout>
+      {view === "login" ? (
+        <Login onLogin={navigateToDashboard} />
+      ) : (
+        <Layout
+          activeView={view} // Pass the current view state
+          onNavigateDashboard={navigateToDashboard}
+          onNavigateProject={navigateToProjectsTab} // Navbar "Projects" goes to empty tab
+          onNavigateHistory={navigateToHistory}
+          onNavigateProfile={navigateToProfile}
+          onCreateProject={navigateToCreate}
+        >
+          {view === "dashboard" ? (
+            <Dashboard
+              onNavigateProject={navigateToProjectDetail} // Cards go to Detail
+              onCreateProject={navigateToCreate}
+              onSeeAllProjects={navigateToProjectsTab}
+            />
+          ) : view === "detail" ? (
+            <ProjectDetail />
+          ) : view === "history" ? (
+            <ProjectHistory onBack={navigateToDashboard} />
+          ) : view === "projects" ? (
+            <OngoingProjects
+              onNavigateDetail={navigateToProjectDetail}
+              onBack={navigateToDashboard}
+            />
+          ) : view === "profile" ? (
+            <Profile onSignOut={() => console.log("Sign Out")} />
+          ) : (
+            <>
+              {currentStep === 1 && (
+                <Step1 onNext={handleNext} onCancel={handleCancelProject} />
+              )}
+              {currentStep === 2 && (
+                <Step2
+                  onNext={handleNext}
+                  onBack={handleBack}
+                  onCancel={handleCancelProject}
+                />
+              )}
+              {currentStep === 3 && (
+                <Step3
+                  onNext={handleNext}
+                  onBack={handleBack}
+                  onCancel={handleCancelProject}
+                />
+              )}
+              {currentStep === 4 && (
+                <Step4
+                  onNext={handleNext}
+                  onBack={handleBack}
+                  onCancel={handleCancelProject}
+                />
+              )}
+              {currentStep === 5 && (
+                <Step5 onBack={handleBack} onCancel={handleCancelProject} />
+              )}
+            </>
+          )}
+        </Layout>
+      )}
 
       <ConfirmationModal
         isOpen={showCancelModal}
