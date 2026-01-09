@@ -55,29 +55,34 @@ const registerUser = async (req, res) => {
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res) => {
-  const { employeeId, password } = req.body;
+  try {
+    const { employeeId, password } = req.body;
 
-  // Check for user email via employeeId
-  const user = await User.findOne({ employeeId });
+    // Check for user email via employeeId
+    const user = await User.findOne({ employeeId });
 
-  if (user && (await user.matchPassword(password))) {
-    const token = generateToken(user._id);
+    if (user && (await user.matchPassword(password))) {
+      const token = generateToken(user._id);
 
-    // Send HTTP-only cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: true, // Always secure for ngrok/cross-site
-      sameSite: "none", // Allow cross-site for ngrok
-      maxAge: 15 * 60 * 1000, // 15 minutes
-    });
+      // Send HTTP-only cookie
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: true, // Always secure for ngrok/cross-site
+        sameSite: "none", // Allow cross-site for ngrok
+        maxAge: 15 * 60 * 1000, // 15 minutes
+      });
 
-    res.json({
-      _id: user.id,
-      name: user.name,
-      employeeId: user.employeeId,
-    });
-  } else {
-    res.status(401).json({ message: "Invalid credentials" });
+      res.json({
+        _id: user.id,
+        name: user.name,
+        employeeId: user.employeeId,
+      });
+    } else {
+      res.status(401).json({ message: "Invalid credentials" });
+    }
+  } catch (error) {
+    console.error("Error in loginUser:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 

@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import "./Dashboard.css";
+import ProjectCard from "../../components/ui/ProjectCard"; // Import new component
 // Icons
 import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
-import CalendarIcon from "../../components/icons/CalendarIcon";
 import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
 import PlusIcon from "../../components/icons/PlusIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
@@ -16,13 +16,56 @@ const Dashboard = ({
   onSeeAllProjects,
   user,
 }) => {
+  const [projects, setProjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch("/api/projects", {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Reverse to show newest first
+        setProjects(data.reverse());
+      } else {
+        console.error("Failed to fetch projects");
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDetailsClick = (projectId) => {
+    // Navigate to details (implement routing or pass ID to parent)
+    console.log("Navigate to details:", projectId);
+    onNavigateProject(projectId);
+  };
+
+  const handleUpdateStatusClick = (projectId) => {
+    console.log("Update status for:", projectId);
+    // Open modal or navigate
+  };
+
   return (
     <div className="dashboard-container">
-      {/* Top Navigation Header Removed - Moved to Layout */}
-
       {/* Page Content Header */}
       <div className="dashboard-page-header">
-        <div className="dashboard-date">Thursday, Oct 24</div>
+        <div className="dashboard-date">
+          {new Date().toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+          })}
+        </div>
         <h1 className="dashboard-greeting">
           Hello, {user ? user.firstName : "User"}{" "}
           <span className="wave-emoji">👋</span>
@@ -41,7 +84,7 @@ const Dashboard = ({
               <ThreeDotsIcon />
             </div>
           </div>
-          <div className="stats-count">12</div>
+          <div className="stats-count">{projects.length}</div>
           <div className="stats-label">Active Projects</div>
         </div>
         <div className="stats-card">
@@ -53,9 +96,12 @@ const Dashboard = ({
               <ThreeDotsIcon />
             </div>
           </div>
-          <div className="stats-count">4</div>
+          <div className="stats-count">
+            {projects.filter((p) => p.status === "Draft").length}
+          </div>
           <div className="stats-label">Pending</div>
         </div>
+        {/* ... keep other stats or make dynamic later ... */}
         <div className="stats-card">
           <div className="stats-header">
             <div className="stats-icon-wrapper green">
@@ -63,7 +109,7 @@ const Dashboard = ({
             </div>
             <div className="trend-pill">~ 15%</div>
           </div>
-          <div className="stats-count">8</div>
+          <div className="stats-count">0</div>
           <div className="stats-label">Completed</div>
         </div>
         <div className="stats-card">
@@ -75,7 +121,7 @@ const Dashboard = ({
               <ThreeDotsIcon />
             </div>
           </div>
-          <div className="stats-count">2</div>
+          <div className="stats-count">0</div>
           <div className="stats-label">Overdue Items</div>
         </div>
       </div>
@@ -92,126 +138,30 @@ const Dashboard = ({
             </button>
           </div>
 
-          <div className="projects-list">
-            {/* Project 1 */}
-            <div className="project-card" onClick={onNavigateProject}>
-              <div className="project-card-header">
-                <div>
-                  <span className="project-id">#MH-2024-01</span>
-                  <h4 className="project-title">Website Redesign</h4>
-                </div>
-                <span className="status-badge in-progress">In Progress</span>
+          <div
+            className="projects-list-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {isLoading ? (
+              <p>Loading projects...</p>
+            ) : projects.length > 0 ? (
+              projects.map((project) => (
+                <ProjectCard
+                  key={project._id}
+                  project={project}
+                  onDetails={handleDetailsClick}
+                  onUpdateStatus={handleUpdateStatusClick}
+                />
+              ))
+            ) : (
+              <div className="no-projects">
+                <p>No projects found. Create one to get started!</p>
               </div>
-              <div className="project-lead-row">
-                <div className="lead-avatar">SC</div>
-                <span className="lead-name">Sarah Connor (Lead)</span>
-              </div>
-              <div className="progress-section">
-                <div className="progress-label-row">
-                  <span className="progress-label">Progress</span>
-                  <span className="progress-pct">60%</span>
-                </div>
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: "60%", backgroundColor: "#2563eb" }}
-                  ></div>
-                </div>
-              </div>
-              <div className="project-footer">
-                <div className="footer-date">
-                  <CalendarIcon /> Due Nov 15
-                </div>
-                <div className="more-dots">
-                  <ThreeDotsIcon />
-                </div>
-              </div>
-            </div>
-
-            {/* Project 2 */}
-            <div className="project-card" onClick={onNavigateProject}>
-              <div className="project-card-header">
-                <div>
-                  <span className="project-id">#MH-2024-02</span>
-                  <h4 className="project-title">Q3 Marketing Asset</h4>
-                </div>
-                <span className="status-badge wait-approval">
-                  Wait Approval
-                </span>
-              </div>
-              <div className="project-lead-row">
-                <div
-                  className="lead-avatar"
-                  style={{ backgroundColor: "#000" }}
-                >
-                  MR
-                </div>
-                <span className="lead-name">Mike Ross (Lead)</span>
-              </div>
-              <div className="progress-section">
-                <div className="progress-label-row">
-                  <span className="progress-label">Progress</span>
-                  <span className="progress-pct">90%</span>
-                </div>
-                <div className="progress-track">
-                  {/* Orange bar */}
-                  <div
-                    className="progress-fill"
-                    style={{ width: "90%", backgroundColor: "#f97316" }}
-                  ></div>
-                </div>
-              </div>
-              <div className="project-footer">
-                <div className="footer-date">
-                  <CalendarIcon /> Due Oct 30
-                </div>
-                <div className="more-dots">
-                  <ThreeDotsIcon />
-                </div>
-              </div>
-            </div>
-
-            {/* Project 3 */}
-            <div className="project-card" onClick={onNavigateProject}>
-              <div className="project-card-header">
-                <div>
-                  <span className="project-id">#MH-2024-05</span>
-                  <h4 className="project-title">Mobile App Fixes</h4>
-                </div>
-                <span className="status-badge blocked">Blocked</span>
-              </div>
-              <div className="project-lead-row">
-                <div
-                  className="lead-avatar"
-                  style={{ backgroundColor: "#cbd5e1", color: "#475569" }}
-                >
-                  JD
-                </div>
-                <span className="lead-name">John Doe (Lead)</span>
-              </div>
-              <div className="progress-section">
-                <div className="progress-label-row">
-                  <span className="progress-label">Progress</span>
-                  <span className="progress-pct">25%</span>
-                </div>
-                <div className="progress-track">
-                  {/* Red bar */}
-                  <div
-                    className="progress-fill"
-                    style={{ width: "25%", backgroundColor: "#ef4444" }}
-                  ></div>
-                </div>
-              </div>
-              <div className="project-footer">
-                <div className="footer-date footer-warning">
-                  <AlertTriangleIcon width="14" height="14" /> Dependencies
-                  Missing
-                </div>
-                <div className="more-dots">
-                  <ThreeDotsIcon />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -230,20 +180,6 @@ const Dashboard = ({
               <div className="deadline-info">
                 <h4>Final Review for Client X</h4>
                 <span className="deadline-time">Today at 5:00 PM</span>
-              </div>
-              <div style={{ marginLeft: "auto", color: "#cbd5e1" }}>
-                <ChevronRightIcon />
-              </div>
-            </div>
-
-            <div className="deadline-card">
-              <div className="date-box blue">
-                <span className="date-month">OCT</span>
-                <span className="date-day">26</span>
-              </div>
-              <div className="deadline-info">
-                <h4>Team Sync - Sprint 42</h4>
-                <span className="deadline-time">Saturday at 10:00 AM</span>
               </div>
               <div style={{ marginLeft: "auto", color: "#cbd5e1" }}>
                 <ChevronRightIcon />
@@ -270,40 +206,6 @@ const Dashboard = ({
                 <div
                   className="progress-fill"
                   style={{ width: "85%", backgroundColor: "#a855f7" }}
-                ></div>
-              </div>
-            </div>
-            <div className="workload-item">
-              <div className="progress-label-row">
-                <span
-                  className="progress-label"
-                  style={{ color: "#0f172a", fontWeight: 600 }}
-                >
-                  Development
-                </span>
-                <span className="progress-label">92% Capacity</span>
-              </div>
-              <div className="progress-track" style={{ height: "8px" }}>
-                <div
-                  className="progress-fill"
-                  style={{ width: "92%", backgroundColor: "#2563eb" }}
-                ></div>
-              </div>
-            </div>
-            <div className="workload-item">
-              <div className="progress-label-row">
-                <span
-                  className="progress-label"
-                  style={{ color: "#0f172a", fontWeight: 600 }}
-                >
-                  Marketing
-                </span>
-                <span className="progress-label">45% Capacity</span>
-              </div>
-              <div className="progress-track" style={{ height: "8px" }}>
-                <div
-                  className="progress-fill"
-                  style={{ width: "45%", backgroundColor: "#22c55e" }}
                 ></div>
               </div>
             </div>
