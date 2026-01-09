@@ -55,6 +55,19 @@ async function createProject() {
       { description: "Test Item 1", breakdown: "Room A", qty: 10 },
       { description: "Test Item 2", breakdown: "Room B", qty: 5 },
     ], // Step 3
+    uncontrollableFactors: [
+      {
+        description: "Weather delay",
+        responsible: { label: "Sarah", value: "sarah" },
+        status: { label: "Identified", value: "identified" },
+      },
+    ],
+    productionRisks: [
+      {
+        description: "Material shortage",
+        preventive: "Stock up early",
+      },
+    ],
   };
 
   const res = await fetch(`${BASE_URL}/projects`, {
