@@ -69,6 +69,31 @@ const CreateProjectWizard = () => {
     navigate("/"); // Go back to dashboard
   };
 
+  const handleCreateProject = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        localStorage.removeItem("projectWizardData");
+        alert("Project Created Successfully!"); // Or toast
+        navigate("/"); // Or to project details
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.message}`);
+      }
+    } catch (error) {
+      console.error("Create Project Error:", error);
+      alert("Something went wrong. Please try again.");
+    }
+  };
+
   return (
     <>
       {currentStep === 1 && (
@@ -105,7 +130,12 @@ const CreateProjectWizard = () => {
         />
       )}
       {currentStep === 5 && (
-        <Step5 onBack={handleBack} onCancel={handleCancelProject} />
+        <Step5
+          formData={formData}
+          onCreate={handleCreateProject}
+          onBack={handleBack}
+          onCancel={handleCancelProject}
+        />
       )}
 
       <ConfirmationModal

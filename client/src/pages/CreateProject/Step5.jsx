@@ -9,8 +9,29 @@ import CheckIcon from "../../components/icons/CheckIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
 import "./Step5.css";
 
-const Step5 = ({ onBack, onCancel }) => {
+const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
   const [isChecked, setIsChecked] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleCreateClick = async () => {
+    if (!isChecked) {
+      alert("Please verify the information before submitting.");
+      return;
+    }
+    setIsCreating(true);
+    await onCreate();
+    setIsCreating(false);
+  };
+
+  // Helper to format date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
   return (
     <div className="step-container">
@@ -63,24 +84,31 @@ const Step5 = ({ onBack, onCancel }) => {
               </div>
               <span className="card-title">Project Basics</span>
             </div>
-            <button className="edit-icon-btn">
+            {/* <button className="edit-icon-btn">
               <EditIcon />
-            </button>
+            </button> */}
           </div>
 
           <div className="review-grid">
             <div className="review-item">
               <label>Project Name</label>
-              <div className="review-value">MagicHands Annual Gala</div>
+              <div className="review-value">
+                {formData.projectName || "N/A"}
+              </div>
             </div>
             <div className="review-item">
-              <label>Type</label>
-              <div className="review-value">Event Management</div>
+              <label>Contact Type</label>
+              <div className="review-value">{formData.contactType}</div>
             </div>
             <div className="review-item">
-              <label>Priority</label>
+              <label>Supply Source</label>
               <div>
-                <span className="badge-pink">High</span>
+                <span
+                  className="badge-yellow"
+                  style={{ textTransform: "capitalize" }}
+                >
+                  {formData.supplySource}
+                </span>
               </div>
             </div>
             <div className="review-item">
@@ -92,83 +120,88 @@ const Step5 = ({ onBack, onCancel }) => {
           </div>
         </div>
 
-        {/* Client Details */}
+        {/* Delivery Details */}
         <div className="review-card">
           <div className="review-card-header">
             <div className="header-left">
               <div className="icon-box-blue">
                 <BuildingIcon />
               </div>
-              <span className="card-title">Client Details</span>
+              <span className="card-title">Delivery Details</span>
             </div>
-            <button className="edit-icon-btn">
-              <EditIcon />
-            </button>
           </div>
 
           <div className="review-grid-3">
             <div className="review-item">
-              <label>Client Company</label>
-              <div className="review-value">TechFlow Solutions Inc.</div>
-            </div>
-            <div className="review-item">
-              <label>Contact Person</label>
-              <div className="user-row">
-                <UserAvatar />
-                <span className="review-value">Sarah Connor</span>
+              <label>Location</label>
+              <div className="review-value">
+                {formData.deliveryLocation || "N/A"}
               </div>
             </div>
             <div className="review-item">
-              <label>Email</label>
-              <div className="review-value">sarah.c@techflow.com</div>
+              <label>Delivery Date</label>
+              <div className="review-value">
+                {formatDate(formData.deliveryDate)} {formData.deliveryTime}
+              </div>
+            </div>
+            <div className="review-item">
+              <label>Lead</label>
+              <div className="user-row">
+                <UserAvatar />
+                <span className="review-value">
+                  {formData.lead ? formData.lead.label : "Unassigned"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Budget & Schedule */}
+        {/* Departments & Items */}
         <div className="review-card">
           <div className="review-card-header">
             <div className="header-left">
               <div className="icon-box-blue">
                 <DollarIcon />
               </div>
-              <span className="card-title">Budget & Schedule</span>
+              <span className="card-title">Scope & Items</span>
             </div>
-            <button className="edit-icon-btn">
-              <EditIcon />
-            </button>
           </div>
 
           <div className="review-grid">
-            <div className="review-item">
-              <label>Est. Budget</label>
-              <div className="review-value bold">$50,000 USD</div>
+            <div className="review-item" style={{ gridColumn: "1 / -1" }}>
+              <label>Engaged Departments</label>
+              <div className="review-value">
+                {formData.departments && formData.departments.length > 0
+                  ? formData.departments.map((d) => (
+                      <span
+                        key={d}
+                        className="badge-pink"
+                        style={{ marginRight: 5, textTransform: "capitalize" }}
+                      >
+                        {d}
+                      </span>
+                    ))
+                  : "None Selected"}
+              </div>
             </div>
-            <div className="review-item">
-              <label>Department</label>
-              <div className="review-value">Marketing</div>
-            </div>
-            <div className="review-item">
-              <label>Start Date</label>
-              <div className="date-value">Oct 12, 2023</div>
-            </div>
-            <div className="review-item">
-              <label>Deadline</label>
-              <div className="date-value">Dec 20, 2023</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Attachments */}
-        <div className="review-section-simple">
-          <label className="section-label-simple">Attachments</label>
-          <div className="attachment-card">
-            <div className="file-icon-box">
-              <FileIcon />
-            </div>
-            <div className="file-info">
-              <div className="file-name">project_brief_v2.pdf</div>
-              <div className="file-size">2.4 MB</div>
+            <div
+              className="review-item"
+              style={{ gridColumn: "1 / -1", marginTop: 10 }}
+            >
+              <label>
+                Items Breakdown ({formData.items ? formData.items.length : 0})
+              </label>
+              <div
+                className="review-value"
+                style={{ fontSize: "0.9rem", color: "#64748B" }}
+              >
+                {formData.items &&
+                  formData.items.map((item, idx) => (
+                    <div key={idx} style={{ marginBottom: 4 }}>
+                      • {item.qty}x {item.description} ({item.breakdown})
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         </div>
@@ -195,31 +228,39 @@ const Step5 = ({ onBack, onCancel }) => {
 
       {/* Footer */}
       <div className="step-footer footer-split">
-        <button className="btn-outline">Save as Draft</button>
-        <button className="btn-primary-green">
-          Create Project
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M4.16666 10H15.8333"
-              stroke="white"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M10 4.16669L15.8333 10L10 15.8334"
-              stroke="white"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+        <button className="btn-outline" onClick={onBack}>
+          Back
+        </button>
+        <button
+          className={`btn-primary-green ${!isChecked ? "disabled" : ""}`}
+          onClick={handleCreateClick}
+          disabled={!isChecked || isCreating}
+        >
+          {isCreating ? "Creating..." : "Create Project"}
+          {!isCreating && (
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4.16666 10H15.8333"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M10 4.16669L15.8333 10L10 15.8334"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
         </button>
       </div>
     </div>
