@@ -7,6 +7,8 @@ import EditIcon from "../../components/icons/EditIcon";
 import FileIcon from "../../components/icons/FileIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import ProjectSummaryPDF from "./ProjectSummaryPDF";
 import "./Step5.css";
 
 const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
@@ -75,6 +77,35 @@ const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
 
         {/* Review Cards */}
 
+        {/* Attachments / Downloads */}
+        <div className="review-section-simple">
+          <label className="section-label-simple">Project Documents</label>
+          <div className="attachment-card" style={{ cursor: "default" }}>
+            <div className="file-icon-box">
+              <FileIcon />
+            </div>
+            <div className="file-info" style={{ flex: 1 }}>
+              <div className="file-name">Project Summary.pdf</div>
+              <div className="file-size">Auto-generated</div>
+            </div>
+
+            <PDFDownloadLink
+              document={<ProjectSummaryPDF formData={formData} />}
+              fileName={`Project_${formData.projectName || "Draft"}.pdf`}
+              style={{
+                textDecoration: "none",
+                padding: "8px 16px",
+                color: "#fff",
+                backgroundColor: "#3B82F6",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "500",
+              }}
+            >
+              {({ loading }) => (loading ? "Generating..." : "Download PDF")}
+            </PDFDownloadLink>
+          </div>
+        </div>
         {/* Project Basics */}
         <div className="review-card">
           <div className="review-card-header">
