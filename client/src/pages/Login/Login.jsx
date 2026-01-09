@@ -149,15 +149,15 @@ const Login = ({ onLogin }) => {
             onLogin();
           }}
         >
-          {/* Email Address */}
+          {/* Employee ID */}
           <div className="form-group">
             <div className="form-label-row">
-              <label className="form-label">EMAIL ADDRESS</label>
+              <label className="form-label">EMPLOYEE ID</label>
             </div>
             <input
-              type="email"
+              type="text"
               className="form-input"
-              placeholder="name@magichands.com"
+              placeholder="Enter your ID"
             />
           </div>
 
