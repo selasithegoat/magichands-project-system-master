@@ -5,6 +5,7 @@ import MenuIcon from "../icons/MenuIcon";
 const Header = ({
   activeView,
   user,
+  projectCount, // [New]
   onNavigateDashboard,
   onNavigateProject,
   onNavigateHistory,
@@ -62,7 +63,9 @@ const Header = ({
             }}
           >
             Projects
-            <span className="nav-badge">12</span>
+            {projectCount > 0 && (
+              <span className="nav-badge">{projectCount}</span>
+            )}
           </a>
           <a
             href="#"

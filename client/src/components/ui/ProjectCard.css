@@ -34,6 +34,10 @@
   background-color: #eff6ff;
   color: #3b82f6;
 } /* Blue */
+.status-badge.pending-approval {
+  background-color: #fff7ed;
+  color: #f97316;
+} /* Orange */
 .status-badge.completed {
   background-color: #f0fdf4;
   color: #22c55e;

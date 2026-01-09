@@ -68,8 +68,14 @@ const ProjectSchema = new mongoose.Schema(
     ], // Step 4
     status: {
       type: String,
-      enum: ["Draft", "In Progress", "Completed", "On Hold"],
-      default: "Draft",
+      enum: [
+        "Draft",
+        "Pending Approval",
+        "In Progress",
+        "Completed",
+        "On Hold",
+      ],
+      default: "Pending Approval",
     },
     currentStep: {
       type: Number,

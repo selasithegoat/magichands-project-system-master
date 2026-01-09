@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./Dashboard.css";
-import ProjectCard from "../../components/ui/ProjectCard"; // Import new component
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import ProjectCard from "../../components/ui/ProjectCard";
 // Icons
 import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
@@ -147,7 +148,7 @@ const Dashboard = ({
             }}
           >
             {isLoading ? (
-              <p>Loading projects...</p>
+              <LoadingSpinner />
             ) : projects.length > 0 ? (
               projects.map((project) => (
                 <ProjectCard

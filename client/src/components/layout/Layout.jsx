@@ -39,7 +39,16 @@ const Layout = ({
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Helper to get initials
+  const [projectCount, setProjectCount] = useState(0);
+
+  React.useEffect(() => {
+    // Basic fetch to update count
+    fetch("/api/projects")
+      .then((res) => res.json())
+      .then((data) => setProjectCount(Array.isArray(data) ? data.length : 0))
+      .catch((err) => console.error(err));
+  }, []);
+
   const getInitials = () => {
     if (!user) return "U";
     const f = user.firstName ? user.firstName[0] : "";
@@ -58,6 +67,7 @@ const Layout = ({
       <Header
         activeView={activeView}
         user={user}
+        projectCount={projectCount}
         onNavigateDashboard={onNavigateDashboard}
         onNavigateProject={onNavigateProject}
         onNavigateHistory={onNavigateHistory}
@@ -113,7 +123,9 @@ const Layout = ({
               >
                 <FolderIcon />
                 Projects
-                <span className="drawer-badge">12</span>
+                {projectCount > 0 && (
+                  <span className="drawer-badge">{projectCount}</span>
+                )}
               </a>
               <a
                 href="#"

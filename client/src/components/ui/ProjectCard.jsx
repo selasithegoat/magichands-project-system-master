@@ -15,6 +15,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     switch (status?.toLowerCase()) {
       case "in progress":
         return "in-progress";
+      case "pending approval":
+        return "pending-approval";
       case "completed":
         return "completed";
       case "on hold":

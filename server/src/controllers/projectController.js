@@ -46,7 +46,7 @@ const createProject = async (req, res) => {
       orderDate: orderDate || Date.now(),
       receivedTime: getValue(receivedTime),
       details: {
-        lead: getValue(lead),
+        lead: lead?.label || lead?.value || lead, // Prefer label (name) over value (id) for lead
         projectName,
         deliveryDate,
         deliveryTime: getValue(deliveryTime),
