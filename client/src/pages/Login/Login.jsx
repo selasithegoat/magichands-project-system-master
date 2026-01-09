@@ -214,9 +214,6 @@ const Login = ({ onLogin }) => {
           <div className="form-group">
             <div className="form-label-row">
               <label className="form-label">PASSWORD</label>
-              <a href="#" className="forgot-link">
-                Forgot?
-              </a>
             </div>
             <input
               type="password"

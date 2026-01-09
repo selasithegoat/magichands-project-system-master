@@ -68,27 +68,8 @@ const getMe = async (req, res) => {
   res.status(200).json(req.user);
 };
 
-// @desc    Reset Password (Simplified)
-// @route   POST /api/auth/reset-password
-// @access  Public (In reality, this should be more secure)
-const resetPassword = async (req, res) => {
-  const { employeeId, newPassword } = req.body;
-
-  const user = await User.findOne({ employeeId });
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
-
-  // Set new password (pre-save hook will hash it)
-  user.password = newPassword;
-  await user.save();
-
-  res.status(200).json({ message: "Password updated successfully" });
-};
-
 module.exports = {
   registerUser,
   loginUser,
   getMe,
-  resetPassword,
 };
