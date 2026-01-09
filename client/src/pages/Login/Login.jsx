@@ -102,6 +102,44 @@ const ConstructionIcon = () => (
 );
 
 const Login = ({ onLogin }) => {
+  const [employeeId, setEmployeeId] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ employeeId, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Login successful
+        // console.log("Login successful:", data);
+        // You might want to store the token here, e.g. localStorage.setItem('token', data.token);
+        onLogin();
+      } else {
+        // Login failed
+        setError(data.message || "Invalid credentials");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="login-container">
       {/* Top Controls */}
@@ -142,13 +180,20 @@ const Login = ({ onLogin }) => {
         </p>
 
         {/* Form */}
-        <form
-          className="login-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onLogin();
-          }}
-        >
+        <form className="login-form" onSubmit={handleSubmit}>
+          {/* Error Message */}
+          {error && (
+            <div
+              style={{
+                color: "red",
+                fontSize: "0.875rem",
+                marginBottom: "1rem",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
           {/* Employee ID */}
           <div className="form-group">
             <div className="form-label-row">
@@ -158,6 +203,9 @@ const Login = ({ onLogin }) => {
               type="text"
               className="form-input"
               placeholder="Enter your ID"
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              required
             />
           </div>
 
@@ -173,12 +221,15 @@ const Login = ({ onLogin }) => {
               type="password"
               className="form-input"
               placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
             />
           </div>
 
           {/* Submit */}
-          <button type="submit" className="login-submit-btn">
-            Sign In to Portal
+          <button type="submit" className="login-submit-btn" disabled={loading}>
+            {loading ? "Signing In..." : "Sign In to Portal"}
           </button>
         </form>
 
