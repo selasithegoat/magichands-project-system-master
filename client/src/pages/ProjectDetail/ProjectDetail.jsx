@@ -21,6 +21,37 @@ import ProjectActivity from "./ProjectActivity";
 import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 
+const STATUS_FLOW = [
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Pending Mockup",
+  "Pending Production",
+  "Pending Packaging",
+  "Pending Delivery/Pickup",
+  "Delivered",
+];
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case "Order Confirmed":
+      return "#94a3b8"; // Slate
+    case "Pending Scope Approval":
+      return "#f97316"; // Orange
+    case "Pending Mockup":
+      return "#a855f7"; // Purple
+    case "Pending Production":
+      return "#3b82f6"; // Blue
+    case "Pending Packaging":
+      return "#6366f1"; // Indigo
+    case "Pending Delivery/Pickup":
+      return "#14b8a6"; // Teal
+    case "Delivered":
+      return "#22c55e"; // Green
+    default:
+      return "#cbd5e1"; // Grey
+  }
+};
+
 const ProjectDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -54,16 +85,6 @@ const ProjectDetail = () => {
   // For simplicity since I just refactored render props, I'll add a separate toast/portal here or just use a simple state.
   // To avoid duplication, I'll add a `pageToast` state.
   const [pageToast, setPageToast] = useState(null);
-
-  const STATUS_FLOW = [
-    "Order Confirmed",
-    "Pending Scope Approval",
-    "Pending Mockup",
-    "Pending Production",
-    "Pending Packaging",
-    "Pending Delivery/Pickup",
-    "Delivered",
-  ];
 
   const handleAdvanceStatus = async () => {
     if (!project) return;
@@ -657,27 +678,6 @@ const ProgressCard = ({ project }) => {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Order Confirmed":
-        return "#94a3b8"; // Slate
-      case "Pending Scope Approval":
-        return "#f97316"; // Orange
-      case "Pending Mockup":
-        return "#a855f7"; // Purple
-      case "Pending Production":
-        return "#3b82f6"; // Blue
-      case "Pending Packaging":
-        return "#6366f1"; // Indigo
-      case "Pending Delivery/Pickup":
-        return "#14b8a6"; // Teal
-      case "Delivered":
-        return "#22c55e"; // Green
-      default:
-        return "#cbd5e1"; // Grey
-    }
-  };
-
   const progress = calculateProgress(project.status);
   const color = getStatusColor(project.status);
 
@@ -705,39 +705,110 @@ const ProgressCard = ({ project }) => {
 };
 
 const ApprovalsCard = ({ status }) => {
+  const currentStatusIndex = STATUS_FLOW.indexOf(status);
+
   return (
     <div className="detail-card">
       <div className="card-header">
         <h3 className="card-title">☑ Approvals</h3>
       </div>
       <div className="approval-list">
-        {/* Mock Data for now - could be dynamic later */}
-        <div className="approval-item">
-          <div className="approval-status completed">
-            <CheckIcon className="check-mark primary" width="14" height="14" />
-          </div>
-          <div className="approval-content">
-            <span className="approval-title">Scope Approval</span>
-            <span className="approval-sub">Approved by System</span>
-          </div>
-        </div>
+        {STATUS_FLOW.map((step, index) => {
+          // Status States:
+          // 1. Completed: index < currentStatusIndex
+          // 2. Active: index === currentStatusIndex
+          // 3. Pending: index > currentStatusIndex
 
-        <div className="approval-item active">
-          <div className="approval-status active">
-            <div className="active-dot"></div>
-          </div>
-          <div className="approval-content">
-            <button className="nudge-btn">Nudge</button>
-            <span className="approval-title" style={{ color: "#3b82f6" }}>
-              Current Status
-            </span>
-            <span className="approval-sub" style={{ color: "#3b82f6" }}>
-              {status}
-            </span>
-          </div>
-        </div>
+          const isCompleted = index < currentStatusIndex;
+          const isActive = index === currentStatusIndex;
+          const stepColor = getStatusColor(step); // Get specific color for this step
+
+          return (
+            <div
+              key={step}
+              className={`approval-item ${isActive ? "active" : ""}`}
+            >
+              <div
+                className={`approval-status ${
+                  isCompleted ? "completed" : isActive ? "active" : "pending"
+                }`}
+                style={{
+                  // Override background/border colors with specific step color
+                  backgroundColor: isCompleted
+                    ? stepColor
+                    : isActive
+                    ? "#fff"
+                    : "#fff",
+                  borderColor: isCompleted
+                    ? stepColor
+                    : isActive
+                    ? "#fff"
+                    : "#fff",
+                  boxShadow: isActive
+                    ? `0 0 0 2px ${stepColor}`
+                    : isCompleted
+                    ? "none"
+                    : `0 0 0 2px #e2e8f0`,
+                }}
+              >
+                {isCompleted ? (
+                  <CheckIcon
+                    className="check-mark primary"
+                    width="14"
+                    height="14"
+                    color="#fff" // White check on colored background
+                    strokeWidth="3"
+                  />
+                ) : isActive ? (
+                  <div
+                    className="active-dot"
+                    style={{ backgroundColor: stepColor }}
+                  ></div>
+                ) : null}
+              </div>
+              <div className="approval-content">
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <span
+                    className={`approval-title ${
+                      isCompleted
+                        ? ""
+                        : isActive
+                        ? "active-text"
+                        : "pending-text"
+                    }`}
+                    style={{
+                      color: isActive
+                        ? stepColor
+                        : isCompleted
+                        ? "#1e293b" // Keep completed text dark? Or match color? Let's keep dark for readability, maybe title is dark.
+                        : "#94a3b8",
+                    }}
+                  >
+                    {step}
+                  </span>
+                  {isActive && status !== "Delivered" && (
+                    <button className="nudge-btn">Nudge</button>
+                  )}
+                </div>
+
+                <span className="approval-sub">
+                  {isCompleted
+                    ? "Completed"
+                    : isActive
+                    ? "Current Status"
+                    : "Pending"}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <a className="view-all-link">View All Approvals</a>
     </div>
   );
 };

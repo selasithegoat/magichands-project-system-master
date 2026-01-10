@@ -503,7 +503,7 @@
 .approval-list {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0; /* Remove gap to handle connection line manually via padding */
 }
 
 .approval-item {
@@ -511,92 +511,70 @@
   gap: 1rem;
   position: relative;
   min-height: 2.5rem;
+  padding-bottom: 2rem; /* Add spacing here instead of gap */
+}
+
+.approval-item:last-child {
+  padding-bottom: 0;
 }
 
 .approval-item:not(:last-child)::before {
   content: "";
   position: absolute;
-  left: 12px; /* Center of 24px icon + 2px border? No, width/2 */
-  /* If width is 24px, center is 12px. Line width 2px. Left 11px? */
-  /* Let's redefine widths. */
+  left: 12px;
   top: 24px;
-  bottom: -12px;
+  bottom: 0px; /* Extend to bottom of this item */
   width: 2px;
   background-color: #f1f5f9;
   z-index: 0;
 }
 
-.approval-status {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #fff;
-  z-index: 1;
-  border: 2px solid #fff; /* White border for separation */
-  box-shadow: 0 0 0 1px #e2e8f0; /* Default ring */
-  flex-shrink: 0;
-}
-
-.approval-status.completed {
-  background-color: #22c55e;
-  box-shadow: none;
-}
-
-.approval-status.active {
-  box-shadow: 0 0 0 2px #3b82f6; /* Blue ring */
-  background-color: #fff;
-}
-
-.approval-status.pending {
-  box-shadow: 0 0 0 2px #e2e8f0; /* Gray ring */
-  background-color: #fff;
-}
-
-.active-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #3b82f6;
-}
-
-.approval-content {
-  flex: 1;
-  padding-top: 2px;
-}
-
-.approval-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  display: block;
-}
-
-.approval-sub {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
+/* ... existing styles ... */
 
 .approval-item.active {
   background-color: #eff6ff;
   border-radius: var(--radius-md);
-  padding: 0.75rem;
-  margin-left: -0.75rem;
-  margin-right: -0.75rem;
+  padding: 1rem; /* Increase padding for active state look */
+  margin-bottom: 2rem; /* Push next item down */
+  margin-left: -1rem; /* Compensate for internal padding if needed, or just let it expand? */
+  margin-right: -1rem;
+  /* Reset padding-bottom logic for active item to avoid huge gap inside the blue box */
+  /* Actually, if we use margin-bottom, the line needs to cross it.
+     Pseudo element is inside the item. It won't cross the margin. 
+     Position absolute bottom: -margin?
+  */
 }
 
-/* Adjust line position for active item */
-/* If padding is added, the line position relative to container shifts?
-   No, pseudo element is on approval-item. 
-   If item has padding, 'left' needs adjustment. 
-   Padding-left is 0.75rem (12px).
-   So 'left' should be 12px + 12px = 24px?
-   Let's check.
+/* Re-thinking Active Item Line:
+   If active item has margin-bottom: 2rem, 
+   element::before with bottom: -2rem will cross it.
 */
+
+.approval-item.active {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem; /* Internal padding */
+}
+
 .approval-item.active:not(:last-child)::before {
-  left: 23px; /* 11px + 12px padding */
+  left: 23px; /* 11px + 12px padding - offset adjustment */
+  /* Wait, if I add padding: 1rem (16px) to container.
+     The .approval-status (icon) is inside.
+     Standard item: left: 0 (container edge) -> icon starts.
+     Actually standard item has no padding. Icon is at left:0 relative to flex container? No.
+     .approval-item { gap: 1rem }. Icon is first child.
+     Icon is at 0,0 relative to item content box.
+     Line is at left: 12px (center of 24px icon).
+     
+     Active item: padding: 1rem (16px).
+     Content box starts at 16px.
+     Icon is at 0 relative to content box?
+     Flex container puts icon at start.
+     So Icon is at x=16px relative to border box.
+     Line should be at x = 16px + 12px = 28px? 
+     Let's use 28px (approx 27-28px).
+  */
+  left: 28px;
+  bottom: -2rem; /* Cross the margin */
 }
 
 .nudge-btn {
