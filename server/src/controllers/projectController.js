@@ -81,7 +81,9 @@ const createProject = async (req, res) => {
 // @access  Private
 const getProjects = async (req, res) => {
   try {
-    const projects = await Project.find({}).sort({ createdAt: -1 });
+    const projects = await Project.find({})
+      .populate("createdBy", "firstName lastName")
+      .sort({ createdAt: -1 });
     res.json(projects);
   } catch (error) {
     console.error("Error fetching projects:", error);

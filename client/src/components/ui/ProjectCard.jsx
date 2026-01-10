@@ -61,9 +61,17 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         </div>
 
         <div className="lead-row">
-          <UserAvatar name={project.details?.lead || "Unassigned"} />
+          <UserAvatar
+            name={
+              project.createdBy
+                ? `${project.createdBy.firstName} ${project.createdBy.lastName}`
+                : "Unassigned"
+            }
+          />
           <span className="lead-name">
-            {project.details?.lead || "Unassigned"}
+            {project.createdBy
+              ? `${project.createdBy.firstName} ${project.createdBy.lastName}`
+              : "Unassigned"}
           </span>
           <div className="card-date">
             <CalendarIcon />

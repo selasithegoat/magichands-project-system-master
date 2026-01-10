@@ -155,10 +155,12 @@ const OngoingProjects = ({ onNavigateDetail, onBack }) => {
                         color: "#475569",
                       }}
                     >
-                      {(p.details?.lead || "U").charAt(0).toUpperCase()}
+                      {(p.createdBy?.firstName || "U").charAt(0).toUpperCase()}
                     </div>
                     <span className="user-name">
-                      {p.details?.lead || "Unassigned"}
+                      {p.createdBy
+                        ? `${p.createdBy.firstName} ${p.createdBy.lastName}`
+                        : "Unassigned"}
                     </span>
                   </div>
 

@@ -2,9 +2,14 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const UserSchema = new mongoose.Schema({
-  name: {
+  firstName: String,
+  lastName: String,
+  email: {
     type: String,
-    required: true,
+    match: [
+      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      "Please add a valid email",
+    ],
   },
   employeeId: {
     type: String,
@@ -21,15 +26,7 @@ const UserSchema = new mongoose.Schema({
     enum: ["user", "admin"],
     default: "user",
   },
-  firstName: String,
-  lastName: String,
-  email: {
-    type: String,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-      "Please add a valid email",
-    ],
-  },
+
   department: String,
   employeeType: String, // Staff, NSP, Intern, Trainee
   contact: String,
