@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import "./ProjectDetail.css";
 import UserAvatar from "../../components/ui/UserAvatar";
@@ -301,15 +302,18 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
   return (
     <div className="detail-card">
       {/* Toast Container */}
-      {toast && (
-        <div className="toast-container">
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        </div>
-      )}
+      {/* Toast Container - Portaled to body for global positioning */}
+      {toast &&
+        createPortal(
+          <div className="ui-toast-container">
+            <Toast
+              message={toast.message}
+              type={toast.type}
+              onClose={() => setToast(null)}
+            />
+          </div>,
+          document.body
+        )}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog
