@@ -182,10 +182,35 @@ const addItemToProject = async (req, res) => {
   }
 };
 
+// @desc    Delete item from project
+// @route   DELETE /api/projects/:id/items/:itemId
+// @access  Private
+const deleteItemFromProject = async (req, res) => {
+  try {
+    const { id, itemId } = req.params;
+
+    const project = await Project.findById(id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Pull item from array
+    project.items.pull({ _id: itemId });
+    await project.save();
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error deleting item:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
   getUserStats,
   getProjectById,
   addItemToProject,
+  deleteItemFromProject,
 };

@@ -10,6 +10,9 @@ import ClockIcon from "../../components/icons/ClockIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
+import TrashIcon from "../../components/icons/TrashIcon"; // Import TrashIcon
+import Toast from "../../components/ui/Toast";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import ProjectExecution from "./ProjectExecution";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
@@ -223,9 +226,23 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
     qty: 1,
   });
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+  });
+
+  const showToast = (message, type = "info") => {
+    setToast({ message, type });
+  };
 
   const handleAddItem = async () => {
-    if (!newItem.description) return;
+    if (!newItem.description) {
+      showToast("Description is required", "error");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -238,17 +255,73 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
       if (res.ok) {
         setIsAdding(false);
         setNewItem({ description: "", breakdown: "", qty: 1 });
+        showToast("Item added successfully", "success");
         if (onUpdate) onUpdate(); // Refresh parent
+      } else {
+        showToast("Failed to add item", "error");
       }
     } catch (err) {
       console.error("Failed to add item", err);
+      showToast("Server error", "error");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDeleteItem = (itemId) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Item",
+      message:
+        "Are you sure you want to remove this item? This action cannot be undone.",
+      onConfirm: () => performDelete(itemId),
+    });
+  };
+
+  const performDelete = async (itemId) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/items/${itemId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        showToast("Item deleted successfully", "success");
+        if (onUpdate) onUpdate();
+      } else {
+        showToast("Failed to delete item", "error");
+      }
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      showToast("Server error", "error");
+    } finally {
+      setConfirmDialog({ ...confirmDialog, isOpen: false });
+    }
+  };
+
   return (
     <div className="detail-card">
+      {/* Toast Container */}
+      {toast && (
+        <div className="toast-container">
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        confirmText="Delete"
+        type="danger"
+      />
+
       <div className="card-header">
         <h3 className="card-title">📦 Order Items</h3>
         <button
@@ -328,6 +401,7 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
             <tr>
               <th>DESCRIPTION</th>
               <th style={{ textAlign: "right" }}>QTY</th>
+              <th style={{ width: "40px" }}></th>
             </tr>
           </thead>
           <tbody>
@@ -340,6 +414,21 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
                   </div>
                 </td>
                 <td className="item-qty">{item.qty}</td>
+                <td>
+                  <button
+                    onClick={() => handleDeleteItem(item._id)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "4px",
+                      opacity: 0.6,
+                    }}
+                    className="delete-item-btn"
+                  >
+                    <TrashIcon width="16" height="16" color="#ef4444" />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -452,8 +541,43 @@ const ProductionRisksCard = ({ risks = [] }) => {
 };
 
 const ProgressCard = ({ project }) => {
-  // Mock calculation or from project data if available
-  const progress = project.progress !== undefined ? project.progress : 50;
+  const calculateProgress = (status) => {
+    switch (status) {
+      case "Draft":
+      case "Pending Approval":
+        return 10;
+      case "Approved":
+        return 25;
+      case "In Progress":
+        return 50;
+      case "In Production":
+        return 75;
+      case "Completed":
+        return 100;
+      default:
+        return 0;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "In Progress":
+        return "#3b82f6"; // Blue
+      case "Pending Approval":
+        return "#f97316"; // Orange
+      case "Completed":
+        return "#22c55e"; // Green
+      case "On Hold":
+        return "#ea580c"; // Dark Orange
+      case "Blocked":
+        return "#ef4444"; // Red
+      default:
+        return "#cbd5e1"; // Grey/Draft
+    }
+  };
+
+  const progress = calculateProgress(project.status);
+  const color = getStatusColor(project.status);
 
   return (
     <div className="detail-card progress-card">
@@ -472,21 +596,7 @@ const ProgressCard = ({ project }) => {
       </div>
       <div className="chart-container">
         {/* Simple SVG Donut Chart */}
-        <ProgressDonutIcon percentage={progress} />
-      </div>
-      <div className="progress-stats">
-        <div className="stat-box">
-          <span className="stat-value">--</span>
-          <span className="stat-label">DONE</span>
-        </div>
-        <div className="stat-box" style={{ background: "#eff6ff" }}>
-          <span className="stat-value" style={{ color: "#2563eb" }}>
-            --
-          </span>
-          <span className="stat-label" style={{ color: "#2563eb" }}>
-            PENDING
-          </span>
-        </div>
+        <ProgressDonutIcon percentage={progress} color={color} />
       </div>
     </div>
   );

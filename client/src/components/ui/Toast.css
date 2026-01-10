@@ -1,0 +1,115 @@
+.ui-toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.ui-toast {
+  min-width: 300px;
+  max-width: 400px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: center; /* Vertically center items */
+  gap: 12px;
+  animation: slideInToast 0.3s ease-out forwards;
+  pointer-events: auto;
+  border-left: 4px solid #3b82f6;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent spillover */
+}
+
+/* Ensure no global styles mess with these specifics */
+.ui-toast * {
+  box-sizing: border-box;
+}
+
+.ui-toast.success {
+  border-left-color: #22c55e;
+}
+
+.ui-toast.error {
+  border-left-color: #ef4444;
+}
+
+.ui-toast.warning {
+  border-left-color: #f59e0b;
+}
+
+.ui-toast.info {
+  border-left-color: #3b82f6;
+}
+
+.ui-toast-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.ui-toast-message {
+  flex: 1;
+  color: #1e293b;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.ui-toast-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  margin-left: auto; /* Push to right if needed, but flex gap handles it */
+}
+
+.ui-toast-close:hover {
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  color: #64748b;
+}
+
+@keyframes slideInToast {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOutToast {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.ui-toast.exiting {
+  animation: fadeOutToast 0.3s ease-in forwards;
+}
