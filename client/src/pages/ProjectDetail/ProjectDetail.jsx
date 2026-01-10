@@ -47,6 +47,60 @@ const ProjectDetail = () => {
     if (id) fetchProject();
   }, [id]);
 
+  const [advancing, setAdvancing] = useState(false);
+  const [toast, setToast] = useState(null); // Lift toast state up or use context/global ref later? For now, re-using card pattern inside here is tricky unless we move toast up.
+  // Actually, OrderItemsCard has its own toast. Let's add a global toast state for ProjectDetail if needed, or just let the button handle it.
+  // Wait, I see OrderItemsCard uses a local toast. I should lift it up properly or create a separate one for the main page.
+  // For simplicity since I just refactored render props, I'll add a separate toast/portal here or just use a simple state.
+  // To avoid duplication, I'll add a `pageToast` state.
+  const [pageToast, setPageToast] = useState(null);
+
+  const STATUS_FLOW = [
+    "Order Confirmed",
+    "Pending Scope Approval",
+    "Pending Mockup",
+    "Pending Production",
+    "Pending Packaging",
+    "Pending Delivery/Pickup",
+    "Delivered",
+  ];
+
+  const handleAdvanceStatus = async () => {
+    if (!project) return;
+    const currentIndex = STATUS_FLOW.indexOf(project.status);
+    if (currentIndex === -1 && project.status !== STATUS_FLOW[0]) {
+      // If unknown status, maybe start at beginning?
+    }
+
+    if (currentIndex >= STATUS_FLOW.length - 1) return; // Already at end
+
+    const nextStatus = STATUS_FLOW[currentIndex + 1] || STATUS_FLOW[0];
+
+    setAdvancing(true);
+    try {
+      const res = await fetch(`/api/projects/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      if (res.ok) {
+        setPageToast({
+          message: `Status updated to ${nextStatus}`,
+          type: "success",
+        });
+        fetchProject();
+      } else {
+        setPageToast({ message: "Failed to update status", type: "error" });
+      }
+    } catch (err) {
+      console.error(err);
+      setPageToast({ message: "Server error", type: "error" });
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
   if (loading)
     return (
       <div
@@ -77,12 +131,49 @@ const ProjectDetail = () => {
               <span className="status-badge">
                 <ClockIcon width="14" height="14" /> {project.status}
               </span>
+              <button
+                onClick={handleAdvanceStatus}
+                disabled={advancing || project.status === "Delivered"}
+                style={{
+                  marginLeft: "12px",
+                  padding: "4px 12px",
+                  fontSize: "0.75rem",
+                  background: "#e0f2fe",
+                  color: "#0369a1",
+                  border: "none",
+                  borderRadius: "20px",
+                  cursor:
+                    project.status === "Delivered" ? "default" : "pointer",
+                  opacity: project.status === "Delivered" ? 0.5 : 1,
+                  fontWeight: 600,
+                }}
+              >
+                {advancing
+                  ? "..."
+                  : project.status === "Delivered"
+                  ? "Completed"
+                  : "Next Step →"}
+              </button>
             </h1>
           </div>
           <button className="edit-link" onClick={() => console.log("Edit")}>
             Edit
           </button>
         </div>
+
+        {/* Page Level Toast */}
+        {pageToast &&
+          createPortal(
+            <div className="ui-toast-container">
+              <Toast
+                message={pageToast.message}
+                type={pageToast.type}
+                onClose={() => setPageToast(null)}
+              />
+            </div>,
+            document.body
+          )}
+
         <div className="project-subtitle">{project.details?.projectName}</div>
         <nav className="header-nav">
           {["Overview", "Execution", "Updates", "Challenges", "Activities"].map(
@@ -547,16 +638,19 @@ const ProductionRisksCard = ({ risks = [] }) => {
 const ProgressCard = ({ project }) => {
   const calculateProgress = (status) => {
     switch (status) {
-      case "Draft":
-      case "Pending Approval":
-        return 10;
-      case "Approved":
-        return 25;
-      case "In Progress":
+      case "Order Confirmed":
+        return 5;
+      case "Pending Scope Approval":
+        return 15;
+      case "Pending Mockup":
+        return 30;
+      case "Pending Production":
         return 50;
-      case "In Production":
+      case "Pending Packaging":
         return 75;
-      case "Completed":
+      case "Pending Delivery/Pickup":
+        return 90;
+      case "Delivered":
         return 100;
       default:
         return 0;
@@ -565,18 +659,22 @@ const ProgressCard = ({ project }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "In Progress":
-        return "#3b82f6"; // Blue
-      case "Pending Approval":
+      case "Order Confirmed":
+        return "#94a3b8"; // Slate
+      case "Pending Scope Approval":
         return "#f97316"; // Orange
-      case "Completed":
+      case "Pending Mockup":
+        return "#a855f7"; // Purple
+      case "Pending Production":
+        return "#3b82f6"; // Blue
+      case "Pending Packaging":
+        return "#6366f1"; // Indigo
+      case "Pending Delivery/Pickup":
+        return "#14b8a6"; // Teal
+      case "Delivered":
         return "#22c55e"; // Green
-      case "On Hold":
-        return "#ea580c"; // Dark Orange
-      case "Blocked":
-        return "#ef4444"; // Red
       default:
-        return "#cbd5e1"; // Grey/Draft
+        return "#cbd5e1"; // Grey
     }
   };
 

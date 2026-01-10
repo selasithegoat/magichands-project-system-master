@@ -13,22 +13,38 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "In Progress":
-        return { class: "in-progress", color: "#3b82f6", textClass: "blue" };
-      case "Pending Approval":
+      case "Order Confirmed":
+        return { class: "draft", color: "#94a3b8", textClass: "gray" };
+      case "Pending Scope Approval":
         return {
           class: "pending-approval",
           color: "#f97316",
           textClass: "orange",
         };
-      case "Completed":
+      case "Pending Mockup":
+        return {
+          class: "pending-mockup",
+          color: "#a855f7",
+          textClass: "purple",
+        }; // Custom class needed?
+      case "Pending Production":
+        return { class: "in-progress", color: "#3b82f6", textClass: "blue" };
+      case "Pending Packaging":
+        return {
+          class: "pending-packaging",
+          color: "#6366f1",
+          textClass: "indigo",
+        };
+      case "Pending Delivery/Pickup":
+        return {
+          class: "pending-delivery",
+          color: "#14b8a6",
+          textClass: "teal",
+        };
+      case "Delivered":
         return { class: "completed", color: "#22c55e", textClass: "green" };
-      case "On Hold":
-        return { class: "on-hold", color: "#ea580c", textClass: "orange" };
-      case "Blocked":
-        return { class: "blocked", color: "#ef4444", textClass: "red" };
       default:
-        return { class: "draft", color: "#cbd5e1", textClass: "blue" };
+        return { class: "draft", color: "#cbd5e1", textClass: "gray" };
     }
   };
 
@@ -37,10 +53,13 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Calculate Progress if not provided
   let progress = project.progress;
   if (progress === undefined) {
-    if (project.status === "Completed") progress = 100;
-    else if (project.status === "Pending Approval") progress = 10;
-    else if (project.status === "In Progress") progress = 50;
-    else progress = 0;
+    if (project.status === "Delivered") progress = 100;
+    else if (project.status === "Pending Delivery/Pickup") progress = 90;
+    else if (project.status === "Pending Packaging") progress = 75;
+    else if (project.status === "Pending Production") progress = 50;
+    else if (project.status === "Pending Mockup") progress = 30;
+    else if (project.status === "Pending Scope Approval") progress = 15;
+    else progress = 5;
   }
 
   return (

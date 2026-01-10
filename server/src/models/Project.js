@@ -74,8 +74,16 @@ const ProjectSchema = new mongoose.Schema(
         "In Progress",
         "Completed",
         "On Hold",
+        // New Workflow Statuses
+        "Order Confirmed",
+        "Pending Scope Approval",
+        "Pending Mockup",
+        "Pending Production",
+        "Pending Packaging",
+        "Pending Delivery/Pickup",
+        "Delivered",
       ],
-      default: "Pending Approval",
+      default: "Order Confirmed",
     },
     currentStep: {
       type: Number,

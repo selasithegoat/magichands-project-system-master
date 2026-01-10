@@ -206,6 +206,28 @@ const deleteItemFromProject = async (req, res) => {
   }
 };
 
+// @desc    Update project status
+// @route   PATCH /api/projects/:id/status
+// @access  Private
+const updateProjectStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    project.status = status;
+    await project.save();
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error updating status:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -213,4 +235,5 @@ module.exports = {
   getProjectById,
   addItemToProject,
   deleteItemFromProject,
+  updateProjectStatus,
 };
