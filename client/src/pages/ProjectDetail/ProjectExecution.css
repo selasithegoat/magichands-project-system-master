@@ -5,6 +5,30 @@
   margin: 0 auto;
 }
 
+@media (max-width: 640px) {
+  .execution-container {
+    padding: 1rem;
+  }
+
+  .timeline-step {
+    gap: 1rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .step-header-row {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .step-date {
+    font-size: 0.7rem;
+  }
+
+  .active-card {
+    padding: 1rem;
+  }
+}
+
 .timeline {
   display: flex;
   flex-direction: column;
@@ -197,9 +221,6 @@
 }
 
 /* ACTIVE CARD */
-.active-card-wrapper {
-  /* No padding here, handled inside active-card or alignment */
-}
 
 .active-card {
   border: 2px solid #2563eb; /* Blue border */

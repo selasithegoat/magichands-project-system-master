@@ -49,9 +49,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         <span className={`status-badge ${statusInfo.class}`}>
           {project.status || "Draft"}
         </span>
-        <button className="card-menu-btn">
+        {/* <button className="card-menu-btn">
           <ThreeDotsIcon />
-        </button>
+        </button> */}
       </div>
 
       <div className="card-body">
