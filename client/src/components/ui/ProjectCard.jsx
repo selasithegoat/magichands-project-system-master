@@ -132,38 +132,13 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               : "disabled-finished"
           }`}
           onClick={() => {
-            if (project.status === "Delivered") {
-              onUpdateStatus(project._id, "Completed");
-            } else {
-              // Show toast or alert. Since we don't have a toast prop, we can simple use alert for now or try to use a passed in Toast handler?
-              // The user said "give a toast message".
-              // ProjectDetail uses a portal toast. Dashboard likely needs one too.
-              // For now, I will assume onUpdateStatus can handle the "error" case if I pass null?
-              // Or better, I'll let the parent handle the toast if I just pass a specific signal?
-              // No, "if clicked while inactive".
-              // I will use `window.alert` temporary or better, since I can't easily add a Toast component here without rendering it,
-              // I will add a prop `onShowToast` or similar.
-              // actually strict requirement: "give a toast message".
-              // I'll assume the parent passes a toast handler. Or I create a formatted console log?
-              // Wait, I can't leave it as console log.
-              // I will trigger `onUpdateStatus` with a special error flag? No.
-
-              // Let's implement a simple logic: The button calls onUpdateStatus.
-              // Parent checks status. If invalid, parent shows toast.
-              // BUT user said "button should only be active if...".
-              // If I handle it in parent, the button behavior is effectively "always active" visually but logic is in parent.
-
-              // Actually, I can import the Toast component into Dashboard and pass a `showToast` function to ProjectCard.
-              // Let's modify ProjectCard signature to accept showToast or similar.
-              // OR easier: just emit the event 'onMarkFinishedAttempt'.
-
-              // Let's try: `onUpdateStatus(project._id, project.status)` and let Dashboard decide.
-              onUpdateStatus(project._id, project.status);
-            }
+            // Always pass the current status. The parent handler validates if it is "Delivered"
+            // and then handles the update to "Completed".
+            onUpdateStatus(project._id, project.status);
           }}
           style={{
             opacity: project.status === "Delivered" ? 1 : 0.6,
-            cursor: "pointer", // Always pointer to allow clicking for toast
+            cursor: "pointer",
           }}
         >
           Mark as Finished

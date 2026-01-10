@@ -18,7 +18,9 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          setProjects(data);
+          // Filter out "Completed" projects
+          const activeProjects = data.filter((p) => p.status !== "Completed");
+          setProjects(activeProjects);
         }
       } catch (error) {
         console.error("Error loading projects:", error);

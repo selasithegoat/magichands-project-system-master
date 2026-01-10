@@ -47,6 +47,8 @@ const getStatusColor = (status) => {
       return "#14b8a6"; // Teal
     case "Delivered":
       return "#22c55e"; // Green
+    case "Completed":
+      return "#22c55e"; // Green
     default:
       return "#cbd5e1"; // Grey
   }
@@ -673,6 +675,8 @@ const ProgressCard = ({ project }) => {
         return 90;
       case "Delivered":
         return 100;
+      case "Completed":
+        return 100;
       default:
         return 0;
     }
@@ -705,7 +709,13 @@ const ProgressCard = ({ project }) => {
 };
 
 const ApprovalsCard = ({ status }) => {
-  const currentStatusIndex = STATUS_FLOW.indexOf(status);
+  // If status is "Completed", we want to show everything as done.
+  // We can simulate this by setting index to length of array (past the last item)
+  let currentStatusIndex = STATUS_FLOW.indexOf(status);
+
+  if (status === "Completed") {
+    currentStatusIndex = STATUS_FLOW.length;
+  }
 
   return (
     <div className="detail-card">

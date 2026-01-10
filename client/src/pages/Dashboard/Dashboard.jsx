@@ -35,8 +35,10 @@ const Dashboard = ({
       });
       if (res.ok) {
         const data = await res.json();
+        // Filter out "Completed" projects
+        const activeProjects = data.filter((p) => p.status !== "Completed");
         // Reverse to show newest first
-        setProjects(data.reverse());
+        setProjects(activeProjects.reverse());
       } else {
         console.error("Failed to fetch projects");
       }
