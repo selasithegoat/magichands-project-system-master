@@ -154,29 +154,31 @@ const ProjectDetail = () => {
               <span className="status-badge">
                 <ClockIcon width="14" height="14" /> {project.status}
               </span>
-              <button
-                onClick={handleAdvanceStatus}
-                disabled={advancing || project.status === "Delivered"}
-                style={{
-                  marginLeft: "12px",
-                  padding: "4px 12px",
-                  fontSize: "0.75rem",
-                  background: "#e0f2fe",
-                  color: "#0369a1",
-                  border: "none",
-                  borderRadius: "20px",
-                  cursor:
-                    project.status === "Delivered" ? "default" : "pointer",
-                  opacity: project.status === "Delivered" ? 0.5 : 1,
-                  fontWeight: 600,
-                }}
-              >
-                {advancing
-                  ? "..."
-                  : project.status === "Delivered"
-                  ? "Completed"
-                  : "Next Step →"}
-              </button>
+              {project.status !== "Completed" && (
+                <button
+                  onClick={handleAdvanceStatus}
+                  disabled={advancing || project.status === "Delivered"}
+                  style={{
+                    marginLeft: "12px",
+                    padding: "4px 12px",
+                    fontSize: "0.75rem",
+                    background: "#e0f2fe",
+                    color: "#0369a1",
+                    border: "none",
+                    borderRadius: "20px",
+                    cursor:
+                      project.status === "Delivered" ? "default" : "pointer",
+                    opacity: project.status === "Delivered" ? 0.5 : 1,
+                    fontWeight: 600,
+                  }}
+                >
+                  {advancing
+                    ? "..."
+                    : project.status === "Delivered"
+                    ? "Ready to Finish"
+                    : "Next Step →"}
+                </button>
+              )}
             </h1>
           </div>
           <button className="edit-link" onClick={() => console.log("Edit")}>
