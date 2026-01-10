@@ -6,6 +6,7 @@ import SearchIcon from "../../components/icons/SearchIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import FabButton from "../../components/ui/FabButton";
 import ProjectCard from "../../components/ui/ProjectCard";
+import Toast from "../../components/ui/Toast";
 
 const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
   const [projects, setProjects] = React.useState([]);
@@ -26,7 +27,50 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
       }
     };
     fetchProjects();
+    fetchProjects();
   }, []);
+
+  const [toast, setToast] = React.useState(null);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    }
+  };
+
+  const handleUpdateStatus = async (projectId, currentStatus) => {
+    if (currentStatus !== "Delivered") {
+      setToast({
+        message: "Project must be 'Delivered' before marking as finished.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Completed" }),
+      });
+
+      if (res.ok) {
+        setToast({ message: "Project marked as Completed!", type: "success" });
+        fetchProjects();
+      } else {
+        setToast({ message: "Failed to update status", type: "error" });
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: "Server error", type: "error" });
+    }
+  };
 
   // Helper to map status to colors
   const getStatusColor = (status) => {
@@ -93,11 +137,22 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
               key={p._id}
               project={p}
               onDetails={onNavigateDetail}
-              onUpdateStatus={() => console.log("Update status clicked")} // Placeholder or pass actual handler
+              onUpdateStatus={handleUpdateStatus}
             />
           ))
         )}
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="ui-toast-container">
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        </div>
+      )}
 
       {/* FAB */}
       {/* FAB */}
