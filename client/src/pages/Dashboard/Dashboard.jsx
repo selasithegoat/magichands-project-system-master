@@ -11,6 +11,7 @@ import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
 import PlusIcon from "../../components/icons/PlusIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import FabButton from "../../components/ui/FabButton";
+import Toast from "../../components/ui/Toast";
 
 const Dashboard = ({
   onNavigateProject,
@@ -46,15 +47,39 @@ const Dashboard = ({
     }
   };
 
+  // Toast State
+  const [toast, setToast] = useState(null);
+
   const handleDetailsClick = (projectId) => {
-    // Navigate to details (implement routing or pass ID to parent)
-    console.log("Navigate to details:", projectId);
     onNavigateProject(projectId);
   };
 
-  const handleUpdateStatusClick = (projectId) => {
-    console.log("Update status for:", projectId);
-    // Open modal or navigate
+  const handleUpdateStatusClick = async (projectId, currentStatus) => {
+    if (currentStatus !== "Delivered") {
+      setToast({
+        message: "Project must be 'Delivered' before marking as finished.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Completed" }),
+      });
+
+      if (res.ok) {
+        setToast({ message: "Project marked as Completed!", type: "success" });
+        fetchProjects(); // Refresh list
+      } else {
+        setToast({ message: "Failed to update status", type: "error" });
+      }
+    } catch (err) {
+      console.error(err);
+      setToast({ message: "Server error", type: "error" });
+    }
   };
 
   return (
@@ -217,6 +242,17 @@ const Dashboard = ({
 
       {/* FAB */}
       <FabButton onClick={onCreateProject} />
+
+      {/* Toast */}
+      {toast && (
+        <div className="ui-toast-container">
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };
