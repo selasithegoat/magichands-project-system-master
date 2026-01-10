@@ -23,6 +23,11 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     department: "",
     contact: "",
   });
+  const [stats, setStats] = useState({
+    totalProjects: 0,
+    completedProjects: 0,
+    hoursLogged: 0,
+  });
   const [loading, setLoading] = useState(!user); // If user prop exists, not loading
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: '' }
@@ -42,6 +47,22 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
       setLoading(false);
     }
   }, [user]);
+
+  // Fetch Stats
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch("/api/projects/stats");
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      }
+    };
+    fetchStats();
+  }, []);
 
   // Handle Toast Timeout
   React.useEffect(() => {
@@ -140,7 +161,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           <div className="stat-card-row">
             <div>
               <span className="stat-label">Total Projects</span>
-              <h2 className="stat-value">14</h2>
+              <h2 className="stat-value">{stats.totalProjects}</h2>
             </div>
             <div className="stat-icon-box blue">
               <FolderIcon />
@@ -149,7 +170,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           <div className="stat-card-row">
             <div>
               <span className="stat-label">Tasks Completed</span>
-              <h2 className="stat-value">32</h2>
+              <h2 className="stat-value">{stats.completedProjects}</h2>
             </div>
             <div className="stat-icon-box green">
               <CheckCircleIcon />
@@ -158,7 +179,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           <div className="stat-card-row">
             <div>
               <span className="stat-label">Hours Logged</span>
-              <h2 className="stat-value">128</h2>
+              <h2 className="stat-value">{stats.hoursLogged}</h2>
             </div>
             <div className="stat-icon-box purple">
               <ClockIcon />

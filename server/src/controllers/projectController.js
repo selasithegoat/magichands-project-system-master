@@ -91,7 +91,38 @@ const getProjects = async (req, res) => {
   }
 };
 
+// @desc    Get user project stats
+// @route   GET /api/projects/stats
+// @access  Private
+const getUserStats = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Count all projects created by user
+    const totalProjects = await Project.countDocuments({ createdBy: userId });
+
+    // Count completed projects
+    const completedProjects = await Project.countDocuments({
+      createdBy: userId,
+      status: "Completed",
+    });
+
+    // Estimate hours: 8 hours per completed project (mock calculation)
+    const hoursLogged = completedProjects * 8;
+
+    res.json({
+      totalProjects,
+      completedProjects,
+      hoursLogged,
+    });
+  } catch (error) {
+    console.error("Error fetching project stats:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
+  getUserStats,
 };
