@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Header from "./Header";
+import NotificationModal from "../ui/NotificationModal";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -40,6 +41,8 @@ const Layout = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [projectCount, setProjectCount] = useState(0);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(7); // Mock count matching modal data
 
   React.useEffect(() => {
     // Basic fetch to update count
@@ -73,6 +76,14 @@ const Layout = ({
         onNavigateHistory={onNavigateHistory}
         onNavigateProfile={onNavigateProfile}
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
+        onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
+        notificationCount={notificationCount}
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
       />
 
       {/* Mobile Drawer */}
