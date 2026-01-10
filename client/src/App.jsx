@@ -149,6 +149,7 @@ function App() {
             <OngoingProjects
               onNavigateDetail={() => navigate("/detail")}
               onBack={() => navigate("/")}
+              onCreateProject={() => navigate("/create")}
             />
           </ProtectedLayout>
         }

@@ -10,6 +10,7 @@ import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
 import PlusIcon from "../../components/icons/PlusIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
+import FabButton from "../../components/ui/FabButton";
 
 const Dashboard = ({
   onNavigateProject,
@@ -215,9 +216,7 @@ const Dashboard = ({
       </div>
 
       {/* FAB */}
-      <button className="fab-btn" onClick={onCreateProject}>
-        <PlusIcon />
-      </button>
+      <FabButton onClick={onCreateProject} />
     </div>
   );
 };

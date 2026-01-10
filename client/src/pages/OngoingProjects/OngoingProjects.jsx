@@ -8,8 +8,9 @@ import CalendarIcon from "../../components/icons/CalendarIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import FabButton from "../../components/ui/FabButton";
 
-const OngoingProjects = ({ onNavigateDetail, onBack }) => {
+const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -187,7 +188,8 @@ const OngoingProjects = ({ onNavigateDetail, onBack }) => {
       </div>
 
       {/* FAB */}
-      <button className="fab-btn-blue">+</button>
+      {/* FAB */}
+      <FabButton onClick={onCreateProject} />
     </div>
   );
 };
