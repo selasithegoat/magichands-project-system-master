@@ -12,7 +12,7 @@ import { PDFDownloadLink } from "@react-pdf/renderer";
 import ProjectSummaryPDF from "./ProjectSummaryPDF";
 import "./Step5.css";
 
-const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
+const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showToast, setShowToast] = useState({
@@ -28,8 +28,18 @@ const Step5 = ({ formData, onCreate, onBack, onCancel }) => {
       return;
     }
     setIsCreating(true);
-    await onCreate();
+    const result = await onCreate();
     setIsCreating(false);
+
+    if (result.success) {
+      triggerToast("Project Created Successfully!", "success");
+      // Wait for toast to be visible before navigating
+      setTimeout(() => {
+        if (onComplete) onComplete();
+      }, 2000);
+    } else {
+      triggerToast(result.message || "Failed to create project", "error");
+    }
   };
 
   const handleDownloadClick = () => {

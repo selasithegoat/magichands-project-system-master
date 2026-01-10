@@ -85,20 +85,26 @@ const CreateProjectWizard = () => {
       });
 
       if (res.ok) {
-        localStorage.removeItem("projectWizardData");
-        // Explicitly reset state to ensure next usage is clean
-        setFormData(DEFAULT_FORM_STATE.formData);
-        setCurrentStep(1);
-        alert("Project Created Successfully!"); // Or toast
-        navigate("/"); // Or to project details
+        return { success: true };
       } else {
         const err = await res.json();
-        alert(`Error: ${err.message}`);
+        return { success: false, message: err.message };
       }
     } catch (error) {
       console.error("Create Project Error:", error);
-      alert("Something went wrong. Please try again.");
+      return {
+        success: false,
+        message: "Something went wrong. Please try again.",
+      };
     }
+  };
+
+  const handleProjectComplete = () => {
+    localStorage.removeItem("projectWizardData");
+    // Explicitly reset state to ensure next usage is clean
+    setFormData(DEFAULT_FORM_STATE.formData);
+    setCurrentStep(1);
+    navigate("/");
   };
 
   return (
@@ -144,6 +150,7 @@ const CreateProjectWizard = () => {
           onCreate={handleCreateProject}
           onBack={handleBack}
           onCancel={handleCancelProject}
+          onComplete={handleProjectComplete}
         />
       )}
 
