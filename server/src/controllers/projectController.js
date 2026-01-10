@@ -121,8 +121,71 @@ const getUserStats = async (req, res) => {
   }
 };
 
+// @desc    Get project by ID
+// @route   GET /api/projects/:id
+// @access  Private
+const getProjectById = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id).populate(
+      "createdBy",
+      "firstName lastName"
+    );
+
+    if (project) {
+      res.json(project);
+    } else {
+      res.status(404).json({ message: "Project not found" });
+    }
+  } catch (error) {
+    console.error("Error fetching project by ID:", error);
+    if (error.kind === "ObjectId") {
+      res.status(404).json({ message: "Project not found" });
+    } else {
+      res.status(500).json({ message: "Server Error" });
+    }
+  }
+};
+
+// @desc    Add item to project
+// @route   POST /api/projects/:id/items
+// @access  Private
+const addItemToProject = async (req, res) => {
+  try {
+    const { description, breakdown, qty } = req.body;
+
+    // Basic validation
+    if (!description || !qty) {
+      return res
+        .status(400)
+        .json({ message: "Description and Quantity are required" });
+    }
+
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const newItem = {
+      description,
+      breakdown: breakdown || "",
+      qty: Number(qty),
+    };
+
+    project.items.push(newItem);
+    await project.save();
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error adding item:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
   getUserStats,
+  getProjectById,
+  addItemToProject,
 };

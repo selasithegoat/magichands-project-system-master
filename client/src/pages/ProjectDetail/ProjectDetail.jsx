@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import "./ProjectDetail.css";
 import UserAvatar from "../../components/ui/UserAvatar";
 import BackArrow from "../../components/icons/BackArrow";
@@ -8,38 +9,77 @@ import CalendarIcon from "../../components/icons/CalendarIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
-import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
 import ProjectExecution from "./ProjectExecution";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
 import ProjectActivity from "./ProjectActivity";
 import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
-// Department icons might be needed if dynamic, for now using dots or generic
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
 
 const ProjectDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}`);
+      if (!res.ok) throw new Error("Failed to fetch project");
+      const data = await res.json();
+      setProject(data);
+    } catch (err) {
+      console.error(err);
+      setError("Could not load project details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) fetchProject();
+  }, [id]);
+
+  if (loading)
+    return (
+      <div
+        className="project-detail-container"
+        style={{ justifyContent: "center", alignItems: "center" }}
+      >
+        <LoadingSpinner />
+      </div>
+    );
+  if (error)
+    return (
+      <div className="project-detail-container">
+        <p style={{ padding: "2rem", color: "red" }}>{error}</p>
+      </div>
+    );
+  if (!project) return null;
 
   return (
     <div className="project-detail-container">
       <header className="project-header">
         <div className="header-top">
           <div className="header-left">
-            <button className="back-button">
+            <button className="back-button" onClick={() => navigate(-1)}>
               <BackArrow />
             </button>
             <h1 className="project-title">
-              #MH-2023-88
+              {project.orderId || "Unititled"}
               <span className="status-badge">
-                <ClockIcon width="14" height="14" /> In Progress
+                <ClockIcon width="14" height="14" /> {project.status}
               </span>
             </h1>
           </div>
-          <a href="#" className="edit-link">
+          <button className="edit-link" onClick={() => console.log("Edit")}>
             Edit
-          </a>
+          </button>
         </div>
-        <div className="project-subtitle">Annual Tech Conference Setup</div>
+        <div className="project-subtitle">{project.details?.projectName}</div>
         <nav className="header-nav">
           {["Overview", "Execution", "Updates", "Challenges", "Activities"].map(
             (tab) => (
@@ -59,29 +99,46 @@ const ProjectDetail = () => {
         {activeTab === "Overview" && (
           <>
             <div className="main-column">
-              <ProjectInfoCard />
-              <DepartmentsCard />
-              <OrderItemsCard />
-              <RisksCard />
-              <ProductionRisksCard />
+              <ProjectInfoCard project={project} />
+              <DepartmentsCard departments={project.departments} />
+              <OrderItemsCard
+                items={project.items}
+                projectId={project._id}
+                onUpdate={fetchProject}
+              />
+              <RisksCard risks={project.uncontrollableFactors} />
+              <ProductionRisksCard risks={project.productionRisks} />
             </div>
             <div className="side-column">
-              <ProgressCard />
-              <QuickActionsCard />
-              <ApprovalsCard />
+              <ProgressCard project={project} />
+              {/* Quick Actions Removed */}
+              <ApprovalsCard status={project.status} />
             </div>
           </>
         )}
-        {activeTab === "Execution" && <ProjectExecution />}
-        {activeTab === "Updates" && <ProjectUpdates />}
-        {activeTab === "Challenges" && <ProjectChallenges />}
-        {activeTab === "Activities" && <ProjectActivity />}
+        {activeTab === "Execution" && <ProjectExecution project={project} />}
+        {activeTab === "Updates" && <ProjectUpdates project={project} />}
+        {activeTab === "Challenges" && <ProjectChallenges project={project} />}
+        {activeTab === "Activities" && <ProjectActivity project={project} />}
       </main>
     </div>
   );
 };
 
-const ProjectInfoCard = () => {
+const ProjectInfoCard = ({ project }) => {
+  const details = project.details || {};
+  const leadName = details.lead || "Unassigned";
+
+  // Format Date
+  const formatDate = (d) => {
+    if (!d) return "TBD";
+    return new Date(d).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   return (
     <div className="detail-card">
       <div className="card-header">
@@ -96,82 +153,107 @@ const ProjectInfoCard = () => {
         <div className="info-item">
           <h4>PROJECT LEAD</h4>
           <div className="lead-profile">
-            <UserAvatar name="Sarah Jenkins" src="/path/to/avatar.jpg" />
-            <span>Sarah Jenkins</span>
+            <UserAvatar name={leadName} width="32px" height="32px" />
+            <span>{leadName}</span>
           </div>
         </div>
         <div className="info-item">
           <h4>CONTACT</h4>
-          <a href="mailto:sarah.j@magichands.co" className="contact-email">
-            sarah.j@magichands.co
-          </a>
+          {/* Mock contact for now as it's not in schema explicitly other than type */}
+          <span className="info-text-bold">{details.contactType || "N/A"}</span>
         </div>
         <div className="info-item">
           <h4>DELIVERY SCHEDULE</h4>
           <div className="info-text-bold">
-            <CalendarIcon width="16" height="16" /> Oct 24, 2023
+            <CalendarIcon width="16" height="16" />{" "}
+            {formatDate(details.deliveryDate)}
           </div>
-          <div className="info-subtext">08:00 AM - 06:00 PM</div>
+          <div className="info-subtext">
+            {details.deliveryTime || "All Day"}
+          </div>
         </div>
         <div className="info-item">
           <h4>LOCATION</h4>
           <div className="info-text-bold">
-            <LocationIcon width="16" height="16" /> Grand Hall, West Wing
+            <LocationIcon width="16" height="16" />{" "}
+            {details.deliveryLocation || "Unknown"}
           </div>
-          <div className="info-subtext">
-            123 Convention Center Blvd, Tech City
-          </div>
+          <div className="info-subtext">{/* Address placeholder */}</div>
         </div>
       </div>
     </div>
   );
 };
 
-const DepartmentsCard = () => {
+const DepartmentsCard = ({ departments = [] }) => {
   return (
     <div className="detail-card">
       <div className="card-header">
         <h3 className="card-title">👥 Departments</h3>
         <span style={{ fontSize: "0.875rem", color: "#64748b" }}>
-          3 Engaged
+          {departments.length} Engaged
         </span>
       </div>
       <div className="dept-list">
-        <span className="dept-tag">
-          <span className="dept-dot" style={{ background: "#22c55e" }}></span>{" "}
-          AV Team
-        </span>
-        <span className="dept-tag">
-          <span className="dept-dot" style={{ background: "#3b82f6" }}></span>{" "}
-          Marketing
-        </span>
-        <span className="dept-tag">
-          <span className="dept-dot" style={{ background: "#eab308" }}></span>{" "}
-          Logistics
-        </span>
-        <span
-          className="dept-tag"
-          style={{ background: "#fff", border: "1px solid #e2e8f0" }}
-        >
-          <span className="dept-dot" style={{ background: "#cbd5e1" }}></span>{" "}
-          Catering
-        </span>
-        <button className="add-dept-btn">+</button>
-      </div>
-      <div style={{ marginTop: "1rem", fontSize: "0.75rem", color: "#94a3b8" }}>
-        Last engaged: 2 hours ago by Marketing
+        {departments.length > 0 ? (
+          departments.map((dept, i) => (
+            <span className="dept-tag" key={i}>
+              <span
+                className="dept-dot"
+                style={{ background: "#3b82f6" }}
+              ></span>{" "}
+              {dept}
+            </span>
+          ))
+        ) : (
+          <span style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+            No departments assigned
+          </span>
+        )}
       </div>
     </div>
   );
 };
 
-const OrderItemsCard = () => {
+const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newItem, setNewItem] = useState({
+    description: "",
+    breakdown: "",
+    qty: 1,
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleAddItem = async () => {
+    if (!newItem.description) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newItem),
+      });
+
+      if (res.ok) {
+        setIsAdding(false);
+        setNewItem({ description: "", breakdown: "", qty: 1 });
+        if (onUpdate) onUpdate(); // Refresh parent
+      }
+    } catch (err) {
+      console.error("Failed to add item", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="detail-card">
       <div className="card-header">
         <h3 className="card-title">📦 Order Items</h3>
         <button
           className="edit-link"
+          onClick={() => setIsAdding(!isAdding)}
           style={{
             fontSize: "0.875rem",
             display: "flex",
@@ -179,51 +261,99 @@ const OrderItemsCard = () => {
             gap: "0.25rem",
           }}
         >
-          + Add Item
+          {isAdding ? "Cancel" : "+ Add Item"}
         </button>
       </div>
-      <table className="items-table">
-        <thead>
-          <tr>
-            <th>DESCRIPTION</th>
-            <th style={{ textAlign: "right" }}>QTY</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <div className="item-desc">
-                <span className="item-name">Standard Booth (3x3m)</span>
-                <span className="item-sub">Shell scheme, white panels</span>
-              </div>
-            </td>
-            <td className="item-qty">10</td>
-          </tr>
-          <tr>
-            <td>
-              <div className="item-desc">
-                <span className="item-name">LED Wall P3</span>
-                <span className="item-sub">Modular 500x500mm tiles</span>
-              </div>
-            </td>
-            <td className="item-qty">2</td>
-          </tr>
-          <tr>
-            <td>
-              <div className="item-desc">
-                <span className="item-name">High Table & Stools</span>
-                <span className="item-sub">Black finish set</span>
-              </div>
-            </td>
-            <td className="item-qty">15</td>
-          </tr>
-        </tbody>
-      </table>
+
+      {isAdding && (
+        <div
+          style={{
+            padding: "1rem",
+            background: "#f8fafc",
+            borderRadius: "8px",
+            marginBottom: "1rem",
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <div style={{ display: "grid", gap: "1rem" }}>
+            <input
+              type="text"
+              placeholder="Description"
+              className="input-field"
+              value={newItem.description}
+              onChange={(e) =>
+                setNewItem({ ...newItem, description: e.target.value })
+              }
+              autoFocus
+            />
+            <input
+              type="text"
+              placeholder="Breakdown / Details (Optional)"
+              className="input-field"
+              value={newItem.breakdown}
+              onChange={(e) =>
+                setNewItem({ ...newItem, breakdown: e.target.value })
+              }
+            />
+            <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+              <label style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                Qty:
+              </label>
+              <input
+                type="number"
+                min="1"
+                className="input-field"
+                style={{ width: "80px" }}
+                value={newItem.qty}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, qty: e.target.value })
+                }
+              />
+              <button
+                className="btn-primary"
+                style={{ marginLeft: "auto", padding: "0.5rem 1rem" }}
+                onClick={handleAddItem}
+                disabled={loading}
+              >
+                {loading ? "Saving..." : "Save Item"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {items.length > 0 ? (
+        <table className="items-table">
+          <thead>
+            <tr>
+              <th>DESCRIPTION</th>
+              <th style={{ textAlign: "right" }}>QTY</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={i}>
+                <td>
+                  <div className="item-desc">
+                    <span className="item-name">{item.description}</span>
+                    <span className="item-sub">{item.breakdown}</span>
+                  </div>
+                </td>
+                <td className="item-qty">{item.qty}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+          No items listed.
+        </p>
+      )}
     </div>
   );
 };
 
-const RisksCard = () => {
+const RisksCard = ({ risks = [] }) => {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -237,25 +367,32 @@ const RisksCard = () => {
           className="risk-count"
           style={{ fontSize: "0.875rem", color: "#7f1d1d" }}
         >
-          2 flagged items {isOpen ? "▲" : "▼"}
+          {risks.length} flagged items {isOpen ? "▲" : "▼"}
         </div>
       </div>
       {isOpen && (
         <div className="risk-content">
-          <div className="risk-item">
-            <div className="risk-dot"></div>
-            <div className="risk-details">
-              <h5>Weather Forecast</h5>
-              <p>Potential rain during outdoor loading on Oct 23.</p>
-            </div>
-          </div>
-          <div className="risk-item">
-            <div className="risk-dot"></div>
-            <div className="risk-details">
-              <h5>Union Strike</h5>
-              <p>Local transport union announced partial strike.</p>
-            </div>
-          </div>
+          {risks.length > 0 ? (
+            risks.map((risk, i) => (
+              <div className="risk-item" key={i}>
+                <div className="risk-dot"></div>
+                <div className="risk-details">
+                  <h5>{risk.description}</h5>
+                  <p>Status: {risk.status?.label || "Pending"}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p
+              style={{
+                color: "#7f1d1d",
+                fontSize: "0.875rem",
+                marginBottom: "1rem",
+              }}
+            >
+              No uncontrollable factors reported.
+            </p>
+          )}
           <button className="risk-add-btn">+ Add Risk Factor</button>
         </div>
       )}
@@ -263,12 +400,10 @@ const RisksCard = () => {
   );
 };
 
-const ProductionRisksCard = () => {
+const ProductionRisksCard = ({ risks = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="detail-card" style={{ padding: "0" }}>
-      {" "}
-      {/* Reusing styles but specialized */}
       <div
         className="risk-header"
         onClick={() => setIsOpen(!isOpen)}
@@ -281,14 +416,45 @@ const ProductionRisksCard = () => {
           className="risk-count"
           style={{ fontSize: "0.875rem", color: "#64748b" }}
         >
-          0 flagged items {isOpen ? "▲" : "▼"}
+          {risks.length} flagged items {isOpen ? "▲" : "▼"}
         </div>
       </div>
+      {isOpen && (
+        <div className="risk-content">
+          {risks.length > 0 ? (
+            risks.map((risk, i) => (
+              <div className="risk-item" key={i}>
+                <div
+                  className="risk-dot"
+                  style={{ backgroundColor: "#eab308" }}
+                ></div>
+                <div className="risk-details">
+                  <h5>{risk.description}</h5>
+                  <p>Preventive: {risk.preventive}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p
+              style={{
+                color: "#64748b",
+                fontSize: "0.875rem",
+                marginBottom: "1rem",
+              }}
+            >
+              No production risks reported.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
-const ProgressCard = () => {
+const ProgressCard = ({ project }) => {
+  // Mock calculation or from project data if available
+  const progress = project.progress !== undefined ? project.progress : 50;
+
   return (
     <div className="detail-card progress-card">
       <div className="progress-header">
@@ -306,16 +472,16 @@ const ProgressCard = () => {
       </div>
       <div className="chart-container">
         {/* Simple SVG Donut Chart */}
-        <ProgressDonutIcon percentage={75} />
+        <ProgressDonutIcon percentage={progress} />
       </div>
       <div className="progress-stats">
         <div className="stat-box">
-          <span className="stat-value">12</span>
+          <span className="stat-value">--</span>
           <span className="stat-label">DONE</span>
         </div>
         <div className="stat-box" style={{ background: "#eff6ff" }}>
           <span className="stat-value" style={{ color: "#2563eb" }}>
-            4
+            --
           </span>
           <span className="stat-label" style={{ color: "#2563eb" }}>
             PENDING
@@ -326,56 +492,24 @@ const ProgressCard = () => {
   );
 };
 
-const QuickActionsCard = () => {
-  return (
-    <div className="detail-card">
-      <div className="card-header">
-        <h3 className="card-title">⚡ Quick Actions</h3>
-      </div>
-      <div className="actions-grid">
-        <button className="action-btn primary">
-          <CheckIcon className="check-mark primary" width="20" height="20" />{" "}
-          Mark Step
-        </button>
-        <button className="action-btn">
-          <EditIcon width="20" height="20" /> Add Update
-        </button>
-        <button className="action-btn">
-          <WarningIcon width="20" height="20" /> Report Risk
-        </button>
-        <button className="action-btn">
-          <FolderIcon width="20" height="20" /> History
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const ApprovalsCard = () => {
+const ApprovalsCard = ({ status }) => {
   return (
     <div className="detail-card">
       <div className="card-header">
         <h3 className="card-title">☑ Approvals</h3>
       </div>
       <div className="approval-list">
+        {/* Mock Data for now - could be dynamic later */}
         <div className="approval-item">
           <div className="approval-status completed">
             <CheckIcon className="check-mark primary" width="14" height="14" />
           </div>
           <div className="approval-content">
             <span className="approval-title">Scope Approval</span>
-            <span className="approval-sub">Approved by Mike T. - Oct 10</span>
+            <span className="approval-sub">Approved by System</span>
           </div>
         </div>
-        <div className="approval-item">
-          <div className="approval-status completed">
-            <CheckIcon className="check-mark primary" width="14" height="14" />
-          </div>
-          <div className="approval-content">
-            <span className="approval-title">Dept Engagement</span>
-            <span className="approval-sub">Auto-verified - Oct 12</span>
-          </div>
-        </div>
+
         <div className="approval-item active">
           <div className="approval-status active">
             <div className="active-dot"></div>
@@ -383,26 +517,10 @@ const ApprovalsCard = () => {
           <div className="approval-content">
             <button className="nudge-btn">Nudge</button>
             <span className="approval-title" style={{ color: "#3b82f6" }}>
-              Project Coord. Sign
+              Current Status
             </span>
             <span className="approval-sub" style={{ color: "#3b82f6" }}>
-              Awaiting Signature
-            </span>
-          </div>
-        </div>
-        <div className="approval-item">
-          <div className="approval-status pending"></div>
-          <div className="approval-content">
-            <span className="approval-title" style={{ color: "#94a3b8" }}>
-              Invoice Generation
-            </span>
-          </div>
-        </div>
-        <div className="approval-item">
-          <div className="approval-status pending"></div>
-          <div className="approval-content">
-            <span className="approval-title" style={{ color: "#94a3b8" }}>
-              Quality Control
+              {status}
             </span>
           </div>
         </div>

@@ -112,7 +112,7 @@ function App() {
           >
             <Dashboard
               user={user} // Pass user to Dashboard
-              onNavigateProject={() => navigate("/detail")}
+              onNavigateProject={(id) => navigate(`/detail/${id}`)}
               onCreateProject={() => navigate("/create")}
               onSeeAllProjects={() => navigate("/projects")}
             />
@@ -130,7 +130,7 @@ function App() {
       />
 
       <Route
-        path="/detail"
+        path="/detail/:id"
         element={
           <ProtectedLayout activeView="detail" user={user} navigate={navigate}>
             <ProjectDetail />
@@ -147,7 +147,7 @@ function App() {
             navigate={navigate}
           >
             <OngoingProjects
-              onNavigateDetail={() => navigate("/detail")}
+              onNavigateDetail={(id) => navigate(`/detail/${id}`)}
               onBack={() => navigate("/")}
               onCreateProject={() => navigate("/create")}
             />
