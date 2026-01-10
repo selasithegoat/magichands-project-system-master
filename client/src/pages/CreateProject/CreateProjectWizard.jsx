@@ -10,30 +10,32 @@ import ConfirmationModal from "../../components/ui/ConfirmationModal";
 const CreateProjectWizard = () => {
   const navigate = useNavigate();
 
+  const DEFAULT_FORM_STATE = {
+    currentStep: 1,
+    formData: {
+      orderDate: new Date().toISOString().split("T")[0],
+      receivedTime: "10:00",
+      lead: null,
+      projectName: "",
+      deliveryDate: new Date().toISOString().split("T")[0],
+      deliveryTime: "14:00",
+      deliveryLocation: "",
+      contactType: "MH",
+      supplySource: "in-house",
+      departments: [], // Step 2
+      items: [], // Step 3
+      uncontrollableFactors: [], // Step 4
+      productionRisks: [], // Step 4
+    },
+  };
+
   // Load initial state from localStorage or default
   const getInitialState = () => {
     const saved = localStorage.getItem("projectWizardData");
     if (saved) {
       return JSON.parse(saved);
     }
-    return {
-      currentStep: 1,
-      formData: {
-        orderDate: new Date().toISOString().split("T")[0],
-        receivedTime: "10:00",
-        lead: null,
-        projectName: "",
-        deliveryDate: new Date().toISOString().split("T")[0],
-        deliveryTime: "14:00",
-        deliveryLocation: "",
-        contactType: "MH",
-        supplySource: "in-house",
-        departments: [], // Step 2
-        items: [], // Step 3
-        uncontrollableFactors: [], // Step 4
-        productionRisks: [], // Step 4
-      },
-    };
+    return DEFAULT_FORM_STATE;
   };
 
   const initialState = getInitialState();
@@ -84,6 +86,9 @@ const CreateProjectWizard = () => {
 
       if (res.ok) {
         localStorage.removeItem("projectWizardData");
+        // Explicitly reset state to ensure next usage is clean
+        setFormData(DEFAULT_FORM_STATE.formData);
+        setCurrentStep(1);
         alert("Project Created Successfully!"); // Or toast
         navigate("/"); // Or to project details
       } else {
