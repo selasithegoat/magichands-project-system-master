@@ -209,7 +209,7 @@ const ProjectSummaryPDF = ({ formData }) => {
           <View style={styles.itemHeader}>
             <Text style={styles.colQty}>Qty</Text>
             <Text style={styles.colDesc}>Description</Text>
-            <Text style={styles.colLoc}>Location</Text>
+            <Text style={styles.colLoc}>Breakdown</Text>
           </View>
           {/* Rows */}
           {formData.items &&
