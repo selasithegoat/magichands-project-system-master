@@ -3,12 +3,9 @@ import "./OngoingProjects.css";
 // Icons
 import ArrowLeftIcon from "../../components/icons/ArrowLeftIcon";
 import SearchIcon from "../../components/icons/SearchIcon";
-import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
-import CalendarIcon from "../../components/icons/CalendarIcon";
-import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
-import ClockIcon from "../../components/icons/ClockIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import FabButton from "../../components/ui/FabButton";
+import ProjectCard from "../../components/ui/ProjectCard";
 
 const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
   const [projects, setProjects] = React.useState([]);
@@ -91,99 +88,14 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
         ) : projects.length === 0 ? (
           <p>No ongoing projects found.</p>
         ) : (
-          projects.map((p) => {
-            const statusStyle = getStatusColor(p.status);
-            // Mock progress based on status or random for now as schema doesn't have it
-            const progress =
-              p.status === "Completed"
-                ? 100
-                : p.status === "Pending Approval"
-                ? 10
-                : 50;
-
-            return (
-              <div className="ongoing-card" key={p._id}>
-                {/* Header Row */}
-                <div className="card-header-row">
-                  <span className={`status-pill ${statusStyle.class}`}>
-                    {p.status}
-                  </span>
-                  <button className="card-menu-btn">
-                    <ThreeDotsIcon />
-                  </button>
-                </div>
-
-                {/* Title */}
-                <h3 className="project-name">
-                  {p.details?.projectName || "Untitled"}
-                </h3>
-                <span className="project-code">{p.orderId}</span>
-
-                {/* Progress */}
-                <div className="progress-container">
-                  <div className="progress-info">
-                    <span>Progress</span>
-                    <span className={`progress-percent ${statusStyle.class}`}>
-                      {progress}%
-                    </span>
-                  </div>
-                  <div className="track">
-                    <div
-                      className="fill"
-                      style={{
-                        width: `${progress}%`,
-                        backgroundColor: statusStyle.color,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Footer Meta */}
-                <div className="card-meta-row">
-                  <div className="user-info">
-                    {/* Avatar placeholder */}
-                    <div
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: "50%",
-                        backgroundColor: "#cbd5e1",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "10px",
-                        fontWeight: "bold",
-                        color: "#475569",
-                      }}
-                    >
-                      {(p.createdBy?.firstName || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <span className="user-name">
-                      {p.createdBy
-                        ? `${p.createdBy.firstName} ${p.createdBy.lastName}`
-                        : "Unassigned"}
-                    </span>
-                  </div>
-
-                  <div className={`date-info`}>
-                    <CalendarIcon />
-                    {formatDate(p.details?.deliveryDate)}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="card-actions-row">
-                  <button
-                    className="btn-details"
-                    onClick={() => onNavigateDetail(p._id)}
-                  >
-                    Details
-                  </button>
-                  <button className="btn-update">Update Status</button>
-                </div>
-              </div>
-            );
-          })
+          projects.map((p) => (
+            <ProjectCard
+              key={p._id}
+              project={p}
+              onDetails={onNavigateDetail}
+              onUpdateStatus={() => console.log("Update status clicked")} // Placeholder or pass actual handler
+            />
+          ))
         )}
       </div>
 
