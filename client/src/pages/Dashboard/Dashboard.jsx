@@ -153,7 +153,17 @@ const Dashboard = ({
               <ThreeDotsIcon />
             </div>
           </div>
-          <div className="stats-count">0</div>
+          <div className="stats-count">
+            {
+              projects.filter((p) => {
+                if (!p.details?.deliveryDate) return false;
+                const dDate = new Date(p.details.deliveryDate);
+                const now = new Date();
+                now.setHours(0, 0, 0, 0); // Start of today
+                return dDate < now && p.status !== "Delivered";
+              }).length
+            }
+          </div>
           <div className="stats-label">Overdue Items</div>
         </div>
       </div>
