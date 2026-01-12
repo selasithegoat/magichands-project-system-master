@@ -39,8 +39,11 @@ const Dashboard = ({
         const data = await res.json();
         // Filter out "Completed" projects
         const activeProjects = data.filter((p) => p.status !== "Completed");
-        // Reverse to show newest first
-        setProjects(activeProjects.reverse());
+        // Sort by createdAt desc (newest first)
+        const sortedProjects = activeProjects.sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        setProjects(sortedProjects);
       } else {
         console.error("Failed to fetch projects");
       }
@@ -191,14 +194,16 @@ const Dashboard = ({
             {isLoading ? (
               <LoadingSpinner />
             ) : projects.length > 0 ? (
-              projects.map((project) => (
-                <ProjectCard
-                  key={project._id}
-                  project={project}
-                  onDetails={handleDetailsClick}
-                  onUpdateStatus={handleUpdateStatusClick}
-                />
-              ))
+              projects
+                .slice(0, 4)
+                .map((project) => (
+                  <ProjectCard
+                    key={project._id}
+                    project={project}
+                    onDetails={handleDetailsClick}
+                    onUpdateStatus={handleUpdateStatusClick}
+                  />
+                ))
             ) : (
               <div className="no-projects">
                 <p>No projects found. Create one to get started!</p>
