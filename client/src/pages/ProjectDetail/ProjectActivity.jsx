@@ -173,6 +173,29 @@ const ProjectActivity = ({ project }) => {
     }
   };
 
+  const getCardClass = (action) => {
+    switch (action) {
+      case "create":
+        return "card-create";
+      case "status_change":
+      case "system":
+        return "card-system";
+      case "risk_add":
+      case "challenge_add":
+        return "card-risk";
+      case "approval":
+        return "card-approval";
+      case "update":
+      case "challenge_update":
+      case "item_add":
+      case "item_delete":
+      case "challenge_delete":
+        return "card-update";
+      default:
+        return "card-system";
+    }
+  };
+
   if (loading) return <div>Loading activity...</div>;
 
   return (
@@ -227,7 +250,9 @@ const ProjectActivity = ({ project }) => {
               </div>
 
               {/* Card */}
-              <div className="history-content-card">
+              <div
+                className={`history-content-card ${getCardClass(item.action)}`}
+              >
                 <div className="card-header">
                   <div className="user-row">
                     <div

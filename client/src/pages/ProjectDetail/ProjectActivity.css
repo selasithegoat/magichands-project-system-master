@@ -158,6 +158,39 @@
   border-radius: 12px;
   padding: 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  border-left: 4px solid #e2e8f0; /* Default border */
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.history-content-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+/* Card Color Variants */
+.history-content-card.card-create {
+  border-left-color: #a855f7;
+  background-color: #faf5ff; /* Very subtle purple tint */
+}
+
+.history-content-card.card-update {
+  border-left-color: #3b82f6;
+  background-color: #eff6ff;
+}
+
+.history-content-card.card-approval {
+  border-left-color: #22c55e;
+  background-color: #f0fdf4;
+}
+
+.history-content-card.card-risk {
+  border-left-color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.history-content-card.card-system {
+  border-left-color: #94a3b8;
+  background-color: #f8fafc;
 }
 
 .card-header {
