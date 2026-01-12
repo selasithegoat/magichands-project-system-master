@@ -14,7 +14,6 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon"; // Import TrashIcon
 import Toast from "../../components/ui/Toast";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
-import ProjectExecution from "./ProjectExecution";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
 import ProjectActivity from "./ProjectActivity";
@@ -202,17 +201,15 @@ const ProjectDetail = ({ onProjectChange }) => {
 
         <div className="project-subtitle">{project.details?.projectName}</div>
         <nav className="header-nav">
-          {["Overview", "Execution", "Updates", "Challenges", "Activities"].map(
-            (tab) => (
-              <a
-                key={tab}
-                className={`nav-item ${activeTab === tab ? "active" : ""}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </a>
-            )
-          )}
+          {["Overview", "Updates", "Challenges", "Activities"].map((tab) => (
+            <a
+              key={tab}
+              className={`nav-item ${activeTab === tab ? "active" : ""}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </a>
+          ))}
         </nav>
       </header>
 
@@ -244,7 +241,6 @@ const ProjectDetail = ({ onProjectChange }) => {
             </div>
           </>
         )}
-        {activeTab === "Execution" && <ProjectExecution project={project} />}
         {activeTab === "Updates" && <ProjectUpdates project={project} />}
         {activeTab === "Challenges" && <ProjectChallenges project={project} />}
         {activeTab === "Activities" && <ProjectActivity project={project} />}
