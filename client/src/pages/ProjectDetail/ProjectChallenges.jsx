@@ -1,30 +1,8 @@
 import React, { useState } from "react";
 import "./ProjectChallenges.css";
-
-const FlagIcon = ({ width = 24, height = 24, color = "currentColor" }) => (
-  <svg
-    width={width}
-    height={height}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M4 15C4 15 5 14 8 14C11 14 13 16 16 16C19 16 20 15 20 15V3C20 3 19 4 16 4C13 4 11 2 8 2C5 2 4 3 4 3V15Z"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M4 22V15"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+import EditIcon from "../../components/icons/EditIcon";
+import TrashIcon from "../../components/icons/TrashIcon";
+import FlagIcon from "../../components/icons/FlagIcon";
 
 const BellIcon = ({ width = 20, height = 20, color = "currentColor" }) => (
   <svg
@@ -171,6 +149,28 @@ const ProjectChallenges = ({ project, onUpdate }) => {
     }
   };
 
+  const handleDeleteChallenge = async (challengeId) => {
+    if (!window.confirm("Are you sure you want to delete this challenge?"))
+      return;
+
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/challenges/${challengeId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (res.ok) {
+        if (onUpdate) onUpdate();
+      } else {
+        console.error("Failed to delete challenge");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="challenges-container">
       {/* Header */}
@@ -201,6 +201,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
         <div className="header-label col-status">STATUS</div>
         <div className="header-label col-reported">REPORTED BY</div>
         <div className="header-label col-resolved">RESOLVED DATE</div>
+        <div className="header-label col-actions"></div>
       </div>
 
       {/* List Items */}
@@ -218,21 +219,26 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                 <p className="assistance-text">{item.assistance || "--"}</p>
               </div>
               <div className="col-status">
-                <select
-                  className={`status-pill ${item.status.toLowerCase()}`}
-                  value={item.status}
-                  onChange={(e) => handleStatusChange(item._id, e.target.value)}
-                  style={{
-                    border: "none",
-                    cursor: "pointer",
-                    appearance: "none",
-                    paddingRight: "1rem",
-                  }}
-                >
-                  <option value="Open">Open</option>
-                  <option value="Escalated">Escalated</option>
-                  <option value="Resolved">Resolved</option>
-                </select>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <select
+                    className={`status-pill ${item.status.toLowerCase()}`}
+                    value={item.status}
+                    onChange={(e) =>
+                      handleStatusChange(item._id, e.target.value)
+                    }
+                    style={{
+                      border: "none",
+                      cursor: "pointer",
+                      appearance: "none",
+                      paddingRight: "1rem",
+                    }}
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Escalated">Escalated</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                  <EditIcon width="16" height="16" color="#94a3b8" />
+                </div>
               </div>
               <div className="col-reported">
                 <div
@@ -255,6 +261,15 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                     {item.resolvedDate.replace(",", "\n")}
                   </span>
                 )}
+              </div>
+              <div className="col-actions">
+                <button
+                  className="btn-icon-delete"
+                  onClick={() => handleDeleteChallenge(item._id)}
+                  title="Delete Challenge"
+                >
+                  <TrashIcon width="18" height="18" color="#dc2626" />
+                </button>
               </div>
             </div>
           ))

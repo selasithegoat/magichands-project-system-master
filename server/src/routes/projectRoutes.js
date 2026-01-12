@@ -10,6 +10,7 @@ const {
   updateProjectStatus,
   addChallengeToProject,
   updateChallengeStatus,
+  deleteChallenge,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -22,6 +23,7 @@ router.patch(
   protect,
   updateChallengeStatus
 );
+router.delete("/:id/challenges/:challengeId", protect, deleteChallenge);
 router.patch("/:id/status", protect, updateProjectStatus);
 router.get("/:id", protect, getProjectById);
 router.post("/", protect, createProject);

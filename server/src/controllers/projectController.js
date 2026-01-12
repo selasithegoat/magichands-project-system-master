@@ -316,6 +316,32 @@ const updateChallengeStatus = async (req, res) => {
   }
 };
 
+// @desc    Delete a challenge
+// @route   DELETE /api/projects/:id/challenges/:challengeId
+// @access  Private
+const deleteChallenge = async (req, res) => {
+  try {
+    const { id, challengeId } = req.params;
+
+    // Use findOneAndUpdate to remove the challenge from the array
+    // using $pull operator
+    const updatedProject = await Project.findOneAndUpdate(
+      { _id: id },
+      { $pull: { challenges: { _id: challengeId } } },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error deleting challenge:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -326,4 +352,5 @@ module.exports = {
   updateProjectStatus,
   addChallengeToProject,
   updateChallengeStatus,
+  deleteChallenge,
 };
