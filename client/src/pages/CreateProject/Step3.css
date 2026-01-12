@@ -54,9 +54,9 @@
   gap: 16px;
 }
 
-  display: flex;
+  /* display: flex;
   gap: 12px;
-}
+} */
 
 @media (max-width: 600px) {
   .item-row-split {

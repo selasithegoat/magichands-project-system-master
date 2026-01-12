@@ -38,6 +38,7 @@ const Layout = ({
   activeView,
   user, // Receive user
   projectCount, // Receive projectCount prop
+  onSignOut, // Receive onSignOut prop
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -171,14 +172,18 @@ const Layout = ({
                 <UsersIcon />
                 History
               </a>
-              <a href="#" className="drawer-item">
-                <SettingsIcon />
-                Settings
-              </a>
             </nav>
 
             <div className="drawer-footer">
-              <div className="drawer-user">
+              <div
+                className="drawer-user"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsMobileMenuOpen(false);
+                  onNavigateProfile();
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <div className="user-profile-mini">{getInitials()}</div>
                 <div className="drawer-user-info">
                   <span className="user-name">{getFullName()}</span>
@@ -187,9 +192,15 @@ const Layout = ({
                   </span>
                 </div>
               </div>
-              <button className="drawer-logout">
+              <button
+                className="drawer-logout"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  if (onSignOut) onSignOut();
+                }}
+              >
                 <LogOutIcon />
-                Log Out
+                Sign Out
               </button>
             </div>
           </div>

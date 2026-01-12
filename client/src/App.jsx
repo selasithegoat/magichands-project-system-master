@@ -24,6 +24,7 @@ const ProtectedLayout = ({
   activeView,
   user,
   navigate,
+  onSignOut, // Receive onSignOut
   projectCount, // Receive projectCount
 }) => (
   <Layout
@@ -35,6 +36,7 @@ const ProtectedLayout = ({
     onNavigateHistory={() => navigate("/history")}
     onNavigateProfile={() => navigate("/profile")}
     onCreateProject={() => navigate("/create")}
+    onSignOut={onSignOut} // Pass onSignOut to Layout
   >
     {children}
   </Layout>
@@ -134,6 +136,7 @@ function App() {
             user={user}
             navigate={navigate}
             projectCount={projectCount}
+            onSignOut={handleLogout}
           >
             <Dashboard
               user={user} // Pass user to Dashboard
