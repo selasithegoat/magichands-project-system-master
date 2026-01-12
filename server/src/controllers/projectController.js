@@ -1,4 +1,6 @@
 const Project = require("../models/Project");
+const ActivityLog = require("../models/ActivityLog");
+const { logActivity } = require("../utils/activityLogger");
 
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
@@ -63,6 +65,14 @@ const createProject = async (req, res) => {
     });
 
     const savedProject = await project.save();
+
+    // Log Activity
+    await logActivity(
+      savedProject._id,
+      req.user.id,
+      "create",
+      `Created project #${savedProject.orderId || savedProject._id}`
+    );
 
     res.status(201).json(savedProject);
   } catch (error) {
@@ -218,8 +228,22 @@ const updateProjectStatus = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const oldStatus = project.status;
     project.status = status;
     await project.save();
+
+    // Log Acyivity
+    if (oldStatus !== status) {
+      await logActivity(
+        project._id,
+        req.user.id,
+        "status_change",
+        `Project status updated to ${status}`,
+        {
+          statusChange: { from: oldStatus, to: status },
+        }
+      );
+    }
 
     res.json(project);
   } catch (error) {
@@ -263,6 +287,14 @@ const addChallengeToProject = async (req, res) => {
     if (!updatedProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    await logActivity(
+      req.params.id,
+      req.user.id,
+      "challenge_add",
+      `Reported new challenge: ${title}`,
+      { challengeId: newChallenge._id }
+    );
 
     res.json(updatedProject);
   } catch (error) {
@@ -309,6 +341,14 @@ const updateChallengeStatus = async (req, res) => {
         .json({ message: "Project or Challenge not found" });
     }
 
+    await logActivity(
+      id,
+      req.user.id,
+      "challenge_update",
+      `Challenge status updated to ${status}`,
+      { challengeId: challengeId, newStatus: status }
+    );
+
     res.json(updatedProject);
   } catch (error) {
     console.error("Error updating challenge status:", error);
@@ -335,9 +375,33 @@ const deleteChallenge = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    await logActivity(
+      id,
+      req.user.id,
+      "challenge_delete",
+      `Deleted a challenge report`,
+      { challengeId: challengeId }
+    );
+
     res.json(updatedProject);
   } catch (error) {
     console.error("Error deleting challenge:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get project activity log
+// @route   GET /api/projects/:id/activity
+// @access  Private
+const getProjectActivity = async (req, res) => {
+  try {
+    const activities = await ActivityLog.find({ project: req.params.id })
+      .populate("user", "firstName lastName") // Get user details
+      .sort({ createdAt: -1 }); // Newest first
+
+    res.json(activities);
+  } catch (error) {
+    console.error("Error fetching activity:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -353,4 +417,5 @@ module.exports = {
   addChallengeToProject,
   updateChallengeStatus,
   deleteChallenge,
+  getProjectActivity,
 };

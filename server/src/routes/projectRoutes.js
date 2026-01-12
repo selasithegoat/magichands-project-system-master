@@ -11,10 +11,12 @@ const {
   addChallengeToProject,
   updateChallengeStatus,
   deleteChallenge,
+  getProjectActivity,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
 router.get("/stats", protect, getUserStats);
+router.get("/:id/activity", protect, getProjectActivity);
 router.post("/:id/items", protect, addItemToProject);
 router.delete("/:id/items/:itemId", protect, deleteItemFromProject);
 router.post("/:id/challenges", protect, addChallengeToProject);

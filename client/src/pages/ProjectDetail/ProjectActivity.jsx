@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./ProjectActivity.css";
 // Icons
 import SearchIcon from "../../components/icons/SearchIcon";
@@ -67,8 +67,113 @@ const historyData = [
   },
 ];
 
-const ProjectActivity = () => {
+const ProjectActivity = ({ project }) => {
   const [filter, setFilter] = useState("All Activity");
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (project?._id) {
+      fetchActivities();
+    }
+  }, [project?._id]);
+
+  const fetchActivities = async () => {
+    try {
+      const res = await fetch(`/api/projects/${project._id}/activity`);
+      const data = await res.json();
+      setActivities(data);
+    } catch (err) {
+      console.error("Failed to fetch activity log", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getFilteredActivities = () => {
+    if (filter === "All Activity") return activities;
+    // Simple mapping for filters
+    // "Status Changes" -> status_change
+    // "Approvals" -> approval
+    // "Edits" -> update, challenge_update, risk_update
+    // "Risks" -> risk_add, challenge_add
+    // "System" -> system
+    return activities.filter((act) => {
+      if (filter === "Status Changes") return act.action === "status_change";
+      if (filter === "Approvals") return act.action === "approval";
+      if (filter === "Edits")
+        return [
+          "update",
+          "challenge_update",
+          "challenge_delete",
+          "item_add",
+          "item_delete",
+        ].includes(act.action);
+      if (filter === "Risks")
+        return ["risk_add", "challenge_add"].includes(act.action);
+      return true;
+    });
+  };
+
+  // Helper to format item date
+  const formatTime = (dateStr) => {
+    return new Date(dateStr).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const formatDateHeader = (dateStr) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) return "TODAY";
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  // Group by date
+  const groupedActivities = () => {
+    const groups = [];
+    const filtered = getFilteredActivities();
+    let lastDate = "";
+
+    filtered.forEach((item) => {
+      const dateHeader = formatDateHeader(item.createdAt);
+      if (dateHeader !== lastDate) {
+        groups.push({ type: "separator", date: dateHeader });
+        lastDate = dateHeader;
+      }
+      groups.push({ ...item, type: "activity" });
+    });
+    return groups;
+  };
+
+  const renderIcon = (type) => {
+    switch (type) {
+      case "create":
+        return <CreateIcon />;
+      case "status_change":
+        return <SystemIcon />; // Using system icon for status flow
+      case "challenge_add":
+      case "risk_add":
+        return <AlertTriangleIcon />;
+      case "approval":
+        return <CheckCircleIcon />;
+      case "update":
+      case "challenge_update":
+      case "item_add":
+      case "item_delete":
+      case "challenge_delete":
+        return <EditIcon />;
+      default:
+        return <SystemIcon />;
+    }
+  };
+
+  if (loading) return <div>Loading activity...</div>;
 
   return (
     <div className="activity-container">
@@ -105,7 +210,7 @@ const ProjectActivity = () => {
 
       {/* Timeline */}
       <div className="history-timeline">
-        {historyData.map((item, index) => {
+        {groupedActivities().map((item, index) => {
           if (item.type === "separator") {
             return (
               <div key={`sep-${index}`} className="date-separator">
@@ -115,79 +220,56 @@ const ProjectActivity = () => {
           }
 
           return (
-            <div key={item.id} className="timeline-item">
+            <div key={item._id} className="timeline-item">
               {/* Icon */}
-              <div className={`history-icon-wrapper ${item.type}`}>
-                {item.type === "edit" && <EditIcon />}
-                {item.type === "approval" && <CheckCircleIcon />}
-                {item.type === "risk" && <AlertTriangleIcon />}
-                {item.type === "system" && <SystemIcon />}
-                {item.type === "create" && <CreateIcon />}
+              <div className={`history-icon-wrapper ${item.action}`}>
+                {renderIcon(item.action)}
               </div>
 
               {/* Card */}
               <div className="history-content-card">
                 <div className="card-header">
                   <div className="user-row">
-                    {item.user.avatar ? (
-                      <img
-                        src={item.user.avatar}
-                        alt={item.user.name}
-                        className="history-avatar"
-                      />
-                    ) : item.user.img ? /* Fallback if needed */ null : (
-                      <div
-                        className={`history-user-initials ${
-                          item.user.color || ""
-                        }`}
-                      >
-                        {item.user.initials || item.user.name[0]}
-                      </div>
-                    )}
-                    <span className="history-username">{item.user.name}</span>
+                    <div
+                      className={`history-user-initials`}
+                      style={{ backgroundColor: "#e2e8f0", color: "#64748b" }}
+                    >
+                      {item.user?.firstName?.[0]}
+                      {item.user?.lastName?.[0]}
+                    </div>
+                    <span className="history-username">
+                      {item.user?.firstName} {item.user?.lastName}
+                    </span>
                   </div>
-                  <span className="history-time">{item.time}</span>
+                  <span className="history-time">
+                    {formatTime(item.createdAt)}
+                  </span>
                 </div>
                 <div className="card-body">
-                  <p
-                    className="history-description"
-                    dangerouslySetInnerHTML={{
-                      __html: item.description.replace(
-                        /\*\*(.*?)\*\*/g,
-                        "<strong>$1</strong>"
-                      ),
-                    }}
-                  />
+                  <p className="history-description">{item.description}</p>
 
-                  {/* Edit Change Box */}
-                  {item.change && (
-                    <div className="change-box">
-                      <span className="change-label">{item.change.label}</span>
-                      <div className="change-values">
-                        <span className="val-old">{item.change.oldVal}</span>
-                        <span className="val-arrow">→</span>
-                        <span className="val-new">{item.change.newVal}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Alert Box */}
-                  {item.alert && (
-                    <div className="alert-box">
-                      <FlagIcon /> {item.alert}
-                    </div>
-                  )}
-
-                  {/* Status Change */}
-                  {item.statusChange && (
+                  {/* Dynamic Details Rendering based on keys in item.details */}
+                  {item.details && item.details.statusChange && (
                     <div className="status-change-row">
-                      <div className="status-pill-hist new-order">
-                        {item.statusChange.from}
+                      <div className="status-pill-hist">
+                        {item.details.statusChange.from}
                       </div>
                       <span className="val-arrow">→</span>
                       <div className="status-pill-hist in-progress">
-                        {item.statusChange.to}
+                        {item.details.statusChange.to}
                       </div>
+                    </div>
+                  )}
+
+                  {item.details && item.details.newStatus && (
+                    <div className="change-box">
+                      <span className="change-label">STATUS UPDATE</span>
+                      <span
+                        className="val-new"
+                        style={{ fontWeight: 600, color: "#0f172a" }}
+                      >
+                        {item.details.newStatus}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -195,8 +277,14 @@ const ProjectActivity = () => {
             </div>
           );
         })}
+        {activities.length === 0 && (
+          <div
+            style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}
+          >
+            No activity recorded yet.
+          </div>
+        )}
       </div>
-      <p className="history-footer-loader">Load older activity</p>
     </div>
   );
 };
