@@ -203,19 +203,69 @@ const Dashboard = ({
             <h3 className="section-title">Upcoming Deadlines</h3>
           </div>
           <div className="deadlines-list">
-            <div className="deadline-card">
-              <div className="date-box">
-                <span className="date-month">OCT</span>
-                <span className="date-day">24</span>
-              </div>
-              <div className="deadline-info">
-                <h4>Final Review for Client X</h4>
-                <span className="deadline-time">Today at 5:00 PM</span>
-              </div>
-              <div style={{ marginLeft: "auto", color: "#cbd5e1" }}>
-                <ChevronRightIcon />
-              </div>
-            </div>
+            {(() => {
+              const threeDaysFromNow = new Date();
+              threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+              const now = new Date();
+              now.setHours(0, 0, 0, 0); // Start of today
+
+              const upcomingDeadlines = projects
+                .filter((p) => {
+                  if (!p.details?.deliveryDate) return false;
+                  const dDate = new Date(p.details.deliveryDate);
+                  return dDate >= now && dDate <= threeDaysFromNow;
+                })
+                .sort(
+                  (a, b) =>
+                    new Date(a.details.deliveryDate) -
+                    new Date(b.details.deliveryDate)
+                );
+
+              if (upcomingDeadlines.length === 0) {
+                return (
+                  <div
+                    style={{
+                      color: "#94a3b8",
+                      fontSize: "0.875rem",
+                      fontStyle: "italic",
+                      padding: "0.5rem",
+                    }}
+                  >
+                    No upcoming deadlines in the next 3 days.
+                  </div>
+                );
+              }
+
+              return upcomingDeadlines.map((p) => {
+                const dateObj = new Date(p.details.deliveryDate);
+                const month = dateObj.toLocaleString("en-US", {
+                  month: "short",
+                });
+                const day = dateObj.getDate();
+                const timeStr = p.details.deliveryTime || "All Day";
+
+                return (
+                  <div
+                    key={p._id}
+                    className="deadline-card"
+                    onClick={() => handleDetailsClick(p._id)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className="date-box">
+                      <span className="date-month">{month.toUpperCase()}</span>
+                      <span className="date-day">{day}</span>
+                    </div>
+                    <div className="deadline-info">
+                      <h4>{p.details.projectName}</h4>
+                      <span className="deadline-time">{timeStr}</span>
+                    </div>
+                    <div style={{ marginLeft: "auto", color: "#cbd5e1" }}>
+                      <ChevronRightIcon />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           {/* Department Workload */}
