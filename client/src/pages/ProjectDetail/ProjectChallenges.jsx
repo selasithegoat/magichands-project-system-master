@@ -142,6 +142,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
 
       if (res.ok) {
         if (onUpdate) onUpdate();
+        setActiveEditId(null); // Exit edit mode
       } else {
         console.error("Failed to update status");
       }
@@ -153,6 +154,9 @@ const ProjectChallenges = ({ project, onUpdate }) => {
   // Delete Confirmation State
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [challengeToDelete, setChallengeToDelete] = useState(null);
+
+  // Status Edit State
+  const [activeEditId, setActiveEditId] = useState(null);
 
   const handleDeleteClick = (challengeId) => {
     setChallengeToDelete(challengeId);
@@ -236,24 +240,56 @@ const ProjectChallenges = ({ project, onUpdate }) => {
               </div>
               <div className="col-status">
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <select
-                    className={`status-pill ${item.status.toLowerCase()}`}
-                    value={item.status}
-                    onChange={(e) =>
-                      handleStatusChange(item._id, e.target.value)
-                    }
-                    style={{
-                      border: "none",
-                      cursor: "pointer",
-                      appearance: "none",
-                      paddingRight: "1rem",
-                    }}
-                  >
-                    <option value="Open">Open</option>
-                    <option value="Escalated">Escalated</option>
-                    <option value="Resolved">Resolved</option>
-                  </select>
-                  <EditIcon width="16" height="16" color="#94a3b8" />
+                  {activeEditId === item._id ? (
+                    <select
+                      className={`status-pill ${item.status.toLowerCase()}`}
+                      value={item.status}
+                      autoFocus
+                      onChange={(e) =>
+                        handleStatusChange(item._id, e.target.value)
+                      }
+                      onBlur={() => setActiveEditId(null)}
+                      style={{
+                        border: "1px solid #cbd5e1", // Add border to look like input
+                        cursor: "pointer",
+                        // appearance: "auto", // Let browser decide or use distinct style
+                        paddingRight: "1rem",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      <option value="Open">Open</option>
+                      <option value="Escalated">Escalated</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
+                  ) : (
+                    <div
+                      className={`status-pill ${item.status.toLowerCase()}`}
+                      style={{
+                        cursor: "default",
+                        pointerEvents: "none", // Make specific text non-interactive
+                      }}
+                    >
+                      <span className="status-dot"></span>
+                      {item.status}
+                    </div>
+                  )}
+
+                  {activeEditId !== item._id && (
+                    <button
+                      className="btn-icon-edit"
+                      onClick={() => setActiveEditId(item._id)}
+                      title="Edit Status"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "4px",
+                        display: "flex",
+                      }}
+                    >
+                      <EditIcon width="16" height="16" color="#94a3b8" />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="col-reported">
