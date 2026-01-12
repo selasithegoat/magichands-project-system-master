@@ -22,6 +22,7 @@ const Dashboard = ({
   onProjectChange, // New prop
 }) => {
   const [projects, setProjects] = useState([]);
+  const [completedCount, setCompletedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -37,6 +38,10 @@ const Dashboard = ({
       });
       if (res.ok) {
         const data = await res.json();
+        // Calculate completed count
+        const completed = data.filter((p) => p.status === "Completed").length;
+        setCompletedCount(completed);
+
         // Filter out "Completed" projects
         const activeProjects = data.filter((p) => p.status !== "Completed");
         // Sort by createdAt desc (newest first)
@@ -142,9 +147,8 @@ const Dashboard = ({
             <div className="stats-icon-wrapper green">
               <CheckCircleIcon />
             </div>
-            <div className="trend-pill">~ 15%</div>
           </div>
-          <div className="stats-count">0</div>
+          <div className="stats-count">{completedCount}</div>
           <div className="stats-label">Completed</div>
         </div>
         <div className="stats-card">
