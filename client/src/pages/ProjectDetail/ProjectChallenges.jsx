@@ -150,6 +150,27 @@ const ProjectChallenges = ({ project, onUpdate }) => {
     }
   };
 
+  const handleStatusChange = async (challengeId, newStatus) => {
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/challenges/${challengeId}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (res.ok) {
+        if (onUpdate) onUpdate();
+      } else {
+        console.error("Failed to update status");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="challenges-container">
       {/* Header */}
@@ -197,10 +218,21 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                 <p className="assistance-text">{item.assistance || "--"}</p>
               </div>
               <div className="col-status">
-                <div className={`status-pill ${item.status.toLowerCase()}`}>
-                  <div className="status-dot"></div>
-                  {item.status}
-                </div>
+                <select
+                  className={`status-pill ${item.status.toLowerCase()}`}
+                  value={item.status}
+                  onChange={(e) => handleStatusChange(item._id, e.target.value)}
+                  style={{
+                    border: "none",
+                    cursor: "pointer",
+                    appearance: "none",
+                    paddingRight: "1rem",
+                  }}
+                >
+                  <option value="Open">Open</option>
+                  <option value="Escalated">Escalated</option>
+                  <option value="Resolved">Resolved</option>
+                </select>
               </div>
               <div className="col-reported">
                 <div

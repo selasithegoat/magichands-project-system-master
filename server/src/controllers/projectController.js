@@ -265,6 +265,47 @@ const addChallengeToProject = async (req, res) => {
   }
 };
 
+// @desc    Update challenge status
+// @route   PATCH /api/projects/:id/challenges/:challengeId/status
+// @access  Private
+const updateChallengeStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const { id, challengeId } = req.params;
+
+    const project = await Project.findById(id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const challenge = project.challenges.id(challengeId);
+
+    if (!challenge) {
+      return res.status(404).json({ message: "Challenge not found" });
+    }
+
+    challenge.status = status;
+
+    if (status === "Resolved") {
+      challenge.resolvedDate = new Date().toLocaleString();
+    } else {
+      // If status changes back from Resolved to Open/Escalated, you might want to clear resolvedDate
+      // or keep it as a history record. For now let's clear it if it's reopened.
+      if (challenge.resolvedDate !== "--") {
+        challenge.resolvedDate = "--";
+      }
+    }
+
+    await project.save();
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error updating challenge status:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -274,4 +315,5 @@ module.exports = {
   deleteItemFromProject,
   updateProjectStatus,
   addChallengeToProject,
+  updateChallengeStatus,
 };
