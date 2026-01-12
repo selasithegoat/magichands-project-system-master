@@ -584,3 +584,68 @@ input:checked + .slider:before {
 .toast-message.fading-out {
   animation: fadeOut 0.5s ease-in forwards;
 }
+
+/* Deep Mobile Responsiveness */
+@media (max-width: 480px) {
+  .profile-container {
+    padding: 1rem;
+    padding-bottom: 5rem;
+  }
+
+  /* Profile Header adjustments */
+  .profile-header-card {
+    padding: 1.25rem;
+  }
+
+  .profile-avatar-large {
+    width: 80px;
+    height: 80px;
+    font-size: 2rem;
+  }
+
+  .profile-name-row h1 {
+    font-size: 1.5rem;
+  }
+
+  .profile-bio {
+    font-size: 0.875rem;
+  }
+
+  /* Stats adjustments */
+  .stat-card-row {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .stat-icon-box {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Content Card Padding */
+  .content-card {
+    padding: 1.25rem;
+  }
+
+  .card-header {
+    flex-wrap: wrap; /* allow header items to wrap */
+    gap: 0.5rem;
+  }
+
+  .card-header h3 {
+    font-size: 1rem;
+  }
+
+  /* Form adjustments */
+  .form-group input,
+  .form-group select {
+    font-size: 0.875rem;
+    padding: 0.625rem;
+  }
+
+  .save-btn {
+    width: 100%; /* Full width button on mobile */
+    justify-content: center;
+  }
+}

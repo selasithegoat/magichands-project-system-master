@@ -275,6 +275,43 @@
   color: #2563eb;
 }
 
-.btn-primary-outline:hover {
-  background-color: #eff6ff;
+/* Deep Mobile Responsiveness */
+@media (max-width: 480px) {
+  .history-container {
+    padding: 1rem;
+  }
+
+  .history-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .history-title {
+    margin-right: 0;
+    text-align: left;
+  }
+
+  .history-search-bar {
+    padding: 0.75rem 1rem;
+  }
+
+  .history-cards-grid {
+    grid-template-columns: 1fr; /* Force single column */
+    gap: 1rem;
+  }
+
+  .history-card {
+    padding: 1rem;
+  }
+
+  .card-actions {
+    flex-direction: column; /* Stack buttons */
+  }
+
+  .filter-pill {
+    padding: 4px 12px;
+    font-size: 0.75rem;
+  }
 }

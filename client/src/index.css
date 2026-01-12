@@ -50,6 +50,14 @@
   background-color: var(--bg-app);
 }
 
+@media (max-width: 480px) {
+  :root {
+    font-size: 14px; /* Fluid Typography Base */
+    --spacing-xl: 1rem;
+    --spacing-lg: 0.75rem;
+  }
+}
+
 /* TOAST NOTIFICATION */
 @keyframes fadeIn {
   from {

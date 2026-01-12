@@ -802,3 +802,43 @@ textarea.input-field {
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* Deep Mobile Responsiveness */
+@media (max-width: 480px) {
+  .project-header, .project-content {
+    padding: 1rem;
+  }
+
+  .project-title {
+    font-size: 1.25rem;
+    flex-wrap: wrap; /* Allow title to wrap */
+  }
+
+  .status-badge {
+    font-size: 0.65rem; /* Smaller badge */
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr; /* Force single column */
+    gap: 1rem;
+  }
+
+  .detail-card {
+    padding: 1rem; /* Reduce card padding */
+  }
+  
+  .actions-grid {
+    grid-template-columns: 1fr; /* Stack actions */
+  }
+
+  /* Make tables scrollable if needed or stack */
+  .items-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+  background-color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
