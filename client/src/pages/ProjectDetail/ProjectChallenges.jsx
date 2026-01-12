@@ -3,6 +3,7 @@ import "./ProjectChallenges.css";
 import EditIcon from "../../components/icons/EditIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
 import FlagIcon from "../../components/icons/FlagIcon";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 
 const BellIcon = ({ width = 20, height = 20, color = "currentColor" }) => (
   <svg
@@ -149,13 +150,21 @@ const ProjectChallenges = ({ project, onUpdate }) => {
     }
   };
 
-  const handleDeleteChallenge = async (challengeId) => {
-    if (!window.confirm("Are you sure you want to delete this challenge?"))
-      return;
+  // Delete Confirmation State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [challengeToDelete, setChallengeToDelete] = useState(null);
+
+  const handleDeleteClick = (challengeId) => {
+    setChallengeToDelete(challengeId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!challengeToDelete) return;
 
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/challenges/${challengeId}`,
+        `/api/projects/${project._id}/challenges/${challengeToDelete}`,
         {
           method: "DELETE",
         }
@@ -163,12 +172,19 @@ const ProjectChallenges = ({ project, onUpdate }) => {
 
       if (res.ok) {
         if (onUpdate) onUpdate();
+        setShowDeleteConfirm(false);
+        setChallengeToDelete(null);
       } else {
         console.error("Failed to delete challenge");
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setChallengeToDelete(null);
   };
 
   return (
@@ -265,7 +281,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
               <div className="col-actions">
                 <button
                   className="btn-icon-delete"
-                  onClick={() => handleDeleteChallenge(item._id)}
+                  onClick={() => handleDeleteClick(item._id)}
                   title="Delete Challenge"
                 >
                   <TrashIcon width="18" height="18" color="#dc2626" />
@@ -282,6 +298,14 @@ const ProjectChallenges = ({ project, onUpdate }) => {
           Showing all {challenges.length} active challenges.{" "}
         </p>
       </div>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        title="Delete Challenge"
+        message="Are you sure you want to delete this challenge? This action cannot be undone."
+      />
 
       {/* Simple Modal for Reporting Challenge */}
       {isModalOpen && (

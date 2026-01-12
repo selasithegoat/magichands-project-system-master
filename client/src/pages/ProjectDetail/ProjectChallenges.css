@@ -292,13 +292,13 @@
   }
 
   .challenge-item {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1.25rem;
+    align-items: stretch;
     background-color: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 1.25rem;
-    gap: 1rem;
-    align-items: stretch;
   }
 
   .col-issue,
@@ -354,6 +354,15 @@
   .col-reported {
     flex-direction: row;
     align-items: center;
+  }
+
+  .col-actions {
+    display: flex; /* Ensure it's visible */
+    justify-content: flex-end;
+    width: 100%;
+    margin-top: 0.5rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.75rem;
   }
 }
 
