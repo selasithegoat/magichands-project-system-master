@@ -708,6 +708,26 @@ const deleteUncontrollableFactor = async (req, res) => {
   }
 };
 
+// Get user specific activity
+const getUserActivity = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 0;
+    const query = ActivityLog.find({ user: req.user.id })
+      .populate("project", "details.projectName")
+      .sort({ createdAt: -1 });
+
+    if (limit > 0) {
+      query.limit(limit);
+    }
+
+    const activities = await query.exec();
+    res.json(activities);
+  } catch (error) {
+    console.error("Error fetching user activity:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -728,4 +748,5 @@ module.exports = {
   deleteUncontrollableFactor,
   updateItemInProject,
   updateProjectDepartments,
+  getUserActivity, // New export
 };

@@ -20,9 +20,11 @@ const {
   deleteUncontrollableFactor,
   updateItemInProject, // [FIX]
   updateProjectDepartments, // [FIX]
+  getUserActivity, // [NEW]
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
+router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
 router.get("/stats", protect, getUserStats);
 router.get("/:id/activity", protect, getProjectActivity);
 router.post("/:id/items", protect, addItemToProject);

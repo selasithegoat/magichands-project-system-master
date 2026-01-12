@@ -16,6 +16,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
+import MyActivities from "./pages/MyActivities/MyActivities";
 
 // Helper to wrap protected content in Layout
 const ProtectedLayout = ({
@@ -125,7 +126,6 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login onLogin={fetchUser} />} />
-
       <Route
         path="/"
         element={
@@ -145,7 +145,6 @@ function App() {
           </ProtectedLayout>
         }
       />
-
       <Route
         path="/create"
         element={
@@ -159,7 +158,6 @@ function App() {
           </ProtectedLayout>
         }
       />
-
       <Route
         path="/detail/:id"
         element={
@@ -173,7 +171,6 @@ function App() {
           </ProtectedLayout>
         }
       />
-
       <Route
         path="/projects"
         element={
@@ -192,7 +189,6 @@ function App() {
           </ProtectedLayout>
         }
       />
-
       <Route
         path="/history"
         element={
@@ -206,7 +202,6 @@ function App() {
           </ProtectedLayout>
         }
       />
-
       <Route
         path="/profile"
         element={
@@ -216,6 +211,19 @@ function App() {
               onUpdateProfile={fetchUser}
               onSignOut={handleLogout}
             />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/my-activities"
+        element={
+          <ProtectedLayout
+            activeView="profile" // Use profile as active view for nav
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <MyActivities onBack={() => navigate("/profile")} />
           </ProtectedLayout>
         }
       />

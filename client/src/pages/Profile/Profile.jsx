@@ -85,6 +85,57 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     }
   }, [message]);
 
+  const [activities, setActivities] = useState([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+
+  // Fetch Activities
+  React.useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        const res = await fetch("/api/projects/activities/me?limit=4", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActivities(data);
+        }
+      } catch (error) {
+        console.error("Error fetching activities:", error);
+      } finally {
+        setIsLoadingActivities(false);
+      }
+    };
+    fetchActivities();
+  }, []);
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const headers = { "Content-Type": "application/json" }; // Dummy usage to avoid unused var if needed
+    const diffInSeconds = Math.floor((now - date) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600)
+      return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getActivityIcon = (action) => {
+    if (action.includes("create")) return { icon: "📁", color: "blue" };
+    if (action.includes("update") || action.includes("status"))
+      return { icon: "✏️", color: "orange" };
+    if (action.includes("delete")) return { icon: "🗑️", color: "red" };
+    if (action.includes("add")) return { icon: "➕", color: "green" };
+    if (action.includes("approval")) return { icon: "✅", color: "green" };
+    return { icon: "📝", color: "gray" };
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -344,51 +395,51 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               <h3>
                 <span style={{ marginRight: "0.5rem" }}>⏱️</span> Activity
               </h3>
-              <a href="#" className="view-all-link">
+              <a href="/my-activities" className="view-all-link">
                 View All
               </a>
             </div>
             <div className="activity-list">
-              <div className="activity-item">
-                <div className="activity-icon blue">💬</div>
-                <div className="activity-content">
-                  <p>
-                    Commented on <strong>"Q4 Marketing Strategy"</strong>
-                  </p>
-                  <span className="time">2 hours ago</span>
+              {isLoadingActivities ? (
+                <div
+                  style={{
+                    padding: "1rem",
+                    textAlign: "center",
+                    color: "#64748b",
+                  }}
+                >
+                  Loading activity...
                 </div>
-              </div>
-              <div className="activity-item">
-                <div className="activity-icon green">
-                  <CheckCircleIcon width="14" height="14" />
+              ) : activities.length > 0 ? (
+                activities.map((activity) => {
+                  const { icon, color } = getActivityIcon(activity.action);
+                  return (
+                    <div className="activity-item" key={activity._id}>
+                      <div className={`activity-icon ${color}`}>{icon}</div>
+                      <div className="activity-content">
+                        <p>{activity.description}</p>
+                        <span className="time">
+                          {formatTimeAgo(activity.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div
+                  style={{
+                    padding: "1rem",
+                    textAlign: "center",
+                    color: "#64748b",
+                  }}
+                >
+                  No recent activity
                 </div>
-                <div className="activity-content">
-                  <p>
-                    Completed task <strong>"Update Homepage Hero"</strong>
-                  </p>
-                  <span className="time">5 hours ago</span>
-                </div>
-              </div>
-              <div className="activity-item">
-                <div className="activity-icon purple">
-                  <UploadIcon width="14" height="14" />
-                </div>
-                <div className="activity-content">
-                  <p>
-                    Uploaded 3 files to <strong>"Assets Folder"</strong>
-                  </p>
-                  <span className="time">Yesterday</span>
-                </div>
-              </div>
-              <div className="activity-item">
-                <div className="activity-icon orange">✏️</div>
-                <div className="activity-content">
-                  <p>Updated profile picture</p>
-                  <span className="time">2 days ago</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
+
+          
 
           {/* Help & Support */}
           <div className="content-card">
