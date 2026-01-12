@@ -250,7 +250,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               <h3>
                 <span style={{ marginRight: "0.5rem" }}>👤</span> My Profile
               </h3>
-              <span className="completion-badge">85% Complete</span>
+
             </div>
 
             {message && (
