@@ -259,9 +259,77 @@ const ProjectActivity = ({ project }) => {
 
           return (
             <div key={item._id} className="timeline-item">
-              {/* Icon */}
-              <div className={`history-icon-wrapper ${item.action}`}>
-                {renderIcon(item.action)}
+              <div
+                className={`history-icon-wrapper ${
+                  item.action.includes("create")
+                    ? "blue"
+                    : item.action.includes("approval")
+                    ? "green"
+                    : item.action.includes("delete")
+                    ? "red"
+                    : item.action.includes("risk") ||
+                      item.action.includes("fact") ||
+                      item.action.includes("chall")
+                    ? "orange" // Risks/Challenges/Factors are orange warning style or red
+                    : "orange" // Updates are orange/yellow
+                  // Refine colors:
+                  // Create: Blue
+                  // Approval: Green
+                  // Add: Green
+                  // Delete: Red
+                  // Risk/Challenge/Factor Add: Red (Alert)
+                  // Update: Orange
+                } ${
+                  // Override specific complex logic if needed, simpler to just map classes in a helper,
+                  // but for now verifying against MyActivities styles:
+                  // blue, green, orange, purple, red, gray
+                  ""
+                }`}
+              >
+                {/* Specific logic for helper function to clean this up */}
+                {(() => {
+                  if (item.action.includes("create"))
+                    return (
+                      <div className="activity-icon-large blue">
+                        {renderIcon(item.action)}
+                      </div>
+                    );
+                  if (item.action.includes("approval"))
+                    return (
+                      <div className="activity-icon-large green">
+                        {renderIcon(item.action)}
+                      </div>
+                    );
+                  if (item.action.includes("delete"))
+                    return (
+                      <div className="activity-icon-large red">
+                        {renderIcon(item.action)}
+                      </div>
+                    );
+                  if (
+                    item.action.includes("risk") ||
+                    item.action.includes("challenge_add") ||
+                    item.action.includes("factor_add")
+                  )
+                    return (
+                      <div className="activity-icon-large red">
+                        {renderIcon(item.action)}
+                      </div>
+                    );
+                  if (item.action.includes("add"))
+                    // Item add
+                    return (
+                      <div className="activity-icon-large green">
+                        {renderIcon(item.action)}
+                      </div>
+                    );
+                  return (
+                    // Default Update/Edit
+                    <div className="activity-icon-large orange">
+                      {renderIcon(item.action)}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Card */}
