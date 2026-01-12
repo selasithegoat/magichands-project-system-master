@@ -349,6 +349,91 @@
 }
 
 /* Risks Section */
+/* Risk Cards Refinement */
+.risk-list {
+  padding: 0.5rem 0;
+}
+
+.risk-item {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 1rem;
+  align-items: start;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.1s;
+}
+
+.risk-item:last-child {
+  border-bottom: none;
+}
+
+.risk-item:hover {
+  background-color: #fcfcfc;
+}
+
+.risk-icon-wrapper {
+  margin-top: 2px;
+  display: flex;
+  justify-content: center;
+}
+
+.risk-content-main h5 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.25rem 0;
+}
+
+.risk-content-main p {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.risk-actions {
+  display: flex;
+  gap: 0.5rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.risk-item:hover .risk-actions {
+  opacity: 1;
+}
+
+/* Add Button in Card */
+.risk-card-footer {
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid #f1f5f9;
+  background-color: #f8fafc;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.btn-add-risk {
+  width: 100%;
+  padding: 0.6rem;
+  background-color: transparent;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-add-risk:hover {
+  border-color: #94a3b8;
+  color: #475569;
+  background-color: #f1f5f9;
+}
 .risk-section {
   background-color: #fef2f2;
   border: 1px solid #fee2e2;
@@ -596,4 +681,96 @@
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+}
+
+/* Modal Form Styles */
+.form-group {
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 0.5rem;
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  color: #1e293b;
+  background-color: #f8fafc;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+textarea.input-field {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end; /* Align to right naturally */
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn-secondary {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.btn-secondary:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.btn-primary {
+  background-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+}
+
+.btn-primary:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
 }

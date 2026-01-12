@@ -14,6 +14,7 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon"; // Import TrashIcon
 import Toast from "../../components/ui/Toast";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import ProjectUpdates from "./ProjectUpdates";
 import ProjectChallenges from "./ProjectChallenges";
 import ProjectActivity from "./ProjectActivity";
@@ -227,10 +228,14 @@ const ProjectDetail = ({ onProjectChange }) => {
               />
               <RisksCard
                 risks={project.uncontrollableFactors}
+                projectId={project._id}
+                onUpdate={fetchProject}
                 readOnly={project.status === "Completed"}
               />
               <ProductionRisksCard
                 risks={project.productionRisks}
+                projectId={project._id}
+                onUpdate={fetchProject}
                 readOnly={project.status === "Completed"}
               />
             </div>
@@ -577,8 +582,109 @@ const OrderItemsCard = ({
   );
 };
 
-const RisksCard = ({ risks = [], readOnly = false }) => {
+const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
   const [isOpen, setIsOpen] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRisk, setEditingRisk] = useState(null);
+  const [formData, setFormData] = useState({
+    description: "",
+    responsible: "MH",
+    status: "Pending",
+  });
+  const [loading, setLoading] = useState(false);
+
+  // Confirmation Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (showModal) {
+      if (editingRisk) {
+        setFormData({
+          description: editingRisk.description,
+          responsible: editingRisk.responsible?.value || "MH",
+          status: editingRisk.status?.value || "Pending",
+        });
+      } else {
+        setFormData({
+          description: "",
+          responsible: "MH",
+          status: "Pending",
+        });
+      }
+    }
+  }, [showModal, editingRisk]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!formData.description) return;
+
+    setLoading(true);
+    try {
+      const url = editingRisk
+        ? `/api/projects/${projectId}/uncontrollable-factors/${editingRisk._id}`
+        : `/api/projects/${projectId}/uncontrollable-factors`;
+
+      const method = editingRisk ? "PATCH" : "POST";
+
+      const payload = {
+        description: formData.description,
+        responsible: {
+          label: formData.responsible === "MH" ? "Magic Hands" : "Client",
+          value: formData.responsible,
+        },
+        status: {
+          label: formData.status,
+          value: formData.status,
+        },
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setShowModal(false);
+        setEditingRisk(null);
+        onUpdate(); // Refresh project data
+      } else {
+        console.error("Failed to save factor");
+      }
+    } catch (err) {
+      console.error("Error saving factor:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (factorId) => {
+    setDeleteId(factorId);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/uncontrollable-factors/${deleteId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (res.ok) {
+        onUpdate();
+        setIsDeleteModalOpen(false);
+        setDeleteId(null);
+      }
+    } catch (err) {
+      console.error("Error deleting factor:", err);
+    }
+  };
 
   return (
     <div className="risk-section">
@@ -595,39 +701,238 @@ const RisksCard = ({ risks = [], readOnly = false }) => {
         </div>
       </div>
       {isOpen && (
-        <div className="risk-content">
-          {risks.length > 0 ? (
-            risks.map((risk, i) => (
-              <div className="risk-item" key={i}>
-                <div className="risk-dot"></div>
-                <div className="risk-details">
-                  <h5>{risk.description}</h5>
-                  <p>Status: {risk.status?.label || "Pending"}</p>
+        <>
+          <div className="risk-list">
+            {risks.length > 0 ? (
+              risks.map((risk, i) => (
+                <div className="risk-item" key={i}>
+                  <div className="risk-icon-wrapper">
+                    <div className="risk-dot"></div>
+                  </div>
+                  <div className="risk-content-main">
+                    <h5>{risk.description}</h5>
+                    <p>Status: {risk.status?.label || "Pending"}</p>
+                  </div>
+                  {!readOnly && (
+                    <div className="risk-actions">
+                      <button
+                        className="btn-icon-small"
+                        onClick={() => {
+                          setEditingRisk(risk);
+                          setShowModal(true);
+                        }}
+                      >
+                        <EditIcon width="14" height="14" />
+                      </button>
+                      <button
+                        className="btn-icon-small delete"
+                        onClick={() => handleDeleteClick(risk._id)}
+                      >
+                        <TrashIcon width="14" height="14" color="#ef4444" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: "1.5rem", textAlign: "center" }}>
+                <p style={{ color: "#9ca3af", margin: 0 }}>
+                  No uncontrollable factors reported.
+                </p>
+              </div>
+            )}
+          </div>
+          {!readOnly && (
+            <div className="risk-card-footer">
+              <button
+                className="btn-add-risk"
+                onClick={() => {
+                  setEditingRisk(null);
+                  setShowModal(true);
+                }}
+              >
+                + Add Uncontrollable Factor
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Inline Modal for adding/editing factor */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ width: "400px" }}>
+            <h3 className="modal-title">
+              {editingRisk
+                ? "Edit Uncontrollable Factor"
+                : "Add Uncontrollable Factor"}
+            </h3>
+            <form onSubmit={handleSave}>
+              <div className="form-group">
+                <label>Description</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div
+                className="form-row"
+                style={{ display: "flex", gap: "1rem" }}
+              >
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Responsible</label>
+                  <select
+                    className="input-field"
+                    value={formData.responsible}
+                    onChange={(e) =>
+                      setFormData({ ...formData, responsible: e.target.value })
+                    }
+                  >
+                    <option value="MH">Magic Hands</option>
+                    <option value="Client">Client</option>
+                    <option value="3rd Party">3rd Party</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Status</label>
+                  <select
+                    className="input-field"
+                    value={formData.status}
+                    onChange={(e) =>
+                      setFormData({ ...formData, status: e.target.value })
+                    }
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Escalated">Escalated</option>
+                  </select>
                 </div>
               </div>
-            ))
-          ) : (
-            <p
-              style={{
-                color: "#7f1d1d",
-                fontSize: "0.875rem",
-                marginBottom: "1rem",
-              }}
-            >
-              No uncontrollable factors reported.
-            </p>
-          )}
-          {!readOnly && (
-            <button className="risk-add-btn">+ Add Risk Factor</button>
-          )}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={loading}
+                >
+                  {loading ? "Saving..." : "Save Factor"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Factor"
+        message="Are you sure you want to delete this uncontrollable factor? This action cannot be undone."
+        onConfirm={confirmDelete}
+        onCancel={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };
 
-const ProductionRisksCard = ({ risks = [] }) => {
+const ProductionRisksCard = ({
+  risks = [],
+  projectId,
+  onUpdate,
+  readOnly = false,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRisk, setEditingRisk] = useState(null);
+  const [formData, setFormData] = useState({ description: "", preventive: "" });
+  const [loading, setLoading] = useState(false);
+
+  // Confirmation Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (showModal) {
+      if (editingRisk) {
+        setFormData({
+          description: editingRisk.description,
+          preventive: editingRisk.preventive,
+        });
+      } else {
+        setFormData({ description: "", preventive: "" });
+      }
+    }
+  }, [showModal, editingRisk]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!formData.description) return;
+
+    setLoading(true);
+    try {
+      const url = editingRisk
+        ? `/api/projects/${projectId}/production-risks/${editingRisk._id}`
+        : `/api/projects/${projectId}/production-risks`;
+
+      const method = editingRisk ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        setShowModal(false);
+        setEditingRisk(null);
+        onUpdate(); // Refresh project data
+      } else {
+        console.error("Failed to save risk");
+      }
+    } catch (err) {
+      console.error("Error saving risk:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (riskId) => {
+    setDeleteId(riskId);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/production-risks/${deleteId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (res.ok) {
+        onUpdate();
+        setIsDeleteModalOpen(false);
+        setDeleteId(null);
+      }
+    } catch (err) {
+      console.error("Error deleting risk:", err);
+    }
+  };
+
   return (
     <div className="detail-card" style={{ padding: "0" }}>
       <div
@@ -646,33 +951,126 @@ const ProductionRisksCard = ({ risks = [] }) => {
         </div>
       </div>
       {isOpen && (
-        <div className="risk-content">
-          {risks.length > 0 ? (
-            risks.map((risk, i) => (
-              <div className="risk-item" key={i}>
-                <div
-                  className="risk-dot"
-                  style={{ backgroundColor: "#eab308" }}
-                ></div>
-                <div className="risk-details">
-                  <h5>{risk.description}</h5>
-                  <p>Preventive: {risk.preventive}</p>
+        <>
+          <div className="risk-list">
+            {risks.length > 0 ? (
+              risks.map((risk, i) => (
+                <div className="risk-item" key={i}>
+                  <div className="risk-icon-wrapper">
+                    <div
+                      className="risk-dot"
+                      style={{ backgroundColor: "#eab308" }}
+                    ></div>
+                  </div>
+                  <div className="risk-content-main">
+                    <h5>{risk.description}</h5>
+                    <p>Preventive: {risk.preventive}</p>
+                  </div>
+                  {!readOnly && (
+                    <div className="risk-actions">
+                      <button
+                        className="btn-icon-small"
+                        onClick={() => {
+                          setEditingRisk(risk);
+                          setShowModal(true);
+                        }}
+                      >
+                        <EditIcon width="14" height="14" />
+                      </button>
+                      <button
+                        className="btn-icon-small delete"
+                        onClick={() => handleDeleteClick(risk._id)}
+                      >
+                        <TrashIcon width="14" height="14" color="#ef4444" />
+                      </button>
+                    </div>
+                  )}
                 </div>
+              ))
+            ) : (
+              <div style={{ padding: "1.5rem", textAlign: "center" }}>
+                <p style={{ color: "#9ca3af", margin: 0 }}>
+                  No production risks reported.
+                </p>
               </div>
-            ))
-          ) : (
-            <p
-              style={{
-                color: "#64748b",
-                fontSize: "0.875rem",
-                marginBottom: "1rem",
-              }}
-            >
-              No production risks reported.
-            </p>
+            )}
+          </div>
+
+          {!readOnly && (
+            <div className="risk-card-footer">
+              <button
+                className="btn-add-risk"
+                onClick={() => {
+                  setEditingRisk(null);
+                  setShowModal(true);
+                }}
+              >
+                + Add Production Risk
+              </button>
+            </div>
           )}
+        </>
+      )}
+
+      {/* Inline Modal for adding/editing risk */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ width: "400px" }}>
+            <h3 className="modal-title">
+              {editingRisk ? "Edit Production Risk" : "Add Production Risk"}
+            </h3>
+            <form onSubmit={handleSave}>
+              <div className="form-group">
+                <label>Description</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Preventive Measures</label>
+                <textarea
+                  className="input-field"
+                  value={formData.preventive}
+                  onChange={(e) =>
+                    setFormData({ ...formData, preventive: e.target.value })
+                  }
+                  rows="3"
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={loading}
+                >
+                  {loading ? "Saving..." : "Save Risk"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        title="Delete Risk"
+        message="Are you sure you want to delete this production risk? This action cannot be undone."
+        onConfirm={confirmDelete}
+        onCancel={() => setIsDeleteModalOpen(false)}
+      />
     </div>
   );
 };

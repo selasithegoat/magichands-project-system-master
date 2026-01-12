@@ -406,6 +406,224 @@ const getProjectActivity = async (req, res) => {
   }
 };
 
+// @desc    Add production risk
+// @route   POST /api/projects/:id/production-risks
+// @access  Private
+const addProductionRisk = async (req, res) => {
+  try {
+    const { description, preventive } = req.body;
+    const { id } = req.params;
+
+    const newRisk = {
+      description,
+      preventive,
+    };
+
+    const updatedProject = await Project.findByIdAndUpdate(
+      id,
+      { $push: { productionRisks: newRisk } },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "risk_add",
+      `Added production risk: ${description}`,
+      { risk: newRisk }
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error adding production risk:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update production risk
+// @route   PATCH /api/projects/:id/production-risks/:riskId
+// @access  Private
+const updateProductionRisk = async (req, res) => {
+  try {
+    const { description, preventive } = req.body;
+    const { id, riskId } = req.params;
+
+    const updatedProject = await Project.findOneAndUpdate(
+      { _id: id, "productionRisks._id": riskId },
+      {
+        $set: {
+          "productionRisks.$.description": description,
+          "productionRisks.$.preventive": preventive,
+        },
+      },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project or Risk not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "risk_update",
+      `Updated production risk: ${description}`,
+      { riskId, description, preventive }
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error updating production risk:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Delete production risk
+// @route   DELETE /api/projects/:id/production-risks/:riskId
+// @access  Private
+const deleteProductionRisk = async (req, res) => {
+  try {
+    const { id, riskId } = req.params;
+
+    const updatedProject = await Project.findByIdAndUpdate(
+      id,
+      { $pull: { productionRisks: { _id: riskId } } },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "risk_update", // Using update/generic action as placeholder
+      `Deleted production risk`,
+      { riskId }
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error deleting production risk:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Add uncontrollable factor
+// @route   POST /api/projects/:id/uncontrollable-factors
+// @access  Private
+const addUncontrollableFactor = async (req, res) => {
+  try {
+    const { description, responsible, status } = req.body;
+    const { id } = req.params;
+
+    const newFactor = {
+      description,
+      responsible, // Expecting { label, value } or string
+      status, // Expecting { label, value } or string
+    };
+
+    const updatedProject = await Project.findByIdAndUpdate(
+      id,
+      { $push: { uncontrollableFactors: newFactor } },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "factor_add",
+      `Added uncontrollable factor: ${description}`,
+      { factor: newFactor }
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error adding uncontrollable factor:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update uncontrollable factor
+// @route   PATCH /api/projects/:id/uncontrollable-factors/:factorId
+// @access  Private
+const updateUncontrollableFactor = async (req, res) => {
+  try {
+    const { description, responsible, status } = req.body;
+    const { id, factorId } = req.params;
+
+    const updatedProject = await Project.findOneAndUpdate(
+      { _id: id, "uncontrollableFactors._id": factorId },
+      {
+        $set: {
+          "uncontrollableFactors.$.description": description,
+          "uncontrollableFactors.$.responsible": responsible,
+          "uncontrollableFactors.$.status": status,
+        },
+      },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project or Factor not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "factor_update",
+      `Updated uncontrollable factor: ${description}`,
+      { factorId, description }
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error updating uncontrollable factor:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Delete uncontrollable factor
+// @route   DELETE /api/projects/:id/uncontrollable-factors/:factorId
+// @access  Private
+const deleteUncontrollableFactor = async (req, res) => {
+  try {
+    const { id, factorId } = req.params;
+
+    const updatedProject = await Project.findByIdAndUpdate(
+      id,
+      { $pull: { uncontrollableFactors: { _id: factorId } } },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "factor_delete",
+      `Deleted uncontrollable factor`,
+      { factorId }
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error deleting uncontrollable factor:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -418,4 +636,10 @@ module.exports = {
   updateChallengeStatus,
   deleteChallenge,
   getProjectActivity,
+  addProductionRisk,
+  updateProductionRisk,
+  deleteProductionRisk,
+  addUncontrollableFactor,
+  updateUncontrollableFactor,
+  deleteUncontrollableFactor,
 };
