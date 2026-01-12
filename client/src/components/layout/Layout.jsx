@@ -37,20 +37,13 @@ const Layout = ({
   onCreateProject,
   activeView,
   user, // Receive user
+  projectCount, // Receive projectCount prop
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [projectCount, setProjectCount] = useState(0);
+  // Lifted projectCount state to App.jsx
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(7); // Mock count matching modal data
-
-  React.useEffect(() => {
-    // Basic fetch to update count
-    fetch("/api/projects")
-      .then((res) => res.json())
-      .then((data) => setProjectCount(Array.isArray(data) ? data.length : 0))
-      .catch((err) => console.error(err));
-  }, []);
 
   const getInitials = () => {
     if (!user) return "U";

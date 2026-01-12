@@ -54,7 +54,7 @@ const getStatusColor = (status) => {
   }
 };
 
-const ProjectDetail = () => {
+const ProjectDetail = ({ onProjectChange }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
@@ -113,6 +113,7 @@ const ProjectDetail = () => {
           type: "success",
         });
         fetchProject();
+        if (onProjectChange) onProjectChange(); // Refresh global count
       } else {
         setPageToast({ message: "Failed to update status", type: "error" });
       }

@@ -8,7 +8,12 @@ import FabButton from "../../components/ui/FabButton";
 import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
 
-const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
+const OngoingProjects = ({
+  onNavigateDetail,
+  onBack,
+  onCreateProject,
+  onProjectChange, // New prop
+}) => {
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -29,7 +34,6 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
       }
     };
     fetchProjects();
-    fetchProjects();
   }, []);
 
   const [toast, setToast] = React.useState(null);
@@ -39,7 +43,11 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        setProjects(data);
+        // Remember to filter here too if not filtered in backend, although the use effect logic above was better.
+        // The original clean fetchProjects function inside useEffect was good, but this one (line 37) was just fetching all without filtering.
+        // We should probably filter here too to match.
+        const activeProjects = data.filter((p) => p.status !== "Completed");
+        setProjects(activeProjects);
       }
     } catch (error) {
       console.error("Error loading projects:", error);
@@ -65,6 +73,7 @@ const OngoingProjects = ({ onNavigateDetail, onBack, onCreateProject }) => {
       if (res.ok) {
         setToast({ message: "Project marked as Completed!", type: "success" });
         fetchProjects();
+        if (onProjectChange) onProjectChange(); // Refresh global count
       } else {
         setToast({ message: "Failed to update status", type: "error" });
       }

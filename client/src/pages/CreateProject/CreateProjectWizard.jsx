@@ -7,7 +7,7 @@ import Step4 from "./Step4";
 import Step5 from "./Step5";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 
-const CreateProjectWizard = () => {
+const CreateProjectWizard = ({ onProjectCreate }) => {
   const navigate = useNavigate();
 
   const DEFAULT_FORM_STATE = {
@@ -104,6 +104,7 @@ const CreateProjectWizard = () => {
     // Explicitly reset state to ensure next usage is clean
     setFormData(DEFAULT_FORM_STATE.formData);
     setCurrentStep(1);
+    if (onProjectCreate) onProjectCreate(); // Refresh global count
     navigate("/");
   };
 

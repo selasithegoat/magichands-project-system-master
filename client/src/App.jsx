@@ -18,10 +18,17 @@ import {
 import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
 
 // Helper to wrap protected content in Layout
-const ProtectedLayout = ({ children, activeView, user, navigate }) => (
+const ProtectedLayout = ({
+  children,
+  activeView,
+  user,
+  navigate,
+  projectCount, // Receive projectCount
+}) => (
   <Layout
     activeView={activeView}
     user={user} // Pass user to Layout
+    projectCount={projectCount} // Pass to Layout
     onNavigateDashboard={() => navigate("/")}
     onNavigateProject={() => navigate("/projects")}
     onNavigateHistory={() => navigate("/history")}
@@ -37,6 +44,22 @@ function App() {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [projectCount, setProjectCount] = useState(0); // Global project count
+
+  // Fetch project count
+  const fetchProjectCount = async () => {
+    try {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = await res.json();
+        // Count active projects (everything except 'Completed')
+        const active = data.filter((p) => p.status !== "Completed");
+        setProjectCount(active.length);
+      }
+    } catch (err) {
+      console.error("Failed to update project count", err);
+    }
+  };
 
   const fetchUser = async () => {
     try {
@@ -47,6 +70,7 @@ function App() {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+        fetchProjectCount(); // Fetch count when user is loaded
         // If on login page and authorized, go to dashboard
         if (location.pathname === "/login") {
           navigate("/");
@@ -109,12 +133,14 @@ function App() {
             activeView="dashboard"
             user={user}
             navigate={navigate}
+            projectCount={projectCount}
           >
             <Dashboard
               user={user} // Pass user to Dashboard
               onNavigateProject={(id) => navigate(`/detail/${id}`)}
               onCreateProject={() => navigate("/create")}
               onSeeAllProjects={() => navigate("/projects")}
+              onProjectChange={fetchProjectCount} // Refresh count on change
             />
           </ProtectedLayout>
         }
@@ -123,8 +149,13 @@ function App() {
       <Route
         path="/create"
         element={
-          <ProtectedLayout activeView="create" user={user} navigate={navigate}>
-            <CreateProjectWizard />
+          <ProtectedLayout
+            activeView="create"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <CreateProjectWizard onProjectCreate={fetchProjectCount} />
           </ProtectedLayout>
         }
       />
@@ -132,8 +163,13 @@ function App() {
       <Route
         path="/detail/:id"
         element={
-          <ProtectedLayout activeView="detail" user={user} navigate={navigate}>
-            <ProjectDetail />
+          <ProtectedLayout
+            activeView="detail"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <ProjectDetail onProjectChange={fetchProjectCount} />
           </ProtectedLayout>
         }
       />
@@ -145,11 +181,13 @@ function App() {
             activeView="projects"
             user={user}
             navigate={navigate}
+            projectCount={projectCount}
           >
             <OngoingProjects
               onNavigateDetail={(id) => navigate(`/detail/${id}`)}
               onBack={() => navigate("/")}
               onCreateProject={() => navigate("/create")}
+              onProjectChange={fetchProjectCount} // Refresh count on change
             />
           </ProtectedLayout>
         }
@@ -158,7 +196,12 @@ function App() {
       <Route
         path="/history"
         element={
-          <ProtectedLayout activeView="history" user={user} navigate={navigate}>
+          <ProtectedLayout
+            activeView="history"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
             <ProjectHistory onBack={() => navigate("/")} />
           </ProtectedLayout>
         }

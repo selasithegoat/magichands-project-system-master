@@ -18,6 +18,7 @@ const Dashboard = ({
   onCreateProject,
   onSeeAllProjects,
   user,
+  onProjectChange, // New prop
 }) => {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +76,7 @@ const Dashboard = ({
       if (res.ok) {
         setToast({ message: "Project marked as Completed!", type: "success" });
         fetchProjects(); // Refresh list
+        if (onProjectChange) onProjectChange(); // Refresh global count
       } else {
         setToast({ message: "Failed to update status", type: "error" });
       }
