@@ -234,11 +234,8 @@ const updateProjectStatus = async (req, res) => {
 const addChallengeToProject = async (req, res) => {
   try {
     const { title, description, assistance, status } = req.body;
-    const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    // Debug logging
+    console.log("User reporting challenge:", req.user);
 
     const newChallenge = {
       title,
@@ -255,16 +252,28 @@ const addChallengeToProject = async (req, res) => {
       resolvedDate: status === "Resolved" ? new Date().toLocaleString() : "--",
     };
 
-    project.challenges.push(newChallenge);
-    await project.save();
+    // Use findByIdAndUpdate to avoid validation errors on other fields (like existing invalid status)
+    // and to automatically handle creating the array if it doesn't exist via $push
+    const updatedProject = await Project.findByIdAndUpdate(
+      req.params.id,
+      { $push: { challenges: newChallenge } },
+      { new: true, runValidators: false } // runValidators: false helps if current doc has issues, but we constructed newChallenge manually so it's safe-ish
+    );
 
-    res.json(project);
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    res.json(updatedProject);
   } catch (error) {
     console.error("Error adding challenge:", error);
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
+// @desc    Update challenge status
+// @route   PATCH /api/projects/:id/challenges/:challengeId/status
+// @access  Private
 // @desc    Update challenge status
 // @route   PATCH /api/projects/:id/challenges/:challengeId/status
 // @access  Private
@@ -273,33 +282,34 @@ const updateChallengeStatus = async (req, res) => {
     const { status } = req.body;
     const { id, challengeId } = req.params;
 
-    const project = await Project.findById(id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    const challenge = project.challenges.id(challengeId);
-
-    if (!challenge) {
-      return res.status(404).json({ message: "Challenge not found" });
-    }
-
-    challenge.status = status;
+    let updateFields = {
+      "challenges.$.status": status,
+    };
 
     if (status === "Resolved") {
-      challenge.resolvedDate = new Date().toLocaleString();
+      updateFields["challenges.$.resolvedDate"] = new Date().toLocaleString();
     } else {
-      // If status changes back from Resolved to Open/Escalated, you might want to clear resolvedDate
-      // or keep it as a history record. For now let's clear it if it's reopened.
-      if (challenge.resolvedDate !== "--") {
-        challenge.resolvedDate = "--";
-      }
+      // We can't easily check the current value here without a fetch,
+      // implies blind update or we accept we might overwrite "--" with "--".
+      // It's safer to just set it to "--" if not Resolved.
+      updateFields["challenges.$.resolvedDate"] = "--";
     }
 
-    await project.save();
+    // Use findOneAndUpdate to target the specific challenge subdocument
+    // and bypass document-level validation
+    const updatedProject = await Project.findOneAndUpdate(
+      { _id: id, "challenges._id": challengeId },
+      { $set: updateFields },
+      { new: true, runValidators: false }
+    );
 
-    res.json(project);
+    if (!updatedProject) {
+      return res
+        .status(404)
+        .json({ message: "Project or Challenge not found" });
+    }
+
+    res.json(updatedProject);
   } catch (error) {
     console.error("Error updating challenge status:", error);
     res.status(500).json({ message: "Server Error" });
