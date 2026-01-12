@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./Dashboard.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ProjectCard from "../../components/ui/ProjectCard";
+import { getDepartmentLabel } from "../../constants/departments";
 // Icons
 import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
@@ -273,23 +274,97 @@ const Dashboard = ({
             <h3 className="section-title">Department Workload</h3>
           </div>
           <div className="workload-card">
-            <div className="workload-item">
-              <div className="progress-label-row">
-                <span
-                  className="progress-label"
-                  style={{ color: "#0f172a", fontWeight: 600 }}
-                >
-                  Design Team
-                </span>
-                <span className="progress-label">85% Capacity</span>
-              </div>
-              <div className="progress-track" style={{ height: "8px" }}>
-                <div
-                  className="progress-fill"
-                  style={{ width: "85%", backgroundColor: "#a855f7" }}
-                ></div>
-              </div>
-            </div>
+            {(() => {
+              // Calculate stats
+              const deptCounts = {};
+              let totalProjectsWithDepts = 0;
+
+              projects.forEach((p) => {
+                if (p.departments && p.departments.length > 0) {
+                  totalProjectsWithDepts++;
+                  p.departments.forEach((deptId) => {
+                    deptCounts[deptId] = (deptCounts[deptId] || 0) + 1;
+                  });
+                }
+              });
+
+              if (Object.keys(deptCounts).length === 0) {
+                return (
+                  <div
+                    style={{
+                      padding: "1rem",
+                      color: "#94a3b8",
+                      fontSize: "0.875rem",
+                      textAlign: "center",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    No department data available.
+                  </div>
+                );
+              }
+
+              // Sort by count desc
+              const topDepts = Object.entries(deptCounts)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5); // Start with top 5
+
+              return topDepts.map(([deptId, count]) => {
+                const percentage = Math.round(
+                  (count / projects.length) * 100 // % of TOTAL active projects
+                );
+                // Color palette for bars
+                const colors = [
+                  "#a855f7",
+                  "#3b82f6",
+                  "#f97316",
+                  "#14b8a6",
+                  "#ef4444",
+                ];
+                // quick hash for consistent color
+                const colorIndex = deptId.length % colors.length;
+                const barColor = colors[colorIndex];
+
+                return (
+                  <div
+                    className="workload-item"
+                    key={deptId}
+                    style={{ marginBottom: "1rem" }}
+                  >
+                    <div className="progress-label-row">
+                      <span
+                        className="progress-label"
+                        style={{ color: "#0f172a", fontWeight: 600 }}
+                      >
+                        {getDepartmentLabel(deptId)}
+                      </span>
+                      <span className="progress-label">
+                        {percentage}% ({count} Projects)
+                      </span>
+                    </div>
+                    <div
+                      className="progress-track"
+                      style={{
+                        height: "8px",
+                        backgroundColor: "#f1f5f9",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${percentage}%`,
+                          backgroundColor: barColor,
+                          height: "100%",
+                          borderRadius: "999px",
+                          transition: "width 0.5s ease-out",
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       </div>
