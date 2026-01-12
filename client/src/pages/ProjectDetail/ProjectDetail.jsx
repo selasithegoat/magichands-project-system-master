@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
+import { DEPARTMENTS, getDepartmentLabel } from "../../constants/departments";
 import "./ProjectDetail.css";
 import UserAvatar from "../../components/ui/UserAvatar";
 import BackArrow from "../../components/icons/BackArrow";
@@ -331,27 +332,17 @@ const DepartmentsCard = ({
   const [selectedDepts, setSelectedDepts] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ALL_DEPARTMENTS = [
-    "UV Printing",
-    "Digital Heat Press",
-    "Business Cards",
-    "Woodme",
-    "Fabrication",
-    "Signage",
-    "Outside Production",
-  ];
-
   useEffect(() => {
     if (showModal) {
       setSelectedDepts(departments);
     }
   }, [showModal, departments]);
 
-  const toggleDept = (dept) => {
-    if (selectedDepts.includes(dept)) {
-      setSelectedDepts(selectedDepts.filter((d) => d !== dept));
+  const toggleDept = (deptId) => {
+    if (selectedDepts.includes(deptId)) {
+      setSelectedDepts(selectedDepts.filter((d) => d !== deptId));
     } else {
-      setSelectedDepts([...selectedDepts, dept]);
+      setSelectedDepts([...selectedDepts, deptId]);
     }
   };
 
@@ -398,13 +389,13 @@ const DepartmentsCard = ({
       </div>
       <div className="dept-list">
         {departments.length > 0 ? (
-          departments.map((dept, i) => (
-            <span className="dept-tag" key={i}>
+          departments.map((dept, index) => (
+            <span key={index} className="dept-tag">
               <span
                 className="dept-dot"
                 style={{ background: "#3b82f6" }}
               ></span>{" "}
-              {dept}
+              {getDepartmentLabel(dept)}
             </span>
           ))
         ) : (
@@ -414,22 +405,29 @@ const DepartmentsCard = ({
         )}
       </div>
 
+      {/* Edit Modal */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ width: "350px" }}>
+          <div
+            className="modal-content"
+            style={{ width: "600px", maxWidth: "90vw" }}
+          >
             <h3 className="modal-title">Manage Departments</h3>
             <div
               className="dept-selection-list"
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
+                maxHeight: "400px",
+                overflowY: "auto",
                 margin: "1rem 0",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: "0.5rem",
+                paddingRight: "0.5rem",
               }}
             >
-              {ALL_DEPARTMENTS.map((dept) => (
+              {DEPARTMENTS.map((dept) => (
                 <label
-                  key={dept}
+                  key={dept.id}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -437,15 +435,19 @@ const DepartmentsCard = ({
                     cursor: "pointer",
                     padding: "0.5rem",
                     borderRadius: "6px",
-                    backgroundColor: selectedDepts.includes(dept)
+                    backgroundColor: selectedDepts.includes(dept.id)
                       ? "#eff6ff"
                       : "transparent",
+                    transition: "all 0.2s",
+                    border: selectedDepts.includes(dept.id)
+                      ? "1px solid #dbeafe"
+                      : "1px solid transparent",
                   }}
                 >
                   <input
                     type="checkbox"
-                    checked={selectedDepts.includes(dept)}
-                    onChange={() => toggleDept(dept)}
+                    checked={selectedDepts.includes(dept.id)}
+                    onChange={() => toggleDept(dept.id)}
                     style={{
                       width: "16px",
                       height: "16px",
@@ -454,13 +456,14 @@ const DepartmentsCard = ({
                   />
                   <span
                     style={{
-                      fontWeight: selectedDepts.includes(dept) ? 600 : 400,
-                      color: selectedDepts.includes(dept)
+                      fontWeight: selectedDepts.includes(dept.id) ? 600 : 400,
+                      color: selectedDepts.includes(dept.id)
                         ? "#1e293b"
                         : "#64748b",
+                      fontSize: "0.875rem",
                     }}
                   >
-                    {dept}
+                    {dept.label}
                   </span>
                 </label>
               ))}
@@ -469,6 +472,7 @@ const DepartmentsCard = ({
               <button
                 className="btn-secondary"
                 onClick={() => setShowModal(false)}
+                disabled={loading}
               >
                 Cancel
               </button>

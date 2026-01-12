@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./ProjectActivity.css";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
 // Icons
 import SearchIcon from "../../components/icons/SearchIcon";
 import EditIcon from "../../components/icons/EditIcon";
@@ -210,7 +211,7 @@ const ProjectActivity = ({ project }) => {
     }
   };
 
-  if (loading) return <div>Loading activity...</div>;
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div className="activity-container">
