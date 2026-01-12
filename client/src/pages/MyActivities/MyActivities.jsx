@@ -3,6 +3,7 @@ import "./MyActivities.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ArrowLeftIcon from "../../components/icons/ArrowLeftIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { format, isToday, isYesterday } from "date-fns";
 
 const MyActivities = ({ onBack }) => {
@@ -12,6 +13,7 @@ const MyActivities = ({ onBack }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchActivities = async (pageNum) => {
     try {
@@ -56,15 +58,12 @@ const MyActivities = ({ onBack }) => {
     fetchActivities(nextPage);
   };
 
-  const handleClearHistory = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to clear activity logs for COMPLETED projects? This cannot be undone."
-      )
-    ) {
-      return;
-    }
+  const handleClearHistory = () => {
+    setIsModalOpen(true);
+  };
 
+  const confirmClearHistory = async () => {
+    setIsModalOpen(false);
     setIsClearing(true);
     try {
       const res = await fetch("/api/projects/activities/me/cleanup", {
@@ -199,6 +198,16 @@ const MyActivities = ({ onBack }) => {
             <p>No activity found.</p>
           </div>
         )}
+        {/* Modal */}
+        <ConfirmationModal
+          isOpen={isModalOpen}
+          onConfirm={confirmClearHistory}
+          onCancel={() => setIsModalOpen(false)}
+          title="Clear Activity History"
+          message="Are you sure you want to clear all activity logs for COMPLETED projects? This action cannot be undone."
+          confirmText="Yes, Clear History"
+          cancelText="Cancel"
+        />
       </div>
     </div>
   );

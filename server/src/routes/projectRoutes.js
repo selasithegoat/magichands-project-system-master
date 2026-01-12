@@ -21,6 +21,7 @@ const {
   updateItemInProject, // [FIX]
   updateProjectDepartments, // [FIX]
   getUserActivity, // [NEW]
+  deleteOldUserActivity, // [NEW] - Fix for reference error
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 

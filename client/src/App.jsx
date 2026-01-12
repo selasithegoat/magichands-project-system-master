@@ -205,7 +205,12 @@ function App() {
       <Route
         path="/profile"
         element={
-          <ProtectedLayout activeView="profile" user={user} navigate={navigate}>
+          <ProtectedLayout
+            activeView="profile"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
             <Profile
               user={user}
               onUpdateProfile={fetchUser}

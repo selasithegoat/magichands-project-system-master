@@ -92,14 +92,15 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   React.useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const res = await fetch("/api/projects/activities/me?limit=4", {
+        const res = await fetch("/api/projects/activities/me?limit=5", {
           headers: {
             "Content-Type": "application/json",
           },
         });
         if (res.ok) {
           const data = await res.json();
-          setActivities(data);
+          // Backend now returns { activities: [], ... } due to pagination support
+          setActivities(data.activities || []);
         }
       } catch (error) {
         console.error("Error fetching activities:", error);
@@ -438,8 +439,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               )}
             </div>
           </div>
-
-          
 
           {/* Help & Support */}
           <div className="content-card">
