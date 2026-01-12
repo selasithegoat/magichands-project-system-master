@@ -711,19 +711,56 @@ const deleteUncontrollableFactor = async (req, res) => {
 // Get user specific activity
 const getUserActivity = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 0;
-    const query = ActivityLog.find({ user: req.user.id })
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const total = await ActivityLog.countDocuments({ user: req.user.id });
+    const activities = await ActivityLog.find({ user: req.user.id })
       .populate("project", "details.projectName")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    if (limit > 0) {
-      query.limit(limit);
-    }
-
-    const activities = await query.exec();
-    res.json(activities);
+    res.json({
+      activities,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalActivities: total,
+    });
   } catch (error) {
     console.error("Error fetching user activity:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Delete activities for completed projects
+const deleteOldUserActivity = async (req, res) => {
+  try {
+    // Find all completed projects
+    const completedProjects = await Project.find({
+      status: "Completed",
+    }).select("_id");
+    const completedProjectIds = completedProjects.map((p) => p._id);
+
+    if (completedProjectIds.length === 0) {
+      return res
+        .status(200)
+        .json({ message: "No completed projects found to clean up." });
+    }
+
+    // Delete activities where project is in completedProjectIds AND user is current user
+    const result = await ActivityLog.deleteMany({
+      user: req.user.id,
+      project: { $in: completedProjectIds },
+    });
+
+    res.json({
+      message: "Cleanup successful",
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("Error cleaning up activities:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -748,5 +785,6 @@ module.exports = {
   deleteUncontrollableFactor,
   updateItemInProject,
   updateProjectDepartments,
-  getUserActivity, // New export
+  getUserActivity,
+  deleteOldUserActivity, // New export
 };

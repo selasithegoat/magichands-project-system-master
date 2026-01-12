@@ -24,6 +24,7 @@ const {
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
+router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
 router.get("/stats", protect, getUserStats);
 router.get("/:id/activity", protect, getProjectActivity);
