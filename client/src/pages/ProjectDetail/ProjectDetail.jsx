@@ -226,9 +226,17 @@ const ProjectDetail = ({ onProjectChange }) => {
                 items={project.items}
                 projectId={project._id}
                 onUpdate={fetchProject}
+                readOnly={project.status === "Completed"}
               />
-              <RisksCard risks={project.uncontrollableFactors} />
-              <ProductionRisksCard risks={project.productionRisks} />
+              <RisksCard
+                risks={project.uncontrollableFactors}
+                readOnly={project.status === "Completed"}
+              />
+              <ProductionRisksCard
+                risks={project.productionRisks}
+                readOnly={project.status === "Completed"}
+              />
+              <ChallengesReportCard />
             </div>
             <div className="side-column">
               <ProgressCard project={project} />
@@ -336,7 +344,12 @@ const DepartmentsCard = ({ departments = [] }) => {
   );
 };
 
-const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
+const OrderItemsCard = ({
+  items = [],
+  projectId,
+  onUpdate,
+  readOnly = false,
+}) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState({
     description: "",
@@ -445,18 +458,20 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
 
       <div className="card-header">
         <h3 className="card-title">📦 Order Items</h3>
-        <button
-          className="edit-link"
-          onClick={() => setIsAdding(!isAdding)}
-          style={{
-            fontSize: "0.875rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.25rem",
-          }}
-        >
-          {isAdding ? "Cancel" : "+ Add Item"}
-        </button>
+        {!readOnly && (
+          <button
+            className="edit-link"
+            onClick={() => setIsAdding(!isAdding)}
+            style={{
+              fontSize: "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.25rem",
+            }}
+          >
+            {isAdding ? "Cancel" : "+ Add Item"}
+          </button>
+        )}
       </div>
 
       {isAdding && (
@@ -536,19 +551,21 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
                 </td>
                 <td className="item-qty">{item.qty}</td>
                 <td>
-                  <button
-                    onClick={() => handleDeleteItem(item._id)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "4px",
-                      opacity: 0.6,
-                    }}
-                    className="delete-item-btn"
-                  >
-                    <TrashIcon width="16" height="16" color="#ef4444" />
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleDeleteItem(item._id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "4px",
+                        opacity: 0.6,
+                      }}
+                      className="delete-item-btn"
+                    >
+                      <TrashIcon width="16" height="16" color="#ef4444" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -563,7 +580,7 @@ const OrderItemsCard = ({ items = [], projectId, onUpdate }) => {
   );
 };
 
-const RisksCard = ({ risks = [] }) => {
+const RisksCard = ({ risks = [], readOnly = false }) => {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -603,7 +620,9 @@ const RisksCard = ({ risks = [] }) => {
               No uncontrollable factors reported.
             </p>
           )}
-          <button className="risk-add-btn">+ Add Risk Factor</button>
+          {!readOnly && (
+            <button className="risk-add-btn">+ Add Risk Factor</button>
+          )}
         </div>
       )}
     </div>
@@ -723,7 +742,7 @@ const ApprovalsCard = ({ status }) => {
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">☑ Approvals</h3>
+        <h3 className="card-title">✅Approvals</h3>
       </div>
       <div className="approval-list">
         {STATUS_FLOW.map((step, index) => {
@@ -821,6 +840,71 @@ const ApprovalsCard = ({ status }) => {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+const ChallengesReportCard = () => {
+  const [challengeText, setChallengeText] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
+
+  // Mock save function
+  const handleSave = () => {
+    // In a real app, this would send data to the backend
+    console.log("Saving challenge:", challengeText);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000); // Reset after 2s
+    setChallengeText(""); // Clear? Or keep? Usually clear if log-style.
+  };
+
+  return (
+    <div className="detail-card">
+      <div className="card-header">
+        <h3 className="card-title">🚩 Challenges Faced</h3>
+      </div>
+      <div>
+        <textarea
+          className="input-field"
+          placeholder="Describe any challenges faced during execution..."
+          rows={4}
+          style={{
+            width: "100%",
+            resize: "vertical",
+            marginTop: "0.5rem",
+            fontFamily: "inherit",
+          }}
+          value={challengeText}
+          onChange={(e) => setChallengeText(e.target.value)}
+        />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: "0.75rem",
+            gap: "0.5rem",
+          }}
+        >
+          {isSaved && (
+            <span
+              style={{
+                color: "#22c55e",
+                alignSelf: "center",
+                fontSize: "0.875rem",
+              }}
+            >
+              Saved!
+            </span>
+          )}
+          <button
+            className="btn-primary"
+            style={{ padding: "0.5rem 1rem" }}
+            onClick={handleSave}
+            disabled={!challengeText.trim()}
+          >
+            Save Report
+          </button>
+        </div>
       </div>
     </div>
   );
