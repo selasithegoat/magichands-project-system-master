@@ -185,9 +185,56 @@ const addItemToProject = async (req, res) => {
     project.items.push(newItem);
     await project.save();
 
+    await logActivity(
+      project._id,
+      req.user.id,
+      "item_add",
+      `Added order item: ${description} (Qty: ${qty})`,
+      { item: newItem }
+    );
+
     res.json(project);
   } catch (error) {
     console.error("Error adding item:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update item in project
+// @route   PATCH /api/projects/:id/items/:itemId
+// @access  Private
+const updateItemInProject = async (req, res) => {
+  try {
+    const { description, breakdown, qty } = req.body;
+    const { id, itemId } = req.params;
+
+    const project = await Project.findOneAndUpdate(
+      { _id: id, "items._id": itemId },
+      {
+        $set: {
+          "items.$.description": description,
+          "items.$.breakdown": breakdown,
+          "items.$.qty": Number(qty),
+        },
+      },
+      { new: true, runValidators: false }
+    );
+
+    if (!project) {
+      return res.status(404).json({ message: "Project or Item not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "item_update",
+      `Updated order item: ${description}`,
+      { itemId, description, qty }
+    );
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error updating item:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -209,9 +256,46 @@ const deleteItemFromProject = async (req, res) => {
     project.items.pull({ _id: itemId });
     await project.save();
 
+    await logActivity(id, req.user.id, "item_delete", `Deleted order item`, {
+      itemId,
+    });
+
     res.json(project);
   } catch (error) {
     console.error("Error deleting item:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update project departments
+// @route   PUT /api/projects/:id/departments
+// @access  Private
+const updateProjectDepartments = async (req, res) => {
+  try {
+    const { departments } = req.body; // Expecting array of strings
+    const { id } = req.params;
+
+    const project = await Project.findByIdAndUpdate(
+      id,
+      { departments },
+      { new: true }
+    );
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    await logActivity(
+      id,
+      req.user.id,
+      "departments_update",
+      `Updated engaged departments`,
+      { departments }
+    );
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error updating departments:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -642,4 +726,6 @@ module.exports = {
   addUncontrollableFactor,
   updateUncontrollableFactor,
   deleteUncontrollableFactor,
+  updateItemInProject,
+  updateProjectDepartments,
 };

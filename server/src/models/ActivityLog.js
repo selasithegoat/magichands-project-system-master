@@ -28,6 +28,10 @@ const ActivityLogSchema = new mongoose.Schema(
         "item_delete",
         "approval",
         "system",
+        "item_update", // [NEW]
+        "departments_update", // [NEW]
+        "factor_add", // [NEW]
+        "factor_update", // [NEW]
       ],
     },
     description: {

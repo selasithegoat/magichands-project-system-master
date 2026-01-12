@@ -95,8 +95,8 @@ const ProjectActivity = ({ project }) => {
     // Simple mapping for filters
     // "Status Changes" -> status_change
     // "Approvals" -> approval
-    // "Edits" -> update, challenge_update, risk_update
-    // "Risks" -> risk_add, challenge_add
+    // "Edits" -> update, challenge_update, risk_update, item_update, departments_update, factor_update
+    // "Risks" -> risk_add, challenge_add, factor_add
     // "System" -> system
     return activities.filter((act) => {
       if (filter === "Status Changes") return act.action === "status_change";
@@ -108,9 +108,13 @@ const ProjectActivity = ({ project }) => {
           "challenge_delete",
           "item_add",
           "item_delete",
+          "item_update",
+          "departments_update",
+          "factor_update",
+          "risk_update",
         ].includes(act.action);
       if (filter === "Risks")
-        return ["risk_add", "challenge_add"].includes(act.action);
+        return ["risk_add", "challenge_add", "factor_add"].includes(act.action);
       return true;
     });
   };
@@ -159,6 +163,7 @@ const ProjectActivity = ({ project }) => {
         return <SystemIcon />; // Using system icon for status flow
       case "challenge_add":
       case "risk_add":
+      case "factor_add":
         return <AlertTriangleIcon />;
       case "approval":
         return <CheckCircleIcon />;
@@ -166,6 +171,10 @@ const ProjectActivity = ({ project }) => {
       case "challenge_update":
       case "item_add":
       case "item_delete":
+      case "item_update":
+      case "departments_update":
+      case "factor_update":
+      case "risk_update":
       case "challenge_delete":
         return <EditIcon />;
       default:
@@ -182,6 +191,7 @@ const ProjectActivity = ({ project }) => {
         return "card-system";
       case "risk_add":
       case "challenge_add":
+      case "factor_add":
         return "card-risk";
       case "approval":
         return "card-approval";
@@ -189,6 +199,10 @@ const ProjectActivity = ({ project }) => {
       case "challenge_update":
       case "item_add":
       case "item_delete":
+      case "item_update":
+      case "departments_update":
+      case "factor_update":
+      case "risk_update":
       case "challenge_delete":
         return "card-update";
       default:

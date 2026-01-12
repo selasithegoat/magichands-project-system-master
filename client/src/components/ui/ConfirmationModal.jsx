@@ -1,7 +1,15 @@
 import React from "react";
 import "./ConfirmationModal.css";
 
-const ConfirmationModal = ({ isOpen, onConfirm, onCancel, title, message }) => {
+const ConfirmationModal = ({
+  isOpen,
+  onConfirm,
+  onCancel,
+  title,
+  message,
+  confirmText = "Yes, Cancel",
+  cancelText = "No, Go Back",
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -11,10 +19,10 @@ const ConfirmationModal = ({ isOpen, onConfirm, onCancel, title, message }) => {
         <p className="modal-message">{message}</p>
         <div className="modal-actions">
           <button className="modal-btn cancel" onClick={onCancel}>
-            No, Go Back
+            {cancelText}
           </button>
           <button className="modal-btn confirm" onClick={onConfirm}>
-            Yes, Cancel
+            {confirmText}
           </button>
         </div>
       </div>

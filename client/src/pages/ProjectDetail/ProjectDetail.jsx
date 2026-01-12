@@ -219,7 +219,12 @@ const ProjectDetail = ({ onProjectChange }) => {
           <>
             <div className="main-column">
               <ProjectInfoCard project={project} />
-              <DepartmentsCard departments={project.departments} />
+              <DepartmentsCard
+                departments={project.departments}
+                projectId={project._id}
+                onUpdate={fetchProject}
+                readOnly={project.status === "Completed"}
+              />
               <OrderItemsCard
                 items={project.items}
                 projectId={project._id}
@@ -316,14 +321,80 @@ const ProjectInfoCard = ({ project }) => {
   );
 };
 
-const DepartmentsCard = ({ departments = [] }) => {
+const DepartmentsCard = ({
+  departments = [],
+  projectId,
+  onUpdate,
+  readOnly = false,
+}) => {
+  const [showModal, setShowModal] = useState(false);
+  const [selectedDepts, setSelectedDepts] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const ALL_DEPARTMENTS = [
+    "UV Printing",
+    "Digital Heat Press",
+    "Business Cards",
+    "Woodme",
+    "Fabrication",
+    "Signage",
+    "Outside Production",
+  ];
+
+  useEffect(() => {
+    if (showModal) {
+      setSelectedDepts(departments);
+    }
+  }, [showModal, departments]);
+
+  const toggleDept = (dept) => {
+    if (selectedDepts.includes(dept)) {
+      setSelectedDepts(selectedDepts.filter((d) => d !== dept));
+    } else {
+      setSelectedDepts([...selectedDepts, dept]);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/departments`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ departments: selectedDepts }),
+      });
+
+      if (res.ok) {
+        setShowModal(false);
+        onUpdate();
+      } else {
+        console.error("Failed to update departments");
+      }
+    } catch (err) {
+      console.error("Error updating departments:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="detail-card">
       <div className="card-header">
         <h3 className="card-title">👥 Departments</h3>
-        <span style={{ fontSize: "0.875rem", color: "#64748b" }}>
-          {departments.length} Engaged
-        </span>
+        {!readOnly && (
+          <button
+            className="edit-link"
+            onClick={() => setShowModal(true)}
+            style={{
+              fontSize: "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.25rem",
+            }}
+          >
+            <EditIcon width="14" height="14" /> Edit
+          </button>
+        )}
       </div>
       <div className="dept-list">
         {departments.length > 0 ? (
@@ -342,6 +413,76 @@ const DepartmentsCard = ({ departments = [] }) => {
           </span>
         )}
       </div>
+
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ width: "350px" }}>
+            <h3 className="modal-title">Manage Departments</h3>
+            <div
+              className="dept-selection-list"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+                margin: "1rem 0",
+              }}
+            >
+              {ALL_DEPARTMENTS.map((dept) => (
+                <label
+                  key={dept}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    cursor: "pointer",
+                    padding: "0.5rem",
+                    borderRadius: "6px",
+                    backgroundColor: selectedDepts.includes(dept)
+                      ? "#eff6ff"
+                      : "transparent",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedDepts.includes(dept)}
+                    onChange={() => toggleDept(dept)}
+                    style={{
+                      width: "16px",
+                      height: "16px",
+                      accentColor: "#2563eb",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontWeight: selectedDepts.includes(dept) ? 600 : 400,
+                      color: selectedDepts.includes(dept)
+                        ? "#1e293b"
+                        : "#64748b",
+                    }}
+                  >
+                    {dept}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => setShowModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSave}
+                disabled={loading}
+              >
+                {loading ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -353,6 +494,7 @@ const OrderItemsCard = ({
   readOnly = false,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingItem, setEditingItem] = useState(null); // Track item being edited
   const [newItem, setNewItem] = useState({
     description: "",
     breakdown: "",
@@ -389,7 +531,7 @@ const OrderItemsCard = ({
         setIsAdding(false);
         setNewItem({ description: "", breakdown: "", qty: 1 });
         showToast("Item added successfully", "success");
-        if (onUpdate) onUpdate(); // Refresh parent
+        if (onUpdate) onUpdate();
       } else {
         showToast("Failed to add item", "error");
       }
@@ -399,6 +541,55 @@ const OrderItemsCard = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUpdateItem = async () => {
+    if (!newItem.description) {
+      showToast("Description is required", "error");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/items/${editingItem._id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newItem),
+        }
+      );
+
+      if (res.ok) {
+        setEditingItem(null);
+        setNewItem({ description: "", breakdown: "", qty: 1 });
+        showToast("Item updated successfully", "success");
+        if (onUpdate) onUpdate();
+      } else {
+        showToast("Failed to update item", "error");
+      }
+    } catch (err) {
+      console.error("Failed to update item", err);
+      showToast("Server error", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEditing = (item) => {
+    setEditingItem(item);
+    setNewItem({
+      description: item.description,
+      breakdown: item.breakdown,
+      qty: item.qty,
+    });
+    setIsAdding(true); // Reuse the adding UI for editing
+  };
+
+  const cancelEditing = () => {
+    setIsAdding(false);
+    setEditingItem(null);
+    setNewItem({ description: "", breakdown: "", qty: 1 });
   };
 
   const handleDeleteItem = (itemId) => {
@@ -434,7 +625,6 @@ const OrderItemsCard = ({
   return (
     <div className="detail-card">
       {/* Toast Container */}
-      {/* Toast Container - Portaled to body for global positioning */}
       {toast &&
         createPortal(
           <div className="ui-toast-container">
@@ -447,23 +637,23 @@ const OrderItemsCard = ({
           document.body
         )}
 
-      {/* Confirmation Dialog */}
-      <ConfirmDialog
+      {/* Confirmation Dialog - Using ConfirmationModal for consistency */}
+      <ConfirmationModal
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
         message={confirmDialog.message}
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
-        confirmText="Delete"
-        type="danger"
+        confirmText="Yes, Delete"
+        cancelText="No, Keep It"
       />
 
       <div className="card-header">
         <h3 className="card-title">📦 Order Items</h3>
-        {!readOnly && (
+        {!readOnly && !isAdding && (
           <button
             className="edit-link"
-            onClick={() => setIsAdding(!isAdding)}
+            onClick={() => setIsAdding(true)}
             style={{
               fontSize: "0.875rem",
               display: "flex",
@@ -471,7 +661,7 @@ const OrderItemsCard = ({
               gap: "0.25rem",
             }}
           >
-            {isAdding ? "Cancel" : "+ Add Item"}
+            + Add Item
           </button>
         )}
       </div>
@@ -520,14 +710,20 @@ const OrderItemsCard = ({
                   setNewItem({ ...newItem, qty: e.target.value })
                 }
               />
-              <button
-                className="btn-primary"
-                style={{ marginLeft: "auto", padding: "0.5rem 1rem" }}
-                onClick={handleAddItem}
-                disabled={loading}
+              <div
+                style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}
               >
-                {loading ? "Saving..." : "Save Item"}
-              </button>
+                <button className="btn-secondary" onClick={cancelEditing}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={editingItem ? handleUpdateItem : handleAddItem}
+                  disabled={loading}
+                >
+                  {loading ? "Saving..." : editingItem ? "Update" : "Add Item"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -539,7 +735,7 @@ const OrderItemsCard = ({
             <tr>
               <th>DESCRIPTION</th>
               <th style={{ textAlign: "right" }}>QTY</th>
-              <th style={{ width: "40px" }}></th>
+              <th style={{ width: "80px" }}></th>
             </tr>
           </thead>
           <tbody>
@@ -554,19 +750,23 @@ const OrderItemsCard = ({
                 <td className="item-qty">{item.qty}</td>
                 <td>
                   {!readOnly && (
-                    <button
-                      onClick={() => handleDeleteItem(item._id)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: "4px",
-                        opacity: 0.6,
-                      }}
-                      className="delete-item-btn"
+                    <div
+                      style={{ display: "flex", justifyContent: "flex-end" }}
                     >
-                      <TrashIcon width="16" height="16" color="#ef4444" />
-                    </button>
+                      <button
+                        className="btn-icon-small"
+                        onClick={() => startEditing(item)}
+                        style={{ marginRight: "0.5rem" }}
+                      >
+                        <EditIcon width="14" height="14" color="#64748b" />
+                      </button>
+                      <button
+                        className="btn-icon-small delete"
+                        onClick={() => handleDeleteItem(item._id)}
+                      >
+                        <TrashIcon width="14" height="14" color="#ef4444" />
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -574,9 +774,11 @@ const OrderItemsCard = ({
           </tbody>
         </table>
       ) : (
-        <p style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
-          No items listed.
-        </p>
+        !isAdding && (
+          <p style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+            No items listed.
+          </p>
+        )
       )}
     </div>
   );

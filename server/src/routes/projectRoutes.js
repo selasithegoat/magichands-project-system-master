@@ -18,13 +18,18 @@ const {
   addUncontrollableFactor,
   updateUncontrollableFactor,
   deleteUncontrollableFactor,
+  updateItemInProject, // [FIX]
+  updateProjectDepartments, // [FIX]
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
 router.get("/stats", protect, getUserStats);
 router.get("/:id/activity", protect, getProjectActivity);
 router.post("/:id/items", protect, addItemToProject);
+router.patch("/:id/items/:itemId", protect, updateItemInProject); // New
 router.delete("/:id/items/:itemId", protect, deleteItemFromProject);
+
+router.put("/:id/departments", protect, updateProjectDepartments); // New
 router.post("/:id/challenges", protect, addChallengeToProject);
 router.patch(
   "/:id/challenges/:challengeId/status",
