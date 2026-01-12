@@ -671,16 +671,8 @@ const OrderItemsCard = ({
       </div>
 
       {isAdding && (
-        <div
-          style={{
-            padding: "1rem",
-            background: "#f8fafc",
-            borderRadius: "8px",
-            marginBottom: "1rem",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <div style={{ display: "grid", gap: "1rem" }}>
+        <div className="edit-item-form">
+          <div className="edit-item-grid">
             <input
               type="text"
               placeholder="Description"
@@ -700,7 +692,7 @@ const OrderItemsCard = ({
                 setNewItem({ ...newItem, breakdown: e.target.value })
               }
             />
-            <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+            <div className="edit-item-row">
               <label style={{ fontSize: "0.875rem", fontWeight: 500 }}>
                 Qty:
               </label>

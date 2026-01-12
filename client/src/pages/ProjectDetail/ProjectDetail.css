@@ -3,6 +3,8 @@
   flex-direction: column;
   height: 100vh;
   width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
   background-color: var(--bg-app);
   font-family: "Inter", sans-serif;
   overflow: hidden;
@@ -684,6 +686,32 @@
 }
 
 /* Modal Form Styles */
+.edit-item-form {
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #e2e8f0;
+}
+
+.edit-item-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.edit-item-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .edit-item-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .form-group {
   margin-bottom: 1.25rem;
   text-align: left;
