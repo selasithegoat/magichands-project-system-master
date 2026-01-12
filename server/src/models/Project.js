@@ -66,6 +66,29 @@ const ProjectSchema = new mongoose.Schema(
         preventive: String,
       },
     ], // Step 4
+    challenges: [
+      {
+        title: String,
+        description: String,
+        assistance: String,
+        status: {
+          type: String,
+          enum: ["Open", "Resolved", "Escalated"],
+          default: "Open",
+        },
+        reporter: {
+          name: String,
+          initials: String,
+          initialsColor: String,
+          date: String,
+          userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+          },
+        },
+        resolvedDate: String,
+      },
+    ],
     status: {
       type: String,
       enum: [

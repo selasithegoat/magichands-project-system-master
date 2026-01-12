@@ -242,7 +242,9 @@ const ProjectDetail = ({ onProjectChange }) => {
           </>
         )}
         {activeTab === "Updates" && <ProjectUpdates project={project} />}
-        {activeTab === "Challenges" && <ProjectChallenges project={project} />}
+        {activeTab === "Challenges" && (
+          <ProjectChallenges project={project} onUpdate={fetchProject} />
+        )}
         {activeTab === "Activities" && <ProjectActivity project={project} />}
       </main>
     </div>

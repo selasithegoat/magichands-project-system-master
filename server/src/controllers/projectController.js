@@ -228,6 +228,43 @@ const updateProjectStatus = async (req, res) => {
   }
 };
 
+// @desc    Add challenge to project
+// @route   POST /api/projects/:id/challenges
+// @access  Private
+const addChallengeToProject = async (req, res) => {
+  try {
+    const { title, description, assistance, status } = req.body;
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const newChallenge = {
+      title,
+      description,
+      assistance,
+      status: status || "Open",
+      reporter: {
+        name: `${req.user.firstName} ${req.user.lastName}`,
+        initials: `${req.user.firstName[0]}${req.user.lastName[0]}`,
+        initialsColor: "blue", // Default color for now
+        date: new Date().toLocaleString(),
+        userId: req.user._id,
+      },
+      resolvedDate: status === "Resolved" ? new Date().toLocaleString() : "--",
+    };
+
+    project.challenges.push(newChallenge);
+    await project.save();
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error adding challenge:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -236,4 +273,5 @@ module.exports = {
   addItemToProject,
   deleteItemFromProject,
   updateProjectStatus,
+  addChallengeToProject,
 };

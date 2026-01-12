@@ -1,13 +1,9 @@
 .challenges-container {
   padding: 1.5rem 2rem;
-  max-width: 100%; /* Expanded to fit the 5-column table */
+  max-width: 1200px; /* Constrain width for centering */
+  margin: 0 auto; /* Center the container */
   background-color: #fff;
   border-radius: 12px;
-  /* The design implies a card container or just the main area. 
-       If this is inside the main-column/tab-content, it might not need white bg itself 
-       if the background is already white? 
-       Actually, looking at the image, it seems to have a white card look with rounded corners.
-       Let's stick to the container style. */
 }
 
 /* Header Section */
@@ -301,33 +297,25 @@
 /* If active/clickable styles needed later */
 
 /* RESPONSIVE STYLES */
-@media (max-width: 900px) {
-  /* Hide Table Header */
+@media (max-width: 1024px) {
+  /* Switch to card layout earlier */
   .list-header {
     display: none;
   }
 
-  /* Stack list items like cards */
   .challenges-list {
     gap: 1rem;
   }
 
   .challenge-item {
     flex-direction: column;
-    background-color: #fff;
+    background-color: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     padding: 1.25rem;
     gap: 1rem;
     align-items: stretch;
   }
-
-  /* Reset column widths/flex */
- .col-reported{
-  display: flex;
-  flex-direction: column;
- }
-
 
   .col-issue,
   .col-assistance,
@@ -339,7 +327,6 @@
     min-width: 0;
   }
 
-  /* Add Labels via before pseudo-element */
   .col-assistance::before {
     content: "Assistance Provided";
     display: block;
@@ -380,29 +367,9 @@
     margin-bottom: 0.25rem;
   }
 
-  /* Issue Title slightly bigger in card view */
-  .issue-title {
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-  }
-
-  /* Adjust Status Pill alignment */
-  .col-status {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  /* Layout adjustments for Card Look */
-  .challenges-header {
-    flex-wrap: wrap; /* allow wrapping on very small screens */
-  }
-  .report-challenge-btn {
-    /* Keep button visible and accessible */
-  }
-
-  .challenges-container {
-    padding: 1rem;
+  .col-reported {
+    flex-direction: row;
+    align-items: center;
   }
 }
 
@@ -427,4 +394,99 @@
     gap: 1rem;
     text-align: center;
   }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content.challenges-modal {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.challenges-modal h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.625rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: #0f172a;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.btn-cancel {
+  background-color: #fff;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-submit {
+  background-color: #2563eb;
+  border: none;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-submit:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
 }
