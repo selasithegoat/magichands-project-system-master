@@ -21,6 +21,13 @@ import ProjectChallenges from "./ProjectChallenges";
 import ProjectActivity from "./ProjectActivity";
 import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
+import EyeIcon from "../../components/icons/EyeIcon";
+import PaintbrushIcon from "../../components/icons/PaintbrushIcon";
+import FactoryIcon from "../../components/icons/FactoryIcon";
+import PackageIcon from "../../components/icons/PackageIcon";
+import TruckIcon from "../../components/icons/TruckIcon";
+import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 
 const STATUS_FLOW = [
   "Order Confirmed",
@@ -1332,10 +1339,20 @@ const ApprovalsCard = ({ status }) => {
     currentStatusIndex = STATUS_FLOW.length;
   }
 
+  const statusIcons = {
+    "Order Confirmed": ClipboardListIcon,
+    "Pending Scope Approval": EyeIcon,
+    "Pending Mockup": PaintbrushIcon,
+    "Pending Production": FactoryIcon,
+    "Pending Packaging": PackageIcon,
+    "Pending Delivery/Pickup": TruckIcon,
+    Delivered: CheckCircleIcon,
+  };
+
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">✅Approvals</h3>
+        <h3 className="card-title">✅ Approvals</h3>
       </div>
       <div className="approval-list">
         {STATUS_FLOW.map((step, index) => {
@@ -1347,6 +1364,7 @@ const ApprovalsCard = ({ status }) => {
           const isCompleted = index < currentStatusIndex;
           const isActive = index === currentStatusIndex;
           const stepColor = getStatusColor(step); // Get specific color for this step
+          const IconComponent = statusIcons[step] || CheckCircleIcon;
 
           return (
             <div
@@ -1367,29 +1385,31 @@ const ApprovalsCard = ({ status }) => {
                   borderColor: isCompleted
                     ? stepColor
                     : isActive
-                    ? "#fff"
-                    : "#fff",
+                    ? stepColor
+                    : "#e2e8f0",
                   boxShadow: isActive
-                    ? `0 0 0 2px ${stepColor}`
-                    : isCompleted
-                    ? "none"
-                    : `0 0 0 2px #e2e8f0`,
+                    ? `0 0 0 4px ${stepColor}33` // Add a subtle glow for active
+                    : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  borderWidth: "2px",
+                  borderStyle: "solid",
+                  transition: "all 0.3s ease",
+                  zIndex: "1",
                 }}
               >
-                {isCompleted ? (
-                  <CheckIcon
-                    className="check-mark primary"
-                    width="14"
-                    height="14"
-                    color="#fff" // White check on colored background
-                    strokeWidth="3"
-                  />
-                ) : isActive ? (
-                  <div
-                    className="active-dot"
-                    style={{ backgroundColor: stepColor }}
-                  ></div>
-                ) : null}
+                <IconComponent
+                  width="16"
+                  height="16"
+                  color={
+                    isCompleted ? "#fff" : isActive ? stepColor : "#cbd5e1"
+                  }
+                  strokeWidth={isActive ? "2.5" : "2"}
+                />
               </div>
               <div className="approval-content">
                 <div
@@ -1411,8 +1431,9 @@ const ApprovalsCard = ({ status }) => {
                       color: isActive
                         ? stepColor
                         : isCompleted
-                        ? "#1e293b" // Keep completed text dark? Or match color? Let's keep dark for readability, maybe title is dark.
+                        ? "#1e293b"
                         : "#94a3b8",
+                      fontWeight: isActive ? "600" : "500",
                     }}
                   >
                     {step}
