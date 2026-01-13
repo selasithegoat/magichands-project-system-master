@@ -45,6 +45,7 @@ const registerUser = async (req, res) => {
       _id: user.id,
       name: user.name,
       employeeId: user.employeeId,
+      role: user.role,
     });
   } else {
     res.status(400).json({ message: "Invalid user data" });
@@ -57,9 +58,11 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { employeeId, password } = req.body;
+    console.log("Login Attempt:", { employeeId, password }); // DEBUG LOG
 
     // Check for user email via employeeId
     const user = await User.findOne({ employeeId });
+    console.log("User Found:", user ? "Yes" : "No"); // DEBUG LOG
 
     if (user && (await user.matchPassword(password))) {
       const token = generateToken(user._id);
@@ -76,6 +79,7 @@ const loginUser = async (req, res) => {
         _id: user.id,
         name: user.name,
         employeeId: user.employeeId,
+        role: user.role,
       });
     } else {
       res.status(401).json({ message: "Invalid credentials" });

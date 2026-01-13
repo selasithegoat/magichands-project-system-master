@@ -9,6 +9,7 @@ const InputField = ({
   icon: Icon,
   showForgot = false,
   onForgot,
+  ...props
 }) => {
   const [inputType, setInputType] = useState(type);
 
@@ -40,6 +41,7 @@ const InputField = ({
             type === "password" ? "input-control-password" : ""
           }`}
           placeholder={placeholder}
+          {...props}
         />
 
         {type === "password" && (

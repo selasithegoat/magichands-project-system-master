@@ -12,17 +12,57 @@ import {
   SupportIcon,
 } from "../../icons/Icons";
 
-const Login = () => {
+const Login = ({ onLoginSuccess }) => {
   const [loginData, setLoginData] = useState({
     username: "",
     password: "",
     keepLogged: false,
   });
 
-  const handleLogin = (e) => {
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    console.log("Logging in with:", loginData);
-    // Authentication logic here
+    setError(null);
+    setLoading(true);
+
+    try {
+      const payload = {
+        employeeId: loginData.username.trim(), // Ensure no whitespace
+        password: loginData.password.trim(),
+      };
+
+      console.log("Sending Login Payload:", payload); // Debug log
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Login failed");
+      }
+
+      if (data.role === "admin") {
+        console.log("Admin user logged in:", data);
+        if (onLoginSuccess) {
+          onLoginSuccess(data);
+        }
+      } else {
+        throw new Error("Unauthorized: Access restricted to Administrators.");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,6 +77,20 @@ const Login = () => {
           <p className="login-subtitle">
             Welcome back. Please authenticate to continue.
           </p>
+          {error && (
+            <div
+              style={{
+                color: "#ef4444",
+                fontSize: "0.875rem",
+                marginTop: "1rem",
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                padding: "0.5rem",
+                borderRadius: "4px",
+              }}
+            >
+              {error}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleLogin}>
@@ -45,20 +99,25 @@ const Login = () => {
             placeholder="Enter your admin credentials"
             icon={UserIcon}
             type="text"
+            value={loginData.username}
+            onChange={(e) =>
+              setLoginData({ ...loginData, username: e.target.value })
+            }
           />
-
           <InputField
             label="Password"
             placeholder="••••••••"
             icon={LockIcon}
             type="password"
             showForgot={false}
+            value={loginData.password}
+            onChange={(e) =>
+              setLoginData({ ...loginData, password: e.target.value })
+            }
           />
-
-          <Button type="submit" icon={CheckCircleIcon}>
-            Secure Login
+          <Button type="submit" icon={CheckCircleIcon} disabled={loading}>
+            {loading ? "Authenticating..." : "Secure Login"}
           </Button>
-
           <div className="login-footer">
             <div className="footer-action">
               <HelpIcon className="w-4 h-4" /> Need Help?
