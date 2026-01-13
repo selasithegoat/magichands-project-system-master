@@ -1,6 +1,8 @@
 const express = require("express");
+const path = require("path");
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes"); // [NEW]
+const updateRoutes = require("./routes/updateRoutes"); // [NEW]
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -32,11 +34,14 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json());
+// Static uploads folder
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Base Route
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes); // [NEW]
+app.use("/api/updates", updateRoutes);
 
 app.get("/", (req, res) => {
   res.send("MagicHands Server is Running");

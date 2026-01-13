@@ -62,7 +62,7 @@ const getStatusColor = (status) => {
   }
 };
 
-const ProjectDetail = ({ onProjectChange }) => {
+const ProjectDetail = ({ onProjectChange, user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Overview");
@@ -259,7 +259,9 @@ const ProjectDetail = ({ onProjectChange }) => {
             </div>
           </>
         )}
-        {activeTab === "Updates" && <ProjectUpdates project={project} />}
+        {activeTab === "Updates" && (
+          <ProjectUpdates project={project} currentUser={user} />
+        )}
         {activeTab === "Challenges" && (
           <ProjectChallenges project={project} onUpdate={fetchProject} />
         )}

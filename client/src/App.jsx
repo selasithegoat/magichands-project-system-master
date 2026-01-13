@@ -170,7 +170,7 @@ function App() {
             navigate={navigate}
             projectCount={projectCount}
           >
-            <ProjectDetail onProjectChange={fetchProjectCount} />
+            <ProjectDetail user={user} onProjectChange={fetchProjectCount} />
           </ProtectedLayout>
         }
       />
