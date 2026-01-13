@@ -35,7 +35,7 @@ const ProtectedLayout = ({
     onNavigateProject={() => navigate("/projects")}
     onNavigateHistory={() => navigate("/history")}
     onNavigateProfile={() => navigate("/profile")}
-    onCreateProject={() => navigate("/create")}
+    onCreateProject={() => navigate("/create-project")}
     onSignOut={onSignOut} // Pass onSignOut to Layout
   >
     {children}
