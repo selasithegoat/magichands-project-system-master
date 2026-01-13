@@ -1,0 +1,89 @@
+.input-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--spacing-lg);
+}
+
+.input-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem; /* Small caps look */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--spacing-xs);
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon-left {
+  position: absolute;
+  left: var(--spacing-md);
+  color: var(--text-placeholder);
+  width: 20px;
+  height: 20px;
+  z-index: 1;
+}
+
+.input-control {
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-md);
+  padding-left: 3rem; /* Space for left icon */
+  padding-right: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.input-control::placeholder {
+  color: var(--text-placeholder);
+}
+
+.input-control:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+/* Password field extras */
+.input-control-password {
+  padding-right: 3rem; /* Space for right icon */
+}
+
+.input-icon-right {
+  position: absolute;
+  right: 1rem;
+  color: var(--text-placeholder);
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  transition: color 0.2s;
+}
+
+.input-icon-right:hover {
+  color: var(--text-primary);
+}
+
+.input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.forgot-link {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.forgot-link:hover {
+  text-decoration: underline;
+  color: var(--text-primary);
+}

@@ -1,0 +1,53 @@
+:root {
+  /* Colors - Dark Theme */
+  --bg-dark: #0f172a; /* Main background - very dark blue/slate */
+  --bg-card: #1e293b; /* Card background - slightly lighter */
+  --bg-input: #1e293b; /* Input background same as card but might darken on interaction */
+
+  --border-color: #334155; /* Slate-700 */
+  --border-focus: #3b82f6; /* Blue-500 */
+
+  --text-primary: #f8fafc; /* Slate-50 */
+  --text-secondary: #94a3b8; /* Slate-400 */
+  --text-placeholder: #475569; /* Slate-600 */
+
+  --primary: #94a3b8; /* Muted blue/grey for icons/accents */
+  --accent: #64748b; /* Slate-500 */
+
+  --btn-bg: #819db5; /* Muted steel blue */
+  --btn-hover: #6c8aa3;
+  --btn-text: #0f172a;
+
+  --link-color: #94a3b8;
+
+  /* Spacing */
+  --spacing-xs: 0.5rem; /* 8px */
+  --spacing-sm: 0.75rem; /* 12px */
+  --spacing-md: 1rem; /* 16px */
+  --spacing-lg: 1.5rem; /* 24px */
+  --spacing-xl: 2rem; /* 32px */
+
+  /* Borders */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Typography */
+  --font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
