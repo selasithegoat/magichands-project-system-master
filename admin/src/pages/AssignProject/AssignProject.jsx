@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./AssignProject.css";
 import DashboardLayout from "../../layouts/DashboardLayout/DashboardLayout";
 import InputField from "../../components/InputField/InputField";
@@ -7,13 +7,6 @@ import Select from "../../components/Form/Select";
 import Toggle from "../../components/Form/Toggle";
 import PrioritySelector from "../../components/Form/PrioritySelector";
 
-// Mock data
-const clients = [
-  { value: "client1", label: "Acme Corp" },
-  { value: "client2", label: "Globex Inc" },
-  { value: "client3", label: "Soylent Corp" },
-];
-
 const AssignProject = () => {
   const [formData, setFormData] = useState({
     orderNumber: "#PRJ-2024-0012", // Auto-generated
@@ -21,13 +14,47 @@ const AssignProject = () => {
     projectName: "",
     client: "",
     overview: "",
-    leads: [], // TODO: Chip Input
-    dateAssigned: "2024-05-20",
+    projectLead: "",
+    dateAssigned: new Date().toISOString().split("T")[0],
     priority: "low",
   });
 
+  const [availableUsers, setAvailableUsers] = useState([]);
+
+  useEffect(() => {
+    // Fetch users for Project Lead dropdown
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/auth/users");
+        if (res.ok) {
+          const data = await res.json();
+          // Format for Select component: { value: id, label: name }
+          const formattedUsers = data.map((u) => ({
+            value: u._id,
+            label:
+              `${u.firstName || ""} ${u.lastName || ""} (${u.name})`.trim() ||
+              u.name,
+          }));
+          setAvailableUsers(formattedUsers);
+        }
+      } catch (err) {
+        console.error("Failed to fetch users", err);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    // If auto-generate is toggled on, reset the order number to the generated one
+    if (field === "autoGenerate" && value === true) {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+        orderNumber: "#PRJ-2024-0012", // Reset to default/calculated
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -60,6 +87,7 @@ const AssignProject = () => {
                   label="Order Number"
                   value={formData.orderNumber}
                   readOnly={formData.autoGenerate}
+                  onChange={(e) => handleChange("orderNumber", e.target.value)}
                   type="text"
                   placeholder="Enter ID"
                 />
@@ -82,10 +110,10 @@ const AssignProject = () => {
               onChange={(e) => handleChange("projectName", e.target.value)}
             />
 
-            <Select
+            {/* Changed from Select to InputField */}
+            <InputField
               label="Client"
-              options={clients}
-              placeholder="Select a client"
+              placeholder="Enter client name"
               value={formData.client}
               onChange={(e) => handleChange("client", e.target.value)}
             />
@@ -105,23 +133,14 @@ const AssignProject = () => {
               Resources
             </h2>
 
-            <div className="form-group">
-              <label className="form-label">Assign Project Leads</label>
-              <div className="chip-input-mock">
-                <span className="chip">
-                  JD <span>Jane Doe</span> <span className="chip-close">×</span>
-                </span>
-                <span className="chip green">
-                  AS <span>Alan Smith</span>{" "}
-                  <span className="chip-close">×</span>
-                </span>
-                <input
-                  type="text"
-                  placeholder="Add lead..."
-                  className="chip-input-field"
-                />
-              </div>
-            </div>
+            {/* Replaced Chip Input with User Select */}
+            <Select
+              label="Assign Project Lead"
+              options={availableUsers}
+              placeholder="Select a project lead"
+              value={formData.projectLead}
+              onChange={(e) => handleChange("projectLead", e.target.value)}
+            />
 
             <InputField
               label="Date Assigned"
@@ -136,9 +155,7 @@ const AssignProject = () => {
             />
 
             <div className="form-actions">
-              <button type="button" className="btn-cancel">
-                Cancel
-              </button>
+              {/* Cancel button removed */}
               <button type="submit" className="btn-confirm">
                 Assign Project
               </button>
@@ -149,5 +166,4 @@ const AssignProject = () => {
     </DashboardLayout>
   );
 };
-
 export default AssignProject;
