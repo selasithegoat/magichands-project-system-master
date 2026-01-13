@@ -180,8 +180,29 @@
 }
 
 @media (max-width: 768px) {
+  .assign-card {
+    padding: var(--spacing-md);
+  }
+
   .assign-form-grid {
     grid-template-columns: 1fr;
-    gap: var(--spacing-xl);
+    gap: 2rem;
+  }
+
+  .page-header-local {
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .btn-confirm {
+    width: 100%;
+    justify-content: center;
   }
 }

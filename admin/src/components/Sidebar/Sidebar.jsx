@@ -10,9 +10,9 @@ import {
   RocketIcon,
 } from "../../icons/Icons";
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose }) => {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? "sidebar-mobile-open" : ""}`}>
       <div className="sidebar-logo">
         <div className="logo-icon-wrapper">
           <RocketIcon className="w-5 h-5" />
@@ -21,6 +21,10 @@ const Sidebar = () => {
           <h1>Project Manager</h1>
           <span>Admin Dashboard</span>
         </div>
+        {/* Close button for mobile */}
+        <button className="mobile-close-btn" onClick={onClose}>
+          &times;
+        </button>
       </div>
 
       <nav className="sidebar-nav">

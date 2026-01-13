@@ -29,10 +29,49 @@
   font-weight: 500;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 16px;
+  }
+
+  .menu-btn {
+    display: block;
+  }
+
+  .breadcrumbs {
+    font-size: 0.8rem;
+  }
+
+  .breadcrumb-separator {
+    margin: 0 4px;
+  }
+}
+
 .header-actions {
   display: flex;
   align-items: center;
   gap: var(--spacing-lg);
+}
+
+@media (max-width: 1024px) {
+  .search-bar {
+    display: none; /* Hide search on mobile for now to save space */
+  }
 }
 
 .search-bar {

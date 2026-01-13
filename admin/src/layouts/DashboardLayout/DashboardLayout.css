@@ -20,27 +20,12 @@
 @media (max-width: 1024px) {
   /* Tablet styles - simplified */
   .sidebar {
-    width: 80px; /* Collapsed width */
-    padding: var(--spacing-md);
-  }
-
-  .logo-text {
-    display: none;
-  }
-
-  .nav-item {
-    justify-content: center;
-    padding: var(--spacing-md) 0;
-  }
-
-  .nav-item span {
-    /* Implicitly hiding text if I wrapped it, but currently text is direct child */
-    display: none; /* Assuming text node processing or wrap */
-    /* Since I didn't wrap text in span in Sidebar.jsx, I should rely on font-size 0 or similar hack or update component */
-    font-size: 0;
+    width: 0;
+    padding: 0;
+    overflow: hidden; /* Hide sidebar completely in document flow */
   }
 
   .dashboard-main {
-    margin-left: 80px;
+    margin-left: 0; /* Full width */
   }
 }
