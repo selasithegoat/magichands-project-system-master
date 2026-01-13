@@ -1,0 +1,187 @@
+.page-header-local {
+  margin-bottom: var(--spacing-xl);
+}
+
+.breadcrumb-muted {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.breadcrumb-active {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin-top: var(--spacing-xs);
+}
+
+.assign-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-xl);
+}
+
+.assign-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem; /* Large gap between columns */
+}
+
+.form-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  /* font-size: 0.9rem; */
+}
+
+.info-icon {
+  color: #3b82f6; /* Blue */
+}
+
+.users-icon {
+  color: #3b82f6;
+}
+
+/* Specific Field Tweaks */
+.form-row-split {
+  display: flex;
+  align-items: flex-end; /* Align inputs to bottom */
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.toggle-container {
+  margin-bottom: 24px; /* Align with input height approx */
+}
+
+/* Chip Input Mock */
+.chip-input-mock {
+  background-color: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.chip {
+  background-color: #334155;
+  color: white;
+  border-radius: 20px;
+  padding: 4px 12px 4px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.chip.green {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.chip::before {
+  content: "JD"; /* Initials fallback */
+  background-color: #3b82f6;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.chip.green::before {
+  content: "AS";
+  background-color: #10b981;
+}
+
+.chip-close {
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 0.8;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.chip-input-field {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  flex: 1;
+  min-width: 100px;
+}
+
+/* Footer Actions */
+.form-actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-lg);
+  padding-top: var(--spacing-xl);
+}
+
+.btn-cancel {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.75rem 1.5rem;
+}
+
+.btn-cancel:hover {
+  color: var(--text-primary);
+}
+
+.btn-confirm {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-confirm:hover {
+  background-color: #2563eb;
+}
+
+@media (max-width: 768px) {
+  .assign-form-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xl);
+  }
+}

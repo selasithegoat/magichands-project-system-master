@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from "react";
 import Login from "./pages/Login/Login";
-import Dashboard from "./pages/Dashboard/Dashboard";
+import AssignProject from "./pages/AssignProject/AssignProject";
 
 function App() {
   const [user, setUser] = useState(null);
-
-  // Check for existing session on mount (optional - strictly cookie based handled by backend but useful for UI state)
-  // For now, we rely on manual login for this demo
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
@@ -24,11 +21,7 @@ function App() {
 
   return (
     <>
-      {user ? (
-        <Dashboard user={user} onLogout={handleLogout} />
-      ) : (
-        <Login onLoginSuccess={handleLoginSuccess} />
-      )}
+      {user ? <AssignProject /> : <Login onLoginSuccess={handleLoginSuccess} />}
     </>
   );
 }
