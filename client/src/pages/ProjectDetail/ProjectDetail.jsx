@@ -273,7 +273,9 @@ const ProjectDetail = ({ onProjectChange, user }) => {
 
 const ProjectInfoCard = ({ project }) => {
   const details = project.details || {};
-  const leadName = details.lead || "Unassigned";
+  const lead = project.projectLeadId
+    ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+    : details.lead || "Unassigned";
 
   // Format Date
   const formatDate = (d) => {
@@ -299,8 +301,8 @@ const ProjectInfoCard = ({ project }) => {
         <div className="info-item">
           <h4>PROJECT LEAD</h4>
           <div className="lead-profile">
-            <UserAvatar name={leadName} width="32px" height="32px" />
-            <span>{leadName}</span>
+            <UserAvatar name={lead} width="32px" height="32px" />
+            <span>{lead}</span>
           </div>
         </div>
         <div className="info-item">

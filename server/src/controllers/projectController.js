@@ -99,6 +99,7 @@ const getProjects = async (req, res) => {
   try {
     const projects = await Project.find({})
       .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName")
       .sort({ createdAt: -1 });
     res.json(projects);
   } catch (error) {
@@ -142,10 +143,9 @@ const getUserStats = async (req, res) => {
 // @access  Private
 const getProjectById = async (req, res) => {
   try {
-    const project = await Project.findById(req.params.id).populate(
-      "createdBy",
-      "firstName lastName"
-    );
+    const project = await Project.findById(req.params.id)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName");
 
     if (project) {
       res.json(project);

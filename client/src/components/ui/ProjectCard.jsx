@@ -116,14 +116,14 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               width="24px"
               height="24px"
               name={
-                project.createdBy
-                  ? `${project.createdBy.firstName} ${project.createdBy.lastName}`
+                project.projectLeadId
+                  ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
                   : "U"
               }
             />
             <span className="lead-name">
-              {project.createdBy
-                ? `${project.createdBy.firstName} ${project.createdBy.lastName}`
+              {project.projectLeadId
+                ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
                 : "Unassigned"}
             </span>
           </div>
