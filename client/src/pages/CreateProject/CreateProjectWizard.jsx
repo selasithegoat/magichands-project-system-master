@@ -86,8 +86,10 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             deliveryTime: data.details?.deliveryTime,
             deliveryLocation: data.details?.deliveryLocation,
             contactType: data.details?.contactType || "MH",
-            supplySource: data.details?.supplySource || "in-house",
-
+            projectLead: data.projectLeadId,
+            lead: data.projectLeadId, // Ensure mapped to ID for Select
+            client: data.details?.client || "", // [NEW] Map client name
+            // Step 2 & 3 & 4
             departments: data.departments || [],
             items: data.items || [],
             uncontrollableFactors: data.uncontrollableFactors || [],

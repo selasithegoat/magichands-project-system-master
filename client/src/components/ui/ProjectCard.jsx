@@ -78,6 +78,19 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           {project.details?.projectName || "Untitled Project"}
         </h3>
         <span className="project-id">{project.orderId || "#ORD-PENDING"}</span>
+        {project.details?.client && (
+          <span
+            className="project-client"
+            style={{
+              display: "block",
+              fontSize: "0.85rem",
+              color: "#64748b",
+              marginTop: "4px",
+            }}
+          >
+            {project.details.client}
+          </span>
+        )}
 
         <div className="progress-section-new">
           <div className="progress-labels">

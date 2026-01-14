@@ -4,8 +4,38 @@ const User = require("../models/User");
 const protect = async (req, res, next) => {
   let token;
 
-  // Check for token in cookies specifically
-  token = req.cookies.token;
+  // Check for token in cookies specifically, prioritizing based on expected context if possible,
+  // but for now we check all.
+  // Note: This middleware protects both Admin and Client routes.
+  // We need to decide which token to use if BOTH exist.
+  // Usually, valid token wins.
+
+  // Prefer token_admin if we are hitting an admin route?
+  // We don't know easily without checking URL.
+  // Let's just grab whichever exists.
+
+  // Determine origin to prevent session interference on localhost
+  const origin = req.headers.origin || req.headers.referer || "";
+
+  // Specific port checks for development/local environment
+  if (origin.includes("3000")) {
+    // Admin Portal
+    token = req.cookies.token_admin || req.cookies.token; // Allow legacy 'token' fallback if needed, or strictly token_admin?
+    // If we fallback to 'token', and 'token' is shared, we risk contamination if 'token' was set by Client.
+    // Ideally we migrate to just token_admin.
+    // For now, let's prefer token_admin.
+    token = req.cookies.token_admin;
+  } else if (origin.includes("5173")) {
+    // Client Portal
+    token = req.cookies.token_client;
+  } else {
+    // Unknown origin (Postman, production domain, etc.)
+    // Fallback to checking everything, prioritizing Admin?
+    // Or maybe check role inside the token?
+    // For now, try all.
+    token =
+      req.cookies.token_admin || req.cookies.token_client || req.cookies.token;
+  }
 
   if (token) {
     try {
@@ -18,13 +48,17 @@ const protect = async (req, res, next) => {
       // Get user from the token
       req.user = await User.findById(decoded.id).select("-password");
 
-      // Sliding Expiration: Refresh the cookie if the token is valid
-      // Note: We are re-setting the same token but extending the cookie lifetime
-      res.cookie("token", token, {
+      // Decide which cookie updated
+      // If user is admin, refresh token_admin. Else token_client.
+      const cookieName =
+        req.user.role === "admin" ? "token_admin" : "token_client";
+
+      // Sliding Expiration
+      res.cookie(cookieName, token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: 15 * 60 * 1000, // Reset to 15 minutes
+        maxAge: 15 * 60 * 1000,
       });
 
       next();

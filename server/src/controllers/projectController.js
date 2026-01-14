@@ -12,6 +12,7 @@ const createProject = async (req, res) => {
       orderDate,
       receivedTime,
       lead,
+      client,
       projectName,
       deliveryDate,
       deliveryTime,
@@ -51,6 +52,7 @@ const createProject = async (req, res) => {
       receivedTime: getValue(receivedTime),
       details: {
         lead: lead?.label || lead?.value || lead, // Prefer label (name) over value (id) for lead
+        client, // [NEW] Added client name
         projectName,
         deliveryDate,
         deliveryTime: getValue(deliveryTime),
@@ -780,6 +782,7 @@ const updateProject = async (req, res) => {
       orderDate,
       receivedTime,
       lead,
+      client, // [NEW]
       projectName,
       deliveryDate,
       deliveryTime,
@@ -808,6 +811,8 @@ const updateProject = async (req, res) => {
     if (orderDate) project.orderDate = orderDate;
     if (receivedTime) project.receivedTime = getValue(receivedTime);
     if (lead) project.details.lead = lead?.label || lead?.value || lead;
+    if (client)
+      project.details.client = client?.label || client?.value || client; // [NEW]
     if (projectName) project.details.projectName = projectName;
     if (deliveryDate) project.details.deliveryDate = deliveryDate;
     if (deliveryTime) project.details.deliveryTime = getValue(deliveryTime);

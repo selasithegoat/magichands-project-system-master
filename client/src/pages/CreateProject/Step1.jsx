@@ -10,6 +10,7 @@ import LocationIcon from "../../components/icons/LocationIcon";
 import HomeIcon from "../../components/icons/HomeIcon";
 import CartIcon from "../../components/icons/CartIcon";
 import PersonIcon from "../../components/icons/PersonIcon";
+import FolderIcon from "../../components/icons/FolderIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
@@ -129,13 +130,22 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
           {/* Project Name */}
           <Input
             label="Project Name"
-            placeholder="e.g. Summer Campaign Banner"
+            placeholder="e.g. Summer Campaign 2024"
             value={formData.projectName}
             onChange={(e) => handleChange("projectName", e.target.value)}
+            icon={<FolderIcon />}
+          />
+
+          {/* Client Name */}
+          <Input
+            label="Client Name"
+            placeholder="e.g. MagicHands Corp"
+            value={formData.client}
+            onChange={(e) => handleChange("client", e.target.value)}
           />
 
           {/* Row: Delivery Date & Time */}
-          <div className="form-row">
+          <div className="form-row-three">
             <Input
               type="date"
               label="Delivery Date"

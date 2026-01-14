@@ -85,7 +85,11 @@ const PendingAssignments = ({ onStartNew }) => {
                   <strong>Assigned:</strong>{" "}
                   {new Date(project.createdAt).toLocaleDateString()}
                 </p>
-                {/* Add more info like client if we had it */}
+                {project.details?.client && (
+                  <p>
+                    <strong>Client:</strong> {project.details.client}
+                  </p>
+                )}
               </div>
               <div className="pa-card-footer">
                 <button

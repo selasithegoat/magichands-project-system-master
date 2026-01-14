@@ -75,13 +75,15 @@ const AssignProject = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          orderId: formData.orderNumber,
+          // Flattened structure for createProject controller
           projectName: formData.projectName,
           projectLeadId: formData.projectLead,
           lead: selectedUser
             ? { value: selectedUser.value, label: selectedUser.label }
             : null,
+          client: formData.client, // [NEW] Send client name
           status: "Pending Scope Approval",
+          orderId: formData.orderNumber,
           // We can send 'client' as something else or lose it?
           // Let's put 'Client: ' + client in overview or descriptions?
           // There is 'overview' in Admin form.

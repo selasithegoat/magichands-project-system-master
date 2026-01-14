@@ -67,12 +67,14 @@ const loginUser = async (req, res) => {
     if (user && (await user.matchPassword(password))) {
       const token = generateToken(user._id);
 
+      const cookieName = user.role === "admin" ? "token_admin" : "token_client";
+
       // Send HTTP-only cookie
-      res.cookie("token", token, {
+      res.cookie(cookieName, token, {
         httpOnly: true,
-        secure: true, // Always secure for ngrok/cross-site
-        sameSite: "none", // Allow cross-site for ngrok
-        maxAge: 15 * 60 * 1000, // 15 minutes
+        secure: true,
+        sameSite: "none",
+        maxAge: 15 * 60 * 1000,
       });
 
       res.json({
@@ -102,6 +104,15 @@ const getMe = async (req, res) => {
 // @route   POST /api/auth/logout
 // @access  Public
 const logoutUser = (req, res) => {
+  res.cookie("token_admin", "", {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+  res.cookie("token_client", "", {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+  // Clear legacy token just in case
   res.cookie("token", "", {
     httpOnly: true,
     expires: new Date(0),

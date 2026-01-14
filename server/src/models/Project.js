@@ -17,6 +17,9 @@ const ProjectSchema = new mongoose.Schema(
       lead: {
         type: String, // Storing value like "sarah" for now, could be User ID reference later
       },
+      client: {
+        type: String,
+      },
       projectName: {
         type: String,
         required: true,

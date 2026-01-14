@@ -42,8 +42,11 @@ const Dashboard = ({
         const completed = data.filter((p) => p.status === "Completed").length;
         setCompletedCount(completed);
 
-        // Filter out "Completed" projects
-        const activeProjects = data.filter((p) => p.status !== "Completed");
+        // Filter out "Completed" and "Pending Scope Approval" projects
+        const activeProjects = data.filter(
+          (p) =>
+            p.status !== "Completed" && p.status !== "Pending Scope Approval"
+        );
         // Sort by createdAt desc (newest first)
         const sortedProjects = activeProjects.sort(
           (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
