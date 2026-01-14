@@ -1,0 +1,97 @@
+.pending-assignments-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.pa-header h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.btn-new-project {
+  background: var(--primary-color, #7d40e7);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.pa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.pa-card {
+  background: #1e1e24;
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid #2d2d35;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pa-card-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.pa-status-badge {
+  background: #ffab0020;
+  color: #ffab00;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.pa-card-body h3 {
+  color: #fff;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.pa-card-body p {
+  color: #aaa;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.btn-accept {
+  width: 100%;
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-top: auto;
+  transition: background 0.2s;
+}
+
+.btn-accept:hover {
+  background: #218838;
+}
+
+.no-assignments {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #666;
+  padding: 3rem;
+  background: #1e1e24;
+  border-radius: 12px;
+}

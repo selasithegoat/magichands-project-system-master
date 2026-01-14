@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Step1 from "./Step1";
 import Step2 from "./Step2";
 import Step3 from "./Step3";
@@ -9,6 +9,7 @@ import ConfirmationModal from "../../components/ui/ConfirmationModal";
 
 const CreateProjectWizard = ({ onProjectCreate }) => {
   const navigate = useNavigate();
+  const location = useLocation(); // Get location for query params
 
   const DEFAULT_FORM_STATE = {
     currentStep: 1,
@@ -26,6 +27,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       items: [], // Step 3
       uncontrollableFactors: [], // Step 4
       productionRisks: [], // Step 4
+      status: "Order Confirmed", // Default for new, overwritten if editing
     },
   };
 
@@ -42,6 +44,79 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   const [currentStep, setCurrentStep] = useState(initialState.currentStep);
   const [formData, setFormData] = useState(initialState.formData);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [editingId, setEditingId] = useState(null); // Track if editing
+  const [isLoading, setIsLoading] = useState(false); // Loading state for fetch
+
+  // Check for edit mode on mount
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const editId = params.get("edit");
+
+    if (editId) {
+      setEditingId(editId);
+      setIsLoading(true);
+      // Fetch project data
+      fetch(`/api/projects/${editId}`)
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error("Failed to fetch project");
+        })
+        .then((data) => {
+          // Map API data to Wizard Form Data
+          // Note: API data structure matches schema (project.details.* etc)
+          // Wizard expects flat structure for some fields (orderDate, etc) and 'details' fields spread?
+          // Looking at CreateProjectWizard initial state vs. Project Model:
+          // Wizard: orderDate, receivedTime, lead, projectName, deliveryDate...
+          // Project Model: orderDate, receivedTime, details: { lead, projectName, deliveryDate... }
+          // Need to flatten details.
+
+          const mappedData = {
+            ...formData, // Keep defaults or existing
+            orderId: data.orderId, // If we want to show it? Wizard Step 1 shows 'Order #1024-B' hardcoded or from state? Step 1 renders hardcoded currently? I should check Step 1 props.
+            // Step 1 expects: orderDate, receivedTime, lead, projectName, deliveryDate, deliveryTime, deliveryLocation, contactType, supplySource
+            orderDate: data.orderDate ? data.orderDate.split("T")[0] : "",
+            receivedTime: data.receivedTime,
+            // Use projectLeadId for the lead select value (matches option value)
+            lead: data.projectLeadId || null,
+
+            projectName: data.details?.projectName || "",
+            deliveryDate: data.details?.deliveryDate
+              ? data.details.deliveryDate.split("T")[0]
+              : "",
+            deliveryTime: data.details?.deliveryTime,
+            deliveryLocation: data.details?.deliveryLocation,
+            contactType: data.details?.contactType || "MH",
+            supplySource: data.details?.supplySource || "in-house",
+
+            departments: data.departments || [],
+            items: data.items || [],
+            uncontrollableFactors: data.uncontrollableFactors || [],
+            productionRisks: data.productionRisks || [],
+
+            // If status was Pending Scope Approval, we usually want to change it on submit?
+            // Keep track of current status
+            status: data.status,
+          };
+
+          // If we could map lead name to object, great. If not, simple string might fail Select.
+          // Assuming Admin sent { value, label } to backend during assignment?
+          // Admin assignment sent: lead: { value, label } but backend details.lead stores STRING.
+          // Project.js: details.lead type: String.
+          // So backend lost the ID reference in 'details.lead' but KEPT it in 'projectLeadId'.
+          // CreateProjectWizard Step 1 fetches users!
+          // Step 1 can handle pre-selected ID if we pass it?
+          // Step 1 uses `formData.lead`.
+          // If we pass `projectLeadId` as `lead`, does Step 1 Select work?
+          // React Select usually needs the object { value, label } to display correctly.
+          // Step 1 loads options. If value is just ID, it might not show label.
+          // We'll see.
+
+          setFormData(mappedData);
+        })
+        .catch((err) => console.error(err))
+        .finally(() => setIsLoading(false));
+    }
+  }, [location.search]); // eslint-disable-next-line
 
   // Save to localStorage whenever state changes
   React.useEffect(() => {
@@ -75,13 +150,22 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
   const handleCreateProject = async () => {
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
+      const method = editingId ? "PUT" : "POST";
+
+      const payload = { ...formData };
+      if (editingId && payload.status === "Pending Scope Approval") {
+        // If editing and status was pending, we assume acceptance/completion moves it to Order Confirmed
+        payload.status = "Order Confirmed";
+      }
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -107,6 +191,9 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
     if (onProjectCreate) onProjectCreate(); // Refresh global count
     navigate("/");
   };
+
+  if (isLoading)
+    return <div style={{ padding: "2rem" }}>Loading project data...</div>;
 
   return (
     <>

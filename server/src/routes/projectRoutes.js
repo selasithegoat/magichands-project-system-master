@@ -22,6 +22,7 @@ const {
   updateProjectDepartments, // [FIX]
   getUserActivity, // [NEW]
   deleteOldUserActivity, // [NEW] - Fix for reference error
+  updateProject, // [NEW] - Full Update
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -62,6 +63,7 @@ router.delete(
 
 router.patch("/:id/status", protect, updateProjectStatus);
 router.get("/:id", protect, getProjectById);
+router.put("/:id", protect, updateProject); // Full update (Step 1-5)
 router.post("/", protect, createProject);
 router.get("/", protect, getProjects);
 

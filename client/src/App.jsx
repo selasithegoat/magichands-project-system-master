@@ -16,6 +16,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
+import PendingAssignments from "./pages/PendingAssignments/PendingAssignments";
 import MyActivities from "./pages/MyActivities/MyActivities";
 
 // Helper to wrap protected content in Layout
@@ -150,6 +151,19 @@ function App() {
       />
       <Route
         path="/create"
+        element={
+          <ProtectedLayout
+            activeView="create"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <PendingAssignments onStartNew={() => navigate("/create/wizard")} />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/create/wizard"
         element={
           <ProtectedLayout
             activeView="create"

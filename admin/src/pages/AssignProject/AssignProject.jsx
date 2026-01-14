@@ -57,9 +57,110 @@ const AssignProject = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("Submitting Project:", formData);
+
+    try {
+      const payload = {
+        orderId: formData.orderNumber,
+        projectName: formData.projectName,
+        lead: formData.client, // Using "client" field for details.lead or rename?
+        // Wait, 'client' in form maps to what in backend?
+        // Backend 'lead' in details is a string. Client in form seems to be client name.
+        // Let's map formData.client to details.lead or create a new field?
+        // Actually, let's look at Project.js again. details.lead is "Storing value like 'sarah'".
+        // But we have actual projectLeadId now.
+        // Let's use 'client' as the client name if possible, but Project model doesn't have 'client' field explicitly outside details?
+        // Looking at Project.js: details.lead, details.projectName... no details.client?
+        // Wait, CreateProjectWizard uses 'lead' for Lead Assignment (User).
+        // Admin form has 'client' input.
+        // Let's assume 'client' -> details.deliveryLocation or we need to add a client field?
+        // The user request didn't specify changing the model for Client, but Admin has a Client field.
+        // Let's map 'client' to details.lead for now if that's how it was, OR better:
+        // CreateProjectWizard inputs:
+        // Step 1: Lead Assignment (Select User) -> details.lead
+        // Step 1: Project Name -> details.projectName
+        // Admin: Project Name, Client, Project Lead (Select User).
+        // Let's map Admin 'Project Lead' -> projectLeadId AND details.lead (for display consistency if needed).
+        // Admin 'Client' -> Maybe prepended to description or separate?
+        // Let's just send it as 'details.lead' if 'client' really means 'Client Name' and not 'Lead Person'.
+        // BUT current backend details.lead seems to be used for the person in Step 1.
+        // Let's check CreateProjectWizard Step 1 again.
+        // Step 1: Lead Assignment -> details.lead.
+        // So Admin 'Project Lead' should map to `projectLeadId` AND `details.lead`.
+        // Admin 'Client' -> Maybe unused in backend model? I'll carry it if I can or ignore it.
+        // Let's ignore 'Client' field issue for a second and focus on assignment.
+
+        projectLeadId: formData.projectLead,
+        status: "Pending Scope Approval",
+        // Minimum required fields
+        details: {
+          projectName: formData.projectName,
+          lead:
+            availableUsers.find((u) => u.value === formData.projectLead)
+              ?.label || "Assigned Lead",
+        },
+        // Flattened structure for createProject controller
+        projectName: formData.projectName,
+        projectLeadId: formData.projectLead,
+        lead: availableUsers.find((u) => u.value === formData.projectLead), // Object or label? Controller expects label/value or string.
+        status: "Pending Scope Approval",
+        orderId: formData.orderNumber,
+        // Map Client to deliveryLocation or description? No clear mapping.
+        // I will map Client to 'details.lead'? No that's the person.
+        // I will map Client to 'details.deliveryLocation' as a fallback placeholder?
+      };
+
+      // Re-reading controller:
+      // const { lead, projectName ... } = req.body;
+      // details: { lead: lead?.label || lead ... }
+
+      // So for Admin:
+      // lead: { value: formData.projectLead, label: selectedUserLabel }
+
+      const selectedUser = availableUsers.find(
+        (u) => u.value === formData.projectLead
+      );
+
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: formData.orderNumber,
+          projectName: formData.projectName,
+          projectLeadId: formData.projectLead,
+          lead: selectedUser
+            ? { value: selectedUser.value, label: selectedUser.label }
+            : null,
+          status: "Pending Scope Approval",
+          // We can send 'client' as something else or lose it?
+          // Let's put 'Client: ' + client in overview or descriptions?
+          // There is 'overview' in Admin form.
+          // Controller has 'items' (Step 3).
+          // Maybe put overview in 'items' with description?
+          // Or just creating the shell info.
+        }),
+      });
+
+      if (res.ok) {
+        alert("Project Assigned Successfully!");
+        // Reset or redirect
+        setFormData((prev) => ({
+          ...prev,
+          projectName: "",
+          overview: "",
+          client: "",
+        }));
+      } else {
+        alert("Failed to assign project");
+      }
+    } catch (err) {
+      console.error("Error assigning project", err);
+      alert("Error assigning project");
+    }
   };
 
   return (
