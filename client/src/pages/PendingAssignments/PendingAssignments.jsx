@@ -51,7 +51,7 @@ const PendingAssignments = ({ onStartNew }) => {
   }, []);
 
   const handleAccept = (projectId) => {
-    navigate(`/create?edit=${projectId}`);
+    navigate(`/create/wizard?edit=${projectId}`);
   };
 
   if (loading) return <div>Loading...</div>;
@@ -59,11 +59,10 @@ const PendingAssignments = ({ onStartNew }) => {
   return (
     <div className="pending-assignments-container">
       <div className="pa-header">
-        <h1>Pending Project Assignments</h1>
-        <p>You have {adjustments.length} projects waiting for acceptance.</p>
-        <button className="btn-new-project" onClick={onStartNew}>
-          + Create New Blank Project
-        </button>
+        <div>
+          <h1>Pending Project Assignments</h1>
+          <p>You have {adjustments.length} projects waiting for acceptance.</p>
+        </div>
       </div>
 
       <div className="pa-grid">

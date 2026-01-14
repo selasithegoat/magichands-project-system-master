@@ -75,7 +75,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
 
         {/* Title */}
         <div className="order-title-section">
-          <h2 className="order-title">Order #1024-B</h2>
+          <h2 className="order-title">{formData.orderId || "New Order"}</h2>
           <p className="order-subtitle">
             Please fill in the project details below.
           </p>
@@ -105,7 +105,11 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
           <Select
             label="Lead Assignment"
             options={leads}
-            value={formData.lead}
+            value={
+              isLoadingLeads
+                ? null
+                : leads.find((l) => l.value === formData.lead) || formData.lead
+            }
             onChange={(val) => handleChange("lead", val)}
             placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
             renderValue={(option) => (
