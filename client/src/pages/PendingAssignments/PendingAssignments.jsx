@@ -33,11 +33,12 @@ const PendingAssignments = ({ onStartNew }) => {
           const userRes = await fetch("/api/auth/me");
           if (userRes.ok) {
             const user = await userRes.json();
-            const pending = data.filter(
-              (p) =>
-                p.projectLeadId === user._id &&
-                p.status === "Pending Scope Approval"
-            );
+            const pending = data.filter((p) => {
+              const leadId = p.projectLeadId?._id || p.projectLeadId; // Handle populated object or string ID
+              return (
+                leadId === user._id && p.status === "Pending Scope Approval"
+              );
+            });
             setAdjustments(pending);
           }
         }
