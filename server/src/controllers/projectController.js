@@ -782,7 +782,7 @@ const updateProject = async (req, res) => {
       orderDate,
       receivedTime,
       lead,
-      client, // [NEW]
+      client,
       projectName,
       deliveryDate,
       deliveryTime,
@@ -795,6 +795,7 @@ const updateProject = async (req, res) => {
       productionRisks,
       status,
       currentStep,
+      projectLeadId,
     } = req.body;
 
     const project = await Project.findById(id);
@@ -803,16 +804,32 @@ const updateProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Helper to extract value if object
+    // Helper
     const getValue = (field) => (field && field.value ? field.value : field);
 
-    // Update fields
+    // Capture old values for logging
+    const oldValues = {
+      client: project.details?.client,
+      orderDate: project.orderDate,
+      receivedTime: project.receivedTime,
+      deliveryDate: project.details?.deliveryDate,
+      deliveryTime: project.details?.deliveryTime,
+      deliveryLocation: project.details?.deliveryLocation,
+      contactType: project.details?.contactType,
+      supplySource: project.details?.supplySource,
+      lead: project.projectLeadId,
+      status: project.status,
+    };
+
+    // Update Top Level
     if (orderId) project.orderId = orderId;
     if (orderDate) project.orderDate = orderDate;
     if (receivedTime) project.receivedTime = getValue(receivedTime);
+    if (projectLeadId) project.projectLeadId = projectLeadId;
+
+    // Update Details
     if (lead) project.details.lead = lead?.label || lead?.value || lead;
-    if (client)
-      project.details.client = client?.label || client?.value || client; // [NEW]
+    if (client) project.details.client = client; // Client is string now usually
     if (projectName) project.details.projectName = projectName;
     if (deliveryDate) project.details.deliveryDate = deliveryDate;
     if (deliveryTime) project.details.deliveryTime = getValue(deliveryTime);
@@ -820,7 +837,7 @@ const updateProject = async (req, res) => {
     if (contactType) project.details.contactType = getValue(contactType);
     if (supplySource) project.details.supplySource = getValue(supplySource);
 
-    // Arrays replacement (assuming full sync from wizard state)
+    // Update Arrays
     if (departments) project.departments = departments;
     if (items) project.items = items;
     if (uncontrollableFactors)
@@ -828,31 +845,87 @@ const updateProject = async (req, res) => {
     if (productionRisks) project.productionRisks = productionRisks;
 
     if (currentStep) project.currentStep = currentStep;
-
-    // Status update logic: If accepting ("Pending Scope Approval" -> "Order Confirmed")
-    // or specifically passed status
-    if (status) {
-      project.status = status;
-    } else if (project.status === "Pending Scope Approval") {
-      // If simply saving/updating from wizard without explicit status, assume moving to active
-      project.status = "Order Confirmed";
-    }
+    if (status) project.status = status;
 
     const updatedProject = await project.save();
 
-    await logActivity(
-      updatedProject._id,
-      req.user.id,
-      "update",
-      `Updated project details for #${
-        updatedProject.orderId || updatedProject._id
-      }`
-    );
+    // --- Activity Logging (Diff) ---
+    const changes = [];
+    if (oldValues.client !== updatedProject.details?.client)
+      changes.push(`Client: ${updatedProject.details?.client}`);
+
+    const oldOD = oldValues.orderDate
+      ? new Date(oldValues.orderDate).toISOString().split("T")[0]
+      : "";
+    const newOD = updatedProject.orderDate
+      ? new Date(updatedProject.orderDate).toISOString().split("T")[0]
+      : "";
+    if (oldOD !== newOD) changes.push(`Order Date: ${newOD}`);
+
+    if (oldValues.receivedTime !== updatedProject.receivedTime)
+      changes.push(`Received Time: ${updatedProject.receivedTime}`);
+
+    const oldDD = oldValues.deliveryDate
+      ? new Date(oldValues.deliveryDate).toISOString().split("T")[0]
+      : "";
+    const newDD = updatedProject.details?.deliveryDate
+      ? new Date(updatedProject.details?.deliveryDate)
+          .toISOString()
+          .split("T")[0]
+      : "";
+    if (oldDD !== newDD) changes.push(`Delivery Date: ${newDD}`);
+
+    if (oldValues.deliveryTime !== updatedProject.details?.deliveryTime)
+      changes.push(`Delivery Time: ${updatedProject.details?.deliveryTime}`);
+    if (oldValues.deliveryLocation !== updatedProject.details?.deliveryLocation)
+      changes.push(`Location: ${updatedProject.details?.deliveryLocation}`);
+    if (oldValues.status !== updatedProject.status)
+      changes.push(`Status: ${updatedProject.status}`);
+
+    if (changes.length > 0) {
+      await logActivity(
+        updatedProject._id,
+        req.user._id,
+        "update",
+        `Updated details: ${changes.join(", ")}`,
+        { changes }
+      );
+    } else {
+      // Generic log if no specific changes detected but save occurred (e.g. arrays)
+      await logActivity(
+        updatedProject._id,
+        req.user.id,
+        "update",
+        `Updated project #${updatedProject.orderId || updatedProject._id}`
+      );
+    }
 
     res.json(updatedProject);
   } catch (error) {
     console.error("Error updating project:", error);
     res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Delete project
+// @route   DELETE /api/projects/:id
+// @access  Private
+const deleteProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    await Project.deleteOne({ _id: req.params.id });
+    // Cleanup activities
+    await ActivityLog.deleteMany({ project: req.params.id });
+
+    res.json({ message: "Project removed" });
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -878,5 +951,6 @@ module.exports = {
   updateProjectDepartments,
   getUserActivity,
   deleteOldUserActivity,
-  updateProject, // New export
+  updateProject, // Full Update
+  deleteProject, // [NEW]
 };

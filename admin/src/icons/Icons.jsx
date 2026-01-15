@@ -330,3 +330,27 @@ export const XMarkIcon = ({ className, onClick }) => (
     />
   </svg>
 );
+
+export const TrashIcon = ({
+  className,
+  width = "24",
+  height = "24",
+  onClick,
+}) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    width={width}
+    height={height}
+    onClick={onClick}
+    style={{ cursor: onClick ? "pointer" : "default" }}
+  >
+    <path
+      fillRule="evenodd"
+      d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.49 1.478l-.565-.059V21a.75.75 0 01-.75.75H5.437a.75.75 0 01-.75-.75V6.638l-.565.059a.75.75 0 11-.49-1.478A48.567 48.567 0 017.5 4.477a48.667 48.667 0 0013.878 0zM7.688 6.551v13.59h8.624V6.551a47.534 47.534 0 00-8.624 0zM12 2.25c.578 0 1.139.1 1.677.275a49.19 49.19 0 013.33 1.127.75.75 0 11-.462 1.428 47.67 47.67 0 00-3.328-1.126.375.375 0 00-.217 0 47.648 47.648 0 00-3.328 1.126.75.75 0 11-.462-1.428 49.19 49.19 0 013.33-1.127A4.248 4.248 0 0112 2.25z"
+      clipRule="evenodd"
+    />
+  </svg>
+);
