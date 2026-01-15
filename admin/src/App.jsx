@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 import Login from "./pages/Login/Login";
 import AssignProject from "./pages/AssignProject/AssignProject";
+import Projects from "./pages/Projects/Projects";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -93,11 +100,19 @@ function App() {
     );
   }
 
-  return (
-    <>
-      {user ? <AssignProject /> : <Login onLoginSuccess={handleLoginSuccess} />}
-    </>
-  );
+  if (user) {
+    return (
+      <Router>
+        <Routes>
+          <Route path="/" element={<Navigate to="/projects" replace />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/assign" element={<AssignProject />} />
+        </Routes>
+      </Router>
+    );
+  }
+
+  return <Login onLoginSuccess={handleLoginSuccess} />;
 }
 
 export default App;

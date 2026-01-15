@@ -1,4 +1,5 @@
 import React from "react";
+import { NavLink } from "react-router-dom";
 import "./Sidebar.css";
 import {
   DashboardIcon,
@@ -32,14 +33,20 @@ const Sidebar = ({ isOpen, onClose }) => {
           <DashboardIcon className="nav-icon" />
           Dashboard
         </a>
-        <a href="#" className="nav-item">
+        <NavLink
+          to="/projects"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
           <ProjectsIcon className="nav-icon" />
           Projects
-        </a>
-        <a href="#" className="nav-item active">
+        </NavLink>
+        <NavLink
+          to="/assign"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
           <AssignIcon className="nav-icon" />
           Assign Projects
-        </a>
+        </NavLink>
         <a href="#" className="nav-item">
           <ClientsIcon className="nav-icon" />
           Clients
