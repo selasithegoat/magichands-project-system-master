@@ -75,7 +75,15 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             orderId: data.orderId, // If we want to show it? Wizard Step 1 shows 'Order #1024-B' hardcoded or from state? Step 1 renders hardcoded currently? I should check Step 1 props.
             // Step 1 expects: orderDate, receivedTime, lead, projectName, deliveryDate, deliveryTime, deliveryLocation, contactType, supplySource
             orderDate: data.orderDate ? data.orderDate.split("T")[0] : "",
-            receivedTime: data.receivedTime,
+            orderDate: data.orderDate ? data.orderDate.split("T")[0] : "",
+            receivedTime: data.receivedTime
+              ? data.receivedTime.includes("T")
+                ? new Date(data.receivedTime).toLocaleTimeString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : data.receivedTime
+              : "",
             // Use projectLeadId for the lead select value (matches option value)
             lead: data.projectLeadId || null,
 

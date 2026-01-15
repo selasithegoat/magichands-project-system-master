@@ -84,7 +84,12 @@ const AssignProject = () => {
           client: formData.client, // [NEW] Send client name
           status: "Pending Scope Approval",
           orderId: formData.orderNumber,
-          // We can send 'client' as something else or lose it?
+          orderDate: new Date(),
+          receivedTime: new Date().toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }), // "HH:mm" format
+          // Callers might need to know "Assigned At" which is effectively this.
           // Let's put 'Client: ' + client in overview or descriptions?
           // There is 'overview' in Admin form.
           // Controller has 'items' (Step 3).

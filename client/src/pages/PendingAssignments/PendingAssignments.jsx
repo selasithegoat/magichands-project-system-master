@@ -84,7 +84,18 @@ const PendingAssignments = ({ onStartNew }) => {
                 <h3>{project.details?.projectName || "Untitled Project"}</h3>
                 <p>
                   <strong>Assigned:</strong>{" "}
-                  {new Date(project.createdAt).toLocaleDateString()}
+                  {new Date(
+                    project.orderDate || project.createdAt
+                  ).toLocaleDateString()}{" "}
+                  at{" "}
+                  {project.receivedTime
+                    ? project.receivedTime.includes("T")
+                      ? new Date(project.receivedTime).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : project.receivedTime
+                    : "N/A"}
                 </p>
                 {project.details?.client && (
                   <p>

@@ -306,6 +306,25 @@ const ProjectInfoCard = ({ project }) => {
           </div>
         </div>
         <div className="info-item">
+          <h4>RECEIVED</h4>
+          <div className="info-text-bold">
+            <ClockIcon width="16" height="16" />{" "}
+            {project.receivedTime
+              ? project.receivedTime.includes("T")
+                ? new Date(project.receivedTime).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : `${new Date(
+                    project.orderDate || project.createdAt
+                  ).toLocaleDateString()} | ${project.receivedTime}`
+              : "N/A"}
+          </div>
+        </div>
+        <div className="info-item">
           <h4>CONTACT</h4>
           {/* Mock contact for now as it's not in schema explicitly other than type */}
           <span className="info-text-bold">{details.contactType || "N/A"}</span>

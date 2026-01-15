@@ -2,6 +2,7 @@ import "./ProjectCard.css";
 import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import ThreeDotsIcon from "../icons/ThreeDotsIcon";
+import ClockIcon from "../icons/ClockIcon";
 
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Helpers
@@ -127,9 +128,34 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
                 : "Unassigned"}
             </span>
           </div>
-          <div className="card-date">
+          <div className="card-date" title="Delivery Date">
             <CalendarIcon />
             <span>{formatDate(project.details?.deliveryDate)}</span>
+          </div>
+        </div>
+
+        {/* Received Time */}
+        <div
+          className="card-meta-row"
+          style={{ marginTop: "4px", paddingTop: "0" }}
+        >
+          <div
+            className="card-date"
+            style={{ marginLeft: "auto", color: "#64748b" }}
+            title="Received Time"
+          >
+            <ClockIcon width="14" height="14" />
+            <span style={{ fontSize: "0.75rem" }}>
+              Rec:{" "}
+              {project.receivedTime
+                ? project.receivedTime.includes("T")
+                  ? new Date(project.receivedTime).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : project.receivedTime
+                : "N/A"}
+            </span>
           </div>
         </div>
       </div>
