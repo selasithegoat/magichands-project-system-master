@@ -100,7 +100,11 @@ const Projects = () => {
                         ? project.receivedTime.includes("T")
                           ? new Date(project.receivedTime).toLocaleTimeString(
                               [],
-                              { hour: "2-digit", minute: "2-digit" }
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: false,
+                              }
                             )
                           : project.receivedTime
                         : "-"}

@@ -2,12 +2,21 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout/DashboardLayout";
 import "./ProjectDetails.css";
-import { ProjectsIcon } from "../../icons/Icons";
+import {
+  ProjectsIcon,
+  PencilIcon,
+  CheckCircleIcon,
+  XMarkIcon,
+} from "../../icons/Icons";
 
 const ProjectDetails = () => {
   const { id } = useParams();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -16,6 +25,23 @@ const ProjectDetails = () => {
         if (res.ok) {
           const data = await res.json();
           setProject(data);
+          // Initialize edit form with flat structure for general info
+          setEditForm({
+            client: data.details?.client || "",
+            orderDate: data.orderDate
+              ? data.orderDate.split("T")[0]
+              : data.createdAt
+              ? data.createdAt.split("T")[0]
+              : "",
+            receivedTime: data.receivedTime || "",
+            deliveryDate: data.details?.deliveryDate
+              ? data.details.deliveryDate.split("T")[0]
+              : "",
+            deliveryTime: data.details?.deliveryTime || "",
+            deliveryLocation: data.details?.deliveryLocation || "",
+            contactType: data.details?.contactType || "",
+            supplySource: data.details?.supplySource || "",
+          });
         } else {
           console.error("Failed to fetch project");
         }
@@ -27,6 +53,78 @@ const ProjectDetails = () => {
     };
     fetchProject();
   }, [id]);
+
+  const handleEditToggle = () => {
+    if (!project) return;
+    // Reset form to current project state when opening edit
+    if (!isEditing) {
+      setEditForm({
+        client: project.details?.client || "",
+        orderDate: project.orderDate
+          ? project.orderDate.split("T")[0]
+          : project.createdAt
+          ? project.createdAt.split("T")[0]
+          : "",
+        receivedTime: project.receivedTime || "",
+        deliveryDate: project.details?.deliveryDate
+          ? project.details.deliveryDate.split("T")[0]
+          : "",
+        deliveryTime: project.details?.deliveryTime || "",
+        deliveryLocation: project.details?.deliveryLocation || "",
+        contactType: project.details?.contactType || "",
+        supplySource: project.details?.supplySource || "",
+      });
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = async () => {
+    try {
+      // Construct payload.
+      // We need to merge edited fields back into the structure backend expects.
+      // Some are top level (orderDate, receivedTime), others in 'details'.
+
+      const updatedDetails = {
+        ...project.details,
+        client: editForm.client,
+        deliveryDate: editForm.deliveryDate,
+        deliveryTime: editForm.deliveryTime,
+        deliveryLocation: editForm.deliveryLocation,
+        contactType: editForm.contactType,
+        supplySource: editForm.supplySource,
+      };
+
+      const payload = {
+        ...project,
+        orderDate: editForm.orderDate,
+        receivedTime: editForm.receivedTime,
+        details: updatedDetails,
+      };
+
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setProject(updatedProject);
+        setIsEditing(false);
+      } else {
+        console.error("Failed to update project");
+        alert("Failed to save changes.");
+      }
+    } catch (err) {
+      console.error("Error saving project:", err);
+      alert("Error saving changes.");
+    }
+  };
 
   if (loading) {
     return (
@@ -58,8 +156,36 @@ const ProjectDetails = () => {
     });
   };
 
+  const formatTime = (timeStr) => {
+    if (!timeStr) return "";
+    // ISO string
+    if (timeStr.includes("T")) {
+      return new Date(timeStr).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    }
+    // Check for 12-hour format (e.g. 02:30 PM)
+    const match = timeStr.match(/(\d{1,2}):(\d{2})\s?(AM|PM)/i);
+    if (match) {
+      let [_, h, m, period] = match;
+      h = parseInt(h);
+      if (period.toUpperCase() === "PM" && h < 12) h += 12;
+      if (period.toUpperCase() === "AM" && h === 12) h = 0;
+      return `${h.toString().padStart(2, "0")}:${m}`;
+    }
+    return timeStr;
+  };
+
   const formatReceivedTime = () => {
     if (!project.receivedTime) return "N/A";
+    const time = formatTime(project.receivedTime);
+
+    // If original was ISO, formatTime returns just the time.
+    // If it was just time string, formatTime returns just the time (converted).
+    // We want to show Date + Time if possible.
+
     if (project.receivedTime.includes("T")) {
       return new Date(project.receivedTime).toLocaleString("en-US", {
         month: "short",
@@ -67,13 +193,12 @@ const ProjectDetails = () => {
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        hour12: false,
       });
     }
-    // Handle HH:mm format by combining with Order Date or Created At
+
     const dateBase = project.orderDate || project.createdAt;
-    return `${new Date(dateBase).toLocaleDateString()} at ${
-      project.receivedTime
-    }`;
+    return `${new Date(dateBase).toLocaleDateString()} at ${time}`;
   };
 
   const details = project.details || {};
@@ -106,38 +231,165 @@ const ProjectDetails = () => {
           <div className="main-info">
             {/* General Info */}
             <div className="detail-card">
-              <h3 className="card-title">General Information</h3>
+              <h3
+                className="card-title"
+                style={{ justifyContent: "space-between" }}
+              >
+                General Information
+                {!isEditing ? (
+                  <button
+                    onClick={handleEditToggle}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                    }}
+                    title="Edit Info"
+                  >
+                    <PencilIcon width="18" height="18" />
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      onClick={handleSave}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#22c55e",
+                        cursor: "pointer",
+                      }}
+                      title="Save"
+                    >
+                      <CheckCircleIcon width="20" height="20" />
+                    </button>
+                    <button
+                      onClick={handleEditToggle}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                      }}
+                      title="Cancel"
+                    >
+                      <XMarkIcon width="20" height="20" />
+                    </button>
+                  </div>
+                )}
+              </h3>
               <div className="info-grid">
                 <div className="info-item">
                   <label>Client</label>
-                  <p>{details.client || "N/A"}</p>
+                  {isEditing ? (
+                    <input
+                      className="edit-input"
+                      name="client"
+                      value={editForm.client}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{details.client || "N/A"}</p>
+                  )}
                 </div>
                 <div className="info-item">
                   <label>Order Date</label>
-                  <p>{formatDate(project.orderDate || project.createdAt)}</p>
+                  {isEditing ? (
+                    <input
+                      type="date"
+                      className="edit-input"
+                      name="orderDate"
+                      value={editForm.orderDate}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{formatDate(project.orderDate || project.createdAt)}</p>
+                  )}
                 </div>
                 <div className="info-item">
                   <label>Received Time</label>
-                  <p>{formatReceivedTime()}</p>
+                  {isEditing ? (
+                    <input
+                      type="time"
+                      className="edit-input"
+                      name="receivedTime"
+                      value={
+                        editForm.receivedTime.includes("T")
+                          ? ""
+                          : editForm.receivedTime
+                      }
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{formatReceivedTime()}</p>
+                  )}
                 </div>
                 <div className="info-item">
                   <label>Delivery</label>
-                  <p>
-                    {formatDate(details.deliveryDate)}
-                    {details.deliveryTime ? ` @ ${details.deliveryTime}` : ""}
-                  </p>
+                  {isEditing ? (
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <input
+                        type="date"
+                        className="edit-input"
+                        name="deliveryDate"
+                        value={editForm.deliveryDate}
+                        onChange={handleChange}
+                      />
+                      <input
+                        type="time"
+                        className="edit-input"
+                        name="deliveryTime"
+                        value={editForm.deliveryTime}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  ) : (
+                    <p>
+                      {formatDate(details.deliveryDate)}
+                      {details.deliveryTime
+                        ? ` @ ${formatTime(details.deliveryTime)}`
+                        : ""}
+                    </p>
+                  )}
                 </div>
                 <div className="info-item">
                   <label>Location</label>
-                  <p>{details.deliveryLocation || "N/A"}</p>
+                  {isEditing ? (
+                    <input
+                      className="edit-input"
+                      name="deliveryLocation"
+                      value={editForm.deliveryLocation}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{details.deliveryLocation || "N/A"}</p>
+                  )}
                 </div>
                 <div className="info-item">
                   <label>Contact Type</label>
-                  <p>{details.contactType || "N/A"}</p>
+                  {isEditing ? (
+                    <input
+                      className="edit-input"
+                      name="contactType"
+                      value={editForm.contactType}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{details.contactType || "N/A"}</p>
+                  )}
                 </div>
                 <div className="info-item">
                   <label>Supply Source</label>
-                  <p>{details.supplySource || "N/A"}</p>
+                  {isEditing ? (
+                    <input
+                      className="edit-input"
+                      name="supplySource"
+                      value={editForm.supplySource}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{details.supplySource || "N/A"}</p>
+                  )}
                 </div>
               </div>
             </div>

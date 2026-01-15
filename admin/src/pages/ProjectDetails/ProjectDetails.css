@@ -1,3 +1,5 @@
+/* Existing styles... */
+
 .project-details-page {
   padding: 1.5rem;
   max-width: 1200px;
@@ -74,6 +76,24 @@
   font-size: 0.95rem;
   color: var(--text-primary);
   font-weight: 500;
+}
+
+/* Edit Input Styles */
+.edit-input {
+  width: 100%;
+  padding: 0.5rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.edit-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: rgba(15, 23, 42, 0.8);
 }
 
 /* Items Table */
