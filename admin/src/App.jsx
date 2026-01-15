@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Login from "./pages/Login/Login";
 import AssignProject from "./pages/AssignProject/AssignProject";
 import Projects from "./pages/Projects/Projects";
+import ProjectDetails from "./pages/ProjectDetails/ProjectDetails";
 import {
   BrowserRouter as Router,
   Routes,
@@ -106,6 +107,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/projects" replace />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:id" element={<ProjectDetails />} />
           <Route path="/assign" element={<AssignProject />} />
         </Routes>
       </Router>

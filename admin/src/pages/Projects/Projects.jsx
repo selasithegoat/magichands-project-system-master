@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout/DashboardLayout";
 import "./Projects.css";
 import { ProjectsIcon } from "../../icons/Icons";
 
 const Projects = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -113,7 +115,12 @@ const Projects = () => {
                       </span>
                     </td>
                     <td>
-                      <button className="action-btn">View</button>
+                      <button
+                        className="action-btn"
+                        onClick={() => navigate(`/projects/${project._id}`)}
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))}
