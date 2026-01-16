@@ -25,7 +25,7 @@ const registerUser = async (req, res) => {
     name,
     employeeId,
     password,
-    email,
+    email: email || undefined,
     firstName,
     lastName,
   });

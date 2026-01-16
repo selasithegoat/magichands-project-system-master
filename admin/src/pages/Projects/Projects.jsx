@@ -15,6 +15,11 @@ const Projects = () => {
     projectId: null,
   });
 
+  // Pagination & Filter State
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -97,6 +102,21 @@ const Projects = () => {
     return "draft";
   };
 
+  // Filter Logic
+  const filteredProjects = projects.filter((project) => {
+    if (filterStatus === "All") return true;
+    return project.status === filterStatus;
+  });
+
+  // Pagination Logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const paginatedProjects = filteredProjects.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+
   return (
     <DashboardLayout>
       <div className="projects-page">
@@ -108,77 +128,130 @@ const Projects = () => {
         </div>
 
         <div className="projects-table-container">
+          <div className="table-controls">
+            <div className="filter-group">
+              <label>Status:</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setCurrentPage(1); // Reset to page 1 on filter change
+                }}
+                className="status-filter"
+              >
+                <option value="All">All Projects</option>
+                <option value="Draft">Draft</option>
+                <option value="Pending Approval">Pending Approval</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+            <div className="result-count">
+              Showing {paginatedProjects.length} of {filteredProjects.length}{" "}
+              results
+            </div>
+          </div>
+
           {loading ? (
             <div className="loading-state">Loading projects...</div>
-          ) : projects.length === 0 ? (
-            <div className="empty-state">No projects found.</div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="empty-state">
+              No projects found matching filter.
+            </div>
           ) : (
-            <table className="projects-table">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Project Name</th>
-                  <th>Lead</th>
-                  <th>Client</th>
-                  <th>Assigned Date</th>
-                  <th>Received Time</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {projects.map((project) => (
-                  <tr key={project._id}>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>
-                        {project.orderId || "N/A"}
-                      </span>
-                    </td>
-                    <td>{project.details?.projectName || "Untitled"}</td>
-                    <td>
-                      {project.projectLeadId
-                        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                        : project.details?.lead || "Unassigned"}
-                    </td>
-                    <td>{project.details?.client || "-"}</td>
-                    <td>
-                      {formatDate(project.orderDate || project.createdAt)}
-                    </td>
-                    <td>{formatTime(project.receivedTime)}</td>
-                    <td>
-                      <span
-                        className={`status-badge ${getStatusClass(
-                          project.status
-                        )}`}
-                      >
-                        {project.status}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="action-btn"
-                        onClick={() => navigate(`/projects/${project._id}`)}
-                      >
-                        View
-                      </button>
-                      <button
-                        className="action-btn delete-btn"
-                        onClick={(e) => handleDeleteClick(e, project._id)}
-                        style={{
-                          marginLeft: "0.5rem",
-                          background: "rgba(239, 68, 68, 0.1)",
-                          color: "#ef4444",
-                          border: "1px solid rgba(239, 68, 68, 0.2)",
-                        }}
-                        title="Delete Project"
-                      >
-                        <TrashIcon width="16" height="16" />
-                      </button>
-                    </td>
+            <>
+              <table className="projects-table">
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Project Name</th>
+                    <th>Lead</th>
+                    <th>Client</th>
+                    <th>Assigned Date</th>
+                    <th>Received Time</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedProjects.map((project) => (
+                    <tr key={project._id}>
+                      <td>
+                        <span style={{ fontWeight: 600 }}>
+                          {project.orderId || "N/A"}
+                        </span>
+                      </td>
+                      <td>{project.details?.projectName || "Untitled"}</td>
+                      <td>
+                        {project.projectLeadId
+                          ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+                          : project.details?.lead || "Unassigned"}
+                      </td>
+                      <td>{project.details?.client || "-"}</td>
+                      <td>
+                        {formatDate(project.orderDate || project.createdAt)}
+                      </td>
+                      <td>{formatTime(project.receivedTime)}</td>
+                      <td>
+                        <span
+                          className={`status-badge ${getStatusClass(
+                            project.status
+                          )}`}
+                        >
+                          {project.status}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="action-btn"
+                          onClick={() => navigate(`/projects/${project._id}`)}
+                        >
+                          View
+                        </button>
+                        <button
+                          className="action-btn delete-btn"
+                          onClick={(e) => handleDeleteClick(e, project._id)}
+                          style={{
+                            marginLeft: "0.5rem",
+                            background: "rgba(239, 68, 68, 0.1)",
+                            color: "#ef4444",
+                            border: "1px solid rgba(239, 68, 68, 0.2)",
+                          }}
+                          title="Delete Project"
+                        >
+                          <TrashIcon width="16" height="16" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="pagination-container">
+                  <button
+                    className="pagination-btn"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Prev
+                  </button>
+                  <span className="pagination-info">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    className="pagination-btn"
+                    disabled={currentPage === totalPages}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 

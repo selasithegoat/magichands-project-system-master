@@ -47,7 +47,7 @@ const registerEmployee = async (req, res) => {
       name: `${firstName} ${lastName}`,
       employeeId,
       password, // Pre-save hook will hash this
-      email,
+      email: email || undefined, // Handle empty string to prevent duplicate key error
       department: deptArray,
       position,
       employeeType,
@@ -100,7 +100,9 @@ const updateEmployee = async (req, res) => {
     user.firstName = req.body.firstName || user.firstName;
     user.lastName = req.body.lastName || user.lastName;
     user.name = `${user.firstName} ${user.lastName}`;
-    user.email = req.body.email || user.email;
+    if (req.body.email !== undefined) {
+      user.email = req.body.email || undefined;
+    }
     user.employeeId = req.body.employeeId || user.employeeId;
     user.position = req.body.position || user.position;
     user.employeeType = req.body.employeeType || user.employeeType;
