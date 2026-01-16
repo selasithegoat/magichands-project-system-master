@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout/DashboardLayout";
 import "./Teams.css";
 import Modal from "../../components/Modal/Modal";
+import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import { UserIcon, LockIcon, PencilIcon, TrashIcon } from "../../icons/Icons";
 
 const Teams = () => {
@@ -10,6 +11,11 @@ const Teams = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    employeeId: null,
+    employeeName: "",
+  });
 
   // Form States
   const [formData, setFormData] = useState({
@@ -130,25 +136,30 @@ const Teams = () => {
     setShowAddModal(true);
   };
 
-  const openDeletePrompt = async (emp) => {
-    if (
-      window.confirm(
-        `Are you sure you want to remove ${emp.firstName} ${emp.lastName}?`
-      )
-    ) {
-      try {
-        const res = await fetch(`/api/admin/employees/${emp._id}`, {
-          method: "DELETE",
-        });
-        if (res.ok) {
-          setEmployees(employees.filter((e) => e._id !== emp._id));
-        } else {
-          alert("Failed to delete user");
-        }
-      } catch (err) {
-        console.error(err);
-        alert("Error deleting user");
+  const openDeletePrompt = (emp) => {
+    setDeleteModal({
+      isOpen: true,
+      employeeId: emp._id,
+      employeeName: `${emp.firstName} ${emp.lastName}`,
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { employeeId } = deleteModal;
+    if (!employeeId) return;
+
+    try {
+      const res = await fetch(`/api/admin/employees/${employeeId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setEmployees(employees.filter((e) => e._id !== employeeId));
+      } else {
+        alert("Failed to delete user");
       }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting user");
     }
   };
 
@@ -620,6 +631,16 @@ const Teams = () => {
             </div>
           </form>
         </Modal>
+
+        <ConfirmationModal
+          isOpen={deleteModal.isOpen}
+          onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+          onConfirm={handleDeleteConfirm}
+          title="Delete Employee"
+          message={`Are you sure you want to remove ${deleteModal.employeeName}?`}
+          confirmText="Remove"
+          isDangerous={true}
+        />
       </div>
     </DashboardLayout>
   );
