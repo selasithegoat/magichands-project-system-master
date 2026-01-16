@@ -10,6 +10,7 @@ const NewOrders = () => {
     description: "",
     details: "",
     orderDate: "",
+    deliveryDate: "", // [New]
   });
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -129,6 +130,19 @@ const NewOrders = () => {
                   className="form-input"
                   placeholder="e.g. 123 Main St, City"
                   required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="deliveryDate">
+                  Delivery Date / Time (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  id="deliveryDate"
+                  name="deliveryDate"
+                  value={formData.deliveryDate}
+                  onChange={handleChange}
+                  className="form-input"
                 />
               </div>
             </div>
