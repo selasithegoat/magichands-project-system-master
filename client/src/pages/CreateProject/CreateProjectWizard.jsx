@@ -46,6 +46,33 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [editingId, setEditingId] = useState(null); // Track if editing
   const [isLoading, setIsLoading] = useState(false); // Loading state for fetch
+  const [leads, setLeads] = useState([]); // [NEW] Values for Steps
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+
+  // Fetch Users for leads
+  React.useEffect(() => {
+    const fetchUsers = async () => {
+      setIsLoadingLeads(true);
+      try {
+        const res = await fetch("/api/auth/users");
+        if (res.ok) {
+          const data = await res.json();
+          const formatted = data.map((u) => ({
+            value: u._id,
+            label: `${u.firstName || ""} ${u.lastName || ""} (${
+              u.employeeId || u.email
+            })`.trim(),
+          }));
+          setLeads(formatted);
+        }
+      } catch (e) {
+        console.error("Failed to fetch users", e);
+      } finally {
+        setIsLoadingLeads(false);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   // Check for edit mode on mount
   React.useEffect(() => {
@@ -91,11 +118,37 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             deliveryDate: data.details?.deliveryDate
               ? data.details.deliveryDate.split("T")[0]
               : "",
-            deliveryTime: data.details?.deliveryTime,
+            deliveryTime: data.details?.deliveryTime
+              ? data.details.deliveryTime.includes("T")
+                ? new Date(data.details.deliveryTime).toLocaleTimeString(
+                    "en-GB",
+                    {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }
+                  )
+                : data.details.deliveryTime
+              : "",
             deliveryLocation: data.details?.deliveryLocation,
             contactType: data.details?.contactType || "MH",
+            // Use projectLeadId for the lead select value
+            // data.projectLeadId might be object (if populated) or ID
+            lead:
+              data.projectLeadId && typeof data.projectLeadId === "object"
+                ? data.projectLeadId._id
+                : data.projectLeadId || null,
+            leadLabel:
+              data.projectLeadId && typeof data.projectLeadId === "object"
+                ? (
+                    (data.projectLeadId.firstName || "") +
+                    " " +
+                    (data.projectLeadId.lastName || "")
+                  ).trim() ||
+                  data.projectLeadId.employeeId ||
+                  data.projectLeadId.email ||
+                  "Assigned Lead"
+                : "Assigned Lead",
             projectLead: data.projectLeadId,
-            lead: data.projectLeadId, // Ensure mapped to ID for Select
             client: data.details?.client || "", // [NEW] Map client name
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             // Step 2 & 3 & 4
@@ -214,6 +267,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
           setFormData={handleUpdateFormData}
           onNext={handleNext}
           onCancel={handleCancelProject}
+          leads={leads} // [NEW]
+          isLoadingLeads={isLoadingLeads} // [NEW]
         />
       )}
       {currentStep === 2 && (

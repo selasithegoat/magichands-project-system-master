@@ -6,6 +6,7 @@ import {
   Document,
   StyleSheet,
   Font,
+  Image, // [NEW]
 } from "@react-pdf/renderer";
 
 // Register fonts if needed (optional, using standard fonts for now)
@@ -298,6 +299,37 @@ const ProjectSummaryPDF = ({ formData }) => {
           </Text>
         </View>
       </Page>
+
+      {/* [NEW] Image Page */}
+      {formData.sampleImage && (
+        <Page size="A4" style={styles.page}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Reference Material</Text>
+              <Text style={styles.subtitle}>
+                {formData.projectName} - Sample Image
+              </Text>
+            </View>
+          </View>
+          <View
+            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          >
+            {/* Note: React-PDF Image requires valid source. Localhost URL might work if accessible, 
+                 otherwise might need base64 or absolute path. 
+                 Since this is client-side generation, http://localhost:5000/... matches browser access.
+             */}
+            <Image
+              src={`http://localhost:5000${formData.sampleImage}`}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+          </View>
+          <View style={styles.footer}>
+            <Text>
+              MagicHands Project Management System • Confidential Document
+            </Text>
+          </View>
+        </Page>
+      )}
     </Document>
   );
 };

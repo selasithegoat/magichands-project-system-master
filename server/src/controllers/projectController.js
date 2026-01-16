@@ -54,6 +54,15 @@ const createProject = async (req, res) => {
       sampleImagePath = `/uploads/${req.file.filename}`;
     }
 
+    // [NEW] Extract time from deliveryDate if deliveryTime is missing
+    let finalDeliveryTime = getValue(deliveryTime);
+    if (!finalDeliveryTime && deliveryDate && deliveryDate.includes("T")) {
+      finalDeliveryTime = new Date(deliveryDate).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
     // Create project
     const project = new Project({
       orderId: finalOrderId,
@@ -64,7 +73,7 @@ const createProject = async (req, res) => {
         client, // [NEW] Added client name
         projectName,
         deliveryDate,
-        deliveryTime: getValue(deliveryTime),
+        deliveryTime: finalDeliveryTime, // [NEW]
         deliveryLocation,
         contactType: getValue(contactType),
         supplySource: getValue(supplySource),
@@ -167,7 +176,7 @@ const getProjectById = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
       .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName");
+      .populate("projectLeadId", "firstName lastName employeeId email");
 
     if (project) {
       // Access Check: Admin OR Project Lead

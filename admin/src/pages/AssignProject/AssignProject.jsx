@@ -145,11 +145,13 @@ const AssignProject = () => {
       } else {
         // New project extras
         payload.orderDate = new Date();
-        payload.receivedTime = new Date().toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
       }
+
+      // [FIX] Always sync receivedTime to assignment time per user request
+      payload.receivedTime = new Date().toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
       const res = await fetch(url, {
         method: method,

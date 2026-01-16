@@ -640,7 +640,7 @@ const ProjectDetails = () => {
                     <thead>
                       <tr>
                         <th>Description</th>
-                        <th>Details</th>
+                        <th>Detailed Specs</th>
                         <th>Qty</th>
                       </tr>
                     </thead>

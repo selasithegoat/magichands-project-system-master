@@ -103,29 +103,54 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
           </div>
 
           {/* Lead Assignment */}
-          <Select
-            label="Lead Assignment"
-            options={leads}
-            value={
-              isLoadingLeads
-                ? null
-                : leads.find((l) => l.value === formData.lead) || formData.lead
-            }
-            onChange={(val) => handleChange("lead", val)}
-            placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
-            renderValue={(option) => (
-              <>
+          {formData.lead ? (
+            <div className="input-group">
+              <label className="input-label">Project Lead</label>
+              <div
+                style={{
+                  padding: "0.75rem",
+                  background: "rgba(255,255,255,0.05)",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
                 <UserAvatar />
-                <span>{option.label}</span>
-              </>
-            )}
-            renderOption={(option) => (
-              <>
-                <UserAvatar />
-                <span>{option.label}</span>
-              </>
-            )}
-          />
+                <span style={{ color: "white" }}>
+                  {formData.leadLabel ||
+                    leads.find((l) => l.value === formData.lead)?.label ||
+                    "Assigned Lead"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <Select
+              label="Lead Assignment"
+              options={leads}
+              value={
+                isLoadingLeads
+                  ? null
+                  : leads.find((l) => l.value === formData.lead) ||
+                    formData.lead
+              }
+              onChange={(val) => handleChange("lead", val)}
+              placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
+              renderValue={(option) => (
+                <>
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </>
+              )}
+              renderOption={(option) => (
+                <>
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </>
+              )}
+            />
+          )}
 
           {/* Project Name */}
           <Input
