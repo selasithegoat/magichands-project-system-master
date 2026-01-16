@@ -1,12 +1,14 @@
 const express = require("express");
 const path = require("path");
-const authRoutes = require("./routes/authRoutes");
-const projectRoutes = require("./routes/projectRoutes"); // [NEW]
-const updateRoutes = require("./routes/updateRoutes"); // [NEW]
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
+
+const authRoutes = require("./routes/authRoutes");
+const projectRoutes = require("./routes/projectRoutes");
+const updateRoutes = require("./routes/updateRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 // Load env vars
 dotenv.config();
@@ -37,18 +39,17 @@ app.use(express.json());
 // Static uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// Base Route
 // Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/projects", projectRoutes); // [NEW]
+app.use("/api/projects", projectRoutes);
 app.use("/api/updates", updateRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.get("/", (req, res) => {
   res.send("MagicHands Server is Running");
 });
 
 // Start Server
-// Restart trigger
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

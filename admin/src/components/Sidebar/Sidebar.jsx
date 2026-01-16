@@ -51,10 +51,13 @@ const Sidebar = ({ isOpen, onClose }) => {
           <ClientsIcon className="nav-icon" />
           Clients
         </a>
-        <a href="#" className="nav-item">
+        <NavLink
+          to="/teams"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
           <TeamsIcon className="nav-icon" />
           Teams
-        </a>
+        </NavLink>
         <a href="#" className="nav-item">
           <ReportsIcon className="nav-icon" />
           Reports

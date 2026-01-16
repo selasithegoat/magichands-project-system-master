@@ -27,8 +27,26 @@ const UserSchema = new mongoose.Schema({
     default: "user",
   },
 
-  department: String,
-  employeeType: String, // Staff, NSP, Intern, Trainee
+  department: {
+    type: String,
+    enum: [
+      "Administration",
+      "Front Desk",
+      "Production",
+      "Graphics/Design",
+      "Photography",
+      "Stores",
+    ],
+  },
+  position: {
+    type: String,
+    enum: ["Leader", "Member"],
+    default: "Member",
+  },
+  employeeType: {
+    type: String,
+    enum: ["Staff", "NSP", "Intern", "Trainee"],
+  },
   contact: String,
   bio: String,
   createdAt: {
