@@ -10,6 +10,7 @@ const Header = ({
   onNavigateProject,
   onNavigateHistory,
   onNavigateProfile,
+  onNavigateNewOrders, // [New]
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
@@ -79,6 +80,20 @@ const Header = ({
           >
             History
           </a>
+          {user?.department?.includes("Front Desk") && (
+            <a
+              href="#"
+              className={`nav-item ${
+                activeView === "new-orders" ? "active" : ""
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateNewOrders();
+              }}
+            >
+              New Orders
+            </a>
+          )}
         </nav>
         <div className="header-actions">
           <button className="icon-btn" onClick={onToggleNotification}>

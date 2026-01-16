@@ -5,6 +5,7 @@ import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
 import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
 import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
 import Profile from "./pages/Profile/Profile";
+import NewOrders from "./pages/NewOrders/NewOrders"; // Import NewOrders
 import Layout from "./components/layout/Layout";
 import Spinner from "./components/ui/Spinner"; // Import Spinner
 
@@ -36,6 +37,7 @@ const ProtectedLayout = ({
     onNavigateProject={() => navigate("/projects")}
     onNavigateHistory={() => navigate("/history")}
     onNavigateProfile={() => navigate("/profile")}
+    onNavigateNewOrders={() => navigate("/new-orders")} // Pass handler
     onCreateProject={() => navigate("/create-project")}
     onSignOut={onSignOut} // Pass onSignOut to Layout
   >
@@ -219,6 +221,19 @@ function App() {
             projectCount={projectCount}
           >
             <ProjectHistory onBack={() => navigate("/")} />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/new-orders"
+        element={
+          <ProtectedLayout
+            activeView="new-orders"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <NewOrders />
           </ProtectedLayout>
         }
       />

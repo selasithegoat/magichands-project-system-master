@@ -9,6 +9,7 @@ import FolderIcon from "../icons/FolderIcon";
 import UsersIcon from "../icons/UsersIcon";
 import SettingsIcon from "../icons/SettingsIcon";
 import LogOutIcon from "../icons/LogOutIcon";
+import ClipboardListIcon from "../icons/ClipboardListIcon";
 
 // --- Icons ---
 const MenuIcon = () => (
@@ -34,6 +35,7 @@ const Layout = ({
   onNavigateProject,
   onNavigateHistory,
   onNavigateProfile,
+  onNavigateNewOrders, // [New]
   onCreateProject,
   activeView,
   user, // Receive user
@@ -69,6 +71,7 @@ const Layout = ({
         onNavigateProject={onNavigateProject}
         onNavigateHistory={onNavigateHistory}
         onNavigateProfile={onNavigateProfile}
+        onNavigateNewOrders={onNavigateNewOrders} // Pass prop
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
@@ -172,6 +175,22 @@ const Layout = ({
                 <UsersIcon />
                 History
               </a>
+              {user?.department?.includes("Front Desk") && (
+                <a
+                  href="#"
+                  className={`drawer-item ${
+                    activeView === "new-orders" ? "active" : ""
+                  }`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsMobileMenuOpen(false);
+                    onNavigateNewOrders();
+                  }}
+                >
+                  <ClipboardListIcon />
+                  New Orders
+                </a>
+              )}
             </nav>
 
             <div className="drawer-footer">
