@@ -156,3 +156,28 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Scrollable Content Area */
+.card-scroll-area {
+  max-height: 400px; /* Adjust limit as needed */
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+/* Custom Scrollbar */
+.card-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card-scroll-area::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.card-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}

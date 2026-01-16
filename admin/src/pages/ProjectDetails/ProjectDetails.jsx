@@ -9,10 +9,46 @@ import {
   XMarkIcon,
 } from "../../icons/Icons";
 
+// Add missing icons locally
+const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+    <polyline points="7 10 12 15 17 10"></polyline>
+    <line x1="12" y1="15" x2="12" y2="3"></line>
+  </svg>
+);
+
+const SystemIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+    <line x1="8" y1="21" x2="16" y2="21"></line>
+    <line x1="12" y1="17" x2="12" y2="21"></line>
+  </svg>
+);
+
 const ProjectDetails = () => {
   const { id } = useParams();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [updates, setUpdates] = useState([]); // New state for updates
 
   // Status handling
   const handleStatusChange = async (newStatus) => {
@@ -80,7 +116,21 @@ const ProjectDetails = () => {
         setLoading(false);
       }
     };
+
+    const fetchUpdates = async () => {
+      try {
+        const res = await fetch(`/api/updates/project/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setUpdates(data);
+        }
+      } catch (err) {
+        console.error("Error fetching updates:", err);
+      }
+    };
+
     fetchProject();
+    fetchUpdates();
   }, [id]);
 
   const handleEditToggle = () => {
@@ -484,6 +534,7 @@ const ProjectDetails = () => {
             {/* Order Items */}
             <div className="detail-card">
               <h3 className="card-title">
+                {/* ... (Header content unchanged) */}
                 <span>
                   Order Items
                   {project.sectionUpdates?.items && (
@@ -501,30 +552,161 @@ const ProjectDetails = () => {
                   )}
                 </span>
               </h3>
-              {project.items && project.items.length > 0 ? (
-                <table className="items-table">
-                  <thead>
-                    <tr>
-                      <th>Description</th>
-                      <th>Details</th>
-                      <th>Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {project.items.map((item, i) => (
-                      <tr key={i}>
-                        <td>{item.description}</td>
-                        <td>{item.breakdown || "-"}</td>
-                        <td>{item.qty}</td>
+              <div className="card-scroll-area">
+                {project.items && project.items.length > 0 ? (
+                  <table className="items-table">
+                    <thead>
+                      <tr>
+                        <th>Description</th>
+                        <th>Details</th>
+                        <th>Qty</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p style={{ color: "var(--text-secondary)" }}>
-                  No items listed.
-                </p>
-              )}
+                    </thead>
+                    <tbody>
+                      {project.items.map((item, i) => (
+                        <tr key={i}>
+                          <td>{item.description}</td>
+                          <td>{item.breakdown || "-"}</td>
+                          <td>{item.qty}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p style={{ color: "var(--text-secondary)" }}>
+                    No items listed.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Project Updates */}
+            <div className="detail-card">
+              <h3 className="card-title">Project Updates</h3>
+              <div
+                className="updates-list card-scroll-area"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                  marginTop: "1rem",
+                }}
+              >
+                {updates && updates.length > 0 ? (
+                  updates.map((update) => (
+                    <div
+                      key={update._id}
+                      style={{
+                        padding: "1rem",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-color)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              color: "var(--text-primary)",
+                            }}
+                          >
+                            {update.author
+                              ? `${update.author.firstName} ${update.author.lastName}`
+                              : "System"}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "0.8rem",
+                              color: "var(--text-secondary)",
+                              background: "rgba(255,255,255,0.1)",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            {update.author?.role || "System"}
+                          </span>
+                          {update.category && (
+                            <span
+                              style={{
+                                fontSize: "0.7rem",
+                                border: "1px solid var(--border-color)",
+                                padding: "2px 6px",
+                                borderRadius: "10px",
+                                color: "var(--text-secondary)",
+                              }}
+                            >
+                              {update.category}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "0.8rem",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          {formatLastUpdated(update.createdAt)}
+                        </span>
+                      </div>
+
+                      <p
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontSize: "0.95rem",
+                          whiteSpace: "pre-wrap",
+                          margin: 0,
+                        }}
+                      >
+                        {update.content}
+                      </p>
+
+                      {update.attachments && update.attachments.length > 0 && (
+                        <div
+                          style={{
+                            marginTop: "0.75rem",
+                            paddingTop: "0.75rem",
+                            borderTop: "1px solid var(--border-color)",
+                          }}
+                        >
+                          <a
+                            href={`http://localhost:5000${update.attachments[0].url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              color: "#6366f1",
+                              textDecoration: "none",
+                              fontSize: "0.9rem",
+                            }}
+                          >
+                            <DownloadIcon /> {update.attachments[0].name}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p style={{ color: "var(--text-secondary)" }}>
+                    No updates posted yet.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Challenges (if any) */}
@@ -549,6 +731,7 @@ const ProjectDetails = () => {
                   </span>
                 </h3>
                 <div
+                  className="card-scroll-area"
                   style={{
                     display: "flex",
                     flexDirection: "column",
