@@ -164,25 +164,16 @@ const ProjectDetails = () => {
 
   const handleSave = async () => {
     try {
-      // Construct payload.
-      // We need to merge edited fields back into the structure backend expects.
-      // Some are top level (orderDate, receivedTime), others in 'details'.
-
-      const updatedDetails = {
-        ...project.details,
+      // Construct payload with flattened fields as expected by the controller
+      const payload = {
         client: editForm.client,
+        orderDate: editForm.orderDate,
+        receivedTime: editForm.receivedTime,
         deliveryDate: editForm.deliveryDate,
         deliveryTime: editForm.deliveryTime,
         deliveryLocation: editForm.deliveryLocation,
         contactType: editForm.contactType,
         supplySource: editForm.supplySource,
-      };
-
-      const payload = {
-        ...project,
-        orderDate: editForm.orderDate,
-        receivedTime: editForm.receivedTime,
-        details: updatedDetails,
       };
 
       const res = await fetch(`/api/projects/${id}`, {
