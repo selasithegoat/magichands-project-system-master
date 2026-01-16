@@ -180,7 +180,7 @@ const ProjectSummaryPDF = ({ formData }) => {
           <View style={styles.row}>
             <Text style={styles.label}>Assigned Lead:</Text>
             <Text style={styles.value}>
-              {formData.lead ? formData.lead.label : "Unassigned"}
+              {formData.leadLabel || "Unassigned"}
             </Text>
           </View>
         </View>

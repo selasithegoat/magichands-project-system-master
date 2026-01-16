@@ -118,7 +118,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
                 }}
               >
                 <UserAvatar />
-                <span style={{ color: "white" }}>
+                <span style={{ color: "var(--text-primary)" }}>
                   {formData.leadLabel ||
                     leads.find((l) => l.value === formData.lead)?.label ||
                     "Assigned Lead"}
