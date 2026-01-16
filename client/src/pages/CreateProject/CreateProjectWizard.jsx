@@ -97,6 +97,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             projectLead: data.projectLeadId,
             lead: data.projectLeadId, // Ensure mapped to ID for Select
             client: data.details?.client || "", // [NEW] Map client name
+            sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             // Step 2 & 3 & 4
             departments: data.departments || [],
             items: data.items || [],

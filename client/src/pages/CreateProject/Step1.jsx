@@ -211,6 +211,33 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
               onChange={() => handleChange("supplySource", "client-supply")}
             />
           </div>
+
+          {/* Reference Image */}
+          {formData.sampleImage && (
+            <div className="reference-section" style={{ marginTop: "1.5rem" }}>
+              <label className="section-label">Reference Material</label>
+              <div
+                style={{
+                  marginTop: "0.5rem",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "8px",
+                  padding: "0.5rem",
+                  background: "rgba(0,0,0,0.1)",
+                }}
+              >
+                <img
+                  src={`http://localhost:5000${formData.sampleImage}`}
+                  alt="Reference"
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "200px",
+                    objectFit: "contain",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

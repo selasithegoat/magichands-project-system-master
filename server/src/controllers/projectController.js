@@ -25,6 +25,8 @@ const createProject = async (req, res) => {
       productionRisks,
       projectLeadId, // [NEW] For Admin Assignment
       status, // [NEW] Allow explicit status setting (e.g. "Pending Scope Approval")
+      description, // [NEW]
+      details, // [NEW]
     } = req.body;
 
     // Basic validation
@@ -45,6 +47,13 @@ const createProject = async (req, res) => {
     // Helper to extract value if object
     const getValue = (field) => (field && field.value ? field.value : field);
 
+    // [NEW] Handle File Upload
+    let sampleImagePath = "";
+    if (req.file) {
+      // Store relative path
+      sampleImagePath = `/uploads/${req.file.filename}`;
+    }
+
     // Create project
     const project = new Project({
       orderId: finalOrderId,
@@ -59,9 +68,13 @@ const createProject = async (req, res) => {
         deliveryLocation,
         contactType: getValue(contactType),
         supplySource: getValue(supplySource),
+        sampleImage: sampleImagePath, // [NEW]
       },
       departments: departments || [],
-      items: items || [],
+      items:
+        items ||
+        (description ? [{ description, breakdown: details, qty: 1 }] : []), // [NEW] Map flat description to items
+      uncontrollableFactors: uncontrollableFactors || [],
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
       currentStep: status ? 1 : 2, // If assigned status provided, likely Step 1 needs completion. Else Step 2.
@@ -838,6 +851,8 @@ const updateProject = async (req, res) => {
       status,
       currentStep,
       projectLeadId,
+      description, // [NEW]
+      details, // [NEW]
     } = req.body;
 
     const project = await Project.findById(id);

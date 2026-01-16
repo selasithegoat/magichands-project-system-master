@@ -27,6 +27,8 @@ const {
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
+const upload = require("../middleware/upload"); // [NEW]
+
 router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
 router.get("/stats", protect, getUserStats);
@@ -66,7 +68,7 @@ router.patch("/:id/status", protect, updateProjectStatus);
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, deleteProject); // Delete Project
 router.put("/:id", protect, updateProject); // Full update (Step 1-5)
-router.post("/", protect, createProject);
+router.post("/", protect, upload.single("sampleImage"), createProject); // [NEW]
 router.get("/", protect, getProjects);
 
 module.exports = router;

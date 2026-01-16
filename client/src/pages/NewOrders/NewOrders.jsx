@@ -64,33 +64,30 @@ const NewOrders = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Construct payload matching Project Schema and Controller expectations
-    const payload = {
-      orderId: formData.orderNumber,
-      orderDate: formData.orderDate,
-      client: formData.clientName,
-      projectName: formData.projectName,
-      deliveryLocation: formData.deliveryLocation,
-      deliveryDate: formData.deliveryDate || null,
-      status: "New Order",
-      // Map description/details to initial Item
-      items: [
-        {
-          description: formData.description,
-          breakdown: formData.details,
-          qty: 1, // Default
-        },
-      ],
-    };
+    // Use FormData for file upload
+    const formPayload = new FormData();
+    formPayload.append("orderId", formData.orderNumber);
+    formPayload.append("orderDate", formData.orderDate);
+    formPayload.append("client", formData.clientName);
+    formPayload.append("projectName", formData.projectName);
+    formPayload.append("deliveryLocation", formData.deliveryLocation);
+    formPayload.append("deliveryDate", formData.deliveryDate || "");
+    formPayload.append("status", "New Order");
+
+    // Map description and details for controller to put into items[]
+    formPayload.append("description", formData.description);
+    formPayload.append("details", formData.details);
+
+    if (selectedImage) {
+      formPayload.append("sampleImage", selectedImage);
+    }
 
     try {
       const res = await fetch("/api/projects", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // Important for auth
-        body: JSON.stringify(payload),
+        // Content-Type header excluded to let browser set boundary
+        credentials: "include",
+        body: formPayload,
       });
 
       if (res.ok) {

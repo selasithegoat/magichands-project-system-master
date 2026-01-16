@@ -41,6 +41,9 @@ const ProjectSchema = new mongoose.Schema(
         type: String,
         enum: ["in-house", "purchase", "client-supply"],
       },
+      sampleImage: {
+        type: String, // Path to the uploaded image
+      },
     },
     departments: [String], // Step 2: List of department IDs
     items: [

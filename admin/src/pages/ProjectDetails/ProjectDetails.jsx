@@ -578,6 +578,41 @@ const ProjectDetails = () => {
               </div>
             </div>
 
+            {/* Reference Material / Image */}
+            {details.sampleImage && (
+              <div className="detail-card">
+                <h3 className="card-title">Reference Material</h3>
+                <div style={{ marginTop: "1rem" }}>
+                  <img
+                    src={`http://localhost:5000${details.sampleImage}`}
+                    alt="Project Reference"
+                    style={{
+                      maxWidth: "100%",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border-color)",
+                      maxHeight: "300px",
+                      objectFit: "contain",
+                      background: "rgba(0,0,0,0.2)",
+                    }}
+                  />
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <a
+                      href={`http://localhost:5000${details.sampleImage}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#6366f1",
+                        fontSize: "0.9rem",
+                        textDecoration: "none",
+                      }}
+                    >
+                      View Full Size
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Order Items */}
             <div className="detail-card">
               <h3 className="card-title">
