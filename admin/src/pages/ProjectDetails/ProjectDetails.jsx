@@ -14,6 +14,35 @@ const ProjectDetails = () => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Status handling
+  const handleStatusChange = async (newStatus) => {
+    if (!project) return;
+    const oldStatus = project.status;
+
+    // Optimistic update
+    setProject({ ...project, status: newStatus });
+
+    try {
+      const res = await fetch(`/api/projects/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update status");
+      }
+
+      const updatedProject = await res.json();
+      setProject(updatedProject);
+    } catch (err) {
+      console.error("Error updating status:", err);
+      // Revert on error
+      setProject({ ...project, status: oldStatus });
+      alert("Failed to update status");
+    }
+  };
+
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
@@ -214,13 +243,44 @@ const ProjectDetails = () => {
           <div className="header-left">
             <h1>
               {project.orderId || "Order #..."}
-              <span
-                className={`status-badge ${project.status
+              <select
+                className={`status-badge-select ${project.status
                   ?.toLowerCase()
                   .replace(" ", "-")}`}
+                value={project.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={loading}
+                style={{
+                  marginLeft: "1rem",
+                  padding: "0.25rem 0.5rem",
+                  borderRadius: "999px",
+                  border: "1px solid transparent",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  backgroundColor: "rgba(255, 255, 255, 0.2)", // Translucent background
+                  color: "inherit",
+                }}
               >
-                {project.status}
-              </span>
+                {[
+                  "Order Confirmed",
+                  "Pending Scope Approval",
+                  "Pending Mockup",
+                  "Pending Production",
+                  "Pending Packaging",
+                  "Pending Delivery/Pickup",
+                  "Delivered",
+                  "Completed",
+                ].map((status) => (
+                  <option
+                    key={status}
+                    value={status}
+                    style={{ color: "#1e293b" }}
+                  >
+                    {status}
+                  </option>
+                ))}
+              </select>
             </h1>
             <p>{details.projectName}</p>
           </div>

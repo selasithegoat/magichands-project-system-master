@@ -88,50 +88,8 @@ const ProjectDetail = ({ onProjectChange, user }) => {
     if (id) fetchProject();
   }, [id]);
 
-  const [advancing, setAdvancing] = useState(false);
-  const [toast, setToast] = useState(null); // Lift toast state up or use context/global ref later? For now, re-using card pattern inside here is tricky unless we move toast up.
-  // Actually, OrderItemsCard has its own toast. Let's add a global toast state for ProjectDetail if needed, or just let the button handle it.
-  // Wait, I see OrderItemsCard uses a local toast. I should lift it up properly or create a separate one for the main page.
-  // For simplicity since I just refactored render props, I'll add a separate toast/portal here or just use a simple state.
-  // To avoid duplication, I'll add a `pageToast` state.
-  const [pageToast, setPageToast] = useState(null);
-
-  const handleAdvanceStatus = async () => {
-    if (!project) return;
-    const currentIndex = STATUS_FLOW.indexOf(project.status);
-    if (currentIndex === -1 && project.status !== STATUS_FLOW[0]) {
-      // If unknown status, maybe start at beginning?
-    }
-
-    if (currentIndex >= STATUS_FLOW.length - 1) return; // Already at end
-
-    const nextStatus = STATUS_FLOW[currentIndex + 1] || STATUS_FLOW[0];
-
-    setAdvancing(true);
-    try {
-      const res = await fetch(`/api/projects/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-
-      if (res.ok) {
-        setPageToast({
-          message: `Status updated to ${nextStatus}`,
-          type: "success",
-        });
-        fetchProject();
-        if (onProjectChange) onProjectChange(); // Refresh global count
-      } else {
-        setPageToast({ message: "Failed to update status", type: "error" });
-      }
-    } catch (err) {
-      console.error(err);
-      setPageToast({ message: "Server error", type: "error" });
-    } finally {
-      setAdvancing(false);
-    }
-  };
+  // Status update logic removed - Admin only feature now.
+  // const [advancing, setAdvancing] = useState(false);
 
   if (loading)
     return (
@@ -163,50 +121,12 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               <span className="status-badge">
                 <ClockIcon width="14" height="14" /> {project.status}
               </span>
-              {project.status !== "Completed" && (
-                <button
-                  onClick={handleAdvanceStatus}
-                  disabled={advancing || project.status === "Delivered"}
-                  style={{
-                    marginLeft: "12px",
-                    padding: "4px 12px",
-                    fontSize: "0.75rem",
-                    background: "#e0f2fe",
-                    color: "#0369a1",
-                    border: "none",
-                    borderRadius: "20px",
-                    cursor:
-                      project.status === "Delivered" ? "default" : "pointer",
-                    opacity: project.status === "Delivered" ? 0.5 : 1,
-                    fontWeight: 600,
-                  }}
-                >
-                  {advancing
-                    ? "..."
-                    : project.status === "Delivered"
-                    ? "Ready to Finish"
-                    : "Next Step →"}
-                </button>
-              )}
             </h1>
           </div>
           <button className="edit-link" onClick={() => console.log("Edit")}>
             Edit
           </button>
         </div>
-
-        {/* Page Level Toast */}
-        {pageToast &&
-          createPortal(
-            <div className="ui-toast-container">
-              <Toast
-                message={pageToast.message}
-                type={pageToast.type}
-                onClose={() => setPageToast(null)}
-              />
-            </div>,
-            document.body
-          )}
 
         <div className="project-subtitle">{project.details?.projectName}</div>
         <nav className="header-nav">

@@ -308,9 +308,16 @@ const updateProjectDepartments = async (req, res) => {
 
 // @desc    Update project status
 // @route   PATCH /api/projects/:id/status
-// @access  Private
+// @access  Private (Admin only)
 const updateProjectStatus = async (req, res) => {
   try {
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Not authorized. Only admins can update status." });
+    }
+
     const { status } = req.body;
     const project = await Project.findById(req.params.id);
 
