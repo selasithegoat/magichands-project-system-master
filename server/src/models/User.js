@@ -28,7 +28,7 @@ const UserSchema = new mongoose.Schema({
   },
 
   department: {
-    type: String,
+    type: [String], // Array of strings
     enum: [
       "Administration",
       "Front Desk",
@@ -37,6 +37,7 @@ const UserSchema = new mongoose.Schema({
       "Photography",
       "Stores",
     ],
+    default: [],
   },
   position: {
     type: String,

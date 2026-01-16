@@ -38,6 +38,9 @@ const registerEmployee = async (req, res) => {
         .json({ message: "User with this ID already exists" });
     }
 
+    // Ensure department is an array
+    const deptArray = Array.isArray(department) ? department : [department];
+
     const user = await User.create({
       firstName,
       lastName,
@@ -45,7 +48,7 @@ const registerEmployee = async (req, res) => {
       employeeId,
       password, // Pre-save hook will hash this
       email,
-      department,
+      department: deptArray,
       position,
       employeeType,
       role: "user", // Default to user
@@ -58,6 +61,7 @@ const registerEmployee = async (req, res) => {
         employeeId: user.employeeId,
         department: user.department,
         position: user.position,
+        employeeType: user.employeeType,
       });
     } else {
       res.status(400).json({ message: "Invalid user data" });
@@ -79,6 +83,64 @@ const getAllEmployees = async (req, res) => {
     res.json(users);
   } catch (error) {
     console.error("Error fetching employees:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update employee details
+// @route   PUT /api/admin/employees/:id
+// @access  Private/Admin
+const updateEmployee = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.firstName = req.body.firstName || user.firstName;
+    user.lastName = req.body.lastName || user.lastName;
+    user.name = `${user.firstName} ${user.lastName}`;
+    user.email = req.body.email || user.email;
+    user.employeeId = req.body.employeeId || user.employeeId;
+    user.position = req.body.position || user.position;
+    user.employeeType = req.body.employeeType || user.employeeType;
+
+    if (req.body.department) {
+      user.department = Array.isArray(req.body.department)
+        ? req.body.department
+        : [req.body.department];
+    }
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      employeeId: updatedUser.employeeId,
+      department: updatedUser.department,
+      position: updatedUser.position,
+      employeeType: updatedUser.employeeType,
+    });
+  } catch (error) {
+    console.error("Error updating employee:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Delete employee
+// @route   DELETE /api/admin/employees/:id
+// @access  Private/Admin
+const deleteEmployee = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await user.deleteOne();
+    res.json({ message: "User removed" });
+  } catch (error) {
+    console.error("Error deleting employee:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -106,4 +168,10 @@ const updateEmployeePassword = async (req, res) => {
   }
 };
 
-module.exports = { registerEmployee, getAllEmployees, updateEmployeePassword };
+module.exports = {
+  registerEmployee,
+  getAllEmployees,
+  updateEmployee,
+  deleteEmployee,
+  updateEmployeePassword,
+};
