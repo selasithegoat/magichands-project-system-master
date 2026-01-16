@@ -49,16 +49,89 @@ const NewOrders = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  // Toast State
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ ...toast, show: false }), 3000);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Handle form submission (API call)
-    console.log("Form Data:", formData);
-    console.log("Image:", selectedImage);
-    alert("Order submitted successfully! (Mock)");
+
+    // Construct payload matching Project Schema and Controller expectations
+    const payload = {
+      orderId: formData.orderNumber,
+      orderDate: formData.orderDate,
+      client: formData.clientName,
+      projectName: formData.projectName,
+      deliveryLocation: formData.deliveryLocation,
+      deliveryDate: formData.deliveryDate || null,
+      status: "New Order",
+      // Map description/details to initial Item
+      items: [
+        {
+          description: formData.description,
+          breakdown: formData.details,
+          qty: 1, // Default
+        },
+      ],
+    };
+
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Important for auth
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        showToast("Order submitted successfully!", "success");
+        // Reset form
+        setFormData({
+          orderNumber: `ORD-${Date.now().toString().slice(-6)}`, // Regen ID
+          clientName: "",
+          deliveryLocation: "",
+          projectName: "",
+          description: "",
+          details: "",
+          orderDate: new Date().toISOString().slice(0, 16),
+          deliveryDate: "",
+        });
+        setSelectedImage(null);
+        setPreviewUrl(null);
+      } else {
+        const errorData = await res.json();
+        showToast(`Error: ${errorData.message || "Failed to submit"}`, "error");
+      }
+    } catch (error) {
+      console.error("Submission error:", error);
+      showToast("Network error. Please try again.", "error");
+    }
   };
 
   return (
     <div className="new-orders-container">
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`toast-message ${toast.type}`}>
+          {toast.type === "success" ? (
+            <span>&#10003;</span>
+          ) : (
+            <span>&#9888;</span>
+          )}
+          {toast.message}
+        </div>
+      )}
+
       <div className="page-header">
         <h1>New Order Entry</h1>
         <p className="subtitle">Record details for incoming client orders</p>

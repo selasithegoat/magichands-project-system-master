@@ -101,6 +101,7 @@ const ProjectSchema = new mongoose.Schema(
         "Completed",
         "On Hold",
         // New Workflow Statuses
+        "New Order", // [New]
         "Order Confirmed",
         "Pending Scope Approval",
         "Pending Mockup",

@@ -131,7 +131,63 @@ const ProjectDetails = () => {
 
     fetchProject();
     fetchUpdates();
+
+    // Fetch users for Lead Edit
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/auth/users");
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableUsers(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch users", err);
+      }
+    };
+    fetchUsers();
   }, [id]);
+
+  // Lead Edit State
+  const [isEditingLead, setIsEditingLead] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [leadForm, setLeadForm] = useState("");
+
+  // Sync leadForm when project loads
+  useEffect(() => {
+    if (project) {
+      setLeadForm(project.projectLeadId?._id || project.projectLeadId || "");
+    }
+  }, [project]);
+
+  const handleSaveLead = async () => {
+    try {
+      // Find selected user object for optimistic update (optional but good)
+      const selectedUser = availableUsers.find((u) => u._id === leadForm);
+      const leadLabel = selectedUser
+        ? `${selectedUser.firstName} ${selectedUser.lastName}`
+        : "";
+
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectLeadId: leadForm,
+          lead: leadLabel, // Also update duplicate lead name in details if needed
+        }),
+      });
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setProject(updatedProject);
+        setIsEditingLead(false);
+      } else {
+        alert("Failed to update Project Lead");
+      }
+    } catch (error) {
+      console.error("Error updating lead:", error);
+      alert("Error updating lead");
+    }
+  };
 
   const handleEditToggle = () => {
     if (!project) return;
@@ -758,14 +814,83 @@ const ProjectDetails = () => {
           {/* Right Column */}
           <div className="side-info">
             <div className="detail-card">
-              <h3 className="card-title">People & Departments</h3>
+              <h3
+                className="card-title"
+                style={{ justifyContent: "space-between" }}
+              >
+                <span>People & Departments</span>
+                {!isEditingLead ? (
+                  <button
+                    onClick={() => setIsEditingLead(true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                    }}
+                    title="Edit Lead"
+                  >
+                    <PencilIcon width="18" height="18" />
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      onClick={handleSaveLead}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#22c55e",
+                        cursor: "pointer",
+                      }}
+                      title="Save"
+                    >
+                      <CheckCircleIcon width="20" height="20" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingLead(false);
+                        setLeadForm(
+                          project.projectLeadId?._id ||
+                            project.projectLeadId ||
+                            ""
+                        );
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                      }}
+                      title="Cancel"
+                    >
+                      <XMarkIcon width="20" height="20" />
+                    </button>
+                  </div>
+                )}
+              </h3>
               <div className="info-item" style={{ marginBottom: "1.5rem" }}>
                 <label>Project Lead</label>
-                <p>
-                  {project.projectLeadId
-                    ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                    : details.lead || "Unassigned"}
-                </p>
+                {isEditingLead ? (
+                  <select
+                    className="edit-input" // Reuse existing class for styling
+                    value={leadForm}
+                    onChange={(e) => setLeadForm(e.target.value)}
+                    style={{ width: "100%", padding: "0.5rem" }}
+                  >
+                    <option value="">Select a Lead</option>
+                    {availableUsers.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.firstName} {u.lastName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p>
+                    {project.projectLeadId
+                      ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+                      : details.lead || "Unassigned"}
+                  </p>
+                )}
               </div>
 
               <div className="info-item">

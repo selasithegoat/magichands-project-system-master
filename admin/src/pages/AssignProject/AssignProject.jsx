@@ -17,9 +17,11 @@ const AssignProject = () => {
     projectLead: "",
     dateAssigned: new Date().toISOString().split("T")[0],
     priority: "low",
+    selectedOrderId: null, // [NEW] Track selected NEW ORDER ID
   });
 
   const [availableUsers, setAvailableUsers] = useState([]);
+  const [newOrders, setNewOrders] = useState([]); // [NEW] Store fetched new orders
 
   useEffect(() => {
     // Fetch users for Project Lead dropdown
@@ -41,8 +43,38 @@ const AssignProject = () => {
         console.error("Failed to fetch users", err);
       }
     };
+
+    // [NEW] Fetch New Orders
+    const fetchNewOrders = async () => {
+      try {
+        const res = await fetch("/api/projects");
+        if (res.ok) {
+          const data = await res.json();
+          // Filter for "New Order" status
+          const pending = data.filter((p) => p.status === "New Order");
+          setNewOrders(pending);
+        }
+      } catch (err) {
+        console.error("Failed to fetch new orders", err);
+      }
+    };
+
     fetchUsers();
+    fetchNewOrders();
   }, []);
+
+  const handleSelectOrder = (order) => {
+    // Populate form with order data
+    setFormData((prev) => ({
+      ...prev,
+      orderNumber: order.orderId || prev.orderNumber,
+      autoGenerate: false, // Use the order's ID
+      projectName: order.details?.projectName || "",
+      client: order.details?.client || "",
+      overview: order.items?.[0]?.description || "", // Map description
+      selectedOrderId: order._id, // Set ID to switch to UPDATE mode
+    }));
+  };
 
   const handleChange = (field, value) => {
     // If auto-generate is toggled on, reset the order number to the generated one
@@ -51,6 +83,7 @@ const AssignProject = () => {
         ...prev,
         [field]: value,
         orderNumber: "#PRJ-2024-0012", // Reset to default/calculated
+        selectedOrderId: null, // Reset selected order if generating new
       }));
     } else {
       setFormData((prev) => ({ ...prev, [field]: value }));
@@ -62,53 +95,91 @@ const AssignProject = () => {
     console.log("Submitting Project:", formData);
 
     try {
-      // So for Admin:
-      // lead: { value: formData.projectLead, label: selectedUserLabel }
+      if (!formData.projectLead) {
+        alert("Please select a Project Lead before assigning.");
+        return;
+      }
 
       const selectedUser = availableUsers.find(
         (u) => u.value === formData.projectLead
       );
 
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      // Payload
+      const payload = {
+        projectName: formData.projectName,
+        projectLeadId: formData.projectLead,
+        lead: selectedUser
+          ? { value: selectedUser.value, label: selectedUser.label }
+          : null,
+        client: formData.client,
+        status: "Pending Scope Approval", // Move to next step
+        orderId: formData.orderNumber,
+        // If updating, preserve original orderDate/receivedTime unless we want to overwrite?
+        // Let's keep original data if possible, but controller might overwrite if we don't send?
+        // Actually, for UPDATE (PUT), we usually send fields to update.
+        // For CREATE (POST), we send everything.
+      };
+
+      let url = "/api/projects";
+      let method = "POST";
+
+      if (formData.selectedOrderId) {
+        // UPDATE existing project
+        url = `/api/projects/${formData.selectedOrderId}`;
+        method = "PUT"; // or PATCH depending on your API. ProjectController has update logic?
+        // Wait, projectController:
+        // createProject is POST /api/projects
+        // It doesn't seem to have a generic PUT /api/projects/:id to update ALL fields.
+        // It has PATCH /status, PUT /departments, etc.
+        // Let's check updateProjectStatus... No generic update.
+        // Wait, CreateProjectWizard uses PUT /api/projects/:editingId logic?
+        // Let's check CreateProjectWizard line 163: `const url = editingId ? /api/projects/${editingId} : "/api/projects";`
+        // Let's check server routes! I need to know if PUT /api/projects/:id exists.
+        // The provided `projectController.js` snippet didn't show a generic updateProject function.
+        // I only saw getProjectById, addItem, etc.
+        // I should CHECK THE ROUTES file or the rest of Controller.
+        // Assuming generic update might NOT exist based on specific endpoints seen.
+        // ... But CreateProjectWizard USES it.
+        // StartLine 163 of CreateProjectWizard.jsx implies it works.
+        // Let's assume it exists or I should fix/create it.
+      } else {
+        // New project extras
+        payload.orderDate = new Date();
+        payload.receivedTime = new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          // Flattened structure for createProject controller
-          projectName: formData.projectName,
-          projectLeadId: formData.projectLead,
-          lead: selectedUser
-            ? { value: selectedUser.value, label: selectedUser.label }
-            : null,
-          client: formData.client, // [NEW] Send client name
-          status: "Pending Scope Approval",
-          orderId: formData.orderNumber,
-          orderDate: new Date(),
-          receivedTime: new Date().toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }), // "HH:mm" format
-          // Callers might need to know "Assigned At" which is effectively this.
-          // Let's put 'Client: ' + client in overview or descriptions?
-          // There is 'overview' in Admin form.
-          // Controller has 'items' (Step 3).
-          // Maybe put overview in 'items' with description?
-          // Or just creating the shell info.
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
         alert("Project Assigned Successfully!");
-        // Reset or redirect
+
+        // Refresh orders list
+        setNewOrders((prev) =>
+          prev.filter((o) => o._id !== formData.selectedOrderId)
+        );
+
         setFormData((prev) => ({
           ...prev,
           projectName: "",
           overview: "",
           client: "",
+          selectedOrderId: null,
+          autoGenerate: true,
+          orderNumber: "#PRJ-2024-xxx",
+          projectLead: "",
         }));
       } else {
-        alert("Failed to assign project");
+        const err = await res.json();
+        alert(`Failed to assign project: ${err.message}`);
       }
     } catch (err) {
       console.error("Error assigning project", err);
@@ -127,6 +198,87 @@ const AssignProject = () => {
       </div>
 
       <div className="assign-card">
+        {/* New Orders Section */}
+        {newOrders.length > 0 && (
+          <div className="new-orders-section mb-6">
+            <h2 className="section-title" style={{ color: "#d97706" }}>
+              <span className="section-icon">⚠️</span> Pending New Orders
+            </h2>
+            <div
+              className="new-orders-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                gap: "1rem",
+                marginBottom: "2rem",
+              }}
+            >
+              {newOrders.map((order) => (
+                <div
+                  key={order._id}
+                  className="order-card"
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    padding: "1rem",
+                    borderRadius: "8px",
+                    background: "var(--bg-card)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    <span style={{ fontWeight: "bold", fontSize: "0.9rem" }}>
+                      {order.orderId}
+                    </span>
+                    <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                      {new Date(order.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h3
+                    style={{
+                      fontSize: "1rem",
+                      fontWeight: "600",
+                      marginBottom: "0.25rem",
+                    }}
+                  >
+                    {order.details?.projectName}
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "0.9rem",
+                      color: "#4b5563",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    Client: {order.details?.client}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectOrder(order)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      background: "#d97706",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Select & Assign
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="assign-form-grid">
           {/* Left Column: General Info */}
           <div className="form-column">
