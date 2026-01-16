@@ -97,7 +97,14 @@ const createProject = async (req, res) => {
 // @access  Private
 const getProjects = async (req, res) => {
   try {
-    const projects = await Project.find({})
+    let query = {};
+
+    // If user is not an admin, they only see projects where they are the assigned Lead
+    if (req.user.role !== "admin") {
+      query = { projectLeadId: req.user._id };
+    }
+
+    const projects = await Project.find(query)
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName")
       .sort({ createdAt: -1 });
@@ -115,12 +122,14 @@ const getUserStats = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Count all projects created by user
-    const totalProjects = await Project.countDocuments({ createdBy: userId });
+    // Count all projects where user is the Lead
+    const totalProjects = await Project.countDocuments({
+      projectLeadId: userId,
+    });
 
-    // Count completed projects
+    // Count completed projects where user is the Lead
     const completedProjects = await Project.countDocuments({
-      createdBy: userId,
+      projectLeadId: userId,
       status: "Completed",
     });
 
@@ -148,6 +157,18 @@ const getProjectById = async (req, res) => {
       .populate("projectLeadId", "firstName lastName");
 
     if (project) {
+      // Access Check: Admin OR Project Lead
+      const isLead =
+        project.projectLeadId &&
+        (project.projectLeadId._id.toString() === req.user._id.toString() ||
+          project.projectLeadId.toString() === req.user._id.toString());
+
+      if (req.user.role !== "admin" && !isLead) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to view this project" });
+      }
+
       res.json(project);
     } else {
       res.status(404).json({ message: "Project not found" });
