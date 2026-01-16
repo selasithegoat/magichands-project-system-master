@@ -230,6 +230,18 @@ const ProjectDetails = () => {
     return `${new Date(dateBase).toLocaleDateString()} at ${time}`;
   };
 
+  const formatLastUpdated = (dateString) => {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  };
+
   const details = project.details || {};
 
   return (
@@ -295,7 +307,22 @@ const ProjectDetails = () => {
                 className="card-title"
                 style={{ justifyContent: "space-between" }}
               >
-                General Information
+                <span>
+                  General Information
+                  {project.sectionUpdates?.details && (
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--text-secondary)",
+                        fontWeight: "normal",
+                        marginLeft: "0.75rem",
+                      }}
+                    >
+                      (Last Updated:{" "}
+                      {formatLastUpdated(project.sectionUpdates.details)})
+                    </span>
+                  )}
+                </span>
                 {!isEditing ? (
                   <button
                     onClick={handleEditToggle}
@@ -456,7 +483,24 @@ const ProjectDetails = () => {
 
             {/* Order Items */}
             <div className="detail-card">
-              <h3 className="card-title">Order Items</h3>
+              <h3 className="card-title">
+                <span>
+                  Order Items
+                  {project.sectionUpdates?.items && (
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--text-secondary)",
+                        fontWeight: "normal",
+                        marginLeft: "0.75rem",
+                      }}
+                    >
+                      (Last Updated:{" "}
+                      {formatLastUpdated(project.sectionUpdates.items)})
+                    </span>
+                  )}
+                </span>
+              </h3>
               {project.items && project.items.length > 0 ? (
                 <table className="items-table">
                   <thead>
@@ -486,7 +530,24 @@ const ProjectDetails = () => {
             {/* Challenges (if any) */}
             {project.challenges && project.challenges.length > 0 && (
               <div className="detail-card">
-                <h3 className="card-title">Project Challenges</h3>
+                <h3 className="card-title">
+                  <span>
+                    Project Challenges
+                    {project.sectionUpdates?.challenges && (
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "var(--text-secondary)",
+                          fontWeight: "normal",
+                          marginLeft: "0.75rem",
+                        }}
+                      >
+                        (Last Updated:{" "}
+                        {formatLastUpdated(project.sectionUpdates.challenges)})
+                      </span>
+                    )}
+                  </span>
+                </h3>
                 <div
                   style={{
                     display: "flex",
@@ -534,7 +595,25 @@ const ProjectDetails = () => {
               </div>
 
               <div className="info-item">
-                <label>Engaged Departments</label>
+                <label>
+                  Engaged Departments
+                  {project.sectionUpdates?.departments && (
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--text-secondary)",
+                        fontWeight: "normal",
+                        marginTop: "0.25rem",
+                        marginBottom: "0.5rem",
+                        textTransform: "none",
+                        letterSpacing: 0,
+                      }}
+                    >
+                      Updated:{" "}
+                      {formatLastUpdated(project.sectionUpdates.departments)}
+                    </div>
+                  )}
+                </label>
                 <div style={{ marginTop: "0.5rem" }}>
                   {project.departments && project.departments.length > 0 ? (
                     project.departments.map((dept, i) => (
@@ -571,6 +650,21 @@ const ProjectDetails = () => {
                       }}
                     >
                       Uncontrollable Factors
+                      {project.sectionUpdates?.uncontrollableFactors && (
+                        <span
+                          style={{
+                            fontWeight: "normal",
+                            marginLeft: "0.5rem",
+                            opacity: 0.8,
+                          }}
+                        >
+                          (
+                          {formatLastUpdated(
+                            project.sectionUpdates.uncontrollableFactors
+                          )}
+                          )
+                        </span>
+                      )}
                     </label>
                     <ul
                       style={{
@@ -596,6 +690,21 @@ const ProjectDetails = () => {
                       }}
                     >
                       Production Risks
+                      {project.sectionUpdates?.productionRisks && (
+                        <span
+                          style={{
+                            fontWeight: "normal",
+                            marginLeft: "0.5rem",
+                            opacity: 0.8,
+                          }}
+                        >
+                          (
+                          {formatLastUpdated(
+                            project.sectionUpdates.productionRisks
+                          )}
+                          )
+                        </span>
+                      )}
                     </label>
                     <ul
                       style={{

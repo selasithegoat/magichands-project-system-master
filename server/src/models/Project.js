@@ -124,6 +124,15 @@ const ProjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // Track last update time for specific sections
+    sectionUpdates: {
+      details: Date,
+      items: Date,
+      departments: Date,
+      uncontrollableFactors: Date,
+      productionRisks: Date,
+      challenges: Date,
+    },
   },
   { timestamps: true }
 );

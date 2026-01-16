@@ -189,6 +189,8 @@ const addItemToProject = async (req, res) => {
     };
 
     project.items.push(newItem);
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.items = new Date();
     await project.save();
 
     await logActivity(
@@ -221,6 +223,7 @@ const updateItemInProject = async (req, res) => {
           "items.$.description": description,
           "items.$.breakdown": breakdown,
           "items.$.qty": Number(qty),
+          "sectionUpdates.items": new Date(),
         },
       },
       { new: true, runValidators: false }
@@ -260,6 +263,8 @@ const deleteItemFromProject = async (req, res) => {
 
     // Pull item from array
     project.items.pull({ _id: itemId });
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.items = new Date();
     await project.save();
 
     await logActivity(id, req.user.id, "item_delete", `Deleted order item`, {
@@ -283,7 +288,7 @@ const updateProjectDepartments = async (req, res) => {
 
     const project = await Project.findByIdAndUpdate(
       id,
-      { departments },
+      { departments, "sectionUpdates.departments": new Date() },
       { new: true }
     );
 
@@ -373,12 +378,13 @@ const addChallengeToProject = async (req, res) => {
       resolvedDate: status === "Resolved" ? new Date().toLocaleString() : "--",
     };
 
-    // Use findByIdAndUpdate to avoid validation errors on other fields (like existing invalid status)
-    // and to automatically handle creating the array if it doesn't exist via $push
     const updatedProject = await Project.findByIdAndUpdate(
       req.params.id,
-      { $push: { challenges: newChallenge } },
-      { new: true, runValidators: false } // runValidators: false helps if current doc has issues, but we constructed newChallenge manually so it's safe-ish
+      {
+        $push: { challenges: newChallenge },
+        "sectionUpdates.challenges": new Date(),
+      },
+      { new: true, runValidators: false }
     );
 
     if (!updatedProject) {
@@ -403,9 +409,6 @@ const addChallengeToProject = async (req, res) => {
 // @desc    Update challenge status
 // @route   PATCH /api/projects/:id/challenges/:challengeId/status
 // @access  Private
-// @desc    Update challenge status
-// @route   PATCH /api/projects/:id/challenges/:challengeId/status
-// @access  Private
 const updateChallengeStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -413,19 +416,15 @@ const updateChallengeStatus = async (req, res) => {
 
     let updateFields = {
       "challenges.$.status": status,
+      "sectionUpdates.challenges": new Date(),
     };
 
     if (status === "Resolved") {
       updateFields["challenges.$.resolvedDate"] = new Date().toLocaleString();
     } else {
-      // We can't easily check the current value here without a fetch,
-      // implies blind update or we accept we might overwrite "--" with "--".
-      // It's safer to just set it to "--" if not Resolved.
       updateFields["challenges.$.resolvedDate"] = "--";
     }
 
-    // Use findOneAndUpdate to target the specific challenge subdocument
-    // and bypass document-level validation
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id, "challenges._id": challengeId },
       { $set: updateFields },
@@ -460,11 +459,12 @@ const deleteChallenge = async (req, res) => {
   try {
     const { id, challengeId } = req.params;
 
-    // Use findOneAndUpdate to remove the challenge from the array
-    // using $pull operator
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id },
-      { $pull: { challenges: { _id: challengeId } } },
+      {
+        $pull: { challenges: { _id: challengeId } },
+        "sectionUpdates.challenges": new Date(),
+      },
       { new: true, runValidators: false }
     );
 
@@ -518,7 +518,10 @@ const addProductionRisk = async (req, res) => {
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
-      { $push: { productionRisks: newRisk } },
+      {
+        $push: { productionRisks: newRisk },
+        "sectionUpdates.productionRisks": new Date(),
+      },
       { new: true, runValidators: false }
     );
 
@@ -555,6 +558,7 @@ const updateProductionRisk = async (req, res) => {
         $set: {
           "productionRisks.$.description": description,
           "productionRisks.$.preventive": preventive,
+          "sectionUpdates.productionRisks": new Date(),
         },
       },
       { new: true, runValidators: false }
@@ -588,7 +592,10 @@ const deleteProductionRisk = async (req, res) => {
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
-      { $pull: { productionRisks: { _id: riskId } } },
+      {
+        $pull: { productionRisks: { _id: riskId } },
+        "sectionUpdates.productionRisks": new Date(),
+      },
       { new: true, runValidators: false }
     );
 
@@ -627,7 +634,10 @@ const addUncontrollableFactor = async (req, res) => {
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
-      { $push: { uncontrollableFactors: newFactor } },
+      {
+        $push: { uncontrollableFactors: newFactor },
+        "sectionUpdates.uncontrollableFactors": new Date(),
+      },
       { new: true, runValidators: false }
     );
 
@@ -665,6 +675,7 @@ const updateUncontrollableFactor = async (req, res) => {
           "uncontrollableFactors.$.description": description,
           "uncontrollableFactors.$.responsible": responsible,
           "uncontrollableFactors.$.status": status,
+          "sectionUpdates.uncontrollableFactors": new Date(),
         },
       },
       { new: true, runValidators: false }
@@ -698,7 +709,10 @@ const deleteUncontrollableFactor = async (req, res) => {
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
-      { $pull: { uncontrollableFactors: { _id: factorId } } },
+      {
+        $pull: { uncontrollableFactors: { _id: factorId } },
+        "sectionUpdates.uncontrollableFactors": new Date(),
+      },
       { new: true, runValidators: false }
     );
 
@@ -828,28 +842,82 @@ const updateProject = async (req, res) => {
       status: project.status,
     };
 
+    // Track if details changed for sectionUpdates
+    let detailsChanged = false;
+
     // Update Top Level
     if (orderId) project.orderId = orderId;
-    if (orderDate) project.orderDate = orderDate;
-    if (receivedTime) project.receivedTime = getValue(receivedTime);
-    if (projectLeadId) project.projectLeadId = projectLeadId;
+    if (orderDate) {
+      project.orderDate = orderDate;
+      detailsChanged = true;
+    }
+    if (receivedTime) {
+      project.receivedTime = getValue(receivedTime);
+      detailsChanged = true;
+    }
+    if (projectLeadId) {
+      project.projectLeadId = projectLeadId;
+      detailsChanged = true;
+    }
 
     // Update Details
-    if (lead) project.details.lead = lead?.label || lead?.value || lead;
-    if (client) project.details.client = client; // Client is string now usually
-    if (projectName) project.details.projectName = projectName;
-    if (deliveryDate) project.details.deliveryDate = deliveryDate;
-    if (deliveryTime) project.details.deliveryTime = getValue(deliveryTime);
-    if (deliveryLocation) project.details.deliveryLocation = deliveryLocation;
-    if (contactType) project.details.contactType = getValue(contactType);
-    if (supplySource) project.details.supplySource = getValue(supplySource);
+    if (lead) {
+      project.details.lead = lead?.label || lead?.value || lead;
+      detailsChanged = true;
+    }
+    if (client) {
+      project.details.client = client;
+      detailsChanged = true;
+    }
+    if (projectName) {
+      project.details.projectName = projectName;
+      detailsChanged = true;
+    }
+    if (deliveryDate) {
+      project.details.deliveryDate = deliveryDate;
+      detailsChanged = true;
+    }
+    if (deliveryTime) {
+      project.details.deliveryTime = getValue(deliveryTime);
+      detailsChanged = true;
+    }
+    if (deliveryLocation) {
+      project.details.deliveryLocation = deliveryLocation;
+      detailsChanged = true;
+    }
+    if (contactType) {
+      project.details.contactType = getValue(contactType);
+      detailsChanged = true;
+    }
+    if (supplySource) {
+      project.details.supplySource = getValue(supplySource);
+      detailsChanged = true;
+    }
 
-    // Update Arrays
-    if (departments) project.departments = departments;
-    if (items) project.items = items;
-    if (uncontrollableFactors)
+    // Initialize sectionUpdates if not exists
+    project.sectionUpdates = project.sectionUpdates || {};
+
+    if (detailsChanged) {
+      project.sectionUpdates.details = new Date();
+    }
+
+    // Update Arrays and their timestamps
+    if (departments) {
+      project.departments = departments;
+      project.sectionUpdates.departments = new Date();
+    }
+    if (items) {
+      project.items = items;
+      project.sectionUpdates.items = new Date();
+    }
+    if (uncontrollableFactors) {
       project.uncontrollableFactors = uncontrollableFactors;
-    if (productionRisks) project.productionRisks = productionRisks;
+      project.sectionUpdates.uncontrollableFactors = new Date();
+    }
+    if (productionRisks) {
+      project.productionRisks = productionRisks;
+      project.sectionUpdates.productionRisks = new Date();
+    }
 
     if (currentStep) project.currentStep = currentStep;
     if (status) project.status = status;
