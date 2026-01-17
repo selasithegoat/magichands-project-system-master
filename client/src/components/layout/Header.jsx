@@ -11,6 +11,7 @@ const Header = ({
   onNavigateHistory,
   onNavigateProfile,
   onNavigateNewOrders, // [New]
+  onNavigateEndOfDay, // [New]
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
@@ -81,18 +82,35 @@ const Header = ({
             History
           </a>
           {user?.department?.includes("Front Desk") && (
-            <a
-              href="#"
-              className={`nav-item ${
-                activeView === "new-orders" ? "active" : ""
-              }`}
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigateNewOrders();
-              }}
-            >
-              New Orders
-            </a>
+            <>
+              <a
+                href="#"
+                className={`nav-item ${
+                  activeView === "new-orders" ? "active" : ""
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigateNewOrders();
+                }}
+              >
+                New Orders
+              </a>
+              <a
+                href="#"
+                className={`nav-item ${
+                  activeView === "end-of-day" ? "active" : ""
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Check if onNavigateEndOfDay exists, if not usage might need update in Layout/App
+                  if (typeof onNavigateEndOfDay === "function") {
+                    onNavigateEndOfDay();
+                  }
+                }}
+              >
+                End of Day Update
+              </a>
+            </>
           )}
         </nav>
         <div className="header-actions">

@@ -137,6 +137,12 @@ const ProjectSchema = new mongoose.Schema(
       productionRisks: Date,
       challenges: Date,
     },
+    endOfDayUpdate: {
+      type: String,
+    },
+    endOfDayUpdateDate: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );

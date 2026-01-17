@@ -122,7 +122,11 @@ const getProjects = async (req, res) => {
     let query = {};
 
     // If user is not an admin, they only see projects where they are the assigned Lead
-    if (req.user.role !== "admin") {
+    // Unless they are Front Desk, who need to see everything for End of Day updates
+    if (
+      req.user.role !== "admin" &&
+      (!req.user.department || !req.user.department.includes("Front Desk"))
+    ) {
       query = { projectLeadId: req.user._id };
     }
 

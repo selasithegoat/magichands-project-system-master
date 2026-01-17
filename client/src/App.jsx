@@ -6,6 +6,7 @@ import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
 import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
 import Profile from "./pages/Profile/Profile";
 import NewOrders from "./pages/NewOrders/NewOrders"; // Import NewOrders
+import EndOfDayUpdate from "./pages/EndOfDayUpdate/EndOfDayUpdate"; // Import EndOfDayUpdate
 import Layout from "./components/layout/Layout";
 import Spinner from "./components/ui/Spinner"; // Import Spinner
 
@@ -38,6 +39,7 @@ const ProtectedLayout = ({
     onNavigateHistory={() => navigate("/history")}
     onNavigateProfile={() => navigate("/profile")}
     onNavigateNewOrders={() => navigate("/new-orders")} // Pass handler
+    onNavigateEndOfDay={() => navigate("/end-of-day")} // Pass handler
     onCreateProject={() => navigate("/create-project")}
     onSignOut={onSignOut} // Pass onSignOut to Layout
   >
@@ -234,6 +236,19 @@ function App() {
             projectCount={projectCount}
           >
             <NewOrders />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/end-of-day"
+        element={
+          <ProtectedLayout
+            activeView="end-of-day"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <EndOfDayUpdate user={user} />
           </ProtectedLayout>
         }
       />

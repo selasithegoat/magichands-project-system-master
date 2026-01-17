@@ -36,6 +36,7 @@ const Layout = ({
   onNavigateHistory,
   onNavigateProfile,
   onNavigateNewOrders, // [New]
+  onNavigateEndOfDay, // [New]
   onCreateProject,
   activeView,
   user, // Receive user
@@ -72,6 +73,7 @@ const Layout = ({
         onNavigateHistory={onNavigateHistory}
         onNavigateProfile={onNavigateProfile}
         onNavigateNewOrders={onNavigateNewOrders} // Pass prop
+        onNavigateEndOfDay={onNavigateEndOfDay} // Pass prop
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
@@ -176,20 +178,36 @@ const Layout = ({
                 History
               </a>
               {user?.department?.includes("Front Desk") && (
-                <a
-                  href="#"
-                  className={`drawer-item ${
-                    activeView === "new-orders" ? "active" : ""
-                  }`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsMobileMenuOpen(false);
-                    onNavigateNewOrders();
-                  }}
-                >
-                  <ClipboardListIcon />
-                  New Orders
-                </a>
+                <>
+                  <a
+                    href="#"
+                    className={`drawer-item ${
+                      activeView === "new-orders" ? "active" : ""
+                    }`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsMobileMenuOpen(false);
+                      onNavigateNewOrders();
+                    }}
+                  >
+                    <ClipboardListIcon />
+                    New Orders
+                  </a>
+                  <a
+                    href="#"
+                    className={`drawer-item ${
+                      activeView === "end-of-day" ? "active" : ""
+                    }`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsMobileMenuOpen(false);
+                      if (onNavigateEndOfDay) onNavigateEndOfDay();
+                    }}
+                  >
+                    <ClipboardListIcon />
+                    End of Day Update
+                  </a>
+                </>
               )}
             </nav>
 

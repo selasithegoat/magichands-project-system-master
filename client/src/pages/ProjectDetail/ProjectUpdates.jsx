@@ -71,6 +71,7 @@ const ProjectUpdates = ({ project, currentUser }) => {
     content: "",
     category: "General",
     attachment: null,
+    isEndOfDayUpdate: false,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -109,6 +110,7 @@ const ProjectUpdates = ({ project, currentUser }) => {
       const data = new FormData();
       data.append("content", formData.content);
       data.append("category", formData.category);
+      data.append("isEndOfDayUpdate", formData.isEndOfDayUpdate);
       if (formData.attachment) {
         data.append("attachment", formData.attachment);
       }
@@ -119,7 +121,12 @@ const ProjectUpdates = ({ project, currentUser }) => {
       });
 
       if (res.ok) {
-        setFormData({ content: "", category: "General", attachment: null });
+        setFormData({
+          content: "",
+          category: "General",
+          attachment: null,
+          isEndOfDayUpdate: false,
+        });
         setShowModal(false);
         fetchUpdates();
         setToast({ type: "success", message: "Update posted successfully!" });
@@ -341,6 +348,33 @@ const ProjectUpdates = ({ project, currentUser }) => {
                     <option value="Design">Design</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "1rem" }}>
+                <label
+                  className="checkbox-container"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.isEndOfDayUpdate}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        isEndOfDayUpdate: e.target.checked,
+                      })
+                    }
+                    style={{ width: "16px", height: "16px" }}
+                  />
+                  <span style={{ fontSize: "0.9rem", color: "#334155" }}>
+                    Mark as Final End of Day Update
+                  </span>
+                </label>
               </div>
 
               <div className="form-group">
