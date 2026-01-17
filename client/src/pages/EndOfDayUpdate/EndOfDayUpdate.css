@@ -1,3 +1,4 @@
+/* Existing styles */
 .end-of-day-container {
   padding: 2rem;
   max-width: 1400px;
@@ -20,11 +21,38 @@
   font-size: 0.95rem;
 }
 
+/* ... existing table styles ... */
+/* Retain all previous table styles, just append new button style if needed */
+
+.download-btn {
+  background-color: #4f46e5;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.download-btn:hover {
+  background-color: #4338ca;
+}
+
+.download-btn:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Rest of the file content... */
 .table-container {
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid #e2e8f0;
 }
 
@@ -109,6 +137,8 @@
   font-size: 0.95rem;
   color: #334155;
   line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .update-date {
