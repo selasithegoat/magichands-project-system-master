@@ -148,6 +148,11 @@ const getProjects = async (req, res) => {
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName")
       .sort({ createdAt: -1 });
+
+    if (isAdminPortal) {
+      // Optional: Logic specific to admin portal if needed later
+    }
+
     res.json(projects);
   } catch (error) {
     console.error("Error fetching projects:", error);

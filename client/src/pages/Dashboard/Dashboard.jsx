@@ -42,14 +42,11 @@ const Dashboard = ({
         const completed = data.filter((p) => p.status === "Completed").length;
         setCompletedCount(completed);
 
-        // Filter out "Completed" and "Pending Scope Approval" projects
-        const activeProjects = data.filter(
-          (p) =>
-            p.status !== "Completed" && p.status !== "Pending Scope Approval"
-        );
+        // Filter out "Completed" projects (Pending Scope Approval is ACTIVE for Lead)
+        const activeProjects = data.filter((p) => p.status !== "Completed");
         // Sort by createdAt desc (newest first)
         const sortedProjects = activeProjects.sort(
-          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
         );
         setProjects(sortedProjects);
       } else {
@@ -241,7 +238,7 @@ const Dashboard = ({
                 .sort(
                   (a, b) =>
                     new Date(a.details.deliveryDate) -
-                    new Date(b.details.deliveryDate)
+                    new Date(b.details.deliveryDate),
                 );
 
               if (upcomingDeadlines.length === 0) {
@@ -333,7 +330,7 @@ const Dashboard = ({
 
               return topDepts.map(([deptId, count]) => {
                 const percentage = Math.round(
-                  (count / projects.length) * 100 // % of TOTAL active projects
+                  (count / projects.length) * 100, // % of TOTAL active projects
                 );
                 // Color palette for bars
                 const colors = [
