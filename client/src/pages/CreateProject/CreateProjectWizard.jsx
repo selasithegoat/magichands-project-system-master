@@ -211,7 +211,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       // Append all JSON fields
       Object.keys(formData).forEach((key) => {
         if (key === "files") return; // Handle files separately
-        if (key === "attachments") return;
+        // attachments sent as JSON string if present (existing files)
 
         const value = formData[key];
         if (Array.isArray(value) || typeof value === "object") {

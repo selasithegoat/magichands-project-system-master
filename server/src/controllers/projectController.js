@@ -126,13 +126,11 @@ const createProject = async (req, res) => {
         "Validation Details:",
         JSON.stringify(error.errors, null, 2),
       );
-      return res
-        .status(400)
-        .json({
-          message: "Validation Error",
-          error: error.message,
-          details: error.errors,
-        });
+      return res.status(400).json({
+        message: "Validation Error",
+        error: error.message,
+        details: error.errors,
+      });
     }
     res.status(500).json({ message: "Server Error", error: error.message });
   }
@@ -888,7 +886,7 @@ const deleteOldUserActivity = async (req, res) => {
 const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
+    let {
       orderId,
       orderDate,
       receivedTime,
@@ -907,9 +905,22 @@ const updateProject = async (req, res) => {
       status,
       currentStep,
       projectLeadId,
-      description, // [NEW]
-      details, // [NEW]
+      description,
+      details,
+      attachments, // Existing attachments (urls)
     } = req.body;
+
+    // Parse JSON fields if they are strings (Multipart/form-data behavior)
+    if (typeof items === "string") items = JSON.parse(items);
+    if (typeof departments === "string") departments = JSON.parse(departments);
+    if (typeof uncontrollableFactors === "string")
+      uncontrollableFactors = JSON.parse(uncontrollableFactors);
+    if (typeof productionRisks === "string")
+      productionRisks = JSON.parse(productionRisks);
+    if (typeof details === "string") details = JSON.parse(details);
+    if (typeof attachments === "string") attachments = JSON.parse(attachments);
+    if (typeof lead === "string" && lead.startsWith("{"))
+      lead = JSON.parse(lead);
 
     const project = await Project.findById(id);
 
@@ -983,6 +994,38 @@ const updateProject = async (req, res) => {
     }
     if (supplySource) {
       project.details.supplySource = getValue(supplySource);
+      detailsChanged = true;
+    }
+
+    // Handle Files
+    if (req.files) {
+      if (req.files.sampleImage && req.files.sampleImage[0]) {
+        project.details.sampleImage = req.files.sampleImage[0].path;
+        detailsChanged = true;
+      }
+
+      const newAttachments = req.files.attachments
+        ? req.files.attachments.map((file) => file.path)
+        : [];
+
+      // Combine existing and new attachments
+      // If 'attachments' is sent in body, use it as the base (allows deletion)
+      // If not sent, keep existing
+      if (attachments && Array.isArray(attachments)) {
+        project.details.attachments = [...attachments, ...newAttachments];
+        detailsChanged = true;
+      } else if (newAttachments.length > 0) {
+        // If only new files sent and no body list, just append?
+        // Or if attachments body is missing, do we assume no logical change to existing?
+        project.details.attachments = [
+          ...(project.details.attachments || []),
+          ...newAttachments,
+        ];
+        detailsChanged = true;
+      }
+    } else if (attachments && Array.isArray(attachments)) {
+      // Case: No new files, but attachments list updated (e.g. deletion)
+      project.details.attachments = attachments;
       detailsChanged = true;
     }
 

@@ -67,7 +67,15 @@ router.delete(
 router.patch("/:id/status", protect, updateProjectStatus);
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, deleteProject); // Delete Project
-router.put("/:id", protect, updateProject); // Full update (Step 1-5)
+router.put(
+  "/:id",
+  protect,
+  upload.fields([
+    { name: "sampleImage", maxCount: 1 },
+    { name: "attachments", maxCount: 10 },
+  ]),
+  updateProject,
+); // Full update (Step 1-5)
 router.post(
   "/",
   protect,
