@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import FolderIcon from "../../components/icons/FolderIcon";
 import "./NewOrders.css";
 
 const NewOrders = () => {
@@ -12,8 +13,8 @@ const NewOrders = () => {
     orderDate: "",
     deliveryDate: "", // [New]
   });
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const [selectedFiles, setSelectedFiles] = useState([]);
 
   // Auto-generate order number on mount
   useEffect(() => {
@@ -41,12 +42,11 @@ const NewOrders = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleImageChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedImage(file);
-      setPreviewUrl(URL.createObjectURL(file));
-    }
+  // Handle removal of a file
+  const removeFile = (indexToRemove) => {
+    setSelectedFiles((prev) =>
+      prev.filter((_, index) => index !== indexToRemove),
+    );
   };
 
   // Toast State
@@ -78,8 +78,10 @@ const NewOrders = () => {
     formPayload.append("description", formData.description);
     formPayload.append("details", formData.details);
 
-    if (selectedImage) {
-      formPayload.append("sampleImage", selectedImage);
+    if (selectedFiles.length > 0) {
+      selectedFiles.forEach((file) => {
+        formPayload.append("attachments", file);
+      });
     }
 
     try {
@@ -103,8 +105,8 @@ const NewOrders = () => {
           orderDate: new Date().toISOString().slice(0, 16),
           deliveryDate: "",
         });
-        setSelectedImage(null);
-        setPreviewUrl(null);
+
+        setSelectedFiles([]);
       } else {
         const errorData = await res.json();
         showToast(`Error: ${errorData.message || "Failed to submit"}`, "error");
@@ -261,58 +263,185 @@ const NewOrders = () => {
           <div className="divider"></div>
 
           {/* Sample Image */}
+          {/* Reference Materials */}
           <div className="form-section">
-            <h2 className="section-title">Reference Material</h2>
-            <div className="form-group">
-              <label>Sample Image</label>
-              <div className="file-upload-wrapper">
-                <input
-                  type="file"
-                  id="sampleImage"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="file-input"
-                />
-                <label htmlFor="sampleImage" className="file-label">
-                  <div className="upload-icon">
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+            <h2 className="section-title">Reference Materials</h2>
+
+            {/* Hidden Input with ID */}
+            <input
+              type="file"
+              multiple
+              id="new-order-attachments"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                console.log("File input change detected", e.target.files);
+                if (e.target.files && e.target.files.length > 0) {
+                  const filesArray = Array.from(e.target.files);
+                  console.log("Processing files:", filesArray);
+                  setSelectedFiles((prev) => {
+                    const newFiles = [...prev, ...filesArray];
+                    console.log("New selectedFiles state:", newFiles);
+                    return newFiles;
+                  });
+                  e.target.value = null; // Reset
+                }
+              }}
+            />
+
+            {/* Empty State: Big Dropzone (Label) */}
+            {selectedFiles.length === 0 && (
+              <label
+                htmlFor="new-order-attachments"
+                className="file-upload-wrapper"
+                style={{
+                  border: "2px dashed #ccc",
+                  borderRadius: "8px",
+                  padding: "2rem",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: "150px",
+                }}
+              >
+                <FolderIcon width="48" height="48" color="#666" />
+                <p style={{ marginTop: "1rem", color: "#666" }}>
+                  Click to upload files (Images, Docs, PDFs)
+                </p>
+              </label>
+            )}
+
+            {/* Files Grid */}
+            {selectedFiles.length > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                  gap: "10px",
+                  marginTop: "1rem",
+                }}
+              >
+                {selectedFiles.map((file, idx) => {
+                  const isImage = file.type.startsWith("image/");
+                  const preview = isImage ? URL.createObjectURL(file) : null;
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        position: "relative",
+                        border: "1px solid #ddd",
+                        borderRadius: "8px",
+                        aspectRatio: "1",
+                        overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: "#f9f9f9",
+                      }}
                     >
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <polyline points="21 15 16 10 5 21" />
-                    </svg>
-                  </div>
-                  <span>
-                    {selectedImage
-                      ? selectedImage.name
-                      : "Click to upload a sample image"}
+                      {isImage ? (
+                        <img
+                          src={preview}
+                          alt="prev"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            textAlign: "center",
+                            padding: "5px",
+                            overflow: "hidden",
+                            width: "100%",
+                          }}
+                        >
+                          <FolderIcon width="32" height="32" color="#888" />
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              marginTop: "5px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {file.name}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile(idx);
+                        }}
+                        style={{
+                          position: "absolute",
+                          top: "2px",
+                          right: "2px",
+                          background: "rgba(0,0,0,0.6)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Add More Tile (Label) */}
+                <label
+                  htmlFor="new-order-attachments"
+                  style={{
+                    border: "2px dashed #bbb",
+                    borderRadius: "8px",
+                    aspectRatio: "1",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    backgroundColor: "rgba(0,0,0,0.02)",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseOver={(e) =>
+                    (e.currentTarget.style.background = "rgba(0,0,0,0.05)")
+                  }
+                  onMouseOut={(e) =>
+                    (e.currentTarget.style.background = "rgba(0,0,0,0.02)")
+                  }
+                >
+                  <span style={{ fontSize: "24px", color: "#666" }}>+</span>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#666",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Add More
                   </span>
                 </label>
               </div>
-              {previewUrl && (
-                <div className="image-preview">
-                  <img src={previewUrl} alt="Preview" />
-                  <button
-                    type="button"
-                    className="remove-image-btn"
-                    onClick={() => {
-                      setSelectedImage(null);
-                      setPreviewUrl(null);
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           <div className="form-actions">

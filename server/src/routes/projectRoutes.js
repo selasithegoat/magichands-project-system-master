@@ -42,7 +42,7 @@ router.post("/:id/challenges", protect, addChallengeToProject);
 router.patch(
   "/:id/challenges/:challengeId/status",
   protect,
-  updateChallengeStatus
+  updateChallengeStatus,
 );
 router.delete("/:id/challenges/:challengeId", protect, deleteChallenge);
 
@@ -56,19 +56,27 @@ router.post("/:id/uncontrollable-factors", protect, addUncontrollableFactor);
 router.patch(
   "/:id/uncontrollable-factors/:factorId",
   protect,
-  updateUncontrollableFactor
+  updateUncontrollableFactor,
 );
 router.delete(
   "/:id/uncontrollable-factors/:factorId",
   protect,
-  deleteUncontrollableFactor
+  deleteUncontrollableFactor,
 );
 
 router.patch("/:id/status", protect, updateProjectStatus);
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, deleteProject); // Delete Project
 router.put("/:id", protect, updateProject); // Full update (Step 1-5)
-router.post("/", protect, upload.single("sampleImage"), createProject); // [NEW]
+router.post(
+  "/",
+  protect,
+  upload.fields([
+    { name: "sampleImage", maxCount: 1 },
+    { name: "attachments", maxCount: 10 },
+  ]),
+  createProject,
+);
 router.get("/", protect, getProjects);
 
 module.exports = router;

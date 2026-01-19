@@ -47,10 +47,24 @@ const createProject = async (req, res) => {
     // Helper to extract value if object
     const getValue = (field) => (field && field.value ? field.value : field);
 
-    // [NEW] Handle File Upload
+    // [NEW] Handle File Uploads (Multiple Fields)
     let sampleImagePath = "";
-    if (req.file) {
-      // Store relative path
+    let attachmentPaths = [];
+
+    if (req.files) {
+      // Handle 'sampleImage' (single file)
+      if (req.files.sampleImage && req.files.sampleImage.length > 0) {
+        sampleImagePath = `/uploads/${req.files.sampleImage[0].filename}`;
+      }
+
+      // Handle 'attachments' (multiple files)
+      if (req.files.attachments && req.files.attachments.length > 0) {
+        attachmentPaths = req.files.attachments.map(
+          (file) => `/uploads/${file.filename}`,
+        );
+      }
+    } else if (req.file) {
+      // Fallback for single file upload middleware (if used elsewhere)
       sampleImagePath = `/uploads/${req.file.filename}`;
     }
 
@@ -78,6 +92,7 @@ const createProject = async (req, res) => {
         contactType: getValue(contactType),
         supplySource: getValue(supplySource),
         sampleImage: sampleImagePath, // [NEW]
+        attachments: attachmentPaths, // [NEW]
       },
       departments: departments || [],
       items:
@@ -105,10 +120,19 @@ const createProject = async (req, res) => {
     res.status(201).json(savedProject);
   } catch (error) {
     console.error("Error creating project:", error);
+    // [DEBUG] Log full validation error details
     if (error.name === "ValidationError") {
+      console.error(
+        "Validation Details:",
+        JSON.stringify(error.errors, null, 2),
+      );
       return res
         .status(400)
-        .json({ message: "Validation Error", error: error.message });
+        .json({
+          message: "Validation Error",
+          error: error.message,
+          details: error.errors,
+        });
     }
     res.status(500).json({ message: "Server Error", error: error.message });
   }

@@ -44,6 +44,7 @@ const ProjectSchema = new mongoose.Schema(
       sampleImage: {
         type: String, // Path to the uploaded image
       },
+      attachments: [String], // Multiple reference files
     },
     departments: [String], // Step 2: List of department IDs
     items: [
@@ -148,7 +149,7 @@ const ProjectSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Project", ProjectSchema);

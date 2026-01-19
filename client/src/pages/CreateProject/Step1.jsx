@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import CardOption from "../../components/ui/CardOption";
@@ -14,7 +14,8 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
+const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
+  const fileInputRef = useRef(null);
   const [leads, setLeads] = useState([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
 
@@ -45,7 +46,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
   }, []);
 
   const handleChange = (field, value) => {
-    setFormData({ [field]: value });
+    setFormData({ ...formData, [field]: value });
   };
 
   const handleNextStep = () => {
@@ -237,32 +238,83 @@ const Step1 = ({ formData, setFormData, onNext, onCancel }) => {
             />
           </div>
 
-          {/* Reference Image */}
-          {formData.sampleImage && (
-            <div className="reference-section" style={{ marginTop: "1.5rem" }}>
-              <label className="section-label">Reference Material</label>
+          {/* Reference Materials Section */}
+          {/* Sample Image Upload (Reverted to Single File) */}
+          <div className="reference-section" style={{ marginTop: "1.5rem" }}>
+            <label className="section-label">Sample Image</label>
+
+            {!isEditing && (
               <div
-                style={{
-                  marginTop: "0.5rem",
-                  border: "1px solid var(--border-color)",
-                  borderRadius: "8px",
-                  padding: "0.5rem",
-                  background: "rgba(0,0,0,0.1)",
-                }}
+                className="file-upload-simple"
+                style={{ marginTop: "0.5rem" }}
               >
-                <img
-                  src={`http://localhost:5000${formData.sampleImage}`}
-                  alt="Reference"
-                  style={{
-                    maxWidth: "100%",
-                    maxHeight: "200px",
-                    objectFit: "contain",
-                    borderRadius: "4px",
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      handleChange("files", [file]);
+                      e.target.value = null;
+                    }
                   }}
                 />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "var(--primary-color)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Upload Image
+                </button>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Preview */}
+            {formData.files && formData.files.length > 0 && (
+              <div style={{ marginTop: "1rem" }}>
+                <img
+                  src={URL.createObjectURL(formData.files[0])}
+                  alt="Preview"
+                  style={{ maxWidth: "200px", borderRadius: "8px" }}
+                />
+                {!isEditing && (
+                  <button
+                    onClick={() => handleChange("files", [])}
+                    style={{
+                      marginLeft: "1rem",
+                      cursor: "pointer",
+                      background: "none",
+                      border: "none",
+                      color: "red",
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Existing Sample Image (Read Only) */}
+            {formData.sampleImage &&
+              (!formData.files || formData.files.length === 0) && (
+                <div style={{ marginTop: "1rem" }}>
+                  <img
+                    src={`http://localhost:5000${formData.sampleImage}`}
+                    alt="Existing"
+                    style={{ maxWidth: "200px", borderRadius: "8px" }}
+                  />
+                </div>
+              )}
+          </div>
         </div>
       </div>
 

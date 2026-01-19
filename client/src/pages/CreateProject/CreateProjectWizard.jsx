@@ -102,7 +102,6 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             orderId: data.orderId, // If we want to show it? Wizard Step 1 shows 'Order #1024-B' hardcoded or from state? Step 1 renders hardcoded currently? I should check Step 1 props.
             // Step 1 expects: orderDate, receivedTime, lead, projectName, deliveryDate, deliveryTime, deliveryLocation, contactType, supplySource
             orderDate: data.orderDate ? data.orderDate.split("T")[0] : "",
-            orderDate: data.orderDate ? data.orderDate.split("T")[0] : "",
             receivedTime: data.receivedTime
               ? data.receivedTime.includes("T")
                 ? new Date(data.receivedTime).toLocaleTimeString("en-GB", {
@@ -115,28 +114,6 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             lead: data.projectLeadId || null,
 
             projectName: data.details?.projectName || "",
-            deliveryDate: data.details?.deliveryDate
-              ? data.details.deliveryDate.split("T")[0]
-              : "",
-            deliveryTime: data.details?.deliveryTime
-              ? data.details.deliveryTime.includes("T")
-                ? new Date(data.details.deliveryTime).toLocaleTimeString(
-                    "en-GB",
-                    {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    },
-                  )
-                : data.details.deliveryTime
-              : "",
-            deliveryLocation: data.details?.deliveryLocation,
-            contactType: data.details?.contactType || "MH",
-            // Use projectLeadId for the lead select value
-            // data.projectLeadId might be object (if populated) or ID
-            lead:
-              data.projectLeadId && typeof data.projectLeadId === "object"
-                ? data.projectLeadId._id
-                : data.projectLeadId || null,
             leadLabel:
               data.projectLeadId && typeof data.projectLeadId === "object"
                 ? (
@@ -221,19 +198,39 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
       const method = editingId ? "PUT" : "POST";
 
-      const payload = { ...formData };
-      if (editingId && payload.status === "Pending Scope Approval") {
-        // If editing and status was pending, we assume acceptance/completion moves it to Order Confirmed
-        payload.status = "Order Confirmed";
+      // Use FormData for File Upload
+      const payload = new FormData();
+
+      // Append all JSON fields
+      Object.keys(formData).forEach((key) => {
+        if (key === "files") return; // Handle files separately
+        if (key === "attachments") return;
+
+        const value = formData[key];
+        if (Array.isArray(value) || typeof value === "object") {
+          if (value) payload.append(key, JSON.stringify(value));
+        } else {
+          if (value !== null && value !== undefined) payload.append(key, value);
+        }
+      });
+
+      // Special handling for Status if editing
+      if (editingId && formData.status === "Pending Scope Approval") {
+        payload.delete("status"); // Remove old status
+        payload.append("status", "Order Confirmed");
+      }
+
+      // Append Files to 'attachments' field
+      if (formData.files && formData.files.length > 0) {
+        formData.files.forEach((file) => {
+          payload.append("attachments", file);
+        });
       }
 
       const res = await fetch(url, {
         method: method,
-        headers: {
-          "Content-Type": "application/json",
-        },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: payload, // [MODIFIED] No Content-Type header
       });
 
       if (res.ok) {
@@ -271,8 +268,9 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
           setFormData={handleUpdateFormData}
           onNext={handleNext}
           onCancel={handleCancelProject}
-          leads={leads} // [NEW]
-          isLoadingLeads={isLoadingLeads} // [NEW]
+          leads={leads}
+          isLoadingLeads={isLoadingLeads}
+          isEditing={!!editingId}
         />
       )}
       {currentStep === 2 && (
