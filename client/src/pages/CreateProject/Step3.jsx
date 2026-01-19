@@ -18,10 +18,10 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   const addItem = () => {
     const newId =
-      items.length > 0 ? Math.max(...items.map((i) => i.id)) + 1 : 1;
+      Date.now().toString() + Math.random().toString(36).substr(2, 5);
     const newItems = [
       ...items,
-      { id: newId, description: "", breakdown: "", qty: 0 },
+      { id: newId, description: "", breakdown: "", qty: 1 },
     ];
     setFormData({ items: newItems });
   };
@@ -33,14 +33,14 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   const updateItem = (id, field, value) => {
     const newItems = items.map((item) =>
-      item.id === id ? { ...item, [field]: value } : item
+      item.id === id ? { ...item, [field]: value } : item,
     );
     setFormData({ items: newItems });
   };
 
   const totalItems = items.reduce(
     (sum, item) => sum + (parseInt(item.qty) || 0),
-    0
+    0,
   );
 
   return (

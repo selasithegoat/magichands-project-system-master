@@ -125,7 +125,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
                     {
                       hour: "2-digit",
                       minute: "2-digit",
-                    }
+                    },
                   )
                 : data.details.deliveryTime
               : "",
@@ -153,7 +153,11 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             // Step 2 & 3 & 4
             departments: data.departments || [],
-            items: data.items || [],
+            items:
+              data.items?.map((i) => ({
+                ...i,
+                id: i._id || i.id || Math.random().toString(36).substr(2, 9),
+              })) || [],
             uncontrollableFactors: data.uncontrollableFactors || [],
             productionRisks: data.productionRisks || [],
 
@@ -186,7 +190,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   React.useEffect(() => {
     localStorage.setItem(
       "projectWizardData",
-      JSON.stringify({ currentStep, formData })
+      JSON.stringify({ currentStep, formData }),
     );
   }, [currentStep, formData]);
 
