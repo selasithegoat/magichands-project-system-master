@@ -47,7 +47,7 @@ const AssignProject = () => {
     // [NEW] Fetch New Orders
     const fetchNewOrders = async () => {
       try {
-        const res = await fetch("/api/projects");
+        const res = await fetch("/api/projects?source=admin");
         if (res.ok) {
           const data = await res.json();
           // Filter for "New Order" status
@@ -101,7 +101,7 @@ const AssignProject = () => {
       }
 
       const selectedUser = availableUsers.find(
-        (u) => u.value === formData.projectLead
+        (u) => u.value === formData.projectLead,
       );
 
       // Payload
@@ -166,7 +166,7 @@ const AssignProject = () => {
 
         // Refresh orders list
         setNewOrders((prev) =>
-          prev.filter((o) => o._id !== formData.selectedOrderId)
+          prev.filter((o) => o._id !== formData.selectedOrderId),
         );
 
         setFormData((prev) => ({

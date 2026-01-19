@@ -123,16 +123,16 @@ const getProjects = async (req, res) => {
 
     // If user is not an admin, they only see projects where they are the assigned Lead
     // Unless they are Front Desk, who need to see everything for End of Day updates
-    // Check for "report" mode (used by End of Day Updates page)
-    const isReportMode = req.query.mode === "report";
-
     // Access Control Logic:
-    // 1. Admins see everything always.
+    // 1. Admins see everything ONLY IF using Admin Portal (source=admin).
     // 2. Front Desk trying to view "End of Day Updates" (report mode) sees everything.
-    // 3. Everyone else (or Front Desk in normal mode) sees ONLY projects where they are Lead or Updater.
+    // 3. Otherwise (Client Portal), EVERYONE (including Admins) sees only their own projects.
+
+    const isReportMode = req.query.mode === "report";
+    const isAdminPortal = req.query.source === "admin";
 
     const canSeeAll =
-      req.user.role === "admin" ||
+      (req.user.role === "admin" && isAdminPortal) ||
       (isReportMode && req.user.department?.includes("Front Desk"));
 
     if (!canSeeAll) {

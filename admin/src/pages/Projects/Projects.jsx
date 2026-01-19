@@ -23,7 +23,7 @@ const Projects = () => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const res = await fetch("/api/projects");
+        const res = await fetch("/api/projects?source=admin");
         if (res.ok) {
           const data = await res.json();
           setProjects(data);
@@ -113,7 +113,7 @@ const Projects = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const paginatedProjects = filteredProjects.slice(
     indexOfFirstItem,
-    indexOfLastItem
+    indexOfLastItem,
   );
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
 
@@ -195,7 +195,7 @@ const Projects = () => {
                       <td>
                         <span
                           className={`status-badge ${getStatusClass(
-                            project.status
+                            project.status,
                           )}`}
                         >
                           {project.status}
