@@ -143,6 +143,10 @@ const ProjectSchema = new mongoose.Schema(
     endOfDayUpdateDate: {
       type: Date,
     },
+    endOfDayUpdateBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   { timestamps: true }
 );

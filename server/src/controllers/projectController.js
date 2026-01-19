@@ -99,7 +99,7 @@ const createProject = async (req, res) => {
       savedProject._id,
       req.user.id,
       "create",
-      `Created project #${savedProject.orderId || savedProject._id}`
+      `Created project #${savedProject.orderId || savedProject._id}`,
     );
 
     res.status(201).json(savedProject);
@@ -123,9 +123,25 @@ const getProjects = async (req, res) => {
 
     // If user is not an admin, they only see projects where they are the assigned Lead
     // Unless they are Front Desk, who need to see everything for End of Day updates
-    // If user is not an admin, they only see projects where they are the assigned Lead
-    if (req.user.role !== "admin") {
-      query = { projectLeadId: req.user._id };
+    // Check for "report" mode (used by End of Day Updates page)
+    const isReportMode = req.query.mode === "report";
+
+    // Access Control Logic:
+    // 1. Admins see everything always.
+    // 2. Front Desk trying to view "End of Day Updates" (report mode) sees everything.
+    // 3. Everyone else (or Front Desk in normal mode) sees ONLY projects where they are Lead or Updater.
+
+    const canSeeAll =
+      req.user.role === "admin" ||
+      (isReportMode && req.user.department?.includes("Front Desk"));
+
+    if (!canSeeAll) {
+      query = {
+        $or: [
+          { projectLeadId: req.user._id },
+          { endOfDayUpdateBy: req.user._id },
+        ],
+      };
     }
 
     const projects = await Project.find(query)
@@ -243,7 +259,7 @@ const addItemToProject = async (req, res) => {
       req.user.id,
       "item_add",
       `Added order item: ${description} (Qty: ${qty})`,
-      { item: newItem }
+      { item: newItem },
     );
 
     res.json(project);
@@ -271,7 +287,7 @@ const updateItemInProject = async (req, res) => {
           "sectionUpdates.items": new Date(),
         },
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!project) {
@@ -283,7 +299,7 @@ const updateItemInProject = async (req, res) => {
       req.user.id,
       "item_update",
       `Updated order item: ${description}`,
-      { itemId, description, qty }
+      { itemId, description, qty },
     );
 
     res.json(project);
@@ -334,7 +350,7 @@ const updateProjectDepartments = async (req, res) => {
     const project = await Project.findByIdAndUpdate(
       id,
       { departments, "sectionUpdates.departments": new Date() },
-      { new: true }
+      { new: true },
     );
 
     if (!project) {
@@ -346,7 +362,7 @@ const updateProjectDepartments = async (req, res) => {
       req.user.id,
       "departments_update",
       `Updated engaged departments`,
-      { departments }
+      { departments },
     );
 
     res.json(project);
@@ -388,7 +404,7 @@ const updateProjectStatus = async (req, res) => {
         `Project status updated to ${status}`,
         {
           statusChange: { from: oldStatus, to: status },
-        }
+        },
       );
     }
 
@@ -429,7 +445,7 @@ const addChallengeToProject = async (req, res) => {
         $push: { challenges: newChallenge },
         "sectionUpdates.challenges": new Date(),
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -441,7 +457,7 @@ const addChallengeToProject = async (req, res) => {
       req.user.id,
       "challenge_add",
       `Reported new challenge: ${title}`,
-      { challengeId: newChallenge._id }
+      { challengeId: newChallenge._id },
     );
 
     res.json(updatedProject);
@@ -473,7 +489,7 @@ const updateChallengeStatus = async (req, res) => {
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id, "challenges._id": challengeId },
       { $set: updateFields },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -487,7 +503,7 @@ const updateChallengeStatus = async (req, res) => {
       req.user.id,
       "challenge_update",
       `Challenge status updated to ${status}`,
-      { challengeId: challengeId, newStatus: status }
+      { challengeId: challengeId, newStatus: status },
     );
 
     res.json(updatedProject);
@@ -510,7 +526,7 @@ const deleteChallenge = async (req, res) => {
         $pull: { challenges: { _id: challengeId } },
         "sectionUpdates.challenges": new Date(),
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -522,7 +538,7 @@ const deleteChallenge = async (req, res) => {
       req.user.id,
       "challenge_delete",
       `Deleted a challenge report`,
-      { challengeId: challengeId }
+      { challengeId: challengeId },
     );
 
     res.json(updatedProject);
@@ -567,7 +583,7 @@ const addProductionRisk = async (req, res) => {
         $push: { productionRisks: newRisk },
         "sectionUpdates.productionRisks": new Date(),
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -579,7 +595,7 @@ const addProductionRisk = async (req, res) => {
       req.user.id,
       "risk_add",
       `Added production risk: ${description}`,
-      { risk: newRisk }
+      { risk: newRisk },
     );
 
     res.json(updatedProject);
@@ -606,7 +622,7 @@ const updateProductionRisk = async (req, res) => {
           "sectionUpdates.productionRisks": new Date(),
         },
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -618,7 +634,7 @@ const updateProductionRisk = async (req, res) => {
       req.user.id,
       "risk_update",
       `Updated production risk: ${description}`,
-      { riskId, description, preventive }
+      { riskId, description, preventive },
     );
 
     res.json(updatedProject);
@@ -641,7 +657,7 @@ const deleteProductionRisk = async (req, res) => {
         $pull: { productionRisks: { _id: riskId } },
         "sectionUpdates.productionRisks": new Date(),
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -653,7 +669,7 @@ const deleteProductionRisk = async (req, res) => {
       req.user.id,
       "risk_update", // Using update/generic action as placeholder
       `Deleted production risk`,
-      { riskId }
+      { riskId },
     );
 
     res.json(updatedProject);
@@ -683,7 +699,7 @@ const addUncontrollableFactor = async (req, res) => {
         $push: { uncontrollableFactors: newFactor },
         "sectionUpdates.uncontrollableFactors": new Date(),
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -695,7 +711,7 @@ const addUncontrollableFactor = async (req, res) => {
       req.user.id,
       "factor_add",
       `Added uncontrollable factor: ${description}`,
-      { factor: newFactor }
+      { factor: newFactor },
     );
 
     res.json(updatedProject);
@@ -723,7 +739,7 @@ const updateUncontrollableFactor = async (req, res) => {
           "sectionUpdates.uncontrollableFactors": new Date(),
         },
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -735,7 +751,7 @@ const updateUncontrollableFactor = async (req, res) => {
       req.user.id,
       "factor_update",
       `Updated uncontrollable factor: ${description}`,
-      { factorId, description }
+      { factorId, description },
     );
 
     res.json(updatedProject);
@@ -758,7 +774,7 @@ const deleteUncontrollableFactor = async (req, res) => {
         $pull: { uncontrollableFactors: { _id: factorId } },
         "sectionUpdates.uncontrollableFactors": new Date(),
       },
-      { new: true, runValidators: false }
+      { new: true, runValidators: false },
     );
 
     if (!updatedProject) {
@@ -770,7 +786,7 @@ const deleteUncontrollableFactor = async (req, res) => {
       req.user.id,
       "factor_delete",
       `Deleted uncontrollable factor`,
-      { factorId }
+      { factorId },
     );
 
     res.json(updatedProject);
@@ -1010,7 +1026,7 @@ const updateProject = async (req, res) => {
         req.user._id,
         "update",
         `Updated details: ${changes.join(", ")}`,
-        { changes }
+        { changes },
       );
     } else {
       // Generic log if no specific changes detected but save occurred (e.g. arrays)
@@ -1018,7 +1034,7 @@ const updateProject = async (req, res) => {
         updatedProject._id,
         req.user.id,
         "update",
-        `Updated project #${updatedProject.orderId || updatedProject._id}`
+        `Updated project #${updatedProject.orderId || updatedProject._id}`,
       );
     }
 

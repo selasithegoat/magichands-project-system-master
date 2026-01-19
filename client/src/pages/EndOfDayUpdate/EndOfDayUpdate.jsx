@@ -36,13 +36,17 @@ const EndOfDayUpdate = ({ user }) => {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects?mode=report");
       if (res.ok) {
         const data = await res.json();
-        const activeProjects = data.filter(
-          (p) =>
-            p.status !== "Completed" && p.status !== "Pending Scope Approval"
-        );
+        const activeProjects = data.filter((p) => {
+          // 1. Active Status Check
+          const isActive =
+            p.status !== "Completed" && p.status !== "Pending Scope Approval";
+          if (!isActive) return false;
+
+          return true;
+        });
         setProjects(activeProjects);
       }
     } catch (err) {
@@ -116,7 +120,7 @@ const EndOfDayUpdate = ({ user }) => {
                 width: { size: 16, type: WidthType.PERCENTAGE },
                 shading: { fill: "4F46E5" }, // Indigo Header Background
                 margins: { top: 100, bottom: 100, left: 100, right: 100 }, // Padding
-              })
+              }),
           ),
         }),
       ];
@@ -127,7 +131,7 @@ const EndOfDayUpdate = ({ user }) => {
           : project.details?.lead || "Unassigned";
 
         const deliveryContent = `${formatDate(
-          project.details?.deliveryDate
+          project.details?.deliveryDate,
         )} ${formatTime(project.details?.deliveryTime)}`;
 
         const updateContent = project.endOfDayUpdate
@@ -168,9 +172,9 @@ const EndOfDayUpdate = ({ user }) => {
                   ],
                   width: { size: 16, type: WidthType.PERCENTAGE },
                   margins: { top: 100, bottom: 100, left: 100, right: 100 }, // Padding
-                })
+                }),
             ),
-          })
+          }),
         );
       });
 

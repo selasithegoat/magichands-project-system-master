@@ -62,6 +62,7 @@ exports.createProjectUpdate = async (req, res) => {
       console.log("Updating Project with End of Day Update:", content); // DEBUG
       project.endOfDayUpdate = content;
       project.endOfDayUpdateDate = new Date();
+      project.endOfDayUpdateBy = req.user._id;
       await project.save();
     } else {
       console.log("Not updating project (isEOD false)"); // DEBUG

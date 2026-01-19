@@ -27,12 +27,11 @@ const protect = async (req, res, next) => {
     token = req.cookies.token_admin;
   } else if (origin.includes("5173")) {
     // Client Portal
-    token = req.cookies.token_client;
+    // Allow token_admin fallback for admins testing client view
+    token =
+      req.cookies.token_client || req.cookies.token_admin || req.cookies.token;
   } else {
     // Unknown origin (Postman, production domain, etc.)
-    // Fallback to checking everything, prioritizing Admin?
-    // Or maybe check role inside the token?
-    // For now, try all.
     token =
       req.cookies.token_admin || req.cookies.token_client || req.cookies.token;
   }
