@@ -32,7 +32,7 @@ app.use(
       callback(null, true);
     },
     credentials: true,
-  })
+  }),
 );
 app.use(cookieParser());
 app.use(express.json());
@@ -53,3 +53,4 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+// Trigger restart to rebuild indexes

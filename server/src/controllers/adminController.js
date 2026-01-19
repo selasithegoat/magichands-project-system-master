@@ -100,9 +100,11 @@ const updateEmployee = async (req, res) => {
     user.firstName = req.body.firstName || user.firstName;
     user.lastName = req.body.lastName || user.lastName;
     user.name = `${user.firstName} ${user.lastName}`;
+
     if (req.body.email !== undefined) {
       user.email = req.body.email || undefined;
     }
+
     user.employeeId = req.body.employeeId || user.employeeId;
     user.position = req.body.position || user.position;
     user.employeeType = req.body.employeeType || user.employeeType;
@@ -125,6 +127,19 @@ const updateEmployee = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating employee:", error);
+
+    // Handle Duplicate Key Error (e.g., Employee ID or Email already exists)
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({ message: `${field} already exists.` });
+    }
+
+    // Handle Validation Errors
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((val) => val.message);
+      return res.status(400).json({ message: messages.join(", ") });
+    }
+
     res.status(500).json({ message: "Server Error" });
   }
 };
