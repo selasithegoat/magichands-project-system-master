@@ -67,7 +67,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     <div className="project-card-new">
       <div className="card-header">
         <span className={`status-badge ${statusInfo.class}`}>
-          {project.status || "Draft"}
+          {project.status === "Pending Scope Approval"
+            ? "WAITING ACCEPTANCE"
+            : project.status || "Draft"}
         </span>
         {/* <button className="card-menu-btn">
           <ThreeDotsIcon />
@@ -133,7 +135,6 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             <span>{formatDate(project.details?.deliveryDate)}</span>
           </div>
         </div>
-
       </div>
 
       <div className="card-footer">

@@ -117,16 +117,57 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               <BackArrow />
             </button>
             <h1 className="project-title">
-              {project.orderId || "Unititled"}
+              {project.orderId || "Untitled"}
               <span className="status-badge">
-                <ClockIcon width="14" height="14" /> {project.status}
+                <ClockIcon width="14" height="14" />{" "}
+                {project.status === "Pending Scope Approval"
+                  ? "WAITING ACCEPTANCE"
+                  : project.status}
               </span>
             </h1>
           </div>
-          <button className="edit-link" onClick={() => console.log("Edit")}>
-            Edit
-          </button>
+          {/* Only show Edit if NOT pending acceptance and NOT completed */}
+          {project.status !== "Pending Scope Approval" &&
+            project.status !== "Completed" && (
+              <button className="edit-link" onClick={() => console.log("Edit")}>
+                Edit
+              </button>
+            )}
         </div>
+
+        {/* Acceptance Banner */}
+        {project.status === "Pending Scope Approval" && (
+          <div
+            className="acceptance-banner"
+            style={{
+              backgroundColor: "#fff7ed",
+              border: "1px solid #fdba74",
+              borderRadius: "8px",
+              padding: "1rem",
+              marginTop: "1rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div>
+              <h3 style={{ color: "#9a3412", marginBottom: "0.25rem" }}>
+                Project Waiting Acceptance
+              </h3>
+              <p style={{ color: "#c2410c", fontSize: "0.875rem" }}>
+                Review the details below. You must accept this project to start
+                work.
+              </p>
+            </div>
+            <button
+              className="btn-primary"
+              onClick={() => navigate(`/create/wizard?edit=${project._id}`)}
+              style={{ backgroundColor: "#ea580c" }}
+            >
+              Accept Project
+            </button>
+          </div>
+        )}
 
         <div className="project-subtitle">{project.details?.projectName}</div>
         <nav className="header-nav">
@@ -151,25 +192,37 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 departments={project.departments}
                 projectId={project._id}
                 onUpdate={fetchProject}
-                readOnly={project.status === "Completed"}
+                readOnly={
+                  project.status === "Completed" ||
+                  project.status === "Pending Scope Approval"
+                }
               />
               <OrderItemsCard
                 items={project.items}
                 projectId={project._id}
                 onUpdate={fetchProject}
-                readOnly={project.status === "Completed"}
+                readOnly={
+                  project.status === "Completed" ||
+                  project.status === "Pending Scope Approval"
+                }
               />
               <RisksCard
                 risks={project.uncontrollableFactors}
                 projectId={project._id}
                 onUpdate={fetchProject}
-                readOnly={project.status === "Completed"}
+                readOnly={
+                  project.status === "Completed" ||
+                  project.status === "Pending Scope Approval"
+                }
               />
               <ProductionRisksCard
                 risks={project.productionRisks}
                 projectId={project._id}
                 onUpdate={fetchProject}
-                readOnly={project.status === "Completed"}
+                readOnly={
+                  project.status === "Completed" ||
+                  project.status === "Pending Scope Approval"
+                }
               />
             </div>
             <div className="side-column">
@@ -213,9 +266,11 @@ const ProjectInfoCard = ({ project }) => {
         <h3 className="card-title">
           <span style={{ color: "#94a3b8" }}>ⓘ</span> Project Info
         </h3>
-        <button className="edit-link">
-          <EditIcon width="16" height="16" />
-        </button>
+        {project.status !== "Pending Scope Approval" && (
+          <button className="edit-link">
+            <EditIcon width="16" height="16" />
+          </button>
+        )}
       </div>
       <div className="info-grid">
         <div className="info-item">
@@ -239,7 +294,7 @@ const ProjectInfoCard = ({ project }) => {
                     minute: "2-digit",
                   })
                 : `${new Date(
-                    project.orderDate || project.createdAt
+                    project.orderDate || project.createdAt,
                   ).toLocaleDateString()} | ${project.receivedTime}`
               : "N/A"}
           </div>
@@ -511,7 +566,7 @@ const OrderItemsCard = ({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newItem),
-        }
+        },
       );
 
       if (res.ok) {
@@ -588,7 +643,7 @@ const OrderItemsCard = ({
               onClose={() => setToast(null)}
             />
           </div>,
-          document.body
+          document.body,
         )}
 
       {/* Confirmation Dialog - Using ConfirmationModal for consistency */}
@@ -821,7 +876,7 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
         `/api/projects/${projectId}/uncontrollable-factors/${deleteId}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (res.ok) {
@@ -1068,7 +1123,7 @@ const ProductionRisksCard = ({
         `/api/projects/${projectId}/production-risks/${deleteId}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (res.ok) {
@@ -1323,13 +1378,13 @@ const ApprovalsCard = ({ status }) => {
                   backgroundColor: isCompleted
                     ? stepColor
                     : isActive
-                    ? "#fff"
-                    : "#fff",
+                      ? "#fff"
+                      : "#fff",
                   borderColor: isCompleted
                     ? stepColor
                     : isActive
-                    ? stepColor
-                    : "#e2e8f0",
+                      ? stepColor
+                      : "#e2e8f0",
                   boxShadow: isActive
                     ? `0 0 0 4px ${stepColor}33` // Add a subtle glow for active
                     : "none",
@@ -1367,15 +1422,15 @@ const ApprovalsCard = ({ status }) => {
                       isCompleted
                         ? ""
                         : isActive
-                        ? "active-text"
-                        : "pending-text"
+                          ? "active-text"
+                          : "pending-text"
                     }`}
                     style={{
                       color: isActive
                         ? stepColor
                         : isCompleted
-                        ? "#1e293b"
-                        : "#94a3b8",
+                          ? "#1e293b"
+                          : "#94a3b8",
                       fontWeight: isActive ? "600" : "500",
                     }}
                   >
@@ -1390,8 +1445,8 @@ const ApprovalsCard = ({ status }) => {
                   {isCompleted
                     ? "Completed"
                     : isActive
-                    ? "Current Status"
-                    : "Pending"}
+                      ? "Current Status"
+                      : "Pending"}
                 </span>
               </div>
             </div>
