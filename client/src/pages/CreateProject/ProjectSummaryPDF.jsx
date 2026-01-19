@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
 });
 
 const ProjectSummaryPDF = ({ formData }) => {
+  console.log("PDF Component Rendering. Attachments:", formData.attachments);
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -330,6 +331,55 @@ const ProjectSummaryPDF = ({ formData }) => {
           </View>
         </Page>
       )}
+
+      {/* [NEW] Attachments Pages - FORCE RENDER */}
+      {formData.attachments &&
+        formData.attachments.length > 0 &&
+        formData.attachments.map((path, index) => {
+          // REMOVED REGEX CHECK to debug
+          // const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+          // if (!isImage) return null;
+
+          console.log(`Rendering PDF Page for: ${path}`);
+
+          return (
+            <Page key={index} size="A4" style={styles.page}>
+              <View style={styles.header}>
+                <View>
+                  <Text style={styles.title}>Reference Material</Text>
+                  <Text style={styles.subtitle}>
+                    {formData.projectName} - Attachment #{index + 1}
+                  </Text>
+                  {/* DEBUG: Show path to verify data presence */}
+                  <Text style={{ fontSize: 8, color: "red" }}>
+                    DEBUG PATH: {path}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Image
+                  src={`http://localhost:5000${path}`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                  }}
+                />
+              </View>
+              <View style={styles.footer}>
+                <Text>
+                  MagicHands Project Management System • Confidential Document
+                </Text>
+              </View>
+            </Page>
+          );
+        })}
     </Document>
   );
 };

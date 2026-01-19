@@ -303,9 +303,84 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               </div>
             )}
 
-            {/* Existing Sample Image (Read Only) */}
+            {/* Existing Attachments (from New Orders) */}
+            {formData.attachments && formData.attachments.length > 0 && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                  gap: "0.5rem",
+                }}
+              >
+                {formData.attachments.map((path, idx) => {
+                  const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                  const fileName = path.split("/").pop();
+                  return (
+                    <a
+                      key={idx}
+                      href={`http://localhost:5000${path}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        position: "relative",
+                        aspectRatio: "1",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "rgba(0,0,0,0.1)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      {isImage ? (
+                        <img
+                          src={`http://localhost:5000${path}`}
+                          alt="attachment"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            textAlign: "center",
+                            padding: "0.5rem",
+                            fontSize: "0.8rem",
+                            color: "var(--text-secondary)",
+                            overflow: "hidden",
+                            width: "100%",
+                          }}
+                        >
+                          <FolderIcon width="24" height="24" />
+                          <div
+                            style={{
+                              marginTop: "0.25rem",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              color: "var(--text-primary)",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            {fileName}
+                          </div>
+                        </div>
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Existing Sample Image (Legacy/Fallback) */}
             {formData.sampleImage &&
-              (!formData.files || formData.files.length === 0) && (
+              (!formData.files || formData.files.length === 0) &&
+              (!formData.attachments || formData.attachments.length === 0) && (
                 <div style={{ marginTop: "1rem" }}>
                   <img
                     src={`http://localhost:5000${formData.sampleImage}`}
