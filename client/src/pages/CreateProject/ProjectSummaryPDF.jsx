@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const ProjectSummaryPDF = ({ formData }) => {
+const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
   console.log("PDF Component Rendering. Attachments:", formData.attachments);
   return (
     <Document>
@@ -159,6 +159,31 @@ const ProjectSummaryPDF = ({ formData }) => {
             <Text style={styles.label}>Supply Source:</Text>
             <Text style={styles.value}>{formData.supplySource}</Text>
           </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Brief Overview:</Text>
+            <Text style={styles.value}>{formData.briefOverview || "N/A"}</Text>
+          </View>
+          {/* Sample Image */}
+          {(formData.sampleImage ||
+            (formData.details && formData.details.sampleImage)) &&
+            imageUrls[formData.sampleImage || formData.details.sampleImage] && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.label}>Reference Image:</Text>
+                <Image
+                  style={{
+                    width: 100,
+                    height: 100,
+                    objectFit: "contain",
+                    marginTop: 5,
+                  }}
+                  src={
+                    imageUrls[
+                      formData.sampleImage || formData.details.sampleImage
+                    ]
+                  }
+                />
+              </View>
+            )}
         </View>
 
         {/* Delivery */}
@@ -302,43 +327,52 @@ const ProjectSummaryPDF = ({ formData }) => {
       </Page>
 
       {/* [NEW] Image Page */}
-      {formData.sampleImage && (
-        <Page size="A4" style={styles.page}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Reference Material</Text>
-              <Text style={styles.subtitle}>
-                {formData.projectName} - Sample Image
-              </Text>
+      {(formData.sampleImage ||
+        (formData.details && formData.details.sampleImage)) &&
+        imageUrls[formData.sampleImage || formData.details.sampleImage] && (
+          <Page size="A4" style={styles.page}>
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>Reference Material</Text>
+                <Text style={styles.subtitle}>
+                  {formData.projectName} - Sample Image
+                </Text>
+              </View>
             </View>
-          </View>
-          <View
-            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-          >
-            {/* Note: React-PDF Image requires valid source. Localhost URL might work if accessible, 
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {/* Note: React-PDF Image requires valid source. Localhost URL might work if accessible, 
                  otherwise might need base64 or absolute path. 
                  Since this is client-side generation, http://localhost:5000/... matches browser access.
              */}
-            <Image
-              src={`http://localhost:5000${formData.sampleImage}`}
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
-          </View>
-          <View style={styles.footer}>
-            <Text>
-              MagicHands Project Management System • Confidential Document
-            </Text>
-          </View>
-        </Page>
-      )}
+              <Image
+                src={
+                  imageUrls[
+                    formData.sampleImage || formData.details.sampleImage
+                  ]
+                }
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            </View>
+            <View style={styles.footer}>
+              <Text>
+                MagicHands Project Management System • Confidential Document
+              </Text>
+            </View>
+          </Page>
+        )}
 
       {/* [NEW] Attachments Pages - FORCE RENDER */}
       {formData.attachments &&
         formData.attachments.length > 0 &&
         formData.attachments.map((path, index) => {
-          // REMOVED REGEX CHECK to debug
-          // const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-          // if (!isImage) return null;
+          // Render only if we have a resolved blob URL
+          if (!imageUrls[path]) return null;
 
           console.log(`Rendering PDF Page for: ${path}`);
 
@@ -350,10 +384,6 @@ const ProjectSummaryPDF = ({ formData }) => {
                   <Text style={styles.subtitle}>
                     {formData.projectName} - Attachment #{index + 1}
                   </Text>
-                  {/* DEBUG: Show path to verify data presence */}
-                  <Text style={{ fontSize: 8, color: "red" }}>
-                    DEBUG PATH: {path}
-                  </Text>
                 </View>
               </View>
               <View
@@ -364,7 +394,7 @@ const ProjectSummaryPDF = ({ formData }) => {
                 }}
               >
                 <Image
-                  src={`http://localhost:5000${path}`}
+                  src={imageUrls[path]}
                   style={{
                     width: "100%",
                     height: "100%",

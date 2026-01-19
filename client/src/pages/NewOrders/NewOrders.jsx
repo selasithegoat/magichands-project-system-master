@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import FolderIcon from "../../components/icons/FolderIcon";
+import TrashIcon from "../../components/icons/TrashIcon"; // Import TrashIcon
 import "./NewOrders.css";
 
 const NewOrders = () => {
@@ -8,10 +9,10 @@ const NewOrders = () => {
     clientName: "",
     deliveryLocation: "",
     projectName: "",
-    description: "",
-    details: "",
+    briefOverview: "", // [New]
+    items: [{ description: "", details: "", qty: 1 }],
     orderDate: "",
-    deliveryDate: "", // [New]
+    deliveryDate: "",
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -40,6 +41,26 @@ const NewOrders = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // [New] Item Management Functions
+  const addItem = () => {
+    setFormData((prev) => ({
+      ...prev,
+      items: [...prev.items, { description: "", details: "", qty: 1 }],
+    }));
+  };
+
+  const removeItem = (index) => {
+    const newItems = formData.items.filter((_, i) => i !== index);
+    setFormData((prev) => ({ ...prev, items: newItems }));
+  };
+
+  const updateItem = (index, field, value) => {
+    const newItems = formData.items.map((item, i) =>
+      i === index ? { ...item, [field]: value } : item,
+    );
+    setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   // Handle removal of a file
@@ -73,10 +94,10 @@ const NewOrders = () => {
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
     formPayload.append("status", "New Order");
+    formPayload.append("briefOverview", formData.briefOverview); // [New]
 
-    // Map description and details for controller to put into items[]
-    formPayload.append("description", formData.description);
-    formPayload.append("details", formData.details);
+    // [Changed] Send items as JSON string
+    formPayload.append("items", JSON.stringify(formData.items));
 
     if (selectedFiles.length > 0) {
       selectedFiles.forEach((file) => {
@@ -100,8 +121,8 @@ const NewOrders = () => {
           clientName: "",
           deliveryLocation: "",
           projectName: "",
-          description: "",
-          details: "",
+          briefOverview: "", // [Reset]
+          items: [{ description: "", details: "", qty: 1 }], // [Reset]
           orderDate: new Date().toISOString().slice(0, 16),
           deliveryDate: "",
         });
@@ -233,30 +254,82 @@ const NewOrders = () => {
               />
             </div>
 
+            {/* [New] Brief Overview */}
             <div className="form-group">
-              <label htmlFor="description">Description of Order</label>
+              <label htmlFor="briefOverview">Brief Overview</label>
               <textarea
-                id="description"
-                name="description"
-                value={formData.description}
+                id="briefOverview"
+                name="briefOverview"
+                value={formData.briefOverview}
                 onChange={handleChange}
                 className="form-input textarea-short"
-                placeholder="Brief summary of the order..."
+                placeholder="High-level summary (e.g. '3 Large banners for stage background')"
                 rows="2"
               ></textarea>
             </div>
 
+            {/* [Changed] Items Section */}
             <div className="form-group">
-              <label htmlFor="details">Detailed Specifications</label>
-              <textarea
-                id="details"
-                name="details"
-                value={formData.details}
-                onChange={handleChange}
-                className="form-input textarea-tall"
-                placeholder="Full details, measurements, materials, etc..."
-                rows="5"
-              ></textarea>
+              <label>Order Items</label>
+              <div className="items-container">
+                {formData.items.map((item, index) => (
+                  <div key={index} className="item-row">
+                    <div className="item-input-group main">
+                      <input
+                        type="text"
+                        placeholder="Description (e.g. Rollup Banner)"
+                        value={item.description}
+                        onChange={(e) =>
+                          updateItem(index, "description", e.target.value)
+                        }
+                        className="form-input"
+                        required
+                      />
+                    </div>
+                    <div className="item-input-group details">
+                      <input
+                        type="text"
+                        placeholder="Details (Optional)"
+                        value={item.details}
+                        onChange={(e) =>
+                          updateItem(index, "details", e.target.value)
+                        }
+                        className="form-input"
+                      />
+                    </div>
+                    <div className="item-input-group qty">
+                      <input
+                        type="number"
+                        placeholder="Qty"
+                        value={item.qty}
+                        onChange={(e) =>
+                          updateItem(index, "qty", e.target.value)
+                        }
+                        className="form-input"
+                        min="1"
+                        required
+                      />
+                    </div>
+                    {formData.items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="remove-item-btn"
+                        title="Remove Item"
+                      >
+                        <TrashIcon width="16" height="16" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="add-item-link"
+                >
+                  + Add Another Item
+                </button>
+              </div>
             </div>
           </div>
 
@@ -274,13 +347,10 @@ const NewOrders = () => {
               id="new-order-attachments"
               style={{ display: "none" }}
               onChange={(e) => {
-                console.log("File input change detected", e.target.files);
                 if (e.target.files && e.target.files.length > 0) {
                   const filesArray = Array.from(e.target.files);
-                  console.log("Processing files:", filesArray);
                   setSelectedFiles((prev) => {
                     const newFiles = [...prev, ...filesArray];
-                    console.log("New selectedFiles state:", newFiles);
                     return newFiles;
                   });
                   e.target.value = null; // Reset

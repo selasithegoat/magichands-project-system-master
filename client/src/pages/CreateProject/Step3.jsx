@@ -68,6 +68,20 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
           </p>
         </div>
 
+        {/* [New] Brief Overview */}
+        <div style={{ marginBottom: "1.5rem" }}>
+          <Input
+            label="BRIEF OVERVIEW"
+            type="textarea"
+            value={formData.briefOverview || ""}
+            onChange={(e) =>
+              setFormData({ ...formData, briefOverview: e.target.value })
+            }
+            placeholder="High-level summary (e.g. '3 Large banners for stage background')"
+            rows={2}
+          />
+        </div>
+
         {/* Items List */}
         <div className="items-list">
           {items.map((item, index) => (

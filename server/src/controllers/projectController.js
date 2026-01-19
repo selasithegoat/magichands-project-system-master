@@ -77,6 +77,20 @@ const createProject = async (req, res) => {
       });
     }
 
+    // [NEW] Handle items array (parsing from JSON string if needed for FormData)
+    let finalItems = items;
+    if (typeof items === "string") {
+      try {
+        finalItems = JSON.parse(items);
+      } catch (e) {
+        console.error("Failed to parse items JSON", e);
+        finalItems = [];
+      }
+    } else if (!finalItems && description) {
+      // Fallback for legacy calls or simple description
+      finalItems = [{ description, breakdown: details, qty: 1 }];
+    }
+
     // Create project
     const project = new Project({
       orderId: finalOrderId,
@@ -86,6 +100,7 @@ const createProject = async (req, res) => {
         lead: lead?.label || lead?.value || lead, // Prefer label (name) over value (id) for lead
         client, // [NEW] Added client name
         projectName,
+        briefOverview: getValue(req.body.briefOverview) || description, // [NEW] Map briefOverview, fallback to description if legacy
         deliveryDate,
         deliveryTime: finalDeliveryTime, // [NEW]
         deliveryLocation,
@@ -95,10 +110,7 @@ const createProject = async (req, res) => {
         attachments: attachmentPaths, // [NEW]
       },
       departments: departments || [],
-      items:
-        items ||
-        (description ? [{ description, breakdown: details, qty: 1 }] : []), // [NEW] Map flat description to items
-      uncontrollableFactors: uncontrollableFactors || [],
+      items: finalItems || [], // [NEW] Use parsed items
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
       currentStep: status ? 1 : 2, // If assigned status provided, likely Step 1 needs completion. Else Step 2.

@@ -93,11 +93,12 @@ const ProjectDetails = () => {
           // Initialize edit form with flat structure for general info
           setEditForm({
             client: data.details?.client || "",
+            briefOverview: data.details?.briefOverview || "", // [New]
             orderDate: data.orderDate
               ? data.orderDate.split("T")[0]
               : data.createdAt
-              ? data.createdAt.split("T")[0]
-              : "",
+                ? data.createdAt.split("T")[0]
+                : "",
             receivedTime: data.receivedTime || "",
             deliveryDate: data.details?.deliveryDate
               ? data.details.deliveryDate.split("T")[0]
@@ -198,8 +199,8 @@ const ProjectDetails = () => {
         orderDate: project.orderDate
           ? project.orderDate.split("T")[0]
           : project.createdAt
-          ? project.createdAt.split("T")[0]
-          : "",
+            ? project.createdAt.split("T")[0]
+            : "",
         receivedTime: project.receivedTime || "",
         deliveryDate: project.details?.deliveryDate
           ? project.details.deliveryDate.split("T")[0]
@@ -223,6 +224,7 @@ const ProjectDetails = () => {
       // Construct payload with flattened fields as expected by the controller
       const payload = {
         client: editForm.client,
+        briefOverview: editForm.briefOverview, // [New]
         orderDate: editForm.orderDate,
         receivedTime: editForm.receivedTime,
         deliveryDate: editForm.deliveryDate,
@@ -474,6 +476,23 @@ const ProjectDetails = () => {
                     />
                   ) : (
                     <p>{details.client || "N/A"}</p>
+                  )}
+                </div>
+                <div className="info-item">
+                  <label>Brief Overview</label>
+                  {isEditing ? (
+                    <textarea
+                      className="edit-input"
+                      name="briefOverview"
+                      value={editForm.briefOverview || ""}
+                      onChange={handleChange}
+                      rows={2}
+                      style={{ resize: "vertical" }}
+                    />
+                  ) : (
+                    <p style={{ whiteSpace: "pre-wrap" }}>
+                      {details.briefOverview || "N/A"}
+                    </p>
                   )}
                 </div>
                 <div className="info-item">
@@ -887,7 +906,7 @@ const ProjectDetails = () => {
                         setLeadForm(
                           project.projectLeadId?._id ||
                             project.projectLeadId ||
-                            ""
+                            "",
                         );
                       }}
                       style={{
@@ -994,7 +1013,7 @@ const ProjectDetails = () => {
                         >
                           (
                           {formatLastUpdated(
-                            project.sectionUpdates.uncontrollableFactors
+                            project.sectionUpdates.uncontrollableFactors,
                           )}
                           )
                         </span>
@@ -1034,7 +1053,7 @@ const ProjectDetails = () => {
                         >
                           (
                           {formatLastUpdated(
-                            project.sectionUpdates.productionRisks
+                            project.sectionUpdates.productionRisks,
                           )}
                           )
                         </span>

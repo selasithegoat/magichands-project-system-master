@@ -24,6 +24,9 @@ const ProjectSchema = new mongoose.Schema(
         type: String,
         required: true,
       },
+      briefOverview: {
+        type: String, // [New] High-level summary
+      },
       deliveryDate: {
         type: Date,
       },

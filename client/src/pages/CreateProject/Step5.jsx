@@ -21,6 +21,72 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
     type: "",
   });
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [imageUrls, setImageUrls] = useState({});
+
+  // [New] Pre-fetch images for PDF to avoid "invalid extension" and CORS issues in react-pdf
+  React.useEffect(() => {
+    const fetchImages = async () => {
+      const urls = {};
+      const pathsToFetch = [];
+
+      // Add Sample Image
+      const sampleImg =
+        formData.sampleImage ||
+        (formData.details && formData.details.sampleImage);
+      if (
+        sampleImg &&
+        typeof sampleImg === "string" &&
+        sampleImg.match(/\.(jpg|jpeg|png)$/i)
+      ) {
+        pathsToFetch.push(sampleImg);
+      }
+
+      // Add Attachments
+      if (formData.attachments && Array.isArray(formData.attachments)) {
+        formData.attachments.forEach((path) => {
+          if (typeof path === "string" && path.match(/\.(jpg|jpeg|png)$/i)) {
+            pathsToFetch.push(path);
+          }
+        });
+      }
+
+      if (pathsToFetch.length === 0) return;
+
+      console.log("Step5: Pre-fetching images for PDF:", pathsToFetch);
+
+      await Promise.all(
+        pathsToFetch.map(async (path) => {
+          try {
+            const res = await fetch(`http://localhost:5000${path}`);
+            if (res.ok) {
+              const blob = await res.blob();
+              // Explicitly set type to jpeg/png based on extension if blob.type is empty or generic?
+              // Actually URL.createObjectURL(blob) works fine.
+              const objectUrl = URL.createObjectURL(blob);
+              urls[path] = objectUrl;
+            } else {
+              console.warn(`Failed to fetch image: ${path}`, res.status);
+            }
+          } catch (err) {
+            console.error(`Error fetching image: ${path}`, err);
+          }
+        }),
+      );
+
+      setImageUrls(urls);
+    };
+
+    fetchImages();
+
+    // Cleanup URL objects on unmount
+    return () => {
+      // We can't easily iterate values here to revoke, relying on page refresh/GC is acceptable for now
+      // or we could store them in a ref to clear.
+      // Ideally:
+      // Object.values(urls).forEach(url => URL.revokeObjectURL(url));
+      // But urls is local. We'd need to use state.
+    };
+  }, [formData]);
 
   const handleCreateClick = async () => {
     if (!isChecked) {
@@ -46,7 +112,7 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
     if (!isChecked) {
       triggerToast(
         "Please verify the information before downloading.",
-        "error"
+        "error",
       );
     }
   };
@@ -334,7 +400,12 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
 
             {isChecked ? (
               <PDFDownloadLink
-                document={<ProjectSummaryPDF formData={formData} />}
+                document={
+                  <ProjectSummaryPDF
+                    formData={formData}
+                    imageUrls={imageUrls}
+                  />
+                }
                 fileName={`Project_${formData.projectName || "Draft"}.pdf`}
                 style={{
                   textDecoration: "none",

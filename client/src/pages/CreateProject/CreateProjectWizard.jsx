@@ -18,6 +18,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       receivedTime: "10:00",
       lead: null,
       projectName: "",
+      briefOverview: "", // [New]
       deliveryDate: new Date().toISOString().split("T")[0],
       deliveryTime: "14:00",
       deliveryLocation: "",
