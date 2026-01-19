@@ -38,6 +38,7 @@ const UserSchema = new mongoose.Schema({
       "Graphics/Design",
       "Photography",
       "Stores",
+      "IT Department",
     ],
     default: [],
   },

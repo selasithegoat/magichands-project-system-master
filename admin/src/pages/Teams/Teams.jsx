@@ -45,6 +45,7 @@ const Teams = () => {
     "Graphics/Design",
     "Photography",
     "Stores",
+    "IT Department",
   ];
 
   // Fetch Employees
@@ -214,15 +215,15 @@ const Teams = () => {
               position: formData.position,
               employeeType: formData.employeeType,
             }),
-          }
+          },
         );
 
         const data = await res.json();
         if (res.ok) {
           setEmployees(
             employees.map((emp) =>
-              emp._id === selectedEmployee._id ? data : emp
-            )
+              emp._id === selectedEmployee._id ? data : emp,
+            ),
           );
           setShowAddModal(false);
           alert("Employee Updated Successfully");
@@ -250,7 +251,7 @@ const Teams = () => {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password: passwordData.newPassword }),
-        }
+        },
       );
 
       if (res.ok) {
@@ -519,8 +520,8 @@ const Teams = () => {
                           pwdStrength < 40
                             ? "#ef4444"
                             : pwdStrength < 80
-                            ? "#eab308"
-                            : "#22c55e",
+                              ? "#eab308"
+                              : "#22c55e",
                       }}
                     ></div>
                   </div>
@@ -533,8 +534,8 @@ const Teams = () => {
                     {pwdStrength < 40
                       ? "Weak"
                       : pwdStrength < 80
-                      ? "Medium"
-                      : "Strong"}
+                        ? "Medium"
+                        : "Strong"}
                   </span>
                 </div>
                 <div className="form-group">
