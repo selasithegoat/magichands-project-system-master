@@ -36,7 +36,7 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
       if (
         sampleImg &&
         typeof sampleImg === "string" &&
-        sampleImg.match(/\.(jpg|jpeg|png)$/i)
+        sampleImg.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
       ) {
         pathsToFetch.push(sampleImg);
       }
@@ -44,7 +44,10 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
       // Add Attachments
       if (formData.attachments && Array.isArray(formData.attachments)) {
         formData.attachments.forEach((path) => {
-          if (typeof path === "string" && path.match(/\.(jpg|jpeg|png)$/i)) {
+          if (
+            typeof path === "string" &&
+            path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
+          ) {
             pathsToFetch.push(path);
           }
         });
@@ -52,23 +55,46 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
 
       if (pathsToFetch.length === 0) return;
 
-      console.log("Step5: Pre-fetching images for PDF:", pathsToFetch);
+      console.log("Step5: Processing images for PDF:", pathsToFetch);
 
       await Promise.all(
         pathsToFetch.map(async (path) => {
           try {
+            // 1. Fetch Blob
             const res = await fetch(`http://localhost:5000${path}`);
-            if (res.ok) {
-              const blob = await res.blob();
-              // Explicitly set type to jpeg/png based on extension if blob.type is empty or generic?
-              // Actually URL.createObjectURL(blob) works fine.
-              const objectUrl = URL.createObjectURL(blob);
-              urls[path] = objectUrl;
-            } else {
-              console.warn(`Failed to fetch image: ${path}`, res.status);
-            }
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const blob = await res.blob();
+
+            // 2. Load into Image to allow Canvas conversion (normalizes formats like WebP/Gif -> PNG)
+            const img = new Image();
+            const blobUrl = URL.createObjectURL(blob);
+            img.src = blobUrl;
+
+            await new Promise((resolve, reject) => {
+              img.onload = () => resolve();
+              img.onerror = (e) => reject(e);
+            });
+
+            // 3. Draw to Canvas and Export as PNG
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+
+            // 4. Get PNG Blob
+            const pngBlob = await new Promise((resolve) =>
+              canvas.toBlob(resolve, "image/png"),
+            );
+
+            // 5. Create Object URL for the PNG
+            const pngUrl = URL.createObjectURL(pngBlob);
+            urls[path] = pngUrl; // Mapped to original path
+
+            // Cleanup temp url
+            URL.revokeObjectURL(blobUrl);
           } catch (err) {
-            console.error(`Error fetching image: ${path}`, err);
+            console.error(`Error processing image ${path}:`, err);
           }
         }),
       );

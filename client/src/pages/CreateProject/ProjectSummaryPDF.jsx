@@ -176,6 +176,7 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
                     objectFit: "contain",
                     marginTop: 5,
                   }}
+                  format="png"
                   src={
                     imageUrls[
                       formData.sampleImage || formData.details.sampleImage
@@ -356,6 +357,7 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
                     formData.sampleImage || formData.details.sampleImage
                   ]
                 }
+                format="png"
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             </View>
@@ -395,6 +397,7 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
               >
                 <Image
                   src={imageUrls[path]}
+                  format="png"
                   style={{
                     width: "100%",
                     height: "100%",

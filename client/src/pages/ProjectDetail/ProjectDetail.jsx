@@ -206,6 +206,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                   project.status === "Pending Scope Approval"
                 }
               />
+              <ReferenceMaterialsCard project={project} />
               <RisksCard
                 risks={project.uncontrollableFactors}
                 projectId={project._id}
@@ -781,6 +782,149 @@ const OrderItemsCard = ({
           </p>
         )
       )}
+    </div>
+  );
+};
+
+const ReferenceMaterialsCard = ({ project }) => {
+  const details = project.details || {};
+  const sampleImage = project.sampleImage || details.sampleImage;
+  const attachments = project.attachments || details.attachments || [];
+
+  if (!sampleImage && (!attachments || attachments.length === 0)) return null;
+
+  return (
+    <div className="detail-card">
+      <div className="card-header">
+        <h3 className="card-title">📎 Reference Materials</h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        {/* Sample Image */}
+        {sampleImage && (
+          <div>
+            <h4
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: "600",
+                color: "#64748b",
+                marginBottom: "0.5rem",
+                textTransform: "uppercase",
+              }}
+            >
+              Sample Image
+            </h4>
+            <div
+              style={{
+                borderRadius: "8px",
+                overflow: "hidden",
+                border: "1px solid #e2e8f0",
+                maxWidth: "200px",
+              }}
+            >
+              <a
+                href={`http://localhost:5000${sampleImage}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={`http://localhost:5000${sampleImage}`}
+                  alt="Sample"
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                  }}
+                />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Attachments */}
+        {attachments.length > 0 && (
+          <div>
+            <h4
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: "600",
+                color: "#64748b",
+                marginBottom: "0.5rem",
+                textTransform: "uppercase",
+              }}
+            >
+              Attachments ({attachments.length})
+            </h4>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                gap: "0.5rem",
+              }}
+            >
+              {attachments.map((path, idx) => {
+                const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                const fileName = path.split("/").pop();
+                return (
+                  <a
+                    key={idx}
+                    href={`http://localhost:5000${path}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      position: "relative",
+                      aspectRatio: "1",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#f8fafc", // slate-50
+                      textDecoration: "none",
+                    }}
+                  >
+                    {isImage ? (
+                      <img
+                        src={`http://localhost:5000${path}`}
+                        alt="attachment"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "0.5rem",
+                          color: "#64748b",
+                          width: "100%",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <FolderIcon width="24" height="24" />
+                        <div
+                          style={{
+                            marginTop: "0.25rem",
+                            fontSize: "0.7rem",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                            overflow: "hidden",
+                            color: "#334155",
+                          }}
+                        >
+                          {fileName}
+                        </div>
+                      </div>
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
