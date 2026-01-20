@@ -16,7 +16,11 @@ const Projects = () => {
   });
 
   // Pagination & Filter State
+  // Pagination & Filter State
   const [filterStatus, setFilterStatus] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [clientFilter, setClientFilter] = useState("All");
+  const [leadFilter, setLeadFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
@@ -102,10 +106,55 @@ const Projects = () => {
     return "draft";
   };
 
+  // Derived Lists
+  const uniqueClients = [
+    ...new Set(
+      projects
+        .map((p) => p.details?.client)
+        .filter((c) => c && c.trim() !== ""),
+    ),
+  ].sort();
+
+  const uniqueLeads = [
+    ...new Set(
+      projects.map((p) => {
+        if (p.projectLeadId) {
+          return `${p.projectLeadId.firstName} ${p.projectLeadId.lastName}`;
+        }
+        return p.details?.lead || "";
+      }),
+    ),
+  ]
+    .filter((l) => l && l !== "" && l !== "Unassigned")
+    .sort();
+
   // Filter Logic
   const filteredProjects = projects.filter((project) => {
-    if (filterStatus === "All") return true;
-    return project.status === filterStatus;
+    // 1. Status
+    if (filterStatus !== "All" && project.status !== filterStatus) return false;
+
+    // 2. Search Query (Order ID)
+    if (
+      searchQuery &&
+      !project.orderId?.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
+      return false;
+    }
+
+    // 3. Client
+    if (clientFilter !== "All" && project.details?.client !== clientFilter) {
+      return false;
+    }
+
+    // 4. Lead
+    if (leadFilter !== "All") {
+      const leadName = project.projectLeadId
+        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+        : project.details?.lead || "";
+      if (leadName !== leadFilter) return false;
+    }
+
+    return true;
   });
 
   // Pagination Logic
@@ -129,21 +178,90 @@ const Projects = () => {
 
         <div className="projects-table-container">
           <div className="table-controls">
-            <div className="filter-group">
-              <label>Status:</label>
+            {/* Filter Bar */}
+            <div className="filter-bar">
+              {/* Search Order # */}
+              <div className="search-pill-wrapper">
+                <input
+                  type="text"
+                  placeholder="Search Order #..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="search-pill"
+                />
+                <div className="search-icon-small">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Status Filter */}
               <select
                 value={filterStatus}
                 onChange={(e) => {
                   setFilterStatus(e.target.value);
-                  setCurrentPage(1); // Reset to page 1 on filter change
+                  setCurrentPage(1);
                 }}
-                className="status-filter"
+                className="filter-pill"
               >
-                <option value="All">All Projects</option>
+                <option value="All">All Status</option>
                 <option value="Draft">Draft</option>
+                <option value="New Order">New Order</option>
+                <option value="Order Confirmed">Order Confirmed</option>
                 <option value="Pending Approval">Pending Approval</option>
+                <option value="Pending Scope Approval">
+                  Pending Scope Approval
+                </option>
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
+                <option value="Delivered">Delivered</option>
+              </select>
+
+              {/* Client Filter */}
+              <select
+                value={clientFilter}
+                onChange={(e) => {
+                  setClientFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="filter-pill"
+              >
+                <option value="All">All Clients</option>
+                {uniqueClients.map((client, idx) => (
+                  <option key={idx} value={client}>
+                    {client}
+                  </option>
+                ))}
+              </select>
+
+              {/* Lead Filter */}
+              <select
+                value={leadFilter}
+                onChange={(e) => {
+                  setLeadFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="filter-pill"
+              >
+                <option value="All">All Leads</option>
+                {uniqueLeads.map((lead, idx) => (
+                  <option key={idx} value={lead}>
+                    {lead}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="result-count">
