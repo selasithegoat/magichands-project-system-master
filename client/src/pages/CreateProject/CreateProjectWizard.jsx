@@ -134,6 +134,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
                 : "Assigned Lead",
             projectLead: data.projectLeadId,
             client: data.details?.client || "", // [NEW] Map client name
+            deliveryLocation: data.details?.deliveryLocation || "", // [NEW] Map delivery location
+            briefOverview: data.details?.briefOverview || "", // [NEW] Map brief overview
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             attachments: data.details?.attachments || [], // [NEW] Map attachments
             // Step 2 & 3 & 4
