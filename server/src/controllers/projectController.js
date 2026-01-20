@@ -113,10 +113,18 @@ const createProject = async (req, res) => {
       items: finalItems || [], // [NEW] Use parsed items
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
+      productionRisks: productionRisks || [],
       currentStep: status ? 1 : 2, // If assigned status provided, likely Step 1 needs completion. Else Step 2.
       status: status || "Order Confirmed", // Default or Explicit
       createdBy: req.user._id,
       projectLeadId: projectLeadId || null,
+      // [NEW] Project Type System
+      projectType: req.body.projectType || "Standard",
+      priority:
+        req.body.priority ||
+        (req.body.projectType === "Emergency" ? "Urgent" : "Normal"),
+      quoteDetails: req.body.quoteDetails || {},
+      updates: req.body.updates || [],
     });
 
     const savedProject = await project.save();

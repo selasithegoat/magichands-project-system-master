@@ -151,6 +151,62 @@ const ProjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    projectType: {
+      type: String,
+      enum: ["Standard", "Emergency", "Quote"],
+      default: "Standard",
+    },
+    priority: {
+      type: String,
+      enum: ["Normal", "Urgent"],
+      default: "Normal",
+    },
+    // Quote Specific Details
+    quoteDetails: {
+      quoteNumber: String,
+      quoteDate: Date,
+      emailResponseSent: Boolean,
+      projectCoordinatorSignature: String,
+      scopeApproved: Boolean,
+      checklist: {
+        cost: Boolean,
+        mockup: Boolean,
+        previousSamples: Boolean,
+        sampleProduction: Boolean,
+        bidSubmission: Boolean,
+      },
+      productionChecklist: {
+        inHouse: Boolean,
+        outside: Boolean,
+        localOutsourcing: Boolean,
+        overseasOutsourcing: Boolean,
+      },
+      productionProof: {
+        proofreadingDone: Boolean,
+        approvedArtworkSent: Boolean,
+        pictureVideoTaken: Boolean,
+      },
+      submission: {
+        sentBy: String,
+        sentVia: [String], // Email, WhatsApp, Call, Other
+      },
+      clientFeedback: String,
+      finalUpdate: {
+        accepted: Boolean,
+        cancelled: Boolean,
+      },
+      filledBy: String, // Self / With Colleague
+      leadSignature: String,
+      submissionDate: Date,
+    },
+    updates: [
+      {
+        date: { type: Date, default: Date.now },
+        event: String,
+        status: String, // email update – projects dept only
+        note: String,
+      },
+    ],
   },
   { timestamps: true },
 );

@@ -18,6 +18,8 @@ import {
   useLocation,
 } from "react-router-dom";
 import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
+import CreateProjectLanding from "./pages/CreateProject/CreateProjectLanding"; // [NEW]
+import QuoteProjectWizard from "./pages/CreateProject/QuoteWizard/QuoteProjectWizard"; // [NEW]
 import PendingAssignments from "./pages/PendingAssignments/PendingAssignments";
 import MyActivities from "./pages/MyActivities/MyActivities";
 
@@ -63,7 +65,7 @@ function App() {
         // Count active projects (everything except 'Completed' and 'Pending Scope Approval')
         const active = data.filter(
           (p) =>
-            p.status !== "Completed" && p.status !== "Pending Scope Approval"
+            p.status !== "Completed" && p.status !== "Pending Scope Approval",
         );
         setProjectCount(active.length);
       }
@@ -165,7 +167,35 @@ function App() {
             navigate={navigate}
             projectCount={projectCount}
           >
-            <PendingAssignments onStartNew={() => navigate("/create/wizard")} />
+            <PendingAssignments
+              onStartNew={() => navigate("/create/select-type")}
+            />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/create/select-type"
+        element={
+          <ProtectedLayout
+            activeView="create"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <CreateProjectLanding />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/create/quote"
+        element={
+          <ProtectedLayout
+            activeView="create"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <QuoteProjectWizard />
           </ProtectedLayout>
         }
       />
@@ -235,7 +265,7 @@ function App() {
             navigate={navigate}
             projectCount={projectCount}
           >
-            <NewOrders />
+            <CreateProjectLanding />
           </ProtectedLayout>
         }
       />

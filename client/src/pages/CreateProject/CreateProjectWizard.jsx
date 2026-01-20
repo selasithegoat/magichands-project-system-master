@@ -77,6 +77,15 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
   // Check for edit mode on mount
   React.useEffect(() => {
+    // [NEW] Handle Project Type & Priority from Landing Page
+    if (location.state?.projectType) {
+      setFormData((prev) => ({
+        ...prev,
+        projectType: location.state.projectType,
+        priority: location.state.priority || prev.priority || "Normal",
+      }));
+    }
+
     const params = new URLSearchParams(location.search);
     const editId = params.get("edit");
 

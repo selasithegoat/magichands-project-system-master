@@ -64,12 +64,41 @@ const PendingAssignments = ({ onStartNew }) => {
           <h1>Pending Project Assignments</h1>
           <p>You have {adjustments.length} projects waiting for acceptance.</p>
         </div>
+        <button
+          className="btn-start-new"
+          onClick={onStartNew}
+          style={{
+            padding: "0.75rem 1.5rem",
+            background: "#3498db",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Start New Project
+        </button>
       </div>
 
       <div className="pa-grid">
         {adjustments.length === 0 ? (
           <div className="no-assignments">
             <p>No pending assignments.</p>
+            <button
+              className="btn-start-new"
+              onClick={onStartNew}
+              style={{
+                marginTop: "1rem",
+                padding: "0.75rem 1.5rem",
+                background: "#3498db",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Start New Project
+            </button>
           </div>
         ) : (
           adjustments.map((project) => (
@@ -85,7 +114,7 @@ const PendingAssignments = ({ onStartNew }) => {
                 <p>
                   <strong>Assigned:</strong>{" "}
                   {new Date(
-                    project.orderDate || project.createdAt
+                    project.orderDate || project.createdAt,
                   ).toLocaleDateString()}{" "}
                   at{" "}
                   {project.receivedTime
