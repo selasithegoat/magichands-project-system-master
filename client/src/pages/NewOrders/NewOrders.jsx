@@ -1,24 +1,32 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom"; // [NEW]
 import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon"; // Import TrashIcon
 import "./NewOrders.css";
 
 const NewOrders = () => {
+  const location = useLocation(); // [NEW]
   const [formData, setFormData] = useState({
     orderNumber: "",
     clientName: "",
     deliveryLocation: "",
     projectName: "",
-    briefOverview: "", // [New]
+    briefOverview: "",
     items: [{ description: "", details: "", qty: 1 }],
     orderDate: "",
     deliveryDate: "",
+    // [New] Fields from Landing Page selection
+    projectType: location.state?.projectType || "Standard",
+    priority: location.state?.priority || "Normal",
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
 
   // Auto-generate order number on mount
   useEffect(() => {
+    // If user navigated directly here without selection, maybe default to Standard?
+    // We already set default in useState.
+
     const generateOrderNumber = () => {
       const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "");
       const randomPart = Math.floor(1000 + Math.random() * 9000);
@@ -35,8 +43,11 @@ const NewOrders = () => {
       ...prev,
       orderNumber: generateOrderNumber(),
       orderDate: isoString,
+      // Ensure type/priority are set if state updates late (unlikely) or just purely from location
+      projectType: location.state?.projectType || prev.projectType,
+      priority: location.state?.priority || prev.priority,
     }));
-  }, []);
+  }, [location.state]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -94,7 +105,10 @@ const NewOrders = () => {
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
     formPayload.append("status", "New Order");
-    formPayload.append("briefOverview", formData.briefOverview); // [New]
+    formPayload.append("briefOverview", formData.briefOverview);
+    // [NEW]
+    formPayload.append("projectType", formData.projectType);
+    formPayload.append("priority", formData.priority);
 
     // [Changed] Send items as JSON string
     formPayload.append("items", JSON.stringify(formData.items));

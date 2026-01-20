@@ -270,6 +270,19 @@ function App() {
         }
       />
       <Route
+        path="/new-orders/form"
+        element={
+          <ProtectedLayout
+            activeView="new-orders"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <NewOrders />
+          </ProtectedLayout>
+        }
+      />
+      <Route
         path="/end-of-day"
         element={
           <ProtectedLayout

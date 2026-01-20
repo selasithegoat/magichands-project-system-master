@@ -13,9 +13,8 @@ const CreateProjectLanding = () => {
       if (type === "Quote") {
         navigate("/create/quote");
       } else {
-        // Standard or Emergency
-        // Pass state to wizard to set 'priority' or 'projectType'
-        navigate("/create/wizard", {
+        // Standard or Emergency (Front Desk Flow -> New Order Form)
+        navigate("/new-orders/form", {
           state: {
             projectType: type,
             priority: type === "Emergency" ? "Urgent" : "Normal",
