@@ -71,7 +71,8 @@ const AssignProject = () => {
       autoGenerate: false, // Use the order's ID
       projectName: order.details?.projectName || "",
       client: order.details?.client || "",
-      overview: order.items?.[0]?.description || "", // Map description
+      overview:
+        order.details?.briefOverview || order.items?.[0]?.description || "", // Map briefOverview with fallback
       selectedOrderId: order._id, // Set ID to switch to UPDATE mode
     }));
   };
