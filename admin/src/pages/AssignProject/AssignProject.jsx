@@ -7,7 +7,7 @@ import Select from "../../components/Form/Select";
 import Toggle from "../../components/Form/Toggle";
 import PrioritySelector from "../../components/Form/PrioritySelector";
 
-const AssignProject = () => {
+const AssignProject = ({ user }) => {
   const [formData, setFormData] = useState({
     orderNumber: "#PRJ-2024-0012", // Auto-generated
     autoGenerate: true,
@@ -31,12 +31,16 @@ const AssignProject = () => {
         if (res.ok) {
           const data = await res.json();
           // Format for Select component: { value: id, label: name }
-          const formattedUsers = data.map((u) => ({
-            value: u._id,
-            label:
-              `${u.firstName || ""} ${u.lastName || ""} (${u.name})`.trim() ||
-              u.name,
-          }));
+          const formattedUsers = data
+            .filter(
+              (u) => u._id !== user._id && u.employeeId !== user.employeeId,
+            )
+            .map((u) => ({
+              value: u._id,
+              label:
+                `${u.firstName || ""} ${u.lastName || ""} (${u.name})`.trim() ||
+                u.name,
+            }));
           setAvailableUsers(formattedUsers);
         }
       } catch (err) {

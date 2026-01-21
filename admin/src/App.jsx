@@ -107,10 +107,13 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<Navigate to="/projects" replace />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/projects/:id" element={<ProjectDetails />} />
-          <Route path="/assign" element={<AssignProject />} />
-          <Route path="/teams" element={<Teams />} />
+          <Route path="/projects" element={<Projects user={user} />} />
+          <Route
+            path="/projects/:id"
+            element={<ProjectDetails user={user} />}
+          />
+          <Route path="/assign" element={<AssignProject user={user} />} />
+          <Route path="/teams" element={<Teams user={user} />} />
         </Routes>
       </Router>
     );

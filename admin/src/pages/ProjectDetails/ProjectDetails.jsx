@@ -44,7 +44,7 @@ const SystemIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
   </svg>
 );
 
-const ProjectDetails = () => {
+const ProjectDetails = ({ user }) => {
   const { id } = useParams();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -376,7 +376,12 @@ const ProjectDetails = () => {
                   .replace(" ", "-")}`}
                 value={project.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                disabled={loading}
+                disabled={
+                  loading ||
+                  (user &&
+                    (project.projectLeadId?._id === user._id ||
+                      project.projectLeadId === user._id))
+                }
                 style={{
                   marginLeft: "1rem",
                   padding: "0.25rem 0.5rem",
@@ -439,18 +444,24 @@ const ProjectDetails = () => {
                   )}
                 </span>
                 {!isEditing ? (
-                  <button
-                    onClick={handleEditToggle}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--text-secondary)",
-                      cursor: "pointer",
-                    }}
-                    title="Edit Info"
-                  >
-                    <PencilIcon width="18" height="18" />
-                  </button>
+                  !(
+                    user &&
+                    (project.projectLeadId?._id === user._id ||
+                      project.projectLeadId === user._id)
+                  ) && (
+                    <button
+                      onClick={handleEditToggle}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--text-secondary)",
+                        cursor: "pointer",
+                      }}
+                      title="Edit Info"
+                    >
+                      <PencilIcon width="18" height="18" />
+                    </button>
+                  )
                 ) : (
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button
@@ -890,18 +901,24 @@ const ProjectDetails = () => {
               >
                 <span>People & Departments</span>
                 {!isEditingLead ? (
-                  <button
-                    onClick={() => setIsEditingLead(true)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--text-secondary)",
-                      cursor: "pointer",
-                    }}
-                    title="Edit Lead"
-                  >
-                    <PencilIcon width="18" height="18" />
-                  </button>
+                  !(
+                    user &&
+                    (project.projectLeadId?._id === user._id ||
+                      project.projectLeadId === user._id)
+                  ) && (
+                    <button
+                      onClick={() => setIsEditingLead(true)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--text-secondary)",
+                        cursor: "pointer",
+                      }}
+                      title="Edit Lead"
+                    >
+                      <PencilIcon width="18" height="18" />
+                    </button>
+                  )
                 ) : (
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button

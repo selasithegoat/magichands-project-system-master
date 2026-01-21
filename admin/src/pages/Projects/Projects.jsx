@@ -5,7 +5,7 @@ import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 
-const Projects = () => {
+const Projects = ({ user }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -326,19 +326,25 @@ const Projects = () => {
                         >
                           View
                         </button>
-                        <button
-                          className="action-btn delete-btn"
-                          onClick={(e) => handleDeleteClick(e, project._id)}
-                          style={{
-                            marginLeft: "0.5rem",
-                            background: "rgba(239, 68, 68, 0.1)",
-                            color: "#ef4444",
-                            border: "1px solid rgba(239, 68, 68, 0.2)",
-                          }}
-                          title="Delete Project"
-                        >
-                          <TrashIcon width="16" height="16" />
-                        </button>
+                        {!(
+                          user &&
+                          (project.projectLeadId?._id === user._id ||
+                            project.projectLeadId === user._id)
+                        ) && (
+                          <button
+                            className="action-btn delete-btn"
+                            onClick={(e) => handleDeleteClick(e, project._id)}
+                            style={{
+                              marginLeft: "0.5rem",
+                              background: "rgba(239, 68, 68, 0.1)",
+                              color: "#ef4444",
+                              border: "1px solid rgba(239, 68, 68, 0.2)",
+                            }}
+                            title="Delete Project"
+                          >
+                            <TrashIcon width="16" height="16" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
