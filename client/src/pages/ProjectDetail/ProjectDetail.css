@@ -805,7 +805,8 @@ textarea.input-field {
 
 /* Deep Mobile Responsiveness */
 @media (max-width: 480px) {
-  .project-header, .project-content {
+  .project-header,
+  .project-content {
     padding: 1rem;
   }
 
@@ -826,7 +827,7 @@ textarea.input-field {
   .detail-card {
     padding: 1rem; /* Reduce card padding */
   }
-  
+
   .actions-grid {
     grid-template-columns: 1fr; /* Stack actions */
   }
@@ -837,8 +838,52 @@ textarea.input-field {
     overflow-x: auto;
     white-space: nowrap;
   }
+  .btn-primary:disabled {
+    background-color: #94a3b8;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
 }
-  background-color: #94a3b8;
-  cursor: not-allowed;
-  box-shadow: none;
+
+/* Emergency Theme */
+.project-detail-container.emergency-theme .project-header {
+  border-bottom: 2px solid #fecaca;
+  background-color: #fffafb;
+}
+
+.project-detail-container.emergency-theme .project-title {
+  color: #dc2626;
+}
+
+.project-detail-container.emergency-theme .status-badge {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.project-detail-container.emergency-theme .detail-card {
+  border: 1px solid #fecaca;
+  box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.05);
+}
+
+.project-detail-container.emergency-theme .card-title {
+  color: #dc2626;
+}
+
+.project-detail-container.emergency-theme .dept-tag {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.project-detail-container.emergency-theme .btn-primary {
+  background-color: #dc2626;
+}
+
+.project-detail-container.emergency-theme .btn-primary:hover {
+  background-color: #b91c1c;
+}
+
+.project-detail-container.emergency-theme .edit-link {
+  color: #dc2626;
 }

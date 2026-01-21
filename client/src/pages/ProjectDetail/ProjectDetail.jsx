@@ -108,8 +108,27 @@ const ProjectDetail = ({ onProjectChange, user }) => {
     );
   if (!project) return null;
 
+  const isEmergency =
+    project.priority === "Urgent" || project.projectType === "Emergency";
+
   return (
-    <div className="project-detail-container">
+    <div
+      className={`project-detail-container ${isEmergency ? "emergency-theme" : ""}`}
+    >
+      {isEmergency && (
+        <div
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            padding: "0.5rem 1rem",
+            textAlign: "center",
+            fontWeight: "bold",
+            borderBottom: "1px solid #fca5a5",
+          }}
+        >
+          🔥 EMERGENCY PROJECT
+        </div>
+      )}
       <header className="project-header">
         <div className="header-top">
           <div className="header-left">

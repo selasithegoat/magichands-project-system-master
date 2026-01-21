@@ -279,8 +279,26 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   if (isLoading)
     return <div style={{ padding: "2rem" }}>Loading project data...</div>;
 
+  const isEmergency =
+    formData.priority === "Urgent" || formData.projectType === "Emergency";
+
   return (
-    <>
+    <div className={`wizard-container ${isEmergency ? "emergency-theme" : ""}`}>
+      {isEmergency && (
+        <div
+          className="emergency-banner"
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            padding: "0.75rem",
+            textAlign: "center",
+            fontWeight: "bold",
+            borderBottom: "1px solid #fca5a5",
+          }}
+        >
+          🔥 EMERGENCY PROJECT - URGENT PRIORITY
+        </div>
+      )}
       {currentStep === 1 && (
         <Step1
           formData={formData}
@@ -336,7 +354,35 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         onConfirm={confirmCancel}
         onCancel={() => setShowCancelModal(false)}
       />
-    </>
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .wizard-container.emergency-theme .step-header h2,
+        .wizard-container.emergency-theme .section-title {
+          color: #dc2626 !important;
+        }
+        .wizard-container.emergency-theme .next-btn,
+        .wizard-container.emergency-theme .submit-btn,
+        .wizard-container.emergency-theme .btn-primary {
+          background-color: #dc2626 !important;
+        }
+        .wizard-container.emergency-theme .next-btn:hover,
+        .wizard-container.emergency-theme .submit-btn:hover,
+        .wizard-container.emergency-theme .btn-primary:hover {
+          background-color: #b91c1c !important;
+        }
+        .wizard-container.emergency-theme .progress-bar-fill {
+          background-color: #dc2626 !important;
+        }
+        .wizard-container.emergency-theme .card-option.selected {
+          border-color: #dc2626 !important;
+          background-color: #fef2f2 !important;
+        }
+      `,
+        }}
+      />
+    </div>
   );
 };
 

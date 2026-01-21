@@ -345,10 +345,26 @@ const ProjectDetails = () => {
 
   return (
     <DashboardLayout>
-      <div className="project-details-page">
+      <div
+        className={`project-details-page ${
+          project &&
+          (project.priority === "Urgent" || project.projectType === "Emergency")
+            ? "emergency-theme"
+            : ""
+        }`}
+      >
         <Link to="/projects" className="back-link">
           ← Back to Projects
         </Link>
+
+        {project &&
+          (project.priority === "Urgent" ||
+            project.projectType === "Emergency") && (
+            <div className="emergency-banner mb-6">
+              <span style={{ fontSize: "1.5rem" }}>🔥</span>
+              <span>EMERGENCY PROJECT - URGENT</span>
+            </div>
+          )}
 
         <div className="details-header">
           <div className="header-left">

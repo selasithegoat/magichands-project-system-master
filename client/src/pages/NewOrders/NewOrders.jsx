@@ -152,8 +152,13 @@ const NewOrders = () => {
     }
   };
 
+  const isEmergency =
+    formData.projectType === "Emergency" || formData.priority === "Urgent";
+
   return (
-    <div className="new-orders-container">
+    <div
+      className={`new-orders-container ${isEmergency ? "emergency-theme" : ""}`}
+    >
       {/* Toast Notification */}
       {toast.show && (
         <div className={`toast-message ${toast.type}`}>
@@ -170,6 +175,13 @@ const NewOrders = () => {
         <h1>New Order Entry</h1>
         <p className="subtitle">Record details for incoming client orders</p>
       </div>
+
+      {isEmergency && (
+        <div className="emergency-banner">
+          <span style={{ fontSize: "1.5rem" }}>🔥</span>
+          <span>EMERGENCY ORDER - High Priority Handling Required</span>
+        </div>
+      )}
 
       <div className="form-card">
         <form onSubmit={handleSubmit}>

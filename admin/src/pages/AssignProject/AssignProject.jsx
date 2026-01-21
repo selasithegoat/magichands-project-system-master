@@ -200,7 +200,30 @@ const AssignProject = () => {
         <h1 className="page-title">Assign New Project</h1>
       </div>
 
-      <div className="assign-card">
+      {formData.selectedOrderId &&
+        newOrders.find((o) => o._id === formData.selectedOrderId) &&
+        (newOrders.find((o) => o._id === formData.selectedOrderId)
+          .projectType === "Emergency" ||
+          newOrders.find((o) => o._id === formData.selectedOrderId).priority ===
+            "Urgent") && (
+          <div className="emergency-banner mb-6">
+            <span style={{ fontSize: "1.5rem" }}>🔥</span>
+            <span>EMERGENCY ORDER - High Priority Handling Required</span>
+          </div>
+        )}
+
+      <div
+        className={`assign-card ${
+          formData.selectedOrderId &&
+          newOrders.find((o) => o._id === formData.selectedOrderId) &&
+          (newOrders.find((o) => o._id === formData.selectedOrderId)
+            .projectType === "Emergency" ||
+            newOrders.find((o) => o._id === formData.selectedOrderId)
+              .priority === "Urgent")
+            ? "emergency-theme"
+            : ""
+        }`}
+      >
         {/* New Orders Section */}
         {newOrders.length > 0 && (
           <div className="new-orders-section mb-6">
