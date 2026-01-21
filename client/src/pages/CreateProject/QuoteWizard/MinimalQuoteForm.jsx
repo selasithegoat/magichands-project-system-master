@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
 import TrashIcon from "../../../components/icons/TrashIcon";
 import FolderIcon from "../../../components/icons/FolderIcon";
+import Input from "../../../components/ui/Input";
+import Select from "../../../components/ui/Select";
+import UserAvatar from "../../../components/ui/UserAvatar";
+import CalendarIcon from "../../../components/icons/CalendarIcon";
+import FolderIconStd from "../../../components/icons/FolderIcon"; // Renamed to avoid collision if any
 import "./MinimalQuoteForm.css";
 
 const MinimalQuoteForm = () => {
@@ -13,6 +18,7 @@ const MinimalQuoteForm = () => {
 
   const [formData, setFormData] = useState({
     projectName: "",
+    clientName: "", // [NEW]
     deliveryDate: "",
     projectLeadId: "",
     quoteNumber: "",
@@ -101,6 +107,7 @@ const MinimalQuoteForm = () => {
       formPayload.append("status", "New Order");
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);
+      formPayload.append("client", formData.clientName); // [NEW] Sync Client Name
       formPayload.append("briefOverview", formData.briefOverview);
       formPayload.append("deliveryDate", formData.deliveryDate);
       formPayload.append("projectLeadId", formData.projectLeadId);
@@ -153,73 +160,98 @@ const MinimalQuoteForm = () => {
           <div className="minimal-quote-form-section">
             <h3 className="section-subtitle">Basic Information</h3>
             <div className="minimal-quote-grid">
-              <div className="minimal-quote-form-group">
-                <label>Quote Number</label>
-                <input
-                  type="text"
-                  name="quoteNumber"
-                  className="minimal-quote-input"
-                  value={formData.quoteNumber}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <Input
+                label="Quote Number"
+                value={formData.quoteNumber}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "quoteNumber", value: e.target.value },
+                  })
+                }
+              />
 
-              <div className="minimal-quote-form-group">
-                <label>Assigned Lead</label>
-                <select
-                  name="projectLeadId"
-                  className="minimal-quote-input"
-                  value={formData.projectLeadId}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Select Lead</option>
-                  {leads.map((l) => (
-                    <option key={l.value} value={l.value}>
-                      {l.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Assigned Lead"
+                options={leads}
+                value={leads.find((l) => l.value === formData.projectLeadId)}
+                onChange={(option) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    projectLeadId: option.value,
+                  }))
+                }
+                placeholder="Select Lead"
+                renderValue={(option) => (
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <UserAvatar />
+                    <span>{option.label}</span>
+                  </div>
+                )}
+                renderOption={(option) => (
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <UserAvatar />
+                    <span>{option.label}</span>
+                  </div>
+                )}
+              />
             </div>
 
             <div className="minimal-quote-grid">
-              <div className="minimal-quote-form-group">
-                <label>Project / Item Name</label>
-                <input
-                  type="text"
-                  name="projectName"
-                  className="minimal-quote-input"
-                  value={formData.projectName}
-                  onChange={handleChange}
-                  required
-                  placeholder="e.g. Annual Report Print"
-                />
-              </div>
+              <Input
+                label="Project / Item Name"
+                placeholder="e.g. Annual Report Print"
+                value={formData.projectName}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "projectName", value: e.target.value },
+                  })
+                }
+                icon={<FolderIconStd />}
+              />
 
-              <div className="minimal-quote-form-group">
-                <label>Requested Completion Date</label>
-                <input
-                  type="date"
-                  name="deliveryDate"
-                  className="minimal-quote-input"
-                  value={formData.deliveryDate}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <Input
+                label="Client Name"
+                placeholder="e.g. MagicHands Corp"
+                value={formData.clientName}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "clientName", value: e.target.value },
+                  })
+                }
+              />
+            </div>
+
+            <div className="minimal-quote-grid">
+              <Input
+                type="date"
+                label="Requested Completion Date"
+                value={formData.deliveryDate}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "deliveryDate", value: e.target.value },
+                  })
+                }
+                icon={<CalendarIcon />}
+              />
             </div>
 
             <div className="minimal-quote-form-group">
-              <label>Brief Overview</label>
+              <label className="input-label">Brief Overview</label>
               <textarea
                 name="briefOverview"
-                className="minimal-quote-input minimal-quote-textarea"
+                className="minimal-quote-textarea-std"
                 value={formData.briefOverview}
                 onChange={handleChange}
                 placeholder="High-level summary of the request..."
                 rows="3"
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color)",
+                  background: "var(--bg-input)",
+                  color: "white",
+                }}
               />
             </div>
           </div>
@@ -232,38 +264,31 @@ const MinimalQuoteForm = () => {
             <div className="minimal-quote-items-container">
               {formData.items.map((item, index) => (
                 <div key={index} className="minimal-quote-item-row">
-                  <div className="item-field description">
-                    <input
-                      type="text"
+                  <div className="item-field description" style={{ flex: 3 }}>
+                    <Input
                       placeholder="Description"
                       value={item.description}
                       onChange={(e) =>
                         updateItem(index, "description", e.target.value)
                       }
-                      className="minimal-quote-input"
-                      required
                     />
                   </div>
-                  <div className="item-field details">
-                    <input
-                      type="text"
+                  <div className="item-field details" style={{ flex: 2 }}>
+                    <Input
                       placeholder="Details (Optional)"
                       value={item.details}
                       onChange={(e) =>
                         updateItem(index, "details", e.target.value)
                       }
-                      className="minimal-quote-input"
                     />
                   </div>
-                  <div className="item-field qty">
-                    <input
+                  <div className="item-field qty" style={{ flex: "0 0 100px" }}>
+                    <Input
                       type="number"
                       placeholder="Qty"
                       value={item.qty}
                       onChange={(e) => updateItem(index, "qty", e.target.value)}
-                      className="minimal-quote-input"
                       min="1"
-                      required
                     />
                   </div>
                   {formData.items.length > 1 && (

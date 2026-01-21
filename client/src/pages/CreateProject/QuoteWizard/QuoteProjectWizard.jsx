@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
+import Input from "../../../components/ui/Input";
+import Select from "../../../components/ui/Select";
+import UserAvatar from "../../../components/ui/UserAvatar";
+import ProgressBar from "../../../components/ui/ProgressBar";
+import BackArrow from "../../../components/icons/BackArrow";
+import CalendarIcon from "../../../components/icons/CalendarIcon";
+import FolderIcon from "../../../components/icons/FolderIcon";
+import TrashIcon from "../../../components/icons/TrashIcon";
+import "./QuoteProjectWizard.css";
 
 const QuoteProjectWizard = () => {
   const navigate = useNavigate();
@@ -21,6 +30,7 @@ const QuoteProjectWizard = () => {
       minute: "2-digit",
     }),
     deliveryDate: "",
+    client: "", // [NEW]
     briefOverview: "", // [NEW]
     attachments: [], // [NEW] Existing attachments
 
@@ -142,6 +152,7 @@ const QuoteProjectWizard = () => {
             items: data.items || [],
             uncontrollableFactors: data.uncontrollableFactors || [],
             receivedTime: data.receivedTime || prev.receivedTime,
+            client: data.details?.client || "", // [NEW]
             briefOverview: data.details?.briefOverview || "", // [NEW]
             attachments: data.details?.attachments || [], // [NEW]
           }));
@@ -259,6 +270,7 @@ const QuoteProjectWizard = () => {
         // Map flat form data to schema structure where necessary
         details: {
           projectName: formData.projectName,
+          client: formData.client, // [NEW]
           lead: formData.leadLabel, // Name
           deliveryDate: formData.deliveryDate,
           briefOverview: formData.briefOverview, // [NEW]
@@ -303,55 +315,114 @@ const QuoteProjectWizard = () => {
   if (isLoading) return <Spinner />;
 
   return (
-    <div
-      className="quote-wizard-container"
-      style={{
-        padding: "2rem",
-        maxWidth: "1000px",
-        margin: "0 auto",
-        background: "#f9f9f9",
-        minHeight: "100vh",
-      }}
-    >
-      <h1
-        style={{ textAlign: "center", marginBottom: "2rem", color: "#2c3e50" }}
-      >
-        Create New Quote
-      </h1>
-
-      <form
-        onSubmit={handleSubmit}
+    <div className="quote-wizard-container">
+      {/* Header */}
+      <div
+        className="step-header"
         style={{
-          background: "white",
-          padding: "2rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "2rem",
         }}
       >
-        {/* Section 1: Project Basic Info */}
-        <h3 className="section-title">Project Details</h3>
-        <div className="form-grid">
-          <div className="form-group">
-            <label>Received Time</label>
-            <input
-              type="text"
-              name="receivedTime"
+        <button
+          className="back-btn"
+          onClick={() => navigate("/")}
+          style={{ background: "none", border: "none", cursor: "pointer" }}
+        >
+          <BackArrow />
+        </button>
+        <h1
+          className="header-title"
+          style={{
+            fontSize: "1.5rem",
+            fontWeight: "700",
+            color: "var(--text-primary)",
+          }}
+        >
+          {editingId ? "Edit Quote Project" : "Create New Quote"}
+        </h1>
+        <button
+          className="cancel-btn"
+          onClick={() => navigate("/")}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#64748b",
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+
+      <div className="step-scrollable-content">
+        {/* Progress */}
+        <ProgressBar currentStep={1} totalSteps={1} />
+
+        {/* Title */}
+        <div className="order-title-section" style={{ marginBottom: "2rem" }}>
+          <h2
+            className="order-title"
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: "600",
+              color: "var(--text-primary)",
+            }}
+          >
+            {formData.quoteDetails.quoteNumber || "New Quote"}
+          </h2>
+          <p className="order-subtitle" style={{ color: "#64748b" }}>
+            Please finalize the technical details for this quote.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="form-body">
+          {/* Section 1: Project Basic Info */}
+          <h3 className="section-title">Project Details</h3>
+          <div
+            className="form-row"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "1.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <Input
+              label="Received Time"
               value={formData.receivedTime}
-              onChange={handleChange}
+              onChange={(e) =>
+                handleChange({
+                  target: { name: "receivedTime", value: e.target.value },
+                })
+              }
             />
-          </div>
-          <div className="form-group">
-            <label>Completion Date</label>
-            <input
+            <Input
               type="date"
-              name="deliveryDate"
+              label="Completion Date"
               value={formData.deliveryDate}
-              onChange={handleChange}
+              onChange={(e) =>
+                handleChange({
+                  target: { name: "deliveryDate", value: e.target.value },
+                })
+              }
+              icon={<CalendarIcon />}
               required
             />
           </div>
-          <div className="form-group checkbox-group">
-            <label>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label
+              className="checkbox-label"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: "pointer",
+              }}
+            >
               <input
                 type="checkbox"
                 name="quoteDetails.emailResponseSent"
@@ -361,519 +432,478 @@ const QuoteProjectWizard = () => {
               Email Response Sent
             </label>
           </div>
-        </div>
 
-        <div className="form-grid">
-          <div className="form-group full-width">
-            <label>Project / Item Name</label>
-            <input
-              type="text"
-              name="projectName"
+          <div
+            className="form-row"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "1.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <Input
+              label="Project / Item Name"
               value={formData.projectName}
-              onChange={handleChange}
+              onChange={(e) =>
+                handleChange({
+                  target: { name: "projectName", value: e.target.value },
+                })
+              }
+              icon={<FolderIcon />}
               required
             />
-          </div>
-          <div className="form-group">
-            <label>Quote Number</label>
-            <input
-              type="text"
-              name="quoteDetails.quoteNumber"
-              value={formData.quoteDetails.quoteNumber}
-              onChange={handleChange}
+            <Input
+              label="Client Name"
+              placeholder="e.g. MagicHands Corp"
+              value={formData.client}
+              onChange={(e) =>
+                handleChange({
+                  target: { name: "client", value: e.target.value },
+                })
+              }
             />
           </div>
-          <div className="form-group">
-            <label>Lead</label>
-            <select
-              name="lead"
-              value={formData.lead}
-              onChange={(e) => {
-                const selected = leads.find((l) => l.value === e.target.value);
+
+          <div
+            className="form-row"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "1.5rem",
+              marginBottom: "1.5rem",
+            }}
+          >
+            <Input
+              label="Quote Number"
+              value={formData.quoteDetails.quoteNumber}
+              onChange={(e) =>
+                handleChange({
+                  target: {
+                    name: "quoteDetails.quoteNumber",
+                    value: e.target.value,
+                  },
+                })
+              }
+            />
+            <Select
+              label="Project Lead"
+              options={leads}
+              value={leads.find((l) => l.value === formData.lead)}
+              onChange={(val) => {
                 setFormData((prev) => ({
                   ...prev,
-                  lead: e.target.value,
-                  leadLabel: selected ? selected.label : "",
+                  lead: val.value,
+                  leadLabel: val.label,
                 }));
               }}
+              placeholder="Select Lead"
+              renderValue={(option) => (
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </div>
+              )}
+              renderOption={(option) => (
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </div>
+              )}
               required
-            >
-              <option value="">Select Lead</option>
-              {leads.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Coordinator Signature</label>
-            <input
-              type="text"
-              name="quoteDetails.projectCoordinatorSignature"
-              value={formData.quoteDetails.projectCoordinatorSignature}
-              onChange={handleChange}
             />
           </div>
-        </div>
 
-        {/* Section: Overview & Reference Materials (Populated from Front Desk) */}
-        <h3 className="section-title">Initial Request Info</h3>
-        <div
-          className="form-group full-width"
-          style={{ marginBottom: "1.5rem" }}
-        >
-          <label>Brief Overview</label>
-          <textarea
-            name="briefOverview"
-            value={formData.briefOverview}
-            onChange={handleChange}
-            rows="3"
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              borderRadius: "4px",
-              border: "1px solid #ddd",
-            }}
-          ></textarea>
-        </div>
+          <div style={{ marginBottom: "1.5rem" }}>
+            <Input
+              label="Coordinator Signature"
+              value={formData.quoteDetails.projectCoordinatorSignature}
+              onChange={(e) =>
+                handleChange({
+                  target: {
+                    name: "quoteDetails.projectCoordinatorSignature",
+                    value: e.target.value,
+                  },
+                })
+              }
+            />
+          </div>
 
-        {formData.attachments?.length > 0 && (
           <div
-            className="form-group full-width"
-            style={{ marginBottom: "1.5rem" }}
-          >
-            <label>Reference Materials from Front Desk</label>
-            <div
+            className="divider"
+            style={{ borderBottom: "1px solid #eee", margin: "2rem 0" }}
+          ></div>
+
+          {/* Section: Overview & Reference Materials */}
+          <h3 className="section-title">Initial Request Info</h3>
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label
+              className="input-label"
               style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap",
-                marginTop: "0.5rem",
+                marginBottom: "0.5rem",
+                display: "block",
+                color: "#64748b",
               }}
             >
-              {formData.attachments.map((file, idx) => (
-                <div
-                  key={idx}
+              Brief Overview
+            </label>
+            <textarea
+              name="briefOverview"
+              value={formData.briefOverview}
+              onChange={handleChange}
+              rows="3"
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: "var(--bg-input)",
+                color: "white",
+              }}
+            ></textarea>
+          </div>
+
+          {formData.attachments?.length > 0 && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label className="section-label" style={{ color: "#64748b" }}>
+                Reference Materials from Front Desk
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                  marginTop: "0.5rem",
+                }}
+              >
+                {formData.attachments.map((file, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: "8px 12px",
+                      background: "#f0f7ff",
+                      border: "1px solid #cce3ff",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <a
+                      href={file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#2563eb", textDecoration: "none" }}
+                    >
+                      {file.split("/").pop()}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div
+            className="divider"
+            style={{ borderBottom: "1px solid #eee", margin: "2rem 0" }}
+          ></div>
+
+          {/* Quote Checklist */}
+          <h3 className="section-title">Quote Checklist</h3>
+          <div
+            className="checklist-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+              gap: "1rem",
+              marginBottom: "2rem",
+            }}
+          >
+            {Object.keys(formData.quoteDetails.checklist).map((key) => (
+              <label
+                key={key}
+                className="checkbox-label"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
+                  padding: "0.75rem",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formData.quoteDetails.checklist[key]}
+                  onChange={() => handleCheckboxChange("checklist", key)}
+                />
+                <span style={{ fontSize: "0.9rem", color: "#1e293b" }}>
+                  {key
+                    .replace(/([A-Z])/g, " $1")
+                    .replace(/^./, (str) => str.toUpperCase())}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {/* Order Breakdown */}
+          <h3 className="section-title">Order / Quantity Breakdown</h3>
+          <div
+            className="quote-items-container"
+            style={{ marginBottom: "2rem" }}
+          >
+            {formData.items.map((item, idx) => (
+              <div
+                key={idx}
+                className="item-row"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr 2fr 2fr 40px",
+                  gap: "1rem",
+                  alignItems: "end",
+                  marginBottom: "1rem",
+                }}
+              >
+                <Input
+                  label={idx === 0 ? "Description" : ""}
+                  placeholder="Description"
+                  value={item.description}
+                  onChange={(e) =>
+                    updateItem(idx, "description", e.target.value)
+                  }
+                />
+                <Input
+                  type="number"
+                  label={idx === 0 ? "Qty" : ""}
+                  placeholder="Qty"
+                  value={item.qty}
+                  onChange={(e) => updateItem(idx, "qty", e.target.value)}
+                />
+                <Input
+                  label={idx === 0 ? "Breakdown" : ""}
+                  placeholder="Breakdown"
+                  value={item.breakdown}
+                  onChange={(e) => updateItem(idx, "breakdown", e.target.value)}
+                />
+                <Input
+                  label={idx === 0 ? "Department" : ""}
+                  placeholder="Department"
+                  value={item.department}
+                  onChange={(e) =>
+                    updateItem(idx, "department", e.target.value)
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => removeItem(idx)}
+                  className="btn-remove"
                   style={{
-                    padding: "8px 12px",
-                    background: "#f0f7ff",
-                    border: "1px solid #cce3ff",
+                    height: "42px",
+                    padding: "0",
+                    background: "#ef4444",
+                    border: "none",
                     borderRadius: "6px",
-                    fontSize: "0.85rem",
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    cursor: "pointer",
                   }}
                 >
-                  <a
-                    href={file}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#2563eb", textDecoration: "none" }}
-                  >
-                    {file.split("/").pop()}
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Quote Checklist */}
-        <h3 className="section-title">Quote Checklist</h3>
-        <div className="checklist-grid">
-          {Object.keys(formData.quoteDetails.checklist).map((key) => (
-            <label key={key} className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={formData.quoteDetails.checklist[key]}
-                onChange={() => handleCheckboxChange("checklist", key)}
-              />{" "}
-              {key
-                .replace(/([A-Z])/g, " $1")
-                .replace(/^./, (str) => str.toUpperCase())}
-            </label>
-          ))}
-        </div>
-
-        {/* Production Checklist */}
-        <h3 className="section-title">Production Checklist</h3>
-        <div className="checklist-grid">
-          {Object.keys(formData.quoteDetails.productionChecklist).map((key) => (
-            <label key={key} className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={formData.quoteDetails.productionChecklist[key]}
-                onChange={() =>
-                  handleCheckboxChange("productionChecklist", key)
-                }
-              />{" "}
-              {key
-                .replace(/([A-Z])/g, " $1")
-                .replace(/^./, (str) => str.toUpperCase())}
-            </label>
-          ))}
-        </div>
-
-        {/* Order Breakdown */}
-        <h3 className="section-title">Order / Quantity Breakdown</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Item Description</th>
-              <th>Quantity</th>
-              <th>Breakdown</th>
-              <th>Department</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {formData.items.map((item, idx) => (
-              <tr key={idx}>
-                <td>
-                  <input
-                    type="text"
-                    value={item.description}
-                    onChange={(e) =>
-                      updateItem(idx, "description", e.target.value)
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.qty}
-                    onChange={(e) => updateItem(idx, "qty", e.target.value)}
-                    style={{ width: "80px" }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={item.breakdown}
-                    onChange={(e) =>
-                      updateItem(idx, "breakdown", e.target.value)
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={item.department}
-                    onChange={(e) =>
-                      updateItem(idx, "department", e.target.value)
-                    }
-                  />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(idx)}
-                    className="btn-remove"
-                  >
-                    X
-                  </button>
-                </td>
-              </tr>
+                  <TrashIcon />
+                </button>
+              </div>
             ))}
-          </tbody>
-        </table>
-        <button type="button" onClick={addItem} className="btn-add">
-          + Add Item
-        </button>
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn-add"
+              style={{
+                background: "#10b981",
+                color: "white",
+                padding: "0.75rem 1.5rem",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              + Add Item
+            </button>
+          </div>
 
-        {/* Uncontrollable Factors */}
-        <h3 className="section-title">Uncontrollable Factors (Job Priority)</h3>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Activity (Job Priority)</th>
-              <th>Responsible</th>
-              <th>Status</th>
-              <th>Risk Factors (Description)</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
+          {/* Uncontrollable Factors */}
+          <h3 className="section-title">
+            Uncontrollable Factors (Job Priority)
+          </h3>
+          <div className="factors-container" style={{ marginBottom: "2rem" }}>
             {formData.uncontrollableFactors.map((factor, idx) => (
-              <tr key={idx}>
-                <td>
-                  <input
-                    type="text"
-                    value={factor.description}
-                    onChange={(e) =>
-                      updateFactor(idx, "description", e.target.value)
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={factor.responsible?.label || factor.responsible}
-                    onChange={(e) =>
-                      updateFactor(idx, "responsible", e.target.value)
-                    }
-                  />
-                </td>
-                <td>
-                  <select
-                    value={factor.status?.value || "Pending"}
-                    onChange={(e) =>
-                      updateFactor(idx, "status", e.target.value)
-                    }
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Done">Done</option>
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={factor.riskFactors}
-                    onChange={(e) =>
-                      updateFactor(idx, "riskFactors", e.target.value)
-                    }
-                    placeholder="Risk Description"
-                  />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => removeFactor(idx)}
-                    className="btn-remove"
-                  >
-                    X
-                  </button>
-                </td>
-              </tr>
+              <div
+                key={idx}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr 1fr 1fr 40px",
+                  gap: "1rem",
+                  alignItems: "end",
+                  marginBottom: "1rem",
+                }}
+              >
+                <Input
+                  label={idx === 0 ? "Activity" : ""}
+                  value={factor.description}
+                  onChange={(e) =>
+                    updateFactor(idx, "description", e.target.value)
+                  }
+                />
+                <Input
+                  label={idx === 0 ? "Responsible" : ""}
+                  value={factor.responsible?.label || factor.responsible}
+                  onChange={(e) =>
+                    updateFactor(idx, "responsible", e.target.value)
+                  }
+                />
+                <Select
+                  label={idx === 0 ? "Status" : ""}
+                  options={[
+                    { label: "Pending", value: "Pending" },
+                    { label: "In Progress", value: "In Progress" },
+                    { label: "Done", value: "Done" },
+                  ]}
+                  value={[
+                    { label: "Pending", value: "Pending" },
+                    { label: "In Progress", value: "In Progress" },
+                    { label: "Done", value: "Done" },
+                  ].find(
+                    (s) => s.value === (factor.status?.value || "Pending"),
+                  )}
+                  onChange={(val) => updateFactor(idx, "status", val.value)}
+                />
+                <Input
+                  label={idx === 0 ? "Risk Factors" : ""}
+                  value={factor.riskFactors}
+                  onChange={(e) =>
+                    updateFactor(idx, "riskFactors", e.target.value)
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => removeFactor(idx)}
+                  className="btn-remove"
+                  style={{
+                    height: "42px",
+                    padding: "0",
+                    background: "#ef4444",
+                    border: "none",
+                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  <TrashIcon />
+                </button>
+              </div>
             ))}
-          </tbody>
-        </table>
-        <button type="button" onClick={addFactor} className="btn-add">
-          + Add Factor
-        </button>
-
-        {/* Production Proof */}
-        <h3 className="section-title">Production Proof & Media</h3>
-        <div className="checklist-grid">
-          {Object.keys(formData.quoteDetails.productionProof).map((key) => (
-            <label key={key} className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={formData.quoteDetails.productionProof[key]}
-                onChange={() => handleCheckboxChange("productionProof", key)}
-              />{" "}
-              {key
-                .replace(/([A-Z])/g, " $1")
-                .replace(/^./, (str) => str.toUpperCase())}
-            </label>
-          ))}
-        </div>
-
-        {/* Submission */}
-        <h3 className="section-title">Quote Submission</h3>
-        <div className="form-grid">
-          <div className="form-group">
-            <label>Sent By</label>
-            <input
-              type="text"
-              name="quoteDetails.submission.sentBy"
-              value={formData.quoteDetails.submission.sentBy}
-              onChange={handleChange}
-            />
+            <button
+              type="button"
+              onClick={addFactor}
+              className="btn-add"
+              style={{
+                background: "#10b981",
+                color: "white",
+                padding: "0.75rem 1.5rem",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              + Add Factor
+            </button>
           </div>
-        </div>
 
-        {/* Updates / Notes */}
-        <h3 className="section-title">Updates / Notes</h3>
-        <div className="form-group full-width">
-          <textarea
-            name="quoteDetails.updates"
-            value={formData.quoteDetails.updates}
-            onChange={handleChange}
-            rows="4"
-            style={{ width: "100%" }}
-            placeholder="Updates / Notes (Free Text)"
-          ></textarea>
-        </div>
+          <div
+            className="divider"
+            style={{ borderBottom: "1px solid #eee", margin: "2rem 0" }}
+          ></div>
 
-        {/* Final Update */}
-        <h3 className="section-title">Final Update</h3>
-        <div className="checklist-grid">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={formData.quoteDetails.finalUpdate.accepted}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  quoteDetails: {
-                    ...prev.quoteDetails,
-                    finalUpdate: {
-                      ...prev.quoteDetails.finalUpdate,
-                      accepted: e.target.checked,
-                    },
-                  },
-                }))
-              }
-            />{" "}
-            Accepted
-          </label>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={formData.quoteDetails.finalUpdate.cancelled}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  quoteDetails: {
-                    ...prev.quoteDetails,
-                    finalUpdate: {
-                      ...prev.quoteDetails.finalUpdate,
-                      cancelled: e.target.checked,
-                    },
-                  },
-                }))
-              }
-            />{" "}
-            Cancelled
-          </label>
-        </div>
-
-        <div className="form-grid" style={{ marginTop: "1rem" }}>
-          <div className="form-group">
-            <label>Project Lead Signature</label>
-            <input
-              type="text"
-              name="quoteDetails.leadSignature"
+          {/* Submission Footer */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "1.5rem",
+              marginBottom: "2rem",
+            }}
+          >
+            <Input
+              label="Lead Signature"
               value={formData.quoteDetails.leadSignature}
-              onChange={handleChange}
+              onChange={(e) =>
+                handleChange({
+                  target: {
+                    name: "quoteDetails.leadSignature",
+                    value: e.target.value,
+                  },
+                })
+              }
             />
-          </div>
-          <div className="form-group">
-            <label>Submission Date</label>
-            <input
+            <Input
               type="date"
-              name="quoteDetails.submissionDate"
+              label="Submission Date"
               value={formData.quoteDetails.submissionDate}
-              onChange={handleChange}
+              onChange={(e) =>
+                handleChange({
+                  target: {
+                    name: "quoteDetails.submissionDate",
+                    value: e.target.value,
+                  },
+                })
+              }
+              icon={<CalendarIcon />}
             />
           </div>
-        </div>
 
-        <div
-          style={{
-            marginTop: "2rem",
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "1rem",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="btn-secondary"
+          <div
             style={{
-              padding: "0.75rem 1.5rem",
-              background: "#e0e0e0",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "1rem",
+              marginTop: "3rem",
             }}
           >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            style={{
-              padding: "0.75rem 1.5rem",
-              background: "#3498db",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Create Quote Project
-          </button>
-        </div>
-      </form>
-
-      <style>{`
-                .form-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 1.5rem;
-                    margin-bottom: 1.5rem;
-                }
-                .form-group {
-                    display: flex;
-                    flex-direction: column;
-                }
-                .form-group label {
-                    margin-bottom: 0.5rem;
-                    font-weight: 500;
-                    color: #555;
-                }
-                .form-group input, .form-group select {
-                    padding: 0.75rem;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                }
-                .full-width {
-                    grid-column: 1 / -1;
-                }
-                .section-title {
-                    border-bottom: 2px solid #eee;
-                    padding-bottom: 0.5rem;
-                    margin: 2rem 0 1rem;
-                    color: #2c3e50;
-                }
-                .checklist-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                    gap: 1rem;
-                    margin-bottom: 1rem;
-                }
-                .checkbox-label {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    cursor: pointer;
-                }
-                .data-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-bottom: 1rem;
-                }
-                .data-table th, .data-table td {
-                    border: 1px solid #eee;
-                    padding: 0.75rem;
-                    text-align: left;
-                }
-                .data-table th {
-                    background: #f8f9fa;
-                    font-weight: 600;
-                }
-                .btn-add {
-                    background: #2ecc71;
-                    color: white;
-                    border: none;
-                    padding: 0.5rem 1rem;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-                 .btn-remove {
-                    background: #e74c3c;
-                    color: white;
-                    border: none;
-                    padding: 0.25rem 0.5rem;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-            `}</style>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="btn-secondary"
+              style={{
+                padding: "0.75rem 2rem",
+                background: "#f1f5f9",
+                color: "#64748b",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{
+                padding: "0.75rem 2rem",
+                background: "var(--primary-color)",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              {editingId ? "Update Project" : "Create Project"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
