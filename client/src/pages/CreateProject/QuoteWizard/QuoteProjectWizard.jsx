@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
 
 const QuoteProjectWizard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [leads, setLeads] = useState([]);
 
   // Form State
@@ -19,6 +21,8 @@ const QuoteProjectWizard = () => {
       minute: "2-digit",
     }),
     deliveryDate: "",
+    briefOverview: "", // [NEW]
+    attachments: [], // [NEW] Existing attachments
 
     // Quote Specific Fields
     quoteDetails: {
@@ -104,6 +108,48 @@ const QuoteProjectWizard = () => {
     };
     fetchUsers();
   }, []);
+
+  // Fetch Project Data if Editing
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      setEditingId(editId);
+      setIsLoading(true);
+      fetch(`/api/projects/${editId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          // Map data to formData
+          setFormData((prev) => ({
+            ...prev,
+            projectName: data.details?.projectName || "",
+            lead: data.projectLeadId?._id || data.projectLeadId || "",
+            leadLabel: data.details?.lead || "",
+            deliveryDate: data.details?.deliveryDate
+              ? data.details.deliveryDate.split("T")[0]
+              : "",
+            quoteDetails: {
+              ...prev.quoteDetails,
+              ...data.quoteDetails,
+              // Ensure dates are formatted for input[type=date]
+              quoteDate: data.quoteDetails?.quoteDate
+                ? data.quoteDetails.quoteDate.split("T")[0]
+                : prev.quoteDetails.quoteDate,
+              submissionDate: data.quoteDetails?.submissionDate
+                ? data.quoteDetails.submissionDate.split("T")[0]
+                : prev.quoteDetails.submissionDate,
+            },
+            items: data.items || [],
+            uncontrollableFactors: data.uncontrollableFactors || [],
+            receivedTime: data.receivedTime || prev.receivedTime,
+            briefOverview: data.details?.briefOverview || "", // [NEW]
+            attachments: data.details?.attachments || [], // [NEW]
+          }));
+        })
+        .catch((err) => console.error("Failed to fetch project", err))
+        .finally(() => setIsLoading(false));
+    }
+  }, [location.search]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -215,6 +261,8 @@ const QuoteProjectWizard = () => {
           projectName: formData.projectName,
           lead: formData.leadLabel, // Name
           deliveryDate: formData.deliveryDate,
+          briefOverview: formData.briefOverview, // [NEW]
+          attachments: formData.attachments, // [NEW] Preserve existing
         },
         projectLeadId: formData.lead, // ID
 
@@ -230,8 +278,11 @@ const QuoteProjectWizard = () => {
           : [],
       };
 
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
+      const method = editingId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -365,6 +416,68 @@ const QuoteProjectWizard = () => {
             />
           </div>
         </div>
+
+        {/* Section: Overview & Reference Materials (Populated from Front Desk) */}
+        <h3 className="section-title">Initial Request Info</h3>
+        <div
+          className="form-group full-width"
+          style={{ marginBottom: "1.5rem" }}
+        >
+          <label>Brief Overview</label>
+          <textarea
+            name="briefOverview"
+            value={formData.briefOverview}
+            onChange={handleChange}
+            rows="3"
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              borderRadius: "4px",
+              border: "1px solid #ddd",
+            }}
+          ></textarea>
+        </div>
+
+        {formData.attachments?.length > 0 && (
+          <div
+            className="form-group full-width"
+            style={{ marginBottom: "1.5rem" }}
+          >
+            <label>Reference Materials from Front Desk</label>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginTop: "0.5rem",
+              }}
+            >
+              {formData.attachments.map((file, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: "8px 12px",
+                    background: "#f0f7ff",
+                    border: "1px solid #cce3ff",
+                    borderRadius: "6px",
+                    fontSize: "0.85rem",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <a
+                    href={file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "#2563eb", textDecoration: "none" }}
+                  >
+                    {file.split("/").pop()}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quote Checklist */}
         <h3 className="section-title">Quote Checklist</h3>

@@ -928,6 +928,9 @@ const updateProject = async (req, res) => {
       description,
       details,
       attachments, // Existing attachments (urls)
+      quoteDetails, // [NEW]
+      projectType, // [NEW]
+      priority, // [NEW]
     } = req.body;
 
     // Parse JSON fields if they are strings (Multipart/form-data behavior)
@@ -939,6 +942,8 @@ const updateProject = async (req, res) => {
       productionRisks = JSON.parse(productionRisks);
     if (typeof details === "string") details = JSON.parse(details);
     if (typeof attachments === "string") attachments = JSON.parse(attachments);
+    if (typeof quoteDetails === "string")
+      quoteDetails = JSON.parse(quoteDetails);
     if (typeof lead === "string" && lead.startsWith("{"))
       lead = JSON.parse(lead);
 
@@ -1076,6 +1081,9 @@ const updateProject = async (req, res) => {
 
     if (currentStep) project.currentStep = currentStep;
     if (status) project.status = status;
+    if (projectType) project.projectType = projectType;
+    if (priority) project.priority = priority;
+    if (quoteDetails) project.quoteDetails = quoteDetails;
 
     const updatedProject = await project.save();
 

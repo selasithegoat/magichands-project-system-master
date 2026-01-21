@@ -20,6 +20,7 @@ import {
 import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
 import CreateProjectLanding from "./pages/CreateProject/CreateProjectLanding"; // [NEW]
 import QuoteProjectWizard from "./pages/CreateProject/QuoteWizard/QuoteProjectWizard"; // [NEW]
+import MinimalQuoteForm from "./pages/CreateProject/QuoteWizard/MinimalQuoteForm"; // [NEW]
 import PendingAssignments from "./pages/PendingAssignments/PendingAssignments";
 import MyActivities from "./pages/MyActivities/MyActivities";
 
@@ -188,6 +189,19 @@ function App() {
       />
       <Route
         path="/create/quote"
+        element={
+          <ProtectedLayout
+            activeView="create"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <MinimalQuoteForm />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/create/quote-wizard"
         element={
           <ProtectedLayout
             activeView="create"

@@ -77,6 +77,7 @@ const AssignProject = ({ user }) => {
       client: order.details?.client || "",
       overview:
         order.details?.briefOverview || order.items?.[0]?.description || "", // Map briefOverview with fallback
+      projectLead: order.projectLeadId || prev.projectLead, // [NEW] Pre-fill lead if Front Desk suggested one
       selectedOrderId: order._id, // Set ID to switch to UPDATE mode
     }));
   };

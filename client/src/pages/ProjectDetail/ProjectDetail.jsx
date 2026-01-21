@@ -180,7 +180,13 @@ const ProjectDetail = ({ onProjectChange, user }) => {
             </div>
             <button
               className="btn-primary"
-              onClick={() => navigate(`/create/wizard?edit=${project._id}`)}
+              onClick={() => {
+                const route =
+                  project.projectType === "Quote"
+                    ? `/create/quote-wizard?edit=${project._id}`
+                    : `/create/wizard?edit=${project._id}`;
+                navigate(route);
+              }}
               style={{ backgroundColor: "#ea580c" }}
             >
               Accept Project
