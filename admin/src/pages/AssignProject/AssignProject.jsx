@@ -195,7 +195,7 @@ const AssignProject = ({ user }) => {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <div className="page-header-local">
         <div>
           <span className="breadcrumb-muted">Assign Projects {">"} </span>

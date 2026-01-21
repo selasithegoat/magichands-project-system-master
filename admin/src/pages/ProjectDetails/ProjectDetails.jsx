@@ -344,7 +344,7 @@ const ProjectDetails = ({ user }) => {
   const details = project.details || {};
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <div
         className={`project-details-page ${
           project &&

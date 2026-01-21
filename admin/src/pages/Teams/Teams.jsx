@@ -5,7 +5,7 @@ import Modal from "../../components/Modal/Modal";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import { UserIcon, LockIcon, PencilIcon, TrashIcon } from "../../icons/Icons";
 
-const Teams = () => {
+const Teams = ({ user }) => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -267,7 +267,7 @@ const Teams = () => {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <div className="teams-page">
         <div className="teams-header">
           <div>

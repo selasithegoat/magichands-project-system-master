@@ -167,7 +167,7 @@ const Projects = ({ user }) => {
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <div className="projects-page">
         <div className="projects-header">
           <h1>
