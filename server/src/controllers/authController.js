@@ -33,13 +33,21 @@ const registerUser = async (req, res) => {
   if (user) {
     const token = generateToken(user._id);
 
+    // Determine cookie name based on role
+    const cookieName = user.role === "admin" ? "token_admin" : "token_client";
+
     // Send HTTP-only cookie
-    res.cookie("token", token, {
+    res.cookie(cookieName, token, {
       httpOnly: true,
-      secure: true, // Always secure for ngrok/cross-site
-      sameSite: "none", // Allow cross-site for ngrok
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
+
+    // Clear any existing opposite token to prevent session leak
+    const oppositeCookie =
+      user.role === "admin" ? "token_client" : "token_admin";
+    res.clearCookie(oppositeCookie);
 
     res.status(201).json({
       _id: user.id,
@@ -76,6 +84,13 @@ const loginUser = async (req, res) => {
         sameSite: "none",
         maxAge: 15 * 60 * 1000,
       });
+
+      // Strictly clear the opposite token to prevent cross-portal auto-login
+      const oppositeCookie =
+        user.role === "admin" ? "token_client" : "token_admin";
+      res.clearCookie(oppositeCookie);
+      // Also clear legacy token
+      res.clearCookie("token");
 
       res.json({
         _id: user.id,

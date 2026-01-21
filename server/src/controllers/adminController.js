@@ -41,6 +41,9 @@ const registerEmployee = async (req, res) => {
     // Ensure department is an array
     const deptArray = Array.isArray(department) ? department : [department];
 
+    // Automatically assign admin role if in Administration department
+    const role = deptArray.includes("Administration") ? "admin" : "user";
+
     const user = await User.create({
       firstName,
       lastName,
@@ -51,7 +54,7 @@ const registerEmployee = async (req, res) => {
       department: deptArray,
       position,
       employeeType,
-      role: "user", // Default to user
+      role, // Dynamic role assignment
     });
 
     if (user) {
@@ -110,9 +113,15 @@ const updateEmployee = async (req, res) => {
     user.employeeType = req.body.employeeType || user.employeeType;
 
     if (req.body.department) {
-      user.department = Array.isArray(req.body.department)
+      const depts = Array.isArray(req.body.department)
         ? req.body.department
         : [req.body.department];
+      user.department = depts;
+
+      // Automatically promote to admin if department changed to Administration
+      if (depts.includes("Administration")) {
+        user.role = "admin";
+      }
     }
 
     const updatedUser = await user.save();

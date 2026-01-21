@@ -17,23 +17,17 @@ const protect = async (req, res, next) => {
   // Determine origin to prevent session interference on localhost
   const origin = req.headers.origin || req.headers.referer || "";
 
-  // Specific port checks for development/local environment
+  // Strict token enforcement based on portal origin
   if (origin.includes("3000")) {
-    // Admin Portal
-    token = req.cookies.token_admin || req.cookies.token; // Allow legacy 'token' fallback if needed, or strictly token_admin?
-    // If we fallback to 'token', and 'token' is shared, we risk contamination if 'token' was set by Client.
-    // Ideally we migrate to just token_admin.
-    // For now, let's prefer token_admin.
+    // Admin Portal - ONLY allow token_admin
     token = req.cookies.token_admin;
-  } else if (origin.includes("5173")) {
-    // Client Portal
-    // Allow token_admin fallback for admins testing client view
-    token =
-      req.cookies.token_client || req.cookies.token_admin || req.cookies.token;
+  } else if (origin.includes("5173") || origin.includes("5174")) {
+    // Client Portal - ONLY allow token_client
+    // Note: We no longer allow token_admin fallback here to prevent auto-login
+    token = req.cookies.token_client;
   } else {
-    // Unknown origin (Postman, production domain, etc.)
-    token =
-      req.cookies.token_admin || req.cookies.token_client || req.cookies.token;
+    // Other (Postman, etc.) - Fallback safely
+    token = req.cookies.token_client || req.cookies.token_admin;
   }
 
   if (token) {
@@ -41,7 +35,7 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(
         token,
-        process.env.JWT_SECRET || "dev_secret_key_12345"
+        process.env.JWT_SECRET || "dev_secret_key_12345",
       );
 
       // Get user from the token
