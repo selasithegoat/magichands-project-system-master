@@ -7,6 +7,7 @@ import QuoteStep2 from "./QuoteStep2";
 import QuoteStep3 from "./QuoteStep3";
 import QuoteStep4 from "./QuoteStep4";
 import QuoteStep5 from "./QuoteStep5";
+import "../WizardLayout.css";
 import "./QuoteProjectWizard.css";
 
 const QuoteProjectWizard = () => {

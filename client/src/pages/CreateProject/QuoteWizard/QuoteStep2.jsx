@@ -26,42 +26,12 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   return (
     <div className="step-container">
-      <div
-        className="step-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-        }}
-      >
-        <button
-          className="back-btn"
-          onClick={onBack}
-          style={{ background: "none", border: "none", cursor: "pointer" }}
-        >
+      <div className="step-header">
+        <button className="back-btn" onClick={onBack}>
           <BackArrow />
         </button>
-        <h1
-          className="header-title"
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: "700",
-            color: "var(--text-primary)",
-          }}
-        >
-          Order Breakdown
-        </h1>
-        <button
-          className="cancel-btn"
-          onClick={onCancel}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#64748b",
-            cursor: "pointer",
-          }}
-        >
+        <h1 className="header-title">Order Breakdown</h1>
+        <button className="cancel-btn" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -69,56 +39,23 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
       <div className="step-scrollable-content">
         <ProgressBar currentStep={2} totalSteps={5} />
 
-        <div className="page-title-section" style={{ marginBottom: "2rem" }}>
-          <h2
-            className="page-title"
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "600",
-              color: "var(--text-primary)",
-            }}
-          >
-            Order / Quantity Breakdown
-          </h2>
-          <p className="page-subtitle" style={{ color: "#64748b" }}>
+        <div className="page-title-section">
+          <h2 className="page-title">Order / Quantity Breakdown</h2>
+          <p className="page-subtitle">
             Review and adjust the specific quantities and descriptions for this
             order.
           </p>
         </div>
 
-        <div
-          className="quote-items-container"
-          style={{
-            background: "var(--bg-card)",
-            padding: "2rem",
-            borderRadius: "12px",
-            border: "1px solid var(--border-color)",
-          }}
-        >
+        <div className="quote-items-container">
           {(formData.items || []).length === 0 && (
-            <p
-              style={{ color: "#64748b", textAlign: "center", padding: "2rem" }}
-            >
+            <p className="empty-message">
               No items added yet. Click "+ Add Item" to begin.
             </p>
           )}
 
           {(formData.items || []).map((item, idx) => (
-            <div
-              key={idx}
-              className="item-row"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "3fr 1fr 2fr 2fr 40px",
-                gap: "1rem",
-                alignItems: "end",
-                marginBottom: "1.5rem",
-                padding: "1rem",
-                background: "rgba(255,255,255,0.02)",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-              }}
-            >
+            <div key={idx} className="item-row">
               <Input
                 label={idx === 0 ? "Description" : ""}
                 placeholder="Item Description"

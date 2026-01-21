@@ -21,42 +21,14 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
 
   return (
     <div className="step-container">
-      <div
-        className="step-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-        }}
-      >
-        <button
-          className="back-btn"
-          onClick={onCancel}
-          style={{ background: "none", border: "none", cursor: "pointer" }}
-        >
+      <div className="step-header">
+        <button className="back-btn" onClick={onCancel}>
           <BackArrow />
         </button>
-        <h1
-          className="header-title"
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: "700",
-            color: "var(--text-primary)",
-          }}
-        >
+        <h1 className="header-title">
           {isEditing ? "Edit Quote Project" : "Create Project from Quote"}
         </h1>
-        <button
-          className="cancel-btn"
-          onClick={onCancel}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#64748b",
-            cursor: "pointer",
-          }}
-        >
+        <button className="cancel-btn" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -64,34 +36,17 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
       <div className="step-scrollable-content">
         <ProgressBar currentStep={1} totalSteps={5} />
 
-        <div className="order-title-section" style={{ marginBottom: "2rem" }}>
-          <h2
-            className="order-title"
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "600",
-              color: "var(--text-primary)",
-            }}
-          >
+        <div className="order-title-section">
+          <h2 className="order-title">
             {formData.quoteDetails?.quoteNumber || "Quote Details"}
           </h2>
-          <p className="order-subtitle" style={{ color: "#64748b" }}>
-            Finalize the project details below.
-          </p>
+          <p className="order-subtitle">Finalize the project details below.</p>
         </div>
 
         <div className="form-body">
           <h3 className="section-title">Step 1: Project Basic Info</h3>
 
-          <div
-            className="form-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "1.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
+          <div className="form-row">
             <Input
               label="Received Time"
               value={formData.receivedTime}
@@ -107,15 +62,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             />
           </div>
 
-          <div
-            className="form-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "1.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
+          <div className="form-row">
             <Input
               label="Project / Item Name"
               value={formData.projectName}

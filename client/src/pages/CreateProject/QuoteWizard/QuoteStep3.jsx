@@ -94,42 +94,12 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   return (
     <div className="step-container">
-      <div
-        className="step-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-        }}
-      >
-        <button
-          className="back-btn"
-          onClick={onBack}
-          style={{ background: "none", border: "none", cursor: "pointer" }}
-        >
+      <div className="step-header">
+        <button className="back-btn" onClick={onBack}>
           <BackArrow />
         </button>
-        <h1
-          className="header-title"
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: "700",
-            color: "var(--text-primary)",
-          }}
-        >
-          Departments
-        </h1>
-        <button
-          className="cancel-btn"
-          onClick={onCancel}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#64748b",
-            cursor: "pointer",
-          }}
-        >
+        <h1 className="header-title">Departments</h1>
+        <button className="cancel-btn" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -137,18 +107,9 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
       <div className="step-scrollable-content">
         <ProgressBar currentStep={3} totalSteps={5} />
 
-        <div className="page-title-section" style={{ marginBottom: "2rem" }}>
-          <h2
-            className="page-title"
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "600",
-              color: "var(--text-primary)",
-            }}
-          >
-            Select Engaged Departments
-          </h2>
-          <p className="page-subtitle" style={{ color: "#64748b" }}>
+        <div className="page-title-section">
+          <h2 className="page-title">Select Engaged Departments</h2>
+          <p className="page-subtitle">
             Tap to select the teams required for this project.
           </p>
         </div>

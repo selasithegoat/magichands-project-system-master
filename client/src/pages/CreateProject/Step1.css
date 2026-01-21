@@ -1,24 +1,4 @@
-.step-container {
-  width: 100%;
-  max-width: 480px; /* Mobile width constraint, can serve as Card on Desktop */
-  margin: 0 auto;
-  background-color: var(--bg-card);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-@media (min-width: 640px) {
-  .step-container {
-    min-height: auto;
-    height: 90vh;
-    border-radius: 20px;
-    overflow: hidden;
-  }
-}
+/* Main container styles handled by WizardLayout.css */
 
 .step-header {
   display: flex;
@@ -108,12 +88,9 @@
 }
 
 .form-row {
-  display: flex;
-  gap: 16px;
-}
-
-.form-row > * {
-  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
 }
 
 @media (max-width: 480px) {
