@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
-import Input from "../../../components/ui/Input";
-import Select from "../../../components/ui/Select";
-import UserAvatar from "../../../components/ui/UserAvatar";
-import ProgressBar from "../../../components/ui/ProgressBar";
-import BackArrow from "../../../components/icons/BackArrow";
-import CalendarIcon from "../../../components/icons/CalendarIcon";
-import FolderIcon from "../../../components/icons/FolderIcon";
-import TrashIcon from "../../../components/icons/TrashIcon";
+import ConfirmationModal from "../../../components/ui/ConfirmationModal";
+import QuoteStep1 from "./QuoteStep1";
+import QuoteStep2 from "./QuoteStep2";
+import QuoteStep3 from "./QuoteStep3";
+import QuoteStep4 from "./QuoteStep4";
+import QuoteStep5 from "./QuoteStep5";
 import "./QuoteProjectWizard.css";
 
 const QuoteProjectWizard = () => {
@@ -17,6 +15,8 @@ const QuoteProjectWizard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [leads, setLeads] = useState([]);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -92,9 +92,13 @@ const QuoteProjectWizard = () => {
 
     // Arrays for lists
     items: [], // { description, quantity, breakdown, department }
+    departments: [], // [NEW]
     uncontrollableFactors: [], // { activity, responsible, status, riskFactors }
+    productionRisks: [], // [NEW]
 
     updates: [], // Project Memo Updates
+    projectType: "Quote", // Default for this wizard
+    priority: "Normal",
   });
 
   // Fetch Leads
@@ -155,12 +159,31 @@ const QuoteProjectWizard = () => {
             client: data.details?.client || "", // [NEW]
             briefOverview: data.details?.briefOverview || "", // [NEW]
             attachments: data.details?.attachments || [], // [NEW]
+            // Step 2 & 3 & 4
+            departments: data.departments || [],
+            uncontrollableFactors: data.uncontrollableFactors || [],
+            productionRisks: data.productionRisks || [],
+            receivedTime: data.receivedTime || prev.receivedTime,
+            client: data.details?.client || "",
+            briefOverview: data.details?.briefOverview || "",
           }));
         })
         .catch((err) => console.error("Failed to fetch project", err))
         .finally(() => setIsLoading(false));
     }
   }, [location.search]);
+
+  const handleUpdateFormData = (updates) => {
+    setFormData((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleNext = () => setCurrentStep((prev) => prev + 1);
+  const handleBack = () => setCurrentStep((prev) => prev - 1);
+  const handleCancelProject = () => setShowCancelModal(true);
+  const confirmCancel = () => {
+    setShowCancelModal(false);
+    navigate("/");
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -256,38 +279,25 @@ const QuoteProjectWizard = () => {
     setFormData((prev) => ({ ...prev, uncontrollableFactors: newFactors }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleCreateProject = async () => {
     setIsLoading(true);
 
     try {
       const payload = {
         ...formData,
-        projectType: "Quote",
-        priority: "Normal", // Quote default
-        status: "New Order", // Initial status
+        projectType: formData.projectType || "Quote",
+        status: editingId ? formData.status : "New Order",
 
-        // Map flat form data to schema structure where necessary
+        // Ensure details object is populated for top-level schema
         details: {
           projectName: formData.projectName,
-          client: formData.client, // [NEW]
-          lead: formData.leadLabel, // Name
+          client: formData.client,
+          lead: formData.leadLabel,
           deliveryDate: formData.deliveryDate,
-          briefOverview: formData.briefOverview, // [NEW]
-          attachments: formData.attachments, // [NEW] Preserve existing
+          briefOverview: formData.briefOverview,
+          attachments: formData.attachments,
         },
-        projectLeadId: formData.lead, // ID
-
-        // Combine free text update to updates array if present
-        updates: formData.quoteDetails.updates
-          ? [
-              {
-                event: "Initial Note",
-                note: formData.quoteDetails.updates,
-                date: new Date(),
-              },
-            ]
-          : [],
+        projectLeadId: formData.lead,
       };
 
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
@@ -300,610 +310,80 @@ const QuoteProjectWizard = () => {
       });
 
       if (res.ok) {
-        navigate("/");
+        return { success: true };
       } else {
-        alert("Failed to create quote");
+        const err = await res.json();
+        return { success: false, message: err.message };
       }
     } catch (err) {
       console.error(err);
-      alert("Error creating quote");
+      return { success: false, message: "Error processing request" };
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleProjectComplete = () => {
+    navigate("/");
   };
 
   if (isLoading) return <Spinner />;
 
   return (
     <div className="quote-wizard-container">
-      {/* Header */}
-      <div
-        className="step-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-        }}
-      >
-        <button
-          className="back-btn"
-          onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", cursor: "pointer" }}
-        >
-          <BackArrow />
-        </button>
-        <h1
-          className="header-title"
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: "700",
-            color: "var(--text-primary)",
-          }}
-        >
-          {editingId ? "Edit Quote Project" : "Create New Quote"}
-        </h1>
-        <button
-          className="cancel-btn"
-          onClick={() => navigate("/")}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#64748b",
-            cursor: "pointer",
-          }}
-        >
-          Cancel
-        </button>
-      </div>
+      {currentStep === 1 && (
+        <QuoteStep1
+          formData={formData}
+          setFormData={handleUpdateFormData}
+          onNext={handleNext}
+          onCancel={handleCancelProject}
+          isEditing={!!editingId}
+        />
+      )}
+      {currentStep === 2 && (
+        <QuoteStep2
+          formData={formData}
+          setFormData={handleUpdateFormData}
+          onNext={handleNext}
+          onBack={handleBack}
+          onCancel={handleCancelProject}
+        />
+      )}
+      {currentStep === 3 && (
+        <QuoteStep3
+          formData={formData}
+          setFormData={handleUpdateFormData}
+          onNext={handleNext}
+          onBack={handleBack}
+          onCancel={handleCancelProject}
+        />
+      )}
+      {currentStep === 4 && (
+        <QuoteStep4
+          formData={formData}
+          setFormData={handleUpdateFormData}
+          onNext={handleNext}
+          onBack={handleBack}
+          onCancel={handleCancelProject}
+        />
+      )}
+      {currentStep === 5 && (
+        <QuoteStep5
+          formData={formData}
+          onCreate={handleCreateProject}
+          onBack={handleBack}
+          onCancel={handleCancelProject}
+          onComplete={handleProjectComplete}
+        />
+      )}
 
-      <div className="step-scrollable-content">
-        {/* Progress */}
-        <ProgressBar currentStep={1} totalSteps={1} />
-
-        {/* Title */}
-        <div className="order-title-section" style={{ marginBottom: "2rem" }}>
-          <h2
-            className="order-title"
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "600",
-              color: "var(--text-primary)",
-            }}
-          >
-            {formData.quoteDetails.quoteNumber || "New Quote"}
-          </h2>
-          <p className="order-subtitle" style={{ color: "#64748b" }}>
-            Please finalize the technical details for this quote.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="form-body">
-          {/* Section 1: Project Basic Info */}
-          <h3 className="section-title">Project Details</h3>
-          <div
-            className="form-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "1.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
-            <Input
-              label="Received Time"
-              value={formData.receivedTime}
-              onChange={(e) =>
-                handleChange({
-                  target: { name: "receivedTime", value: e.target.value },
-                })
-              }
-            />
-            <Input
-              type="date"
-              label="Completion Date"
-              value={formData.deliveryDate}
-              onChange={(e) =>
-                handleChange({
-                  target: { name: "deliveryDate", value: e.target.value },
-                })
-              }
-              icon={<CalendarIcon />}
-              required
-            />
-          </div>
-
-          <div style={{ marginBottom: "1.5rem" }}>
-            <label
-              className="checkbox-label"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                name="quoteDetails.emailResponseSent"
-                checked={formData.quoteDetails.emailResponseSent}
-                onChange={handleChange}
-              />{" "}
-              Email Response Sent
-            </label>
-          </div>
-
-          <div
-            className="form-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "1.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
-            <Input
-              label="Project / Item Name"
-              value={formData.projectName}
-              onChange={(e) =>
-                handleChange({
-                  target: { name: "projectName", value: e.target.value },
-                })
-              }
-              icon={<FolderIcon />}
-              required
-            />
-            <Input
-              label="Client Name"
-              placeholder="e.g. MagicHands Corp"
-              value={formData.client}
-              onChange={(e) =>
-                handleChange({
-                  target: { name: "client", value: e.target.value },
-                })
-              }
-            />
-          </div>
-
-          <div
-            className="form-row"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "1.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
-            <Input
-              label="Quote Number"
-              value={formData.quoteDetails.quoteNumber}
-              onChange={(e) =>
-                handleChange({
-                  target: {
-                    name: "quoteDetails.quoteNumber",
-                    value: e.target.value,
-                  },
-                })
-              }
-            />
-            <Select
-              label="Project Lead"
-              options={leads}
-              value={leads.find((l) => l.value === formData.lead)}
-              onChange={(val) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  lead: val.value,
-                  leadLabel: val.label,
-                }));
-              }}
-              placeholder="Select Lead"
-              renderValue={(option) => (
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <UserAvatar />
-                  <span>{option.label}</span>
-                </div>
-              )}
-              renderOption={(option) => (
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <UserAvatar />
-                  <span>{option.label}</span>
-                </div>
-              )}
-              required
-            />
-          </div>
-
-          <div style={{ marginBottom: "1.5rem" }}>
-            <Input
-              label="Coordinator Signature"
-              value={formData.quoteDetails.projectCoordinatorSignature}
-              onChange={(e) =>
-                handleChange({
-                  target: {
-                    name: "quoteDetails.projectCoordinatorSignature",
-                    value: e.target.value,
-                  },
-                })
-              }
-            />
-          </div>
-
-          <div
-            className="divider"
-            style={{ borderBottom: "1px solid #eee", margin: "2rem 0" }}
-          ></div>
-
-          {/* Section: Overview & Reference Materials */}
-          <h3 className="section-title">Initial Request Info</h3>
-          <div style={{ marginBottom: "1.5rem" }}>
-            <label
-              className="input-label"
-              style={{
-                marginBottom: "0.5rem",
-                display: "block",
-                color: "#64748b",
-              }}
-            >
-              Brief Overview
-            </label>
-            <textarea
-              name="briefOverview"
-              value={formData.briefOverview}
-              onChange={handleChange}
-              rows="3"
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                borderRadius: "8px",
-                border: "1px solid #e2e8f0",
-                background: "var(--bg-input)",
-                color: "white",
-              }}
-            ></textarea>
-          </div>
-
-          {formData.attachments?.length > 0 && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label className="section-label" style={{ color: "#64748b" }}>
-                Reference Materials from Front Desk
-              </label>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  flexWrap: "wrap",
-                  marginTop: "0.5rem",
-                }}
-              >
-                {formData.attachments.map((file, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: "8px 12px",
-                      background: "#f0f7ff",
-                      border: "1px solid #cce3ff",
-                      borderRadius: "6px",
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    <a
-                      href={file}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      {file.split("/").pop()}
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div
-            className="divider"
-            style={{ borderBottom: "1px solid #eee", margin: "2rem 0" }}
-          ></div>
-
-          {/* Quote Checklist */}
-          <h3 className="section-title">Quote Checklist</h3>
-          <div
-            className="checklist-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: "1rem",
-              marginBottom: "2rem",
-            }}
-          >
-            {Object.keys(formData.quoteDetails.checklist).map((key) => (
-              <label
-                key={key}
-                className="checkbox-label"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  cursor: "pointer",
-                  padding: "0.75rem",
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={formData.quoteDetails.checklist[key]}
-                  onChange={() => handleCheckboxChange("checklist", key)}
-                />
-                <span style={{ fontSize: "0.9rem", color: "#1e293b" }}>
-                  {key
-                    .replace(/([A-Z])/g, " $1")
-                    .replace(/^./, (str) => str.toUpperCase())}
-                </span>
-              </label>
-            ))}
-          </div>
-
-          {/* Order Breakdown */}
-          <h3 className="section-title">Order / Quantity Breakdown</h3>
-          <div
-            className="quote-items-container"
-            style={{ marginBottom: "2rem" }}
-          >
-            {formData.items.map((item, idx) => (
-              <div
-                key={idx}
-                className="item-row"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr 2fr 2fr 40px",
-                  gap: "1rem",
-                  alignItems: "end",
-                  marginBottom: "1rem",
-                }}
-              >
-                <Input
-                  label={idx === 0 ? "Description" : ""}
-                  placeholder="Description"
-                  value={item.description}
-                  onChange={(e) =>
-                    updateItem(idx, "description", e.target.value)
-                  }
-                />
-                <Input
-                  type="number"
-                  label={idx === 0 ? "Qty" : ""}
-                  placeholder="Qty"
-                  value={item.qty}
-                  onChange={(e) => updateItem(idx, "qty", e.target.value)}
-                />
-                <Input
-                  label={idx === 0 ? "Breakdown" : ""}
-                  placeholder="Breakdown"
-                  value={item.breakdown}
-                  onChange={(e) => updateItem(idx, "breakdown", e.target.value)}
-                />
-                <Input
-                  label={idx === 0 ? "Department" : ""}
-                  placeholder="Department"
-                  value={item.department}
-                  onChange={(e) =>
-                    updateItem(idx, "department", e.target.value)
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => removeItem(idx)}
-                  className="btn-remove"
-                  style={{
-                    height: "42px",
-                    padding: "0",
-                    background: "#ef4444",
-                    border: "none",
-                    borderRadius: "6px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={addItem}
-              className="btn-add"
-              style={{
-                background: "#10b981",
-                color: "white",
-                padding: "0.75rem 1.5rem",
-                borderRadius: "8px",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              + Add Item
-            </button>
-          </div>
-
-          {/* Uncontrollable Factors */}
-          <h3 className="section-title">
-            Uncontrollable Factors (Job Priority)
-          </h3>
-          <div className="factors-container" style={{ marginBottom: "2rem" }}>
-            {formData.uncontrollableFactors.map((factor, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr 1fr 40px",
-                  gap: "1rem",
-                  alignItems: "end",
-                  marginBottom: "1rem",
-                }}
-              >
-                <Input
-                  label={idx === 0 ? "Activity" : ""}
-                  value={factor.description}
-                  onChange={(e) =>
-                    updateFactor(idx, "description", e.target.value)
-                  }
-                />
-                <Input
-                  label={idx === 0 ? "Responsible" : ""}
-                  value={factor.responsible?.label || factor.responsible}
-                  onChange={(e) =>
-                    updateFactor(idx, "responsible", e.target.value)
-                  }
-                />
-                <Select
-                  label={idx === 0 ? "Status" : ""}
-                  options={[
-                    { label: "Pending", value: "Pending" },
-                    { label: "In Progress", value: "In Progress" },
-                    { label: "Done", value: "Done" },
-                  ]}
-                  value={[
-                    { label: "Pending", value: "Pending" },
-                    { label: "In Progress", value: "In Progress" },
-                    { label: "Done", value: "Done" },
-                  ].find(
-                    (s) => s.value === (factor.status?.value || "Pending"),
-                  )}
-                  onChange={(val) => updateFactor(idx, "status", val.value)}
-                />
-                <Input
-                  label={idx === 0 ? "Risk Factors" : ""}
-                  value={factor.riskFactors}
-                  onChange={(e) =>
-                    updateFactor(idx, "riskFactors", e.target.value)
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => removeFactor(idx)}
-                  className="btn-remove"
-                  style={{
-                    height: "42px",
-                    padding: "0",
-                    background: "#ef4444",
-                    border: "none",
-                    borderRadius: "6px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={addFactor}
-              className="btn-add"
-              style={{
-                background: "#10b981",
-                color: "white",
-                padding: "0.75rem 1.5rem",
-                borderRadius: "8px",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              + Add Factor
-            </button>
-          </div>
-
-          <div
-            className="divider"
-            style={{ borderBottom: "1px solid #eee", margin: "2rem 0" }}
-          ></div>
-
-          {/* Submission Footer */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "1.5rem",
-              marginBottom: "2rem",
-            }}
-          >
-            <Input
-              label="Lead Signature"
-              value={formData.quoteDetails.leadSignature}
-              onChange={(e) =>
-                handleChange({
-                  target: {
-                    name: "quoteDetails.leadSignature",
-                    value: e.target.value,
-                  },
-                })
-              }
-            />
-            <Input
-              type="date"
-              label="Submission Date"
-              value={formData.quoteDetails.submissionDate}
-              onChange={(e) =>
-                handleChange({
-                  target: {
-                    name: "quoteDetails.submissionDate",
-                    value: e.target.value,
-                  },
-                })
-              }
-              icon={<CalendarIcon />}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "1rem",
-              marginTop: "3rem",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="btn-secondary"
-              style={{
-                padding: "0.75rem 2rem",
-                background: "#f1f5f9",
-                color: "#64748b",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn-primary"
-              style={{
-                padding: "0.75rem 2rem",
-                background: "var(--primary-color)",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-              }}
-            >
-              {editingId ? "Update Project" : "Create Project"}
-            </button>
-          </div>
-        </form>
-      </div>
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        title="Cancel Progress?"
+        message="Are you sure you want to exit? Your progress in this wizard will be lost."
+        onConfirm={confirmCancel}
+        onCancel={() => setShowCancelModal(false)}
+      />
     </div>
   );
 };

@@ -113,6 +113,81 @@
   transform: scale(1.05);
 }
 
+.step-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.step-header {
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header-title {
+  margin: 0;
+  background: linear-gradient(135deg, var(--primary-color), #60a5fa);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.step-footer {
+  padding: 2rem 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+
+.next-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.next-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
+}
+
+.back-text-btn {
+  transition: color 0.2s;
+}
+
+.back-text-btn:hover {
+  color: var(--text-primary) !important;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+/* Checklist layout */
+.checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* File links */
+.reference-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.reference-link:hover {
+  opacity: 0.8;
+}
+
+/* Responsive adjustments */
 @media (max-width: 768px) {
   .quote-wizard-container {
     padding: 1rem;
@@ -122,8 +197,18 @@
     padding: 1.5rem;
   }
 
-  .item-row,
-  .factor-row {
+  .item-row {
     grid-template-columns: 1fr !important;
+  }
+
+  .step-footer {
+    flex-direction: column-reverse;
+    gap: 1rem;
+  }
+
+  .next-btn,
+  .back-text-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
