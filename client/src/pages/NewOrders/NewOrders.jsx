@@ -69,7 +69,8 @@ const NewOrders = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/projects");
+      // Use mode=report to ensure Front Desk sees projects they created
+      const res = await fetch("/api/projects?mode=report");
       if (res.ok) {
         const data = await res.json();
         setAllOrders(data);

@@ -183,13 +183,22 @@ const getProjects = async (req, res) => {
       (isReportMode && isFrontDesk);
 
     if (!canSeeAll) {
+      // [STRICT] Default View: ONLY projects where user is the Lead
       query = {
-        $or: [
-          { projectLeadId: req.user._id },
-          { endOfDayUpdateBy: req.user._id },
-          { createdBy: req.user._id }, // [NEW] Ensure creators see their own projects
-        ],
+        projectLeadId: req.user._id,
       };
+
+      // [Mode: Report / All Orders]
+      // Include projects they created OR are assigned to update
+      if (isReportMode) {
+        query = {
+          $or: [
+            { projectLeadId: req.user._id },
+            { endOfDayUpdateBy: req.user._id },
+            { createdBy: req.user._id },
+          ],
+        };
+      }
     }
 
     const projects = await Project.find(query)
