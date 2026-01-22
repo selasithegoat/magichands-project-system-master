@@ -39,14 +39,7 @@ const EndOfDayUpdate = ({ user }) => {
       const res = await fetch("/api/projects?mode=report");
       if (res.ok) {
         const data = await res.json();
-        const activeProjects = data.filter((p) => {
-          // 1. Active Status Check
-          const isActive =
-            p.status !== "Completed" && p.status !== "Pending Scope Approval";
-          if (!isActive) return false;
-
-          return true;
-        });
+        const activeProjects = data.filter((p) => p.status !== "Completed");
         setProjects(activeProjects);
       }
     } catch (err) {
