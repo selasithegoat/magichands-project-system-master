@@ -8,6 +8,7 @@ const Clients = ({ user }) => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [expandedClients, setExpandedClients] = useState(new Set());
 
   useEffect(() => {
@@ -78,10 +79,34 @@ const Clients = ({ user }) => {
     setExpandedClients(newExpanded);
   };
 
-  // Filter clients by search query
-  const filteredClients = clients.filter((client) =>
-    client.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  // Filter clients by search query and project status
+  const filteredClients = clients
+    .map((client) => {
+      // Filter projects within each client based on status filter
+      let filteredProjects = client.projects;
+
+      if (projectStatusFilter === "ongoing") {
+        filteredProjects = client.projects.filter(
+          (p) => p.status !== "Completed" && p.status !== "Delivered",
+        );
+      } else if (projectStatusFilter === "completed") {
+        filteredProjects = client.projects.filter(
+          (p) => p.status === "Completed" || p.status === "Delivered",
+        );
+      }
+
+      return {
+        ...client,
+        projects: filteredProjects,
+        projectCount: filteredProjects.length,
+      };
+    })
+    .filter((client) => {
+      // Filter out clients with no projects after status filter
+      if (client.projectCount === 0) return false;
+      // Filter by client name search
+      return client.name.toLowerCase().includes(searchQuery.toLowerCase());
+    });
 
   return (
     <DashboardLayout user={user}>
@@ -102,28 +127,40 @@ const Clients = ({ user }) => {
 
         <div className="clients-container">
           <div className="clients-controls">
-            <div className="search-pill-wrapper">
-              <input
-                type="text"
-                placeholder="Search clients..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-pill"
-              />
-              <div className="search-icon-small">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-4 h-4"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+            <div className="filter-bar">
+              <div className="search-pill-wrapper">
+                <input
+                  type="text"
+                  placeholder="Search clients..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-pill"
+                />
+                <div className="search-icon-small">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
               </div>
+
+              <select
+                value={projectStatusFilter}
+                onChange={(e) => setProjectStatusFilter(e.target.value)}
+                className="filter-pill"
+              >
+                <option value="all">All Projects</option>
+                <option value="ongoing">Ongoing Projects</option>
+                <option value="completed">Completed Projects</option>
+              </select>
             </div>
             <div className="result-count">
               Showing {filteredClients.length} of {clients.length} clients
@@ -180,7 +217,7 @@ const Clients = ({ user }) => {
                             <th>Project Name</th>
                             <th>Lead</th>
                             <th>Assigned Date</th>
-                            <th>Received Time</th>
+                            <th>Delivery Date/Time</th>
                             <th>Status</th>
                             <th>Actions</th>
                           </tr>
@@ -206,7 +243,11 @@ const Clients = ({ user }) => {
                                   project.orderDate || project.createdAt,
                                 )}
                               </td>
-                              <td>{formatTime(project.receivedTime)}</td>
+                              <td>
+                                {project.details?.deliveryDate
+                                  ? `${formatDate(project.details.deliveryDate)} ${formatTime(project.details.deliveryTime)}`
+                                  : "-"}
+                              </td>
                               <td>
                                 <span
                                   className={`status-badge ${getStatusClass(
