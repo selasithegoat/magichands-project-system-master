@@ -24,6 +24,10 @@ const EndOfDayUpdate = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate(); // Hook
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
   useEffect(() => {
     // Redirect if user is loaded but not Front Desk
     if (user && !user.department?.includes("Front Desk")) {
@@ -41,6 +45,7 @@ const EndOfDayUpdate = ({ user }) => {
         const data = await res.json();
         const activeProjects = data.filter((p) => p.status !== "Completed");
         setProjects(activeProjects);
+        setCurrentPage(1); // Reset to page 1 on new fetch
       }
     } catch (err) {
       console.error("Failed to fetch projects", err);
@@ -229,6 +234,12 @@ const EndOfDayUpdate = ({ user }) => {
     }
   };
 
+  // Derived Pagination Data
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const paginatedProjects = projects.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(projects.length / itemsPerPage);
+
   if (loading) {
     return (
       <div className="spinner-container">
@@ -274,7 +285,7 @@ const EndOfDayUpdate = ({ user }) => {
           </thead>
           <tbody>
             {projects.length > 0 ? (
-              projects.map((project) => (
+              paginatedProjects.map((project) => (
                 <tr key={project._id}>
                   <td>
                     {project.projectLeadId
@@ -332,6 +343,29 @@ const EndOfDayUpdate = ({ user }) => {
             )}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="pagination-controls">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="pagination-btn"
+            >
+              Previous
+            </button>
+            <span className="page-info">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="pagination-btn"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
