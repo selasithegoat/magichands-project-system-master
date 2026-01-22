@@ -1194,6 +1194,46 @@ const getClients = async (req, res) => {
   }
 };
 
+// @desc    Reopen a completed project
+// @route   PATCH /api/projects/:id/reopen
+// @access  Private
+const reopenProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check if project is completed or delivered
+    if (project.status !== "Completed" && project.status !== "Delivered") {
+      return res.status(400).json({
+        message: "Only completed or delivered projects can be reopened",
+      });
+    }
+
+    const oldStatus = project.status;
+    project.status = "In Progress";
+    await project.save();
+
+    // Log activity
+    await logActivity(
+      project._id,
+      req.user.id,
+      "status_change",
+      `Project reopened from ${oldStatus} to In Progress`,
+      {
+        statusChange: { from: oldStatus, to: "In Progress" },
+      },
+    );
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error reopening project:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Delete project
 // @route   DELETE /api/projects/:id
 // @access  Private
@@ -1241,4 +1281,5 @@ module.exports = {
   updateProject, // Full Update
   deleteProject, // [NEW]
   getClients, // [NEW]
+  reopenProject, // [NEW]
 };

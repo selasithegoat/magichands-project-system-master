@@ -25,6 +25,7 @@ const {
   updateProject, // [NEW] - Full Update
   deleteProject, // [NEW]
   getClients, // [NEW]
+  reopenProject, // [NEW]
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -67,6 +68,7 @@ router.delete(
 );
 
 router.patch("/:id/status", protect, updateProjectStatus);
+router.patch("/:id/reopen", protect, reopenProject); // [NEW] - Reopen completed project
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, deleteProject); // Delete Project
 router.put(
