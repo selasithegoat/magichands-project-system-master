@@ -220,7 +220,8 @@ const NewOrders = () => {
   const getStatusClass = (status) => {
     if (!status) return "draft";
     const lower = status.toLowerCase();
-    if (lower.includes("pending")) return "pending";
+    if (lower.includes("pending") || lower.includes("new order"))
+      return "pending";
     if (lower.includes("completed") || lower.includes("delivered"))
       return "completed";
     if (lower.includes("progress")) return "in-progress";
@@ -246,8 +247,11 @@ const NewOrders = () => {
         .includes(allFilters.client.toLowerCase())
     )
       return false;
-    if (allFilters.status !== "All" && order.status !== allFilters.status)
+
+    const displayStatus = order.projectLeadId ? order.status : "New Order";
+    if (allFilters.status !== "All" && displayStatus !== allFilters.status)
       return false;
+
     if (allFilters.assignment === "Assigned" && !order.projectLeadId)
       return false;
     if (allFilters.assignment === "Unassigned" && order.projectLeadId)
@@ -786,10 +790,10 @@ const NewOrders = () => {
                     <td>
                       <span
                         className={`status-badge ${getStatusClass(
-                          order.status,
+                          order.projectLeadId ? order.status : "New Order",
                         )}`}
                       >
-                        {order.status}
+                        {order.projectLeadId ? order.status : "New Order"}
                       </span>
                     </td>
                     <td>

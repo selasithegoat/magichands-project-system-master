@@ -172,17 +172,20 @@ const getProjects = async (req, res) => {
 
     const isReportMode = req.query.mode === "report";
     const isAdminPortal = req.query.source === "admin";
+    const isFrontDesk = req.user.department?.includes("Front Desk");
 
+    // Access Control:
+    // - Admins (non-Front Desk) can see all projects in Admin Portal
+    // - Front Desk users can see all projects ONLY in report mode (End of Day updates)
+    // - Front Desk users in Admin Portal see only their own projects
     const canSeeAll =
-      (req.user.role === "admin" && isAdminPortal) ||
-      (isReportMode && req.user.department?.includes("Front Desk"));
+      (req.user.role === "admin" && isAdminPortal && !isFrontDesk) ||
+      (isReportMode && isFrontDesk);
 
     if (!canSeeAll) {
       query = {
         $or: [
           { projectLeadId: req.user._id },
-          { createBy: req.user._id },
-          { createdBy: req.user._id },
           { endOfDayUpdateBy: req.user._id },
         ],
       };
