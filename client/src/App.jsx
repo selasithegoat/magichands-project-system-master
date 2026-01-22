@@ -23,6 +23,7 @@ import QuoteProjectWizard from "./pages/CreateProject/QuoteWizard/QuoteProjectWi
 import MinimalQuoteForm from "./pages/CreateProject/QuoteWizard/MinimalQuoteForm"; // [NEW]
 import PendingAssignments from "./pages/PendingAssignments/PendingAssignments";
 import MyActivities from "./pages/MyActivities/MyActivities";
+import useInactivityLogout from "./hooks/useInactivityLogout";
 
 // Helper to wrap protected content in Layout
 const ProtectedLayout = ({
@@ -56,6 +57,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [projectCount, setProjectCount] = useState(0); // Global project count
+
+  // Initialize auto-logout (30 minutes)
+  useInactivityLogout();
 
   // Fetch project count
   const fetchProjectCount = async () => {

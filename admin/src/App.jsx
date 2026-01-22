@@ -5,6 +5,7 @@ import Projects from "./pages/Projects/Projects";
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails";
 import Teams from "./pages/Teams/Teams";
 import Clients from "./pages/Clients/Clients";
+import useInactivityLogout from "./hooks/useInactivityLogout";
 import {
   BrowserRouter as Router,
   Routes,
@@ -48,43 +49,8 @@ function App() {
     }
   };
 
-  // Inactivity Timeout Logic
-  useEffect(() => {
-    if (!user) return; // Only track if logged in
-
-    const TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
-    let timeoutId;
-
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        console.log("User inactive for 15 minutes. Logging out...");
-        alert("Session expired due to inactivity.");
-        handleLogout();
-      }, TIMEOUT_MS);
-    };
-
-    // Events to track activity
-    const events = ["mousemove", "keydown", "click", "scroll"];
-
-    const setupEventListeners = () => {
-      events.forEach((event) => {
-        window.addEventListener(event, resetTimer);
-      });
-      resetTimer(); // Start timer on mount/login
-    };
-
-    const cleanupEventListeners = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
-      });
-    };
-
-    setupEventListeners();
-
-    return cleanupEventListeners;
-  }, [user]);
+  // Inactivity Timeout (30 minutes)
+  useInactivityLogout(30 * 60 * 1000);
 
   if (loading) {
     return (
@@ -105,19 +71,14 @@ function App() {
 
   if (user) {
     return (
-      <Router>
-        <Routes>
-          <Route path="/" element={<Navigate to="/projects" replace />} />
-          <Route path="/projects" element={<Projects user={user} />} />
-          <Route
-            path="/projects/:id"
-            element={<ProjectDetails user={user} />}
-          />
-          <Route path="/assign" element={<AssignProject user={user} />} />
-          <Route path="/teams" element={<Teams user={user} />} />
-          <Route path="/clients" element={<Clients user={user} />} />
-        </Routes>
-      </Router>
+      <Routes>
+        <Route path="/" element={<Navigate to="/projects" replace />} />
+        <Route path="/projects" element={<Projects user={user} />} />
+        <Route path="/projects/:id" element={<ProjectDetails user={user} />} />
+        <Route path="/assign" element={<AssignProject user={user} />} />
+        <Route path="/teams" element={<Teams user={user} />} />
+        <Route path="/clients" element={<Clients user={user} />} />
+      </Routes>
     );
   }
 
