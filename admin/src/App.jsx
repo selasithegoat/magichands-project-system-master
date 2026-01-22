@@ -4,6 +4,7 @@ import AssignProject from "./pages/AssignProject/AssignProject";
 import Projects from "./pages/Projects/Projects";
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails";
 import Teams from "./pages/Teams/Teams";
+import Clients from "./pages/Clients/Clients";
 import {
   BrowserRouter as Router,
   Routes,
@@ -114,6 +115,7 @@ function App() {
           />
           <Route path="/assign" element={<AssignProject user={user} />} />
           <Route path="/teams" element={<Teams user={user} />} />
+          <Route path="/clients" element={<Clients user={user} />} />
         </Routes>
       </Router>
     );

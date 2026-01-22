@@ -24,6 +24,7 @@ const {
   deleteOldUserActivity, // [NEW] - Fix for reference error
   updateProject, // [NEW] - Full Update
   deleteProject, // [NEW]
+  getClients, // [NEW]
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -31,6 +32,7 @@ const upload = require("../middleware/upload"); // [NEW]
 
 router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
+router.get("/clients", protect, getClients); // [NEW] - Get all clients with their projects
 router.get("/stats", protect, getUserStats);
 router.get("/:id/activity", protect, getProjectActivity);
 router.post("/:id/items", protect, addItemToProject);

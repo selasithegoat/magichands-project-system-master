@@ -1145,6 +1145,55 @@ const updateProject = async (req, res) => {
   }
 };
 
+// @desc    Get all clients with their projects
+// @route   GET /api/projects/clients
+// @access  Private (Admin only)
+const getClients = async (req, res) => {
+  try {
+    // Only admins can access this endpoint
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Not authorized. Only admins can view clients." });
+    }
+
+    // Aggregate clients from all projects
+    const projects = await Project.find({})
+      .populate("createdBy", "firstName lastName email")
+      .populate("projectLeadId", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    // Group projects by client
+    const clientsMap = new Map();
+
+    projects.forEach((project) => {
+      const clientName = project.details?.client || "Unknown Client";
+
+      if (!clientsMap.has(clientName)) {
+        clientsMap.set(clientName, {
+          name: clientName,
+          projects: [],
+          projectCount: 0,
+        });
+      }
+
+      const clientData = clientsMap.get(clientName);
+      clientData.projects.push(project);
+      clientData.projectCount++;
+    });
+
+    // Convert map to array and sort by name
+    const clients = Array.from(clientsMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    res.json(clients);
+  } catch (error) {
+    console.error("Error fetching clients:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Delete project
 // @route   DELETE /api/projects/:id
 // @access  Private
@@ -1191,4 +1240,5 @@ module.exports = {
   deleteOldUserActivity,
   updateProject, // Full Update
   deleteProject, // [NEW]
+  getClients, // [NEW]
 };
