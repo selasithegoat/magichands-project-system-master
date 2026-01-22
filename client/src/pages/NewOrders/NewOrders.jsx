@@ -10,8 +10,17 @@ const NewOrders = () => {
   const [activeTab, setActiveTab] = useState("create");
   const [allOrders, setAllOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [assignmentFilter, setAssignmentFilter] = useState("All");
+  const [allFilters, setAllFilters] = useState({
+    orderId: "",
+    client: "",
+    status: "All",
+    assignment: "All",
+  });
+  const [historyFilters, setHistoryFilters] = useState({
+    orderId: "",
+    client: "",
+    lead: "",
+  });
 
   const [formData, setFormData] = useState({
     orderNumber: "",
@@ -220,7 +229,31 @@ const NewOrders = () => {
 
   // Filter orders for All Orders tab (non-completed projects)
   const allOrdersFiltered = allOrders.filter((order) => {
-    return order.status !== "Completed" && order.status !== "Delivered";
+    // Exclude completed/delivered
+    if (order.status === "Completed" || order.status === "Delivered")
+      return false;
+
+    // Apply search filters
+    if (
+      allFilters.orderId &&
+      !order.orderId?.toLowerCase().includes(allFilters.orderId.toLowerCase())
+    )
+      return false;
+    if (
+      allFilters.client &&
+      !order.details?.client
+        ?.toLowerCase()
+        .includes(allFilters.client.toLowerCase())
+    )
+      return false;
+    if (allFilters.status !== "All" && order.status !== allFilters.status)
+      return false;
+    if (allFilters.assignment === "Assigned" && !order.projectLeadId)
+      return false;
+    if (allFilters.assignment === "Unassigned" && order.projectLeadId)
+      return false;
+
+    return true;
   });
 
   // Filter orders for Order History tab (completed projects only)
@@ -229,10 +262,30 @@ const NewOrders = () => {
     if (order.status !== "Completed" && order.status !== "Delivered")
       return false;
 
-    // Apply additional filters
-    if (statusFilter !== "All" && order.status !== statusFilter) return false;
-    if (assignmentFilter === "Assigned" && !order.projectLeadId) return false;
-    if (assignmentFilter === "Unassigned" && order.projectLeadId) return false;
+    // Apply search filters
+    if (
+      historyFilters.orderId &&
+      !order.orderId
+        ?.toLowerCase()
+        .includes(historyFilters.orderId.toLowerCase())
+    )
+      return false;
+    if (
+      historyFilters.client &&
+      !order.details?.client
+        ?.toLowerCase()
+        .includes(historyFilters.client.toLowerCase())
+    )
+      return false;
+
+    // Lead filter logic
+    if (historyFilters.lead) {
+      const leadName = order.projectLeadId
+        ? `${order.projectLeadId.firstName} ${order.projectLeadId.lastName}`.toLowerCase()
+        : "";
+      if (!leadName.includes(historyFilters.lead.toLowerCase())) return false;
+    }
+
     return true;
   });
 
@@ -658,6 +711,51 @@ const NewOrders = () => {
       {/* All Orders Tab */}
       {activeTab === "all" && (
         <div className="orders-list-container">
+          <div className="filter-controls">
+            <input
+              type="text"
+              placeholder="Order ID..."
+              value={allFilters.orderId}
+              onChange={(e) =>
+                setAllFilters({ ...allFilters, orderId: e.target.value })
+              }
+              className="filter-input"
+            />
+            <input
+              type="text"
+              placeholder="Client..."
+              value={allFilters.client}
+              onChange={(e) =>
+                setAllFilters({ ...allFilters, client: e.target.value })
+              }
+              className="filter-input"
+            />
+            <select
+              value={allFilters.status}
+              onChange={(e) =>
+                setAllFilters({ ...allFilters, status: e.target.value })
+              }
+              className="filter-select"
+            >
+              <option value="All">All Status</option>
+              <option value="New Order">New Order</option>
+              <option value="Order Confirmed">Order Confirmed</option>
+              <option value="In Progress">In Progress</option>
+            </select>
+
+            <select
+              value={allFilters.assignment}
+              onChange={(e) =>
+                setAllFilters({ ...allFilters, assignment: e.target.value })
+              }
+              className="filter-select"
+            >
+              <option value="All">All Assignments</option>
+              <option value="Assigned">Assigned</option>
+              <option value="Unassigned">Unassigned</option>
+            </select>
+          </div>
+
           {loading ? (
             <div className="loading-state">Loading orders...</div>
           ) : allOrdersFiltered.length === 0 ? (
@@ -724,28 +822,36 @@ const NewOrders = () => {
       {activeTab === "history" && (
         <div className="orders-list-container">
           <div className="filter-controls">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="filter-select"
-            >
-              <option value="All">All Status</option>
-              <option value="New Order">New Order</option>
-              <option value="Order Confirmed">Order Confirmed</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-              <option value="Delivered">Delivered</option>
-            </select>
-
-            <select
-              value={assignmentFilter}
-              onChange={(e) => setAssignmentFilter(e.target.value)}
-              className="filter-select"
-            >
-              <option value="All">All Assignments</option>
-              <option value="Assigned">Assigned</option>
-              <option value="Unassigned">Unassigned</option>
-            </select>
+            <input
+              type="text"
+              placeholder="Client Search..."
+              value={historyFilters.client}
+              onChange={(e) =>
+                setHistoryFilters({ ...historyFilters, client: e.target.value })
+              }
+              className="filter-input"
+            />
+            <input
+              type="text"
+              placeholder="Order Number..."
+              value={historyFilters.orderId}
+              onChange={(e) =>
+                setHistoryFilters({
+                  ...historyFilters,
+                  orderId: e.target.value,
+                })
+              }
+              className="filter-input"
+            />
+            <input
+              type="text"
+              placeholder="Lead Name..."
+              value={historyFilters.lead}
+              onChange={(e) =>
+                setHistoryFilters({ ...historyFilters, lead: e.target.value })
+              }
+              className="filter-input"
+            />
           </div>
 
           {loading ? (
