@@ -187,6 +187,7 @@ const getProjects = async (req, res) => {
         $or: [
           { projectLeadId: req.user._id },
           { endOfDayUpdateBy: req.user._id },
+          { createdBy: req.user._id }, // [NEW] Ensure creators see their own projects
         ],
       };
     }
