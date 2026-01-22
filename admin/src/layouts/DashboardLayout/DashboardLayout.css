@@ -19,12 +19,6 @@
 
 @media (max-width: 1024px) {
   /* Tablet styles - simplified */
-  .sidebar {
-    width: 0;
-    padding: 0;
-    overflow: hidden; /* Hide sidebar completely in document flow */
-  }
-
   .dashboard-main {
     margin-left: 0; /* Full width */
   }

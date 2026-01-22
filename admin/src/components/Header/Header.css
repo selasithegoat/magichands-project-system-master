@@ -44,7 +44,12 @@
   padding: 0;
 }
 
-@media (max-width: 768px) {
+.menu-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 1024px) {
   .header {
     padding: 0 16px;
   }
