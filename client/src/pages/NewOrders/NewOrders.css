@@ -159,7 +159,7 @@
   color: #16a34a;
 }
 
-.assignment-badge.pending {
+.assignment-badge.unassigned {
   background: #fef3c7;
   color: #d97706;
 }

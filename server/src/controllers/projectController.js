@@ -181,6 +181,8 @@ const getProjects = async (req, res) => {
       query = {
         $or: [
           { projectLeadId: req.user._id },
+          { createBy: req.user._id },
+          { createdBy: req.user._id },
           { endOfDayUpdateBy: req.user._id },
         ],
       };

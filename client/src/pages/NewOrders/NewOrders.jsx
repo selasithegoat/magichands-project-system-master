@@ -159,10 +159,8 @@ const NewOrders = () => {
         });
         setSelectedFiles([]);
 
-        // Refresh orders if on All Orders tab
-        if (activeTab === "all") {
-          fetchOrders();
-        }
+        // Always refresh orders list after creating a new order
+        fetchOrders();
       } else {
         const errorData = await res.json();
         showToast(`Error: ${errorData.message || "Failed to submit"}`, "error");
@@ -207,7 +205,7 @@ const NewOrders = () => {
   };
 
   const getAssignmentStatus = (project) => {
-    return project.projectLeadId ? "Assigned" : "Pending Assignment";
+    return project.projectLeadId ? "Assigned" : "Unassigned";
   };
 
   const getStatusClass = (status) => {
@@ -220,8 +218,18 @@ const NewOrders = () => {
     return "draft";
   };
 
-  // Filter orders for history tab
-  const filteredOrders = allOrders.filter((order) => {
+  // Filter orders for All Orders tab (non-completed projects)
+  const allOrdersFiltered = allOrders.filter((order) => {
+    return order.status !== "Completed" && order.status !== "Delivered";
+  });
+
+  // Filter orders for Order History tab (completed projects only)
+  const historyOrdersFiltered = allOrders.filter((order) => {
+    // Only show completed/delivered projects
+    if (order.status !== "Completed" && order.status !== "Delivered")
+      return false;
+
+    // Apply additional filters
     if (statusFilter !== "All" && order.status !== statusFilter) return false;
     if (assignmentFilter === "Assigned" && !order.projectLeadId) return false;
     if (assignmentFilter === "Unassigned" && order.projectLeadId) return false;
@@ -652,8 +660,8 @@ const NewOrders = () => {
         <div className="orders-list-container">
           {loading ? (
             <div className="loading-state">Loading orders...</div>
-          ) : allOrders.length === 0 ? (
-            <div className="empty-state">No orders found.</div>
+          ) : allOrdersFiltered.length === 0 ? (
+            <div className="empty-state">No ongoing orders found.</div>
           ) : (
             <table className="orders-table">
               <thead>
@@ -668,7 +676,7 @@ const NewOrders = () => {
                 </tr>
               </thead>
               <tbody>
-                {allOrders.map((order) => (
+                {allOrdersFiltered.map((order) => (
                   <tr key={order._id}>
                     <td>
                       <span style={{ fontWeight: 600 }}>
@@ -689,7 +697,7 @@ const NewOrders = () => {
                     <td>
                       <span
                         className={`assignment-badge ${
-                          order.projectLeadId ? "assigned" : "pending"
+                          order.projectLeadId ? "assigned" : "unassigned"
                         }`}
                       >
                         {getAssignmentStatus(order)}
@@ -742,8 +750,10 @@ const NewOrders = () => {
 
           {loading ? (
             <div className="loading-state">Loading orders...</div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="empty-state">No orders found matching filters.</div>
+          ) : historyOrdersFiltered.length === 0 ? (
+            <div className="empty-state">
+              No completed orders found matching filters.
+            </div>
           ) : (
             <table className="orders-table">
               <thead>
@@ -758,7 +768,7 @@ const NewOrders = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.map((order) => (
+                {historyOrdersFiltered.map((order) => (
                   <tr key={order._id}>
                     <td>
                       <span style={{ fontWeight: 600 }}>
@@ -779,7 +789,7 @@ const NewOrders = () => {
                     <td>
                       <span
                         className={`assignment-badge ${
-                          order.projectLeadId ? "assigned" : "pending"
+                          order.projectLeadId ? "assigned" : "unassigned"
                         }`}
                       >
                         {getAssignmentStatus(order)}
