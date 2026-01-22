@@ -230,7 +230,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
           className="next-btn"
           onClick={handleNextStep}
           style={{
-            background: "var(--primary-color)",
+            background: "var(--primary-blue)",
             color: "white",
             padding: "0.75rem 2rem",
             borderRadius: "8px",

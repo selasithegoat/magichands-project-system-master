@@ -20,7 +20,7 @@
 .step-scrollable-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0 24px 24px;
+  max-width: 90%;  
 }
 
 /* Progress Section */
@@ -83,8 +83,7 @@
 /* Form Body */
 .form-body {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  flex-direction: column
 }
 
 .form-row {
@@ -150,7 +149,7 @@
 
 .next-btn {
   width: 100%;
-  background-color: var(--primary-blue);
+  background-color: var(--primary-blue) !important;
   color: white;
   font-size: 0.9375rem;
   font-weight: 600;

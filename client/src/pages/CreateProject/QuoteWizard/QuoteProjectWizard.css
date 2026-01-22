@@ -3,7 +3,8 @@
 .step-scrollable-content {
   flex: 1;
   overflow-y: auto;
-  padding-right: 0.5rem;
+  max-width: 95%;
+  margin: 0 auto;
 }
 
 .step-scrollable-content::-webkit-scrollbar {
@@ -35,6 +36,8 @@
   background: var(--bg-card);
   padding: 2.5rem;
   border-radius: 16px;
+  width: 95%;
+  margin: 0 auto;
   border: 1px solid var(--border-color);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
 }
@@ -125,13 +128,13 @@
 }
 
 .step-footer {
-  padding: 2rem 0;
   border-top: 1px solid var(--border-color);
   margin-top: auto;
 }
 
 .next-btn {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 70%;
 }
 
 .next-btn:hover {
@@ -178,6 +181,7 @@
 
 .order-title-section {
   margin-bottom: 2rem;
+  margin-left: 1.5rem;
 }
 
 .risk-section {
@@ -314,7 +318,13 @@
 
   .next-btn,
   .back-text-btn {
-    width: 100%;
+    /* width: 100%; */
     justify-content: center;
+  }
+}
+
+@media (max-width: 540){
+  .wizard-container {
+    overflow-x: scroll;
   }
 }
