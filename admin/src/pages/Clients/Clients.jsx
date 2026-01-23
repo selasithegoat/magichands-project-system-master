@@ -217,7 +217,7 @@ const Clients = ({ user }) => {
                             <th>Project Name</th>
                             <th>Lead</th>
                             <th>Assigned Date</th>
-                            <th>Delivery Date/Time</th>
+                            <th>Contact / Email</th>
                             <th>Status</th>
                             <th>Actions</th>
                           </tr>
@@ -243,11 +243,7 @@ const Clients = ({ user }) => {
                                   project.orderDate || project.createdAt,
                                 )}
                               </td>
-                              <td>
-                                {project.details?.deliveryDate
-                                  ? `${formatDate(project.details.deliveryDate)} ${formatTime(project.details.deliveryTime)}`
-                                  : "-"}
-                              </td>
+                              <td>{project.details?.clientEmail || "-"}</td>
                               <td>
                                 <span
                                   className={`status-badge ${getStatusClass(

@@ -20,6 +20,9 @@ const ProjectSchema = new mongoose.Schema(
       client: {
         type: String,
       },
+      clientEmail: {
+        type: String, // [New]
+      },
       projectName: {
         type: String,
         required: true,

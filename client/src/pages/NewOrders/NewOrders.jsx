@@ -25,6 +25,7 @@ const NewOrders = () => {
   const [formData, setFormData] = useState({
     orderNumber: "",
     clientName: "",
+    clientEmail: "", // [NEW]
     deliveryLocation: "",
     projectName: "",
     briefOverview: "",
@@ -132,6 +133,7 @@ const NewOrders = () => {
     formPayload.append("orderId", formData.orderNumber);
     formPayload.append("orderDate", formData.orderDate);
     formPayload.append("client", formData.clientName);
+    formPayload.append("clientEmail", formData.clientEmail); // [NEW]
     formPayload.append("projectName", formData.projectName);
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
@@ -160,6 +162,7 @@ const NewOrders = () => {
         setFormData({
           orderNumber: `ORD-${Date.now().toString().slice(-6)}`,
           clientName: "",
+          clientEmail: "", // [NEW]
           deliveryLocation: "",
           projectName: "",
           briefOverview: "",
@@ -403,6 +406,18 @@ const NewOrders = () => {
                       className="form-input"
                       placeholder="e.g. Acme Corp"
                       required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="clientEmail">Client Email</label>
+                    <input
+                      type="email"
+                      id="clientEmail"
+                      name="clientEmail"
+                      value={formData.clientEmail}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. contact@client.com"
                     />
                   </div>
                   <div className="form-group">

@@ -13,6 +13,7 @@ const createProject = async (req, res) => {
       receivedTime,
       lead,
       client,
+      clientEmail, // [NEW]
       projectName,
       deliveryDate,
       deliveryTime,
@@ -99,6 +100,7 @@ const createProject = async (req, res) => {
       details: {
         lead: lead?.label || lead?.value || lead, // Prefer label (name) over value (id) for lead
         client, // [NEW] Added client name
+        clientEmail, // [NEW] Added client email
         projectName,
         briefOverview: getValue(req.body.briefOverview) || description, // [NEW] Map briefOverview, fallback to description if legacy
         deliveryDate,
