@@ -809,36 +809,169 @@ const ProjectDetails = ({ user }) => {
             )}
 
             {/* Reference Material / Image */}
-            {details.sampleImage && (
+            {(project.sampleImage ||
+              details.sampleImage ||
+              (project.attachments && project.attachments.length > 0) ||
+              (details.attachments && details.attachments.length > 0)) && (
               <div className="detail-card">
                 <h3 className="card-title">Reference Material</h3>
-                <div style={{ marginTop: "1rem" }}>
-                  <img
-                    src={`http://localhost:5000${details.sampleImage}`}
-                    alt="Project Reference"
-                    style={{
-                      maxWidth: "100%",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border-color)",
-                      maxHeight: "300px",
-                      objectFit: "contain",
-                      background: "rgba(0,0,0,0.2)",
-                    }}
-                  />
-                  <div style={{ marginTop: "0.5rem" }}>
-                    <a
-                      href={`http://localhost:5000${details.sampleImage}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "#6366f1",
-                        fontSize: "0.9rem",
-                        textDecoration: "none",
-                      }}
-                    >
-                      View Full Size
-                    </a>
-                  </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1.5rem",
+                    marginTop: "1rem",
+                  }}
+                >
+                  {/* Sample Image */}
+                  {(project.sampleImage || details.sampleImage) && (
+                    <div>
+                      <h4
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          color: "var(--text-secondary)",
+                          marginBottom: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        Sample Image
+                      </h4>
+                      <div
+                        style={{
+                          borderRadius: "12px",
+                          overflow: "hidden",
+                          border: "1px solid var(--border-color)",
+                          maxWidth: "400px",
+                          background: "rgba(0,0,0,0.2)",
+                        }}
+                      >
+                        <a
+                          href={`http://localhost:5000${project.sampleImage || details.sampleImage}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <img
+                            src={`http://localhost:5000${project.sampleImage || details.sampleImage}`}
+                            alt="Sample"
+                            style={{
+                              width: "100%",
+                              height: "auto",
+                              display: "block",
+                              maxHeight: "300px",
+                              objectFit: "contain",
+                            }}
+                          />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Attachments */}
+                  {((project.attachments && project.attachments.length > 0) ||
+                    (details.attachments &&
+                      details.attachments.length > 0)) && (
+                    <div>
+                      <h4
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          color: "var(--text-secondary)",
+                          marginBottom: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        Attachments (
+                        {(project.attachments?.length || 0) +
+                          (details.attachments?.length || 0)}
+                        )
+                      </h4>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(120px, 1fr))",
+                          gap: "1rem",
+                        }}
+                      >
+                        {[
+                          ...(project.attachments || []),
+                          ...(details.attachments || []),
+                        ].map((path, idx) => {
+                          const isImage = path.match(
+                            /\.(jpg|jpeg|png|gif|webp)$/i,
+                          );
+                          const fileName = path.split("/").pop();
+                          return (
+                            <a
+                              key={idx}
+                              href={`http://localhost:5000${path}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                position: "relative",
+                                aspectRatio: "1",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: "rgba(255, 255, 255, 0.03)",
+                                textDecoration: "none",
+                                transition: "transform 0.2s",
+                              }}
+                              onMouseOver={(e) =>
+                                (e.currentTarget.style.transform =
+                                  "scale(1.02)")
+                              }
+                              onMouseOut={(e) =>
+                                (e.currentTarget.style.transform = "scale(1)")
+                              }
+                            >
+                              {isImage ? (
+                                <img
+                                  src={`http://localhost:5000${path}`}
+                                  alt="attachment"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  style={{
+                                    textAlign: "center",
+                                    padding: "0.75rem",
+                                    color: "var(--text-secondary)",
+                                    width: "100%",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <FolderIcon width="28" height="28" />
+                                  <div
+                                    style={{
+                                      marginTop: "0.5rem",
+                                      fontSize: "0.75rem",
+                                      whiteSpace: "nowrap",
+                                      textOverflow: "ellipsis",
+                                      overflow: "hidden",
+                                      color: "#f8fafc",
+                                    }}
+                                  >
+                                    {fileName}
+                                  </div>
+                                </div>
+                              )}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
