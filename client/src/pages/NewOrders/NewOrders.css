@@ -59,6 +59,8 @@
   background-color: var(--bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+  min-width: 300px;
+
   padding: 1.5rem;
   border: 1px solid var(--border-color);
   overflow-x: auto; /* Enable horizontal scrolling */
@@ -395,7 +397,7 @@
   background-color: var(--primary-blue) !important;
   display: block !important;
   color: white;
-  margin:0 auto;
+  margin: 0 auto;
   width: 30%;
   text-align: center;
   padding: 0.75rem 2rem;
@@ -427,10 +429,6 @@
 
   .submit-btn {
     width: 100%;
-  }
-
-  .tabs-container {
-    overflow-x: auto;
   }
 
   .tab-btn {
@@ -618,4 +616,104 @@
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* Selected Files Grid */
+.selected-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 15px;
+  margin-top: 1rem;
+}
+
+.file-preview-card {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--bg-input);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.file-preview-card:hover {
+  transform: scale(1.02);
+}
+
+.file-preview-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-icon-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  text-align: center;
+}
+
+.file-icon-placeholder span {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 90px;
+}
+
+.remove-file-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  background: rgba(239, 68, 68, 0.8);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  z-index: 5;
+}
+
+.remove-file-btn:hover {
+  background: #ef4444;
+}
+
+.add-more-files {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.02);
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.add-more-files:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+}
+
+.add-more-files span:first-child {
+  font-size: 24px;
+}
+
+.add-more-files span:last-child {
+  font-size: 12px;
 }

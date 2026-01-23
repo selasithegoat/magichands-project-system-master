@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import OrdersList from "../NewOrders/OrdersList";
 
 const CreateProjectLanding = () => {
   const navigate = useNavigate();
@@ -186,6 +187,9 @@ const CreateProjectLanding = () => {
           </div>
         </div>
       </div>
+
+      {/* Orders Management Tabs (All Orders & History) */}
+      <OrdersList />
     </div>
   );
 };
