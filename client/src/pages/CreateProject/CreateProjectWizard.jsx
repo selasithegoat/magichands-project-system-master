@@ -234,10 +234,13 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         }
       });
 
-      // Special handling for Status if editing
       if (editingId && formData.status === "Pending Scope Approval") {
         payload.delete("status"); // Remove old status
-        payload.append("status", "Order Confirmed");
+        const nextStatus =
+          formData.projectType === "Quote"
+            ? "Pending Quote Request"
+            : "Order Confirmed";
+        payload.append("status", nextStatus);
       }
 
       // Append Files to 'attachments' field

@@ -122,6 +122,10 @@ const ProjectSchema = new mongoose.Schema(
         "Pending Packaging",
         "Pending Delivery/Pickup",
         "Delivered",
+        // Quote-Specific Statuses
+        "Pending Quote Request",
+        "Pending Send Response",
+        "Response Sent",
       ],
       default: "Order Confirmed",
     },

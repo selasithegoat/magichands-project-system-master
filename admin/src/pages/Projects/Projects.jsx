@@ -102,7 +102,8 @@ const Projects = ({ user }) => {
     if (lower.includes("pending")) return "pending";
     if (lower.includes("completed") || lower.includes("delivered"))
       return "completed";
-    if (lower.includes("progress")) return "in-progress";
+    if (lower.includes("progress") || lower.includes("sent"))
+      return "in-progress";
     return "draft";
   };
 
@@ -228,6 +229,13 @@ const Projects = ({ user }) => {
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
                 <option value="Delivered">Delivered</option>
+                <option value="Pending Quote Request">
+                  Pending Quote Request
+                </option>
+                <option value="Pending Send Response">
+                  Pending Send Response
+                </option>
+                <option value="Response Sent">Response Sent</option>
               </select>
 
               {/* Client Filter */}

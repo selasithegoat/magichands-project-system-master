@@ -287,7 +287,11 @@ const QuoteProjectWizard = () => {
       const payload = {
         ...formData,
         projectType: formData.projectType || "Quote",
-        status: editingId ? formData.status : "New Order",
+        status: editingId
+          ? formData.status === "Pending Scope Approval"
+            ? "Pending Quote Request"
+            : formData.status
+          : "Order Confirmed",
 
         // Ensure details object is populated for top-level schema
         details: {

@@ -41,6 +41,15 @@ const STATUS_FLOW = [
   "Delivered",
 ];
 
+const QUOTE_STATUS_FLOW = [
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Pending Quote Request",
+  "Pending Send Response",
+  "Response Sent",
+  "Completed",
+];
+
 const getStatusColor = (status) => {
   switch (status) {
     case "Order Confirmed":
@@ -59,6 +68,12 @@ const getStatusColor = (status) => {
       return "#22c55e"; // Green
     case "Completed":
       return "#22c55e"; // Green
+    case "Pending Quote Request":
+      return "#eab308"; // Yellow/Gold
+    case "Pending Send Response":
+      return "#6366f1"; // Indigo
+    case "Response Sent":
+      return "#06b6d4"; // Cyan
     default:
       return "#cbd5e1"; // Grey
   }
@@ -420,7 +435,10 @@ const ProjectDetail = ({ onProjectChange, user }) => {
             <div className="side-column">
               <ProgressCard project={project} />
               {/* Quick Actions Removed */}
-              <ApprovalsCard status={project.status} />
+              <ApprovalsCard
+                status={project.status}
+                type={project.projectType}
+              />
             </div>
           </>
         )}
@@ -1676,7 +1694,26 @@ const ProductionRisksCard = ({
 };
 
 const ProgressCard = ({ project }) => {
-  const calculateProgress = (status) => {
+  const calculateProgress = (status, type) => {
+    if (type === "Quote") {
+      switch (status) {
+        case "Order Confirmed":
+          return 5;
+        case "Pending Scope Approval":
+          return 25;
+        case "Pending Quote Request":
+          return 50;
+        case "Pending Send Response":
+          return 75;
+        case "Response Sent":
+          return 90;
+        case "Completed":
+          return 100;
+        default:
+          return 0;
+      }
+    }
+
     switch (status) {
       case "Order Confirmed":
         return 5;
@@ -1699,7 +1736,7 @@ const ProgressCard = ({ project }) => {
     }
   };
 
-  const progress = calculateProgress(project.status);
+  const progress = calculateProgress(project.status, project.projectType);
   const color = getStatusColor(project.status);
 
   return (
@@ -1725,13 +1762,15 @@ const ProgressCard = ({ project }) => {
   );
 };
 
-const ApprovalsCard = ({ status }) => {
+const ApprovalsCard = ({ status, type }) => {
+  const flow = type === "Quote" ? QUOTE_STATUS_FLOW : STATUS_FLOW;
+
   // If status is "Completed", we want to show everything as done.
   // We can simulate this by setting index to length of array (past the last item)
-  let currentStatusIndex = STATUS_FLOW.indexOf(status);
+  let currentStatusIndex = flow.indexOf(status);
 
   if (status === "Completed") {
-    currentStatusIndex = STATUS_FLOW.length;
+    currentStatusIndex = flow.length;
   }
 
   const statusIcons = {
@@ -1742,6 +1781,10 @@ const ApprovalsCard = ({ status }) => {
     "Pending Packaging": PackageIcon,
     "Pending Delivery/Pickup": TruckIcon,
     Delivered: CheckCircleIcon,
+    "Pending Quote Request": ClipboardListIcon,
+    "Pending Send Response": ClockIcon,
+    "Response Sent": CheckCircleIcon,
+    Completed: CheckCircleIcon,
   };
 
   return (
@@ -1750,7 +1793,7 @@ const ApprovalsCard = ({ status }) => {
         <h3 className="card-title">✅ Approvals</h3>
       </div>
       <div className="approval-list">
-        {STATUS_FLOW.map((step, index) => {
+        {flow.map((step, index) => {
           // Status States:
           // 1. Completed: index < currentStatusIndex
           // 2. Active: index === currentStatusIndex

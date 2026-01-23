@@ -106,7 +106,7 @@ const MinimalQuoteForm = () => {
     try {
       const formPayload = new FormData();
       formPayload.append("projectType", "Quote");
-      formPayload.append("status", "New Order");
+      formPayload.append("status", "Order Confirmed");
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);
       formPayload.append("client", formData.clientName);

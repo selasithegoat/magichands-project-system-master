@@ -439,16 +439,26 @@ const ProjectDetails = ({ user }) => {
                   color: "inherit",
                 }}
               >
-                {[
-                  "Order Confirmed",
-                  "Pending Scope Approval",
-                  "Pending Mockup",
-                  "Pending Production",
-                  "Pending Packaging",
-                  "Pending Delivery/Pickup",
-                  "Delivered",
-                  "Completed",
-                ].map((status) => (
+                {(project.projectType === "Quote"
+                  ? [
+                      "Order Confirmed",
+                      "Pending Scope Approval",
+                      "Pending Quote Request",
+                      "Pending Send Response",
+                      "Response Sent",
+                      "Completed",
+                    ]
+                  : [
+                      "Order Confirmed",
+                      "Pending Scope Approval",
+                      "Pending Mockup",
+                      "Pending Production",
+                      "Pending Packaging",
+                      "Pending Delivery/Pickup",
+                      "Delivered",
+                      "Completed",
+                    ]
+                ).map((status) => (
                   <option
                     key={status}
                     value={status}
