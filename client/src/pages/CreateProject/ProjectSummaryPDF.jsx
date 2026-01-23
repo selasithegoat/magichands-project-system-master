@@ -127,11 +127,18 @@ const styles = StyleSheet.create({
 const ProjectSummaryPDF = ({
   formData,
   imageUrls = {},
-  isEmergency = false,
+  pdfType = "STANDARD",
 }) => {
   console.log("PDF Component Rendering. Attachments:", formData.attachments);
 
-  const themeColor = isEmergency ? "#EF4444" : "#10B981"; // Red or Green
+  // Theme Colors
+  const THEME = {
+    EMERGENCY: "#EF4444", // Red
+    QUOTE: "#F97316", // Orange
+    STANDARD: "#10B981", // Green (Default)
+  };
+
+  const themeColor = THEME[pdfType] || THEME.STANDARD;
 
   return (
     <Document>
@@ -148,7 +155,7 @@ const ProjectSummaryPDF = ({
             <Text
               style={{ color: themeColor, fontSize: 12, fontWeight: "bold" }}
             >
-              {isEmergency ? "STATUS: EMERGENCY" : "STATUS: DRAFT"}
+              TYPE: {pdfType}
             </Text>
           </View>
         </View>

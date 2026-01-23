@@ -272,7 +272,13 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                   <ProjectSummaryPDF
                     formData={getPdfFormData()}
                     imageUrls={imageUrls}
-                    isEmergency={isEmergency}
+                    pdfType={
+                      isEmergency
+                        ? "EMERGENCY"
+                        : project.projectType === "Quote"
+                          ? "QUOTE"
+                          : "STANDARD" // Default
+                    }
                   />
                 }
                 fileName={`Project_${project.orderId || "Brief"}.pdf`}
