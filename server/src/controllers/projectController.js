@@ -14,6 +14,7 @@ const createProject = async (req, res) => {
       lead,
       client,
       clientEmail, // [NEW]
+      clientPhone, // [NEW]
       projectName,
       deliveryDate,
       deliveryTime,
@@ -101,6 +102,7 @@ const createProject = async (req, res) => {
         lead: lead?.label || lead?.value || lead, // Prefer label (name) over value (id) for lead
         client, // [NEW] Added client name
         clientEmail, // [NEW] Added client email
+        clientPhone, // [NEW] Added client phone
         projectName,
         briefOverview: getValue(req.body.briefOverview) || description, // [NEW] Map briefOverview, fallback to description if legacy
         deliveryDate,
@@ -929,6 +931,8 @@ const updateProject = async (req, res) => {
       receivedTime,
       lead,
       client,
+      clientEmail, // [NEW]
+      clientPhone, // [NEW]
       projectName,
       deliveryDate,
       deliveryTime,
@@ -976,6 +980,8 @@ const updateProject = async (req, res) => {
     // Capture old values for logging
     const oldValues = {
       client: project.details?.client,
+      clientEmail: project.details?.clientEmail,
+      clientPhone: project.details?.clientPhone,
       orderDate: project.orderDate,
       receivedTime: project.receivedTime,
       deliveryDate: project.details?.deliveryDate,
@@ -1012,6 +1018,14 @@ const updateProject = async (req, res) => {
     }
     if (client) {
       project.details.client = client;
+      detailsChanged = true;
+    }
+    if (clientEmail) {
+      project.details.clientEmail = clientEmail;
+      detailsChanged = true;
+    }
+    if (clientPhone) {
+      project.details.clientPhone = clientPhone;
       detailsChanged = true;
     }
     if (projectName) {

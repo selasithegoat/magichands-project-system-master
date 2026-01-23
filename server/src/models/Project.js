@@ -23,6 +23,9 @@ const ProjectSchema = new mongoose.Schema(
       clientEmail: {
         type: String, // [New]
       },
+      clientPhone: {
+        type: String, // [New]
+      },
       projectName: {
         type: String,
         required: true,

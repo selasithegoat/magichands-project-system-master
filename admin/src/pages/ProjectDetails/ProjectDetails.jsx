@@ -93,6 +93,8 @@ const ProjectDetails = ({ user }) => {
           // Initialize edit form with flat structure for general info
           setEditForm({
             client: data.details?.client || "",
+            clientEmail: data.details?.clientEmail || "", // [NEW]
+            clientPhone: data.details?.clientPhone || "", // [NEW]
             briefOverview: data.details?.briefOverview || "", // [New]
             orderDate: data.orderDate
               ? data.orderDate.split("T")[0]
@@ -196,6 +198,8 @@ const ProjectDetails = ({ user }) => {
     if (!isEditing) {
       setEditForm({
         client: project.details?.client || "",
+        clientEmail: project.details?.clientEmail || "", // [NEW]
+        clientPhone: project.details?.clientPhone || "", // [NEW]
         orderDate: project.orderDate
           ? project.orderDate.split("T")[0]
           : project.createdAt
@@ -224,6 +228,8 @@ const ProjectDetails = ({ user }) => {
       // Construct payload with flattened fields as expected by the controller
       const payload = {
         client: editForm.client,
+        clientEmail: editForm.clientEmail, // [NEW]
+        clientPhone: editForm.clientPhone, // [NEW]
         briefOverview: editForm.briefOverview, // [New]
         orderDate: editForm.orderDate,
         receivedTime: editForm.receivedTime,
@@ -503,6 +509,32 @@ const ProjectDetails = ({ user }) => {
                     />
                   ) : (
                     <p>{details.client || "N/A"}</p>
+                  )}
+                </div>
+                <div className="info-item">
+                  <label>Client Email</label>
+                  {isEditing ? (
+                    <input
+                      className="edit-input"
+                      name="clientEmail"
+                      value={editForm.clientEmail}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{details.clientEmail || "N/A"}</p>
+                  )}
+                </div>
+                <div className="info-item">
+                  <label>Client Phone</label>
+                  {isEditing ? (
+                    <input
+                      className="edit-input"
+                      name="clientPhone"
+                      value={editForm.clientPhone}
+                      onChange={handleChange}
+                    />
+                  ) : (
+                    <p>{details.clientPhone || "N/A"}</p>
                   )}
                 </div>
                 <div className="info-item">

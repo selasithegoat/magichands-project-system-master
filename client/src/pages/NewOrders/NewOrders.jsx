@@ -26,6 +26,7 @@ const NewOrders = () => {
     orderNumber: "",
     clientName: "",
     clientEmail: "", // [NEW]
+    clientPhone: "", // [NEW]
     deliveryLocation: "",
     projectName: "",
     briefOverview: "",
@@ -134,6 +135,7 @@ const NewOrders = () => {
     formPayload.append("orderDate", formData.orderDate);
     formPayload.append("client", formData.clientName);
     formPayload.append("clientEmail", formData.clientEmail); // [NEW]
+    formPayload.append("clientPhone", formData.clientPhone); // [NEW]
     formPayload.append("projectName", formData.projectName);
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
@@ -163,6 +165,7 @@ const NewOrders = () => {
           orderNumber: `ORD-${Date.now().toString().slice(-6)}`,
           clientName: "",
           clientEmail: "", // [NEW]
+          clientPhone: "", // [NEW]
           deliveryLocation: "",
           projectName: "",
           briefOverview: "",
@@ -418,6 +421,18 @@ const NewOrders = () => {
                       onChange={handleChange}
                       className="form-input"
                       placeholder="e.g. contact@client.com"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="clientPhone">Client Phone</label>
+                    <input
+                      type="tel"
+                      id="clientPhone"
+                      name="clientPhone"
+                      value={formData.clientPhone}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. +1234567890"
                     />
                   </div>
                   <div className="form-group">
