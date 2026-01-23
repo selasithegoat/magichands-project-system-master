@@ -4,7 +4,6 @@ import "./Sidebar.css";
 import {
   DashboardIcon,
   ProjectsIcon,
-  AssignIcon,
   ClientsIcon,
   TeamsIcon,
   ReportsIcon,
@@ -56,13 +55,6 @@ const Sidebar = ({ isOpen, onClose, user }) => {
         >
           <ProjectsIcon className="nav-icon" />
           Projects
-        </NavLink>
-        <NavLink
-          to="/assign"
-          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-        >
-          <AssignIcon className="nav-icon" />
-          Assign Projects
         </NavLink>
         <NavLink
           to="/clients"

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
+import UserAvatar from "../../components/ui/UserAvatar";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import "./NewOrders.css";
 
 const NewOrders = () => {
@@ -20,21 +22,50 @@ const NewOrders = () => {
     deliveryDate: "",
     projectType: location.state?.projectType || "Standard",
     priority: location.state?.priority || "Normal",
+    projectLeadId: "",
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [toast, setToast] = useState({
     show: false,
     message: "",
     type: "success",
   });
+  const [isToastFading, setIsToastFading] = useState(false);
+
+  // Fetch users for project lead
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/auth/users");
+        if (res.ok) {
+          const data = await res.json();
+          const formatted = data.map((u) => ({
+            value: u._id,
+            label:
+              `${u.firstName || ""} ${u.lastName || ""} (${u.employeeId || u.email})`.trim(),
+          }));
+          setLeads(formatted);
+        }
+      } catch (e) {
+        console.error("Failed to fetch users", e);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(
-      () => setToast({ show: false, message: "", type: "success" }),
-      3000,
-    );
+    setIsToastFading(false);
+    setTimeout(() => {
+      setIsToastFading(true);
+      setTimeout(() => {
+        setToast({ show: false, message: "", type: "success" });
+        setIsToastFading(false);
+      }, 500);
+    }, 3000);
   };
 
   // Auto-generate order number on mount
@@ -88,8 +119,17 @@ const NewOrders = () => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.projectLeadId) {
+      showToast("Please select a Project Lead.", "error");
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowConfirmModal(false);
 
     const formPayload = new FormData();
     formPayload.append("orderId", formData.orderNumber);
@@ -100,15 +140,26 @@ const NewOrders = () => {
     formPayload.append("projectName", formData.projectName);
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
-    formPayload.append("status", "New Order");
+    formPayload.append("projectLeadId", formData.projectLeadId);
+    formPayload.append("status", "Pending Scope Approval");
     formPayload.append("briefOverview", formData.briefOverview);
     formPayload.append("projectType", formData.projectType);
     formPayload.append("priority", formData.priority);
     formPayload.append("items", JSON.stringify(formData.items));
 
-    selectedFiles.forEach((file) => {
-      formPayload.append("attachments", file);
-    });
+    const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
+    if (imageFile) {
+      formPayload.append("sampleImage", imageFile);
+      selectedFiles
+        .filter((f) => f !== imageFile)
+        .forEach((file) => {
+          formPayload.append("attachments", file);
+        });
+    } else {
+      selectedFiles.forEach((file) => {
+        formPayload.append("attachments", file);
+      });
+    }
 
     try {
       const res = await fetch("/api/projects", {
@@ -132,6 +183,7 @@ const NewOrders = () => {
           deliveryDate: "",
           projectType: formData.projectType,
           priority: formData.priority,
+          projectLeadId: "",
         });
         setSelectedFiles([]);
 
@@ -153,12 +205,9 @@ const NewOrders = () => {
   return (
     <div className="new-orders-page">
       {toast.show && (
-        <div className={`toast-container ${toast.type}`}>
-          {toast.type === "success" ? (
-            <span>&#10003;</span>
-          ) : (
-            <span>&#9888;</span>
-          )}
+        <div
+          className={`toast-message ${toast.type} ${isToastFading ? "fading-out" : ""}`}
+        >
           {toast.message}
         </div>
       )}
@@ -209,6 +258,28 @@ const NewOrders = () => {
                     className="form-input"
                     required
                   />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="projectLeadId">
+                    Project Lead <span style={{ color: "red" }}>*</span>
+                  </label>
+                  <select
+                    id="projectLeadId"
+                    name="projectLeadId"
+                    value={formData.projectLeadId}
+                    onChange={handleChange}
+                    className="form-input"
+                    required
+                  >
+                    <option value="">Select a Project Lead</option>
+                    {leads.map((lead) => (
+                      <option key={lead.value} value={lead.value}>
+                        {lead.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -442,6 +513,16 @@ const NewOrders = () => {
           </form>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onConfirm={handleConfirmSubmit}
+        onCancel={() => setShowConfirmModal(false)}
+        title="Confirm New Order"
+        message={`Are you sure you want to create order ${formData.orderNumber} for ${formData.projectName}? It will be assigned to the selected Project Lead for approval.`}
+        confirmText="Yes, Create Order"
+        cancelText="Cancel"
+      />
     </div>
   );
 };

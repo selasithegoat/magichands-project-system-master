@@ -23,9 +23,7 @@ const Header = ({ onMenuClick }) => {
           </svg>
         </button>
         <div className="breadcrumbs">
-          <span>Assign Projects</span>
-          <span className="breadcrumb-separator">{">"}</span>
-          <span className="breadcrumb-current">New Assignment</span>
+          <span className="breadcrumb-current">Projects Overview</span>
         </div>
       </div>
 

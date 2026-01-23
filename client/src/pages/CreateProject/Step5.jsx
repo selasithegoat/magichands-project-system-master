@@ -8,6 +8,7 @@ import FileIcon from "../../components/icons/FileIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ProjectSummaryPDF from "./ProjectSummaryPDF";
 import "./Step5.css";
@@ -15,6 +16,7 @@ import "./Step5.css";
 const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showToast, setShowToast] = useState({
     show: false,
     message: "",
@@ -114,11 +116,16 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
     };
   }, [formData]);
 
-  const handleCreateClick = async () => {
+  const handleCreateClick = () => {
     if (!isChecked) {
       triggerToast("Please verify the information before submitting.", "error");
       return;
     }
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmCreate = async () => {
+    setShowConfirmModal(false);
     setIsCreating(true);
     const result = await onCreate();
     setIsCreating(false);
@@ -523,6 +530,16 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
           )}
         </button>
       </div>
+
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onConfirm={handleConfirmCreate}
+        onCancel={() => setShowConfirmModal(false)}
+        title="Confirm Project Creation"
+        message={`Are you sure you want to create the project "${formData.projectName}"? It will be assigned to ${formData.lead?.label || "the selected Lead"} for approval.`}
+        confirmText="Yes, Create Project"
+        cancelText="Cancel"
+      />
     </div>
   );
 };

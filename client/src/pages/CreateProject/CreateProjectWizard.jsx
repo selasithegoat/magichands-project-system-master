@@ -50,6 +50,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   const [isLoading, setIsLoading] = useState(false); // Loading state for fetch
   const [leads, setLeads] = useState([]); // [NEW] Values for Steps
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState("");
 
   // Fetch Users for leads
   React.useEffect(() => {
@@ -243,11 +245,29 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         payload.append("status", nextStatus);
       }
 
-      // Append Files to 'attachments' field
+      // Set status to Pending Scope Approval if we have a lead and it's a NEW project
+      if (!editingId && formData.lead) {
+        payload.delete("status");
+        payload.append("status", "Pending Scope Approval");
+      }
+
+      // Append Files to 'sampleImage' and 'attachments' fields
       if (formData.files && formData.files.length > 0) {
-        formData.files.forEach((file) => {
-          payload.append("attachments", file);
-        });
+        const imageFile = formData.files.find((f) =>
+          f.type.startsWith("image/"),
+        );
+        if (imageFile) {
+          payload.append("sampleImage", imageFile);
+          formData.files
+            .filter((f) => f !== imageFile)
+            .forEach((file) => {
+              payload.append("attachments", file);
+            });
+        } else {
+          formData.files.forEach((file) => {
+            payload.append("attachments", file);
+          });
+        }
       }
 
       const res = await fetch(url, {
@@ -257,6 +277,9 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        setCreatedOrderNumber(data.orderId || formData.orderId || "New Order");
+        setShowSuccessModal(true);
         return { success: true };
       } else {
         const err = await res.json();
@@ -385,6 +408,15 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         }
       `,
         }}
+      />
+      <ConfirmationModal
+        isOpen={showSuccessModal}
+        onClose={handleProjectComplete}
+        onConfirm={handleProjectComplete}
+        title="Project Created Successfully"
+        message={`New project ${createdOrderNumber} has been created and assigned to the Project Lead for scope approval.`}
+        confirmText="Back to Dashboard"
+        hideCancel={true}
       />
     </div>
   );

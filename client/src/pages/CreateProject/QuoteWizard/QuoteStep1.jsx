@@ -5,15 +5,43 @@ import BackArrow from "../../../components/icons/BackArrow";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
 import FolderIcon from "../../../components/icons/FolderIcon";
 import PersonIcon from "../../../components/icons/PersonIcon";
+import Select from "../../../components/ui/Select";
+import UserAvatar from "../../../components/ui/UserAvatar";
 
 const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
+  const [leads, setLeads] = React.useState([]);
+  const [isLoadingLeads, setIsLoadingLeads] = React.useState(false);
+
+  React.useEffect(() => {
+    const fetchUsers = async () => {
+      setIsLoadingLeads(true);
+      try {
+        const res = await fetch("/api/auth/users");
+        if (res.ok) {
+          const data = await res.json();
+          const formatted = data.map((u) => ({
+            value: u._id,
+            label:
+              `${u.firstName || ""} ${u.lastName || ""} (${u.employeeId || u.email})`.trim(),
+          }));
+          setLeads(formatted);
+        }
+      } catch (e) {
+        console.error("Failed to fetch users", e);
+      } finally {
+        setIsLoadingLeads(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleChange = (field, value) => {
     setFormData({ [field]: value });
   };
 
   const handleNextStep = () => {
-    if (!formData.projectName || !formData.deliveryDate) {
-      alert("Please fill in Project Name and Completion Date.");
+    if (!formData.projectName || !formData.deliveryDate || !formData.lead) {
+      alert("Please fill in Project Name, Completion Date, and select a Lead.");
       return;
     }
     onNext();
@@ -54,11 +82,53 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             />
             <Input
               type="date"
-              label="Completion Date"
+              label={
+                <>
+                  Completion Date <span style={{ color: "#ef4444" }}>*</span>
+                </>
+              }
               value={formData.deliveryDate}
               onChange={(e) => handleChange("deliveryDate", e.target.value)}
               icon={<CalendarIcon />}
               required
+            />
+          </div>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <Select
+              label={
+                <>
+                  Lead Assignment <span style={{ color: "#ef4444" }}>*</span>
+                </>
+              }
+              options={leads}
+              value={leads.find((l) => l.value === formData.lead)}
+              onChange={(val) => handleChange("lead", val)}
+              placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
+              renderValue={(option) => (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </div>
+              )}
+              renderOption={(option) => (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </div>
+              )}
             />
           </div>
 

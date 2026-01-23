@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import Login from "./pages/Login/Login";
-import AssignProject from "./pages/AssignProject/AssignProject";
 import Projects from "./pages/Projects/Projects";
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails";
 import Teams from "./pages/Teams/Teams";
@@ -104,16 +103,6 @@ function App() {
         element={
           user ? (
             <ProjectDetails user={user} />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route
-        path="/assign"
-        element={
-          user ? (
-            <AssignProject user={user} />
           ) : (
             <Navigate to="/login" replace />
           )

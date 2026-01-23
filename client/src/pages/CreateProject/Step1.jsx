@@ -128,7 +128,11 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             </div>
           ) : (
             <Select
-              label="Lead Assignment"
+              label={
+                <>
+                  Lead Assignment <span style={{ color: "#ef4444" }}>*</span>
+                </>
+              }
               options={leads}
               value={
                 isLoadingLeads
@@ -239,24 +243,26 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
           </div>
 
           {/* Reference Materials Section */}
-          {/* Sample Image Upload (Reverted to Single File) */}
           <div className="reference-section" style={{ marginTop: "1.5rem" }}>
-            <label className="section-label">Sample Image</label>
+            <label className="section-label">Reference Materials</label>
 
             {!isEditing && (
               <div
-                className="file-upload-simple"
+                className="file-upload-multi"
                 style={{ marginTop: "0.5rem" }}
               >
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      handleChange("files", [file]);
+                    const newFiles = Array.from(e.target.files);
+                    if (newFiles.length > 0) {
+                      handleChange("files", [
+                        ...(formData.files || []),
+                        ...newFiles,
+                      ]);
                       e.target.value = null;
                     }
                   }}
@@ -271,35 +277,102 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                     border: "none",
                     borderRadius: "4px",
                     cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
                   }}
                 >
-                  Upload Image
+                  <FolderIcon width="16" height="16" />
+                  Add Files
                 </button>
               </div>
             )}
 
-            {/* Preview */}
+            {/* New Files Preview Grid */}
             {formData.files && formData.files.length > 0 && (
-              <div style={{ marginTop: "1rem" }}>
-                <img
-                  src={URL.createObjectURL(formData.files[0])}
-                  alt="Preview"
-                  style={{ maxWidth: "200px", borderRadius: "8px" }}
-                />
-                {!isEditing && (
-                  <button
-                    onClick={() => handleChange("files", [])}
+              <div
+                style={{
+                  marginTop: "1rem",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                  gap: "1rem",
+                }}
+              >
+                {formData.files.map((file, idx) => (
+                  <div
+                    key={idx}
                     style={{
-                      marginLeft: "1rem",
-                      cursor: "pointer",
-                      background: "none",
-                      border: "none",
-                      color: "red",
+                      position: "relative",
+                      aspectRatio: "1",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      border: "1px solid var(--border-color)",
+                      background: "#f8fafc",
                     }}
                   >
-                    Remove
-                  </button>
-                )}
+                    {file.type.startsWith("image/") ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt="Preview"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0.5rem",
+                          textAlign: "center",
+                        }}
+                      >
+                        <FolderIcon width="24" height="24" color="#64748b" />
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            marginTop: "0.25rem",
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {file.name}
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const remaining = formData.files.filter(
+                          (_, i) => i !== idx,
+                        );
+                        handleChange("files", remaining);
+                      }}
+                      style={{
+                        position: "absolute",
+                        top: "4px",
+                        right: "4px",
+                        background: "rgba(239, 68, 68, 0.9)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "20px",
+                        height: "20px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 

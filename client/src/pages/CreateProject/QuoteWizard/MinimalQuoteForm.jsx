@@ -8,6 +8,7 @@ import Select from "../../../components/ui/Select";
 import UserAvatar from "../../../components/ui/UserAvatar";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
 import FolderIconStd from "../../../components/icons/FolderIcon"; // Renamed to avoid collision if any
+import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 import "./MinimalQuoteForm.css";
 
 const MinimalQuoteForm = () => {
@@ -15,6 +16,15 @@ const MinimalQuoteForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showToast, setShowToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+  const [isToastFading, setIsToastFading] = useState(false);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState("");
 
   const [formData, setFormData] = useState({
     projectName: "",
@@ -99,14 +109,24 @@ const MinimalQuoteForm = () => {
     );
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.projectLeadId) {
+      alert("Please select a Project Lead. This is a required field.");
+      return;
+    }
+
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowConfirmModal(false);
     setIsLoading(true);
 
     try {
       const formPayload = new FormData();
       formPayload.append("projectType", "Quote");
-      formPayload.append("status", "Order Confirmed");
+      formPayload.append("status", "Pending Scope Approval");
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);
       formPayload.append("client", formData.clientName);
@@ -124,7 +144,15 @@ const MinimalQuoteForm = () => {
         }),
       );
 
-      if (selectedFiles.length > 0) {
+      const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
+      if (imageFile) {
+        formPayload.append("sampleImage", imageFile);
+        selectedFiles
+          .filter((f) => f !== imageFile)
+          .forEach((file) => {
+            formPayload.append("attachments", file);
+          });
+      } else if (selectedFiles.length > 0) {
         selectedFiles.forEach((file) => {
           formPayload.append("attachments", file);
         });
@@ -136,23 +164,46 @@ const MinimalQuoteForm = () => {
       });
 
       if (res.ok) {
-        navigate("/");
+        setCreatedOrderNumber(formData.quoteNumber);
+        triggerToast("Project Created Successfully!", "success");
+        setShowSuccessModal(true);
       } else {
         const err = await res.json();
-        alert(`Failed to create quote: ${err.message}`);
+        triggerToast(err.message || "Failed to create quote", "error");
       }
     } catch (err) {
       console.error(err);
-      alert("Error creating quote");
+      triggerToast("Error creating quote", "error");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const triggerToast = (message, type = "success") => {
+    setShowToast({ show: true, message, type });
+    setIsToastFading(false);
+    setTimeout(() => {
+      setIsToastFading(true);
+      setTimeout(() => {
+        setShowToast({ show: false, message: "", type: "success" });
+        setIsToastFading(false);
+      }, 500);
+    }, 3000);
   };
 
   if (isLoading) return <Spinner />;
 
   return (
     <div className="minimal-quote-container">
+      {showToast.show && (
+        <div
+          className={`toast-message ${showToast.type} ${
+            isToastFading ? "fading-out" : ""
+          }`}
+        >
+          {showToast.message}
+        </div>
+      )}
       <div className="page-header">
         <h1>Create New Quote</h1>
         <p className="subtitle">Front Desk entry for new quote requests</p>
@@ -464,6 +515,25 @@ const MinimalQuoteForm = () => {
           </div>
         </form>
       </div>
+
+      <ConfirmationModal
+        isOpen={showSuccessModal}
+        onClose={() => navigate("/")}
+        onConfirm={() => navigate("/")}
+        title="Quote Created Successfully"
+        message={`New quote project ${createdOrderNumber} has been created and assigned to the Project Lead for scope approval.`}
+        confirmText="Back to Dashboard"
+        hideCancel={true}
+      />
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onConfirm={handleConfirmSubmit}
+        onCancel={() => setShowConfirmModal(false)}
+        title="Confirm New Quote Order"
+        message={`Are you sure you want to create a new project for ${formData.clientName}? It will be assigned to the selected Project Lead for approval.`}
+        confirmText="Yes, Create Quote"
+        cancelText="Cancel"
+      />
     </div>
   );
 };

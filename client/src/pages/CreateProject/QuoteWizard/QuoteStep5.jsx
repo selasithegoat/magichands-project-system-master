@@ -9,28 +9,55 @@ import RobotArmIcon from "../../../components/icons/RobotArmIcon";
 import UserAvatar from "../../../components/ui/UserAvatar";
 import Spinner from "../../../components/ui/Spinner";
 import ProgressBar from "../../../components/ui/ProgressBar";
+import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 import "./QuoteStep5.css"; // We'll create this or use Step5.css if shared
 
 const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showToast, setShowToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+  const [isToastFading, setIsToastFading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleFinish = async () => {
+  const handleFinish = () => {
     if (!isChecked) {
       setError("Please verify the information before submitting.");
       return;
     }
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmFinish = async () => {
+    setShowConfirmModal(false);
     setIsCreating(true);
     setError("");
     const result = await onCreate();
     setIsCreating(false);
 
     if (result.success) {
-      onComplete();
+      triggerToast("Project Created Successfully!", "success");
+      setTimeout(() => onComplete(), 2000);
     } else {
       setError(result.message || "Something went wrong.");
+      triggerToast(result.message || "Something went wrong.", "error");
     }
+  };
+
+  const triggerToast = (message, type = "success") => {
+    setShowToast({ show: true, message, type });
+    setIsToastFading(false);
+    setTimeout(() => {
+      setIsToastFading(true);
+      setTimeout(() => {
+        setShowToast({ show: false, message: "", type: "success" });
+        setIsToastFading(false);
+      }, 500);
+    }, 3000);
   };
 
   const formatDate = (dateStr) => {
@@ -44,6 +71,13 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
 
   return (
     <div className="step-container">
+      {showToast.show && (
+        <div
+          className={`toast-message ${showToast.type} ${isToastFading ? "fading-out" : ""}`}
+        >
+          {showToast.message}
+        </div>
+      )}
       <div className="step-header">
         <button className="back-btn" onClick={onBack}>
           <BackArrow />
@@ -346,6 +380,16 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
           {isCreating ? <Spinner size="small" /> : "Accept Project"}
         </button>
       </div>
+
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onConfirm={handleConfirmFinish}
+        onCancel={() => setShowConfirmModal(false)}
+        title="Confirm Project Acceptance"
+        message={`Are you sure you want to accept this quote and create the project "${formData.projectName}"? It will be assigned to ${formData.leadLabel || "the selected Lead"} for approval.`}
+        confirmText="Yes, Accept Project"
+        cancelText="Cancel"
+      />
     </div>
   );
 };

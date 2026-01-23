@@ -18,6 +18,8 @@ const QuoteProjectWizard = () => {
   const [leads, setLeads] = useState([]);
   const [currentStep, setCurrentStep] = useState(1);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdOrderNumber, setCreatedOrderNumber] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -283,11 +285,12 @@ const QuoteProjectWizard = () => {
       const payload = {
         ...formData,
         projectType: formData.projectType || "Quote",
+        // Initial status for projects created from Quote
         status: editingId
           ? formData.status === "Pending Scope Approval"
             ? "Pending Quote Request"
             : formData.status
-          : "Order Confirmed",
+          : "Pending Scope Approval",
 
         // Ensure details object is populated for top-level schema
         details: {
@@ -311,6 +314,11 @@ const QuoteProjectWizard = () => {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        setCreatedOrderNumber(
+          data.orderId || formData.quoteDetails?.quoteNumber || "New Order",
+        );
+        setShowSuccessModal(true);
         return { success: true };
       } else {
         const err = await res.json();
@@ -385,6 +393,15 @@ const QuoteProjectWizard = () => {
         message="Are you sure you want to exit? Your progress in this wizard will be lost."
         onConfirm={confirmCancel}
         onCancel={() => setShowCancelModal(false)}
+      />
+      <ConfirmationModal
+        isOpen={showSuccessModal}
+        onClose={handleProjectComplete}
+        onConfirm={handleProjectComplete}
+        title="Project Created Successfully"
+        message={`New project ${createdOrderNumber} has been created and assigned to the Project Lead for scope approval.`}
+        confirmText="Back to Dashboard"
+        hideCancel={true}
       />
     </div>
   );
