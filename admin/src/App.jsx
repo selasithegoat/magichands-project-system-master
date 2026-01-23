@@ -69,20 +69,76 @@ function App() {
     );
   }
 
-  if (user) {
-    return (
-      <Routes>
-        <Route path="/" element={<Navigate to="/projects" replace />} />
-        <Route path="/projects" element={<Projects user={user} />} />
-        <Route path="/projects/:id" element={<ProjectDetails user={user} />} />
-        <Route path="/assign" element={<AssignProject user={user} />} />
-        <Route path="/teams" element={<Teams user={user} />} />
-        <Route path="/clients" element={<Clients user={user} />} />
-      </Routes>
-    );
-  }
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          user ? (
+            <Navigate to="/projects" replace />
+          ) : (
+            <Login onLoginSuccess={handleLoginSuccess} />
+          )
+        }
+      />
+      <Route
+        path="/"
+        element={
+          user ? (
+            <Navigate to="/projects" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
 
-  return <Login onLoginSuccess={handleLoginSuccess} />;
+      {/* Protected Routes */}
+      <Route
+        path="/projects"
+        element={
+          user ? <Projects user={user} /> : <Navigate to="/login" replace />
+        }
+      />
+      <Route
+        path="/projects/:id"
+        element={
+          user ? (
+            <ProjectDetails user={user} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/assign"
+        element={
+          user ? (
+            <AssignProject user={user} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/teams"
+        element={
+          user ? <Teams user={user} /> : <Navigate to="/login" replace />
+        }
+      />
+      <Route
+        path="/clients"
+        element={
+          user ? <Clients user={user} /> : <Navigate to="/login" replace />
+        }
+      />
+
+      {/* Fallback */}
+      <Route
+        path="*"
+        element={<Navigate to={user ? "/projects" : "/login"} replace />}
+      />
+    </Routes>
+  );
 }
 
 export default App;

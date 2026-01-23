@@ -260,6 +260,45 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
+  const handleChecklistToggle = async (key, val) => {
+    if (!project || !project.quoteDetails) return;
+
+    const currentChecklist = project.quoteDetails.checklist || {};
+    const updatedChecklist = { ...currentChecklist, [key]: !val };
+
+    // Optimistic update
+    const updatedProject = {
+      ...project,
+      quoteDetails: {
+        ...project.quoteDetails,
+        checklist: updatedChecklist,
+      },
+    };
+    setProject(updatedProject);
+
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quoteDetails: {
+            ...project.quoteDetails,
+            checklist: updatedChecklist,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update checklist");
+      }
+    } catch (err) {
+      console.error("Error updating checklist:", err);
+      alert("Failed to update checklist");
+      // Revert is not strictly necessary if we rely on next fetch, but good practice
+      // For now, simpler to just re-fetch if needed or rely on alert
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -655,6 +694,74 @@ const ProjectDetails = ({ user }) => {
                 </div>
               </div>
             </div>
+
+            {/* Quote Checklist (Only for Quote projects) */}
+            {project.projectType === "Quote" && (
+              <div className="detail-card">
+                <h3 className="card-title">Quote Requirements</h3>
+                <div
+                  className="checklist-admin-grid"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: "1rem",
+                    marginTop: "1rem",
+                  }}
+                >
+                  {project.quoteDetails?.checklist ? (
+                    Object.entries(project.quoteDetails.checklist).map(
+                      ([key, val]) => (
+                        <div
+                          key={key}
+                          onClick={() => handleChecklistToggle(key, val)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            padding: "0.75rem",
+                            background: val
+                              ? "rgba(16, 185, 129, 0.1)"
+                              : "rgba(255, 255, 255, 0.03)",
+                            borderRadius: "8px",
+                            border: val
+                              ? "1px solid rgba(16, 185, 129, 0.2)"
+                              : "1px solid var(--border-color)",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                          className="checklist-admin-item"
+                        >
+                          <span
+                            style={{
+                              color: val ? "#10b981" : "var(--text-secondary)",
+                              fontSize: "1.2rem",
+                            }}
+                          >
+                            {val ? "✓" : "○"}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "0.9rem",
+                              color: val ? "#f8fafc" : "var(--text-secondary)",
+                              fontWeight: val ? 600 : 400,
+                            }}
+                          >
+                            {key
+                              .replace(/([A-Z])/g, " $1")
+                              .replace(/^./, (str) => str.toUpperCase())}
+                          </span>
+                        </div>
+                      ),
+                    )
+                  ) : (
+                    <p style={{ color: "var(--text-secondary)" }}>
+                      No checklist requirements.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Reference Material / Image */}
             {details.sampleImage && (

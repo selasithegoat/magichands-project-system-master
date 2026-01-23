@@ -263,6 +263,7 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
                     <div
                       key={key}
                       className={`checklist-review-item ${val ? "completed" : ""}`}
+                      style={{ cursor: "default" }}
                     >
                       <span className="check-mark">{val ? "✓" : "○"}</span>
                       <span className="check-label">

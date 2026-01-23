@@ -371,6 +371,7 @@ const QuoteProjectWizard = () => {
       {currentStep === 5 && (
         <QuoteStep5
           formData={formData}
+          setFormData={handleUpdateFormData}
           onCreate={handleCreateProject}
           onBack={handleBack}
           onCancel={handleCancelProject}

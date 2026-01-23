@@ -205,6 +205,8 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                           : "1px solid var(--border-color)",
                         color: val ? "#10b981" : "#64748b",
                         fontSize: "0.85rem",
+                        cursor: "default",
+                        transition: "all 0.2s ease",
                       }}
                     >
                       <span style={{ fontSize: "1.1rem" }}>

@@ -88,9 +88,16 @@ const createProject = async (req, res) => {
         console.error("Failed to parse items JSON", e);
         finalItems = [];
       }
-    } else if (!finalItems && description) {
-      // Fallback for legacy calls or simple description
-      finalItems = [{ description, breakdown: details, qty: 1 }];
+    }
+
+    // [NEW] Handle quoteDetails parsing (important for Multipart/FormData)
+    let finalQuoteDetails = req.body.quoteDetails || {};
+    if (typeof finalQuoteDetails === "string") {
+      try {
+        finalQuoteDetails = JSON.parse(finalQuoteDetails);
+      } catch (e) {
+        console.error("Failed to parse quoteDetails JSON", e);
+      }
     }
 
     // Create project
@@ -117,7 +124,6 @@ const createProject = async (req, res) => {
       items: finalItems || [], // [NEW] Use parsed items
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
-      productionRisks: productionRisks || [],
       currentStep: status ? 1 : 2, // If assigned status provided, likely Step 1 needs completion. Else Step 2.
       status: status || "Order Confirmed", // Default or Explicit
       createdBy: req.user._id,
@@ -127,7 +133,7 @@ const createProject = async (req, res) => {
       priority:
         req.body.priority ||
         (req.body.projectType === "Emergency" ? "Urgent" : "Normal"),
-      quoteDetails: req.body.quoteDetails || {},
+      quoteDetails: finalQuoteDetails,
       updates: req.body.updates || [],
     });
 
