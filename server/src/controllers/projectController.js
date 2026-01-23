@@ -1059,35 +1059,44 @@ const updateProject = async (req, res) => {
       detailsChanged = true;
     }
 
-    // Handle Files
-    if (req.files) {
-      if (req.files.sampleImage && req.files.sampleImage[0]) {
-        project.details.sampleImage = req.files.sampleImage[0].path;
-        detailsChanged = true;
+    // --- Reference Material Management ---
+    let existingAttachmentsList = attachments || req.body.existingAttachments;
+    if (typeof existingAttachmentsList === "string") {
+      try {
+        existingAttachmentsList = JSON.parse(existingAttachmentsList);
+      } catch (e) {
+        existingAttachmentsList = [];
       }
+    }
 
-      const newAttachments = req.files.attachments
-        ? req.files.attachments.map((file) => file.path)
+    // 1. Handle Sample Image (New upload or Delete flag)
+    if (req.files && req.files.sampleImage && req.files.sampleImage[0]) {
+      project.details.sampleImage = `/uploads/${req.files.sampleImage[0].filename}`;
+      detailsChanged = true;
+    } else if (req.body.deleteSampleImage === "true") {
+      project.details.sampleImage = "";
+      detailsChanged = true;
+    }
+
+    // 2. Handle Attachments (Combine existing list with new uploads)
+    const newAttachments =
+      req.files && req.files.attachments
+        ? req.files.attachments.map((file) => `/uploads/${file.filename}`)
         : [];
 
-      // Combine existing and new attachments
-      // If 'attachments' is sent in body, use it as the base (allows deletion)
-      // If not sent, keep existing
-      if (attachments && Array.isArray(attachments)) {
-        project.details.attachments = [...attachments, ...newAttachments];
-        detailsChanged = true;
-      } else if (newAttachments.length > 0) {
-        // If only new files sent and no body list, just append?
-        // Or if attachments body is missing, do we assume no logical change to existing?
-        project.details.attachments = [
-          ...(project.details.attachments || []),
-          ...newAttachments,
-        ];
-        detailsChanged = true;
-      }
-    } else if (attachments && Array.isArray(attachments)) {
-      // Case: No new files, but attachments list updated (e.g. deletion)
-      project.details.attachments = attachments;
+    if (Array.isArray(existingAttachmentsList)) {
+      // If we have a list (even empty), it represents the new state of existing files
+      project.details.attachments = [
+        ...existingAttachmentsList,
+        ...newAttachments,
+      ];
+      detailsChanged = true;
+    } else if (newAttachments.length > 0) {
+      // Fallback: just append if no list provided
+      project.details.attachments = [
+        ...(project.details.attachments || []),
+        ...newAttachments,
+      ];
       detailsChanged = true;
     }
 

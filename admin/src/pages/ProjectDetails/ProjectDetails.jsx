@@ -44,6 +44,21 @@ const SystemIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
   </svg>
 );
 
+const FolderIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+  </svg>
+);
+
 const ProjectDetails = ({ user }) => {
   const { id } = useParams();
   const [project, setProject] = useState(null);
@@ -109,7 +124,12 @@ const ProjectDetails = ({ user }) => {
             deliveryLocation: data.details?.deliveryLocation || "",
             contactType: data.details?.contactType || "",
             supplySource: data.details?.supplySource || "",
+            briefOverview: data.details?.briefOverview || "",
           });
+          setExistingAttachments(data.details?.attachments || []);
+          setDeleteSampleImageFlag(false);
+          setNewSampleImage(null);
+          setNewAttachments([]);
         } else {
           console.error("Failed to fetch project");
         }
@@ -154,6 +174,12 @@ const ProjectDetails = ({ user }) => {
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [leadForm, setLeadForm] = useState("");
+
+  // Reference Material Management State
+  const [newSampleImage, setNewSampleImage] = useState(null);
+  const [newAttachments, setNewAttachments] = useState([]);
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [deleteSampleImageFlag, setDeleteSampleImageFlag] = useState(false);
 
   // Sync leadForm when project loads
   useEffect(() => {
@@ -213,7 +239,12 @@ const ProjectDetails = ({ user }) => {
         deliveryLocation: project.details?.deliveryLocation || "",
         contactType: project.details?.contactType || "",
         supplySource: project.details?.supplySource || "",
+        briefOverview: project.details?.briefOverview || "",
       });
+      setExistingAttachments(project.details?.attachments || []);
+      setDeleteSampleImageFlag(false);
+      setNewSampleImage(null);
+      setNewAttachments([]);
     }
     setIsEditing(!isEditing);
   };
@@ -225,31 +256,43 @@ const ProjectDetails = ({ user }) => {
 
   const handleSave = async () => {
     try {
-      // Construct payload with flattened fields as expected by the controller
-      const payload = {
-        client: editForm.client,
-        clientEmail: editForm.clientEmail, // [NEW]
-        clientPhone: editForm.clientPhone, // [NEW]
-        briefOverview: editForm.briefOverview, // [New]
-        orderDate: editForm.orderDate,
-        receivedTime: editForm.receivedTime,
-        deliveryDate: editForm.deliveryDate,
-        deliveryTime: editForm.deliveryTime,
-        deliveryLocation: editForm.deliveryLocation,
-        contactType: editForm.contactType,
-        supplySource: editForm.supplySource,
-      };
+      const formData = new FormData();
+      // General Info fields
+      Object.keys(editForm).forEach((key) => {
+        formData.append(key, editForm[key]);
+      });
+
+      // Reference Materials
+      if (newSampleImage) {
+        formData.append("sampleImage", newSampleImage);
+      }
+      if (deleteSampleImageFlag) {
+        formData.append("deleteSampleImage", "true");
+      }
+
+      // Existing attachments (filtered list)
+      formData.append(
+        "existingAttachments",
+        JSON.stringify(existingAttachments),
+      );
+
+      // New attachments
+      newAttachments.forEach((file) => {
+        formData.append("attachments", file);
+      });
 
       const res = await fetch(`/api/projects/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData, // FormData handles boundary automatically
       });
 
       if (res.ok) {
         const updatedProject = await res.json();
         setProject(updatedProject);
         setIsEditing(false);
+        // Clear file states
+        setNewSampleImage(null);
+        setNewAttachments([]);
       } else {
         console.error("Failed to update project");
         alert("Failed to save changes.");
@@ -257,6 +300,28 @@ const ProjectDetails = ({ user }) => {
     } catch (err) {
       console.error("Error saving project:", err);
       alert("Error saving changes.");
+    }
+  };
+
+  const handleDeleteAttachment = (idx) => {
+    setExistingAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleRemoveNewAttachment = (idx) => {
+    setNewAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSampleImageChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setNewSampleImage(e.target.files[0]);
+      setDeleteSampleImageFlag(false);
+    }
+  };
+
+  const handleAttachmentsChange = (e) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setNewAttachments((prev) => [...prev, ...files]);
     }
   };
 
@@ -809,35 +874,126 @@ const ProjectDetails = ({ user }) => {
             )}
 
             {/* Reference Material / Image */}
-            {(project.sampleImage ||
+            {(isEditing ||
+              project.sampleImage ||
               details.sampleImage ||
               (project.attachments && project.attachments.length > 0) ||
               (details.attachments && details.attachments.length > 0)) && (
               <div className="detail-card">
-                <h3 className="card-title">Reference Material</h3>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <h3 className="card-title">Reference Material</h3>
+                  {isEditing && (
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <label
+                        className="btn-icon-small"
+                        style={{
+                          cursor: "pointer",
+                          background: "rgba(99, 102, 241, 0.1)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          padding: "0.4rem 0.8rem",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          color: "#818cf8",
+                          border: "1px solid rgba(99, 102, 241, 0.2)",
+                        }}
+                      >
+                        <i className="fas fa-plus"></i> Add Attachment
+                        <input
+                          type="file"
+                          multiple
+                          onChange={handleAttachmentsChange}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
                 <div
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     gap: "1.5rem",
-                    marginTop: "1rem",
                   }}
                 >
-                  {/* Sample Image */}
-                  {(project.sampleImage || details.sampleImage) && (
-                    <div>
+                  {/* Sample Image Section */}
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
                       <h4
                         style={{
                           fontSize: "0.75rem",
                           fontWeight: "600",
                           color: "var(--text-secondary)",
-                          marginBottom: "0.75rem",
                           textTransform: "uppercase",
                           letterSpacing: "0.05em",
+                          margin: 0,
                         }}
                       >
                         Sample Image
                       </h4>
+                      {isEditing && (
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <label
+                            style={{
+                              fontSize: "0.7rem",
+                              color: "#6366f1",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                            }}
+                          >
+                            {project.sampleImage || details.sampleImage
+                              ? "Replace"
+                              : "Upload"}
+                            <input
+                              type="file"
+                              onChange={handleSampleImageChange}
+                              style={{ display: "none" }}
+                            />
+                          </label>
+                          {(project.sampleImage ||
+                            details.sampleImage ||
+                            newSampleImage) &&
+                            !deleteSampleImageFlag && (
+                              <button
+                                onClick={() => {
+                                  setNewSampleImage(null);
+                                  setDeleteSampleImageFlag(true);
+                                }}
+                                style={{
+                                  fontSize: "0.7rem",
+                                  color: "#ef4444",
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  textDecoration: "underline",
+                                }}
+                              >
+                                Delete
+                              </button>
+                            )}
+                        </div>
+                      )}
+                    </div>
+
+                    {newSampleImage ||
+                    ((project.sampleImage || details.sampleImage) &&
+                      !deleteSampleImageFlag) ? (
                       <div
                         style={{
                           borderRadius: "12px",
@@ -845,15 +1001,24 @@ const ProjectDetails = ({ user }) => {
                           border: "1px solid var(--border-color)",
                           maxWidth: "400px",
                           background: "rgba(0,0,0,0.2)",
+                          position: "relative",
                         }}
                       >
                         <a
-                          href={`http://localhost:5000${project.sampleImage || details.sampleImage}`}
+                          href={
+                            newSampleImage
+                              ? URL.createObjectURL(newSampleImage)
+                              : `http://localhost:5000${project.sampleImage || details.sampleImage}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                         >
                           <img
-                            src={`http://localhost:5000${project.sampleImage || details.sampleImage}`}
+                            src={
+                              newSampleImage
+                                ? URL.createObjectURL(newSampleImage)
+                                : `http://localhost:5000${project.sampleImage || details.sampleImage}`
+                            }
                             alt="Sample"
                             style={{
                               width: "100%",
@@ -864,30 +1029,72 @@ const ProjectDetails = ({ user }) => {
                             }}
                           />
                         </a>
+                        {newSampleImage && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "0.5rem",
+                              left: "0.5rem",
+                              background: "rgba(99, 102, 241, 0.9)",
+                              color: "white",
+                              padding: "0.2rem 0.5rem",
+                              borderRadius: "4px",
+                              fontSize: "0.6rem",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            NEWLY UPLOADED
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Attachments */}
-                  {((project.attachments && project.attachments.length > 0) ||
-                    (details.attachments &&
-                      details.attachments.length > 0)) && (
-                    <div>
-                      <h4
+                    ) : (
+                      <div
                         style={{
-                          fontSize: "0.75rem",
-                          fontWeight: "600",
+                          padding: "1.5rem",
+                          border: "2px dashed var(--border-color)",
+                          borderRadius: "8px",
+                          textAlign: "center",
                           color: "var(--text-secondary)",
-                          marginBottom: "0.75rem",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
+                          fontSize: "0.85rem",
                         }}
                       >
-                        Attachments (
-                        {(project.attachments?.length || 0) +
-                          (details.attachments?.length || 0)}
-                        )
-                      </h4>
+                        {deleteSampleImageFlag
+                          ? "Sample image will be deleted."
+                          : "No sample image uploaded."}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Attachments Section */}
+                  <div>
+                    <h4
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        color: "var(--text-secondary)",
+                        marginBottom: "0.75rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Attachments (
+                      {existingAttachments.length + newAttachments.length})
+                    </h4>
+                    {existingAttachments.length === 0 &&
+                    newAttachments.length === 0 ? (
+                      <div
+                        style={{
+                          padding: "1rem",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          textAlign: "center",
+                          color: "var(--text-secondary)",
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        No attachments.
+                      </div>
+                    ) : (
                       <div
                         style={{
                           display: "grid",
@@ -896,82 +1103,200 @@ const ProjectDetails = ({ user }) => {
                           gap: "1rem",
                         }}
                       >
-                        {[
-                          ...(project.attachments || []),
-                          ...(details.attachments || []),
-                        ].map((path, idx) => {
+                        {/* Existing Attachments */}
+                        {existingAttachments.map((path, idx) => {
                           const isImage = path.match(
                             /\.(jpg|jpeg|png|gif|webp)$/i,
                           );
                           const fileName = path.split("/").pop();
                           return (
-                            <a
-                              key={idx}
-                              href={`http://localhost:5000${path}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                position: "relative",
-                                aspectRatio: "1",
-                                border: "1px solid var(--border-color)",
-                                borderRadius: "10px",
-                                overflow: "hidden",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                background: "rgba(255, 255, 255, 0.03)",
-                                textDecoration: "none",
-                                transition: "transform 0.2s",
-                              }}
-                              onMouseOver={(e) =>
-                                (e.currentTarget.style.transform =
-                                  "scale(1.02)")
-                              }
-                              onMouseOut={(e) =>
-                                (e.currentTarget.style.transform = "scale(1)")
-                              }
-                            >
-                              {isImage ? (
-                                <img
-                                  src={`http://localhost:5000${path}`}
-                                  alt="attachment"
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
-                                />
-                              ) : (
-                                <div
-                                  style={{
-                                    textAlign: "center",
-                                    padding: "0.75rem",
-                                    color: "var(--text-secondary)",
-                                    width: "100%",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <FolderIcon width="28" height="28" />
+                            <div key={path} style={{ position: "relative" }}>
+                              <a
+                                href={`http://localhost:5000${path}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  position: "relative",
+                                  aspectRatio: "1",
+                                  border: "1px solid var(--border-color)",
+                                  borderRadius: "10px",
+                                  overflow: "hidden",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "rgba(255, 255, 255, 0.03)",
+                                  textDecoration: "none",
+                                  transition: "transform 0.2s",
+                                }}
+                                onMouseOver={(e) =>
+                                  (e.currentTarget.style.transform =
+                                    "scale(1.02)")
+                                }
+                                onMouseOut={(e) =>
+                                  (e.currentTarget.style.transform = "scale(1)")
+                                }
+                              >
+                                {isImage ? (
+                                  <img
+                                    src={`http://localhost:5000${path}`}
+                                    alt="attachment"
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                ) : (
                                   <div
                                     style={{
-                                      marginTop: "0.5rem",
-                                      fontSize: "0.75rem",
-                                      whiteSpace: "nowrap",
-                                      textOverflow: "ellipsis",
+                                      textAlign: "center",
+                                      padding: "0.75rem",
+                                      color: "var(--text-secondary)",
+                                      width: "100%",
                                       overflow: "hidden",
-                                      color: "#f8fafc",
                                     }}
                                   >
-                                    {fileName}
+                                    <FolderIcon width="28" height="28" />
+                                    <div
+                                      style={{
+                                        marginTop: "0.5rem",
+                                        fontSize: "0.75rem",
+                                        whiteSpace: "nowrap",
+                                        textOverflow: "ellipsis",
+                                        overflow: "hidden",
+                                        color: "#f8fafc",
+                                      }}
+                                    >
+                                      {fileName}
+                                    </div>
                                   </div>
-                                </div>
+                                )}
+                              </a>
+                              {isEditing && (
+                                <button
+                                  onClick={() => handleDeleteAttachment(idx)}
+                                  className="btn-icon-small delete"
+                                  style={{
+                                    position: "absolute",
+                                    top: "-0.5rem",
+                                    right: "-0.5rem",
+                                    width: "24px",
+                                    height: "24px",
+                                    borderRadius: "50%",
+                                    background: "#ef4444",
+                                    color: "white",
+                                    zIndex: 10,
+                                    padding: 0,
+                                    border: "2px solid var(--bg-card)",
+                                  }}
+                                  title="Delete Attachment"
+                                >
+                                  <XMarkIcon width="14" height="14" />
+                                </button>
                               )}
-                            </a>
+                            </div>
+                          );
+                        })}
+
+                        {/* New Attachments */}
+                        {newAttachments.map((file, idx) => {
+                          const isImage = file.type.startsWith("image/");
+                          return (
+                            <div
+                              key={`new-${idx}`}
+                              style={{ position: "relative" }}
+                            >
+                              <div
+                                style={{
+                                  position: "relative",
+                                  aspectRatio: "1",
+                                  border: "1px solid var(--accent-primary)",
+                                  borderRadius: "10px",
+                                  overflow: "hidden",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "rgba(99, 102, 241, 0.05)",
+                                }}
+                              >
+                                {isImage ? (
+                                  <img
+                                    src={URL.createObjectURL(file)}
+                                    alt="new attachment"
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    style={{
+                                      textAlign: "center",
+                                      padding: "0.75rem",
+                                      color: "var(--text-secondary)",
+                                      width: "100%",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    <FolderIcon width="28" height="28" />
+                                    <div
+                                      style={{
+                                        marginTop: "0.5rem",
+                                        fontSize: "0.75rem",
+                                        whiteSpace: "nowrap",
+                                        textOverflow: "ellipsis",
+                                        overflow: "hidden",
+                                        color: "#f8fafc",
+                                      }}
+                                    >
+                                      {file.name}
+                                    </div>
+                                  </div>
+                                )}
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    background: "rgba(99, 102, 241, 0.9)",
+                                    color: "white",
+                                    textAlign: "center",
+                                    fontSize: "0.6rem",
+                                    padding: "2px 0",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  PENDING
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveNewAttachment(idx)}
+                                className="btn-icon-small delete"
+                                style={{
+                                  position: "absolute",
+                                  top: "-0.5rem",
+                                  right: "-0.5rem",
+                                  width: "24px",
+                                  height: "24px",
+                                  borderRadius: "50%",
+                                  background: "#ef4444",
+                                  color: "white",
+                                  zIndex: 10,
+                                  padding: 0,
+                                  border: "2px solid var(--bg-card)",
+                                }}
+                                title="Remove File"
+                              >
+                                <XMarkIcon width="14" height="14" />
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             )}
