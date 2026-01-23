@@ -9,9 +9,26 @@ import {
   TeamsIcon,
   ReportsIcon,
   RocketIcon,
+  LogoutIcon,
 } from "../../icons/Icons";
+import { useNavigate } from "react-router-dom";
 
 const Sidebar = ({ isOpen, onClose, user }) => {
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        window.location.href = "/login"; // Redirect to login
+      }
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
+  };
   return (
     <aside className={`sidebar ${isOpen ? "sidebar-mobile-open" : ""}`}>
       <div className="sidebar-logo">
@@ -66,6 +83,13 @@ const Sidebar = ({ isOpen, onClose, user }) => {
           Reports
         </a>
       </nav>
+
+      <div className="sidebar-footer">
+        <button className="nav-item logout-btn" onClick={handleLogout}>
+          <LogoutIcon className="nav-icon" />
+          Logout
+        </button>
+      </div>
     </aside>
   );
 };

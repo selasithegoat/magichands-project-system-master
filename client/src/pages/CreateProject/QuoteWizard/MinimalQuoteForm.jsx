@@ -18,7 +18,9 @@ const MinimalQuoteForm = () => {
 
   const [formData, setFormData] = useState({
     projectName: "",
-    clientName: "", // [NEW]
+    clientName: "",
+    clientEmail: "", // [NEW]
+    clientPhone: "", // [NEW]
     deliveryDate: "",
     projectLeadId: "",
     quoteNumber: "",
@@ -107,7 +109,9 @@ const MinimalQuoteForm = () => {
       formPayload.append("status", "New Order");
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);
-      formPayload.append("client", formData.clientName); // [NEW] Sync Client Name
+      formPayload.append("client", formData.clientName);
+      formPayload.append("clientEmail", formData.clientEmail); // [NEW]
+      formPayload.append("clientPhone", formData.clientPhone); // [NEW]
       formPayload.append("briefOverview", formData.briefOverview);
       formPayload.append("deliveryDate", formData.deliveryDate);
       formPayload.append("projectLeadId", formData.projectLeadId);
@@ -219,6 +223,28 @@ const MinimalQuoteForm = () => {
                   })
                 }
               />
+
+              <Input
+                label="Client Email"
+                placeholder="e.g. contact@client.com"
+                value={formData.clientEmail}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "clientEmail", value: e.target.value },
+                  })
+                }
+              />
+
+              <Input
+                label="Client Phone"
+                placeholder="e.g. +1234567890"
+                value={formData.clientPhone}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "clientPhone", value: e.target.value },
+                  })
+                }
+              />
             </div>
 
             <div className="minimal-quote-grid">
@@ -250,7 +276,7 @@ const MinimalQuoteForm = () => {
                   borderRadius: "8px",
                   border: "1px solid var(--border-color)",
                   background: "var(--bg-input)",
-                  color: "white",
+                  color: "var(--text-color)",
                 }}
               />
             </div>
