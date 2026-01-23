@@ -576,23 +576,25 @@ const ProjectDetails = ({ user }) => {
                     <p>{details.clientPhone || "N/A"}</p>
                   )}
                 </div>
-                <div className="info-item">
-                  <label>Brief Overview</label>
-                  {isEditing ? (
-                    <textarea
-                      className="edit-input"
-                      name="briefOverview"
-                      value={editForm.briefOverview || ""}
-                      onChange={handleChange}
-                      rows={2}
-                      style={{ resize: "vertical" }}
-                    />
-                  ) : (
-                    <p style={{ whiteSpace: "pre-wrap" }}>
-                      {details.briefOverview || "N/A"}
-                    </p>
-                  )}
-                </div>
+                {project.projectType !== "Quote" && (
+                  <div className="info-item">
+                    <label>Brief Overview</label>
+                    {isEditing ? (
+                      <textarea
+                        className="edit-input"
+                        name="briefOverview"
+                        value={editForm.briefOverview || ""}
+                        onChange={handleChange}
+                        rows={2}
+                        style={{ resize: "vertical" }}
+                      />
+                    ) : (
+                      <p style={{ whiteSpace: "pre-wrap" }}>
+                        {details.briefOverview || "N/A"}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="info-item">
                   <label>Order Date</label>
                   {isEditing ? (
@@ -615,9 +617,9 @@ const ProjectDetails = ({ user }) => {
                       className="edit-input"
                       name="receivedTime"
                       value={
-                        editForm.receivedTime.includes("T")
+                        editForm.receivedTime?.includes("T")
                           ? ""
-                          : editForm.receivedTime
+                          : editForm.receivedTime || ""
                       }
                       onChange={handleChange}
                     />
@@ -625,75 +627,118 @@ const ProjectDetails = ({ user }) => {
                     <p>{formatReceivedTime()}</p>
                   )}
                 </div>
-                <div className="info-item">
-                  <label>Delivery</label>
-                  {isEditing ? (
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <input
-                        type="date"
-                        className="edit-input"
-                        name="deliveryDate"
-                        value={editForm.deliveryDate}
-                        onChange={handleChange}
-                      />
-                      <input
-                        type="time"
-                        className="edit-input"
-                        name="deliveryTime"
-                        value={editForm.deliveryTime}
-                        onChange={handleChange}
-                      />
+                {project.projectType !== "Quote" && (
+                  <>
+                    <div className="info-item">
+                      <label>Delivery</label>
+                      {isEditing ? (
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <input
+                            type="date"
+                            className="edit-input"
+                            name="deliveryDate"
+                            value={editForm.deliveryDate}
+                            onChange={handleChange}
+                          />
+                          <input
+                            type="time"
+                            className="edit-input"
+                            name="deliveryTime"
+                            value={editForm.deliveryTime}
+                            onChange={handleChange}
+                          />
+                        </div>
+                      ) : (
+                        <p>
+                          {formatDate(details.deliveryDate)}
+                          {details.deliveryTime
+                            ? ` @ ${formatTime(details.deliveryTime)}`
+                            : ""}
+                        </p>
+                      )}
                     </div>
+                    <div className="info-item">
+                      <label>Location</label>
+                      {isEditing ? (
+                        <input
+                          className="edit-input"
+                          name="deliveryLocation"
+                          value={editForm.deliveryLocation}
+                          onChange={handleChange}
+                        />
+                      ) : (
+                        <p>{details.deliveryLocation || "N/A"}</p>
+                      )}
+                    </div>
+                    <div className="info-item">
+                      <label>Contact Type</label>
+                      {isEditing ? (
+                        <input
+                          className="edit-input"
+                          name="contactType"
+                          value={editForm.contactType}
+                          onChange={handleChange}
+                        />
+                      ) : (
+                        <p>{details.contactType || "N/A"}</p>
+                      )}
+                    </div>
+                    <div className="info-item">
+                      <label>Supply Source</label>
+                      {isEditing ? (
+                        <input
+                          className="edit-input"
+                          name="supplySource"
+                          value={editForm.supplySource}
+                          onChange={handleChange}
+                        />
+                      ) : (
+                        <p>{details.supplySource || "N/A"}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Brief Overview Section (Only for Quote projects - moved from General Info) */}
+            {project.projectType === "Quote" && (
+              <div className="detail-card">
+                <h3 className="card-title">Brief Overview</h3>
+                <div style={{ marginTop: "1rem" }}>
+                  {isEditing ? (
+                    <textarea
+                      className="edit-input"
+                      name="briefOverview"
+                      value={editForm.briefOverview || ""}
+                      onChange={handleChange}
+                      rows={4}
+                      style={{
+                        resize: "vertical",
+                        width: "100%",
+                        padding: "0.75rem",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "8px",
+                        color: "#f8fafc",
+                        fontSize: "0.95rem",
+                      }}
+                    />
                   ) : (
-                    <p>
-                      {formatDate(details.deliveryDate)}
-                      {details.deliveryTime
-                        ? ` @ ${formatTime(details.deliveryTime)}`
-                        : ""}
+                    <p
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        color: "var(--text-secondary)",
+                        lineHeight: "1.6",
+                        fontSize: "0.95rem",
+                      }}
+                    >
+                      {details.briefOverview || "No overview provided."}
                     </p>
                   )}
                 </div>
-                <div className="info-item">
-                  <label>Location</label>
-                  {isEditing ? (
-                    <input
-                      className="edit-input"
-                      name="deliveryLocation"
-                      value={editForm.deliveryLocation}
-                      onChange={handleChange}
-                    />
-                  ) : (
-                    <p>{details.deliveryLocation || "N/A"}</p>
-                  )}
-                </div>
-                <div className="info-item">
-                  <label>Contact Type</label>
-                  {isEditing ? (
-                    <input
-                      className="edit-input"
-                      name="contactType"
-                      value={editForm.contactType}
-                      onChange={handleChange}
-                    />
-                  ) : (
-                    <p>{details.contactType || "N/A"}</p>
-                  )}
-                </div>
-                <div className="info-item">
-                  <label>Supply Source</label>
-                  {isEditing ? (
-                    <input
-                      className="edit-input"
-                      name="supplySource"
-                      value={editForm.supplySource}
-                      onChange={handleChange}
-                    />
-                  ) : (
-                    <p>{details.supplySource || "N/A"}</p>
-                  )}
-                </div>
               </div>
-            </div>
+            )}
 
             {/* Quote Checklist (Only for Quote projects) */}
             {project.projectType === "Quote" && (

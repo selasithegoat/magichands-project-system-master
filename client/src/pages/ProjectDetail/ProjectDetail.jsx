@@ -376,6 +376,9 @@ const ProjectDetail = ({ onProjectChange, user }) => {
           <>
             <div className="main-column">
               <ProjectInfoCard project={project} />
+              {project.projectType === "Quote" && (
+                <QuoteChecklistCard project={project} />
+              )}
               <DepartmentsCard
                 departments={project.departments}
                 projectId={project._id}
@@ -488,29 +491,91 @@ const ProjectInfoCard = ({ project }) => {
               : "N/A"}
           </div>
         </div>
-        <div className="info-item">
-          <h4>CONTACT</h4>
-          {/* Mock contact for now as it's not in schema explicitly other than type */}
-          <span className="info-text-bold">{details.contactType || "N/A"}</span>
-        </div>
+        {project.projectType !== "Quote" && (
+          <div className="info-item">
+            <h4>CONTACT</h4>
+            <span className="info-text-bold">
+              {details.contactType || "N/A"}
+            </span>
+          </div>
+        )}
         <div className="info-item">
           <h4>DELIVERY SCHEDULE</h4>
           <div className="info-text-bold">
             <CalendarIcon width="16" height="16" />{" "}
             {formatDate(details.deliveryDate)}
           </div>
-          <div className="info-subtext">
-            {details.deliveryTime || "All Day"}
-          </div>
+          {project.projectType !== "Quote" && (
+            <div className="info-subtext">
+              {details.deliveryTime || "All Day"}
+            </div>
+          )}
         </div>
-        <div className="info-item">
-          <h4>LOCATION</h4>
-          <div className="info-text-bold">
-            <LocationIcon width="16" height="16" />{" "}
-            {details.deliveryLocation || "Unknown"}
+        {project.projectType !== "Quote" && (
+          <div className="info-item">
+            <h4>LOCATION</h4>
+            <div className="info-text-bold">
+              <LocationIcon width="16" height="16" />{" "}
+              {details.deliveryLocation || "Unknown"}
+            </div>
+            <div className="info-subtext"></div>
           </div>
-          <div className="info-subtext">{/* Address placeholder */}</div>
-        </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const QuoteChecklistCard = ({ project }) => {
+  const checklist = project.quoteDetails?.checklist || {};
+
+  return (
+    <div className="detail-card">
+      <div className="card-header">
+        <h3 className="card-title">📋 Quote Requirements</h3>
+      </div>
+      <div
+        className="checklist-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: "1rem",
+          marginTop: "1rem",
+        }}
+      >
+        {Object.entries(checklist).map(([key, val]) => (
+          <div
+            key={key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.75rem",
+              background: val
+                ? "rgba(16, 185, 129, 0.1)"
+                : "rgba(255, 255, 255, 0.03)",
+              borderRadius: "8px",
+              border: val
+                ? "1px solid rgba(16, 185, 129, 0.2)"
+                : "1px solid var(--border-color)",
+              color: val ? "#10b981" : "var(--text-secondary)",
+              transition: "all 0.2s",
+            }}
+          >
+            <span style={{ fontSize: "1.2rem" }}>{val ? "✓" : "○"}</span>
+            <span
+              style={{
+                fontSize: "0.9rem",
+                fontWeight: val ? 600 : 400,
+                color: val ? "#f8fafc" : "var(--text-secondary)",
+              }}
+            >
+              {key
+                .replace(/([A-Z])/g, " $1")
+                .replace(/^./, (str) => str.toUpperCase())}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
