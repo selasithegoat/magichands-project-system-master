@@ -155,18 +155,14 @@ const QuoteProjectWizard = () => {
                 : prev.quoteDetails.submissionDate,
             },
             items: data.items || [],
-            uncontrollableFactors: data.uncontrollableFactors || [],
             receivedTime: data.receivedTime || prev.receivedTime,
-            client: data.details?.client || "", // [NEW]
-            briefOverview: data.details?.briefOverview || "", // [NEW]
-            attachments: data.details?.attachments || [], // [NEW]
+            client: data.details?.client || "",
+            briefOverview: data.details?.briefOverview || "",
+            attachments: data.details?.attachments || [],
             // Step 2 & 3 & 4
             departments: data.departments || [],
             uncontrollableFactors: data.uncontrollableFactors || [],
             productionRisks: data.productionRisks || [],
-            receivedTime: data.receivedTime || prev.receivedTime,
-            client: data.details?.client || "",
-            briefOverview: data.details?.briefOverview || "",
           }));
         })
         .catch((err) => console.error("Failed to fetch project", err))

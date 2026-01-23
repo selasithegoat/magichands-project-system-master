@@ -25,9 +25,7 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
     borderBottomWidth: 2,
-    borderBottomWidth: 2,
     // borderBottomColor: "#10B981", // Removed static color
-    paddingBottom: 10,
     paddingBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
