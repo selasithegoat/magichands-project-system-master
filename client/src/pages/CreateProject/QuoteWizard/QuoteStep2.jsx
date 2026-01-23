@@ -131,10 +131,11 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         className="step-footer"
         style={{
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "center",
           marginTop: "2rem",
           padding: "1.5rem 0",
           borderTop: "1px solid var(--border-color)",
+          gap: "1.5rem",
         }}
       >
         <button

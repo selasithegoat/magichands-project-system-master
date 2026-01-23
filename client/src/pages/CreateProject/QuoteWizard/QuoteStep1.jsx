@@ -88,9 +88,10 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             }}
           ></div>
 
-          <h3 className="section-title">Initial Request Info (Read Only)</h3>
-
-          <div style={{ marginBottom: "1.5rem" }}>
+          <div
+            className="minimal-quote-form-group"
+            style={{ marginBottom: "1.5rem" }}
+          >
             <label
               className="input-label"
               style={{
@@ -103,19 +104,25 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             >
               Brief Overview
             </label>
-            <div
+            <textarea
+              name="briefOverview"
+              className="minimal-quote-textarea-std"
+              value={formData.briefOverview}
+              onChange={(e) => handleChange("briefOverview", e.target.value)}
+              placeholder="High-level summary of the request..."
+              rows="3"
               style={{
-                padding: "1rem",
-                background: "rgba(255,255,255,0.05)",
+                width: "100%",
+                padding: "0.75rem",
                 borderRadius: "8px",
                 border: "1px solid var(--border-color)",
-                color: "var(--text-secondary)",
-                minHeight: "60px",
+                background: "var(--bg-input)",
+                color: "var(--text-primary)",
+                minHeight: "100px",
                 fontSize: "0.95rem",
+                resize: "vertical",
               }}
-            >
-              {formData.briefOverview || "No overview provided."}
-            </div>
+            />
           </div>
 
           {formData.attachments?.length > 0 && (
@@ -220,10 +227,11 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
         className="step-footer"
         style={{
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "center",
           marginTop: "2rem",
           padding: "1.5rem 0",
           borderTop: "1px solid var(--border-color)",
+          gap: "1.5rem",
         }}
       >
         <button

@@ -229,7 +229,17 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         </div>
       </div>
 
-      <div className="step-footer">
+      <div
+        className="step-footer"
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          marginTop: "2rem",
+          padding: "1.5rem 0",
+          borderTop: "1px solid var(--border-color)",
+          gap: "1.5rem",
+        }}
+      >
         <button className="back-text-btn" onClick={onBack}>
           Back
         </button>
