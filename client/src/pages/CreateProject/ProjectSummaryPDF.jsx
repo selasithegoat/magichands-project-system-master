@@ -25,7 +25,9 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
     borderBottomWidth: 2,
-    borderBottomColor: "#10B981", // Green accent
+    borderBottomWidth: 2,
+    // borderBottomColor: "#10B981", // Removed static color
+    paddingBottom: 10,
     paddingBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -122,13 +124,20 @@ const styles = StyleSheet.create({
   },
 });
 
-const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
+const ProjectSummaryPDF = ({
+  formData,
+  imageUrls = {},
+  isEmergency = false,
+}) => {
   console.log("PDF Component Rendering. Attachments:", formData.attachments);
+
+  const themeColor = isEmergency ? "#EF4444" : "#10B981"; // Red or Green
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: themeColor }]}>
           <View>
             <Text style={styles.title}>Project Brief</Text>
             <Text style={styles.subtitle}>
@@ -137,16 +146,20 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
           </View>
           <View>
             <Text
-              style={{ color: "#10B981", fontSize: 12, fontWeight: "bold" }}
+              style={{ color: themeColor, fontSize: 12, fontWeight: "bold" }}
             >
-              STATUS: DRAFT
+              {isEmergency ? "STATUS: EMERGENCY" : "STATUS: DRAFT"}
             </Text>
           </View>
         </View>
 
         {/* Basics */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Project Basics</Text>
+          <Text
+            style={[styles.sectionTitle, { borderBottomColor: themeColor }]}
+          >
+            Project Basics
+          </Text>
           <View style={styles.row}>
             <Text style={styles.label}>Project Name:</Text>
             <Text style={styles.value}>{formData.projectName || "N/A"}</Text>
@@ -189,7 +202,11 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
 
         {/* Delivery */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery & Logistics</Text>
+          <Text
+            style={[styles.sectionTitle, { borderBottomColor: themeColor }]}
+          >
+            Delivery & Logistics
+          </Text>
           <View style={styles.row}>
             <Text style={styles.label}>Delivery Date:</Text>
             <Text style={styles.value}>{formData.deliveryDate}</Text>
@@ -214,7 +231,11 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
 
         {/* Departments */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Engaged Departments</Text>
+          <Text
+            style={[styles.sectionTitle, { borderBottomColor: themeColor }]}
+          >
+            Engaged Departments
+          </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {formData.departments && formData.departments.length > 0 ? (
               formData.departments.map((dept, index) => (
@@ -232,7 +253,11 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
 
         {/* Items */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Item Breakdown</Text>
+          <Text
+            style={[styles.sectionTitle, { borderBottomColor: themeColor }]}
+          >
+            Item Breakdown
+          </Text>
           {/* Table Header */}
           <View style={styles.itemHeader}>
             <Text style={styles.colQty}>Qty</Text>
@@ -264,7 +289,11 @@ const ProjectSummaryPDF = ({ formData, imageUrls = {} }) => {
 
         {/* Risks */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Risk Assessment</Text>
+          <Text
+            style={[styles.sectionTitle, { borderBottomColor: themeColor }]}
+          >
+            Risk Assessment
+          </Text>
           <Text
             style={{
               fontSize: 10,
