@@ -35,7 +35,7 @@ const MinimalQuoteForm = () => {
     projectLeadId: "",
     quoteNumber: "",
     briefOverview: "",
-    items: [{ description: "", details: "", qty: 1 }],
+    items: [{ description: "", breakdown: "", qty: 1 }],
     checklist: {
       cost: false,
       mockup: false,
@@ -87,7 +87,7 @@ const MinimalQuoteForm = () => {
   const addItem = () => {
     setFormData((prev) => ({
       ...prev,
-      items: [...prev.items, { description: "", details: "", qty: 1 }],
+      items: [...prev.items, { description: "", breakdown: "", qty: 1 }],
     }));
   };
 
@@ -147,12 +147,14 @@ const MinimalQuoteForm = () => {
       const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
       if (imageFile) {
         formPayload.append("sampleImage", imageFile);
-        selectedFiles
-          .filter((f) => f !== imageFile)
-          .forEach((file) => {
+        // Also add other images as attachments, and non-images as attachments
+        selectedFiles.forEach((file) => {
+          if (file !== imageFile) {
             formPayload.append("attachments", file);
-          });
+          }
+        });
       } else if (selectedFiles.length > 0) {
+        // If no image, all are attachments
         selectedFiles.forEach((file) => {
           formPayload.append("attachments", file);
         });
@@ -353,9 +355,9 @@ const MinimalQuoteForm = () => {
                   <div className="item-field details" style={{ flex: 2 }}>
                     <Input
                       placeholder="Details (Optional)"
-                      value={item.details}
+                      value={item.breakdown}
                       onChange={(e) =>
-                        updateItem(index, "details", e.target.value)
+                        updateItem(index, "breakdown", e.target.value)
                       }
                     />
                   </div>

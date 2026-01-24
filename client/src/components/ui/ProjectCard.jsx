@@ -3,6 +3,7 @@ import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import ThreeDotsIcon from "../icons/ThreeDotsIcon";
 import ClockIcon from "../icons/ClockIcon";
+import FolderIcon from "../icons/FolderIcon";
 
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Helpers
@@ -66,6 +67,20 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   return (
     <div className="project-card-new">
       <div className="card-header">
+        {/* Project Thumbnail / Avatar */}
+        <div className="project-thumbnail-wrapper">
+          {project.sampleImage || project.details?.sampleImage ? (
+            <img
+              src={`http://localhost:5000${project.sampleImage || project.details.sampleImage}`}
+              alt="Project"
+              className="project-card-image"
+            />
+          ) : (
+            <div className="project-card-placeholder">
+              <FolderIcon width="32" height="32" color="#94a3b8" />
+            </div>
+          )}
+        </div>
         <span className={`status-badge ${statusInfo.class}`}>
           {project.status === "Pending Scope Approval"
             ? "WAITING ACCEPTANCE"

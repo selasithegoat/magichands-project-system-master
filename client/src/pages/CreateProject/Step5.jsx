@@ -419,60 +419,6 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
           </div>
         </div>
 
-        {/* Project Documents */}
-        <div className="review-section-simple">
-          <label className="section-label-simple">Project Documents</label>
-          <div className="attachment-card" style={{ cursor: "default" }}>
-            <div className="file-icon-box">
-              <FileIcon />
-            </div>
-            <div className="file-info" style={{ flex: 1 }}>
-              <div className="file-name">Project Summary.pdf</div>
-              <div className="file-size">Auto-generated</div>
-            </div>
-
-            {isChecked ? (
-              <PDFDownloadLink
-                document={
-                  <ProjectSummaryPDF
-                    formData={formData}
-                    imageUrls={imageUrls}
-                  />
-                }
-                fileName={`Project_${formData.projectName || "Draft"}.pdf`}
-                style={{
-                  textDecoration: "none",
-                  padding: "8px 16px",
-                  color: "#fff",
-                  backgroundColor: "#3B82F6",
-                  borderRadius: "6px",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                }}
-              >
-                {({ loading }) => (loading ? "Generating..." : "Download PDF")}
-              </PDFDownloadLink>
-            ) : (
-              <button
-                onClick={handleDownloadClick}
-                style={{
-                  textDecoration: "none",
-                  padding: "8px 16px",
-                  color: "#fff",
-                  backgroundColor: "#94A3B8", // Greyed out but clickable
-                  borderRadius: "6px",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                Download PDF
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* Verification Checkbox */}
         <div className="verification-section">
           <label className="checkbox-container">
