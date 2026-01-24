@@ -68,10 +68,7 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         // Count active projects (everything except 'Completed' and 'Pending Scope Approval')
-        const active = data.filter(
-          (p) =>
-            p.status !== "Completed" && p.status !== "Pending Scope Approval",
-        );
+        const active = data.filter((p) => p.status !== "Completed");
         setProjectCount(active.length);
       }
     } catch (err) {

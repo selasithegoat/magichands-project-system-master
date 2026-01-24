@@ -142,7 +142,7 @@ const Dashboard = ({
                 .length
             }
           </div>
-          <div className="stats-label">Pending Assignment</div>
+          <div className="stats-label">Pending Acceptance</div>
         </div>
         {/* ... keep other stats or make dynamic later ... */}
         <div className="stats-card">
