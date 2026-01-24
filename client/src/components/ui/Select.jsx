@@ -9,6 +9,7 @@ const Select = ({
   placeholder,
   renderOption,
   renderValue,
+  disabled,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -24,8 +25,8 @@ const Select = ({
     <div className="select-wrapper">
       {label && <label className="select-label">{label}</label>}
       <div
-        className={`select-container ${isOpen ? "open" : ""}`}
-        onClick={() => setIsOpen(!isOpen)}
+        className={`select-container ${isOpen ? "open" : ""} ${disabled ? "disabled" : ""}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         <div className="select-value">
           {value ? (

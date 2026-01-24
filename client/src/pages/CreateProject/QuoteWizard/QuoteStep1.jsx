@@ -104,6 +104,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               options={leads}
               value={leads.find((l) => l.value === formData.lead)}
               onChange={(val) => handleChange("lead", val)}
+              disabled={true}
               placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
               renderValue={(option) => (
                 <div

@@ -30,6 +30,16 @@
   border-color: var(--text-tertiary);
 }
 
+.select-container.disabled {
+  background-color: #f1f5f9;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.select-container.disabled:hover {
+  border-color: var(--border-color);
+}
+
 .select-container.open {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);

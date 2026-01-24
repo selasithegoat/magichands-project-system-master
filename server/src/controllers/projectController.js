@@ -100,11 +100,19 @@ const createProject = async (req, res) => {
       }
     }
 
+    // [NEW] Sync Received Time with creation if not provided
+    const now = new Date();
+    const currentTime = now.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const finalReceivedTime = getValue(receivedTime) || currentTime;
+
     // Create project
     const project = new Project({
       orderId: finalOrderId,
-      orderDate: orderDate || Date.now(),
-      receivedTime: getValue(receivedTime),
+      orderDate: orderDate || now,
+      receivedTime: finalReceivedTime,
       details: {
         lead: lead?.label || lead?.value || lead, // Prefer label (name) over value (id) for lead
         client, // [NEW] Added client name
