@@ -103,6 +103,18 @@ const MinimalQuoteForm = () => {
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
+  const triggerToast = (message, type = "success") => {
+    setShowToast({ show: true, message, type });
+    setIsToastFading(false);
+    setTimeout(() => {
+      setIsToastFading(true);
+      setTimeout(() => {
+        setShowToast({ show: false, message: "", type: "success" });
+        setIsToastFading(false);
+      }, 500);
+    }, 3000);
+  };
+
   const removeFile = (indexToRemove) => {
     setSelectedFiles((prev) =>
       prev.filter((_, index) => index !== indexToRemove),
@@ -179,18 +191,6 @@ const MinimalQuoteForm = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const triggerToast = (message, type = "success") => {
-    setShowToast({ show: true, message, type });
-    setIsToastFading(false);
-    setTimeout(() => {
-      setIsToastFading(true);
-      setTimeout(() => {
-        setShowToast({ show: false, message: "", type: "success" });
-        setIsToastFading(false);
-      }, 500);
-    }, 3000);
   };
 
   if (isLoading) return <Spinner />;
@@ -460,14 +460,17 @@ const MinimalQuoteForm = () => {
             />
 
             {selectedFiles.length === 0 && (
-              <label
-                htmlFor="quote-attachments"
+              <div
                 className="minimal-quote-file-dropzone"
+                onClick={() =>
+                  document.getElementById("quote-attachments").click()
+                }
+                style={{ cursor: "pointer" }}
               >
                 <FolderIcon />
                 <p>Click to upload reference files</p>
                 <span>Images, PDFs, Documents</span>
-              </label>
+              </div>
             )}
 
             {selectedFiles.length > 0 && (
@@ -481,8 +484,8 @@ const MinimalQuoteForm = () => {
                         <FolderIcon />
                       )}
                     </div>
-                    <div className="file-info">
-                      <span title={file.name}>{file.name}</span>
+                    <div className="file-info" title={file.name}>
+                      {file.name}
                     </div>
                     <button
                       type="button"
@@ -493,12 +496,14 @@ const MinimalQuoteForm = () => {
                     </button>
                   </div>
                 ))}
-                <label
-                  htmlFor="quote-attachments"
+                <div
                   className="minimal-quote-file-add-tile"
+                  onClick={() =>
+                    document.getElementById("quote-attachments").click()
+                  }
                 >
                   <span>+</span>
-                </label>
+                </div>
               </div>
             )}
           </div>

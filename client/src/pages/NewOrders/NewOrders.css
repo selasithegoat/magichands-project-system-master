@@ -235,10 +235,10 @@
 }
 
 .section-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--primary-blue);
-  margin-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #3b82f6;
+  margin-bottom: 1.25rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -314,76 +314,165 @@
   margin: 2rem 0;
 }
 
-/* File Upload Styling */
-.file-upload-wrapper {
-  position: relative;
-}
-
-.file-input {
-  display: none;
-}
-
-.file-label {
+/* Reference Materials Revamp */
+.minimal-quote-file-dropzone {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
-  border: 2px dashed var(--border-color);
-  border-radius: var(--radius-md);
+  padding: 3rem 2rem;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
   background-color: #f8fafc;
   cursor: pointer;
-  transition: all 0.2s;
-  color: var(--text-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 0.5rem;
 }
 
-.file-label:hover {
-  border-color: var(--primary-blue);
+.minimal-quote-file-dropzone:hover {
+  border-color: #3b82f6;
   background-color: #eff6ff;
-  color: var(--primary-blue);
+  transform: translateY(-2px);
 }
 
-.upload-icon {
+.minimal-quote-file-dropzone svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1.25rem;
+  color: #3b82f6;
+  transition: color 0.3s ease;
+}
+
+.minimal-quote-file-dropzone:hover svg {
+  color: #3b82f6;
+}
+
+.minimal-quote-file-dropzone p {
+  font-weight: 700;
+  color: #1e293b;
   margin-bottom: 0.5rem;
-  color: inherit;
+  font-size: 1.1rem;
 }
 
-.image-preview {
-  margin-top: 1rem;
+.minimal-quote-file-dropzone span {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.minimal-quote-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.minimal-quote-file-tile {
   position: relative;
-  display: inline-block;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-.image-preview img {
-  display: block;
-  max-width: 100%;
-  max-height: 200px;
-  object-fit: cover;
+.minimal-quote-file-tile:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-color: #bfdbfe;
 }
 
-.remove-image-btn {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
+.file-icon {
+  width: 100%;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  line-height: 1;
-  transition: background 0.2s;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f1f5f9;
+  border: 1px solid #f1f5f9;
 }
 
-.remove-image-btn:hover {
-  background: rgba(220, 38, 38, 0.9);
+.file-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.minimal-quote-file-tile:hover .file-icon img {
+  transform: scale(1.1);
+}
+
+.file-icon svg {
+  width: 36px;
+  height: 36px;
+  color: #94a3b8;
+}
+
+.file-info {
+  width: 100%;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+
+.file-remove-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  background: #ef4444;
+  color: white;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.file-remove-btn:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+.minimal-quote-file-add-tile {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  height: 100%;
+  min-height: 140px;
+  font-size: 2rem;
+  color: #94a3b8;
+  background: #f8fafc;
+  transition: all 0.3s ease;
+}
+
+.minimal-quote-file-add-tile:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
+  transform: translateY(-4px);
 }
 
 /* Actions */
@@ -616,104 +705,4 @@
     transform: translateX(0);
     opacity: 1;
   }
-}
-
-/* Selected Files Grid */
-.selected-files-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 15px;
-  margin-top: 1rem;
-}
-
-.file-preview-card {
-  position: relative;
-  aspect-ratio: 1;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background-color: var(--bg-input);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s;
-}
-
-.file-preview-card:hover {
-  transform: scale(1.02);
-}
-
-.file-preview-card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.file-icon-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 5px;
-  text-align: center;
-}
-
-.file-icon-placeholder span {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 90px;
-}
-
-.remove-file-btn {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 20px;
-  height: 20px;
-  background: rgba(239, 68, 68, 0.8);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  z-index: 5;
-}
-
-.remove-file-btn:hover {
-  background: #ef4444;
-}
-
-.add-more-files {
-  border: 2px dashed var(--border-color);
-  border-radius: var(--radius-md);
-  aspect-ratio: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: rgba(0, 0, 0, 0.02);
-  transition: all 0.2s;
-  color: var(--text-secondary);
-}
-
-.add-more-files:hover {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: var(--primary-blue);
-  color: var(--primary-blue);
-}
-
-.add-more-files span:first-child {
-  font-size: 24px;
-}
-
-.add-more-files span:last-child {
-  font-size: 12px;
 }

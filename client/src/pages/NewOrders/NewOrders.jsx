@@ -17,7 +17,7 @@ const NewOrders = () => {
     deliveryLocation: "",
     projectName: "",
     briefOverview: "",
-    items: [{ description: "", details: "", qty: 1 }],
+    items: [{ description: "", breakdown: "", qty: 1 }],
     orderDate: "",
     deliveryDate: "",
     projectType: location.state?.projectType || "Standard",
@@ -34,6 +34,7 @@ const NewOrders = () => {
     type: "success",
   });
   const [isToastFading, setIsToastFading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Fetch users for project lead
   useEffect(() => {
@@ -98,7 +99,7 @@ const NewOrders = () => {
   const addItem = () => {
     setFormData((prev) => ({
       ...prev,
-      items: [...prev.items, { description: "", details: "", qty: 1 }],
+      items: [...prev.items, { description: "", breakdown: "", qty: 1 }],
     }));
   };
 
@@ -130,6 +131,7 @@ const NewOrders = () => {
 
   const handleConfirmSubmit = async () => {
     setShowConfirmModal(false);
+    setIsLoading(true);
 
     const formPayload = new FormData();
     formPayload.append("orderId", formData.orderNumber);
@@ -178,7 +180,7 @@ const NewOrders = () => {
           deliveryLocation: "",
           projectName: "",
           briefOverview: "",
-          items: [{ description: "", details: "", qty: 1 }],
+          items: [{ description: "", breakdown: "", qty: 1 }],
           orderDate: new Date().toISOString().slice(0, 16),
           deliveryDate: "",
           projectType: formData.projectType,
@@ -196,6 +198,8 @@ const NewOrders = () => {
     } catch (error) {
       console.error("Submission error:", error);
       showToast("Network error. Please try again.", "error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -402,9 +406,9 @@ const NewOrders = () => {
                         <input
                           type="text"
                           placeholder="Details (Optional)"
-                          value={item.details}
+                          value={item.breakdown}
                           onChange={(e) =>
-                            updateItem(index, "details", e.target.value)
+                            updateItem(index, "breakdown", e.target.value)
                           }
                           className="form-input"
                         />
@@ -449,6 +453,21 @@ const NewOrders = () => {
 
             <div className="form-section">
               <h2 className="section-title">Reference Materials</h2>
+
+              {selectedFiles.length === 0 && (
+                <div
+                  className="minimal-quote-file-dropzone"
+                  onClick={() =>
+                    document.getElementById("new-order-attachments").click()
+                  }
+                  style={{ cursor: "pointer" }}
+                >
+                  <FolderIcon />
+                  <p>Click to upload reference files</p>
+                  <span>Images, PDFs, Documents</span>
+                </div>
+              )}
+
               <input
                 type="file"
                 multiple
@@ -456,58 +475,51 @@ const NewOrders = () => {
                 style={{ display: "none" }}
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
-                    setSelectedFiles((prev) => [
-                      ...prev,
-                      ...Array.from(e.target.files),
-                    ]);
+                    const filesArray = Array.from(e.target.files);
+                    setSelectedFiles((prev) => [...prev, ...filesArray]);
                     e.target.value = null;
                   }
                 }}
               />
 
-              {selectedFiles.length === 0 ? (
-                <label
-                  htmlFor="new-order-attachments"
-                  className="file-upload-wrapper"
-                >
-                  <FolderIcon width="48" height="48" color="#666" />
-                  <p>Click to upload files (Images, Docs, PDFs)</p>
-                </label>
-              ) : (
-                <div className="selected-files-grid">
+              {selectedFiles.length > 0 && (
+                <div className="minimal-quote-files-grid">
                   {selectedFiles.map((file, idx) => (
-                    <div key={idx} className="file-preview-card">
-                      {file.type.startsWith("image/") ? (
-                        <img src={URL.createObjectURL(file)} alt="preview" />
-                      ) : (
-                        <div className="file-icon-placeholder">
-                          <FolderIcon width="32" height="32" color="#888" />
-                          <span>{file.name}</span>
-                        </div>
-                      )}
+                    <div key={idx} className="minimal-quote-file-tile">
+                      <div className="file-icon">
+                        {file.type.startsWith("image/") ? (
+                          <img src={URL.createObjectURL(file)} alt="preview" />
+                        ) : (
+                          <FolderIcon />
+                        )}
+                      </div>
+                      <div className="file-info" title={file.name}>
+                        {file.name}
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
-                        className="remove-file-btn"
+                        className="file-remove-btn"
                       >
                         &times;
                       </button>
                     </div>
                   ))}
-                  <label
-                    htmlFor="new-order-attachments"
-                    className="add-more-files"
+                  <div
+                    className="minimal-quote-file-add-tile"
+                    onClick={() =>
+                      document.getElementById("new-order-attachments").click()
+                    }
                   >
                     <span>+</span>
-                    <span>Add More</span>
-                  </label>
+                  </div>
                 </div>
               )}
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="submit-btn">
-                Create Order
+              <button type="submit" className="submit-btn" disabled={isLoading}>
+                {isLoading ? "Creating..." : "Create Order"}
               </button>
             </div>
           </form>
