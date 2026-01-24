@@ -137,9 +137,12 @@ const Dashboard = ({
             </div>
           </div>
           <div className="stats-count">
-            {projects.filter((p) => p.status === "Order Confirmed").length}
+            {
+              projects.filter((p) => p.status === "Pending Scope Approval")
+                .length
+            }
           </div>
-          <div className="stats-label">Pending Acceptance</div>
+          <div className="stats-label">Pending Assignment</div>
         </div>
         {/* ... keep other stats or make dynamic later ... */}
         <div className="stats-card">
