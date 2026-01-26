@@ -301,7 +301,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  color: #94a3b8;
+  color: #e7ebf0;
   padding: 0.5rem 2rem 0.5rem 1rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -311,7 +311,7 @@
 
 .period-select:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: white;
+  /* color: white; */
 }
 
 .period-selector-wrapper .chevron-down {
