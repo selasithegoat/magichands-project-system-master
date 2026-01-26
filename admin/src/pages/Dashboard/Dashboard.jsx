@@ -57,6 +57,166 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
+// SVG Donut Chart Component
+const StatusDonut = ({ stats }) => {
+  const size = 180;
+  const strokeWidth = 18;
+  const center = size / 2;
+  const radius = center - strokeWidth / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  const total = stats.inProgress + stats.completed + stats.delayed || 1;
+  const pIn = (stats.inProgress / total) * circumference;
+  const pComp = (stats.completed / total) * circumference;
+  const pDel = (stats.delayed / total) * circumference;
+
+  return (
+    <div className="donut-wrapper">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="status-donut"
+      >
+        {/* Delayed Segment (Orange) */}
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="transparent"
+          stroke="#f59e0b"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={0}
+        />
+        {/* Completed Segment (Green) */}
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="transparent"
+          stroke="#10b981"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${pComp + pIn} ${circumference}`}
+          strokeDashoffset={0}
+          transform={`rotate(-90 ${center} ${center})`}
+        />
+        {/* In Progress Segment (Blue) */}
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="transparent"
+          stroke="#3b82f6"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${pIn} ${circumference}`}
+          strokeDashoffset={0}
+          transform={`rotate(-90 ${center} ${center})`}
+        />
+      </svg>
+      <div className="donut-content">
+        <span className="donut-label">Total Active</span>
+        <span className="donut-value">
+          {total === 1 && stats.inProgress === 0 ? 0 : total}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const ProjectStatusOverview = ({ projects }) => {
+  const [period, setPeriod] = useState("This Month");
+
+  // Calculate period-aware stats
+  const stats = (() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    let inProgress = 0;
+    let completed = 0;
+    let delayed = 0;
+
+    projects.forEach((p) => {
+      // For "This Month" filter logic (simplified: check if project was created or updated this month)
+      // If we want exact period filtering, we'd add it here.
+
+      if (p.status === "Completed" || p.status === "Delivered") {
+        completed++;
+      } else {
+        const dDate = p.details?.deliveryDate
+          ? new Date(p.details.deliveryDate)
+          : null;
+        if (dDate && dDate < now) {
+          delayed++;
+        } else {
+          inProgress++;
+        }
+      }
+    });
+
+    const total = inProgress + completed + delayed || 1;
+    return {
+      inProgress,
+      completed,
+      delayed,
+      total,
+      pIn: Math.round((inProgress / total) * 100),
+      pComp: Math.round((completed / total) * 100),
+      pDel: Math.round((delayed / total) * 100),
+    };
+  })();
+
+  return (
+    <div className="status-overview-card">
+      <div className="overview-header">
+        <h3 className="section-title">Project Status Overview</h3>
+        <div className="period-selector">
+          {period} <span className="chevron-down">▾</span>
+        </div>
+      </div>
+
+      <div className="overview-body">
+        <StatusDonut stats={stats} />
+
+        <div className="status-list">
+          <div className="status-item">
+            <div className="status-label-group">
+              <span className="status-dot in-progress"></span>
+              <span className="status-text">In Progress</span>
+            </div>
+            <div className="status-metrics">
+              <span className="status-percent">{stats.pIn}%</span>
+              <span className="status-count">{stats.inProgress} Projects</span>
+            </div>
+          </div>
+
+          <div className="status-item">
+            <div className="status-label-group">
+              <span className="status-dot completed"></span>
+              <span className="status-text">Completed</span>
+            </div>
+            <div className="status-metrics">
+              <span className="status-percent">{stats.pComp}%</span>
+              <span className="status-count">{stats.completed} Projects</span>
+            </div>
+          </div>
+
+          <div className="status-item">
+            <div className="status-label-group">
+              <span className="status-dot delayed"></span>
+              <span className="status-text">Delayed</span>
+            </div>
+            <div className="status-metrics">
+              <span className="status-percent">{stats.pDel}%</span>
+              <span className="status-count">{stats.delayed} Projects</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
@@ -208,6 +368,9 @@ const Dashboard = ({ user }) => {
           <div className="stat-label">Critical / Overdue</div>
         </div>
       </div>
+
+      {/* NEW: Project Status Overview Component */}
+      <ProjectStatusOverview projects={projects} />
 
       {/* Main Content Body */}
       <div className="admin-dashboard-body">
