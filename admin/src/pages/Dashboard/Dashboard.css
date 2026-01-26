@@ -60,7 +60,7 @@
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.05),
     0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--border-color);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
@@ -104,7 +104,7 @@
 .stat-value {
   font-size: 2.25rem;
   font-weight: 700;
-  
+
   line-height: 1;
   margin-bottom: 0.5rem;
 }
@@ -137,7 +137,7 @@
 /* Recent Projects Table style list */
 .recent-projects-card {
   border-radius: 16px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--border-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
@@ -147,7 +147,7 @@
   grid-template-columns: 2fr 1.5fr 1fr auto;
   padding: 1rem 1.5rem;
   align-items: center;
-  border-bottom: 1px solid #f1f5f9;
+  border: 1px solid var(--border-color);
   transition: background-color 0.2s;
   cursor: pointer;
 }
@@ -210,7 +210,7 @@
 .chart-card {
   border-radius: 16px;
   padding: 1.5rem;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--border-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
