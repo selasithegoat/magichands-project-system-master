@@ -290,13 +290,36 @@
   font-weight: 600;
 }
 
-.period-selector {
-  font-size: 0.875rem;
-  color: #94a3b8;
-  cursor: pointer;
+.period-selector-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+}
+
+.period-select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #94a3b8;
+  padding: 0.5rem 2rem 0.5rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.period-select:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.period-selector-wrapper .chevron-down {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  font-size: 0.75rem;
+  color: #64748b;
 }
 
 .overview-body {

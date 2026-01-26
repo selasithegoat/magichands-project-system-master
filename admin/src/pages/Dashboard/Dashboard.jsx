@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import "./Dashboard.css";
 import {
   ProjectsIcon,
@@ -125,20 +125,53 @@ const StatusDonut = ({ stats }) => {
 };
 
 const ProjectStatusOverview = ({ projects }) => {
-  const [period, setPeriod] = useState("This Month");
+  const [selectedPeriod, setSelectedPeriod] = useState("All Time");
 
-  // Calculate period-aware stats
-  const stats = (() => {
+  // Extract unique months from projects data for the selector
+  const periods = useMemo(() => {
+    const months = new Set();
+    projects.forEach((p) => {
+      const date = new Date(p.createdAt || p.orderDate);
+      if (!isNaN(date.getTime())) {
+        const monthYear = date.toLocaleString("en-US", {
+          month: "long",
+          year: "numeric",
+        });
+        months.add(monthYear);
+      }
+    });
+
+    // Sort months chronologically descending
+    return [
+      "All Time",
+      ...Array.from(months).sort((a, b) => new Date(b) - new Date(a)),
+    ];
+  }, [projects]);
+
+  // Filter projects by selected period and calculate stats
+  const stats = useMemo(() => {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    now.setHours(0, 0, 0, 0);
+
+    const filtered = projects.filter((p) => {
+      if (selectedPeriod === "All Time") return true;
+      const date = new Date(p.createdAt || p.orderDate);
+      const monthYear = date.toLocaleString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
+      return monthYear === selectedPeriod;
+    });
 
     let inProgress = 0;
     let completed = 0;
     let delayed = 0;
 
-    projects.forEach((p) => {
-      // For "This Month" filter logic (simplified: check if project was created or updated this month)
-      // If we want exact period filtering, we'd add it here.
+    filtered.forEach((p) => {
+      // Logic:
+      // 1. If status is Completed or Delivered -> Completed
+      // 2. If deliveryDate is in the past (overdue) and not delivered -> Delayed
+      // 3. Otherwise -> In Progress (except for 'Completed')
 
       if (p.status === "Completed" || p.status === "Delivered") {
         completed++;
@@ -154,24 +187,37 @@ const ProjectStatusOverview = ({ projects }) => {
       }
     });
 
-    const total = inProgress + completed + delayed || 1;
+    const totalCount = inProgress + completed + delayed;
+    const calcTotal = totalCount || 1; // Avoid division by zero for display
+
     return {
       inProgress,
       completed,
       delayed,
-      total,
-      pIn: Math.round((inProgress / total) * 100),
-      pComp: Math.round((completed / total) * 100),
-      pDel: Math.round((delayed / total) * 100),
+      total: totalCount,
+      pIn: Math.round((inProgress / calcTotal) * 100),
+      pComp: Math.round((completed / calcTotal) * 100),
+      pDel: Math.round((delayed / calcTotal) * 100),
     };
-  })();
+  }, [projects, selectedPeriod]);
 
   return (
     <div className="status-overview-card">
       <div className="overview-header">
         <h3 className="section-title">Project Status Overview</h3>
-        <div className="period-selector">
-          {period} <span className="chevron-down">▾</span>
+        <div className="period-selector-wrapper">
+          <select
+            className="period-select"
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
+          >
+            {periods.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <span className="chevron-down">▾</span>
         </div>
       </div>
 
