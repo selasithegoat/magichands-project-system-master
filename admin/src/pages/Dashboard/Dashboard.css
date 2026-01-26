@@ -27,7 +27,6 @@
 
 .admin-date {
   font-size: 0.875rem;
-  color: #64748b;
   margin-bottom: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -37,18 +36,12 @@
 .admin-title {
   font-size: 2rem;
   font-weight: 700;
-  color: #0f172a;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .admin-subtitle {
-  color: #64748b;
   font-size: 1rem;
   margin-top: 0.25rem;
 }
@@ -62,7 +55,6 @@
 }
 
 .admin-stat-card {
-  background: white;
   border-radius: 16px;
   padding: 1.5rem;
   box-shadow:
@@ -97,32 +89,27 @@
 }
 
 .stat-icon-wrapper.blue {
-  background: #eff6ff;
   color: #3b82f6;
 }
 .stat-icon-wrapper.purple {
-  background: #f5f3ff;
   color: #8b5cf6;
 }
 .stat-icon-wrapper.green {
-  background: #f0fdf4;
   color: #22c55e;
 }
 .stat-icon-wrapper.red {
-  background: #fef2f2;
   color: #ef4444;
 }
 
 .stat-value {
   font-size: 2.25rem;
   font-weight: 700;
-  color: #0f172a;
+  
   line-height: 1;
   margin-bottom: 0.5rem;
 }
 
 .stat-label {
-  color: #64748b;
   font-size: 0.875rem;
   font-weight: 500;
 }
@@ -145,12 +132,10 @@
 .section-title {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1e293b;
 }
 
 /* Recent Projects Table style list */
 .recent-projects-card {
-  background: white;
   border-radius: 16px;
   border: 1px solid #f1f5f9;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -172,13 +157,12 @@
 }
 
 .project-row:hover {
-  background-color: #f8fafc;
+  background-color: #293b4d6c;
 }
 
 .project-info h4 {
   margin: 0;
   font-size: 0.95rem;
-  color: #334155;
   font-weight: 600;
 }
 
@@ -190,7 +174,8 @@
 
 .project-client {
   font-size: 0.9rem;
-  color: #475569;
+  color: #929aa5;
+  font-weight: 600;
 }
 
 /* Status Pills */
@@ -223,7 +208,6 @@
 
 /* Department Chart Wrapper */
 .chart-card {
-  background: white;
   border-radius: 16px;
   padding: 1.5rem;
   border: 1px solid #f1f5f9;
