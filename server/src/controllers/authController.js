@@ -41,13 +41,13 @@ const registerUser = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      maxAge: 30 * 60 * 1000, // 30 minutes
     });
 
-    // Clear any existing opposite token to prevent session leak
-    const oppositeCookie =
-      user.role === "admin" ? "token_client" : "token_admin";
-    res.clearCookie(oppositeCookie);
+    // [REMOVED] Clear any existing opposite token to prevent session leak
+    // const oppositeCookie =
+    //   user.role === "admin" ? "token_client" : "token_admin";
+    // res.clearCookie(oppositeCookie);
 
     res.status(201).json({
       _id: user.id,
@@ -82,13 +82,13 @@ const loginUser = async (req, res) => {
         httpOnly: true,
         secure: true,
         sameSite: "none",
-        maxAge: 15 * 60 * 1000,
+        maxAge: 30 * 60 * 1000,
       });
 
-      // Strictly clear the opposite token to prevent cross-portal auto-login
-      const oppositeCookie =
-        user.role === "admin" ? "token_client" : "token_admin";
-      res.clearCookie(oppositeCookie);
+      // [REMOVED] Strictly clear the opposite token to prevent cross-portal auto-login
+      // const oppositeCookie =
+      //   user.role === "admin" ? "token_client" : "token_admin";
+      // res.clearCookie(oppositeCookie);
       // Also clear legacy token
       res.clearCookie("token");
 
@@ -119,14 +119,33 @@ const getMe = async (req, res) => {
 // @route   POST /api/auth/logout
 // @access  Public
 const logoutUser = (req, res) => {
-  res.cookie("token_admin", "", {
-    httpOnly: true,
-    expires: new Date(0),
-  });
-  res.cookie("token_client", "", {
-    httpOnly: true,
-    expires: new Date(0),
-  });
+  // Determine origin to scope logout
+  const origin = req.headers.origin || req.headers.referer || "";
+
+  if (origin.includes("3000")) {
+    // Admin Portal
+    res.cookie("token_admin", "", {
+      httpOnly: true,
+      expires: new Date(0),
+    });
+  } else if (origin.includes("5173") || origin.includes("5174")) {
+    // Client Portal
+    res.cookie("token_client", "", {
+      httpOnly: true,
+      expires: new Date(0),
+    });
+  } else {
+    // Fallback: Clear all if uncertain
+    res.cookie("token_admin", "", {
+      httpOnly: true,
+      expires: new Date(0),
+    });
+    res.cookie("token_client", "", {
+      httpOnly: true,
+      expires: new Date(0),
+    });
+  }
+
   // Clear legacy token just in case
   res.cookie("token", "", {
     httpOnly: true,

@@ -49,9 +49,9 @@ const protect = async (req, res, next) => {
       // Sliding Expiration
       res.cookie(cookieName, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000,
+        secure: true,
+        sameSite: "none",
+        maxAge: 30 * 60 * 1000, // 30 minutes
       });
 
       next();
