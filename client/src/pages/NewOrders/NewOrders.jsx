@@ -43,11 +43,14 @@ const NewOrders = () => {
         const res = await fetch("/api/auth/users");
         if (res.ok) {
           const data = await res.json();
-          const formatted = data.map((u) => ({
-            value: u._id,
-            label:
-              `${u.firstName || ""} ${u.lastName || ""} (${u.employeeId || u.email})`.trim(),
-          }));
+          const formatted = data.map((u) => {
+            const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+            const identifier = u.employeeId || u.email;
+            return {
+              value: u._id,
+              label: identifier ? `${fullName} (${identifier})` : fullName,
+            };
+          });
           setLeads(formatted);
         }
       } catch (e) {

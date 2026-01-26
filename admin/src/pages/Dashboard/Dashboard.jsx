@@ -427,7 +427,7 @@ const Dashboard = ({ user }) => {
           </div>
 
           <div className="recent-projects-card">
-            {projects.slice(0, 10).map((project) => (
+            {projects.slice(0, 5).map((project) => (
               <div
                 key={project._id}
                 className="project-row"
@@ -436,7 +436,10 @@ const Dashboard = ({ user }) => {
                 <div className="project-info">
                   <h4>{project.details?.projectName}</h4>
                   <div className="project-meta">
-                    {project.orderId} • {project.details?.lead || "No Lead"}
+                    {project.orderId} •{" "}
+                    {project.projectLeadId
+                      ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+                      : project.details?.lead || "No Lead"}
                   </div>
                 </div>
 
