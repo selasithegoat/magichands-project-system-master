@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import Login from "./pages/Login/Login";
+import Dashboard from "./pages/Dashboard/Dashboard";
 import Projects from "./pages/Projects/Projects";
 import ProjectDetails from "./pages/ProjectDetails/ProjectDetails";
 import Teams from "./pages/Teams/Teams";
 import Clients from "./pages/Clients/Clients";
+import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import {
   BrowserRouter as Router,
@@ -68,13 +70,18 @@ function App() {
     );
   }
 
+  const ProtectedRoute = ({ children }) => {
+    if (!user) return <Navigate to="/login" replace />;
+    return <DashboardLayout user={user}>{children}</DashboardLayout>;
+  };
+
   return (
     <Routes>
       <Route
         path="/login"
         element={
           user ? (
-            <Navigate to="/projects" replace />
+            <Navigate to="/dashboard" replace />
           ) : (
             <Login onLoginSuccess={handleLoginSuccess} />
           )
@@ -84,7 +91,7 @@ function App() {
         path="/"
         element={
           user ? (
-            <Navigate to="/projects" replace />
+            <Navigate to="/dashboard" replace />
           ) : (
             <Navigate to="/login" replace />
           )
@@ -93,38 +100,50 @@ function App() {
 
       {/* Protected Routes */}
       <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard user={user} />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/projects"
         element={
-          user ? <Projects user={user} /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Projects user={user} />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/projects/:id"
         element={
-          user ? (
+          <ProtectedRoute>
             <ProjectDetails user={user} />
-          ) : (
-            <Navigate to="/login" replace />
-          )
+          </ProtectedRoute>
         }
       />
       <Route
         path="/teams"
         element={
-          user ? <Teams user={user} /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Teams user={user} />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/clients"
         element={
-          user ? <Clients user={user} /> : <Navigate to="/login" replace />
+          <ProtectedRoute>
+            <Clients user={user} />
+          </ProtectedRoute>
         }
       />
 
       {/* Fallback */}
       <Route
         path="*"
-        element={<Navigate to={user ? "/projects" : "/login"} replace />}
+        element={<Navigate to={user ? "/dashboard" : "/login"} replace />}
       />
     </Routes>
   );

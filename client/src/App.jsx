@@ -45,6 +45,7 @@ const ProtectedLayout = ({
     onNavigateNewOrders={() => navigate("/new-orders")} // Pass handler
     onNavigateEndOfDay={() => navigate("/end-of-day")} // Pass handler
     onCreateProject={() => navigate("/create")}
+    onNavigateAdmin={() => navigate("/admin")} // [NEW]
     onSignOut={onSignOut} // Pass onSignOut to Layout
   >
     {children}

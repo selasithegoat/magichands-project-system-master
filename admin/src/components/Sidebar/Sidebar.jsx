@@ -45,10 +45,13 @@ const Sidebar = ({ isOpen, onClose, user }) => {
       </div>
 
       <nav className="sidebar-nav">
-        <a href="#" className="nav-item">
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+        >
           <DashboardIcon className="nav-icon" />
           Dashboard
-        </a>
+        </NavLink>
         <NavLink
           to="/projects"
           className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
