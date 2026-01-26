@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import DashboardLayout from "../../layouts/DashboardLayout/DashboardLayout";
+
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
@@ -168,236 +168,232 @@ const Projects = ({ user }) => {
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
 
   return (
-    <DashboardLayout user={user}>
-      <div className="projects-page">
-        <div className="projects-header">
-          <h1>
-            <ProjectsIcon className="text-secondary" /> Projects
-          </h1>
-          {/* Add Filter/Search here later */}
-        </div>
-
-        <div className="projects-table-container">
-          <div className="table-controls">
-            {/* Filter Bar */}
-            <div className="filter-bar">
-              {/* Search Order # */}
-              <div className="search-pill-wrapper">
-                <input
-                  type="text"
-                  placeholder="Search Order #..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="search-pill"
-                />
-                <div className="search-icon-small">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Status Filter */}
-              <select
-                value={filterStatus}
-                onChange={(e) => {
-                  setFilterStatus(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="filter-pill"
-              >
-                <option value="All">All Status</option>
-                <option value="Draft">Draft</option>
-                <option value="New Order">New Order</option>
-                <option value="Order Confirmed">Order Confirmed</option>
-                <option value="Pending Approval">Pending Approval</option>
-                <option value="Pending Scope Approval">
-                  Pending Scope Approval
-                </option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Delivered">Delivered</option>
-                <option value="Pending Quote Request">
-                  Pending Quote Request
-                </option>
-                <option value="Pending Send Response">
-                  Pending Send Response
-                </option>
-                <option value="Response Sent">Response Sent</option>
-              </select>
-
-              {/* Client Filter */}
-              <select
-                value={clientFilter}
-                onChange={(e) => {
-                  setClientFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="filter-pill"
-              >
-                <option value="All">All Clients</option>
-                {uniqueClients.map((client, idx) => (
-                  <option key={idx} value={client}>
-                    {client}
-                  </option>
-                ))}
-              </select>
-
-              {/* Lead Filter */}
-              <select
-                value={leadFilter}
-                onChange={(e) => {
-                  setLeadFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="filter-pill"
-              >
-                <option value="All">All Leads</option>
-                {uniqueLeads.map((lead, idx) => (
-                  <option key={idx} value={lead}>
-                    {lead}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="result-count">
-              Showing {paginatedProjects.length} of {filteredProjects.length}{" "}
-              results
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="loading-state">Loading projects...</div>
-          ) : filteredProjects.length === 0 ? (
-            <div className="empty-state">
-              No projects found matching filter.
-            </div>
-          ) : (
-            <>
-              <table className="projects-table">
-                <thead>
-                  <tr>
-                    <th>Order ID</th>
-                    <th>Project Name</th>
-                    <th>Lead</th>
-                    <th>Client</th>
-                    <th>Assigned Date</th>
-                    <th>Received Time</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedProjects.map((project) => (
-                    <tr key={project._id}>
-                      <td>
-                        <span style={{ fontWeight: 600 }}>
-                          {project.orderId || "N/A"}
-                        </span>
-                      </td>
-                      <td>{project.details?.projectName || "Untitled"}</td>
-                      <td>
-                        {project.projectLeadId
-                          ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                          : project.details?.lead || "Unassigned"}
-                      </td>
-                      <td>{project.details?.client || "-"}</td>
-                      <td>
-                        {formatDate(project.orderDate || project.createdAt)}
-                      </td>
-                      <td>{formatTime(project.receivedTime)}</td>
-                      <td>
-                        <span
-                          className={`status-badge ${getStatusClass(
-                            project.status,
-                          )}`}
-                        >
-                          {project.status}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="action-btn"
-                          onClick={() => navigate(`/projects/${project._id}`)}
-                        >
-                          View
-                        </button>
-                        {!(
-                          user &&
-                          (project.projectLeadId?._id === user._id ||
-                            project.projectLeadId === user._id)
-                        ) && (
-                          <button
-                            className="action-btn delete-btn"
-                            onClick={(e) => handleDeleteClick(e, project._id)}
-                            style={{
-                              marginLeft: "0.5rem",
-                              background: "rgba(239, 68, 68, 0.1)",
-                              color: "#ef4444",
-                              border: "1px solid rgba(239, 68, 68, 0.2)",
-                            }}
-                            title="Delete Project"
-                          >
-                            <TrashIcon width="16" height="16" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="pagination-container">
-                  <button
-                    className="pagination-btn"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    Prev
-                  </button>
-                  <span className="pagination-info">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <button
-                    className="pagination-btn"
-                    disabled={currentPage === totalPages}
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
-                    }
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <ConfirmationModal
-          isOpen={deleteModal.isOpen}
-          onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
-          onConfirm={handleDeleteConfirm}
-          title="Delete Project"
-          message="Are you sure you want to delete this project? This action cannot be undone."
-          confirmText="Delete"
-          isDangerous={true}
-        />
+    <div className="projects-page">
+      <div className="projects-header">
+        <h1>
+          <ProjectsIcon className="text-secondary" /> Projects
+        </h1>
+        {/* Add Filter/Search here later */}
       </div>
-    </DashboardLayout>
+
+      <div className="projects-table-container">
+        <div className="table-controls">
+          {/* Filter Bar */}
+          <div className="filter-bar">
+            {/* Search Order # */}
+            <div className="search-pill-wrapper">
+              <input
+                type="text"
+                placeholder="Search Order #..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="search-pill"
+              />
+              <div className="search-icon-small">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-4 h-4"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="filter-pill"
+            >
+              <option value="All">All Status</option>
+              <option value="Draft">Draft</option>
+              <option value="New Order">New Order</option>
+              <option value="Order Confirmed">Order Confirmed</option>
+              <option value="Pending Approval">Pending Approval</option>
+              <option value="Pending Scope Approval">
+                Pending Scope Approval
+              </option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="Delivered">Delivered</option>
+              <option value="Pending Quote Request">
+                Pending Quote Request
+              </option>
+              <option value="Pending Send Response">
+                Pending Send Response
+              </option>
+              <option value="Response Sent">Response Sent</option>
+            </select>
+
+            {/* Client Filter */}
+            <select
+              value={clientFilter}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="filter-pill"
+            >
+              <option value="All">All Clients</option>
+              {uniqueClients.map((client, idx) => (
+                <option key={idx} value={client}>
+                  {client}
+                </option>
+              ))}
+            </select>
+
+            {/* Lead Filter */}
+            <select
+              value={leadFilter}
+              onChange={(e) => {
+                setLeadFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="filter-pill"
+            >
+              <option value="All">All Leads</option>
+              {uniqueLeads.map((lead, idx) => (
+                <option key={idx} value={lead}>
+                  {lead}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="result-count">
+            Showing {paginatedProjects.length} of {filteredProjects.length}{" "}
+            results
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="loading-state">Loading projects...</div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="empty-state">No projects found matching filter.</div>
+        ) : (
+          <>
+            <table className="projects-table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Project Name</th>
+                  <th>Lead</th>
+                  <th>Client</th>
+                  <th>Assigned Date</th>
+                  <th>Received Time</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedProjects.map((project) => (
+                  <tr key={project._id}>
+                    <td>
+                      <span style={{ fontWeight: 600 }}>
+                        {project.orderId || "N/A"}
+                      </span>
+                    </td>
+                    <td>{project.details?.projectName || "Untitled"}</td>
+                    <td>
+                      {project.projectLeadId
+                        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+                        : project.details?.lead || "Unassigned"}
+                    </td>
+                    <td>{project.details?.client || "-"}</td>
+                    <td>
+                      {formatDate(project.orderDate || project.createdAt)}
+                    </td>
+                    <td>{formatTime(project.receivedTime)}</td>
+                    <td>
+                      <span
+                        className={`status-badge ${getStatusClass(
+                          project.status,
+                        )}`}
+                      >
+                        {project.status}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="action-btn"
+                        onClick={() => navigate(`/projects/${project._id}`)}
+                      >
+                        View
+                      </button>
+                      {!(
+                        user &&
+                        (project.projectLeadId?._id === user._id ||
+                          project.projectLeadId === user._id)
+                      ) && (
+                        <button
+                          className="action-btn delete-btn"
+                          onClick={(e) => handleDeleteClick(e, project._id)}
+                          style={{
+                            marginLeft: "0.5rem",
+                            background: "rgba(239, 68, 68, 0.1)",
+                            color: "#ef4444",
+                            border: "1px solid rgba(239, 68, 68, 0.2)",
+                          }}
+                          title="Delete Project"
+                        >
+                          <TrashIcon width="16" height="16" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="pagination-container">
+                <button
+                  className="pagination-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  Prev
+                </button>
+                <span className="pagination-info">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="pagination-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Project"
+        message="Are you sure you want to delete this project? This action cannot be undone."
+        confirmText="Delete"
+        isDangerous={true}
+      />
+    </div>
   );
 };
 
