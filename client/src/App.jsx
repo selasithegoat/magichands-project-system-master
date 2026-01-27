@@ -7,6 +7,7 @@ import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
 import Profile from "./pages/Profile/Profile";
 import NewOrders from "./pages/NewOrders/NewOrders"; // Import NewOrders
 import EndOfDayUpdate from "./pages/EndOfDayUpdate/EndOfDayUpdate"; // Import EndOfDayUpdate
+import EngagedProjects from "./pages/EngagedProjects/EngagedProjects"; // [NEW]
 import Layout from "./components/layout/Layout";
 import Spinner from "./components/ui/Spinner"; // Import Spinner
 
@@ -44,6 +45,7 @@ const ProtectedLayout = ({
     onNavigateProfile={() => navigate("/profile")}
     onNavigateNewOrders={() => navigate("/new-orders")} // Pass handler
     onNavigateEndOfDay={() => navigate("/end-of-day")} // Pass handler
+    onNavigateEngagedProjects={() => navigate("/engaged-projects")} // [NEW]
     onCreateProject={() => navigate("/create")}
     onNavigateAdmin={() => navigate("/admin")} // [NEW]
     onSignOut={onSignOut} // Pass onSignOut to Layout
@@ -308,6 +310,19 @@ function App() {
             projectCount={projectCount}
           >
             <EndOfDayUpdate user={user} />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/engaged-projects"
+        element={
+          <ProtectedLayout
+            activeView="engaged-projects"
+            user={user}
+            navigate={navigate}
+            projectCount={projectCount}
+          >
+            <EngagedProjects />
           </ProtectedLayout>
         }
       />

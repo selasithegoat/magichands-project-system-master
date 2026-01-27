@@ -37,6 +37,7 @@ const Layout = ({
   onNavigateProfile,
   onNavigateNewOrders, // [New]
   onNavigateEndOfDay, // [New]
+  onNavigateEngagedProjects, // [New] Production Team
   onCreateProject,
   activeView,
   user, // Receive user
@@ -74,6 +75,7 @@ const Layout = ({
         onNavigateProfile={onNavigateProfile}
         onNavigateNewOrders={onNavigateNewOrders} // Pass prop
         onNavigateEndOfDay={onNavigateEndOfDay} // Pass prop
+        onNavigateEngagedProjects={onNavigateEngagedProjects} // [New]
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}

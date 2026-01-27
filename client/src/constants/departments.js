@@ -25,6 +25,28 @@ export const DEPARTMENTS = [
   { id: "outside-production", label: "Outside Production" },
 ];
 
+export const PRODUCTION_SUB_DEPARTMENTS = [
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+];
+
 export const getDepartmentLabel = (id) => {
   const dept = DEPARTMENTS.find((d) => d.id === id);
   return dept ? dept.label : id;

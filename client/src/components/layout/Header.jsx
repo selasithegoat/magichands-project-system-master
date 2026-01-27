@@ -12,6 +12,7 @@ const Header = ({
   onNavigateProfile,
   onNavigateNewOrders, // [New]
   onNavigateEndOfDay, // [New]
+  onNavigateEngagedProjects, // [New] Production Team
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
@@ -111,6 +112,22 @@ const Header = ({
                 End of Day Update
               </a>
             </>
+          )}
+          {user?.department?.includes("Production") && (
+            <a
+              href="#"
+              className={`nav-item ${
+                activeView === "engaged-projects" ? "active" : ""
+              }`}
+              onClick={(e) => {
+                e.preventDefault();
+                if (typeof onNavigateEngagedProjects === "function") {
+                  onNavigateEngagedProjects();
+                }
+              }}
+            >
+              Engaged Projects
+            </a>
           )}
         </nav>
         <div className="header-actions">
