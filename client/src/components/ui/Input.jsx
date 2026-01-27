@@ -9,6 +9,7 @@ const Input = ({
   value,
   onChange,
   className = "",
+  ...rest
 }) => {
   return (
     <div className={`input-wrapper ${className}`}>
@@ -21,6 +22,7 @@ const Input = ({
           placeholder={placeholder}
           value={value}
           onChange={onChange}
+          {...rest}
         />
       </div>
     </div>

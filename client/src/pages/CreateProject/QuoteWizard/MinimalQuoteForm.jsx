@@ -172,6 +172,14 @@ const MinimalQuoteForm = () => {
       return;
     }
 
+    const hasChecklist = Object.values(formData.checklist).some(
+      (val) => val === true,
+    );
+    if (!hasChecklist) {
+      triggerToast("Please select at least one Requirement.", "error");
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -449,7 +457,10 @@ const MinimalQuoteForm = () => {
 
           {/* Checklist Section */}
           <div className="minimal-quote-form-section">
-            <h3 className="section-subtitle">Quote Requirements Checklist</h3>
+            <h3 className="section-subtitle">
+              Quote Requirements Checklist{" "}
+              <span style={{ color: "red" }}>*</span>
+            </h3>
             <div className="minimal-quote-checklist-grid">
               <label className="checklist-item">
                 <input
