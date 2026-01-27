@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
@@ -8,11 +8,25 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import "./EngagedProjects.css";
 
+const STATUS_OPTIONS = [
+  "All",
+  "Pending Production",
+  "Pending Mockup",
+  "Pending Packaging",
+  "Pending Delivery/Pickup",
+  "Order Confirmed",
+  "In Progress",
+];
+
 const EngagedProjects = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+
+  // Filter State
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Modal State
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -54,6 +68,52 @@ const EngagedProjects = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Filter logic
+  const filteredProjects = useMemo(() => {
+    return projects.filter((project) => {
+      // Status filter
+      if (statusFilter !== "All" && project.status !== statusFilter) {
+        return false;
+      }
+
+      // Search filter (Project ID, Project Name, Lead)
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const projectId = (project.orderId || project._id).toLowerCase();
+        const projectName = (project.details?.projectName || "").toLowerCase();
+        const lead = project.projectLeadId
+          ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.toLowerCase()
+          : (project.details?.lead || "").toLowerCase();
+
+        if (
+          !projectId.includes(query) &&
+          !projectName.includes(query) &&
+          !lead.includes(query)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [projects, statusFilter, searchQuery]);
+
+  // Check if project is emergency
+  const isEmergency = (project) => {
+    return project.priority === "Urgent" || project.projectType === "Emergency";
+  };
+
+  // Check if delivery is approaching (within 2 days)
+  const isApproachingDelivery = (project) => {
+    const deliveryDate = project.details?.deliveryDate;
+    if (!deliveryDate) return false;
+    const delivery = new Date(deliveryDate);
+    const now = new Date();
+    const diffMs = delivery - now;
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 2;
   };
 
   const handleOpenUpdateModal = (project) => {
@@ -146,15 +206,49 @@ const EngagedProjects = () => {
         </p>
       </header>
 
+      {/* Filter Controls */}
+      <div className="filter-controls">
+        <div className="filter-group">
+          <label>Status</label>
+          <select
+            className="filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group search-group">
+          <label>Search</label>
+          <input
+            type="text"
+            className="filter-input"
+            placeholder="Project ID, Name, or Lead..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="filter-results">
+          Showing {filteredProjects.length} of {projects.length} projects
+        </div>
+      </div>
+
       <div className="engaged-table-wrapper">
-        {projects.length === 0 ? (
+        {filteredProjects.length === 0 ? (
           <div className="empty-state">
-            <p>No engaged projects at this time.</p>
+            <p>No projects match your filters.</p>
           </div>
         ) : (
           <table className="engaged-table">
             <thead>
               <tr>
+                <th></th>
                 <th>Project ID</th>
                 <th>Project Name</th>
                 <th>Lead</th>
@@ -165,7 +259,7 @@ const EngagedProjects = () => {
               </tr>
             </thead>
             <tbody>
-              {projects.map((project) => {
+              {filteredProjects.map((project) => {
                 const lead = project.projectLeadId
                   ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
                   : project.details?.lead || "Unassigned";
@@ -173,9 +267,29 @@ const EngagedProjects = () => {
                 const deliveryDate = formatDate(project.details?.deliveryDate);
                 const deliveryTime = formatTime(project.details?.deliveryTime);
                 const projectName = project.details?.projectName || "Untitled";
+                const emergency = isEmergency(project);
+                const approaching = isApproachingDelivery(project);
 
                 return (
-                  <tr key={project._id}>
+                  <tr
+                    key={project._id}
+                    className={`${emergency ? "emergency-row" : ""} ${approaching ? "approaching-row" : ""}`}
+                  >
+                    <td className="indicator-cell">
+                      {emergency && (
+                        <span className="indicator emergency" title="Emergency">
+                          🔥
+                        </span>
+                      )}
+                      {approaching && !emergency && (
+                        <span
+                          className="indicator approaching"
+                          title="Approaching Delivery"
+                        >
+                          ⏰
+                        </span>
+                      )}
+                    </td>
                     <td
                       className="project-id-cell"
                       onClick={() => navigate(`/detail/${project._id}`)}
@@ -185,7 +299,7 @@ const EngagedProjects = () => {
                     <td className="project-name-cell">{projectName}</td>
                     <td>{lead}</td>
                     <td>{client}</td>
-                    <td>
+                    <td className={approaching ? "delivery-approaching" : ""}>
                       {deliveryDate}
                       {deliveryTime && ` @ ${deliveryTime}`}
                     </td>
