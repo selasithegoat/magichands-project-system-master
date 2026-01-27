@@ -156,6 +156,7 @@ const EngagedProjects = () => {
             <thead>
               <tr>
                 <th>Project ID</th>
+                <th>Project Name</th>
                 <th>Lead</th>
                 <th>Client</th>
                 <th>Delivery Date & Time</th>
@@ -171,6 +172,7 @@ const EngagedProjects = () => {
                 const client = project.details?.client || "N/A";
                 const deliveryDate = formatDate(project.details?.deliveryDate);
                 const deliveryTime = formatTime(project.details?.deliveryTime);
+                const projectName = project.details?.projectName || "Untitled";
 
                 return (
                   <tr key={project._id}>
@@ -180,6 +182,7 @@ const EngagedProjects = () => {
                     >
                       {project.orderId || project._id.slice(-6).toUpperCase()}
                     </td>
+                    <td className="project-name-cell">{projectName}</td>
                     <td>{lead}</td>
                     <td>{client}</td>
                     <td>

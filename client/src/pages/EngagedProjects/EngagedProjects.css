@@ -67,6 +67,15 @@
   text-decoration: underline;
 }
 
+.project-name-cell {
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
