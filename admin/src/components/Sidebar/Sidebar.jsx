@@ -73,10 +73,6 @@ const Sidebar = ({ isOpen, onClose, user }) => {
           <TeamsIcon className="nav-icon" />
           Teams
         </NavLink>
-        <a href="#" className="nav-item">
-          <ReportsIcon className="nav-icon" />
-          Reports
-        </a>
       </nav>
 
       <div className="sidebar-footer">

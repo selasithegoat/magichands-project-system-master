@@ -130,9 +130,6 @@
 
 /* Responsive Styles */
 @media (max-width: 768px) {
-  .main-header {
-    /* No change needed for bg */
-  }
 
   .header-inner {
     width: 100%; /* Full width on mobile */
