@@ -18,6 +18,8 @@ const STATUS_OPTIONS = [
   "In Progress",
 ];
 
+const ITEMS_PER_PAGE = 10;
+
 const EngagedProjects = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
@@ -27,6 +29,9 @@ const EngagedProjects = () => {
   // Filter State
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Modal State
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -99,6 +104,18 @@ const EngagedProjects = () => {
       return true;
     });
   }, [projects, statusFilter, searchQuery]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchQuery]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const paginatedProjects = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProjects.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProjects, currentPage]);
 
   // Check if project is emergency
   const isEmergency = (project) => {
@@ -259,7 +276,7 @@ const EngagedProjects = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredProjects.map((project) => {
+              {paginatedProjects.map((project) => {
                 const lead = project.projectLeadId
                   ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
                   : project.details?.lead || "Unassigned";
@@ -325,6 +342,29 @@ const EngagedProjects = () => {
           </table>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="pagination-controls">
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            ← Previous
+          </button>
+          <div className="pagination-info">
+            Page {currentPage} of {totalPages}
+          </div>
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next →
+          </button>
+        </div>
+      )}
 
       {/* Update Modal */}
       {showUpdateModal && selectedProject && (
