@@ -31,6 +31,7 @@ const EngagedProjects = ({ user }) => {
 
   // Filter State
   const [statusFilter, setStatusFilter] = useState("All");
+  const [departmentFilter, setDepartmentFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Pagination State
@@ -46,23 +47,45 @@ const EngagedProjects = ({ user }) => {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // Determine sub-departments to check based on user's department
-  const engagedSubDepts = useMemo(() => {
+  // Determine all engaged departments the user belongs to
+  const userEngagedDepts = useMemo(() => {
     const depts = user?.department || [];
-    if (depts.includes("Graphics/Design")) return GRAPHICS_SUB_DEPARTMENTS;
-    if (depts.includes("Stores")) return STORES_SUB_DEPARTMENTS;
-    if (depts.includes("Photography")) return PHOTOGRAPHY_SUB_DEPARTMENTS;
-    return PRODUCTION_SUB_DEPARTMENTS; // Default to Production
+    const found = [];
+    if (depts.includes("Production")) found.push("Production");
+    if (depts.includes("Graphics/Design")) found.push("Graphics");
+    if (depts.includes("Stores")) found.push("Stores");
+    if (depts.includes("Photography")) found.push("Photography");
+    return found;
   }, [user]);
 
-  // Determine user's primary "Engaged" department label
-  const primaryDept = useMemo(() => {
-    const depts = user?.department || [];
-    if (depts.includes("Graphics/Design")) return "Graphics";
-    if (depts.includes("Stores")) return "Stores";
-    if (depts.includes("Photography")) return "Photography";
-    return "Production";
-  }, [user]);
+  // Determine sub-departments to check based on the selected department filter
+  const engagedSubDepts = useMemo(() => {
+    // If filtering by a specific department
+    if (departmentFilter === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
+    if (departmentFilter === "Stores") return STORES_SUB_DEPARTMENTS;
+    if (departmentFilter === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
+    if (departmentFilter === "Production") return PRODUCTION_SUB_DEPARTMENTS;
+
+    // If "All" or default, aggregate from all user's engaged departments
+    let aggregated = [];
+    if (userEngagedDepts.includes("Production"))
+      aggregated = [...aggregated, ...PRODUCTION_SUB_DEPARTMENTS];
+    if (userEngagedDepts.includes("Graphics"))
+      aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
+    if (userEngagedDepts.includes("Stores"))
+      aggregated = [...aggregated, ...STORES_SUB_DEPARTMENTS];
+    if (userEngagedDepts.includes("Photography"))
+      aggregated = [...aggregated, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
+
+    return aggregated;
+  }, [userEngagedDepts, departmentFilter]);
+
+  // Determine user's primary label for the current view
+  const primaryDeptLabel = useMemo(() => {
+    if (departmentFilter !== "All") return departmentFilter;
+    if (userEngagedDepts.length === 1) return userEngagedDepts[0];
+    return "Engaged";
+  }, [userEngagedDepts, departmentFilter]);
 
   useEffect(() => {
     fetchEngagedProjects();
@@ -129,7 +152,7 @@ const EngagedProjects = ({ user }) => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, searchQuery]);
+  }, [statusFilter, departmentFilter, searchQuery]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
@@ -162,7 +185,12 @@ const EngagedProjects = ({ user }) => {
     );
     setUpdateForm({
       content: "",
-      category: primaryDept,
+      category:
+        departmentFilter !== "All"
+          ? departmentFilter
+          : userEngagedDepts.length > 0
+            ? userEngagedDepts[0]
+            : "Production",
       department: engagedDepts.length > 0 ? engagedDepts[0] : "",
     });
     setShowUpdateModal(true);
@@ -238,14 +266,32 @@ const EngagedProjects = ({ user }) => {
   return (
     <div className="engaged-projects-container">
       <header className="engaged-header">
-        <h1>{primaryDept} Projects</h1>
+        <h1>{primaryDeptLabel} Projects</h1>
         <p className="engaged-subtitle">
-          Projects where the {primaryDept} department is actively engaged.
+          Projects where your department is actively engaged.
         </p>
       </header>
 
       {/* Filter Controls */}
       <div className="filter-controls">
+        {userEngagedDepts.length > 1 && (
+          <div className="filter-group">
+            <label>Department</label>
+            <select
+              className="filter-select"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+            >
+              <option value="All">All Departments</option>
+              {userEngagedDepts.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="filter-group">
           <label>Status</label>
           <select
@@ -405,9 +451,21 @@ const EngagedProjects = ({ user }) => {
                     <span
                       key={dept}
                       className={`dept-chip ${updateForm.department === dept ? "selected" : ""}`}
-                      onClick={() =>
-                        setUpdateForm({ ...updateForm, department: dept })
-                      }
+                      onClick={() => {
+                        let category = "Production";
+                        if (GRAPHICS_SUB_DEPARTMENTS.includes(dept))
+                          category = "Graphics";
+                        else if (STORES_SUB_DEPARTMENTS.includes(dept))
+                          category = "Stores";
+                        else if (PHOTOGRAPHY_SUB_DEPARTMENTS.includes(dept))
+                          category = "Photography";
+
+                        setUpdateForm({
+                          ...updateForm,
+                          department: dept,
+                          category,
+                        });
+                      }}
                     >
                       {getDepartmentLabel(dept)}
                     </span>
