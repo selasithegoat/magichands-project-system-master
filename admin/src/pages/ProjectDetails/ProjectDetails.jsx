@@ -581,25 +581,6 @@ const ProjectDetails = ({ user }) => {
                   <p>{details.clientPhone || "N/A"}</p>
                 )}
               </div>
-              {project.projectType !== "Quote" && (
-                <div className="info-item">
-                  <label>Brief Overview</label>
-                  {isEditing ? (
-                    <textarea
-                      className="edit-input"
-                      name="briefOverview"
-                      value={editForm.briefOverview || ""}
-                      onChange={handleChange}
-                      rows={2}
-                      style={{ resize: "vertical" }}
-                    />
-                  ) : (
-                    <p style={{ whiteSpace: "pre-wrap" }}>
-                      {details.briefOverview || "N/A"}
-                    </p>
-                  )}
-                </div>
-              )}
               <div className="info-item">
                 <label>Order Date</label>
                 {isEditing ? (
@@ -706,8 +687,8 @@ const ProjectDetails = ({ user }) => {
             </div>
           </div>
 
-          {/* Brief Overview Section (Only for Quote projects - moved from General Info) */}
-          {project.projectType === "Quote" && (
+          {/* Brief Overview Section (Moved from General Info) */}
+          {true && (
             <div className="detail-card">
               <h3 className="card-title">Brief Overview</h3>
               <div style={{ marginTop: "1rem" }}>
