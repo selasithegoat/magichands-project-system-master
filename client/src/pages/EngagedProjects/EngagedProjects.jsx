@@ -30,7 +30,8 @@ const EngagedProjects = () => {
 
   const fetchEngagedProjects = async () => {
     try {
-      const res = await fetch("/api/projects");
+      // Use mode=engaged to bypass lead filtering and get all projects
+      const res = await fetch("/api/projects?mode=engaged");
       if (res.ok) {
         const data = await res.json();
         // Filter projects that have at least one production sub-department engaged
