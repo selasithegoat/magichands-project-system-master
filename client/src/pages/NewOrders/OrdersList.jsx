@@ -59,8 +59,15 @@ const OrdersList = () => {
         credentials: "include",
       });
       if (res.ok) {
+        const project = await res.json();
         showToast("Project reopened successfully!", "success");
-        fetchOrders();
+
+        // Navigate back to form with details
+        if (project.projectType === "Quote") {
+          navigate("/create/quote", { state: { reopenedProject: project } });
+        } else {
+          navigate("/new-orders/form", { state: { reopenedProject: project } });
+        }
       } else {
         const errorData = await res.json();
         showToast(`Error: ${errorData.message || "Failed to reopen"}`, "error");
@@ -227,7 +234,6 @@ const OrdersList = () => {
                   <th>Status</th>
                   <th>Assignment Status</th>
                   <th>Created Date</th>
-          
                 </tr>
               </thead>
               <tbody>
@@ -255,7 +261,6 @@ const OrdersList = () => {
                       </span>
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
-    
                   </tr>
                 ))}
               </tbody>

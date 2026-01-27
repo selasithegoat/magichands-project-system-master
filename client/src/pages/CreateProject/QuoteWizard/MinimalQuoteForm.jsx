@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
 import TrashIcon from "../../../components/icons/TrashIcon";
 import FolderIcon from "../../../components/icons/FolderIcon";
@@ -16,6 +16,8 @@ const MinimalQuoteForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [existingSampleImage, setExistingSampleImage] = useState("");
+  const [existingAttachments, setExistingAttachments] = useState([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showToast, setShowToast] = useState({
@@ -45,6 +47,8 @@ const MinimalQuoteForm = () => {
     },
   });
 
+  const location = useLocation();
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -67,10 +71,39 @@ const MinimalQuoteForm = () => {
     };
     fetchUsers();
 
-    // Auto-generate quote number
-    const qNumber = `Q-${Date.now().toString().slice(-6)}`;
-    setFormData((prev) => ({ ...prev, quoteNumber: qNumber }));
-  }, []);
+    if (location.state?.reopenedProject) {
+      const p = location.state.reopenedProject;
+      setFormData({
+        projectName: p.details?.projectName || "",
+        clientName: p.details?.client || "",
+        clientEmail: p.details?.clientEmail || "",
+        clientPhone: p.details?.clientPhone || "",
+        deliveryDate: p.details?.deliveryDate
+          ? new Date(p.details.deliveryDate).toISOString().slice(0, 10)
+          : "",
+        projectLeadId: p.projectLeadId?._id || p.projectLeadId || "",
+        quoteNumber: p.orderId || "",
+        briefOverview: p.details?.briefOverview || "",
+        items:
+          p.items?.length > 0
+            ? p.items
+            : [{ description: "", breakdown: "", qty: 1 }],
+        checklist: p.quoteDetails?.checklist || {
+          cost: false,
+          mockup: false,
+          previousSamples: false,
+          sampleProduction: false,
+          bidSubmission: false,
+        },
+      });
+      setExistingSampleImage(p.details?.sampleImage || "");
+      setExistingAttachments(p.details?.attachments || []);
+    } else {
+      // Auto-generate quote number
+      const qNumber = `Q-${Date.now().toString().slice(-6)}`;
+      setFormData((prev) => ({ ...prev, quoteNumber: qNumber }));
+    }
+  }, [location.state]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -124,6 +157,14 @@ const MinimalQuoteForm = () => {
     );
   };
 
+  const removeExistingAttachment = (index) => {
+    setExistingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingSampleImage = () => {
+    setExistingSampleImage("");
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.projectLeadId) {
@@ -158,6 +199,17 @@ const MinimalQuoteForm = () => {
           checklist: formData.checklist,
         }),
       );
+
+      // Handle Existing Files
+      if (existingSampleImage) {
+        formPayload.append("existingSampleImage", existingSampleImage);
+      }
+      if (existingAttachments.length > 0) {
+        formPayload.append(
+          "existingAttachments",
+          JSON.stringify(existingAttachments),
+        );
+      }
 
       const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
       if (imageFile) {
@@ -228,6 +280,7 @@ const MinimalQuoteForm = () => {
                     target: { name: "quoteNumber", value: e.target.value },
                   })
                 }
+                required
               />
 
               <Select
@@ -460,22 +513,72 @@ const MinimalQuoteForm = () => {
               }}
             />
 
-            {selectedFiles.length === 0 && (
-              <div
-                className="minimal-quote-file-dropzone"
-                onClick={() =>
-                  document.getElementById("quote-attachments").click()
-                }
-                style={{ cursor: "pointer" }}
-              >
-                <FolderIcon />
-                <p>Click to upload reference files</p>
-                <span>Images, PDFs, Documents</span>
-              </div>
-            )}
+            {selectedFiles.length === 0 &&
+              !existingSampleImage &&
+              existingAttachments.length === 0 && (
+                <div
+                  className="minimal-quote-file-dropzone"
+                  onClick={() =>
+                    document.getElementById("quote-attachments").click()
+                  }
+                  style={{ cursor: "pointer" }}
+                >
+                  <FolderIcon />
+                  <p>Click to upload reference files</p>
+                  <span>Images, PDFs, Documents</span>
+                </div>
+              )}
 
-            {selectedFiles.length > 0 && (
+            {(selectedFiles.length > 0 ||
+              existingSampleImage ||
+              existingAttachments.length > 0) && (
               <div className="minimal-quote-files-grid">
+                {/* Existing Sample Image */}
+                {existingSampleImage && (
+                  <div className="minimal-quote-file-tile existing">
+                    <div className="file-icon">
+                      <img src={existingSampleImage} alt="existing sample" />
+                    </div>
+                    <div className="file-info" title="Sample Image (Original)">
+                      Sample Image
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeExistingSampleImage}
+                      className="file-remove-btn"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+
+                {/* Existing Attachments */}
+                {existingAttachments.map((path, idx) => (
+                  <div
+                    key={`exist-${idx}`}
+                    className="minimal-quote-file-tile existing"
+                  >
+                    <div className="file-icon">
+                      {path.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                        <img src={path} alt="attachment" />
+                      ) : (
+                        <FolderIcon />
+                      )}
+                    </div>
+                    <div className="file-info" title={path.split("/").pop()}>
+                      {path.split("/").pop()}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeExistingAttachment(idx)}
+                      className="file-remove-btn"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+
+                {/* New Files */}
                 {selectedFiles.map((file, idx) => (
                   <div key={idx} className="minimal-quote-file-tile">
                     <div className="file-icon">

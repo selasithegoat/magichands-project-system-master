@@ -26,6 +26,8 @@ const NewOrders = () => {
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [existingSampleImage, setExistingSampleImage] = useState("");
+  const [existingAttachments, setExistingAttachments] = useState([]);
   const [leads, setLeads] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [toast, setToast] = useState({
@@ -72,26 +74,59 @@ const NewOrders = () => {
     }, 3000);
   };
 
-  // Auto-generate order number on mount
+  // Handle auto-generation OR reopened project sync
   useEffect(() => {
-    const generateOrderNumber = () => {
-      const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const randomPart = Math.floor(1000 + Math.random() * 9000);
-      return `ORD-${datePart}-${randomPart}`;
-    };
+    if (location.state?.reopenedProject) {
+      const p = location.state.reopenedProject;
+      setFormData({
+        orderNumber: p.orderId || "",
+        clientName: p.details?.client || "",
+        clientEmail: p.details?.clientEmail || "",
+        clientPhone: p.details?.clientPhone || "",
+        deliveryLocation: p.details?.deliveryLocation || "",
+        projectName: p.details?.projectName || "",
+        briefOverview: p.details?.briefOverview || "",
+        items:
+          p.items?.length > 0
+            ? p.items
+            : [{ description: "", breakdown: "", qty: 1 }],
+        orderDate: p.orderDate
+          ? new Date(p.orderDate).toISOString().slice(0, 16)
+          : new Date().toISOString().slice(0, 16),
+        deliveryDate: p.details?.deliveryDate
+          ? new Date(p.details.deliveryDate).toISOString().slice(0, 16)
+          : "",
+        projectType: p.projectType || "Standard",
+        priority: p.priority || "Normal",
+        projectLeadId: p.projectLeadId?._id || p.projectLeadId || "",
+      });
+      setExistingSampleImage(p.details?.sampleImage || "");
+      setExistingAttachments(p.details?.attachments || []);
+    } else {
+      const generateOrderNumber = () => {
+        const datePart = new Date()
+          .toISOString()
+          .slice(2, 10)
+          .replace(/-/g, "");
+        const randomPart = Math.floor(1000 + Math.random() * 9000);
+        return `ORD-${datePart}-${randomPart}`;
+      };
 
-    const now = new Date();
-    const isoString = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16);
+      const now = new Date();
+      const isoString = new Date(
+        now.getTime() - now.getTimezoneOffset() * 60000,
+      )
+        .toISOString()
+        .slice(0, 16);
 
-    setFormData((prev) => ({
-      ...prev,
-      orderNumber: generateOrderNumber(),
-      orderDate: isoString,
-      projectType: location.state?.projectType || prev.projectType,
-      priority: location.state?.priority || prev.priority,
-    }));
+      setFormData((prev) => ({
+        ...prev,
+        orderNumber: generateOrderNumber(),
+        orderDate: isoString,
+        projectType: location.state?.projectType || prev.projectType,
+        priority: location.state?.priority || prev.priority,
+      }));
+    }
   }, [location.state]);
 
   const handleChange = (e) => {
@@ -123,6 +158,14 @@ const NewOrders = () => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const removeExistingAttachment = (index) => {
+    setExistingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingSampleImage = () => {
+    setExistingSampleImage("");
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.projectLeadId) {
@@ -151,6 +194,17 @@ const NewOrders = () => {
     formPayload.append("projectType", formData.projectType);
     formPayload.append("priority", formData.priority);
     formPayload.append("items", JSON.stringify(formData.items));
+
+    // Handle Existing Files
+    if (existingSampleImage) {
+      formPayload.append("existingSampleImage", existingSampleImage);
+    }
+    if (existingAttachments.length > 0) {
+      formPayload.append(
+        "existingAttachments",
+        JSON.stringify(existingAttachments),
+      );
+    }
 
     const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
     if (imageFile) {
@@ -191,6 +245,8 @@ const NewOrders = () => {
           projectLeadId: "",
         });
         setSelectedFiles([]);
+        setExistingSampleImage("");
+        setExistingAttachments([]);
 
         // Navigate back to landing after short delay
         setTimeout(() => navigate("/create"), 1500);
@@ -457,19 +513,21 @@ const NewOrders = () => {
             <div className="form-section">
               <h2 className="section-title">Reference Materials</h2>
 
-              {selectedFiles.length === 0 && (
-                <div
-                  className="minimal-quote-file-dropzone"
-                  onClick={() =>
-                    document.getElementById("new-order-attachments").click()
-                  }
-                  style={{ cursor: "pointer" }}
-                >
-                  <FolderIcon />
-                  <p>Click to upload reference files</p>
-                  <span>Images, PDFs, Documents</span>
-                </div>
-              )}
+              {selectedFiles.length === 0 &&
+                !existingSampleImage &&
+                existingAttachments.length === 0 && (
+                  <div
+                    className="minimal-quote-file-dropzone"
+                    onClick={() =>
+                      document.getElementById("new-order-attachments").click()
+                    }
+                    style={{ cursor: "pointer" }}
+                  >
+                    <FolderIcon />
+                    <p>Click to upload reference files</p>
+                    <span>Images, PDFs, Documents</span>
+                  </div>
+                )}
 
               <input
                 type="file"
@@ -485,8 +543,59 @@ const NewOrders = () => {
                 }}
               />
 
-              {selectedFiles.length > 0 && (
+              {(selectedFiles.length > 0 ||
+                existingSampleImage ||
+                existingAttachments.length > 0) && (
                 <div className="minimal-quote-files-grid">
+                  {/* Existing Sample Image */}
+                  {existingSampleImage && (
+                    <div className="minimal-quote-file-tile existing">
+                      <div className="file-icon">
+                        <img src={existingSampleImage} alt="existing sample" />
+                      </div>
+                      <div
+                        className="file-info"
+                        title="Sample Image (Original)"
+                      >
+                        Sample Image
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeExistingSampleImage}
+                        className="file-remove-btn"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Existing Attachments */}
+                  {existingAttachments.map((path, idx) => (
+                    <div
+                      key={`exist-${idx}`}
+                      className="minimal-quote-file-tile existing"
+                    >
+                      <div className="file-icon">
+                        {path.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                          <img src={path} alt="attachment" />
+                        ) : (
+                          <FolderIcon />
+                        )}
+                      </div>
+                      <div className="file-info" title={path.split("/").pop()}>
+                        {path.split("/").pop()}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeExistingAttachment(idx)}
+                        className="file-remove-btn"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* New Files */}
                   {selectedFiles.map((file, idx) => (
                     <div key={idx} className="minimal-quote-file-tile">
                       <div className="file-icon">

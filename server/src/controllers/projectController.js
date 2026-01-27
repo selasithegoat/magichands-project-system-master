@@ -50,8 +50,26 @@ const createProject = async (req, res) => {
     const getValue = (field) => (field && field.value ? field.value : field);
 
     // [NEW] Handle File Uploads (Multiple Fields)
-    let sampleImagePath = "";
-    let attachmentPaths = [];
+    let sampleImagePath = req.body.existingSampleImage || "";
+    let existingAttachments = req.body.existingAttachments;
+
+    // Parse existing attachments if they come as a JSON string
+    if (
+      typeof existingAttachments === "string" &&
+      existingAttachments.startsWith("[")
+    ) {
+      try {
+        existingAttachments = JSON.parse(existingAttachments);
+      } catch (e) {
+        existingAttachments = [existingAttachments];
+      }
+    } else if (existingAttachments && !Array.isArray(existingAttachments)) {
+      existingAttachments = [existingAttachments];
+    }
+
+    let attachmentPaths = Array.isArray(existingAttachments)
+      ? existingAttachments
+      : [];
 
     if (req.files) {
       // Handle 'sampleImage' (single file)
@@ -61,9 +79,10 @@ const createProject = async (req, res) => {
 
       // Handle 'attachments' (multiple files)
       if (req.files.attachments && req.files.attachments.length > 0) {
-        attachmentPaths = req.files.attachments.map(
+        const newAttachments = req.files.attachments.map(
           (file) => `/uploads/${file.filename}`,
         );
+        attachmentPaths = [...attachmentPaths, ...newAttachments];
       }
     } else if (req.file) {
       // Fallback for single file upload middleware (if used elsewhere)
