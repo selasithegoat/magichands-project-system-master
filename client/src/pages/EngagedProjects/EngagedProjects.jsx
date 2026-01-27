@@ -385,7 +385,7 @@ const EngagedProjects = ({ user }) => {
                     <td>{client}</td>
                     <td className={approaching ? "delivery-approaching" : ""}>
                       {deliveryDate}
-                      {deliveryTime && ` @ ${deliveryTime}`}
+                      {deliveryTime && ` (${deliveryTime})`}
                     </td>
                     <td>
                       <span

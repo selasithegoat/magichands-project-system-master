@@ -227,7 +227,7 @@ const OrdersList = () => {
                   <th>Status</th>
                   <th>Assignment Status</th>
                   <th>Created Date</th>
-                  <th>Actions</th>
+          
                 </tr>
               </thead>
               <tbody>
@@ -255,14 +255,7 @@ const OrdersList = () => {
                       </span>
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
-                    <td>
-                      <button
-                        className="action-btn"
-                        onClick={() => navigate(`/detail/${order._id}`)}
-                      >
-                        View
-                      </button>
-                    </td>
+    
                   </tr>
                 ))}
               </tbody>
@@ -322,7 +315,7 @@ const OrdersList = () => {
                   <th>Status</th>
                   <th>Assignment Status</th>
                   <th>Created Date</th>
-                  <th>Actions</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -351,12 +344,6 @@ const OrdersList = () => {
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
                     <td>
-                      <button
-                        className="action-btn"
-                        onClick={() => navigate(`/detail/${order._id}`)}
-                      >
-                        View
-                      </button>
                       {(order.status === "Completed" ||
                         order.status === "Delivered") && (
                         <button
