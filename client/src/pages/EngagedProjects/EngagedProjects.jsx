@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
+  GRAPHICS_SUB_DEPARTMENTS,
+  STORES_SUB_DEPARTMENTS,
+  PHOTOGRAPHY_SUB_DEPARTMENTS,
   getDepartmentLabel,
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
@@ -20,7 +23,7 @@ const STATUS_OPTIONS = [
 
 const ITEMS_PER_PAGE = 10;
 
-const EngagedProjects = () => {
+const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,24 @@ const EngagedProjects = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Determine sub-departments to check based on user's department
+  const engagedSubDepts = useMemo(() => {
+    const depts = user?.department || [];
+    if (depts.includes("Graphics/Design")) return GRAPHICS_SUB_DEPARTMENTS;
+    if (depts.includes("Stores")) return STORES_SUB_DEPARTMENTS;
+    if (depts.includes("Photography")) return PHOTOGRAPHY_SUB_DEPARTMENTS;
+    return PRODUCTION_SUB_DEPARTMENTS; // Default to Production
+  }, [user]);
+
+  // Determine user's primary "Engaged" department label
+  const primaryDept = useMemo(() => {
+    const depts = user?.department || [];
+    if (depts.includes("Graphics/Design")) return "Graphics";
+    if (depts.includes("Stores")) return "Stores";
+    if (depts.includes("Photography")) return "Photography";
+    return "Production";
+  }, [user]);
+
   useEffect(() => {
     fetchEngagedProjects();
   }, []);
@@ -58,7 +79,7 @@ const EngagedProjects = () => {
           if (!project.departments || project.departments.length === 0)
             return false;
           return project.departments.some((dept) =>
-            PRODUCTION_SUB_DEPARTMENTS.includes(dept),
+            engagedSubDepts.includes(dept),
           );
         });
         // Exclude completed projects
@@ -135,13 +156,13 @@ const EngagedProjects = () => {
 
   const handleOpenUpdateModal = (project) => {
     setSelectedProject(project);
-    // Get only production sub-departments for this project
+    // Get only relevant sub-departments for this project
     const engagedDepts = project.departments.filter((dept) =>
-      PRODUCTION_SUB_DEPARTMENTS.includes(dept),
+      engagedSubDepts.includes(dept),
     );
     setUpdateForm({
       content: "",
-      category: "Production",
+      category: primaryDept,
       department: engagedDepts.length > 0 ? engagedDepts[0] : "",
     });
     setShowUpdateModal(true);
@@ -217,9 +238,9 @@ const EngagedProjects = () => {
   return (
     <div className="engaged-projects-container">
       <header className="engaged-header">
-        <h1>Engaged Projects</h1>
+        <h1>{primaryDept} Projects</h1>
         <p className="engaged-subtitle">
-          Projects where the Production department is actively engaged.
+          Projects where the {primaryDept} department is actively engaged.
         </p>
       </header>
 
@@ -379,7 +400,7 @@ const EngagedProjects = () => {
               <label>Engaged Departments</label>
               <div className="dept-chips">
                 {selectedProject.departments
-                  .filter((dept) => PRODUCTION_SUB_DEPARTMENTS.includes(dept))
+                  .filter((dept) => engagedSubDepts.includes(dept))
                   .map((dept) => (
                     <span
                       key={dept}

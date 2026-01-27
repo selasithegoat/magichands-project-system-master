@@ -113,7 +113,10 @@ const Header = ({
               </a>
             </>
           )}
-          {user?.department?.includes("Production") && (
+          {(user?.department?.includes("Production") ||
+            user?.department?.includes("Graphics/Design") ||
+            user?.department?.includes("Stores") ||
+            user?.department?.includes("Photography")) && (
             <a
               href="#"
               className={`nav-item ${

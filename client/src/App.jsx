@@ -322,7 +322,7 @@ function App() {
             navigate={navigate}
             projectCount={projectCount}
           >
-            <EngagedProjects />
+            <EngagedProjects user={user} />
           </ProtectedLayout>
         }
       />

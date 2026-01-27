@@ -193,17 +193,21 @@ const getProjects = async (req, res) => {
     const isEngagedMode = req.query.mode === "engaged"; // [NEW] Production Engaged Mode
     const isAdminPortal = req.query.source === "admin";
     const isFrontDesk = req.user.department?.includes("Front Desk");
-    const isProduction = req.user.department?.includes("Production"); // [NEW]
+    const isEngagedDept =
+      req.user.department?.includes("Production") ||
+      req.user.department?.includes("Graphics/Design") ||
+      req.user.department?.includes("Stores") ||
+      req.user.department?.includes("Photography");
 
     // Access Control:
     // - Admins (non-Front Desk) can see all projects in Admin Portal
     // - Front Desk users can see all projects ONLY in report mode (End of Day updates)
-    // - Production users can see all projects in engaged mode (Engaged Projects)
+    // - Engaged Department users can see all projects in engaged mode (Engaged Projects)
     // - Front Desk users in Admin Portal see only their own projects
     const canSeeAll =
       (req.user.role === "admin" && isAdminPortal && !isFrontDesk) ||
       (isReportMode && isFrontDesk) ||
-      (isEngagedMode && isProduction); // [NEW] Production Engaged Mode
+      (isEngagedMode && isEngagedDept); // Engaged Projects Mode
 
     if (!canSeeAll) {
       // [STRICT] Default View: ONLY projects where user is the Lead

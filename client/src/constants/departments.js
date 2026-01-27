@@ -47,6 +47,17 @@ export const PRODUCTION_SUB_DEPARTMENTS = [
   "signage",
 ];
 
+export const GRAPHICS_SUB_DEPARTMENTS = ["graphics"];
+export const STORES_SUB_DEPARTMENTS = ["stock", "packaging"];
+export const PHOTOGRAPHY_SUB_DEPARTMENTS = ["photography"];
+
+export const ALL_ENGAGED_DEPARTMENTS = [
+  "Production",
+  "Graphics",
+  "Stores",
+  "Photography",
+];
+
 export const getDepartmentLabel = (id) => {
   const dept = DEPARTMENTS.find((d) => d.id === id);
   return dept ? dept.label : id;
