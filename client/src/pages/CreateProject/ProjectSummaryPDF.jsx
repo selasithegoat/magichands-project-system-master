@@ -131,9 +131,10 @@ const ProjectSummaryPDF = ({
 
   // Theme Colors
   const THEME = {
-    EMERGENCY: "#EF4444", // Red
-    QUOTE: "#F97316", // Orange
-    STANDARD: "#10B981", // Green (Default)
+    EMERGENCY: "#e74c3c", // Red
+    QUOTE: "#f39c12", // Orange
+    CORPORATE: "#42a165", // Green
+    STANDARD: "#3498db", // Blue (Default)
   };
 
   const themeColor = THEME[pdfType] || THEME.STANDARD;

@@ -288,11 +288,14 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                     formData={getPdfFormData()}
                     imageUrls={imageUrls}
                     pdfType={
-                      isEmergency
+                      project.projectType === "Emergency" ||
+                      project.priority === "Urgent"
                         ? "EMERGENCY"
                         : project.projectType === "Quote"
                           ? "QUOTE"
-                          : "STANDARD" // Default
+                          : project.projectType === "Corporate Job"
+                            ? "CORPORATE"
+                            : "STANDARD"
                     }
                   />
                 }
