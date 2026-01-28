@@ -184,7 +184,7 @@ const createProject = async (req, res) => {
         savedProject._id,
         "ASSIGNMENT",
         "New Project Assigned",
-        `You have been assigned as the lead for project: ${savedProject.details.projectName}`,
+        `Project #${savedProject.orderId}: You have been assigned as the lead for project: ${savedProject.details.projectName}`,
       );
     }
 
@@ -1235,7 +1235,7 @@ const updateProject = async (req, res) => {
           updatedProject._id,
           "ACCEPTANCE",
           "Project Accepted",
-          `Project "${updatedProject.details.projectName}" has been accepted and is ready for production.`,
+          `Project #${updatedProject.orderId}: Project "${updatedProject.details.projectName}" has been accepted and is ready for production.`,
         );
       }
     }

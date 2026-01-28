@@ -36,7 +36,7 @@ const logActivity = async (
           projectId,
           "ACTIVITY",
           "Project Activity Updated",
-          description,
+          `Project #${project.orderId}: ${description}`,
         );
       }
     }

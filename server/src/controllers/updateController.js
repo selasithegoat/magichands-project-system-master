@@ -80,8 +80,24 @@ exports.createProjectUpdate = async (req, res) => {
         project._id,
         "UPDATE",
         `${category} Update Posted`,
-        `A new update has been posted in the ${category} category for project: ${project.details.projectName}`,
+        `Project #${project.orderId}: A new update has been posted in the ${category} category for project: ${project.details.projectName}`,
       );
+    }
+
+    // [New] Notify Front Desk if this is a Final (End of Day) update
+    if (isEOD) {
+      const User = require("../models/User"); // Import if not already at top
+      const frontDeskUsers = await User.find({ department: "Front Desk" });
+      for (const fdUser of frontDeskUsers) {
+        await createNotification(
+          fdUser._id,
+          req.user._id,
+          project._id,
+          "UPDATE",
+          "Final Update Posted",
+          `Project #${project.orderId}: ${req.user.firstName} ${req.user.lastName} has posted a final (End of Day) update for project: ${project.details.projectName}`,
+        );
+      }
     }
 
     res.status(201).json(newUpdate);
