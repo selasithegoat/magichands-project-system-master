@@ -52,6 +52,21 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 
   const statusInfo = getStatusColor(project.status);
 
+  const getProjectTypeInfo = (type) => {
+    switch (type) {
+      case "Emergency":
+        return { label: "EMERGENCY", color: "#e74c3c", bg: "#fef2f2" };
+      case "Corporate Job":
+        return { label: "CORPORATE", color: "#42a165", bg: "#f0fdf4" };
+      case "Quote":
+        return { label: "QUOTE", color: "#f39c12", bg: "#fffbeb" };
+      default:
+        return { label: "STANDARD", color: "#3498db", bg: "#eff6ff" };
+    }
+  };
+
+  const projectTypeInfo = getProjectTypeInfo(project.projectType);
+
   // Calculate Progress if not provided
   let progress = project.progress;
   if (progress === undefined) {
@@ -81,11 +96,23 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             </div>
           )}
         </div>
-        <span className={`status-badge ${statusInfo.class}`}>
-          {project.status === "Pending Scope Approval"
-            ? "WAITING ACCEPTANCE"
-            : project.status || "Draft"}
-        </span>
+        <div className="card-badge-container">
+          <span
+            className="type-badge"
+            style={{
+              backgroundColor: projectTypeInfo.bg,
+              color: projectTypeInfo.color,
+              border: `1px solid ${projectTypeInfo.color}40`,
+            }}
+          >
+            {projectTypeInfo.label}
+          </span>
+          <span className={`status-badge ${statusInfo.class}`}>
+            {project.status === "Pending Scope Approval"
+              ? "WAITING ACCEPTANCE"
+              : project.status || "Draft"}
+          </span>
+        </div>
         {/* <button className="card-menu-btn">
           <ThreeDotsIcon />
         </button> */}

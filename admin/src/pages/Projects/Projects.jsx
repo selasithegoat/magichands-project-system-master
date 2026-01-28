@@ -288,6 +288,7 @@ const Projects = ({ user }) => {
                 <tr>
                   <th>Order ID</th>
                   <th>Project Name</th>
+                  <th>Type</th>
                   <th>Lead</th>
                   <th>Client</th>
                   <th>Assigned Date</th>
@@ -305,6 +306,44 @@ const Projects = ({ user }) => {
                       </span>
                     </td>
                     <td>{project.details?.projectName || "Untitled"}</td>
+                    <td>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          backgroundColor:
+                            project.projectType === "Emergency"
+                              ? "#fef2f2"
+                              : project.projectType === "Corporate Job"
+                                ? "#f0fdf4"
+                                : project.projectType === "Quote"
+                                  ? "#fffbeb"
+                                  : "#eff6ff",
+                          color:
+                            project.projectType === "Emergency"
+                              ? "#e74c3c"
+                              : project.projectType === "Corporate Job"
+                                ? "#42a165"
+                                : project.projectType === "Quote"
+                                  ? "#f39c12"
+                                  : "#3498db",
+                          border: `1px solid ${
+                            project.projectType === "Emergency"
+                              ? "#e74c3c40"
+                              : project.projectType === "Corporate Job"
+                                ? "#42a16540"
+                                : project.projectType === "Quote"
+                                  ? "#f39c1240"
+                                  : "#3498db40"
+                          }`,
+                        }}
+                      >
+                        {project.projectType || "Standard"}
+                      </span>
+                    </td>
                     <td>
                       {project.projectLeadId
                         ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`

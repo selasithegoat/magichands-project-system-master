@@ -186,6 +186,52 @@ const CreateProjectLanding = () => {
             Type: Quote
           </div>
         </div>
+
+        {/* Corporate Job Project */}
+        <div
+          className="project-type-card corporate"
+          onClick={() => handleSelection("Corporate Job")}
+          style={{
+            background: "#fff",
+            borderRadius: "12px",
+            padding: "2rem",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            cursor: "pointer",
+            transition: "transform 0.2s, box-shadow 0.2s",
+            border: "2px solid transparent",
+            width: "100%",
+            maxWidth: "350px",
+            textAlign: "center",
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.transform = "translateY(-5px)";
+            e.currentTarget.style.boxShadow =
+              "0 8px 24px rgba(66, 161, 101, 0.2)";
+            e.currentTarget.style.border = "2px solid #42a165";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+            e.currentTarget.style.border = "2px solid transparent";
+          }}
+        >
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🏢</div>
+          <h2 style={{ color: "#42a165", marginBottom: "1rem" }}>
+            Corporate Job
+          </h2>
+          <p style={{ color: "#7f8c8d", lineHeight: "1.5" }}>
+            High-volume orders for corporate clients. Specialized handling flow.
+          </p>
+          <div
+            style={{
+              marginTop: "1.5rem",
+              color: "#42a165",
+              fontWeight: "bold",
+            }}
+          >
+            Priority: Normal
+          </div>
+        </div>
       </div>
 
       {/* Orders Management Tabs (All Orders & History) */}

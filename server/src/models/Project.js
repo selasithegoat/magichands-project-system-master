@@ -163,7 +163,7 @@ const ProjectSchema = new mongoose.Schema(
     },
     projectType: {
       type: String,
-      enum: ["Standard", "Emergency", "Quote"],
+      enum: ["Standard", "Emergency", "Quote", "Corporate Job"],
       default: "Standard",
     },
     priority: {

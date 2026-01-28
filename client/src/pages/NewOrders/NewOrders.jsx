@@ -265,6 +265,8 @@ const NewOrders = () => {
   const isEmergency =
     formData.projectType === "Emergency" || formData.priority === "Urgent";
 
+  const isCorporate = formData.projectType === "Corporate Job";
+
   return (
     <div className="new-orders-page">
       {toast.show && (
@@ -278,7 +280,11 @@ const NewOrders = () => {
       <div className="page-header">
         <h1>Create New Order</h1>
         <p className="subtitle">
-          Fill in the details for the {formData.projectType} job
+          Fill in the details for the{" "}
+          <span style={{ color: isCorporate ? "#42a165" : "inherit" }}>
+            {formData.projectType}
+          </span>{" "}
+          job
         </p>
       </div>
 
@@ -287,6 +293,27 @@ const NewOrders = () => {
           <div className="emergency-banner">
             <span style={{ fontSize: "1.5rem" }}>🔥</span>
             <span>EMERGENCY ORDER - High Priority Handling Required</span>
+          </div>
+        )}
+
+        {isCorporate && (
+          <div
+            className="corporate-banner"
+            style={{
+              background: "rgba(66, 161, 101, 0.1)",
+              border: "1px solid #42a165",
+              color: "#42a165",
+              padding: "1rem",
+              borderRadius: "8px",
+              marginBottom: "1.5rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              fontWeight: "600",
+            }}
+          >
+            <span style={{ fontSize: "1.5rem" }}>🏢</span>
+            <span>CORPORATE JOB - Specialized Handling Flow</span>
           </div>
         )}
 
