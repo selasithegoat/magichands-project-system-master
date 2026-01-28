@@ -15,13 +15,13 @@
 
 .notif-modal-content {
   width: 400px;
-  max-height: 80vh;
+  max-height: 60vh;
   background-color: #fff;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+
   border: 1px solid #e2e8f0;
 
   /* Animation */
@@ -97,7 +97,7 @@
 /* List */
 .notif-list-container {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
   padding: 0 16px 16px 16px;
 }
 
