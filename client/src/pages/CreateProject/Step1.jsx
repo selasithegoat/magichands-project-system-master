@@ -392,7 +392,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   return (
                     <a
                       key={idx}
-                      href={`http://localhost:5000${path}`}
+                      href={`${path}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -410,7 +410,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                     >
                       {isImage ? (
                         <img
-                          src={`http://localhost:5000${path}`}
+                          src={`${path}`}
                           alt="attachment"
                           style={{
                             width: "100%",
@@ -456,7 +456,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               (!formData.attachments || formData.attachments.length === 0) && (
                 <div style={{ marginTop: "1rem" }}>
                   <img
-                    src={`http://localhost:5000${formData.sampleImage}`}
+                    src={`${formData.sampleImage}`}
                     alt="Existing"
                     style={{ maxWidth: "200px", borderRadius: "8px" }}
                   />

@@ -129,7 +129,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
         pathsToFetch.map(async (path) => {
           try {
             // 1. Fetch Blob (from localhost:5000 proxied or direct)
-            const res = await fetch(`http://localhost:5000${path}`);
+            const res = await fetch(`${path}`);
             if (!res.ok) throw new Error(`Status ${res.status}`);
             const blob = await res.blob();
 
@@ -1096,12 +1096,12 @@ const ReferenceMaterialsCard = ({ project }) => {
               }}
             >
               <a
-                href={`http://localhost:5000${sampleImage}`}
+                href={`${sampleImage}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <img
-                  src={`http://localhost:5000${sampleImage}`}
+                  src={`${sampleImage}`}
                   alt="Sample"
                   style={{
                     width: "100%",
@@ -1141,7 +1141,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                 return (
                   <a
                     key={idx}
-                    href={`http://localhost:5000${path}`}
+                    href={`${path}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -1159,7 +1159,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                   >
                     {isImage ? (
                       <img
-                        src={`http://localhost:5000${path}`}
+                        src={`${path}`}
                         alt="attachment"
                         style={{
                           width: "100%",

@@ -63,7 +63,7 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
         pathsToFetch.map(async (path) => {
           try {
             // 1. Fetch Blob
-            const res = await fetch(`http://localhost:5000${path}`);
+            const res = await fetch(`${path}`);
             if (!res.ok) throw new Error(`Status ${res.status}`);
             const blob = await res.blob();
 

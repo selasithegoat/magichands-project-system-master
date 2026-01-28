@@ -86,7 +86,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         <div className="project-thumbnail-wrapper">
           {project.sampleImage || project.details?.sampleImage ? (
             <img
-              src={`http://localhost:5000${project.sampleImage || project.details.sampleImage}`}
+              src={`${project.sampleImage || project.details.sampleImage}`}
               alt="Project"
               className="project-card-image"
             />

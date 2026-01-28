@@ -382,9 +382,8 @@ const ProjectSummaryPDF = ({
                 alignItems: "center",
               }}
             >
-              {/* Note: React-PDF Image requires valid source. Localhost URL might work if accessible, 
-                 otherwise might need base64 or absolute path. 
-                 Since this is client-side generation, http://localhost:5000/... matches browser access.
+              {/* Note: React-PDF Image requires valid source. 
+                 Since this is client-side generation, relative URLs match browser access through the Vite proxy.
              */}
               <Image
                 src={

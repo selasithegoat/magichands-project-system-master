@@ -190,7 +190,7 @@ const ProjectUpdates = ({ project, currentUser }) => {
   };
 
   const getDownloadUrl = (path) => {
-    return `http://localhost:5000${path}`;
+    return `${path}`;
   };
 
   const isAuthor = (update) => {
