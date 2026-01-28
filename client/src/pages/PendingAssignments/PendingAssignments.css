@@ -6,8 +6,9 @@
 
 .pa-header {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid #333;
@@ -16,8 +17,7 @@
 .pa-header h1 {
   font-size: 2.2rem;
   font-weight: 700;
-  color: var( --text-primary);
-
+  color: var(--text-primary);
 }
 
 .btn-new-project {
@@ -97,4 +97,14 @@
   padding: 3rem;
   background: #1e1e24;
   border-radius: 12px;
+}
+@media (max-width: 640px) {
+  .pa-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .btn-start-new-header {
+    width: 100%;
+  }
 }

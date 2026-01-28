@@ -2,45 +2,23 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PendingAssignments.css";
 
-const PendingAssignments = ({ onStartNew }) => {
+const PendingAssignments = ({ onStartNew, user }) => {
   const [adjustments, setAdjustments] = useState([]);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch projects assigned to me with status "Pending Scope Approval"
-    // Since getProjects returns all, we filter client side for now unless we added specific endpoint
     const fetchAssignments = async () => {
+      if (!user) return;
       try {
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          // Filter for my assignments (assuming backend filters getting all projects, but let's be safe if it returns all)
-          // Actually getProjects usually returns all projects if admin, or user's projects?
-          // Let's assume getProjects returns enough info.
-          // Wait, getProjects controller: "Project.find({})" - returns ALL.
-          // We need to filter by `projectLeadId` matching current user AND status.
-          // We need 'current user' ID.
-          // Browser fetch doesn't easily give us ID unless we stored it in context.
-          // Let's assume we filter on server or we fetch /auth/me or passing user as prop?
-          // I'll update App.jsx to pass User or just fetch /auth/me here or trust server filtering if I implemented it.
-          // I didn't change getProjects to filter.
-          // I will filter client side here if I can get current user.
-          // BETTER: Add a proper endpoint or query param to getProjects?
-          // `GET /api/projects?assigned=me`?
-          // For now, I'll fetch `/api/auth/me` to get my ID then filter list.
-
-          const userRes = await fetch("/api/auth/me");
-          if (userRes.ok) {
-            const user = await userRes.json();
-            const pending = data.filter((p) => {
-              const leadId = p.projectLeadId?._id || p.projectLeadId; // Handle populated object or string ID
-              return (
-                leadId === user._id && p.status === "Pending Scope Approval"
-              );
-            });
-            setAdjustments(pending);
-          }
+          const pending = data.filter((p) => {
+            const leadId = p.projectLeadId?._id || p.projectLeadId;
+            return leadId === user._id && p.status === "Pending Scope Approval";
+          });
+          setAdjustments(pending);
         }
       } catch (error) {
         console.error("Failed to load assignments", error);
@@ -49,13 +27,15 @@ const PendingAssignments = ({ onStartNew }) => {
       }
     };
     fetchAssignments();
-  }, []);
+  }, [user]);
 
   const handleAccept = (projectId) => {
     navigate(`/create/wizard?edit=${projectId}`);
   };
 
   if (loading) return <div>Loading...</div>;
+
+  const isFrontDesk = user?.department?.includes("Front Desk");
 
   return (
     <div className="pending-assignments-container">
@@ -64,27 +44,46 @@ const PendingAssignments = ({ onStartNew }) => {
           <h1>Pending Project Assignments</h1>
           <p>You have {adjustments.length} projects waiting for acceptance.</p>
         </div>
+        {isFrontDesk && (
+          <button
+            className="btn-start-new-header"
+            onClick={onStartNew}
+            style={{
+              padding: "0.75rem 1.5rem",
+              background: "#3498db",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Start New Project
+          </button>
+        )}
       </div>
 
       <div className="pa-grid">
         {adjustments.length === 0 ? (
           <div className="no-assignments">
             <p>No pending assignments.</p>
-            <button
-              className="btn-start-new"
-              onClick={onStartNew}
-              style={{
-                marginTop: "1rem",
-                padding: "0.75rem 1.5rem",
-                background: "#3498db",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Start New Project
-            </button>
+            {isFrontDesk && (
+              <button
+                className="btn-start-new"
+                onClick={onStartNew}
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1.5rem",
+                  background: "#3498db",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Start New Project
+              </button>
+            )}
           </div>
         ) : (
           adjustments.map((project) => (

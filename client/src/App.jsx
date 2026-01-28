@@ -173,6 +173,7 @@ function App() {
             projectCount={projectCount}
           >
             <PendingAssignments
+              user={user}
               onStartNew={() => navigate("/create/select-type")}
             />
           </ProtectedLayout>
