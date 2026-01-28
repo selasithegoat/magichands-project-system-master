@@ -217,3 +217,16 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+@media (max-width: 640px) {
+  .notif-modal-overlay {
+    justify-content: center;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .notif-modal-content {
+    width: 95%;
+    max-width: 400px;
+  }
+}
