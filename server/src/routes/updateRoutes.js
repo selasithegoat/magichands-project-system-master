@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const updateController = require("../controllers/updateController");
 const { protect } = require("../middleware/authMiddleware");
-const upload = require("../middleware/uploadMiddleware");
+const upload = require("../middleware/upload");
 
 // Get updates for a project
 // GET /api/updates/project/:projectId
@@ -26,7 +26,7 @@ router.post(
       next();
     });
   },
-  updateController.createProjectUpdate
+  updateController.createProjectUpdate,
 );
 
 // Delete an update

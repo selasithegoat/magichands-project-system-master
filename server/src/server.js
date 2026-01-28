@@ -37,8 +37,11 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json());
-// Static uploads folder
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// External uploads folder (outside source)
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR || path.join(__dirname, "../../../magichands-uploads");
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 // Routes
 app.use("/api/auth", authRoutes);

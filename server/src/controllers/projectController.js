@@ -1112,12 +1112,12 @@ const updateProject = async (req, res) => {
     // Handle Files
     if (req.files) {
       if (req.files.sampleImage && req.files.sampleImage[0]) {
-        project.details.sampleImage = req.files.sampleImage[0].path;
+        project.details.sampleImage = `/uploads/${req.files.sampleImage[0].filename}`;
         detailsChanged = true;
       }
 
       const newAttachments = req.files.attachments
-        ? req.files.attachments.map((file) => file.path)
+        ? req.files.attachments.map((file) => `/uploads/${file.filename}`)
         : [];
 
       // Combine existing and new attachments
