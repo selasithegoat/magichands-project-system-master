@@ -132,6 +132,7 @@
 
 .form-input {
   width: 100%;
+  height: 50px;
   padding: 12px 0; /* Underline style usually has less horizontal padding visually, but good for touch */
   font-size: 1rem;
   border: none;

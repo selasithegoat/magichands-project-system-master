@@ -145,26 +145,18 @@ const Login = ({ onLogin }) => {
   return (
     <div className="login-container">
       {/* Top Controls */}
-      <button className="login-close-btn" aria-label="Close">
-        <XIcon />
-      </button>
-
-      <div className="login-lang-selector">English</div>
-
       <div className="login-content">
         {/* Logo Icon */}
         <div className="login-icon-wrapper">
           <img
             src="/mhlogo.png"
             alt="Logo"
-            style={{ width: "48px", height: "auto" }}
+            style={{ width: "200px", height: "auto" }}
           />
         </div>
 
         {/* Brand */}
-        <div className="login-brand">
-          MagicHands <span className="highlight">Co. Ltd.</span>
-        </div>
+
 
         {/* Welcome Text */}
         <h1 className="login-title">Welcome Back</h1>
@@ -244,8 +236,7 @@ const Login = ({ onLogin }) => {
           </a>
         </div>
 
-        {/* Home Indicator */}
-        <div className="home-indicator"></div>
+        
       </div>
     </div>
   );
