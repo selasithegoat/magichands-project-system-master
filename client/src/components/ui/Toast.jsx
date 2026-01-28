@@ -5,7 +5,13 @@ import WarningIcon from "../icons/WarningIcon";
 import AlertTriangleIcon from "../icons/AlertTriangleIcon";
 import "./Toast.css";
 
-const Toast = ({ message, type = "info", onClose, duration = 3000 }) => {
+const Toast = ({
+  message,
+  type = "info",
+  onClose,
+  onClick,
+  duration = 3000,
+}) => {
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
@@ -40,10 +46,20 @@ const Toast = ({ message, type = "info", onClose, duration = 3000 }) => {
   };
 
   return (
-    <div className={`ui-toast ${type} ${isExiting ? "exiting" : ""}`}>
+    <div
+      className={`ui-toast ${type} ${isExiting ? "exiting" : ""}`}
+      onClick={onClick}
+      style={{ cursor: onClick ? "pointer" : "default" }}
+    >
       <div className="ui-toast-icon">{getIcon()}</div>
       <div className="ui-toast-message">{message}</div>
-      <button className="ui-toast-close" onClick={handleClose}>
+      <button
+        className="ui-toast-close"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleClose();
+        }}
+      >
         <XIcon width="16" height="16" />
       </button>
     </div>

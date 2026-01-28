@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
+import Toast from "../ui/Toast";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -48,12 +49,60 @@ const Layout = ({
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // [New] Notifications State
+  // [New] Notifications & Toasts State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [toasts, setToasts] = useState([]);
+  const [lastNotificationIds, setLastNotificationIds] = useState(new Set());
 
-  const fetchNotifications = async () => {
+  // [New] Native Notification Permission Logic
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const showNativeNotification = (notification) => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      const n = new Notification(notification.title, {
+        body: notification.message,
+        icon: "/mhlogo.png", // Optional: use app logo
+      });
+      n.onclick = () => {
+        window.focus();
+        if (notification.project) {
+          const projectId = notification.project._id || notification.project;
+          setIsNotificationOpen(false);
+          setIsMobileMenuOpen(false);
+          navigate(`/projects/${projectId}`);
+        }
+        n.close();
+      };
+    }
+  };
+
+  const addToast = (notification) => {
+    // Show Native Notification
+    showNativeNotification(notification);
+
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [
+      ...prev,
+      {
+        id,
+        message: notification.message,
+        type: notification.type === "ASSIGNMENT" ? "warning" : "info",
+        projectId: notification.project?._id || notification.project,
+      },
+    ]);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const fetchNotifications = async (isInitial = false) => {
     try {
       const res = await fetch("/api/notifications");
       if (res.ok) {
@@ -61,6 +110,18 @@ const Layout = ({
         setNotifications(data);
         const unreadCount = data.filter((n) => !n.isRead).length;
         setNotificationCount(unreadCount);
+
+        // Check for new unread notifications to trigger toasts
+        if (!isInitial) {
+          data.forEach((n) => {
+            if (!n.isRead && !lastNotificationIds.has(n._id)) {
+              addToast(n);
+            }
+          });
+        }
+
+        // Update tracking IDs
+        setLastNotificationIds(new Set(data.map((n) => n._id)));
       }
     } catch (err) {
       console.error("Error fetching notifications:", err);
@@ -69,8 +130,8 @@ const Layout = ({
 
   useEffect(() => {
     if (user) {
-      fetchNotifications();
-      const interval = setInterval(fetchNotifications, 60000); // Poll every 60s
+      fetchNotifications(true);
+      const interval = setInterval(() => fetchNotifications(false), 30000); // 30s
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -81,7 +142,7 @@ const Layout = ({
         method: "PATCH",
       });
       if (res.ok) {
-        setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
         setNotificationCount(0);
       }
     } catch (err) {
@@ -94,6 +155,7 @@ const Layout = ({
       const res = await fetch("/api/notifications", { method: "DELETE" });
       if (res.ok) {
         setNotifications([]);
+        setLastNotificationIds(new Set());
         setNotificationCount(0);
       }
     } catch (err) {
@@ -329,6 +391,25 @@ const Layout = ({
           </div>
         </>
       )}
+
+      {/* Notification Toasts */}
+      <div className="ui-toast-container">
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+            duration={6000}
+            onClick={() => {
+              if (toast.projectId) {
+                navigate(`/projects/${toast.projectId}`);
+                removeToast(toast.id);
+              }
+            }}
+          />
+        ))}
+      </div>
 
       {/* Page Content */}
       <main className="layout-content">{children}</main>
