@@ -9,6 +9,7 @@ const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const updateRoutes = require("./routes/updateRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 // Load env vars
 dotenv.config();
@@ -44,6 +45,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => {
   res.send("MagicHands Server is Running");

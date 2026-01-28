@@ -1,5 +1,6 @@
 const ProjectUpdate = require("../models/ProjectUpdate");
 const Project = require("../models/Project");
+const { createNotification } = require("../utils/notificationService");
 
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
@@ -70,6 +71,18 @@ exports.createProjectUpdate = async (req, res) => {
 
     // Populate author for immediate return
     await newUpdate.populate("author", "firstName lastName email role");
+
+    // [New] Notify Lead if update is from a department
+    if (category !== "General" && project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "UPDATE",
+        `${category} Update Posted`,
+        `A new update has been posted in the ${category} category for project: ${project.details.projectName}`,
+      );
+    }
 
     res.status(201).json(newUpdate);
   } catch (error) {

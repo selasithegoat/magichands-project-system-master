@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
 import "./Layout.css";
@@ -44,11 +45,83 @@ const Layout = ({
   projectCount, // Receive projectCount prop
   onSignOut, // Receive onSignOut prop
 }) => {
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Lifted projectCount state to App.jsx
+  // [New] Notifications State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(7); // Mock count matching modal data
+  const [notifications, setNotifications] = useState([]);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+        const unreadCount = data.filter((n) => !n.isRead).length;
+        setNotificationCount(unreadCount);
+      }
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 60000); // Poll every 60s
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const res = await fetch("/api/notifications/read-all", {
+        method: "PATCH",
+      });
+      if (res.ok) {
+        setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
+        setNotificationCount(0);
+      }
+    } catch (err) {
+      console.error("Error marking all read:", err);
+    }
+  };
+
+  const handleClearNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications", { method: "DELETE" });
+      if (res.ok) {
+        setNotifications([]);
+        setNotificationCount(0);
+      }
+    } catch (err) {
+      console.error("Error clearing notifications:", err);
+    }
+  };
+
+  const handleMarkSingleRead = async (id, projectId) => {
+    try {
+      const res = await fetch(`/api/notifications/${id}/read`, {
+        method: "PATCH",
+      });
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
+        );
+        setNotificationCount((prev) => Math.max(0, prev - 1));
+
+        if (projectId) {
+          setIsNotificationOpen(false);
+          setIsMobileMenuOpen(false);
+          navigate(`/projects/${projectId}`);
+        }
+      }
+    } catch (err) {
+      console.error("Error marking single read:", err);
+    }
+  };
 
   const getInitials = () => {
     if (!user) return "U";
@@ -85,6 +158,10 @@ const Layout = ({
       <NotificationModal
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onMarkAllRead={handleMarkAllAsRead}
+        onClearAll={handleClearNotifications}
+        onMarkRead={handleMarkSingleRead}
       />
 
       {/* Mobile Drawer */}

@@ -1,6 +1,8 @@
 const Project = require("../models/Project");
 const ActivityLog = require("../models/ActivityLog");
 const { logActivity } = require("../utils/activityLogger");
+const { createNotification } = require("../utils/notificationService");
+const User = require("../models/User"); // Need User model for department notifications
 
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
@@ -173,6 +175,18 @@ const createProject = async (req, res) => {
       "create",
       `Created project #${savedProject.orderId || savedProject._id}`,
     );
+
+    // [New] Notify Lead
+    if (savedProject.projectLeadId) {
+      await createNotification(
+        savedProject.projectLeadId,
+        req.user._id,
+        savedProject._id,
+        "ASSIGNMENT",
+        "New Project Assigned",
+        `You have been assigned as the lead for project: ${savedProject.details.projectName}`,
+      );
+    }
 
     res.status(201).json(savedProject);
   } catch (error) {
@@ -1209,6 +1223,21 @@ const updateProject = async (req, res) => {
         "update",
         `Updated project #${updatedProject.orderId || updatedProject._id}`,
       );
+    }
+
+    // [New] Notify Production Team on Acceptance
+    if (updatedProject.status === "Pending Production") {
+      const productionUsers = await User.find({ department: "Production" });
+      for (const prodUser of productionUsers) {
+        await createNotification(
+          prodUser._id,
+          req.user._id,
+          updatedProject._id,
+          "ACCEPTANCE",
+          "Project Accepted",
+          `Project "${updatedProject.details.projectName}" has been accepted and is ready for production.`,
+        );
+      }
     }
 
     res.json(updatedProject);
