@@ -28,14 +28,6 @@ const Header = ({ onMenuClick }) => {
       </div>
 
       <div className="header-actions">
-        <div className="search-bar">
-          <SearchIcon className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            className="search-input"
-          />
-        </div>
 
         <button className="notification-btn">
           <BellIcon className="w-5 h-5" />

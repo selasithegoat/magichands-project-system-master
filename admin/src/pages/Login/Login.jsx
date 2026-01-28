@@ -11,9 +11,7 @@ import {
   HelpIcon,
   SupportIcon,
 } from "../../icons/Icons";
-
-const Login = ({ onLoginSuccess }) => {
-  const [loginData, setLoginData] = useState({
+  const Login = ({ onLoginSuccess }) => { const [loginData, setLoginData] = useState({
     username: "",
     password: "",
     keepLogged: false,
@@ -70,7 +68,7 @@ const Login = ({ onLoginSuccess }) => {
       <div className="login-card">
         <div className="login-header">
           <div className="login-icon-wrapper">
-            <ShieldCheckIcon className="login-icon w-8 h-8" />
+            <img className="logo-icon" src="/mhlogo.png" alt="MagicHands Logo" />
           </div>
           <h1 className="login-title">Project Management</h1>
           <h2>Admin Portal</h2>

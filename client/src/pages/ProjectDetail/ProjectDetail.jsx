@@ -588,7 +588,7 @@ const QuoteChecklistCard = ({ project }) => {
               style={{
                 fontSize: "0.9rem",
                 fontWeight: val ? 600 : 400,
-                color: val ? "#f8fafc" : "var(--text-secondary)",
+                color: val ? "#0c0c0cff" : "var(--text-secondary)",
               }}
             >
               {key

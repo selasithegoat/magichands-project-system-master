@@ -29,7 +29,6 @@
   gap: var(--spacing-md);
   margin-bottom: 3rem;
   padding-left: var(--spacing-xs);
-  justify-content: space-between;
 }
 
 .mobile-close-btn {
@@ -50,7 +49,6 @@
 .logo-icon-wrapper {
   width: 32px;
   height: 32px;
-  background-color: #3b82f6;
   border-radius: 50%;
   display: flex;
   align-items: center;

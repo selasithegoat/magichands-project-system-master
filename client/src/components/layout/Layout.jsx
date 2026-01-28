@@ -96,8 +96,15 @@ const Layout = ({
           ></div>
           <div className="mobile-drawer">
             <div className="drawer-header">
-              <div className="drawer-brand">
-                <span className="brand-name">MagicHands</span>
+              <div
+                className="drawer-brand"
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <img
+                  src="/mhlogo.png"
+                  alt="Logo"
+                  style={{ height: "40px", width: "auto" }}
+                />
               </div>
               <button
                 className="drawer-close-btn"

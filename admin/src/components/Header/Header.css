@@ -73,43 +73,6 @@
   gap: var(--spacing-lg);
 }
 
-@media (max-width: 1024px) {
-  .search-bar {
-    display: none; /* Hide search on mobile for now to save space */
-  }
-}
-
-.search-bar {
-  position: relative;
-  width: 300px;
-}
-
-.search-input {
-  width: 100%;
-  background-color: var(--bg-dark);
-  border: 1px solid var(--border-color);
-  border-radius: 20px; /* Pill shape */
-  padding: 10px 16px 10px 40px;
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.search-input:focus {
-  border-color: var(--border-focus);
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-placeholder);
-  width: 18px;
-  height: 18px;
-}
-
 .notification-btn {
   background: #334155;
   border: none;

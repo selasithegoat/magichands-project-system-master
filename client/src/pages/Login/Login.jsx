@@ -154,20 +154,11 @@ const Login = ({ onLogin }) => {
       <div className="login-content">
         {/* Logo Icon */}
         <div className="login-icon-wrapper">
-          {/* Using a generic "Construction" or "Tools" looking SVG */}
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M18.3 5.3a2 2 0 0 0-2.8 0l-10 10a2 2 0 0 0 0 2.8l4.2 4.2a2 2 0 0 0 2.8 0l10-10a2 2 0 0 0 0-2.8L18.3 5.3z" />
-            <path d="M2 2l20 20" />
-          </svg>
+          <img
+            src="/mhlogo.png"
+            alt="Logo"
+            style={{ width: "48px", height: "auto" }}
+          />
         </div>
 
         {/* Brand */}

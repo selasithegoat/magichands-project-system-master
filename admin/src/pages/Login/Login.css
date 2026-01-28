@@ -15,9 +15,9 @@
 }
 
 .login-icon-wrapper {
-  width: 64px;
-  height: 64px;
-  background-color: var(--bg-dark);
+  width: 100px;
+  height: 100px;
+  background-color: white;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   display: flex;
@@ -27,8 +27,9 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.login-icon {
-  color: #bae6fd;
+.logo-icon {
+  width: 80px;
+  height: 80x;
 }
 
 .login-title {

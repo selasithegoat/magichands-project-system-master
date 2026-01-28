@@ -31,11 +31,13 @@ const Sidebar = ({ isOpen, onClose, user }) => {
   return (
     <aside className={`sidebar ${isOpen ? "sidebar-mobile-open" : ""}`}>
       <div className="sidebar-logo">
-        <div className="logo-icon-wrapper">
-          <RocketIcon className="w-5 h-5" />
-        </div>
+ 
         <div className="logo-text">
-          <h1>{user?.name || user?.firstName || "Project Manager"}</h1>
+          <h1>
+            {user?.name ||
+              user?.firstName + " " + user?.lastName ||
+              "Project Manager"}
+          </h1>
           <span>Admin Dashboard</span>
         </div>
         {/* Close button for mobile */}
