@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
@@ -54,7 +54,7 @@ const Layout = ({
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [toasts, setToasts] = useState([]);
-  const [lastNotificationIds, setLastNotificationIds] = useState(new Set());
+  const lastIdsRef = useRef(new Set());
 
   // [New] Native Notification Permission Logic
   useEffect(() => {
@@ -114,14 +114,14 @@ const Layout = ({
         // Check for new unread notifications to trigger toasts
         if (!isInitial) {
           data.forEach((n) => {
-            if (!n.isRead && !lastNotificationIds.has(n._id)) {
+            if (!n.isRead && !lastIdsRef.current.has(n._id)) {
               addToast(n);
             }
           });
         }
 
         // Update tracking IDs
-        setLastNotificationIds(new Set(data.map((n) => n._id)));
+        lastIdsRef.current = new Set(data.map((n) => n._id));
       }
     } catch (err) {
       console.error("Error fetching notifications:", err);
@@ -155,7 +155,7 @@ const Layout = ({
       const res = await fetch("/api/notifications", { method: "DELETE" });
       if (res.ok) {
         setNotifications([]);
-        setLastNotificationIds(new Set());
+        lastIdsRef.current = new Set();
         setNotificationCount(0);
       }
     } catch (err) {
