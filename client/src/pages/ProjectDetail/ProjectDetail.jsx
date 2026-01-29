@@ -244,11 +244,16 @@ const ProjectDetail = ({ onProjectChange, user }) => {
 
   const isEmergency =
     project.priority === "Urgent" || project.projectType === "Emergency";
+  const isCorporate = project.projectType === "Corporate Job";
+  const isQuote = project.projectType === "Quote";
+
+  let themeClass = "";
+  if (isEmergency) themeClass = "emergency-theme";
+  else if (isCorporate) themeClass = "corporate-theme";
+  else if (isQuote) themeClass = "quote-theme";
 
   return (
-    <div
-      className={`project-detail-container ${isEmergency ? "emergency-theme" : ""}`}
-    >
+    <div className={`project-detail-container ${themeClass}`}>
       {isEmergency && (
         <div
           style={{
@@ -261,6 +266,34 @@ const ProjectDetail = ({ onProjectChange, user }) => {
           }}
         >
           🔥 EMERGENCY PROJECT
+        </div>
+      )}
+      {isCorporate && (
+        <div
+          style={{
+            background: "#f0fdf4",
+            color: "#166534",
+            padding: "0.5rem 1rem",
+            textAlign: "center",
+            fontWeight: "bold",
+            borderBottom: "1px solid #bbf7d0",
+          }}
+        >
+          🏢 CORPORATE JOB
+        </div>
+      )}
+      {isQuote && (
+        <div
+          style={{
+            background: "#fffbeb",
+            color: "#b45309",
+            padding: "0.5rem 1rem",
+            textAlign: "center",
+            fontWeight: "bold",
+            borderBottom: "1px solid #fde68a",
+          }}
+        >
+          📜 QUOTE REQUEST
         </div>
       )}
       <header className="project-header">

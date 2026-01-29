@@ -887,3 +887,89 @@ textarea.input-field {
 .project-detail-container.emergency-theme .edit-link {
   color: #dc2626;
 }
+
+/* Corporate Theme (Green) */
+.project-detail-container.corporate-theme .project-header {
+  border-bottom: 2px solid #bbf7d0;
+  background-color: #f0fdf4;
+}
+
+.project-detail-container.corporate-theme .project-title {
+  color: #166534;
+}
+
+.project-detail-container.corporate-theme .status-badge {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.project-detail-container.corporate-theme .detail-card {
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.05);
+}
+
+.project-detail-container.corporate-theme .card-title {
+  color: #166534;
+}
+
+.project-detail-container.corporate-theme .dept-tag {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.project-detail-container.corporate-theme .btn-primary {
+  background-color: #16a34a;
+}
+
+.project-detail-container.corporate-theme .btn-primary:hover {
+  background-color: #15803d;
+}
+
+.project-detail-container.corporate-theme .edit-link {
+  color: #166534;
+}
+
+/* Quote Theme (Yellow/Amber) */
+.project-detail-container.quote-theme .project-header {
+  border-bottom: 2px solid #fde68a;
+  background-color: #fffbeb;
+}
+
+.project-detail-container.quote-theme .project-title {
+  color: #b45309;
+}
+
+.project-detail-container.quote-theme .status-badge {
+  background-color: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.project-detail-container.quote-theme .detail-card {
+  border: 1px solid #fde68a;
+  box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.05);
+}
+
+.project-detail-container.quote-theme .card-title {
+  color: #b45309;
+}
+
+.project-detail-container.quote-theme .dept-tag {
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.project-detail-container.quote-theme .btn-primary {
+  background-color: #d97706;
+}
+
+.project-detail-container.quote-theme .btn-primary:hover {
+  background-color: #b45309;
+}
+
+.project-detail-container.quote-theme .edit-link {
+  color: #b45309;
+}
