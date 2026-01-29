@@ -144,7 +144,7 @@ const EndOfDayUpdate = ({ user }) => {
         if (project.details?.deliveryDate) {
           const deliveryDate = new Date(project.details.deliveryDate);
           const hoursDiff = differenceInHours(deliveryDate, new Date());
-          if (hoursDiff <= 24) {
+          if (hoursDiff <= 72) {
             isUrgent = true;
           }
         }
@@ -433,10 +433,17 @@ const EndOfDayUpdate = ({ user }) => {
                       return "row-standard";
                   }
                 };
+                const isUrgent =
+                  project.details?.deliveryDate &&
+                  differenceInHours(
+                    new Date(project.details.deliveryDate),
+                    new Date(),
+                  ) <= 72;
+
                 return (
                   <tr
                     key={project._id}
-                    className={getRowClass(project.projectType)}
+                    className={`${getRowClass(project.projectType)} ${isUrgent ? "is-urgent" : ""}`}
                   >
                     <td>
                       {project.projectLeadId

@@ -101,6 +101,16 @@
   background-color: #eff6ff;
 }
 
+.is-urgent td {
+  color: #ef4444 !important;
+}
+
+.is-urgent .time-sub,
+.is-urgent .update-date,
+.is-urgent .update-content p {
+  color: #ef4444 !important;
+}
+
 .delivery-cell {
   display: flex;
   flex-direction: column;
