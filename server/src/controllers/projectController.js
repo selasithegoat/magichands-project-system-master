@@ -273,7 +273,15 @@ const getProjects = async (req, res) => {
     res.json(projects);
   } catch (error) {
     console.error("Error fetching projects:", error);
-    res.status(500).json({ message: "Server Error" });
+    // DEBUG LOGGING
+    const fs = require("fs");
+    const path = require("path");
+    const logPath = path.join(__dirname, "../../error_log.txt");
+    fs.appendFileSync(
+      logPath,
+      `${new Date().toISOString()} - Error fetching projects: ${error.stack}\n`,
+    );
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 

@@ -12,6 +12,8 @@ import {
   BorderStyle,
   PageOrientation,
   AlignmentType,
+  Footer,
+  Header,
 } from "docx";
 import { saveAs } from "file-saver";
 import { format, differenceInHours } from "date-fns";
@@ -88,7 +90,7 @@ const EndOfDayUpdate = ({ user }) => {
         : "User";
       // Refinement: Month in words (MMMM)
       const dateStr = format(new Date(), "EEEE. dd MMMM yy");
-      const titleText = `SCRUM UPDATE - ${userName} - ${dateStr}`;
+      // Title text is now used in Header, not body
 
       const tableRows = [
         new TableRow({
@@ -110,14 +112,15 @@ const EndOfDayUpdate = ({ user }) => {
                         bold: true,
                         size: 24,
                         color: "000000",
-                      }), // White text
+                        font: "Calibri",
+                      }),
                     ],
                     alignment: AlignmentType.CENTER,
                   }),
                 ],
                 width: { size: 16, type: WidthType.PERCENTAGE },
-                shading: { fill: "ffffff" }, // Indigo Header Background
-                margins: { top: 100, bottom: 100, left: 100, right: 100 }, // Padding
+                shading: { fill: "ffffff" },
+                margins: { top: 100, bottom: 100, left: 100, right: 100 },
               }),
           ),
         }),
@@ -136,7 +139,7 @@ const EndOfDayUpdate = ({ user }) => {
           ? project.endOfDayUpdate
           : "No final update yet";
 
-        // Urgency Check: Red text if delivery date is within 24 hours (or past)
+        // Urgency Check
         let isUrgent = false;
         if (project.details?.deliveryDate) {
           const deliveryDate = new Date(project.details.deliveryDate);
@@ -178,21 +181,119 @@ const EndOfDayUpdate = ({ user }) => {
                   children: [
                     new Paragraph({
                       children: [
-                        new TextRun({ text: text || "", color: textColor }),
+                        new TextRun({
+                          text: text || "",
+                          color: textColor,
+                          font: "Calibri",
+                        }),
                       ],
                       alignment: AlignmentType.LEFT,
                     }),
                   ],
                   width: { size: 16, type: WidthType.PERCENTAGE },
                   shading: { fill: rowColor },
-                  margins: { top: 100, bottom: 100, left: 100, right: 100 }, // Padding
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
             ),
           }),
         );
       });
 
+      // Custom Header Table (Invisible Borders)
+      const headerTable = new Table({
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: userName,
+                        bold: true,
+                        font: "Calibri",
+                      }),
+                    ],
+                    alignment: AlignmentType.LEFT,
+                  }),
+                ],
+                width: { size: 30, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.NONE },
+                  bottom: { style: BorderStyle.NONE },
+                  left: { style: BorderStyle.NONE },
+                  right: { style: BorderStyle.NONE },
+                  insideVertical: { style: BorderStyle.NONE },
+                },
+              }),
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: "SCRUM UPDATE",
+                        bold: true,
+                        size: 28,
+                        font: "Calibri",
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                  }),
+                ],
+                width: { size: 40, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.NONE },
+                  bottom: { style: BorderStyle.NONE },
+                  left: { style: BorderStyle.NONE },
+                  right: { style: BorderStyle.NONE },
+                  insideVertical: { style: BorderStyle.NONE },
+                },
+              }),
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: dateStr,
+                        bold: true,
+                        font: "Calibri",
+                      }),
+                    ],
+                    alignment: AlignmentType.RIGHT,
+                  }),
+                ],
+                width: { size: 30, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.NONE },
+                  bottom: { style: BorderStyle.NONE },
+                  left: { style: BorderStyle.NONE },
+                  right: { style: BorderStyle.NONE },
+                  insideVertical: { style: BorderStyle.NONE },
+                },
+              }),
+            ],
+          }),
+        ],
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.NONE },
+          bottom: { style: BorderStyle.NONE },
+          left: { style: BorderStyle.NONE },
+          right: { style: BorderStyle.NONE },
+          insideVertical: { style: BorderStyle.NONE },
+        },
+      });
+
       const doc = new Document({
+        styles: {
+          default: {
+            document: {
+              run: {
+                font: "Calibri",
+              },
+            },
+          },
+        },
         sections: [
           {
             properties: {
@@ -202,13 +303,31 @@ const EndOfDayUpdate = ({ user }) => {
                 },
               },
             },
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({ text: titleText, bold: true, size: 32 }),
-                ],
-                spacing: { after: 400 },
+            headers: {
+              default: new Header({
+                children: [headerTable],
               }),
+            },
+            footers: {
+              default: new Footer({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: "OFFICIAL DOCUMENT OF MAGICHANDS CO. LTD.",
+                        bold: true,
+                        size: 20, // 10pt
+                        color: "64748B",
+                        font: "Calibri",
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                  }),
+                ],
+              }),
+            },
+            children: [
+              // No Title Paragraph here anymore
               new Table({
                 rows: tableRows,
                 width: { size: 100, type: WidthType.PERCENTAGE },
@@ -243,7 +362,7 @@ const EndOfDayUpdate = ({ user }) => {
       });
 
       const blob = await Packer.toBlob(doc);
-      saveAs(blob, `${titleText}.docx`);
+      saveAs(blob, `SCRUM UPDATE - ${userName} - ${dateStr}.docx`);
     } catch (error) {
       console.error("Error generating document:", error);
       alert("Failed to generate document.");
