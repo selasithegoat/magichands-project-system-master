@@ -163,7 +163,11 @@ const Layout = ({
     }
   };
 
-  const handleMarkSingleRead = async (id, projectId) => {
+  const handleMarkSingleRead = async (notification) => {
+    const id = notification._id;
+    const projectId = notification.project?._id || notification.project;
+    const type = notification.type;
+
     try {
       const res = await fetch(`/api/notifications/${id}/read`, {
         method: "PATCH",
@@ -174,10 +178,32 @@ const Layout = ({
         );
         setNotificationCount((prev) => Math.max(0, prev - 1));
 
+        // Close modals
+        setIsNotificationOpen(false);
+        setIsMobileMenuOpen(false);
+
+        // Intelligent Routing based on notification type
         if (projectId) {
-          setIsNotificationOpen(false);
-          setIsMobileMenuOpen(false);
-          navigate(`/projects/${projectId}`);
+          switch (type) {
+            case "ACTIVITY":
+              navigate(`/projects/${projectId}?tab=Activities`);
+              break;
+            case "UPDATE":
+              navigate(`/projects/${projectId}?tab=Updates`);
+              break;
+            case "ASSIGNMENT":
+              // Navigate to project details for assigned project
+              navigate(`/projects/${projectId}`);
+              break;
+            case "ACCEPTANCE":
+              navigate(`/projects/${projectId}`);
+              break;
+            default:
+              navigate(`/projects/${projectId}`);
+          }
+        } else if (type === "SYSTEM") {
+          // System notifications with no project context - go to dashboard
+          navigate("/dashboard");
         }
       }
     } catch (err) {

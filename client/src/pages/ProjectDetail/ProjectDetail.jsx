@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { DEPARTMENTS, getDepartmentLabel } from "../../constants/departments";
 import "./ProjectDetail.css";
 import UserAvatar from "../../components/ui/UserAvatar";
@@ -82,7 +82,9 @@ const getStatusColor = (status) => {
 const ProjectDetail = ({ onProjectChange, user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("Overview");
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabParam || "Overview");
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

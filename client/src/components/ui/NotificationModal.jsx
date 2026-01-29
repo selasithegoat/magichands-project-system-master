@@ -74,7 +74,7 @@ const NotificationModal = ({
                 <div
                   key={n._id}
                   className="notif-item unread"
-                  onClick={() => onMarkRead(n._id, n.project?._id || n.project)}
+                  onClick={() => onMarkRead(n)}
                 >
                   <div
                     className={`notif-icon-wrapper ${n.type === "ASSIGNMENT" ? "red-bg" : "blue-light-bg"}`}
@@ -105,7 +105,7 @@ const NotificationModal = ({
                 <div
                   key={n._id}
                   className="notif-item"
-                  onClick={() => onMarkRead(n._id, n.project?._id || n.project)}
+                  onClick={() => onMarkRead(n)}
                 >
                   <div className="notif-icon-wrapper gray-bg">
                     {n.type === "ASSIGNMENT" ? "📌" : "🔔"}
