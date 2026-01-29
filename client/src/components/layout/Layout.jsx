@@ -189,22 +189,27 @@ const Layout = ({
 
         // Intelligent Routing based on notification type
         if (projectId) {
-          switch (type) {
-            case "ACTIVITY":
-              navigate(`/detail/${projectId}?tab=Activities`);
-              break;
-            case "UPDATE":
-              navigate(`/detail/${projectId}?tab=Updates`);
-              break;
-            case "ASSIGNMENT":
-              // Navigate to project details for assigned project
-              navigate(`/detail/${projectId}`);
-              break;
-            case "ACCEPTANCE":
-              navigate(`/detail/${projectId}`);
-              break;
-            default:
-              navigate(`/detail/${projectId}`);
+          // Special Case: End of Day Update for Front Desk
+          if (notification.title === "Final Update Posted") {
+            navigate("/end-of-day");
+          } else {
+            switch (type) {
+              case "ACTIVITY":
+                navigate(`/detail/${projectId}?tab=Activities`);
+                break;
+              case "UPDATE":
+                navigate(`/detail/${projectId}?tab=Updates`);
+                break;
+              case "ASSIGNMENT":
+                // Navigate to project details for assigned project
+                navigate(`/detail/${projectId}`);
+                break;
+              case "ACCEPTANCE":
+                navigate(`/detail/${projectId}`);
+                break;
+              default:
+                navigate(`/detail/${projectId}`);
+            }
           }
         } else if (type === "SYSTEM") {
           // System notifications with no project context - go to dashboard

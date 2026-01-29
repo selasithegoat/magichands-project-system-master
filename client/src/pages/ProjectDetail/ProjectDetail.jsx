@@ -434,6 +434,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               )}
               <DepartmentsCard
                 departments={project.departments}
+                acknowledgements={project.acknowledgements}
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
@@ -639,6 +640,7 @@ const QuoteChecklistCard = ({ project }) => {
 
 const DepartmentsCard = ({
   departments = [],
+  acknowledgements = [],
   projectId,
   onUpdate,
   readOnly = false,
@@ -704,15 +706,37 @@ const DepartmentsCard = ({
       </div>
       <div className="dept-list">
         {departments.length > 0 ? (
-          departments.map((dept, index) => (
-            <span key={index} className="dept-tag">
-              <span
-                className="dept-dot"
-                style={{ background: "#3b82f6" }}
-              ></span>{" "}
-              {getDepartmentLabel(dept)}
-            </span>
-          ))
+          departments.map((dept, index) => {
+            const isAcknowledged = acknowledgements?.some(
+              (a) => a.department === dept,
+            );
+            return (
+              <span key={index} className="dept-tag">
+                <span
+                  className="dept-dot"
+                  style={{ background: isAcknowledged ? "#10b8a6" : "#3b82f6" }}
+                ></span>{" "}
+                {getDepartmentLabel(dept)}
+                {isAcknowledged && (
+                  <span
+                    className="acknowledged-badge"
+                    style={{
+                      marginLeft: "0.5rem",
+                      fontSize: "0.65rem",
+                      fontWeight: "700",
+                      background: "#10b8a6",
+                      color: "#fff",
+                      padding: "1px 6px",
+                      borderRadius: "4px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    ✓ Acknowledged
+                  </span>
+                )}
+              </span>
+            );
+          })
         ) : (
           <span style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
             No departments assigned

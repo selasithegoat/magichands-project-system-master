@@ -26,6 +26,7 @@ const {
   deleteProject, // [NEW]
   getClients, // [NEW]
   reopenProject, // [NEW]
+  acknowledgeProject,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -69,6 +70,7 @@ router.delete(
 
 router.patch("/:id/status", protect, updateProjectStatus);
 router.patch("/:id/reopen", protect, reopenProject); // [NEW] - Reopen completed project
+router.post("/:id/acknowledge", protect, acknowledgeProject); // [NEW] - Acknowledge engagement
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, deleteProject); // Delete Project
 router.put(

@@ -215,6 +215,12 @@
   color: #14b8a6;
 }
 
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .update-btn {
   padding: 0.5rem 1rem;
   background: linear-gradient(135deg, #3b82f6, #2563eb);
@@ -225,11 +231,30 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  width: 100%;
 }
 
 .update-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.acknowledge-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #10b8a6, #0d9488);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.acknowledge-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 184, 166, 0.3);
 }
 
 .empty-state {

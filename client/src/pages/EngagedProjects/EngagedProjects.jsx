@@ -241,6 +241,33 @@ const EngagedProjects = ({ user }) => {
     }
   };
 
+  const handleAcknowledge = async (project, department) => {
+    try {
+      const res = await fetch(`/api/projects/${project._id}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ department }),
+      });
+
+      if (res.ok) {
+        setToast({
+          type: "success",
+          message: `${getDepartmentLabel(department)} acknowledged!`,
+        });
+        fetchEngagedProjects(); // Refresh the list
+      } else {
+        const errorData = await res.json();
+        setToast({
+          type: "error",
+          message: errorData.message || "Acknowledgement failed.",
+        });
+      }
+    } catch (err) {
+      console.error("Error acknowledging project:", err);
+      setToast({ type: "error", message: "An unexpected error occurred." });
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "TBD";
     return new Date(dateStr).toLocaleDateString("en-US", {
@@ -395,12 +422,32 @@ const EngagedProjects = ({ user }) => {
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="update-btn"
-                        onClick={() => handleOpenUpdateModal(project)}
-                      >
-                        Update
-                      </button>
+                      <div className="action-buttons">
+                        <button
+                          className="update-btn"
+                          onClick={() => handleOpenUpdateModal(project)}
+                        >
+                          Update
+                        </button>
+                        {project.departments
+                          .filter((dept) => engagedSubDepts.includes(dept))
+                          .filter(
+                            (dept) =>
+                              !project.acknowledgements?.some(
+                                (a) => a.department === dept,
+                              ),
+                          )
+                          .map((dept) => (
+                            <button
+                              key={dept}
+                              className="acknowledge-btn"
+                              onClick={() => handleAcknowledge(project, dept)}
+                              title={`Accept engagement for ${getDepartmentLabel(dept)}`}
+                            >
+                              Accept Engagement
+                            </button>
+                          ))}
+                      </div>
                     </td>
                   </tr>
                 );

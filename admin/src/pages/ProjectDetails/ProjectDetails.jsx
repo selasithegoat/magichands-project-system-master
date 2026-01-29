@@ -1302,11 +1302,26 @@ const ProjectDetails = ({ user }) => {
               </label>
               <div style={{ marginTop: "0.5rem" }}>
                 {project.departments && project.departments.length > 0 ? (
-                  project.departments.map((dept, i) => (
-                    <span key={i} className="dept-tag">
-                      {dept}
-                    </span>
-                  ))
+                  project.departments.map((dept, i) => {
+                    const isAcknowledged = project.acknowledgements?.some(
+                      (a) => a.department === dept,
+                    );
+                    return (
+                      <span
+                        key={i}
+                        className={`dept-tag ${isAcknowledged ? "acknowledged" : ""}`}
+                      >
+                        {dept}
+                        {isAcknowledged && (
+                          <span
+                            style={{ marginLeft: "4px", fontSize: "0.7rem" }}
+                          >
+                            ✓
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })
                 ) : (
                   <p
                     style={{

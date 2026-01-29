@@ -1366,6 +1366,70 @@ const deleteProject = async (req, res) => {
   }
 };
 
+// @desc    Acknowledge project engagement by a department
+// @route   POST /api/projects/:id/acknowledge
+// @access  Private
+const acknowledgeProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { department } = req.body;
+
+    if (!department) {
+      return res.status(400).json({ message: "Department is required" });
+    }
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check if department has already acknowledged
+    const existingIndex = project.acknowledgements.indexOf(
+      (a) => a.department === department,
+    );
+
+    if (existingIndex > -1) {
+      return res
+        .status(400)
+        .json({ message: "Department already acknowledged" });
+    }
+
+    project.acknowledgements.push({
+      department,
+      user: req.user._id,
+      date: new Date(),
+    });
+
+    await project.save();
+
+    // Log Activity
+    await logActivity(
+      project._id,
+      req.user._id,
+      "engagement_acknowledge",
+      `${department} department has acknowledged the project engagement.`,
+      { department },
+    );
+
+    // Notify Project Lead
+    if (project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "ACTIVITY",
+        "Department Acknowledgement",
+        `${department} department has acknowledged project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details.projectName}`,
+      );
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error acknowledging project:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -1392,4 +1456,5 @@ module.exports = {
   deleteProject, // [NEW]
   getClients, // [NEW]
   reopenProject, // [NEW]
+  acknowledgeProject,
 };

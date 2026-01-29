@@ -209,6 +209,13 @@ const ProjectSchema = new mongoose.Schema(
       leadSignature: String,
       submissionDate: Date,
     },
+    acknowledgements: [
+      {
+        department: String,
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        date: { type: Date, default: Date.now },
+      },
+    ],
     updates: [
       {
         date: { type: Date, default: Date.now },
