@@ -11,7 +11,8 @@ import {
   HelpIcon,
   SupportIcon,
 } from "../../icons/Icons";
-  const Login = ({ onLoginSuccess }) => { const [loginData, setLoginData] = useState({
+const Login = ({ onLoginSuccess }) => {
+  const [loginData, setLoginData] = useState({
     username: "",
     password: "",
     keepLogged: false,
@@ -65,13 +66,18 @@ import {
 
   return (
     <AuthLayout>
+      <h2>Admin Portal</h2>
+
       <div className="login-card">
         <div className="login-header">
           <div className="login-icon-wrapper">
-            <img className="logo-icon" src="/mhlogo.png" alt="MagicHands Logo" />
+            <img
+              className="logo-icon"
+              src="/mhlogo.png"
+              alt="MagicHands Logo"
+            />
           </div>
           <h1 className="login-title">Project Management</h1>
-          <h2>Admin Portal</h2>
           <p className="login-subtitle">
             Welcome back. Please authenticate to continue.
           </p>

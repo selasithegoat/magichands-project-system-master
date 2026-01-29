@@ -7,8 +7,7 @@ const AuthLayout = ({ children }) => {
     <div className="auth-layout">
       <header className="auth-header">
         <div className="auth-logo">
-          <ShieldIcon className="auth-logo-icon w-6 h-6" />
-          <span>MagicHands Co. Ltd</span>
+          <img className="auth-logo-icon" src="/mhlogo.png" alt="MagicHands Logo" />
         </div>
         <div className="auth-version">Enterprise Secure Gateway</div>
       </header>
@@ -17,7 +16,7 @@ const AuthLayout = ({ children }) => {
 
       <footer className="auth-footer">
         <div className="copyright">
-          © 2024 MagicHands Co. Ltd. All rights reserved.
+          © {new Date().getFullYear()} MagicHands Co. Ltd. All rights reserved.
         </div>
         
       </footer>

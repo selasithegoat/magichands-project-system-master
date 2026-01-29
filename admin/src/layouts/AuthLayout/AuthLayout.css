@@ -17,7 +17,10 @@
 }
 
 .auth-logo {
+  /* border: 1px solid red; */
   display: flex;
+  justify-content:  space-between;
+  width: 70%;
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--text-primary);
@@ -28,7 +31,8 @@
 }
 
 .auth-logo-icon {
-  color: #bae6fd; /* Light blue logo accent */
+  width: auto;
+  height: 70px;
 }
 
 .auth-version {
