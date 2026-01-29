@@ -40,7 +40,7 @@ const ProjectActivity = ({ project }) => {
       filtered = activities.filter((act) => {
         if (filter === "Status Updates") return act.action === "status_change";
         if (filter === "New Orders") return act.action === "create";
-        if (filter === "Updates (from departments)")
+        if (filter === "Updates")
           return act.action === "update_post";
         if (filter === "Project Edits")
           return [
@@ -195,7 +195,7 @@ const ProjectActivity = ({ project }) => {
           {[
             "All Activity",
             "New Orders",
-            "Updates (from departments)",
+            "Updates",
             "Status Updates",
             "Project Edits",
             "Risks & Challenges",

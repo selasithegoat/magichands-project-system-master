@@ -242,9 +242,6 @@ const ProjectUpdates = ({ project, currentUser }) => {
                           ? `${update.author.firstName} ${update.author.lastName}`
                           : "System"}
                       </span>
-                      <span className="user-role">
-                        {update.author?.role || "System"}
-                      </span>
                     </div>
                     <span className="update-time">
                       {formatTime(update.createdAt)}
