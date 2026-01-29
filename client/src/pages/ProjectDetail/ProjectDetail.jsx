@@ -358,15 +358,6 @@ const ProjectDetail = ({ onProjectChange, user }) => {
             )}
 
             {/* Only show Edit if NOT pending acceptance and NOT completed */}
-            {project.status !== "Pending Scope Approval" &&
-              project.status !== "Completed" && (
-                <button
-                  className="edit-link"
-                  onClick={() => console.log("Edit")}
-                >
-                  Edit
-                </button>
-              )}
           </div>
         </div>
 
@@ -515,11 +506,6 @@ const ProjectInfoCard = ({ project }) => {
         <h3 className="card-title">
           <span style={{ color: "#94a3b8" }}>ⓘ</span> Project Info
         </h3>
-        {project.status !== "Pending Scope Approval" && (
-          <button className="edit-link">
-            <EditIcon width="16" height="16" />
-          </button>
-        )}
       </div>
       <div className="info-grid">
         <div className="info-item">

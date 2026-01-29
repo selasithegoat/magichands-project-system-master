@@ -8,65 +8,6 @@ import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import SystemIcon from "../../components/icons/SystemIcon";
 import CreateIcon from "../../components/icons/CreateIcon";
-import FlagIcon from "../../components/icons/FlagIcon";
-
-const historyData = [
-  { type: "separator", date: "TODAY" },
-  {
-    id: 1,
-    type: "edit",
-    user: {
-      name: "Sarah Jenkins",
-      avatar: "https://i.pravatar.cc/150?u=sarah",
-    },
-    time: "10:42 AM",
-    description: "Updated delivery schedule details.",
-    change: {
-      label: "CHANGED: DELIVERY START TIME",
-      oldVal: "09:00 AM",
-      newVal: "08:00 AM",
-    },
-  },
-  {
-    id: 2,
-    type: "approval",
-    user: { name: "Mike Thompson", initials: "MT" },
-    time: "09:15 AM",
-    description: "Marked **Scope Approval** as complete.",
-  },
-  { type: "separator", date: "OCT 23, 2023" },
-  {
-    id: 3,
-    type: "risk",
-    user: { name: "Logistics Team", initials: "LG", color: "yellow" },
-    time: "4:30 PM",
-    description: "Flagged new Uncontrollable Factor",
-    alert: "Union Strike Alert",
-  },
-  {
-    id: 4,
-    type: "system",
-    user: { name: "System", initials: "sys", color: "gray" },
-    time: "2:00 PM",
-    description:
-      "Project status automatically updated based on Department Engagement.",
-    statusChange: {
-      from: "New Order",
-      to: "In Progress",
-    },
-  },
-  { type: "separator", date: "OCT 20, 2023" },
-  {
-    id: 5,
-    type: "create",
-    user: {
-      name: "Sarah Jenkins",
-      avatar: "https://i.pravatar.cc/150?u=sarah",
-    },
-    time: "11:00 AM",
-    description: "Created project #MH-2023-88.",
-  },
-];
 
 const ProjectActivity = ({ project }) => {
   const [filter, setFilter] = useState("All Activity");
@@ -231,10 +172,8 @@ const ProjectActivity = ({ project }) => {
           {[
             "All Activity",
             "Status Changes",
-            "Approvals",
             "Edits",
-            "Risks",
-          ].map((f) => (
+                    ].map((f) => (
             <div
               key={f}
               className={`filter-pill ${filter === f ? "active" : ""}`}

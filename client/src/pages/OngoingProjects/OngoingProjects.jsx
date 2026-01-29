@@ -123,7 +123,6 @@ const OngoingProjects = ({
           <h1 className="stats-main-text">{projects.length} Active Orders</h1>
           <span className="stats-sub-text">Updates synced just now</span>
         </div>
-        <a className="view-all-link">View All</a>
       </div>
 
       {/* Search */}
