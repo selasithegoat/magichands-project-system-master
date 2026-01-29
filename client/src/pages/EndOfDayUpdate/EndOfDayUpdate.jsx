@@ -285,55 +285,72 @@ const EndOfDayUpdate = ({ user }) => {
           </thead>
           <tbody>
             {projects.length > 0 ? (
-              paginatedProjects.map((project) => (
-                <tr key={project._id}>
-                  <td>
-                    {project.projectLeadId
-                      ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                      : project.details?.lead || "Unassigned"}
-                  </td>
-                  <td>{project.orderId || "N/A"}</td>
-                  <td>{project.details?.projectName || "Untitled"}</td>
-                  <td>
-                    <div className="delivery-cell">
-                      <span>{formatDate(project.details?.deliveryDate)}</span>
-                      <span className="time-sub">
-                        {formatTime(project.details?.deliveryTime)}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <span
-                      className={`status-badge ${project.status
-                        ?.toLowerCase()
-                        .replace(/\s+/g, "-")}`}
-                    >
-                      {project.status}
-                    </span>
-                  </td>
-                  <td className="update-cell">
-                    {project.endOfDayUpdate ? (
-                      <div className="update-content">
-                        <p>{project.endOfDayUpdate}</p>
-                        <span
-                          className="update-date"
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#64748b",
-                            display: "block",
-                            marginTop: "4px",
-                          }}
-                        >
-                          Last updated:{" "}
-                          {formatDateTime(project.endOfDayUpdateDate)}
+              paginatedProjects.map((project) => {
+                const getRowClass = (type) => {
+                  switch (type) {
+                    case "Emergency":
+                      return "row-emergency";
+                    case "Corporate Job":
+                      return "row-corporate";
+                    case "Quote":
+                      return "row-quote";
+                    default:
+                      return "row-standard";
+                  }
+                };
+                return (
+                  <tr
+                    key={project._id}
+                    className={getRowClass(project.projectType)}
+                  >
+                    <td>
+                      {project.projectLeadId
+                        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+                        : project.details?.lead || "Unassigned"}
+                    </td>
+                    <td>{project.orderId || "N/A"}</td>
+                    <td>{project.details?.projectName || "Untitled"}</td>
+                    <td>
+                      <div className="delivery-cell">
+                        <span>{formatDate(project.details?.deliveryDate)}</span>
+                        <span className="time-sub">
+                          {formatTime(project.details?.deliveryTime)}
                         </span>
                       </div>
-                    ) : (
-                      <span className="no-update">No final update yet</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td>
+                      <span
+                        className={`status-badge ${project.status
+                          ?.toLowerCase()
+                          .replace(/\s+/g, "-")}`}
+                      >
+                        {project.status}
+                      </span>
+                    </td>
+                    <td className="update-cell">
+                      {project.endOfDayUpdate ? (
+                        <div className="update-content">
+                          <p>{project.endOfDayUpdate}</p>
+                          <span
+                            className="update-date"
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "#64748b",
+                              display: "block",
+                              marginTop: "4px",
+                            }}
+                          >
+                            Last updated:{" "}
+                            {formatDateTime(project.endOfDayUpdateDate)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="no-update">No final update yet</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan="6" className="empty-state">

@@ -82,7 +82,23 @@
 }
 
 .update-table tbody tr:hover {
-  background-color: #f8fafc;
+  filter: brightness(
+    0.98
+  ); /* Slight darken on hover instead of fixed color to support colored rows */
+}
+
+/* Row Coloring by Project Type */
+.row-emergency {
+  background-color: #fef2f2;
+}
+.row-corporate {
+  background-color: #f0fdf4;
+}
+.row-quote {
+  background-color: #fffbeb;
+}
+.row-standard {
+  background-color: #eff6ff;
 }
 
 .delivery-cell {
