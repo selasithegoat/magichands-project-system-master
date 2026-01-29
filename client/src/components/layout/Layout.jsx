@@ -55,6 +55,7 @@ const Layout = ({
   const [notificationCount, setNotificationCount] = useState(0);
   const [toasts, setToasts] = useState([]);
   const lastIdsRef = useRef(new Set());
+  const shownToastsRef = useRef(new Set()); // Track notification IDs already shown as toasts
 
   // [New] Native Notification Permission Logic
   useEffect(() => {
@@ -83,6 +84,12 @@ const Layout = ({
   };
 
   const addToast = (notification) => {
+    // Prevent duplicate toasts
+    if (shownToastsRef.current.has(notification._id)) {
+      return;
+    }
+    shownToastsRef.current.add(notification._id);
+
     // Show Native Notification
     showNativeNotification(notification);
 
@@ -111,23 +118,12 @@ const Layout = ({
         const unreadCount = data.filter((n) => !n.isRead).length;
         setNotificationCount(unreadCount);
 
-        // Check for new unread notifications to trigger toasts
-        // On initial load, show toasts for all unread
-        // On subsequent polls, show only for new unread
-        if (isInitial) {
-          // Show toast for each unread notification on initial load
-          data.forEach((n) => {
-            if (!n.isRead) {
-              addToast(n);
-            }
-          });
-        } else {
-          data.forEach((n) => {
-            if (!n.isRead && !lastIdsRef.current.has(n._id)) {
-              addToast(n);
-            }
-          });
-        }
+        // Show toasts for unread notifications not yet shown
+        data.forEach((n) => {
+          if (!n.isRead && !shownToastsRef.current.has(n._id)) {
+            addToast(n);
+          }
+        });
 
         // Update tracking IDs
         lastIdsRef.current = new Set(data.map((n) => n._id));
@@ -140,7 +136,7 @@ const Layout = ({
   useEffect(() => {
     if (user) {
       fetchNotifications(true);
-      const interval = setInterval(() => fetchNotifications(false), 30000); // 30s
+      const interval = setInterval(() => fetchNotifications(false), 5000); // 5s for near real-time
       return () => clearInterval(interval);
     }
   }, [user]);
