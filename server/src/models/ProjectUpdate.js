@@ -14,7 +14,17 @@ const ProjectUpdateSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["General", "Production", "Client", "Design"],
+      enum: [
+        "General",
+        "Production",
+        "Design",
+        "Graphics",
+        "Graphics/Design",
+        "Photography",
+        "Stores",
+        "IT Department",
+        "Client",
+      ],
       default: "General",
     },
     content: {
@@ -29,7 +39,7 @@ const ProjectUpdateSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("ProjectUpdate", ProjectUpdateSchema);

@@ -13,6 +13,7 @@ const ProjectActivity = ({ project }) => {
   const [filter, setFilter] = useState("All Activity");
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (project?._id) {
@@ -33,32 +34,50 @@ const ProjectActivity = ({ project }) => {
   };
 
   const getFilteredActivities = () => {
-    if (filter === "All Activity") return activities;
-    // Simple mapping for filters
-    // "Status Changes" -> status_change
-    // "Approvals" -> approval
-    // "Edits" -> update, challenge_update, risk_update, item_update, departments_update, factor_update
-    // "Risks" -> risk_add, challenge_add, factor_add
-    // "System" -> system
-    return activities.filter((act) => {
-      if (filter === "Status Changes") return act.action === "status_change";
-      if (filter === "Approvals") return act.action === "approval";
-      if (filter === "Edits")
-        return [
-          "update",
-          "challenge_update",
-          "challenge_delete",
-          "item_add",
-          "item_delete",
-          "item_update",
-          "departments_update",
-          "factor_update",
-          "risk_update",
-        ].includes(act.action);
-      if (filter === "Risks")
-        return ["risk_add", "challenge_add", "factor_add"].includes(act.action);
-      return true;
-    });
+    let filtered = activities;
+
+    if (filter !== "All Activity") {
+      filtered = activities.filter((act) => {
+        if (filter === "Status Updates") return act.action === "status_change";
+        if (filter === "New Orders") return act.action === "create";
+        if (filter === "Updates (from departments)")
+          return act.action === "update_post";
+        if (filter === "Project Edits")
+          return [
+            "update",
+            "challenge_update",
+            "challenge_delete",
+            "item_add",
+            "item_delete",
+            "item_update",
+            "departments_update",
+            "factor_update",
+            "risk_update",
+          ].includes(act.action);
+        if (filter === "Risks & Challenges")
+          return ["risk_add", "challenge_add", "factor_add"].includes(
+            act.action,
+          );
+        return true;
+      });
+    }
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((act) => {
+        const descMatch = act.description?.toLowerCase().includes(term);
+        const actionMatch = act.action?.toLowerCase().includes(term);
+        const userMatch = `${act.user?.firstName} ${act.user?.lastName}`
+          .toLowerCase()
+          .includes(term);
+        const categoryMatch = act.details?.category
+          ?.toLowerCase()
+          .includes(term);
+        return descMatch || actionMatch || userMatch || categoryMatch;
+      });
+    }
+
+    return filtered;
   };
 
   // Helper to format item date
@@ -118,6 +137,7 @@ const ProjectActivity = ({ project }) => {
       case "factor_update":
       case "risk_update":
       case "challenge_delete":
+      case "update_post":
         return <EditIcon />;
       default:
         return <SystemIcon />;
@@ -146,6 +166,7 @@ const ProjectActivity = ({ project }) => {
       case "factor_update":
       case "risk_update":
       case "challenge_delete":
+      case "update_post":
         return "card-update";
       default:
         return "card-system";
@@ -166,14 +187,19 @@ const ProjectActivity = ({ project }) => {
             type="text"
             className="history-search-input"
             placeholder="Search activity log..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="history-filters">
           {[
             "All Activity",
-            "Status Changes",
-            "Edits",
-                    ].map((f) => (
+            "New Orders",
+            "Updates (from departments)",
+            "Status Updates",
+            "Project Edits",
+            "Risks & Challenges",
+          ].map((f) => (
             <div
               key={f}
               className={`filter-pill ${filter === f ? "active" : ""}`}
@@ -199,76 +225,21 @@ const ProjectActivity = ({ project }) => {
           return (
             <div key={item._id} className="timeline-item">
               <div
-                className={`history-icon-wrapper ${
-                  item.action.includes("create")
-                    ? "blue"
-                    : item.action.includes("approval")
-                    ? "green"
-                    : item.action.includes("delete")
-                    ? "red"
-                    : item.action.includes("risk") ||
-                      item.action.includes("fact") ||
-                      item.action.includes("chall")
-                    ? "orange" // Risks/Challenges/Factors are orange warning style or red
-                    : "orange" // Updates are orange/yellow
-                  // Refine colors:
-                  // Create: Blue
-                  // Approval: Green
-                  // Add: Green
-                  // Delete: Red
-                  // Risk/Challenge/Factor Add: Red (Alert)
-                  // Update: Orange
-                } ${
-                  // Override specific complex logic if needed, simpler to just map classes in a helper,
-                  // but for now verifying against MyActivities styles:
-                  // blue, green, orange, purple, red, gray
-                  ""
-                }`}
-              >
-                {/* Specific logic for helper function to clean this up */}
-                {(() => {
-                  if (item.action.includes("create"))
-                    return (
-                      <div className="activity-icon-large blue">
-                        {renderIcon(item.action)}
-                      </div>
-                    );
-                  if (item.action.includes("approval"))
-                    return (
-                      <div className="activity-icon-large green">
-                        {renderIcon(item.action)}
-                      </div>
-                    );
-                  if (item.action.includes("delete"))
-                    return (
-                      <div className="activity-icon-large red">
-                        {renderIcon(item.action)}
-                      </div>
-                    );
+                className={`history-icon-wrapper ${(() => {
+                  if (item.action === "create") return "create";
+                  if (item.action.includes("approval")) return "approval";
+                  if (item.action.includes("delete")) return "risk";
                   if (
-                    item.action.includes("risk") ||
+                    item.action.includes("risk_add") ||
                     item.action.includes("challenge_add") ||
                     item.action.includes("factor_add")
                   )
-                    return (
-                      <div className="activity-icon-large red">
-                        {renderIcon(item.action)}
-                      </div>
-                    );
-                  if (item.action.includes("add"))
-                    // Item add
-                    return (
-                      <div className="activity-icon-large green">
-                        {renderIcon(item.action)}
-                      </div>
-                    );
-                  return (
-                    // Default Update/Edit
-                    <div className="activity-icon-large orange">
-                      {renderIcon(item.action)}
-                    </div>
-                  );
-                })()}
+                    return "risk";
+                  if (item.action === "status_change") return "system";
+                  return "edit";
+                })()}`}
+              >
+                {renderIcon(item.action)}
               </div>
 
               {/* Card */}

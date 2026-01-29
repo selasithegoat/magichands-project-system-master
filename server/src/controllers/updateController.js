@@ -1,6 +1,7 @@
 const ProjectUpdate = require("../models/ProjectUpdate");
 const Project = require("../models/Project");
 const { createNotification } = require("../utils/notificationService");
+const { logActivity } = require("../utils/activityLogger");
 
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
@@ -99,6 +100,15 @@ exports.createProjectUpdate = async (req, res) => {
         );
       }
     }
+
+    // [New] Log activity for this update
+    await logActivity(
+      project._id,
+      req.user.id,
+      "update_post",
+      `Posted a new update in ${category} category`,
+      { category, updateId: newUpdate._id, isEndOfDay: isEOD },
+    );
 
     res.status(201).json(newUpdate);
   } catch (error) {

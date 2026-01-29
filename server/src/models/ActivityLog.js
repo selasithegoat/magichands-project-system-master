@@ -32,6 +32,7 @@ const ActivityLogSchema = new mongoose.Schema(
         "departments_update", // [NEW]
         "factor_add", // [NEW]
         "factor_update", // [NEW]
+        "update_post", // [NEW]
       ],
     },
     description: {
@@ -44,7 +45,7 @@ const ActivityLogSchema = new mongoose.Schema(
       default: {},
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("ActivityLog", ActivityLogSchema);
