@@ -109,14 +109,14 @@ const EndOfDayUpdate = ({ user }) => {
                         text,
                         bold: true,
                         size: 24,
-                        color: "FFFFFF",
+                        color: "000000",
                       }), // White text
                     ],
                     alignment: AlignmentType.CENTER,
                   }),
                 ],
                 width: { size: 16, type: WidthType.PERCENTAGE },
-                shading: { fill: "4F46E5" }, // Indigo Header Background
+                shading: { fill: "ffffff" }, // Indigo Header Background
                 margins: { top: 100, bottom: 100, left: 100, right: 100 }, // Padding
               }),
           ),
@@ -148,6 +148,21 @@ const EndOfDayUpdate = ({ user }) => {
 
         const textColor = isUrgent ? "FF0000" : "000000";
 
+        const getRowColor = (type) => {
+          switch (type) {
+            case "Emergency":
+              return "FEF2F2";
+            case "Corporate Job":
+              return "F0FDF4";
+            case "Quote":
+              return "FFFBEB";
+            default:
+              return "EFF6FF";
+          }
+        };
+
+        const rowColor = getRowColor(project.projectType);
+
         tableRows.push(
           new TableRow({
             children: [
@@ -169,6 +184,7 @@ const EndOfDayUpdate = ({ user }) => {
                     }),
                   ],
                   width: { size: 16, type: WidthType.PERCENTAGE },
+                  shading: { fill: rowColor },
                   margins: { top: 100, bottom: 100, left: 100, right: 100 }, // Padding
                 }),
             ),
