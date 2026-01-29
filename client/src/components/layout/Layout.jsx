@@ -112,7 +112,16 @@ const Layout = ({
         setNotificationCount(unreadCount);
 
         // Check for new unread notifications to trigger toasts
-        if (!isInitial) {
+        // On initial load, show toasts for all unread
+        // On subsequent polls, show only for new unread
+        if (isInitial) {
+          // Show toast for each unread notification on initial load
+          data.forEach((n) => {
+            if (!n.isRead) {
+              addToast(n);
+            }
+          });
+        } else {
           data.forEach((n) => {
             if (!n.isRead && !lastIdsRef.current.has(n._id)) {
               addToast(n);
