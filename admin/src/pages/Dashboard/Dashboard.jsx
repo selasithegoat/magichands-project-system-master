@@ -179,7 +179,11 @@ const ProjectStatusOverview = ({ projects }) => {
         const dDate = p.details?.deliveryDate
           ? new Date(p.details.deliveryDate)
           : null;
-        if (dDate && dDate < now) {
+
+        // Count as delayed if overdue OR within 3 days (72 hours) of delivery
+        const isUrgent = dDate && dDate - now <= 3 * 24 * 60 * 60 * 1000;
+
+        if (isUrgent) {
           delayed++;
         } else {
           inProgress++;
@@ -325,7 +329,9 @@ const Dashboard = ({ user }) => {
         }
         if (p.details?.deliveryDate) {
           const dDate = new Date(p.details.deliveryDate);
-          if (dDate < now && p.status !== "Delivered") {
+          // Count as overdue if already passed OR within 3 days (72 hours)
+          const isUrgent = dDate - now <= 3 * 24 * 60 * 60 * 1000;
+          if (isUrgent && p.status !== "Delivered") {
             overdue++;
           }
         }
