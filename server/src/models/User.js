@@ -57,6 +57,10 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  notificationSettings: {
+    email: { type: Boolean, default: true },
+    push: { type: Boolean, default: false },
+  },
 });
 
 // Encrypt password using bcrypt

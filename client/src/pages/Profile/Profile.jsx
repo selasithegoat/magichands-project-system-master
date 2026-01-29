@@ -11,8 +11,12 @@ import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
 
 const Profile = ({ onSignOut, user, onUpdateProfile }) => {
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [pushNotif, setPushNotif] = useState(false);
+  const [emailNotif, setEmailNotif] = useState(
+    user?.notificationSettings?.email ?? true,
+  );
+  const [pushNotif, setPushNotif] = useState(
+    user?.notificationSettings?.push ?? false,
+  );
 
   // User Data State
   const [formData, setFormData] = useState({
@@ -44,6 +48,8 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         department: user.department || "",
         contact: user.contact || "",
       });
+      setEmailNotif(user.notificationSettings?.email ?? true);
+      setPushNotif(user.notificationSettings?.push ?? false);
       setLoading(false);
     }
   }, [user]);
@@ -153,7 +159,13 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          notificationSettings: {
+            email: emailNotif,
+            push: pushNotif,
+          },
+        }),
       });
 
       if (res.ok) {
@@ -250,7 +262,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               <h3>
                 <span style={{ marginRight: "0.5rem" }}>👤</span> My Profile
               </h3>
-
             </div>
 
             {message && (

@@ -1,7 +1,9 @@
 const Notification = require("../models/Notification");
+const User = require("../models/User");
+const { sendEmail } = require("./emailService");
 
 /**
- * Create a new notification
+ * Create a new notification and trigger delivery channels based on user preferences
  * @param {string} recipientId - User ID of the recipient
  * @param {string} senderId - User ID of the sender
  * @param {string} projectId - ID of the related project (optional)
@@ -23,6 +25,10 @@ const createNotification = async (
       return null;
     }
 
+    // Fetch recipient to check notification preferences
+    const recipient = await User.findById(recipientId);
+    if (!recipient) return null;
+
     const notification = await Notification.create({
       recipient: recipientId,
       sender: senderId,
@@ -31,6 +37,24 @@ const createNotification = async (
       title,
       message,
     });
+
+    // Check preferences and trigger delivery channels
+    const settings = recipient.notificationSettings || {
+      email: true,
+      push: false,
+    };
+
+    if (settings.email && recipient.email) {
+      await sendEmail(recipient.email, title, message);
+    }
+
+    if (settings.push) {
+      // Stub for Push Notification Service
+      console.log(
+        `[Push Service] Triggering push to user ${recipientId}: ${title}`,
+      );
+    }
+
     return notification;
   } catch (err) {
     console.error("Failed to create notification:", err);

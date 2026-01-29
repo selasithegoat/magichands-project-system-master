@@ -167,9 +167,19 @@ const updateProfile = async (req, res) => {
     user.department = req.body.department || user.department;
     user.employeeType = req.body.employeeType || user.employeeType;
     user.contact = req.body.contact || user.contact;
-    // user.bio = req.body.bio || user.bio; // Add if needed
 
-    // If implementing avatar, handle it here usually with file upload middleware
+    if (req.body.notificationSettings) {
+      user.notificationSettings = {
+        email:
+          req.body.notificationSettings.email !== undefined
+            ? req.body.notificationSettings.email
+            : user.notificationSettings.email,
+        push:
+          req.body.notificationSettings.push !== undefined
+            ? req.body.notificationSettings.push
+            : user.notificationSettings.push,
+      };
+    }
 
     const updatedUser = await user.save();
 
@@ -183,6 +193,7 @@ const updateProfile = async (req, res) => {
       department: updatedUser.department,
       employeeType: updatedUser.employeeType,
       contact: updatedUser.contact,
+      notificationSettings: updatedUser.notificationSettings,
     });
   } else {
     res.status(404);
