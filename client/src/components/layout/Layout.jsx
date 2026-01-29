@@ -93,6 +93,11 @@ const Layout = ({
     // Show Native Notification
     showNativeNotification(notification);
 
+    // Vibrate on mobile
+    if ("vibrate" in navigator) {
+      navigator.vibrate([200, 100, 200]);
+    }
+
     const id = Date.now() + Math.random();
     setToasts((prev) => [
       ...prev,

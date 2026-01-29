@@ -1,0 +1,22 @@
+{
+  "short_name": "MagicHands",
+  "name": "MagicHands Project Form",
+  "icons": [
+    {
+      "src": "mhlogo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "mhlogo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a"
+}
