@@ -76,7 +76,7 @@ const Layout = ({
           const projectId = notification.project._id || notification.project;
           setIsNotificationOpen(false);
           setIsMobileMenuOpen(false);
-          navigate(`/projects/${projectId}`);
+          navigate(`/detail/${projectId}`);
         }
         n.close();
       };
@@ -191,20 +191,20 @@ const Layout = ({
         if (projectId) {
           switch (type) {
             case "ACTIVITY":
-              navigate(`/projects/${projectId}?tab=Activities`);
+              navigate(`/detail/${projectId}?tab=Activities`);
               break;
             case "UPDATE":
-              navigate(`/projects/${projectId}?tab=Updates`);
+              navigate(`/detail/${projectId}?tab=Updates`);
               break;
             case "ASSIGNMENT":
               // Navigate to project details for assigned project
-              navigate(`/projects/${projectId}`);
+              navigate(`/detail/${projectId}`);
               break;
             case "ACCEPTANCE":
-              navigate(`/projects/${projectId}`);
+              navigate(`/detail/${projectId}`);
               break;
             default:
-              navigate(`/projects/${projectId}`);
+              navigate(`/detail/${projectId}`);
           }
         } else if (type === "SYSTEM") {
           // System notifications with no project context - go to dashboard
@@ -434,7 +434,7 @@ const Layout = ({
             duration={6000}
             onClick={() => {
               if (toast.projectId) {
-                navigate(`/projects/${toast.projectId}`);
+                navigate(`/detail/${toast.projectId}`);
                 removeToast(toast.id);
               }
             }}
