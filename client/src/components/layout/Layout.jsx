@@ -192,6 +192,8 @@ const Layout = ({
           // Special Case: End of Day Update for Front Desk
           if (notification.title === "Final Update Posted") {
             navigate("/end-of-day");
+          } else if (notification.title === "New Project Engagement") {
+            navigate("/engaged-projects");
           } else {
             switch (type) {
               case "ACTIVITY":

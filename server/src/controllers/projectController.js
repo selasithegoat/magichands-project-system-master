@@ -477,15 +477,31 @@ const updateProjectDepartments = async (req, res) => {
     const { departments } = req.body; // Expecting array of strings
     const { id } = req.params;
 
-    const project = await Project.findByIdAndUpdate(
-      id,
-      { departments, "sectionUpdates.departments": new Date() },
-      { new: true },
-    );
+    const project = await Project.findById(id);
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    const oldDepartments = project.departments || [];
+    const newDepartments = departments || [];
+
+    // Reset acknowledgements for removed departments
+    // If a department is no longer in the engaged list, remove its acknowledgement
+    project.acknowledgements = (project.acknowledgements || []).filter((ack) =>
+      newDepartments.includes(ack.department),
+    );
+
+    // Identify newly added departments
+    const addedDepartments = newDepartments.filter(
+      (dept) => !oldDepartments.includes(dept),
+    );
+
+    project.departments = newDepartments;
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.departments = new Date();
+
+    await project.save();
 
     await logActivity(
       id,
@@ -494,6 +510,35 @@ const updateProjectDepartments = async (req, res) => {
       `Updated engaged departments`,
       { departments },
     );
+
+    // Notify newly added departments
+    if (addedDepartments.length > 0) {
+      // Find all users who are in any of the newly added departments
+      const usersToNotify = await User.find({
+        department: { $in: addedDepartments },
+      });
+
+      for (const dept of addedDepartments) {
+        // Find users specifically in THIS department
+        const deptUsers = usersToNotify.filter((u) =>
+          u.department?.includes(dept),
+        );
+
+        for (const targetUser of deptUsers) {
+          // Avoid notifying the person who made the change if they happen to be in that dept
+          if (targetUser._id.toString() === req.user.id.toString()) continue;
+
+          await createNotification(
+            targetUser._id,
+            req.user.id,
+            project._id,
+            "UPDATE",
+            "New Project Engagement",
+            `Your department (${dept}) has been engaged on project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
+          );
+        }
+      }
+    }
 
     res.json(project);
   } catch (error) {
