@@ -485,7 +485,7 @@ const Dashboard = ({ user }) => {
         {/* Right Column: Insights / Workload */}
         <div className="dashboard-side-col">
           <div className="section-header">
-            <h3 className="section-title">Workload Distribution</h3>
+            <h3 className="section-title">Team Workload Distribution</h3>
           </div>
 
           <div className="chart-card">

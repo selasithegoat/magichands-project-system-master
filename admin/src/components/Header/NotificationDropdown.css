@@ -129,7 +129,6 @@
   color: var(--text-light);
 }
 
-
 .notification-section-header {
   padding: 8px 16px;
   font-size: 11px;
@@ -142,6 +141,14 @@
   border-top: 1px solid var(--border-light);
 }
 
-.notification-section-header:first-child {
-  border-top: none;
+@media (max-width: 480px) {
+  .notification-dropdown {
+    width: calc(100vw - 32px); /* Full width minus margins */
+    margin: -70px auto;
+    height: 98vh; /* Prevent overflow vertically */
+  }
+
+  .notification-header h3 {
+    font-size: 15px;
+  }
 }
