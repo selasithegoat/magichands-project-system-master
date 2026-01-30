@@ -50,9 +50,6 @@ const createNotification = async (
 
     if (settings.push) {
       // Stub for Push Notification Service
-      console.log(
-        `[Push Service] Triggering push to user ${recipientId}: ${title}`,
-      );
     }
 
     return notification;

@@ -125,8 +125,6 @@ const ProjectDetail = ({ onProjectChange, user }) => {
 
       if (pathsToFetch.length === 0) return;
 
-      console.log("ProjectDetail: Processing images for PDF:", pathsToFetch);
-
       await Promise.all(
         pathsToFetch.map(async (path) => {
           try {

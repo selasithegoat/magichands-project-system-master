@@ -104,12 +104,6 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
           throw new Error("Failed to fetch project");
         })
         .then((data) => {
-          console.log("Wizard: Fetched Project Data", data);
-          console.log(
-            "Wizard: Attachments from DB:",
-            data.details?.attachments,
-          );
-
           // Map API data to Wizard Form Data
           // Note: API data structure matches schema (project.details.* etc)
           // Wizard expects flat structure for some fields (orderDate, etc) and 'details' fields spread?

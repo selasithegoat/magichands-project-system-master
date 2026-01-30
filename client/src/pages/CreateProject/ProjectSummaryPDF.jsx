@@ -127,8 +127,6 @@ const ProjectSummaryPDF = ({
   imageUrls = {},
   pdfType = "STANDARD",
 }) => {
-  console.log("PDF Component Rendering. Attachments:", formData.attachments);
-
   // Theme Colors
   const THEME = {
     EMERGENCY: "#e74c3c", // Red
@@ -409,8 +407,6 @@ const ProjectSummaryPDF = ({
         formData.attachments.map((path, index) => {
           // Render only if we have a resolved blob URL
           if (!imageUrls[path]) return null;
-
-          console.log(`Rendering PDF Page for: ${path}`);
 
           return (
             <Page key={index} size="A4" style={styles.page}>

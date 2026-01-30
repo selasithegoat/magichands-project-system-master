@@ -57,8 +57,6 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
 
       if (pathsToFetch.length === 0) return;
 
-      console.log("Step5: Processing images for PDF:", pathsToFetch);
-
       await Promise.all(
         pathsToFetch.map(async (path) => {
           try {

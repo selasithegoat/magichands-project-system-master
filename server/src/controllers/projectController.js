@@ -662,7 +662,6 @@ const addChallengeToProject = async (req, res) => {
   try {
     const { title, description, assistance, status } = req.body;
     // Debug logging
-    console.log("User reporting challenge:", req.user);
 
     const newChallenge = {
       title,

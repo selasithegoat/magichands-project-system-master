@@ -32,8 +32,6 @@ const Login = ({ onLoginSuccess }) => {
         password: loginData.password.trim(),
       };
 
-      console.log("Sending Login Payload:", payload); // Debug log
-
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
@@ -49,7 +47,6 @@ const Login = ({ onLoginSuccess }) => {
       }
 
       if (data.role === "admin") {
-        console.log("Admin user logged in:", data);
         if (onLoginSuccess) {
           onLoginSuccess(data);
         }

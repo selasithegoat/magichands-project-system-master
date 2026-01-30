@@ -25,7 +25,7 @@ exports.createProjectUpdate = async (req, res) => {
   try {
     const { projectId } = req.params;
     const { content, category, attachments } = req.body;
-    console.log("createProjectUpdate body:", req.body); // DEBUG
+
     const authorId = req.user._id; // Auth middleware attaches user doc to req.user
 
     // Verify project exists
@@ -54,7 +54,6 @@ exports.createProjectUpdate = async (req, res) => {
     await newUpdate.save();
 
     // If marked as End of Day Update, update the Project document
-    console.log("isEndOfDayUpdate flag:", req.body.isEndOfDayUpdate); // DEBUG
 
     const isEOD =
       req.body.isEndOfDayUpdate === "true" ||
@@ -62,13 +61,11 @@ exports.createProjectUpdate = async (req, res) => {
       req.body.isEndOfDayUpdate === "on";
 
     if (isEOD) {
-      console.log("Updating Project with End of Day Update:", content); // DEBUG
       project.endOfDayUpdate = content;
       project.endOfDayUpdateDate = new Date();
       project.endOfDayUpdateBy = req.user._id;
       await project.save();
     } else {
-      console.log("Not updating project (isEOD false)"); // DEBUG
     }
 
     // Populate author for immediate return
