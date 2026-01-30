@@ -45,7 +45,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         lastName: user.lastName || "",
         email: user.email || "",
         employeeType: user.employeeType || "Staff",
-        department: user.department || "",
+        department: Array.isArray(user.department)
+          ? user.department.join(", ")
+          : user.department || "",
         contact: user.contact || "",
       });
       setEmailNotif(user.notificationSettings?.email ?? false);
@@ -120,7 +122,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const formatTimeAgo = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
-    const headers = { "Content-Type": "application/json" }; // Dummy usage to avoid unused var if needed
     const diffInSeconds = Math.floor((now - date) / 1000);
 
     if (diffInSeconds < 60) return "Just now";
@@ -161,6 +162,12 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         credentials: "include",
         body: JSON.stringify({
           ...formData,
+          department: formData.department
+            ? formData.department
+                .split(",")
+                .map((d) => d.trim())
+                .filter((d) => d !== "")
+            : [],
           notificationSettings: {
             email: emailNotif,
             push: pushNotif,
@@ -207,11 +214,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 <span className="role-badge">{formData.employeeType}</span>
               </div>
               <p className="profile-handle">{formData.department}</p>
-              <p className="profile-bio">
-                Senior Project Lead specializing in visual design and team
-                management. Passionate about creating seamless user experiences
-                and optimizing workflow efficiency.
-              </p>
+
               <label>Contact (phone)</label>
               <div className="contact-value">
                 <span>📞</span> {formData.contact || "Not set"}
@@ -308,30 +311,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 />
               </div>
               <div className="form-group">
-                <label>Employee Type</label>
-                <div className="select-wrapper">
-                  <select
-                    name="employeeType"
-                    value={formData.employeeType}
-                    onChange={handleChange}
-                  >
-                    <option>Staff</option>
-                    <option>NSP</option>
-                    <option>Intern</option>
-                    <option>Trainee</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Department</label>
-                <input
-                  type="text"
-                  name="department"
-                  value={formData.department}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="form-group">
                 <label>Contact</label>
                 <input
                   type="text"
@@ -341,15 +320,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 />
               </div>
             </div>
-            <div className="form-actions">
-              <button
-                className="save-btn"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
+        
           </div>
 
           {/* Settings - Notifications */}
@@ -405,6 +376,15 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               </div>
             </div>
           </div>
+          <div className="form-actions">
+              <button
+                className="save-btn"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
         </div>
 
         {/* Right Column: Activity & Support */}

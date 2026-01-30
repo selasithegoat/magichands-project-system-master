@@ -15,7 +15,7 @@
 
 .notif-modal-content {
   width: 400px;
-  max-height: 60vh;
+  max-height: 80vh;
   background-color: #fff;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
@@ -74,25 +74,6 @@
   cursor: pointer;
 }
 
-/* Search */
-.notif-search-container {
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background-color: #f8fafc;
-  margin: 12px 16px;
-  border-radius: 6px;
-}
-
-.notif-search-input {
-  border: none;
-  background: none;
-  outline: none;
-  width: 100%;
-  font-size: 13px;
-  color: #334155;
-}
 
 /* List */
 .notif-list-container {
@@ -103,6 +84,7 @@
 
 .notif-section {
   margin-bottom: 20px;
+  padding-top: 7px ;
 }
 
 .notif-section-header {
@@ -146,6 +128,7 @@
   display: flex;
   gap: 12px;
   margin-bottom: 16px;
+  cursor: pointer;
 }
 
 .notif-icon-wrapper {
@@ -226,7 +209,12 @@
   }
 
   .notif-modal-content {
+    position: absolute;
     width: 95%;
     max-width: 400px;
+    max-height: 99.6vh;
+    top: 0;
+
+    transform: translate(-50%, -50%);
   }
 }

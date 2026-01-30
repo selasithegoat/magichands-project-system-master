@@ -350,7 +350,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               >
                 {({ loading }) => (
                   <>
-                    <FolderIcon width="16" height="16" color="#ffffff" />
+                    
                     {loading ? "Generating..." : "Download Brief"}
                   </>
                 )}

@@ -3,10 +3,7 @@ import "./NotificationModal.css";
 // Icons
 import XIcon from "../icons/XIcon"; // Using Close icon
 import SearchIcon from "../icons/SearchIcon";
-import AlertTriangleIcon from "../icons/AlertTriangleIcon";
-import CheckCircleIcon from "../icons/CheckCircleIcon";
-import ClockIcon from "../icons/ClockIcon";
-import CalendarIcon from "../icons/CalendarIcon";
+
 
 const NotificationModal = ({
   isOpen,
@@ -50,15 +47,7 @@ const NotificationModal = ({
           </button>
         </div>
 
-        {/* Search */}
-        <div className="notif-search-container">
-          <SearchIcon style={{ width: 16, height: 16, color: "#94a3b8" }} />
-          <input
-            type="text"
-            className="notif-search-input"
-            placeholder="Search project updates"
-          />
-        </div>
+        
 
         {/* Scrollable List */}
         <div className="notif-list-container">

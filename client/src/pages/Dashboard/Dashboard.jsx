@@ -121,7 +121,6 @@ const Dashboard = ({
               <FolderIcon />
             </div>
             <div className="more-dots">
-              <ThreeDotsIcon />
             </div>
           </div>
           <div className="stats-count">{projects.length}</div>
@@ -133,7 +132,6 @@ const Dashboard = ({
               <ClockIcon />
             </div>
             <div className="more-dots">
-              <ThreeDotsIcon />
             </div>
           </div>
           <div className="stats-count">
@@ -160,7 +158,6 @@ const Dashboard = ({
               <AlertTriangleIcon />
             </div>
             <div className="more-dots">
-              <ThreeDotsIcon />
             </div>
           </div>
           <div className="stats-count">

@@ -1,4 +1,7 @@
 .pending-assignments-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;  
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
@@ -93,6 +96,7 @@
 .no-assignments {
   grid-column: 1 / -1;
   text-align: center;
+  margin: auto;
   color: #666;
   padding: 3rem;
   background: #1e1e24;
