@@ -490,26 +490,25 @@ const Dashboard = ({ user }) => {
 
           <div className="chart-card">
             {(() => {
-              const deptCounts = {};
-              let totalWithDept = 0;
+              const leadCounts = {};
               const activeOnes = projects.filter(
-                (p) => p.status !== "Completed",
+                (p) => p.status !== "Completed" && p.status !== "Delivered",
               );
 
+              // Calculate counts per lead
               activeOnes.forEach((p) => {
-                if (p.departments?.length > 0) {
-                  totalWithDept++;
-                  p.departments.forEach((d) => {
-                    deptCounts[d] = (deptCounts[d] || 0) + 1;
-                  });
-                }
+                const leadName = p.projectLeadId
+                  ? `${p.projectLeadId.firstName} ${p.projectLeadId.lastName}`
+                  : "Unassigned";
+                leadCounts[leadName] = (leadCounts[leadName] || 0) + 1;
               });
 
-              const sortedDepts = Object.entries(deptCounts)
-                .sort(([, a], [, b]) => b - a)
-                .slice(0, 5);
+              // Sort by count descending
+              const sortedLeads = Object.entries(leadCounts).sort(
+                ([, a], [, b]) => b - a,
+              );
 
-              if (sortedDepts.length === 0) {
+              if (sortedLeads.length === 0) {
                 return (
                   <div
                     style={{
@@ -524,23 +523,29 @@ const Dashboard = ({ user }) => {
                 );
               }
 
+              // Predefined colors for variety
               const colors = [
-                "#3b82f6",
-                "#8b5cf6",
-                "#10b981",
-                "#f59e0b",
-                "#ef4444",
+                "#3b82f6", // Blue
+                "#8b5cf6", // Purple
+                "#10b981", // Green
+                "#f59e0b", // Amber
+                "#ef4444", // Red
+                "#ec4899", // Pink
+                "#6366f1", // Indigo
+                "#14b8a6", // Teal
               ];
 
-              return sortedDepts.map(([deptName, count], idx) => {
+              return sortedLeads.map(([leadName, count], idx) => {
+                // Calculate percentage relative to Total Active Projects
                 const percent =
                   activeOnes.length > 0
                     ? Math.round((count / activeOnes.length) * 100)
                     : 0;
+
                 return (
-                  <div key={deptName} className="dept-bar-group">
+                  <div key={leadName} className="dept-bar-group">
                     <div className="dept-header">
-                      <span>{deptName}</span>
+                      <span>{leadName}</span>
                       <span style={{ color: "#64748b" }}>{count} Projects</span>
                     </div>
                     <div className="dept-track">
@@ -564,7 +569,7 @@ const Dashboard = ({ user }) => {
                 textAlign: "center",
               }}
             >
-              Showing top 5 departments by active project volume.
+              Tracking active project distribution across team members.
             </p>
           </div>
         </div>
