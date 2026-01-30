@@ -80,13 +80,13 @@ const NotificationDropdown = ({
                       </div>
                       <div className="notification-content">
                         <p className="notification-title">
-                          {notification.title}
+                          <span>{notification.title}</span>
                         </p>
                         <p className="notification-message">
-                          {notification.message}
+                          <span>{notification.message}</span>
                         </p>
                         <span className="notification-time">
-                          {formatTime(notification.createdAt)}
+                          <span>{formatTime(notification.createdAt)}</span>
                         </span>
                       </div>
                       <div className="unread-dot"></div>
@@ -116,13 +116,13 @@ const NotificationDropdown = ({
                       </div>
                       <div className="notification-content">
                         <p className="notification-title">
-                          {notification.title}
+                          <span>{notification.title}</span>
                         </p>
                         <p className="notification-message">
-                          {notification.message}
+                          <span>{notification.message}</span>
                         </p>
                         <span className="notification-time">
-                          {formatTime(notification.createdAt)}
+                          <span>{formatTime(notification.createdAt)}</span>
                         </span>
                       </div>
                     </div>
