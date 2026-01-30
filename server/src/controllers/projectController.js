@@ -3,6 +3,7 @@ const ActivityLog = require("../models/ActivityLog");
 const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
+const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
 
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
@@ -185,6 +186,17 @@ const createProject = async (req, res) => {
         "ASSIGNMENT",
         "New Project Assigned",
         `Project #${savedProject.orderId}: You have been assigned as the lead for project: ${savedProject.details.projectName}`,
+      );
+    }
+
+    // [New] Notify Admins (if creator is not admin)
+    if (req.user.role !== "admin") {
+      await notifyAdmins(
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "New Project Created",
+        `${req.user.firstName} ${req.user.lastName} created a new project #${savedProject.orderId || savedProject._id}: ${savedProject.details.projectName}`,
       );
     }
 
@@ -392,6 +404,15 @@ const addItemToProject = async (req, res) => {
       { item: newItem },
     );
 
+    // Notify Admins
+    await notifyAdmins(
+      req.user.id,
+      project._id,
+      "UPDATE",
+      "Project Item Added",
+      `${req.user.firstName} added an item to project #${project.orderId}: ${description} (Qty: ${qty})`,
+    );
+
     res.json(project);
   } catch (error) {
     console.error("Error adding item:", error);
@@ -432,6 +453,15 @@ const updateItemInProject = async (req, res) => {
       { itemId, description, qty },
     );
 
+    // Notify Admins
+    await notifyAdmins(
+      req.user.id,
+      id,
+      "UPDATE",
+      "Project Item Updated",
+      `${req.user.firstName} updated an item in project #${project.orderId || id}: ${description}`,
+    );
+
     res.json(project);
   } catch (error) {
     console.error("Error updating item:", error);
@@ -461,6 +491,15 @@ const deleteItemFromProject = async (req, res) => {
     await logActivity(id, req.user.id, "item_delete", `Deleted order item`, {
       itemId,
     });
+
+    // Notify Admins
+    await notifyAdmins(
+      req.user.id,
+      id,
+      "UPDATE",
+      "Project Item Deleted",
+      `${req.user.firstName} deleted an item from project #${project.orderId || id}`,
+    );
 
     res.json(project);
   } catch (error) {
@@ -540,6 +579,15 @@ const updateProjectDepartments = async (req, res) => {
       }
     }
 
+    // Notify Admins of Department Update
+    await notifyAdmins(
+      req.user.id,
+      id,
+      "UPDATE",
+      "Departments Updated",
+      `${req.user.firstName} updated engaged departments for project #${project.orderId || project._id}: ${newDepartments.join(", ")}`,
+    );
+
     res.json(project);
   } catch (error) {
     console.error("Error updating departments:", error);
@@ -588,6 +636,15 @@ const updateProjectStatus = async (req, res) => {
         {
           statusChange: { from: oldStatus, to: newStatus },
         },
+      );
+
+      // Notify Admins (if not sender)
+      await notifyAdmins(
+        req.user.id,
+        project._id,
+        "SYSTEM",
+        "Project Status Updated",
+        `Project #${project.orderId || project._id} status changed to ${newStatus} by ${req.user.firstName}`,
       );
     }
 
@@ -641,6 +698,15 @@ const addChallengeToProject = async (req, res) => {
       "challenge_add",
       `Reported new challenge: ${title}`,
       { challengeId: newChallenge._id },
+    );
+
+    // Notify Admins
+    await notifyAdmins(
+      req.user.id,
+      req.params.id,
+      "ACTIVITY",
+      "Challenge Reported",
+      `New challenge reported on project #${updatedProject.orderId}: ${title}`,
     );
 
     res.json(updatedProject);
@@ -781,6 +847,15 @@ const addProductionRisk = async (req, res) => {
       { risk: newRisk },
     );
 
+    // Notify Admins
+    await notifyAdmins(
+      id,
+      req.user.id,
+      "ACTIVITY",
+      "Production Risk Reported",
+      `New production risk reported on project #${updatedProject.orderId}: ${description}`,
+    );
+
     res.json(updatedProject);
   } catch (error) {
     console.error("Error adding production risk:", error);
@@ -820,6 +895,15 @@ const updateProductionRisk = async (req, res) => {
       { riskId, description, preventive },
     );
 
+    // Notify Admins
+    await notifyAdmins(
+      id,
+      req.user.id,
+      "UPDATE",
+      "Production Risk Updated",
+      `${req.user.firstName} updated a production risk on project #${updatedProject.orderId || id}: ${description}`,
+    );
+
     res.json(updatedProject);
   } catch (error) {
     console.error("Error updating production risk:", error);
@@ -853,6 +937,15 @@ const deleteProductionRisk = async (req, res) => {
       "risk_update", // Using update/generic action as placeholder
       `Deleted production risk`,
       { riskId },
+    );
+
+    // Notify Admins
+    await notifyAdmins(
+      id,
+      req.user.id,
+      "UPDATE",
+      "Production Risk Deleted",
+      `${req.user.firstName} deleted a production risk from project #${updatedProject.orderId || id}`,
     );
 
     res.json(updatedProject);
@@ -897,6 +990,15 @@ const addUncontrollableFactor = async (req, res) => {
       { factor: newFactor },
     );
 
+    // Notify Admins
+    await notifyAdmins(
+      id,
+      req.user.id,
+      "ACTIVITY",
+      "Uncontrollable Factor Added",
+      `New uncontrollable factor added to project #${updatedProject.orderId}: ${description}`,
+    );
+
     res.json(updatedProject);
   } catch (error) {
     console.error("Error adding uncontrollable factor:", error);
@@ -937,6 +1039,15 @@ const updateUncontrollableFactor = async (req, res) => {
       { factorId, description },
     );
 
+    // Notify Admins
+    await notifyAdmins(
+      id,
+      req.user.id,
+      "UPDATE",
+      "Uncontrollable Factor Updated",
+      `${req.user.firstName} updated an uncontrollable factor on project #${updatedProject.orderId || id}: ${description}`,
+    );
+
     res.json(updatedProject);
   } catch (error) {
     console.error("Error updating uncontrollable factor:", error);
@@ -970,6 +1081,15 @@ const deleteUncontrollableFactor = async (req, res) => {
       "factor_delete",
       `Deleted uncontrollable factor`,
       { factorId },
+    );
+
+    // Notify Admins
+    await notifyAdmins(
+      id,
+      req.user.id,
+      "UPDATE",
+      "Uncontrollable Factor Deleted",
+      `${req.user.firstName} deleted an uncontrollable factor from project #${updatedProject.orderId || id}`,
     );
 
     res.json(updatedProject);
@@ -1286,6 +1406,17 @@ const updateProject = async (req, res) => {
       );
     }
 
+    // Notify Admins of significant updates (if changes > 0)
+    if (changes.length > 0) {
+      await notifyAdmins(
+        req.user.id,
+        updatedProject._id,
+        "UPDATE",
+        "Project Details Updated",
+        `${req.user.firstName} updated details for project #${updatedProject.orderId || updatedProject._id}: ${changes.join(", ")}`,
+      );
+    }
+
     // [New] Notify Production Team on Acceptance
     if (updatedProject.status === "Pending Production") {
       const productionUsers = await User.find({ department: "Production" });
@@ -1388,6 +1519,15 @@ const reopenProject = async (req, res) => {
       {
         statusChange: { from: oldStatus, to: "In Progress" },
       },
+    );
+
+    // Notify Admins
+    await notifyAdmins(
+      req.user.id,
+      project._id,
+      "SYSTEM",
+      "Project Reopened",
+      `Project #${project.orderId} was reopened by ${req.user.firstName}`,
     );
 
     res.json(project);

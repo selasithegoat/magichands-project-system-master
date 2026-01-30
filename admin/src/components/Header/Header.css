@@ -94,11 +94,11 @@
 
 .notification-badge {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 10px;
-  height: 10px;
-  background-color: #ef4444; /* Red */
-  border-radius: 50%;
-  border: 2px solid var(--bg-card);
+  top: -2px;
+  right: -8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: transparent;
+  padding: 0 4px;
 }

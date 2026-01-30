@@ -2,6 +2,7 @@ const ProjectUpdate = require("../models/ProjectUpdate");
 const Project = require("../models/Project");
 const { createNotification } = require("../utils/notificationService");
 const { logActivity } = require("../utils/activityLogger");
+const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
 
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
@@ -99,6 +100,15 @@ exports.createProjectUpdate = async (req, res) => {
           `Project #${project.orderId}: ${req.user.firstName} ${req.user.lastName} has posted a final (End of Day) update for project: ${project.details.projectName}`,
         );
       }
+
+      // [New] Notify Admins of EOD Update
+      await notifyAdmins(
+        req.user._id,
+        project._id,
+        "UPDATE",
+        "End of Day Update Posted",
+        `${req.user.firstName} ${req.user.lastName} posted a final (End of Day) update for project #${project.orderId || project._id}: ${project.details.projectName}`,
+      );
     }
 
     // [New] Log activity for this update

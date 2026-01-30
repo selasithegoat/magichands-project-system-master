@@ -1,8 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
 import "./Header.css";
-import { SearchIcon, BellIcon } from "../../icons/Icons"; // Ensure these exist
+import { SearchIcon, BellIcon } from "../../icons/Icons";
+import NotificationDropdown from "./NotificationDropdown";
+import useNotifications from "../../hooks/useNotifications";
 
 const Header = ({ onMenuClick }) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const {
+    notifications,
+    loading,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    clearNotifications,
+  } = useNotifications();
+
   return (
     <header className="header">
       <div className="header-left">
@@ -28,11 +40,32 @@ const Header = ({ onMenuClick }) => {
       </div>
 
       <div className="header-actions">
+        {/* Notification Button */}
+        <div
+          className="notification-container"
+          style={{ position: "relative" }}
+        >
+          <button
+            className="notification-btn"
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          >
+            <BellIcon className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="notification-badge">{unreadCount}</span>
+            )}
+          </button>
 
-        <button className="notification-btn">
-          <BellIcon className="w-5 h-5" />
-          <span className="notification-badge"></span>
-        </button>
+          {isDropdownOpen && (
+            <NotificationDropdown
+              onClose={() => setIsDropdownOpen(false)}
+              notifications={notifications}
+              loading={loading}
+              markAsRead={markAsRead}
+              markAllAsRead={markAllAsRead}
+              clearNotifications={clearNotifications}
+            />
+          )}
+        </div>
       </div>
     </header>
   );
