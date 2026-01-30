@@ -25,7 +25,7 @@
   border-radius: 12px;
   border: 1px solid var(--border-color);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3); /* Darker shadow */
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .projects-table {

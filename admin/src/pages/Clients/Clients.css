@@ -3,7 +3,7 @@
   max-width: 1400px;
   margin: 0 auto;
 }
-
+ 
 .clients-header {
   margin-bottom: 2rem;
   display: flex;
@@ -199,6 +199,7 @@
 .client-projects {
   padding: 0 1.5rem 1.5rem 1.5rem;
   animation: slideDown 0.2s ease-out;
+  overflow-x: auto;
 }
 
 @keyframes slideDown {

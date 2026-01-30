@@ -132,7 +132,15 @@ const Projects = ({ user }) => {
   // Filter Logic
   const filteredProjects = projects.filter((project) => {
     // 1. Status
-    if (filterStatus !== "All" && project.status !== filterStatus) return false;
+    if (filterStatus !== "All") {
+      if (filterStatus === "Completed") {
+        // Show both Completed and Finished projects when filtering by Completed
+        if (project.status !== "Completed" && project.status !== "Finished")
+          return false;
+      } else if (project.status !== filterStatus) {
+        return false;
+      }
+    }
 
     // 2. Search Query (Order ID)
     if (
