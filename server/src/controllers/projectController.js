@@ -552,33 +552,41 @@ const updateProjectDepartments = async (req, res) => {
 // @access  Private (Admin only)
 const updateProjectStatus = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ message: "Not authorized. Only admins can update status." });
-    }
-
-    const { status } = req.body;
+    const { status: newStatus } = req.body;
     const project = await Project.findById(req.params.id);
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    // Check permissions: Admin can do anything.
+    // Project Lead can transition from "Completed" to "Finished".
+    const isLead =
+      project.projectLeadId &&
+      project.projectLeadId.toString() === req.user.id.toString();
+    const isFinishing =
+      project.status === "Completed" && newStatus === "Finished";
+
+    if (req.user.role !== "admin" && (!isLead || !isFinishing)) {
+      return res.status(403).json({
+        message:
+          "Not authorized. Only admins can update status (except for finishing your own completed projects).",
+      });
+    }
+
     const oldStatus = project.status;
-    project.status = status;
+    project.status = newStatus;
     await project.save();
 
     // Log Acyivity
-    if (oldStatus !== status) {
+    if (oldStatus !== newStatus) {
       await logActivity(
         project._id,
         req.user.id,
         "status_change",
-        `Project status updated to ${status}`,
+        `Project status updated to ${newStatus}`,
         {
-          statusChange: { from: oldStatus, to: status },
+          statusChange: { from: oldStatus, to: newStatus },
         },
       );
     }

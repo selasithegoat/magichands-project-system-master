@@ -23,8 +23,10 @@ const ProjectHistory = ({ onBack }) => {
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        // Filter only Completed projects
-        const completed = data.filter((p) => p.status === "Completed");
+        // Filter projects (Finished are archived, Completed is the new active state before archival)
+        const completed = data.filter(
+          (p) => p.status === "Finished" || p.status === "Completed",
+        );
         setProjects(completed.reverse()); // Show newest first
       }
     } catch (error) {

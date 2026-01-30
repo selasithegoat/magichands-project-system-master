@@ -224,6 +224,28 @@ const ProjectDetail = ({ onProjectChange, user }) => {
     if (id) fetchProject();
   }, [id]);
 
+  const handleFinishProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Finished" }),
+      });
+
+      if (res.ok) {
+        // Force refresh or redirect to history
+        navigate("/history");
+      } else {
+        console.error("Failed to finish project");
+        alert(
+          "Failed to mark project as finished. Make sure it is 'Completed'.",
+        );
+      }
+    } catch (err) {
+      console.error("Error finishing project:", err);
+    }
+  };
+
   // Status update logic removed - Admin only feature now.
   // const [advancing, setAdvancing] = useState(false);
 
@@ -312,6 +334,20 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                   ? "WAITING ACCEPTANCE"
                   : project.status}
               </span>
+              {project.status === "Completed" && (
+                <button
+                  className="btn-primary"
+                  onClick={() => handleFinishProject()}
+                  style={{
+                    marginLeft: "1rem",
+                    padding: "0.4rem 0.8rem",
+                    fontSize: "0.75rem",
+                    backgroundColor: "#10b981",
+                  }}
+                >
+                  Mark as Finished
+                </button>
+              )}
             </h1>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -349,10 +385,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 }}
               >
                 {({ loading }) => (
-                  <>
-                    
-                    {loading ? "Generating..." : "Download Brief"}
-                  </>
+                  <>{loading ? "Generating..." : "Download Brief"}</>
                 )}
               </PDFDownloadLink>
             )}

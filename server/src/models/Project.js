@@ -122,6 +122,7 @@ const ProjectSchema = new mongoose.Schema(
         "Pending Packaging",
         "Pending Delivery/Pickup",
         "Delivered",
+        "Finished",
         // Quote-Specific Statuses
         "Pending Quote Request",
         "Pending Send Response",

@@ -23,8 +23,8 @@ const OngoingProjects = ({
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          // Filter out "Completed" projects
-          const activeProjects = data.filter((p) => p.status !== "Completed");
+          // Filter out "Finished" projects
+          const activeProjects = data.filter((p) => p.status !== "Finished");
           setProjects(activeProjects);
         }
       } catch (error) {
@@ -46,7 +46,7 @@ const OngoingProjects = ({
         // Remember to filter here too if not filtered in backend, although the use effect logic above was better.
         // The original clean fetchProjects function inside useEffect was good, but this one (line 37) was just fetching all without filtering.
         // We should probably filter here too to match.
-        const activeProjects = data.filter((p) => p.status !== "Completed");
+        const activeProjects = data.filter((p) => p.status !== "Finished");
         setProjects(activeProjects);
       }
     } catch (error) {
@@ -55,9 +55,9 @@ const OngoingProjects = ({
   };
 
   const handleUpdateStatus = async (projectId, currentStatus) => {
-    if (currentStatus !== "Delivered") {
+    if (currentStatus !== "Completed") {
       setToast({
-        message: "Project must be 'Delivered' before marking as finished.",
+        message: "Project must be 'Completed' before marking as finished.",
         type: "error",
       });
       return;
@@ -67,7 +67,7 @@ const OngoingProjects = ({
       const res = await fetch(`/api/projects/${projectId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Completed" }),
+        body: JSON.stringify({ status: "Finished" }),
       });
 
       if (res.ok) {

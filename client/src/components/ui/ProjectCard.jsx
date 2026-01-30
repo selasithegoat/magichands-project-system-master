@@ -185,7 +185,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         </button>
         <button
           className={`btn-update ${
-            project.status === "Delivered"
+            project.status === "Completed"
               ? "active-finished"
               : "disabled-finished"
           }`}
@@ -195,8 +195,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             onUpdateStatus(project._id, project.status);
           }}
           style={{
-            opacity: project.status === "Delivered" ? 1 : 0.6,
-            cursor: "pointer",
+            opacity: project.status === "Completed" ? 1 : 0.6,
+            cursor: project.status === "Completed" ? "pointer" : "not-allowed",
           }}
         >
           Mark as Finished

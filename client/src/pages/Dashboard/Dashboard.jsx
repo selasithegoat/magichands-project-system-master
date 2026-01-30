@@ -39,11 +39,11 @@ const Dashboard = ({
       if (res.ok) {
         const data = await res.json();
         // Calculate completed count
-        const completed = data.filter((p) => p.status === "Completed").length;
+        const completed = data.filter((p) => p.status === "Finished").length;
         setCompletedCount(completed);
 
-        // Filter out "Completed" projects (Pending Scope Approval is ACTIVE for Lead)
-        const activeProjects = data.filter((p) => p.status !== "Completed");
+        // Filter out "Finished" projects
+        const activeProjects = data.filter((p) => p.status !== "Finished");
         // Sort by createdAt desc (newest first)
         const sortedProjects = activeProjects.sort(
           (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
@@ -67,9 +67,9 @@ const Dashboard = ({
   };
 
   const handleUpdateStatusClick = async (projectId, currentStatus) => {
-    if (currentStatus !== "Delivered") {
+    if (currentStatus !== "Completed") {
       setToast({
-        message: "Project must be 'Delivered' before marking as finished.",
+        message: "Project must be 'Completed' before marking as finished.",
         type: "error",
       });
       return;
@@ -79,7 +79,7 @@ const Dashboard = ({
       const res = await fetch(`/api/projects/${projectId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Completed" }),
+        body: JSON.stringify({ status: "Finished" }),
       });
 
       if (res.ok) {
@@ -120,8 +120,7 @@ const Dashboard = ({
             <div className="stats-icon-wrapper blue">
               <FolderIcon />
             </div>
-            <div className="more-dots">
-            </div>
+            <div className="more-dots"></div>
           </div>
           <div className="stats-count">{projects.length}</div>
           <div className="stats-label">Active Projects</div>
@@ -131,8 +130,7 @@ const Dashboard = ({
             <div className="stats-icon-wrapper orange">
               <ClockIcon />
             </div>
-            <div className="more-dots">
-            </div>
+            <div className="more-dots"></div>
           </div>
           <div className="stats-count">
             {
@@ -157,8 +155,7 @@ const Dashboard = ({
             <div className="stats-icon-wrapper red">
               <AlertTriangleIcon />
             </div>
-            <div className="more-dots">
-            </div>
+            <div className="more-dots"></div>
           </div>
           <div className="stats-count">
             {
