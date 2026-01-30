@@ -95,6 +95,9 @@ const loginUser = async (req, res) => {
         name: user.name,
         employeeId: user.employeeId,
         role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
       });
     } else {
       res.status(401).json({ message: "Invalid credentials" });

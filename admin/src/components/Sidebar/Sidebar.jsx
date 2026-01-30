@@ -73,7 +73,7 @@ const Sidebar = ({ isOpen, onClose, user }) => {
           className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
         >
           <TeamsIcon className="nav-icon" />
-          Teams
+          Team
         </NavLink>
       </nav>
 
