@@ -447,7 +447,7 @@ const Layout = ({
             message={toast.message}
             type={toast.type}
             onClose={() => removeToast(toast.id)}
-            duration={6000}
+            duration={5000}
             onClick={() => {
               if (toast.projectId) {
                 navigate(`/detail/${toast.projectId}`);
