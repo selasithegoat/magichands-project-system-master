@@ -109,6 +109,15 @@ exports.createProjectUpdate = async (req, res) => {
         "End of Day Update Posted",
         `${req.user.firstName} ${req.user.lastName} posted a final (End of Day) update for project #${project.orderId || project._id}: ${project.details.projectName}`,
       );
+    } else {
+      // [New] Notify Admins of Regular Update
+      await notifyAdmins(
+        req.user._id,
+        project._id,
+        "UPDATE",
+        "Project Update Posted",
+        `${req.user.firstName} ${req.user.lastName} posted a new update in ${category} for project #${project.orderId || project._id}: ${content.substring(0, 100)}...`,
+      );
     }
 
     // [New] Log activity for this update
