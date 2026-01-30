@@ -23,8 +23,10 @@ import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
-import { PDFDownloadLink } from "@react-pdf/renderer"; // Import PDFDownloadLink
-import ProjectSummaryPDF from "../CreateProject/ProjectSummaryPDF"; // Import ProjectSummaryPDF
+// Lazy Load PDF Component
+const ProjectPdfDownload = React.lazy(
+  () => import("../../components/features/ProjectPdfDownload"),
+);
 import PaintbrushIcon from "../../components/icons/PaintbrushIcon";
 import FactoryIcon from "../../components/icons/FactoryIcon";
 import PackageIcon from "../../components/icons/PackageIcon";
@@ -89,120 +91,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // PDF Image Processing
-  const [imageUrls, setImageUrls] = useState({});
-
-  React.useEffect(() => {
-    if (!project) return;
-
-    const fetchImages = async () => {
-      const urls = {};
-      const pathsToFetch = [];
-      const details = project.details || {};
-
-      // Add Sample Image
-      const sampleImg = project.sampleImage || details.sampleImage;
-      if (
-        sampleImg &&
-        typeof sampleImg === "string" &&
-        sampleImg.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-      ) {
-        pathsToFetch.push(sampleImg);
-      }
-
-      // Add Attachments
-      const attachments = project.attachments || details.attachments;
-      if (attachments && Array.isArray(attachments)) {
-        attachments.forEach((path) => {
-          if (
-            typeof path === "string" &&
-            path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-          ) {
-            pathsToFetch.push(path);
-          }
-        });
-      }
-
-      if (pathsToFetch.length === 0) return;
-
-      await Promise.all(
-        pathsToFetch.map(async (path) => {
-          try {
-            // 1. Fetch Blob (from localhost:5000 proxied or direct)
-            const res = await fetch(`${path}`);
-            if (!res.ok) throw new Error(`Status ${res.status}`);
-            const blob = await res.blob();
-
-            // 2. Load into Image to allow Canvas conversion
-            const img = new Image();
-            const blobUrl = URL.createObjectURL(blob);
-            img.src = blobUrl;
-
-            await new Promise((resolve, reject) => {
-              img.onload = () => resolve();
-              img.onerror = (e) => reject(e);
-            });
-
-            // 3. Draw to Canvas and Export as PNG
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0);
-
-            // 4. Get PNG Blob
-            const pngBlob = await new Promise((resolve) =>
-              canvas.toBlob(resolve, "image/png"),
-            );
-
-            // 5. Create Object URL for the PNG
-            const pngUrl = URL.createObjectURL(pngBlob);
-            urls[path] = pngUrl;
-
-            // Cleanup temp url
-            URL.revokeObjectURL(blobUrl);
-          } catch (err) {
-            console.error(`Error processing image ${path}:`, err);
-          }
-        }),
-      );
-
-      setImageUrls(urls);
-    };
-
-    fetchImages();
-  }, [project]);
-
-  // Helper to map project data to PDF formData structure
-  const getPdfFormData = () => {
-    if (!project) return {};
-    const details = project.details || {};
-    return {
-      projectName: details.projectName || project.projectName,
-      contactType: details.contactType,
-      supplySource: details.supplySource,
-      deliveryDate: details.deliveryDate
-        ? new Date(details.deliveryDate).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          })
-        : "N/A",
-      deliveryTime: details.deliveryTime,
-      deliveryLocation: details.deliveryLocation,
-      briefOverview: details.briefOverview, // Included in Step 5 PDF
-      leadLabel: project.projectLeadId
-        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-        : details.lead,
-      departments: project.departments,
-      items: project.items,
-      uncontrollableFactors: project.uncontrollableFactors,
-      productionRisks: project.productionRisks,
-      attachments: project.attachments || details.attachments,
-      sampleImage: project.sampleImage || details.sampleImage,
-      details: details, // Fallback for some nested checks in PDF
-    };
-  };
+  // PDF Image Processing & Form Data removed - moved to ProjectPdfDownload component
 
   const fetchProject = async () => {
     try {
@@ -349,43 +238,17 @@ const ProjectDetail = ({ onProjectChange, user }) => {
             </h1>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            {/* PDF Download Button */}
+            {/* PDF Download Button - Lazy Loaded */}
             {project && (
-              <PDFDownloadLink
-                document={
-                  <ProjectSummaryPDF
-                    formData={getPdfFormData()}
-                    imageUrls={imageUrls}
-                    pdfType={
-                      project.projectType === "Emergency" ||
-                      project.priority === "Urgent"
-                        ? "EMERGENCY"
-                        : project.projectType === "Quote"
-                          ? "QUOTE"
-                          : project.projectType === "Corporate Job"
-                            ? "CORPORATE"
-                            : "STANDARD"
-                    }
-                  />
+              <React.Suspense
+                fallback={
+                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                    Loading PDF...
+                  </span>
                 }
-                fileName={`Project_${project.orderId || "Brief"}.pdf`}
-                style={{
-                  textDecoration: "none",
-                  padding: "0.5rem 1rem",
-                  color: "#fff",
-                  backgroundColor: "#475569", // Slate color
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
               >
-                {({ loading }) => (
-                  <>{loading ? "Generating..." : "Download Brief"}</>
-                )}
-              </PDFDownloadLink>
+                <ProjectPdfDownload project={project} />
+              </React.Suspense>
             )}
 
             {/* Only show Edit if NOT pending acceptance and NOT completed */}

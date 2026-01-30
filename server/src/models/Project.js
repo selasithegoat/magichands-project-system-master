@@ -229,4 +229,15 @@ const ProjectSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Indexes for performance optimization
+// Combined index for Dashboard/Filtering: Most common filter combo
+ProjectSchema.index({ status: 1, projectType: 1, createdAt: -1 });
+
+// Single field indexes for specific lookups
+ProjectSchema.index({ priority: 1 });
+ProjectSchema.index({ projectLeadId: 1 });
+ProjectSchema.index({ createdBy: 1 });
+ProjectSchema.index({ "details.client": 1 });
+ProjectSchema.index({ "details.deliveryDate": 1 });
+
 module.exports = mongoose.model("Project", ProjectSchema);

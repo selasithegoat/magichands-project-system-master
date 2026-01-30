@@ -21,4 +21,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          ui: ["@fontsource/inter", "date-fns"],
+          pdf: ["@react-pdf/renderer"],
+          docx: ["docx", "file-saver"],
+        },
+      },
+    },
+  },
 });

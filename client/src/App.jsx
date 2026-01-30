@@ -1,15 +1,27 @@
-import React, { useState } from "react";
-import Login from "./pages/Login/Login";
-import Dashboard from "./pages/Dashboard/Dashboard";
-import ProjectDetail from "./pages/ProjectDetail/ProjectDetail";
-import ProjectHistory from "./pages/ProjectHistory/ProjectHistory";
-import OngoingProjects from "./pages/OngoingProjects/OngoingProjects";
-import Profile from "./pages/Profile/Profile";
-import NewOrders from "./pages/NewOrders/NewOrders"; // Import NewOrders
-import EndOfDayUpdate from "./pages/EndOfDayUpdate/EndOfDayUpdate"; // Import EndOfDayUpdate
-import EngagedProjects from "./pages/EngagedProjects/EngagedProjects"; // [NEW]
+import React, { useState, Suspense, lazy } from "react";
 import Layout from "./components/layout/Layout";
-import Spinner from "./components/ui/Spinner"; // Import Spinner
+import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth load
+import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for Suspense fallback
+import useInactivityLogout from "./hooks/useInactivityLogout";
+
+// Lazy Loaded Pages
+const Login = lazy(() => import("./pages/Login/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
+const ProjectDetail = lazy(() => import("./pages/ProjectDetail/ProjectDetail"));
+const ProjectHistory = lazy(
+  () => import("./pages/ProjectHistory/ProjectHistory"),
+);
+const OngoingProjects = lazy(
+  () => import("./pages/OngoingProjects/OngoingProjects"),
+);
+const Profile = lazy(() => import("./pages/Profile/Profile"));
+const NewOrders = lazy(() => import("./pages/NewOrders/NewOrders"));
+const EndOfDayUpdate = lazy(
+  () => import("./pages/EndOfDayUpdate/EndOfDayUpdate"),
+);
+const EngagedProjects = lazy(
+  () => import("./pages/EngagedProjects/EngagedProjects"),
+);
 
 import {
   Routes,
@@ -18,13 +30,23 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import CreateProjectWizard from "./pages/CreateProject/CreateProjectWizard";
-import CreateProjectLanding from "./pages/CreateProject/CreateProjectLanding"; // [NEW]
-import QuoteProjectWizard from "./pages/CreateProject/QuoteWizard/QuoteProjectWizard"; // [NEW]
-import MinimalQuoteForm from "./pages/CreateProject/QuoteWizard/MinimalQuoteForm"; // [NEW]
-import PendingAssignments from "./pages/PendingAssignments/PendingAssignments";
-import MyActivities from "./pages/MyActivities/MyActivities";
-import useInactivityLogout from "./hooks/useInactivityLogout";
+
+const CreateProjectWizard = lazy(
+  () => import("./pages/CreateProject/CreateProjectWizard"),
+);
+const CreateProjectLanding = lazy(
+  () => import("./pages/CreateProject/CreateProjectLanding"),
+);
+const QuoteProjectWizard = lazy(
+  () => import("./pages/CreateProject/QuoteWizard/QuoteProjectWizard"),
+);
+const MinimalQuoteForm = lazy(
+  () => import("./pages/CreateProject/QuoteWizard/MinimalQuoteForm"),
+);
+const PendingAssignments = lazy(
+  () => import("./pages/PendingAssignments/PendingAssignments"),
+);
+const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
 // Helper to wrap protected content in Layout
 const ProtectedLayout = ({
@@ -141,223 +163,225 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login onLogin={fetchUser} />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedLayout
-            activeView="dashboard"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-            onSignOut={handleLogout}
-          >
-            <Dashboard
-              user={user} // Pass user to Dashboard
-              onNavigateProject={(id) => navigate(`/detail/${id}`)}
-              onCreateProject={() => navigate("/create")}
-              onSeeAllProjects={() => navigate("/projects")}
-              onProjectChange={fetchProjectCount} // Refresh count on change
-            />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/create"
-        element={
-          <ProtectedLayout
-            activeView="create"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <PendingAssignments
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
+        <Route path="/login" element={<Login onLogin={fetchUser} />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedLayout
+              activeView="dashboard"
               user={user}
-              onStartNew={() => navigate("/create/select-type")}
-            />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/create/select-type"
-        element={
-          <ProtectedLayout
-            activeView="create"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <CreateProjectLanding />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/create/quote"
-        element={
-          <ProtectedLayout
-            activeView="create"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <MinimalQuoteForm />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/create/quote-wizard"
-        element={
-          <ProtectedLayout
-            activeView="create"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <QuoteProjectWizard />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/create/wizard"
-        element={
-          <ProtectedLayout
-            activeView="create"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <CreateProjectWizard onProjectCreate={fetchProjectCount} />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/detail/:id"
-        element={
-          <ProtectedLayout
-            activeView="detail"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <ProjectDetail user={user} onProjectChange={fetchProjectCount} />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/projects"
-        element={
-          <ProtectedLayout
-            activeView="projects"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <OngoingProjects
-              onNavigateDetail={(id) => navigate(`/detail/${id}`)}
-              onBack={() => navigate("/")}
-              onCreateProject={() => navigate("/create")}
-              onProjectChange={fetchProjectCount} // Refresh count on change
-            />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/history"
-        element={
-          <ProtectedLayout
-            activeView="history"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <ProjectHistory onBack={() => navigate("/")} />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/new-orders"
-        element={
-          <ProtectedLayout
-            activeView="new-orders"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <CreateProjectLanding />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/new-orders/form"
-        element={
-          <ProtectedLayout
-            activeView="new-orders"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <NewOrders />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/end-of-day"
-        element={
-          <ProtectedLayout
-            activeView="end-of-day"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <EndOfDayUpdate user={user} />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/engaged-projects"
-        element={
-          <ProtectedLayout
-            activeView="engaged-projects"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <EngagedProjects user={user} />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedLayout
-            activeView="profile"
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <Profile
-              user={user}
-              onUpdateProfile={fetchUser}
+              navigate={navigate}
+              projectCount={projectCount}
               onSignOut={handleLogout}
-            />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/my-activities"
-        element={
-          <ProtectedLayout
-            activeView="profile" // Use profile as active view for nav
-            user={user}
-            navigate={navigate}
-            projectCount={projectCount}
-          >
-            <MyActivities onBack={() => navigate("/profile")} />
-          </ProtectedLayout>
-        }
-      />
-    </Routes>
+            >
+              <Dashboard
+                user={user} // Pass user to Dashboard
+                onNavigateProject={(id) => navigate(`/detail/${id}`)}
+                onCreateProject={() => navigate("/create")}
+                onSeeAllProjects={() => navigate("/projects")}
+                onProjectChange={fetchProjectCount} // Refresh count on change
+              />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/create"
+          element={
+            <ProtectedLayout
+              activeView="create"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <PendingAssignments
+                user={user}
+                onStartNew={() => navigate("/create/select-type")}
+              />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/create/select-type"
+          element={
+            <ProtectedLayout
+              activeView="create"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <CreateProjectLanding />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/create/quote"
+          element={
+            <ProtectedLayout
+              activeView="create"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <MinimalQuoteForm />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/create/quote-wizard"
+          element={
+            <ProtectedLayout
+              activeView="create"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <QuoteProjectWizard />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/create/wizard"
+          element={
+            <ProtectedLayout
+              activeView="create"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <CreateProjectWizard onProjectCreate={fetchProjectCount} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/detail/:id"
+          element={
+            <ProtectedLayout
+              activeView="detail"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <ProjectDetail user={user} onProjectChange={fetchProjectCount} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/projects"
+          element={
+            <ProtectedLayout
+              activeView="projects"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <OngoingProjects
+                onNavigateDetail={(id) => navigate(`/detail/${id}`)}
+                onBack={() => navigate("/")}
+                onCreateProject={() => navigate("/create")}
+                onProjectChange={fetchProjectCount} // Refresh count on change
+              />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedLayout
+              activeView="history"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <ProjectHistory onBack={() => navigate("/")} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/new-orders"
+          element={
+            <ProtectedLayout
+              activeView="new-orders"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <CreateProjectLanding />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/new-orders/form"
+          element={
+            <ProtectedLayout
+              activeView="new-orders"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <NewOrders />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/end-of-day"
+          element={
+            <ProtectedLayout
+              activeView="end-of-day"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <EndOfDayUpdate user={user} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/engaged-projects"
+          element={
+            <ProtectedLayout
+              activeView="engaged-projects"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <EngagedProjects user={user} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedLayout
+              activeView="profile"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <Profile
+                user={user}
+                onUpdateProfile={fetchUser}
+                onSignOut={handleLogout}
+              />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/my-activities"
+          element={
+            <ProtectedLayout
+              activeView="profile" // Use profile as active view for nav
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+            >
+              <MyActivities onBack={() => navigate("/profile")} />
+            </ProtectedLayout>
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }
 

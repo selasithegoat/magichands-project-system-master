@@ -1431,7 +1431,11 @@ const updateProject = async (req, res) => {
       }
     }
 
-    res.json(updatedProject);
+    const populatedProject = await Project.findById(updatedProject._id)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email");
+
+    res.json(populatedProject);
   } catch (error) {
     console.error("Error updating project:", error);
     res.status(500).json({ message: "Server Error", error: error.message });

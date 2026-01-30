@@ -14,4 +14,14 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          admin_libs: ["axios", "react-hot-toast"],
+        },
+      },
+    },
+  },
 });

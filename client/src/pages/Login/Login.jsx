@@ -151,12 +151,13 @@ const Login = ({ onLogin }) => {
           <img
             src="/mhlogo.png"
             alt="Logo"
+            width="200"
+            height="200"
             style={{ width: "200px", height: "auto" }}
           />
         </div>
 
         {/* Brand */}
-
 
         {/* Welcome Text */}
         <h1 className="login-title">Welcome Back</h1>
@@ -235,8 +236,6 @@ const Login = ({ onLogin }) => {
             Request Access
           </a>
         </div>
-
-        
       </div>
     </div>
   );

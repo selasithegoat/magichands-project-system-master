@@ -32,7 +32,12 @@ const Header = ({
             <MenuIcon />
           </button>
           <div className="logo-icon">
-            <img src="/mhlogo.png" alt="MagicHands Logo" />
+            <img
+              src="/mhlogo.png"
+              alt="MagicHands Logo"
+              width="32"
+              height="32"
+            />
           </div>
           {/* <span className="brand-name">MagicHands</span> */}
         </div>

@@ -1,21 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  BorderStyle,
-  PageOrientation,
-  AlignmentType,
-  Footer,
-  Header,
-} from "docx";
-import { saveAs } from "file-saver";
 import { format, differenceInHours } from "date-fns";
 import Spinner from "../../components/ui/Spinner";
 import { DownloadIcon } from "../../components/icons/DownloadIcon"; // Assuming exists or I will create an inline SVG
@@ -85,6 +69,22 @@ const EndOfDayUpdate = ({ user }) => {
     if (!projects.length) return;
 
     try {
+      const {
+        Document,
+        Packer,
+        Paragraph,
+        TextRun,
+        Table,
+        TableRow,
+        TableCell,
+        WidthType,
+        BorderStyle,
+        PageOrientation,
+        AlignmentType,
+        Footer,
+        Header,
+      } = await import("docx");
+      const { saveAs } = await import("file-saver");
       const userName = user
         ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
         : "User";
