@@ -9,12 +9,6 @@ const nodemailer = require("nodemailer");
  */
 const sendEmail = async (to, subject, text, html) => {
   try {
-    // In a real production environment, you would use environment variables
-    // for SMTP credentials. For now, we'll log the attempt.
-    console.log(`[Email Service] Attempting to send email to: ${to}`);
-    console.log(`[Email Service] Subject: ${subject}`);
-    console.log(`[Email Service] Content: ${text}`);
-
     // Higher compatibility config for Gmail
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -25,7 +19,7 @@ const sendEmail = async (to, subject, text, html) => {
     });
 
     const info = await transporter.sendMail({
-      from: `"MagicHands Admin" <${process.env.SMTP_USER}>`,
+      from: `"Magichands Co. Ltd." <${process.env.SMTP_USER}>`,
       to,
       subject,
       text,

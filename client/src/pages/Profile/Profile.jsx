@@ -12,10 +12,10 @@ import LogOutIcon from "../../components/icons/LogOutIcon";
 
 const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [emailNotif, setEmailNotif] = useState(
-    user?.notificationSettings?.email ?? true,
+    user?.notificationSettings?.email ?? false,
   );
   const [pushNotif, setPushNotif] = useState(
-    user?.notificationSettings?.push ?? false,
+    user?.notificationSettings?.push ?? true,
   );
 
   // User Data State
@@ -48,8 +48,8 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         department: user.department || "",
         contact: user.contact || "",
       });
-      setEmailNotif(user.notificationSettings?.email ?? true);
-      setPushNotif(user.notificationSettings?.push ?? false);
+      setEmailNotif(user.notificationSettings?.email ?? false);
+      setPushNotif(user.notificationSettings?.push ?? true);
       setLoading(false);
     }
   }, [user]);
@@ -366,14 +366,18 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 <div>
                   <div className="setting-title">Email Notifications</div>
                   <div className="setting-desc">
-                    Receive daily summaries and alerts
+                    Receive email alerts for assignments and updates
                   </div>
                 </div>
                 <label className="switch">
                   <input
                     type="checkbox"
                     checked={emailNotif}
-                    onChange={() => setEmailNotif(!emailNotif)}
+                    onChange={() => {
+                      if (emailNotif && !pushNotif) return; // Prevent turning both off
+                      setEmailNotif(!emailNotif);
+                    }}
+                    disabled={emailNotif && !pushNotif} // Visually disable if it's the only one left
                   />
                   <span className="slider round"></span>
                 </label>
@@ -383,14 +387,18 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 <div>
                   <div className="setting-title">Push Notifications</div>
                   <div className="setting-desc">
-                    Receive alerts on mobile devices
+                    Receive real-time push alerts on mobile devices
                   </div>
                 </div>
                 <label className="switch">
                   <input
                     type="checkbox"
                     checked={pushNotif}
-                    onChange={() => setPushNotif(!pushNotif)}
+                    onChange={() => {
+                      if (pushNotif && !emailNotif) return; // Prevent turning both off
+                      setPushNotif(!pushNotif);
+                    }}
+                    disabled={pushNotif && !emailNotif} // Visually disable if it's the only one left
                   />
                   <span className="slider round"></span>
                 </label>

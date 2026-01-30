@@ -39,9 +39,9 @@ const createNotification = async (
     });
 
     // Check preferences and trigger delivery channels
-    const settings = recipient.notificationSettings || {
-      email: true,
-      push: false,
+    const settings = {
+      email: recipient.notificationSettings?.email ?? false,
+      push: recipient.notificationSettings?.push ?? true,
     };
 
     if (settings.email && recipient.email) {

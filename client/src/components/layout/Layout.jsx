@@ -90,6 +90,10 @@ const Layout = ({
     }
     shownToastsRef.current.add(notification._id);
 
+    // Check user preferences for Push/Toasts
+    const allowPush = user?.notificationSettings?.push ?? true;
+    if (!allowPush) return;
+
     // Show Native Notification
     showNativeNotification(notification);
 

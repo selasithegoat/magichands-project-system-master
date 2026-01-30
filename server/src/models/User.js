@@ -58,8 +58,8 @@ const UserSchema = new mongoose.Schema({
     default: Date.now,
   },
   notificationSettings: {
-    email: { type: Boolean, default: true },
-    push: { type: Boolean, default: false },
+    email: { type: Boolean, default: false },
+    push: { type: Boolean, default: true },
   },
 });
 

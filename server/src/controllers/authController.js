@@ -169,16 +169,24 @@ const updateProfile = async (req, res) => {
     user.contact = req.body.contact || user.contact;
 
     if (req.body.notificationSettings) {
-      user.notificationSettings = {
-        email:
-          req.body.notificationSettings.email !== undefined
-            ? req.body.notificationSettings.email
-            : user.notificationSettings.email,
-        push:
-          req.body.notificationSettings.push !== undefined
-            ? req.body.notificationSettings.push
-            : user.notificationSettings.push,
-      };
+      const email =
+        req.body.notificationSettings.email !== undefined
+          ? req.body.notificationSettings.email
+          : (user.notificationSettings?.email ?? false);
+      const push =
+        req.body.notificationSettings.push !== undefined
+          ? req.body.notificationSettings.push
+          : (user.notificationSettings?.push ?? true);
+
+      // Enforce at least one channel active
+      if (!email && !push) {
+        return res.status(400).json({
+          message: "At least one notification channel must be active",
+        });
+      }
+
+      user.notificationSettings = { email, push };
+      user.markModified("notificationSettings");
     }
 
     const updatedUser = await user.save();
