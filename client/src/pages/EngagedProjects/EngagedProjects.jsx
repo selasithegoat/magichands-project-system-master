@@ -105,9 +105,12 @@ const EngagedProjects = ({ user }) => {
             engagedSubDepts.includes(dept),
           );
         });
-        // Exclude completed projects
+        // Exclude completed/finished projects
         const activeEngaged = engaged.filter(
-          (p) => p.status !== "Completed" && p.status !== "Delivered",
+          (p) =>
+            p.status !== "Completed" &&
+            p.status !== "Delivered" &&
+            p.status !== "Finished",
         );
         setProjects(activeEngaged);
       }

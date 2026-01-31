@@ -158,7 +158,8 @@ function App() {
           return (
             p.departments.some((dept) => subDepts.includes(dept)) &&
             p.status !== "Completed" &&
-            p.status !== "Delivered"
+            p.status !== "Delivered" &&
+            p.status !== "Finished"
           );
         });
         setEngagedCount(engaged.length);
