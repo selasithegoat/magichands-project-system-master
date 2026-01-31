@@ -98,9 +98,13 @@ const Layout = ({
     // Show Native Notification
     showNativeNotification(notification);
 
-    // Vibrate on mobile
-    if ("vibrate" in navigator) {
-      navigator.vibrate([200, 100, 200]);
+    // Vibrate on mobile (wrapped in try-catch as Chrome blocks this until user interaction)
+    try {
+      if ("vibrate" in navigator) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    } catch {
+      // Silently ignore - vibration blocked before user interaction
     }
 
     const id = Date.now() + Math.random();
