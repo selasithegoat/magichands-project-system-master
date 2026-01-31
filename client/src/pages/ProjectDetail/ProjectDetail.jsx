@@ -119,6 +119,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
 
   // PDF Image Processing & Form Data removed - moved to ProjectPdfDownload component
 
@@ -138,6 +139,22 @@ const ProjectDetail = ({ onProjectChange, user }) => {
 
   useEffect(() => {
     if (id) fetchProject();
+  }, [id]);
+
+  // [New] Fetch updates count
+  useEffect(() => {
+    const fetchUpdatesCount = async () => {
+      try {
+        const res = await fetch(`/api/updates/project/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setUpdatesCount(data.length);
+        }
+      } catch (err) {
+        console.error("Error fetching updates count:", err);
+      }
+    };
+    if (id) fetchUpdatesCount();
   }, [id]);
 
   const handleFinishProject = async () => {
@@ -335,6 +352,22 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               onClick={() => setActiveTab(tab)}
             >
               {tab}
+              {tab === "Updates" && updatesCount > 0 && (
+                <span
+                  style={{
+                    marginLeft: "0.4rem",
+                    backgroundColor:
+                      activeTab === "Updates" ? "white" : "#3b82f6",
+                    color: activeTab === "Updates" ? "#3b82f6" : "white",
+                    padding: "2px 6px",
+                    borderRadius: "999px",
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  {updatesCount}
+                </span>
+              )}
             </a>
           ))}
         </nav>
