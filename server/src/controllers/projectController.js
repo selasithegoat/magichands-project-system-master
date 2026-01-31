@@ -623,18 +623,34 @@ const updateProjectStatus = async (req, res) => {
     }
 
     const oldStatus = project.status;
-    project.status = newStatus;
+
+    // Status progression map: when a stage is marked complete, auto-advance to next pending
+    const statusProgression = {
+      // Standard workflow
+      "Scope Approval Completed": "Pending Mockup",
+      "Mockup Completed": "Pending Production",
+      "Production Completed": "Pending Packaging",
+      "Packaging Completed": "Pending Delivery/Pickup",
+      Delivered: "Completed",
+      // Quote workflow
+      "Quote Request Completed": "Pending Send Response",
+      "Response Sent": "Completed",
+    };
+
+    // If the selected status has an auto-advancement, use it
+    const finalStatus = statusProgression[newStatus] || newStatus;
+    project.status = finalStatus;
     await project.save();
 
-    // Log Acyivity
-    if (oldStatus !== newStatus) {
+    // Log Activity
+    if (oldStatus !== finalStatus) {
       await logActivity(
         project._id,
         req.user.id,
         "status_change",
-        `Project status updated to ${newStatus}`,
+        `Project status updated to ${finalStatus}`,
         {
-          statusChange: { from: oldStatus, to: newStatus },
+          statusChange: { from: oldStatus, to: finalStatus },
         },
       );
 
@@ -644,7 +660,7 @@ const updateProjectStatus = async (req, res) => {
         project._id,
         "SYSTEM",
         "Project Status Updated",
-        `Project #${project.orderId || project._id} status changed to ${newStatus} by ${req.user.firstName}`,
+        `Project #${project.orderId || project._id} status changed to ${finalStatus} by ${req.user.firstName}`,
       );
     }
 
