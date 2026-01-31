@@ -437,17 +437,25 @@ const ProjectDetails = ({ user }) => {
               {(project.projectType === "Quote"
                 ? [
                     "Order Confirmed",
+                    "Pending Scope Approval",
                     "Scope Approval Completed",
+                    "Pending Quote Request",
                     "Quote Request Completed",
+                    "Pending Send Response",
                     "Response Sent",
                     "Completed",
                   ]
                 : [
                     "Order Confirmed",
+                    "Pending Scope Approval",
                     "Scope Approval Completed",
+                    "Pending Mockup",
                     "Mockup Completed",
+                    "Pending Production",
                     "Production Completed",
+                    "Pending Packaging",
                     "Packaging Completed",
+                    "Pending Delivery/Pickup",
                     "Delivered",
                     "Completed",
                   ]
