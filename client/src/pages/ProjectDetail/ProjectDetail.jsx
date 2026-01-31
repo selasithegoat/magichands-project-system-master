@@ -33,23 +33,41 @@ import PackageIcon from "../../components/icons/PackageIcon";
 import TruckIcon from "../../components/icons/TruckIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 
-const STATUS_FLOW = [
-  "Order Confirmed",
-  "Pending Scope Approval",
-  "Pending Mockup",
-  "Pending Production",
-  "Pending Packaging",
-  "Pending Delivery/Pickup",
-  "Delivered",
+const STATUS_STEPS = [
+  { label: "Order Confirmed", statuses: ["Order Confirmed"] },
+  {
+    label: "Scope Approval",
+    statuses: ["Pending Scope Approval", "Scope Approval Completed"],
+  },
+  { label: "Mockup", statuses: ["Pending Mockup", "Mockup Completed"] },
+  {
+    label: "Production",
+    statuses: ["Pending Production", "Production Completed"],
+  },
+  {
+    label: "Packaging",
+    statuses: ["Pending Packaging", "Packaging Completed"],
+  },
+  {
+    label: "Delivery/Pickup",
+    statuses: ["Pending Delivery/Pickup", "Delivered"],
+  },
 ];
 
-const QUOTE_STATUS_FLOW = [
-  "Order Confirmed",
-  "Pending Scope Approval",
-  "Pending Quote Request",
-  "Pending Send Response",
-  "Response Sent",
-  "Completed",
+const QUOTE_STEPS = [
+  { label: "Order Confirmed", statuses: ["Order Confirmed"] },
+  {
+    label: "Scope Approval",
+    statuses: ["Pending Scope Approval", "Scope Approval Completed"],
+  },
+  {
+    label: "Quote Request",
+    statuses: ["Pending Quote Request", "Quote Request Completed"],
+  },
+  {
+    label: "Send Response",
+    statuses: ["Pending Send Response", "Response Sent"],
+  },
 ];
 
 const getStatusColor = (status) => {
@@ -57,25 +75,36 @@ const getStatusColor = (status) => {
     case "Order Confirmed":
       return "#94a3b8"; // Slate
     case "Pending Scope Approval":
+    case "Scope Approval Completed":
+    case "Scope Approval":
       return "#f97316"; // Orange
     case "Pending Mockup":
+    case "Mockup Completed":
+    case "Mockup":
       return "#a855f7"; // Purple
     case "Pending Production":
+    case "Production Completed":
+    case "Production":
       return "#3b82f6"; // Blue
     case "Pending Packaging":
+    case "Packaging Completed":
+    case "Packaging":
       return "#6366f1"; // Indigo
     case "Pending Delivery/Pickup":
-      return "#14b8a6"; // Teal
     case "Delivered":
-      return "#22c55e"; // Green
+    case "Delivery/Pickup":
+      return "#14b8a6"; // Teal
     case "Completed":
+    case "Finished":
       return "#22c55e"; // Green
     case "Pending Quote Request":
+    case "Quote Request Completed":
+    case "Quote Request":
       return "#eab308"; // Yellow/Gold
     case "Pending Send Response":
-      return "#6366f1"; // Indigo
     case "Response Sent":
-      return "#06b6d4"; // Cyan
+    case "Send Response":
+      return "#6366f1"; // Indigo
     default:
       return "#cbd5e1"; // Grey
   }
@@ -219,7 +248,9 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 <ClockIcon width="14" height="14" />{" "}
                 {project.status === "Pending Scope Approval"
                   ? "WAITING ACCEPTANCE"
-                  : project.status}
+                  : project.status.startsWith("Pending ")
+                    ? project.status.replace("Pending ", "")
+                    : project.status}
               </span>
               {project.status === "Completed" && (
                 <button
@@ -1643,8 +1674,12 @@ const ProgressCard = ({ project }) => {
           return 5;
         case "Pending Scope Approval":
           return 25;
+        case "Scope Approval Completed":
+          return 35;
         case "Pending Quote Request":
           return 50;
+        case "Quote Request Completed":
+          return 60;
         case "Pending Send Response":
           return 75;
         case "Response Sent":
@@ -1661,17 +1696,27 @@ const ProgressCard = ({ project }) => {
         return 5;
       case "Pending Scope Approval":
         return 15;
+      case "Scope Approval Completed":
+        return 22;
       case "Pending Mockup":
         return 30;
+      case "Mockup Completed":
+        return 40;
       case "Pending Production":
         return 50;
+      case "Production Completed":
+        return 65;
       case "Pending Packaging":
         return 75;
+      case "Packaging Completed":
+        return 82;
       case "Pending Delivery/Pickup":
         return 90;
       case "Delivered":
         return 100;
       case "Completed":
+        return 100;
+      case "Finished":
         return 100;
       default:
         return 0;
@@ -1705,28 +1750,49 @@ const ProgressCard = ({ project }) => {
 };
 
 const ApprovalsCard = ({ status, type }) => {
-  const flow = type === "Quote" ? QUOTE_STATUS_FLOW : STATUS_FLOW;
+  const steps = type === "Quote" ? QUOTE_STEPS : STATUS_STEPS;
 
-  // If status is "Completed", we want to show everything as done.
-  // We can simulate this by setting index to length of array (past the last item)
-  let currentStatusIndex = flow.indexOf(status);
+  // Find current step index
+  let currentStepIndex = steps.findIndex((step) =>
+    step.statuses.includes(status),
+  );
 
-  if (status === "Completed") {
-    currentStatusIndex = flow.length;
+  if (currentStepIndex !== -1 && status !== "Order Confirmed") {
+    // Determine if the status represents a completed step
+    const isCompletedVariant =
+      status.includes("Completed") ||
+      status === "Delivered" ||
+      status === "Response Sent";
+
+    if (isCompletedVariant) {
+      // If completed, visually move to the next step (making it "Pending")
+      currentStepIndex++;
+    }
+  }
+
+  // Handle global Completed/Finished status
+  if (status === "Completed" || status === "Finished") {
+    currentStepIndex = steps.length;
+  }
+
+  // Fallback
+  if (
+    currentStepIndex === -1 &&
+    status !== "Completed" &&
+    status !== "Finished"
+  ) {
+    currentStepIndex = 0;
   }
 
   const statusIcons = {
     "Order Confirmed": ClipboardListIcon,
-    "Pending Scope Approval": EyeIcon,
-    "Pending Mockup": PaintbrushIcon,
-    "Pending Production": FactoryIcon,
-    "Pending Packaging": PackageIcon,
-    "Pending Delivery/Pickup": TruckIcon,
-    Delivered: CheckCircleIcon,
-    "Pending Quote Request": ClipboardListIcon,
-    "Pending Send Response": ClockIcon,
-    "Response Sent": CheckCircleIcon,
-    Completed: CheckCircleIcon,
+    "Scope Approval": EyeIcon,
+    Mockup: PaintbrushIcon,
+    Production: FactoryIcon,
+    Packaging: PackageIcon,
+    "Delivery/Pickup": TruckIcon,
+    "Quote Request": ClipboardListIcon,
+    "Send Response": ClockIcon,
   };
 
   return (
@@ -1735,20 +1801,38 @@ const ApprovalsCard = ({ status, type }) => {
         <h3 className="card-title">✅ Approvals</h3>
       </div>
       <div className="approval-list">
-        {flow.map((step, index) => {
+        {steps.map((step, index) => {
           // Status States:
-          // 1. Completed: index < currentStatusIndex
-          // 2. Active: index === currentStatusIndex
-          // 3. Pending: index > currentStatusIndex
+          // 1. Completed: index < currentStepIndex
+          // 2. Active: index === currentStepIndex
+          // 3. Pending: index > currentStepIndex
 
-          const isCompleted = index < currentStatusIndex;
-          const isActive = index === currentStatusIndex;
-          const stepColor = getStatusColor(step); // Get specific color for this step
-          const IconComponent = statusIcons[step] || CheckCircleIcon;
+          const isCompleted = index < currentStepIndex;
+          const isActive = index === currentStepIndex;
+          const stepColor = getStatusColor(step.label); // Get color for this step label
+          const IconComponent = statusIcons[step.label] || CheckCircleIcon;
+
+          let subText = "Pending";
+          if (isCompleted) {
+            subText = "Completed";
+          } else if (isActive) {
+            // Check if specifically completed within this step
+            if (
+              status.includes("Completed") ||
+              status === "Response Sent" ||
+              status === "Delivered"
+            ) {
+              subText = "Completed";
+            } else if (status === "Order Confirmed") {
+              subText = "Confirmed";
+            } else {
+              subText = "Pending";
+            }
+          }
 
           return (
             <div
-              key={step}
+              key={step.label}
               className={`approval-item ${isActive ? "active" : ""}`}
             >
               <div
@@ -1816,20 +1900,16 @@ const ApprovalsCard = ({ status, type }) => {
                       fontWeight: isActive ? "600" : "500",
                     }}
                   >
-                    {step}
+                    {step.label}
                   </span>
-                  {isActive && status !== "Delivered" && (
-                    <button className="nudge-btn">Nudge</button>
-                  )}
+                  {isActive &&
+                    subText === "Pending" &&
+                    status !== "Order Confirmed" && (
+                      <button className="nudge-btn">Nudge</button>
+                    )}
                 </div>
 
-                <span className="approval-sub">
-                  {isCompleted
-                    ? "Completed"
-                    : isActive
-                      ? "Current Status"
-                      : "Pending"}
-                </span>
+                <span className="approval-sub">{subText}</span>
               </div>
             </div>
           );
