@@ -599,7 +599,24 @@ const DepartmentsCard = ({
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">👥 Departments</h3>
+        <h3 className="card-title">
+          👥 Departments
+          {departments.length > 0 && (
+            <span
+              style={{
+                marginLeft: "0.5rem",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                padding: "2px 8px",
+                borderRadius: "999px",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}
+            >
+              {departments.length}
+            </span>
+          )}
+        </h3>
         {!readOnly && (
           <button
             className="edit-link"
@@ -1904,9 +1921,7 @@ const ApprovalsCard = ({ status, type }) => {
                   </span>
                   {isActive &&
                     subText === "Pending" &&
-                    status !== "Order Confirmed" && (
-                      <button className="nudge-btn">Nudge</button>
-                    )}
+                    status !== "Order Confirmed"}
                 </div>
 
                 <span className="approval-sub">{subText}</span>

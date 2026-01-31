@@ -16,6 +16,7 @@ const Header = ({
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
+  engagedCount = 0, // [New] Department engagement count
 }) => {
   const getInitials = () => {
     if (!user) return "U";
@@ -124,6 +125,9 @@ const Header = ({
               }}
             >
               Engaged Projects
+              {engagedCount > 0 && (
+                <span className="nav-badge">{engagedCount}</span>
+              )}
             </a>
           )}
         </nav>

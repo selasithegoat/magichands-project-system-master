@@ -56,11 +56,13 @@ const ProtectedLayout = ({
   navigate,
   onSignOut, // Receive onSignOut
   projectCount, // Receive projectCount
+  engagedCount, // [New] Receive engagedCount
 }) => (
   <Layout
     activeView={activeView}
     user={user} // Pass user to Layout
     projectCount={projectCount} // Pass to Layout
+    engagedCount={engagedCount} // [New] Pass to Layout
     onNavigateDashboard={() => navigate("/")}
     onNavigateProject={() => navigate("/projects")}
     onNavigateHistory={() => navigate("/history")}
@@ -82,6 +84,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [projectCount, setProjectCount] = useState(0); // Global project count
+  const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
 
   // Initialize auto-logout (30 minutes)
   useInactivityLogout();
@@ -98,6 +101,70 @@ function App() {
       }
     } catch (err) {
       console.error("Failed to update project count", err);
+    }
+  };
+
+  // [New] Fetch engaged project count for user's department(s)
+  const fetchEngagedCount = async (userData) => {
+    const userDepts = userData?.department || user?.department || [];
+
+    // Map user's main departments to sub-departments (same logic as EngagedProjects.jsx)
+    let subDepts = [];
+    if (userDepts.includes("Production")) {
+      subDepts = [
+        ...subDepts,
+        "dtf",
+        "uv-dtf",
+        "uv-printing",
+        "engraving",
+        "large-format",
+        "digital-press",
+        "digital-heat-press",
+        "offset-press",
+        "screen-printing",
+        "embroidery",
+        "sublimation",
+        "digital-cutting",
+        "pvc-id",
+        "business-cards",
+        "installation",
+        "overseas",
+        "woodme",
+        "fabrication",
+        "signage",
+      ];
+    }
+    if (userDepts.includes("Graphics/Design")) {
+      subDepts = [...subDepts, "graphics"];
+    }
+    if (userDepts.includes("Stores")) {
+      subDepts = [...subDepts, "stock", "packaging"];
+    }
+    if (userDepts.includes("Photography")) {
+      subDepts = [...subDepts, "photography"];
+    }
+
+    if (subDepts.length === 0) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/projects?mode=engaged");
+      if (res.ok) {
+        const data = await res.json();
+        // Count projects where any of the user's sub-departments are engaged
+        const engaged = data.filter((p) => {
+          if (!p.departments || p.departments.length === 0) return false;
+          return (
+            p.departments.some((dept) => subDepts.includes(dept)) &&
+            p.status !== "Completed" &&
+            p.status !== "Delivered"
+          );
+        });
+        setEngagedCount(engaged.length);
+      }
+    } catch (err) {
+      console.error("Failed to update engaged count", err);
     }
   };
 
@@ -132,6 +199,13 @@ function App() {
   React.useEffect(() => {
     fetchUser();
   }, []);
+
+  // [New] Fetch engaged count when user changes
+  React.useEffect(() => {
+    if (user?.department?.length) {
+      fetchEngagedCount(user);
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -174,6 +248,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
               onSignOut={handleLogout}
             >
               <Dashboard
@@ -194,6 +269,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <PendingAssignments
                 user={user}
@@ -210,6 +286,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <CreateProjectLanding />
             </ProtectedLayout>
@@ -223,6 +300,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <MinimalQuoteForm />
             </ProtectedLayout>
@@ -236,6 +314,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <QuoteProjectWizard />
             </ProtectedLayout>
@@ -249,6 +328,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <CreateProjectWizard onProjectCreate={fetchProjectCount} />
             </ProtectedLayout>
@@ -262,6 +342,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <ProjectDetail user={user} onProjectChange={fetchProjectCount} />
             </ProtectedLayout>
@@ -275,6 +356,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <OngoingProjects
                 onNavigateDetail={(id) => navigate(`/detail/${id}`)}
@@ -293,6 +375,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <ProjectHistory onBack={() => navigate("/")} />
             </ProtectedLayout>
@@ -306,6 +389,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <CreateProjectLanding />
             </ProtectedLayout>
@@ -319,6 +403,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <NewOrders />
             </ProtectedLayout>
@@ -332,6 +417,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <EndOfDayUpdate user={user} />
             </ProtectedLayout>
@@ -345,6 +431,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <EngagedProjects user={user} />
             </ProtectedLayout>
@@ -358,6 +445,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <Profile
                 user={user}
@@ -375,6 +463,7 @@ function App() {
               user={user}
               navigate={navigate}
               projectCount={projectCount}
+              engagedCount={engagedCount}
             >
               <MyActivities onBack={() => navigate("/profile")} />
             </ProtectedLayout>
