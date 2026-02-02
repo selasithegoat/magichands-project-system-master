@@ -814,86 +814,41 @@ const ProjectDetails = ({ user }) => {
                   marginTop: "1rem",
                 }}
               >
-                {/* Sample Image */}
-                {(project.sampleImage || details.sampleImage) && (
-                  <div>
-                    <h4
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: "600",
-                        color: "var(--text-secondary)",
-                        marginBottom: "0.75rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      Sample Image
-                    </h4>
-                    <div
-                      style={{
-                        borderRadius: "12px",
-                        overflow: "hidden",
-                        border: "1px solid var(--border-color)",
-                        maxWidth: "400px",
-                        background: "rgba(0,0,0,0.2)",
-                      }}
-                    >
-                      <a
-                        href={`http://localhost:5000${project.sampleImage || details.sampleImage}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <img
-                          src={`http://localhost:5000${project.sampleImage || details.sampleImage}`}
-                          alt="Sample"
-                          style={{
-                            width: "100%",
-                            height: "auto",
-                            display: "block",
-                            maxHeight: "300px",
-                            objectFit: "contain",
-                          }}
-                        />
-                      </a>
-                    </div>
-                  </div>
-                )}
-
-                {/* Attachments */}
-                {((project.attachments && project.attachments.length > 0) ||
-                  (details.attachments && details.attachments.length > 0)) && (
-                  <div>
-                    <h4
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: "600",
-                        color: "var(--text-secondary)",
-                        marginBottom: "0.75rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      Attachments (
-                      {(project.attachments?.length || 0) +
-                        (details.attachments?.length || 0)}
+                {/* Unified Attachments Grid */}
+                <div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(120px, 1fr))",
+                      gap: "1rem",
+                    }}
+                  >
+                    {[
+                      // Combine sampleImage (if exists) + all attachments
+                      ...(project.sampleImage || details.sampleImage
+                        ? [project.sampleImage || details.sampleImage]
+                        : []),
+                      ...(project.attachments || []),
+                      ...(details.attachments || []),
+                    ]
+                      // Filter out duplicates if any (by path string)
+                      .filter(
+                        (value, index, self) => self.indexOf(value) === index,
                       )
-                    </h4>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(120px, 1fr))",
-                        gap: "1rem",
-                      }}
-                    >
-                      {[
-                        ...(project.attachments || []),
-                        ...(details.attachments || []),
-                      ].map((path, idx) => {
+                      .map((path, idx) => {
                         const isImage = path.match(
                           /\.(jpg|jpeg|png|gif|webp)$/i,
                         );
-                        const fileName = path.split("/").pop();
+                        // Safe check for path being a string before split
+                        const fileName =
+                          typeof path === "string"
+                            ? path.split("/").pop()
+                            : "File";
+
+                        // Debug log for path issues if any
+                        // console.log("Rendering attachment path:", path);
+
                         return (
                           <a
                             key={idx}
@@ -919,6 +874,7 @@ const ProjectDetails = ({ user }) => {
                             onMouseOut={(e) =>
                               (e.currentTarget.style.transform = "scale(1)")
                             }
+                            title={fileName}
                           >
                             {isImage ? (
                               <img
@@ -958,9 +914,8 @@ const ProjectDetails = ({ user }) => {
                           </a>
                         );
                       })}
-                    </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}

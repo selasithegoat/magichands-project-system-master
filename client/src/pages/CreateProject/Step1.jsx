@@ -376,8 +376,8 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               </div>
             )}
 
-            {/* Existing Attachments (from New Orders) */}
-            {formData.attachments && formData.attachments.length > 0 && (
+            {/* Unified Existing Reference Materials (Attachments & Sample Image) */}
+            {(formData.attachments?.length > 0 || formData.sampleImage) && (
               <div
                 style={{
                   marginTop: "1rem",
@@ -386,12 +386,16 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   gap: "0.5rem",
                 }}
               >
-                {formData.attachments.map((path, idx) => {
+                {/* Prepare a unified list of existing files */}
+                {[
+                  ...(formData.sampleImage ? [formData.sampleImage] : []),
+                  ...(formData.attachments || []),
+                ].map((path, idx) => {
                   const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                   const fileName = path.split("/").pop();
                   return (
                     <a
-                      key={idx}
+                      key={`exist-${idx}`}
                       href={`${path}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -407,11 +411,12 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                         background: "rgba(0,0,0,0.1)",
                         textDecoration: "none",
                       }}
+                      title={fileName}
                     >
                       {isImage ? (
                         <img
                           src={`${path}`}
-                          alt="attachment"
+                          alt="reference"
                           style={{
                             width: "100%",
                             height: "100%",
@@ -449,19 +454,6 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                 })}
               </div>
             )}
-
-            {/* Existing Sample Image (Legacy/Fallback) */}
-            {formData.sampleImage &&
-              (!formData.files || formData.files.length === 0) &&
-              (!formData.attachments || formData.attachments.length === 0) && (
-                <div style={{ marginTop: "1rem" }}>
-                  <img
-                    src={`${formData.sampleImage}`}
-                    alt="Existing"
-                    style={{ maxWidth: "200px", borderRadius: "8px" }}
-                  />
-                </div>
-              )}
           </div>
         </div>
       </div>
