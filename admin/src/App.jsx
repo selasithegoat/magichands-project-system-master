@@ -29,7 +29,7 @@ function App() {
         const res = await fetch("/api/auth/me");
         if (res.ok) {
           const data = await res.json();
-          setUser(data);
+          setUser(data); // data will be null if not logged in, which is correct
         }
       } catch (error) {
         console.error("Session verification failed", error);

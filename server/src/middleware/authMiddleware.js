@@ -70,4 +70,39 @@ const admin = (req, res, next) => {
   }
 };
 
-module.exports = { protect, admin };
+const checkAuth = async (req, res, next) => {
+  let token;
+  const origin = req.headers.origin || req.headers.referer || "";
+
+  if (origin.includes("3000")) {
+    token = req.cookies.token_admin;
+  } else if (origin.includes("5173") || origin.includes("5174")) {
+    token = req.cookies.token_client;
+  } else {
+    token = req.cookies.token_client || req.cookies.token_admin;
+  }
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id).select("-password");
+
+      // Sliding Expiration (keep session alive)
+      const cookieName =
+        req.user.role === "admin" ? "token_admin" : "token_client";
+
+      res.cookie(cookieName, token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 30 * 60 * 1000,
+      });
+    } catch (error) {
+      // Invalid token - typically we just ignore and treat as guest
+      // but strictly speaking we could clear the cookie here too?
+    }
+  }
+  next();
+};
+
+module.exports = { protect, admin, checkAuth };

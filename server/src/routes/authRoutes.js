@@ -8,11 +8,11 @@ const {
   updateProfile,
   getUsers, // [NEW]
 } = require("../controllers/authController");
-const { protect, admin } = require("../middleware/authMiddleware");
+const { protect, admin, checkAuth } = require("../middleware/authMiddleware");
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
-router.get("/me", protect, getMe);
+router.get("/me", checkAuth, getMe);
 router.put("/profile", protect, updateProfile);
 router.get("/users", protect, getUsers); // [NEW]
 router.post("/logout", logoutUser);

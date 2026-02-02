@@ -178,10 +178,13 @@ function App() {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
-        fetchProjectCount(); // Fetch count when user is loaded
-        // If on login page and authorized, go to dashboard
-        if (location.pathname === "/login") {
-          navigate("/");
+
+        if (userData) {
+          fetchProjectCount(); // Fetch count when user is loaded
+          // If on login page and authorized, go to dashboard
+          if (location.pathname === "/login") {
+            navigate("/");
+          }
         }
       } else {
         // If unauthorized and trying to access protected route, go to login

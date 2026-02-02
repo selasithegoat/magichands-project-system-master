@@ -113,7 +113,8 @@ const loginUser = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   // req.user is set in authMiddleware by verifying token
-  res.status(200).json(req.user);
+  // If checkAuth is used and no token, req.user will be undefined. Return null safely.
+  res.status(200).json(req.user || null);
 };
 
 // @desc    Logout user / Clear cookie
