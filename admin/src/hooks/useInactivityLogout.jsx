@@ -9,7 +9,10 @@ const useInactivityLogout = (timeout = 1800000) => {
   const logout = async () => {
     try {
       // Call logout endpoint to clear cookies
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
 
       // Clear local storage if used
       localStorage.removeItem("token");

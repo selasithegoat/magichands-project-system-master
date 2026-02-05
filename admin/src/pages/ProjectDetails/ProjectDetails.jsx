@@ -62,6 +62,7 @@ const ProjectDetails = ({ user }) => {
       const res = await fetch(`/api/projects/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ status: newStatus }),
       });
 
@@ -86,7 +87,9 @@ const ProjectDetails = ({ user }) => {
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const res = await fetch(`/api/projects/${id}`);
+        const res = await fetch(`/api/projects/${id}`, {
+          credentials: "include",
+        });
         if (res.ok) {
           const data = await res.json();
           setProject(data);
@@ -122,7 +125,9 @@ const ProjectDetails = ({ user }) => {
 
     const fetchUpdates = async () => {
       try {
-        const res = await fetch(`/api/updates/project/${id}`);
+        const res = await fetch(`/api/updates/project/${id}`, {
+          credentials: "include",
+        });
         if (res.ok) {
           const data = await res.json();
           setUpdates(data);
@@ -138,7 +143,9 @@ const ProjectDetails = ({ user }) => {
     // Fetch users for Lead Edit
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/auth/users");
+      const res = await fetch("/api/auth/users", {
+        credentials: "include",
+      });
         if (res.ok) {
           const data = await res.json();
           setAvailableUsers(data);
@@ -173,6 +180,7 @@ const ProjectDetails = ({ user }) => {
       const res = await fetch(`/api/projects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           projectLeadId: leadForm,
           lead: leadLabel, // Also update duplicate lead name in details if needed
@@ -243,6 +251,7 @@ const ProjectDetails = ({ user }) => {
       const res = await fetch(`/api/projects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -280,6 +289,7 @@ const ProjectDetails = ({ user }) => {
       const res = await fetch(`/api/projects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           quoteDetails: {
             ...project.quoteDetails,

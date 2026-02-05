@@ -51,7 +51,9 @@ const Teams = ({ user }) => {
   // Fetch Employees
   const fetchEmployees = async () => {
     try {
-      const res = await fetch("/api/admin/employees");
+      const res = await fetch("/api/admin/employees", {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setEmployees(data);
@@ -152,6 +154,7 @@ const Teams = ({ user }) => {
     try {
       const res = await fetch(`/api/admin/employees/${employeeId}`, {
         method: "DELETE",
+        credentials: "include",
       });
       if (res.ok) {
         setEmployees(employees.filter((e) => e._id !== employeeId));
@@ -184,6 +187,7 @@ const Teams = ({ user }) => {
         const res = await fetch("/api/admin/employees", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify(formData),
         });
 
@@ -206,6 +210,7 @@ const Teams = ({ user }) => {
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               firstName: formData.firstName,
               lastName: formData.lastName,
@@ -250,6 +255,7 @@ const Teams = ({ user }) => {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ password: passwordData.newPassword }),
         },
       );

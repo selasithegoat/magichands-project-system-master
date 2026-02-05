@@ -27,7 +27,9 @@ const Projects = ({ user }) => {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const res = await fetch("/api/projects?source=admin");
+        const res = await fetch("/api/projects?source=admin", {
+          credentials: "include",
+        });
         if (res.ok) {
           const data = await res.json();
           setProjects(data);
@@ -84,6 +86,7 @@ const Projects = ({ user }) => {
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "DELETE",
+        credentials: "include",
       });
       if (res.ok) {
         setProjects(projects.filter((p) => p._id !== projectId));

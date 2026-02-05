@@ -288,6 +288,7 @@ const Dashboard = ({ user }) => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
       });
 
       if (res.ok) {

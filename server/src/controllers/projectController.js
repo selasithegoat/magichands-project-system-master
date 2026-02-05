@@ -250,7 +250,7 @@ const getProjects = async (req, res) => {
     // - Engaged Department users can see all projects in engaged mode (Engaged Projects)
     // - Front Desk users in Admin Portal see only their own projects
     const canSeeAll =
-      (req.user.role === "admin" && isAdminPortal && !isFrontDesk) ||
+      (req.user.role === "admin" && isAdminPortal) ||
       (isReportMode && isFrontDesk) ||
       (isEngagedMode && isEngagedDept); // Engaged Projects Mode
 

@@ -14,7 +14,9 @@ const Clients = ({ user }) => {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await fetch("/api/projects/clients");
+        const res = await fetch("/api/projects/clients", {
+          credentials: "include",
+        });
         if (res.ok) {
           const data = await res.json();
           setClients(data);

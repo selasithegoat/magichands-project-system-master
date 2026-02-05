@@ -26,7 +26,9 @@ function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+        });
         if (res.ok) {
           const data = await res.json();
           setUser(data); // data will be null if not logged in, which is correct
@@ -46,7 +48,10 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
       setUser(null);
     } catch (err) {
       console.error("Logout failed", err);
