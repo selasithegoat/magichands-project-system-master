@@ -1,0 +1,158 @@
+const ProjectUpdate = require("../models/ProjectUpdate");
+const Project = require("../models/Project");
+const { createNotification } = require("../utils/notificationService");
+const { logActivity } = require("../utils/activityLogger");
+const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
+
+// Get all updates for a specific project
+exports.getProjectUpdates = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const updates = await ProjectUpdate.find({ project: projectId })
+      .populate("author", "firstName lastName email role") // Populate author details
+      .sort({ createdAt: -1 }); // Newest first
+
+    res.status(200).json(updates);
+  } catch (error) {
+    console.error("Error fetching project updates:", error);
+    res.status(500).json({ message: "Server error fetching updates" });
+  }
+};
+
+// Create a new update
+exports.createProjectUpdate = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { content, category, attachments } = req.body;
+
+    const authorId = req.user._id; // Auth middleware attaches user doc to req.user
+
+    // Verify project exists
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    let attachmentsArray = [];
+    if (req.file) {
+      attachmentsArray.push({
+        name: req.file.originalname,
+        url: `/uploads/${req.file.filename}`,
+        fileType: req.file.mimetype,
+      });
+    }
+
+    const newUpdate = new ProjectUpdate({
+      project: projectId,
+      author: authorId,
+      content,
+      category,
+      attachments: attachmentsArray,
+    });
+
+    await newUpdate.save();
+
+    // If marked as End of Day Update, update the Project document
+
+    const isEOD =
+      req.body.isEndOfDayUpdate === "true" ||
+      req.body.isEndOfDayUpdate === true ||
+      req.body.isEndOfDayUpdate === "on";
+
+    if (isEOD) {
+      project.endOfDayUpdate = content;
+      project.endOfDayUpdateDate = new Date();
+      project.endOfDayUpdateBy = req.user._id;
+      await project.save();
+    } else {
+    }
+
+    // Populate author for immediate return
+    await newUpdate.populate("author", "firstName lastName email role");
+
+    // [New] Notify Lead if update is from a department
+    if (category !== "General" && project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "UPDATE",
+        `${category} Update Posted`,
+        `Project #${project.orderId}: A new update has been posted in the ${category} category for project: ${project.details.projectName}`,
+      );
+    }
+
+    // [New] Notify Front Desk if this is a Final (End of Day) update
+    if (isEOD) {
+      const User = require("../models/User"); // Import if not already at top
+      const frontDeskUsers = await User.find({ department: "Front Desk" });
+      for (const fdUser of frontDeskUsers) {
+        await createNotification(
+          fdUser._id,
+          req.user._id,
+          project._id,
+          "UPDATE",
+          "Final Update Posted",
+          `Project #${project.orderId}: ${req.user.firstName} ${req.user.lastName} has posted a final (End of Day) update for project: ${project.details.projectName}`,
+        );
+      }
+
+      // [New] Notify Admins of EOD Update
+      await notifyAdmins(
+        req.user._id,
+        project._id,
+        "UPDATE",
+        "End of Day Update Posted",
+        `${req.user.firstName} ${req.user.lastName} posted a final (End of Day) update for project #${project.orderId || project._id}: ${project.details.projectName}`,
+      );
+    } else {
+      // [New] Notify Admins of Regular Update
+      await notifyAdmins(
+        req.user._id,
+        project._id,
+        "UPDATE",
+        "Project Update Posted",
+        `${req.user.firstName} ${req.user.lastName} posted a new update in ${category} for project #${project.orderId || project._id}: ${content.substring(0, 100)}...`,
+      );
+    }
+
+    // [New] Log activity for this update
+    await logActivity(
+      project._id,
+      req.user.id,
+      "update_post",
+      `Posted a new update in ${category} category`,
+      { category, updateId: newUpdate._id, isEndOfDay: isEOD },
+    );
+
+    res.status(201).json(newUpdate);
+  } catch (error) {
+    console.error("Error creating project update:", error);
+    res.status(500).json({ message: "Server error creating update" });
+  }
+};
+
+// Delete an update
+exports.deleteProjectUpdate = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const update = await ProjectUpdate.findById(id);
+    if (!update) {
+      return res.status(404).json({ message: "Update not found" });
+    }
+
+    // Check authorization (optional: only author or admin can delete)
+    // if (update.author.toString() !== req.user.userId && req.user.role !== 'admin') {
+    //   return res.status(403).json({ message: "Not authorized to delete this update" });
+    // }
+
+    await update.deleteOne();
+
+    res.status(200).json({ message: "Update deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting project update:", error);
+    res.status(500).json({ message: "Server error deleting update" });
+  }
+};

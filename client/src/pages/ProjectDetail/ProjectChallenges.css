@@ -1,0 +1,485 @@
+.challenges-container {
+  padding: 1.5rem 2rem;
+  max-width: 1200px; /* Constrain width for centering */
+  margin: 0 auto; /* Center the container */
+  background-color: #fff;
+  border-radius: 12px;
+}
+
+/* Header Section */
+.challenges-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.flag-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  background-color: #fef2f2;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.challenges-title-group h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.challenge-count-badge {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.challenges-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Action Button - moved to top right flex in JSX */
+.report-challenge-btn {
+  /* width: 100%; Removed full width */
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.report-challenge-btn:hover {
+  background-color: #1d4ed8;
+}
+
+/* Table / List */
+/* Table / List - Switching to Grid for better alignment */
+.challenges-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Common Grid Layout for Header and Items */
+.list-header,
+.challenge-item {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1.2fr 1.5fr 1.2fr 0.5fr; /* Added small column for actions */
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0 1.5rem;
+}
+
+.list-header {
+  height: 50px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 0; /* Remove margin as it's part of the table structure now */
+}
+
+/* Remove old Flex column widths as we use Grid now */
+
+.challenge-item {
+  padding: 1.5rem 0; /* Adjust padding if needed, previously 1.5rem 0 */
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  background-color: #fff;
+  transition: background-color 0.2s;
+}
+
+.challenge-item:first-child {
+  border-top: none;
+}
+
+.challenge-item:hover {
+  background-color: #f8fafc;
+}
+
+/* Delete Button */
+.btn-icon-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+}
+
+.btn-icon-delete:hover {
+  background-color: #fee2e2;
+}
+
+/* Status Column */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: #f1f5f9;
+  color: #475569;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #94a3b8;
+}
+
+.status-pill.escalated {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+.status-pill.escalated .status-dot {
+  background-color: #dc2626;
+}
+
+.status-pill.open {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+.status-pill.open .status-dot {
+  background-color: #2563eb;
+}
+
+.status-pill.resolved {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+.status-pill.resolved .status-dot {
+  width: 8px;
+  height: 4px; /* Checkmark simulation? Design implies check icon or just text. Image has check icon in Verified green. Let's start with dot or check. The image shows a check icon for resolved. */
+  /* Wait, the image shows "Resolved" with check icon. The dot logic works for Open/Escalated.*/
+  background-color: transparent;
+  /* To act as checkmark space if using icon. 
+       Actually let's just use CSS checks or Font for simplicity. */
+  border-left: 2px solid #16a34a;
+  border-bottom: 2px solid #16a34a;
+  transform: rotate(-45deg);
+  border-radius: 0;
+  margin-top: -2px;
+}
+
+/* Reported By Column */
+.col-reported {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.reporter-initials {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: #f1f5f9;
+  color: #64748b;
+  flex-shrink: 0;
+}
+.reporter-initials.purple {
+  background-color: #f3e8ff;
+  color: #9333ea;
+}
+.reporter-initials.pink {
+  background-color: #fce7f3;
+  color: #db2777;
+}
+
+.reporter-info {
+  display: flex;
+  flex-direction: column;
+}
+.reporter-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+.reporter-date {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+/* Resolved Column */
+.resolved-placeholder {
+  color: #cbd5e1;
+  font-weight: 300;
+}
+.resolved-date-text {
+  font-size: 0.8125rem;
+  color: #0f172a;
+  font-weight: 600;
+  white-space: pre-wrap; /* For line break */
+  display: block;
+}
+
+/* No Strikethrough needed as per new image */
+
+/* Footer Pagination */
+.challenges-footer {
+  display: flex;
+  justify-content: space-between; /* Space between text and controls */
+  align-items: center;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  /* maybe border top? */
+}
+
+.footer-text {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+.view-archived-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.pagination-btn {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.375rem 1rem;
+  font-size: 0.875rem;
+  color: #94a3b8;
+
+}
+/* If active/clickable styles needed later */
+
+/* RESPONSIVE STYLES */
+@media (max-width: 1024px) {
+  /* Switch to card layout earlier */
+  .list-header {
+    display: none;
+  }
+
+  .challenges-list {
+    gap: 1rem;
+  }
+
+  .challenge-item {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1.25rem;
+    align-items: stretch;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+  }
+
+  .col-issue,
+  .col-assistance,
+  .col-status,
+  .col-reported,
+  .col-resolved {
+    flex: auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .col-assistance::before {
+    content: "Assistance Provided";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-status::before {
+    content: "Status";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-reported::before {
+    content: "Reported By";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-resolved::before {
+    content: "Resolved Date";
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .col-reported {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .col-actions {
+    display: flex; /* Ensure it's visible */
+    justify-content: flex-end;
+    width: 100%;
+    margin-top: 0.5rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.75rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .challenges-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .report-challenge-btn {
+    width: 100%; /* Full width button on mobile */
+    margin-top: 0.5rem;
+  }
+
+  .challenges-title-group h3 {
+    font-size: 1.125rem;
+  }
+
+  .challenges-footer {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content.challenges-modal {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.challenges-modal h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.625rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: #0f172a;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.btn-cancel {
+  background-color: #fff;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-submit {
+  background-color: #2563eb;
+  border: none;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-submit:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+}

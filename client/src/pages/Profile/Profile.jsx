@@ -1,0 +1,474 @@
+import React, { useState } from "react";
+import "./Profile.css";
+// Icons
+import UserAvatar from "../../components/ui/UserAvatar";
+import EditIcon from "../../components/icons/EditIcon";
+import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
+import FolderIcon from "../../components/icons/FolderIcon";
+import ClockIcon from "../../components/icons/ClockIcon";
+import UploadIcon from "../../components/icons/UploadIcon";
+import HelpIcon from "../../components/icons/HelpIcon";
+import LogOutIcon from "../../components/icons/LogOutIcon";
+
+const Profile = ({ onSignOut, user, onUpdateProfile }) => {
+  const [emailNotif, setEmailNotif] = useState(
+    user?.notificationSettings?.email ?? false,
+  );
+  const [pushNotif, setPushNotif] = useState(
+    user?.notificationSettings?.push ?? true,
+  );
+
+  // User Data State
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    employeeType: "Staff",
+    department: "",
+    contact: "",
+  });
+  const [stats, setStats] = useState({
+    totalProjects: 0,
+    completedProjects: 0,
+    hoursLogged: 0,
+  });
+  const [loading, setLoading] = useState(!user); // If user prop exists, not loading
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: '' }
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  // Sync state with user prop when it changes
+  React.useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        employeeType: user.employeeType || "Staff",
+        department: Array.isArray(user.department)
+          ? user.department.join(", ")
+          : user.department || "",
+        contact: user.contact || "",
+      });
+      setEmailNotif(user.notificationSettings?.email ?? false);
+      setPushNotif(user.notificationSettings?.push ?? true);
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Fetch Stats
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch("/api/projects/stats");
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  // Handle Toast Timeout
+  React.useEffect(() => {
+    if (message) {
+      // Start fade out after 4.5s
+      const fadeTimer = setTimeout(() => {
+        setIsFadingOut(true);
+      }, 4500);
+
+      // Remove after 5s
+      const removeTimer = setTimeout(() => {
+        setMessage(null);
+        setIsFadingOut(false);
+      }, 5000);
+
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(removeTimer);
+      };
+    }
+  }, [message]);
+
+  const [activities, setActivities] = useState([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+
+  // Fetch Activities
+  React.useEffect(() => {
+    const fetchActivities = async () => {
+      try {
+        const res = await fetch("/api/projects/activities/me?limit=5", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Backend now returns { activities: [], ... } due to pagination support
+          setActivities(data.activities || []);
+        }
+      } catch (error) {
+        console.error("Error fetching activities:", error);
+      } finally {
+        setIsLoadingActivities(false);
+      }
+    };
+    fetchActivities();
+  }, []);
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600)
+      return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getActivityIcon = (action) => {
+    if (action.includes("create")) return { icon: "📁", color: "blue" };
+    if (action.includes("update") || action.includes("status"))
+      return { icon: "✏️", color: "orange" };
+    if (action.includes("delete")) return { icon: "🗑️", color: "red" };
+    if (action.includes("add")) return { icon: "➕", color: "green" };
+    if (action.includes("approval")) return { icon: "✅", color: "green" };
+    return { icon: "📝", color: "gray" };
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage(null);
+    setIsFadingOut(false);
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          ...formData,
+          department: formData.department
+            ? formData.department
+                .split(",")
+                .map((d) => d.trim())
+                .filter((d) => d !== "")
+            : [],
+          notificationSettings: {
+            email: emailNotif,
+            push: pushNotif,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: "Profile updated successfully!" });
+        if (onUpdateProfile) onUpdateProfile(); // Refresh app state
+      } else {
+        setMessage({ type: "error", text: "Failed to update profile." });
+      }
+    } catch (error) {
+      console.error("Error updating profile", error);
+      setMessage({ type: "error", text: "An error occurred." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="profile-container">Loading...</div>;
+
+  return (
+    <div className="profile-container">
+      {/* Top Section: Header & Stats */}
+      <div className="profile-top-grid">
+        {/* ... (rest of top grid remains same) ... */}
+        {/* Profile Card */}
+        <div className="profile-header-card">
+          <div className="profile-wrapper">
+            <div className="profile-avatar-large">
+              {formData.firstName ? formData.firstName[0] : "U"}
+              {formData.lastName ? formData.lastName[0] : ""}
+              <button className="edit-avatar-btn">
+                <EditIcon width="12" height="12" />
+              </button>
+            </div>
+            <div className="profile-info-main">
+              <div className="profile-name-row">
+                <h1>
+                  {formData.firstName} {formData.lastName}
+                </h1>
+                <span className="role-badge">{formData.employeeType}</span>
+              </div>
+              <p className="profile-handle">{formData.department}</p>
+
+              <label>Contact (phone)</label>
+              <div className="contact-value">
+                <span>📞</span> {formData.contact || "Not set"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Column */}
+        <div className="profile-stats-column">
+          <div className="stat-card-row">
+            <div>
+              <span className="stat-label">Total Projects</span>
+              <h2 className="stat-value">{stats.totalProjects}</h2>
+            </div>
+            <div className="stat-icon-box blue">
+              <FolderIcon />
+            </div>
+          </div>
+          <div className="stat-card-row">
+            <div>
+              <span className="stat-label">Tasks Completed</span>
+              <h2 className="stat-value">{stats.completedProjects}</h2>
+            </div>
+            <div className="stat-icon-box green">
+              <CheckCircleIcon />
+            </div>
+          </div>
+          <div className="stat-card-row">
+            <div>
+              <span className="stat-label">Hours Logged</span>
+              <h2 className="stat-value">{stats.hoursLogged}</h2>
+            </div>
+            <div className="stat-icon-box purple">
+              <ClockIcon />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Grid: Form, Activity, Settings */}
+      <div className="profile-content-grid">
+        {/* Left Column: Form & Settings */}
+        <div className="profile-left-col">
+          {/* My Profile Form */}
+          <div className="content-card">
+            <div className="card-header">
+              <h3>
+                <span style={{ marginRight: "0.5rem" }}>👤</span> My Profile
+              </h3>
+            </div>
+
+            {message && (
+              <div
+                className={`toast-message ${message.type} ${
+                  isFadingOut ? "fading-out" : ""
+                }`}
+              >
+                {message.type === "success" ? (
+                  <CheckCircleIcon width="16" height="16" />
+                ) : (
+                  "⚠️"
+                )}
+                {message.text}
+              </div>
+            )}
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label>First Name</label>
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Last Name</label>
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="form-group full-width">
+                <label>Email Address</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Contact</label>
+                <input
+                  type="text"
+                  name="contact"
+                  value={formData.contact}
+                  onChange={handleChange}
+                />
+              </div>
+            </div>
+        
+          </div>
+
+          {/* Settings - Notifications */}
+          <div className="content-card">
+            <div className="card-header">
+              <h3>
+                <span style={{ marginRight: "0.5rem" }}>⚙️</span> Settings
+              </h3>
+            </div>
+            <div className="settings-section">
+              <h4>Notifications</h4>
+
+              <div className="setting-row">
+                <div>
+                  <div className="setting-title">Email Notifications</div>
+                  <div className="setting-desc">
+                    Receive email alerts for assignments and updates
+                  </div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={emailNotif}
+                    onChange={() => {
+                      if (emailNotif && !pushNotif) return; // Prevent turning both off
+                      setEmailNotif(!emailNotif);
+                    }}
+                    disabled={emailNotif && !pushNotif} // Visually disable if it's the only one left
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+
+              <div className="setting-row">
+                <div>
+                  <div className="setting-title">Push Notifications</div>
+                  <div className="setting-desc">
+                    Receive real-time push alerts on mobile devices
+                  </div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={pushNotif}
+                    onChange={() => {
+                      if (pushNotif && !emailNotif) return; // Prevent turning both off
+                      setPushNotif(!pushNotif);
+                    }}
+                    disabled={pushNotif && !emailNotif} // Visually disable if it's the only one left
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div className="form-actions">
+              <button
+                className="save-btn"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+        </div>
+
+        {/* Right Column: Activity & Support */}
+        <div className="profile-right-col">
+          {/* Activity */}
+          <div className="content-card">
+            <div className="card-header">
+              <h3>
+                <span style={{ marginRight: "0.5rem" }}>⏱️</span> Activity
+              </h3>
+              <a href="/my-activities" className="view-all-link">
+                View All
+              </a>
+            </div>
+            <div className="activity-list">
+              {isLoadingActivities ? (
+                <div
+                  style={{
+                    padding: "1rem",
+                    textAlign: "center",
+                    color: "#64748b",
+                  }}
+                >
+                  Loading activity...
+                </div>
+              ) : activities.length > 0 ? (
+                activities.map((activity) => {
+                  const { icon, color } = getActivityIcon(activity.action);
+                  return (
+                    <div className="activity-item" key={activity._id}>
+                      <div className={`activity-icon ${color}`}>{icon}</div>
+                      <div className="activity-content">
+                        <p>{activity.description}</p>
+                        <span className="time">
+                          {formatTimeAgo(activity.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div
+                  style={{
+                    padding: "1rem",
+                    textAlign: "center",
+                    color: "#64748b",
+                  }}
+                >
+                  No recent activity
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Help & Support */}
+          <div className="content-card">
+            <div className="card-header">
+              <h3>
+                <span style={{ marginRight: "0.5rem" }}>❓</span> Help & Support
+              </h3>
+            </div>
+            <div className="support-list">
+              <button className="support-btn">
+                <HelpIcon /> Browse FAQs <span className="arrow">›</span>
+              </button>
+              <button className="support-btn">
+                <span style={{ fontSize: "1.2rem", lineHeight: 0 }}>🎧</span>{" "}
+                Contact Support <span className="arrow">›</span>
+              </button>
+            </div>
+            <div className="support-tip">
+              <strong>Tip:</strong> You can find more detailed documentation in
+              the Knowledge Base accessible from the main dashboard.
+            </div>
+          </div>
+
+          {/* Sign Out */}
+          <button className="sign-out-btn" onClick={onSignOut}>
+            <LogOutIcon /> Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Profile;

@@ -1,0 +1,44 @@
+.priority-container {
+  margin-bottom: var(--spacing-lg);
+}
+
+.priority-options {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.priority-card {
+  flex: 1;
+  background-color: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 80px;
+}
+
+.priority-card:hover {
+  border-color: var(--text-secondary);
+}
+
+.priority-card.active {
+  border-color: var(--accent-color);
+  background-color: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.priority-icon {
+  font-size: 1.2rem;
+  margin-bottom: 4px;
+}
+
+.priority-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}

@@ -1,0 +1,8 @@
+.check-mark.primary {
+  stroke: white;
+}
+
+.check-mark.secondary {
+  stroke: var(--primary-blue);
+}
+    

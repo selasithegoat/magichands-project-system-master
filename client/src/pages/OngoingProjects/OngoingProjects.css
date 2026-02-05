@@ -1,0 +1,324 @@
+.ongoing-container {
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  background-color: var(--bg-main, #f8fafc);
+  min-height: 100vh;
+}
+
+/* Header */
+.ongoing-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.ongoing-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ongoing-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Sub-header / Stats */
+.ongoing-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.stats-main-text {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.stats-sub-text {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.view-all-link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Search */
+.ongoing-search-wrapper {
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.ongoing-search-input {
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  flex: 1;
+  color: #1e293b;
+}
+
+.ongoing-search-input::placeholder {
+  color: #94a3b8;
+}
+
+/* Grid */
+.projects-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .projects-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1400px) {
+  .projects-grid {
+    grid-template-columns: 1fr 1fr; /* Keep 2 cols wide cards or go to 3? Design looks like big cards. Let's stick to 2 for now based on card complexity */
+    /* Update: If the user wants to stretch, maybe 2 columns is best for these detailed cards */
+  }
+}
+
+/* Card */
+.ongoing-card {
+  background-color: white;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.status-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-pill.blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.status-pill.purple {
+  background-color: #f3e8ff;
+  color: #9333ea;
+}
+
+.status-pill.orange {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
+.card-menu-btn {
+  color: #94a3b8;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.project-name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.project-code {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-bottom: 20px;
+  display: block;
+}
+
+/* Progress */
+.progress-container {
+  margin-bottom: 24px;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.progress-percent {
+  font-weight: 700;
+}
+
+.progress-percent.blue {
+  color: #2563eb;
+}
+.progress-percent.purple {
+  color: #9333ea;
+}
+.progress-percent.orange {
+  color: #ea580c;
+}
+.progress-percent.red {
+  color: #ef4444;
+}
+
+.track {
+  width: 100%;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+/* Footer info */
+.card-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-name {
+  font-size: 0.875rem;
+  color: #334155;
+  font-weight: 500;
+}
+
+.date-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.date-info.urgent {
+  color: #ea580c;
+}
+
+/* Actions */
+.card-actions-row {
+  display: flex;
+  gap: 16px;
+  margin-top: auto;
+}
+
+.btn-details {
+  flex: 1;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: center;
+}
+/* Force visibility */
+.btn-details {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-update {
+  flex: 1.5;
+  background-color: #2563eb;
+  border: none;
+  color: white;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn-update:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-details:hover {
+  background-color: #f8fafc;
+}
+
+/* FAB */
+.fab-btn-blue {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 64px;
+  height: 64px;
+  background-color: #2563eb;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+  cursor: pointer;
+  font-size: 2rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.fab-btn-blue:hover {
+  transform: scale(1.05);
+  background-color: #1d4ed8;
+}

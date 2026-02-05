@@ -1,0 +1,140 @@
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background-color: var(--bg-dark);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-lg);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  transition: transform 0.3s ease-in-out;
+  overflow-y: auto; /* Enable vertical scrolling */
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.sidebar-mobile-open {
+    transform: translateX(0);
+  }
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: 3rem;
+  padding-left: var(--spacing-xs);
+}
+
+.mobile-close-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+@media (max-width: 1024px) {
+  .mobile-close-btn {
+    display: block;
+  }
+}
+
+.logo-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.logo-text h1 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.logo-text span {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 240px;
+  }
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-item.active {
+  background-color: rgba(59, 130, 246, 0.1); /* Low opacity blue */
+  color: #60a5fa; /* Lighter blue text */
+  /* border: 1px solid rgba(59, 130, 246, 0.3); Optional border from design */
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-color);
+}
+
+.logout-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ef4444 !important; /* Red color for logout */
+}
+
+.logout-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+@media (max-height: 700px) {
+  .sidebar-logo {
+    margin-bottom: 1.5rem;
+  }
+  .nav-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+}

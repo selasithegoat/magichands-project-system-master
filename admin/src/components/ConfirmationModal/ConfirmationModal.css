@@ -1,0 +1,127 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background-color: var(--bg-card, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: modal-pop 0.2s ease-out;
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color, #334155);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary, #f8fafc);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #f8fafc);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--border-color, #334155);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.btn-cancel {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border: 1px solid var(--border-color, #334155);
+  color: var(--text-primary, #f8fafc);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.btn-confirm {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  color: white;
+  transition: all 0.2s;
+}
+
+.btn-confirm.primary {
+  background-color: #3b82f6;
+}
+
+.btn-confirm.primary:hover {
+  background-color: #2563eb;
+}
+
+.btn-confirm.danger {
+  background-color: #ef4444;
+}
+
+.btn-confirm.danger:hover {
+  background-color: #dc2626;
+}

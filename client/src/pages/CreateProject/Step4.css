@@ -1,0 +1,83 @@
+.risk-section {
+  margin-top: 32px;
+}
+
+.risk-section-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.risk-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.risk-section-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.risk-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.risk-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.badge-high {
+  background-color: #fff7ed; /* Light orange */
+  color: #c2410c; /* Dark Orange */
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #ffedd5;
+}
+
+.risk-number {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.add-risk-btn {
+  width: 100%;
+  padding: 12px;
+  border: 1px dashed #bfdbfe;
+  background-color: white; /* Design shows white outline dash */
+  border-radius: var(--radius-lg); /* More rounded */
+  color: var(--primary-blue);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.add-risk-btn:hover {
+  background-color: #f8fafc;
+  border-color: var(--primary-blue);
+}
+
+.form-group {
+  width: 100%;
+}

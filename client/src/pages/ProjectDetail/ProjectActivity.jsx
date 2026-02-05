@@ -1,0 +1,310 @@
+import React, { useState, useEffect } from "react";
+import "./ProjectActivity.css";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+// Icons
+import SearchIcon from "../../components/icons/SearchIcon";
+import EditIcon from "../../components/icons/EditIcon";
+import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
+import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
+import SystemIcon from "../../components/icons/SystemIcon";
+import CreateIcon from "../../components/icons/CreateIcon";
+
+const ProjectActivity = ({ project }) => {
+  const [filter, setFilter] = useState("All Activity");
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    if (project?._id) {
+      fetchActivities();
+    }
+  }, [project?._id]);
+
+  const fetchActivities = async () => {
+    try {
+      const res = await fetch(`/api/projects/${project._id}/activity`);
+      const data = await res.json();
+      setActivities(data);
+    } catch (err) {
+      console.error("Failed to fetch activity log", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getFilteredActivities = () => {
+    let filtered = activities;
+
+    if (filter !== "All Activity") {
+      filtered = activities.filter((act) => {
+        if (filter === "Status Updates") return act.action === "status_change";
+        if (filter === "New Orders") return act.action === "create";
+        if (filter === "Updates")
+          return act.action === "update_post";
+        if (filter === "Project Edits")
+          return [
+            "update",
+            "challenge_update",
+            "challenge_delete",
+            "item_add",
+            "item_delete",
+            "item_update",
+            "departments_update",
+            "factor_update",
+            "risk_update",
+          ].includes(act.action);
+        if (filter === "Risks & Challenges")
+          return ["risk_add", "challenge_add", "factor_add"].includes(
+            act.action,
+          );
+        return true;
+      });
+    }
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((act) => {
+        const descMatch = act.description?.toLowerCase().includes(term);
+        const actionMatch = act.action?.toLowerCase().includes(term);
+        const userMatch = `${act.user?.firstName} ${act.user?.lastName}`
+          .toLowerCase()
+          .includes(term);
+        const categoryMatch = act.details?.category
+          ?.toLowerCase()
+          .includes(term);
+        return descMatch || actionMatch || userMatch || categoryMatch;
+      });
+    }
+
+    return filtered;
+  };
+
+  // Helper to format item date
+  const formatTime = (dateStr) => {
+    return new Date(dateStr).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const formatDateHeader = (dateStr) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) return "TODAY";
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  // Group by date
+  const groupedActivities = () => {
+    const groups = [];
+    const filtered = getFilteredActivities();
+    let lastDate = "";
+
+    filtered.forEach((item) => {
+      const dateHeader = formatDateHeader(item.createdAt);
+      if (dateHeader !== lastDate) {
+        groups.push({ type: "separator", date: dateHeader });
+        lastDate = dateHeader;
+      }
+      groups.push({ ...item, type: "activity" });
+    });
+    return groups;
+  };
+
+  const renderIcon = (type) => {
+    switch (type) {
+      case "create":
+        return <CreateIcon />;
+      case "status_change":
+        return <SystemIcon />; // Using system icon for status flow
+      case "challenge_add":
+      case "risk_add":
+      case "factor_add":
+        return <AlertTriangleIcon />;
+      case "approval":
+        return <CheckCircleIcon />;
+      case "update":
+      case "challenge_update":
+      case "item_add":
+      case "item_delete":
+      case "item_update":
+      case "departments_update":
+      case "factor_update":
+      case "risk_update":
+      case "challenge_delete":
+      case "update_post":
+        return <EditIcon />;
+      default:
+        return <SystemIcon />;
+    }
+  };
+
+  const getCardClass = (action) => {
+    switch (action) {
+      case "create":
+        return "card-create";
+      case "status_change":
+      case "system":
+        return "card-system";
+      case "risk_add":
+      case "challenge_add":
+      case "factor_add":
+        return "card-risk";
+      case "approval":
+        return "card-approval";
+      case "update":
+      case "challenge_update":
+      case "item_add":
+      case "item_delete":
+      case "item_update":
+      case "departments_update":
+      case "factor_update":
+      case "risk_update":
+      case "challenge_delete":
+      case "update_post":
+        return "card-update";
+      default:
+        return "card-system";
+    }
+  };
+
+  if (loading) return <LoadingSpinner />;
+
+  return (
+    <div className="activity-container">
+      {/* Search and Filters */}
+      <div className="history-controls">
+        <div className="search-bar-wrapper">
+          <span className="search-icon-ph">
+            <SearchIcon />
+          </span>
+          <input
+            type="text"
+            className="history-search-input"
+            placeholder="Search activity log..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="history-filters">
+          {[
+            "All Activity",
+            "New Orders",
+            "Updates",
+            "Status Updates",
+            "Project Edits",
+            "Risks & Challenges",
+          ].map((f) => (
+            <div
+              key={f}
+              className={`filter-pill ${filter === f ? "active" : ""}`}
+              onClick={() => setFilter(f)}
+            >
+              {f}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="history-timeline">
+        {groupedActivities().map((item, index) => {
+          if (item.type === "separator") {
+            return (
+              <div key={`sep-${index}`} className="date-separator">
+                <span className="date-badge">{item.date}</span>
+              </div>
+            );
+          }
+
+          return (
+            <div key={item._id} className="timeline-item">
+              <div
+                className={`history-icon-wrapper ${(() => {
+                  if (item.action === "create") return "create";
+                  if (item.action.includes("approval")) return "approval";
+                  if (item.action.includes("delete")) return "risk";
+                  if (
+                    item.action.includes("risk_add") ||
+                    item.action.includes("challenge_add") ||
+                    item.action.includes("factor_add")
+                  )
+                    return "risk";
+                  if (item.action === "status_change") return "system";
+                  return "edit";
+                })()}`}
+              >
+                {renderIcon(item.action)}
+              </div>
+
+              {/* Card */}
+              <div
+                className={`history-content-card ${getCardClass(item.action)}`}
+              >
+                <div className="card-header">
+                  <div className="user-row">
+                    <div
+                      className={`history-user-initials`}
+                      style={{ backgroundColor: "#e2e8f0", color: "#64748b" }}
+                    >
+                      {item.user?.firstName?.[0]}
+                      {item.user?.lastName?.[0]}
+                    </div>
+                    <span className="history-username">
+                      {item.user?.firstName} {item.user?.lastName}
+                    </span>
+                  </div>
+                  <span className="history-time">
+                    {formatTime(item.createdAt)}
+                  </span>
+                </div>
+                <div className="card-body">
+                  <p className="history-description">{item.description}</p>
+
+                  {/* Dynamic Details Rendering based on keys in item.details */}
+                  {item.details && item.details.statusChange && (
+                    <div className="status-change-row">
+                      <div className="status-pill-hist">
+                        {item.details.statusChange.from}
+                      </div>
+                      <span className="val-arrow">→</span>
+                      <div className="status-pill-hist in-progress">
+                        {item.details.statusChange.to}
+                      </div>
+                    </div>
+                  )}
+
+                  {item.details && item.details.newStatus && (
+                    <div className="change-box">
+                      <span className="change-label">STATUS UPDATE</span>
+                      <span
+                        className="val-new"
+                        style={{ fontWeight: 600, color: "#0f172a" }}
+                      >
+                        {item.details.newStatus}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {activities.length === 0 && (
+          <div
+            style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}
+          >
+            No activity recorded yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ProjectActivity;

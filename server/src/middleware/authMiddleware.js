@@ -1,0 +1,108 @@
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+
+const protect = async (req, res, next) => {
+  let token;
+
+  // Check for token in cookies specifically, prioritizing based on expected context if possible,
+  // but for now we check all.
+  // Note: This middleware protects both Admin and Client routes.
+  // We need to decide which token to use if BOTH exist.
+  // Usually, valid token wins.
+
+  // Prefer token_admin if we are hitting an admin route?
+  // We don't know easily without checking URL.
+  // Let's just grab whichever exists.
+
+  // Determine origin to prevent session interference on localhost
+  const origin = req.headers.origin || req.headers.referer || "";
+
+  // Strict token enforcement based on portal origin
+  if (origin.includes("3000")) {
+    // Admin Portal - ONLY allow token_admin
+    token = req.cookies.token_admin;
+  } else if (origin.includes("5173") || origin.includes("5174")) {
+    // Client Portal - ONLY allow token_client
+    // Note: We no longer allow token_admin fallback here to prevent auto-login
+    token = req.cookies.token_client;
+  } else {
+    // Other (Postman, etc.) - Fallback safely
+    token = req.cookies.token_client || req.cookies.token_admin;
+  }
+
+  if (token) {
+    try {
+      // Verify token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Get user from the token
+      req.user = await User.findById(decoded.id).select("-password");
+
+      // Decide which cookie updated
+      // If user is admin, refresh token_admin. Else token_client.
+      const cookieName =
+        req.user.role === "admin" ? "token_admin" : "token_client";
+
+      // Sliding Expiration
+      res.cookie(cookieName, token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 30 * 60 * 1000, // 30 minutes
+      });
+
+      next();
+    } catch (error) {
+      console.error(error);
+      res.status(401).json({ message: "Not authorized" });
+    }
+  } else {
+    res.status(401).json({ message: "Not authorized, no token" });
+  }
+};
+
+// Middleware for admin access
+const admin = (req, res, next) => {
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    res.status(401).json({ message: "Not authorized as an admin" });
+  }
+};
+
+const checkAuth = async (req, res, next) => {
+  let token;
+  const origin = req.headers.origin || req.headers.referer || "";
+
+  if (origin.includes("3000")) {
+    token = req.cookies.token_admin;
+  } else if (origin.includes("5173") || origin.includes("5174")) {
+    token = req.cookies.token_client;
+  } else {
+    token = req.cookies.token_client || req.cookies.token_admin;
+  }
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id).select("-password");
+
+      // Sliding Expiration (keep session alive)
+      const cookieName =
+        req.user.role === "admin" ? "token_admin" : "token_client";
+
+      res.cookie(cookieName, token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 30 * 60 * 1000,
+      });
+    } catch (error) {
+      // Invalid token - typically we just ignore and treat as guest
+      // but strictly speaking we could clear the cookie here too?
+    }
+  }
+  next();
+};
+
+module.exports = { protect, admin, checkAuth };

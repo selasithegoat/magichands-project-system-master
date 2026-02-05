@@ -1,0 +1,244 @@
+.project-card-new {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+  border: 1px solid #f1f5f9;
+}
+
+.project-card-new:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.project-thumbnail-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.project-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.project-card-new:hover .project-card-image {
+  transform: scale(1.1);
+}
+
+.project-card-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #f8fafc;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.card-badge-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.type-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.status-badge.in-progress {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+.status-badge.pending-approval {
+  background-color: #fff7ed;
+  color: #f97316;
+}
+.status-badge.completed {
+  background-color: #f0fdf4;
+  color: #22c55e;
+}
+.status-badge.blocked {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+.status-badge.draft {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+.status-badge.on-hold {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
+.card-menu-btn {
+  color: #94a3b8;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.project-title-new {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  margin-bottom: 4px;
+}
+
+.project-id {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* Progress Section */
+.progress-section-new {
+  margin-bottom: 24px;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.progress-val {
+  font-weight: 700;
+}
+.progress-val.blue {
+  color: #2563eb;
+}
+.progress-val.orange {
+  color: #f97316;
+}
+.progress-val.green {
+  color: #22c55e;
+}
+.progress-val.red {
+  color: #ef4444;
+}
+
+.progress-track-new {
+  width: 100%;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill-new {
+  height: 100%;
+  border-radius: 999px;
+  background-color: #3b82f6; /* Default */
+}
+
+/* Meta Section */
+.card-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.lead-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lead-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.card-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.card-footer {
+  display: flex;
+  gap: 16px;
+  margin-top: auto;
+}
+
+.btn-details,
+.btn-update {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.btn-details {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.btn-details:hover {
+  background: #f8fafc;
+}
+
+.btn-update {
+  background: #2563eb;
+  border: none;
+  color: white;
+  flex: 1.5;
+}
+
+.btn-update:hover {
+  background: #1d4ed8;
+}

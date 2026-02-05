@@ -1,0 +1,194 @@
+/* Existing styles */
+.end-of-day-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.page-header p {
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+/* ... existing table styles ... */
+/* Retain all previous table styles, just append new button style if needed */
+
+.download-btn {
+  background-color: #4f46e5;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.download-btn:hover {
+  background-color: #4338ca;
+}
+
+.download-btn:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Rest of the file content... */
+.table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+}
+
+.update-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.update-table th,
+.update-table td {
+  padding: 1rem 1.5rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.update-table th {
+  background-color: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.update-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.update-table tbody tr:hover {
+  filter: brightness(
+    0.98
+  ); /* Slight darken on hover instead of fixed color to support colored rows */
+}
+
+/* Row Coloring by Project Type */
+.row-emergency {
+  background-color: #fef2f2;
+}
+.row-corporate {
+  background-color: #f0fdf4;
+}
+.row-quote {
+  background-color: #fffbeb;
+}
+.row-standard {
+  background-color: #eff6ff;
+}
+
+.is-urgent td {
+  color: #ef4444 !important;
+}
+
+.is-urgent .time-sub,
+.is-urgent .update-date,
+.is-urgent .update-content p {
+  color: #ef4444 !important;
+}
+
+.delivery-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.time-sub {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.status-badge {
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+/* Status Colors */
+.status-badge.completed {
+  background-color: #dcfce7;
+  color: #166534;
+}
+.status-badge.in-progress {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+.status-badge.pending-approval {
+  background-color: #fef9c3;
+  color: #854d0e;
+}
+.status-badge.on-hold {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+.status-badge.order-confirmed {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.update-cell {
+  max-width: 400px;
+}
+
+.update-content p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.update-date {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.no-update {
+  font-style: italic;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #64748b;
+}
+
+.spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}

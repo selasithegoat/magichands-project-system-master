@@ -1,0 +1,61 @@
+.card-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: var(--spacing-sm);
+}
+
+.card-option:hover {
+  border-color: var(--primary-blue);
+}
+
+.card-option.checked {
+  background-color: #eff6ff; /* Very light blue */
+  border-color: var(--primary-blue);
+}
+
+.card-option-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.card-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.card-option.checked .card-option-icon {
+  color: var(--primary-blue);
+}
+
+.card-option-label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.card-option-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.card-option-checkbox.checked {
+  background-color: var(--primary-blue);
+  border-color: var(--primary-blue);
+}

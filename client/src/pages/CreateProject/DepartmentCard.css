@@ -1,0 +1,57 @@
+.dept-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  padding: 12px;
+}
+
+.dept-card:hover {
+  border-color: var(--primary-blue);
+  background-color: #f8fafc;
+}
+
+.dept-card.selected {
+  border-color: var(--primary-blue);
+  background-color: #eff6ff; /* Very light blue */
+}
+
+.dept-icon-container {
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dept-card.selected .dept-icon-container {
+  color: var(--primary-blue);
+}
+
+.dept-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.dept-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  background-color: #10b981; /* Success Green */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

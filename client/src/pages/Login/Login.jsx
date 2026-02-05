@@ -1,0 +1,244 @@
+import React from "react";
+import "./Login.css";
+// Importing a simple icon for the "Tools" logo.
+// If 'SystemIcon' or 'SettingsIcon' isn't quite right, we'll build a custom SVG.
+// Using 'SettingsIcon' as a placeholder for the crossed tools, or I will create an inline SVG that looks like the wrench/hammer in the image.
+import XIcon from "../../components/icons/XIcon";
+import Spinner from "../../components/ui/Spinner";
+
+const ToolsLogo = () => (
+  <svg
+    width="40"
+    height="40"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+  </svg>
+);
+
+// Better custom icon for "Wrench and Hammer" crossed if possible, but let's stick to a generic "Tools" representation
+// or imply it with a Wrench + Hammer SVG if I can easily draw it.
+// Given the complexity of drawing a perfect icon from scratch blindly, I'll use a simplified version
+// or just use the ToolsLogo above which is a generic wrench-like shape.
+// Let's try to match the image: Crossed Hammer and Wrench.
+const CrossedToolsIcon = () => (
+  <svg
+    width="32"
+    height="32"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {/* Hammer */}
+    <path d="M13.7 3.7l3.6 3.6" />
+    <path d="M6.3 11.1l7.4-7.4a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8l-7.4 7.4" />
+    <path d="M2 22l6-6" />
+    {/* Wrench (simplified crossing) - This is hard to perfect blindly. 
+       Let's use a meaningful construction icon. */}
+  </svg>
+);
+
+// Actually, the `SystemIcon` in the project might be suitable?
+// Let's just use a clean "Wrench" and "Hammer" SVG inline for best visual match.
+const ConstructionIcon = () => (
+  <svg
+    width="40"
+    height="40"
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M14.5 2L17.5 5L14.5 8"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M5 14L2 17C2 17 4 21 8 21L11 18"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M16 3.5L8 11.5"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M11.5 8L3.5 16"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Cross line */}
+    <path
+      d="M21 21L12 12"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M15 9L18 12"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const Login = ({ onLogin }) => {
+  const [employeeId, setEmployeeId] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Send cookies
+        body: JSON.stringify({ employeeId, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Login successful
+        // console.log("Login successful:", data);
+        // You might want to store the token here, e.g. localStorage.setItem('token', data.token);
+        onLogin();
+      } else {
+        // Login failed
+        setError(data.message || "Invalid credentials");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-container">
+      {/* Top Controls */}
+      <div className="login-content">
+        {/* Logo Icon */}
+        <div className="login-icon-wrapper">
+          <img
+            src="/mhlogo.png"
+            alt="Logo"
+            width="200"
+            height="200"
+            style={{ width: "200px", height: "auto" }}
+          />
+        </div>
+
+        {/* Brand */}
+
+        {/* Welcome Text */}
+        <h1 className="login-title">Welcome Back</h1>
+        <p className="login-subtitle">
+          Access your project management dashboard
+        </p>
+
+        {/* Form */}
+        <form className="login-form" onSubmit={handleSubmit}>
+          {/* Error Message */}
+          {error && (
+            <div
+              style={{
+                color: "red",
+                fontSize: "0.875rem",
+                marginBottom: "1rem",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Employee ID */}
+          <div className="form-group">
+            <div className="form-label-row">
+              <label className="form-label">EMPLOYEE ID</label>
+            </div>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Enter your ID"
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              required
+            />
+          </div>
+
+          {/* Password */}
+          <div className="form-group">
+            <div className="form-label-row">
+              <label className="form-label">PASSWORD</label>
+            </div>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          {/* Submit */}
+          <button type="submit" className="login-submit-btn" disabled={loading}>
+            {loading ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                <Spinner /> Signing In...
+              </div>
+            ) : (
+              "Sign In to Portal"
+            )}
+          </button>
+        </form>
+
+        {/* Footer */}
+        <div className="login-footer">
+          New team member?{" "}
+          <a href="#" className="request-access-link">
+            Request Access
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;

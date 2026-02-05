@@ -1,0 +1,30 @@
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--btn-bg);
+  color: var(--btn-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  height: 48px; /* Fixed height for consistency */
+}
+
+.btn:hover {
+  background-color: var(--btn-hover);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-icon-right {
+  margin-left: var(--spacing-sm);
+}

@@ -1,0 +1,12 @@
+@import "./styles/variables.css";
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background-color: var(--bg-dark);
+}

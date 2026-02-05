@@ -1,0 +1,113 @@
+.cancel-btn {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.progress-section {
+  margin-top: 10px;
+  margin-bottom: 24px;
+}
+
+.progress-text-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.step-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-blue);
+  letter-spacing: 0.05em;
+}
+
+.step-details-link {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.progress-bar-simple {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.progress-pill {
+  width: 24px;
+  height: 4px;
+  background-color: #e2e8f0;
+  border-radius: 2px;
+  flex: 1; /* Make it stretch if needed, or keep fixed width but centered */
+}
+
+/* ... keep other styles ... */
+/* Simplified for this update, but I should probably overwrite the whole file or append */
+
+.progress-pill.active {
+  background-color: var(--primary-blue);
+}
+
+.page-title-section {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.search-section {
+  margin-bottom: 24px;
+}
+
+.departments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+/* Split Footer overrides */
+.footer-split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.back-text-btn {
+  padding: 12px 24px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  min-width: 100px;
+}
+
+.next-btn-small {
+  background-color: var(--primary-blue);
+  color: white;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.next-btn-small:hover {
+  background-color: var(--primary-blue-hover);
+}
