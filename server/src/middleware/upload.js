@@ -14,6 +14,12 @@ if (!fs.existsSync(uploadDir)) {
 
 console.log(`Uploads will be stored in: ${uploadDir}`);
 
+const parsedMaxMb = Number(process.env.UPLOAD_MAX_MB);
+const maxFileSizeMb =
+  Number.isFinite(parsedMaxMb) && parsedMaxMb > 0 ? parsedMaxMb : 50;
+
+console.log(`Upload max file size: ${maxFileSizeMb}MB`);
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -51,7 +57,9 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: maxFileSizeMb * 1024 * 1024 },
 });
+
+upload.maxFileSizeMb = maxFileSizeMb;
 
 module.exports = upload;

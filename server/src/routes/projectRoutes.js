@@ -32,6 +32,26 @@ const { protect } = require("../middleware/authMiddleware");
 
 const upload = require("../middleware/upload"); // [NEW]
 
+const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const projectUploadFields = [
+  { name: "sampleImage", maxCount: 1 },
+  { name: "attachments", maxCount: 10 },
+];
+
+const handleProjectUploads = (req, res, next) => {
+  upload.fields(projectUploadFields)(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ message: `File too large. Max limit is ${maxFileSizeMb}MB.` });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+    next();
+  });
+};
+
 router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
 router.get("/clients", protect, getClients); // [NEW] - Get all clients with their projects
@@ -76,19 +96,13 @@ router.delete("/:id", protect, deleteProject); // Delete Project
 router.put(
   "/:id",
   protect,
-  upload.fields([
-    { name: "sampleImage", maxCount: 1 },
-    { name: "attachments", maxCount: 10 },
-  ]),
+  handleProjectUploads,
   updateProject,
 ); // Full update (Step 1-5)
 router.post(
   "/",
   protect,
-  upload.fields([
-    { name: "sampleImage", maxCount: 1 },
-    { name: "attachments", maxCount: 10 },
-  ]),
+  handleProjectUploads,
   createProject,
 );
 router.get("/", protect, getProjects);
