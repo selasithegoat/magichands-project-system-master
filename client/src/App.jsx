@@ -63,7 +63,7 @@ const ProtectedLayout = ({
     user={user} // Pass user to Layout
     projectCount={projectCount} // Pass to Layout
     engagedCount={engagedCount} // [New] Pass to Layout
-    onNavigateDashboard={() => navigate("/")}
+    onNavigateDashboard={() => navigate("/client")}
     onNavigateProject={() => navigate("/projects")}
     onNavigateHistory={() => navigate("/history")}
     onNavigateProfile={() => navigate("/profile")}
@@ -185,7 +185,7 @@ function App() {
           fetchProjectCount(); // Fetch count when user is loaded
           // If on login page and authorized, go to dashboard
           if (location.pathname === "/login") {
-            navigate("/");
+            navigate("/client");
           }
         }
       } else {
@@ -246,8 +246,9 @@ function App() {
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/login" element={<Login onLogin={fetchUser} />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route
-          path="/"
+          path="/client"
           element={
             <ProtectedLayout
               activeView="dashboard"
@@ -366,7 +367,7 @@ function App() {
             >
               <OngoingProjects
                 onNavigateDetail={(id) => navigate(`/detail/${id}`)}
-                onBack={() => navigate("/")}
+                onBack={() => navigate("/client")}
                 onCreateProject={() => navigate("/create")}
                 onProjectChange={fetchProjectCount} // Refresh count on change
               />
@@ -383,7 +384,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <ProjectHistory onBack={() => navigate("/")} />
+              <ProjectHistory onBack={() => navigate("/client")} />
             </ProtectedLayout>
           }
         />

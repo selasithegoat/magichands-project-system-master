@@ -97,16 +97,7 @@ function App() {
               )
             }
           />
-          <Route
-            path="/"
-            element={
-              user ? (
-                <Navigate to="/dashboard" replace />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* Protected Routes */}
           <Route
