@@ -7,7 +7,11 @@ const AuthLayout = ({ children }) => {
     <div className="auth-layout">
       <header className="auth-header">
         <div className="auth-logo">
-          <img className="auth-logo-icon" src="/mhlogo.png" alt="MagicHands Logo" />
+          <img
+            className="auth-logo-icon"
+            src={`${import.meta.env.BASE_URL}mhlogo.png`}
+            alt="MagicHands Logo"
+          />
         </div>
         <div className="auth-version">Enterprise Secure Gateway</div>
       </header>

@@ -7,11 +7,11 @@ const {
   deleteEmployee,
   updateEmployeePassword,
 } = require("../controllers/adminController");
-const { protect, admin } = require("../middleware/authMiddleware");
+const { protect, requireRole } = require("../middleware/authMiddleware");
 
 // All routes are protected and admin-only
 router.use(protect);
-router.use(admin);
+router.use(requireRole("admin"));
 
 router.route("/employees").post(registerEmployee).get(getAllEmployees);
 router.route("/employees/:id").put(updateEmployee).delete(deleteEmployee);

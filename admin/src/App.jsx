@@ -77,7 +77,9 @@ function App() {
   }
 
   const ProtectedRoute = ({ children }) => {
-    if (!user) return <Navigate to="/login" replace />;
+    if (!user || user.role !== "admin") {
+      return <Navigate to="/login" replace />;
+    }
     return <DashboardLayout user={user}>{children}</DashboardLayout>;
   };
 

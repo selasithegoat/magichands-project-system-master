@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
@@ -19,6 +20,7 @@ connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
 
 // Trust proxy for ngrok/production (required for secure cookies behind proxy)
 app.set("trust proxy", 1);
@@ -50,12 +52,39 @@ app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-app.get("/", (req, res) => {
-  res.send("MagicHands Server is Running");
-});
+// Serve built frontends (Vite builds -> dist)
+const clientDistPath = path.resolve(__dirname, "../../client/dist");
+const adminDistPath = path.resolve(__dirname, "../../admin/dist");
+const hasClientBuild = fs.existsSync(clientDistPath);
+const hasAdminBuild = fs.existsSync(adminDistPath);
+
+if (hasAdminBuild) {
+  app.use("/admin", express.static(adminDistPath));
+}
+
+if (hasClientBuild) {
+  app.use(express.static(clientDistPath));
+}
+
+// SPA fallbacks
+if (hasAdminBuild) {
+  app.get(/^\/admin(\/.*)?$/, (req, res) => {
+    res.sendFile(path.join(adminDistPath, "index.html"));
+  });
+}
+
+if (hasClientBuild) {
+  app.get(/^\/(?!api|admin|uploads).*/, (req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.send("MagicHands Server is Running");
+  });
+}
 
 // Start Server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running at http://${HOST}:${PORT}`);
 });
 // Trigger restart to rebuild indexes

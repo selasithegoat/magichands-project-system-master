@@ -852,7 +852,7 @@ const ProjectDetails = ({ user }) => {
                         return (
                           <a
                             key={idx}
-                            href={`http://localhost:5000${path}`}
+                            href={path}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{
@@ -878,7 +878,7 @@ const ProjectDetails = ({ user }) => {
                           >
                             {isImage ? (
                               <img
-                                src={`http://localhost:5000${path}`}
+                                src={path}
                                 alt="attachment"
                                 style={{
                                   width: "100%",
@@ -1071,7 +1071,7 @@ const ProjectDetails = ({ user }) => {
                         }}
                       >
                         <a
-                          href={`http://localhost:5000${update.attachments[0].url}`}
+                          href={update.attachments[0].url}
                           target="_blank"
                           rel="noopener noreferrer"
                           download

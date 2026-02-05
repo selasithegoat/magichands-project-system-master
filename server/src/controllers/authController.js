@@ -2,6 +2,10 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
+const {
+  resolveCookieOptions,
+  resolveClearCookieOptions,
+} = require("../utils/cookieOptions");
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -37,12 +41,7 @@ const registerUser = async (req, res) => {
     const cookieName = user.role === "admin" ? "token_admin" : "token_client";
 
     // Send HTTP-only cookie
-    res.cookie(cookieName, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-      maxAge: 30 * 60 * 1000, // 30 minutes
-    });
+    res.cookie(cookieName, token, resolveCookieOptions());
 
     // [REMOVED] Clear any existing opposite token to prevent session leak
     // const oppositeCookie =
@@ -76,12 +75,7 @@ const loginUser = async (req, res) => {
       const cookieName = user.role === "admin" ? "token_admin" : "token_client";
 
       // Send HTTP-only cookie
-      res.cookie(cookieName, token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 30 * 60 * 1000,
-      });
+      res.cookie(cookieName, token, resolveCookieOptions());
 
       // [REMOVED] Strictly clear the opposite token to prevent cross-portal auto-login
       // const oppositeCookie =
@@ -121,32 +115,11 @@ const getMe = async (req, res) => {
 // @route   POST /api/auth/logout
 // @access  Public
 const logoutUser = (req, res) => {
-  // Determine origin to scope logout
-  const origin = req.headers.origin || req.headers.referer || "";
+  const clearOptions = resolveClearCookieOptions();
 
-  if (origin.includes("3000")) {
-    // Admin Portal
-    res.cookie("token_admin", "", {
-      httpOnly: true,
-      expires: new Date(0),
-    });
-  } else if (origin.includes("5173") || origin.includes("5174")) {
-    // Client Portal
-    res.cookie("token_client", "", {
-      httpOnly: true,
-      expires: new Date(0),
-    });
-  } else {
-    // Fallback: Clear all if uncertain
-    res.cookie("token_admin", "", {
-      httpOnly: true,
-      expires: new Date(0),
-    });
-    res.cookie("token_client", "", {
-      httpOnly: true,
-      expires: new Date(0),
-    });
-  }
+  // Clear all auth cookies to avoid cross-portal residue
+  res.cookie("token_admin", "", clearOptions);
+  res.cookie("token_client", "", clearOptions);
 
   // Clear legacy token just in case
   res.cookie("token", "", {

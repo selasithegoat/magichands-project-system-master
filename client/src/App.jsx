@@ -71,7 +71,9 @@ const ProtectedLayout = ({
     onNavigateEndOfDay={() => navigate("/end-of-day")} // Pass handler
     onNavigateEngagedProjects={() => navigate("/engaged-projects")} // [NEW]
     onCreateProject={() => navigate("/create")}
-    onNavigateAdmin={() => navigate("/admin")} // [NEW]
+    onNavigateAdmin={() => {
+      window.location.href = "/admin";
+    }} // [NEW]
     onSignOut={onSignOut} // Pass onSignOut to Layout
   >
     {children}

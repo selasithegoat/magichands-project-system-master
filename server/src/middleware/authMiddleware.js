@@ -1,5 +1,27 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { resolveCookieOptions } = require("../utils/cookieOptions");
+
+const isAdminPortalRequest = (req) => {
+  const referer = req.headers.referer || "";
+  const originalUrl = req.originalUrl || "";
+  const baseUrl = req.baseUrl || "";
+
+  return (
+    baseUrl.startsWith("/api/admin") ||
+    originalUrl.startsWith("/api/admin") ||
+    referer.includes("/admin")
+  );
+};
+
+const selectAuthToken = (req) => {
+  if (isAdminPortalRequest(req)) {
+    return req.cookies.token_admin;
+  }
+
+  // Client portal: allow admin tokens to access client routes too
+  return req.cookies.token_client || req.cookies.token_admin;
+};
 
 const protect = async (req, res, next) => {
   let token;
@@ -14,21 +36,7 @@ const protect = async (req, res, next) => {
   // We don't know easily without checking URL.
   // Let's just grab whichever exists.
 
-  // Determine origin to prevent session interference on localhost
-  const origin = req.headers.origin || req.headers.referer || "";
-
-  // Strict token enforcement based on portal origin
-  if (origin.includes("3000")) {
-    // Admin Portal - ONLY allow token_admin
-    token = req.cookies.token_admin;
-  } else if (origin.includes("5173") || origin.includes("5174")) {
-    // Client Portal - ONLY allow token_client
-    // Note: We no longer allow token_admin fallback here to prevent auto-login
-    token = req.cookies.token_client;
-  } else {
-    // Other (Postman, etc.) - Fallback safely
-    token = req.cookies.token_client || req.cookies.token_admin;
-  }
+  token = selectAuthToken(req);
 
   if (token) {
     try {
@@ -44,12 +52,7 @@ const protect = async (req, res, next) => {
         req.user.role === "admin" ? "token_admin" : "token_client";
 
       // Sliding Expiration
-      res.cookie(cookieName, token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 30 * 60 * 1000, // 30 minutes
-      });
+      res.cookie(cookieName, token, resolveCookieOptions());
 
       next();
     } catch (error) {
@@ -72,15 +75,7 @@ const admin = (req, res, next) => {
 
 const checkAuth = async (req, res, next) => {
   let token;
-  const origin = req.headers.origin || req.headers.referer || "";
-
-  if (origin.includes("3000")) {
-    token = req.cookies.token_admin;
-  } else if (origin.includes("5173") || origin.includes("5174")) {
-    token = req.cookies.token_client;
-  } else {
-    token = req.cookies.token_client || req.cookies.token_admin;
-  }
+  token = selectAuthToken(req);
 
   if (token) {
     try {
@@ -91,12 +86,7 @@ const checkAuth = async (req, res, next) => {
       const cookieName =
         req.user.role === "admin" ? "token_admin" : "token_client";
 
-      res.cookie(cookieName, token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 30 * 60 * 1000,
-      });
+      res.cookie(cookieName, token, resolveCookieOptions());
     } catch (error) {
       // Invalid token - typically we just ignore and treat as guest
       // but strictly speaking we could clear the cookie here too?
@@ -105,4 +95,12 @@ const checkAuth = async (req, res, next) => {
   next();
 };
 
-module.exports = { protect, admin, checkAuth };
+// Middleware for admin access
+const requireRole = (role) => (req, res, next) => {
+  if (req.user && req.user.role === role) {
+    return next();
+  }
+  return res.status(401).json({ message: "Not authorized" });
+};
+
+module.exports = { protect, admin, checkAuth, requireRole };

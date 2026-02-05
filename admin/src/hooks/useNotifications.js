@@ -13,7 +13,7 @@ const useNotifications = () => {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/notifications", {
+      const res = await axios.get("/api/notifications", {
         withCredentials: true,
       });
 
@@ -69,7 +69,7 @@ const useNotifications = () => {
   const markAsRead = async (id) => {
     try {
       await axios.patch(
-        `http://localhost:5000/api/notifications/${id}/read`,
+        `/api/notifications/${id}/read`,
         {},
         { withCredentials: true },
       );
@@ -91,7 +91,7 @@ const useNotifications = () => {
   const markAllAsRead = async () => {
     try {
       await axios.patch(
-        "http://localhost:5000/api/notifications/read-all",
+        "/api/notifications/read-all",
         {},
         { withCredentials: true },
       );
@@ -107,7 +107,7 @@ const useNotifications = () => {
 
   const clearNotifications = async () => {
     try {
-      await axios.delete("http://localhost:5000/api/notifications", {
+      await axios.delete("/api/notifications", {
         withCredentials: true,
       });
       setNotifications([]);

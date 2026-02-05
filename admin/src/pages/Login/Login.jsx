@@ -70,7 +70,7 @@ const Login = ({ onLoginSuccess }) => {
           <div className="login-icon-wrapper">
             <img
               className="logo-icon"
-              src="/mhlogo.png"
+              src={`${import.meta.env.BASE_URL}mhlogo.png`}
               alt="MagicHands Logo"
             />
           </div>
