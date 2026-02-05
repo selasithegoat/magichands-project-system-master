@@ -6,8 +6,13 @@ const isAdminPortalRequest = (req) => {
   const referer = req.headers.referer || "";
   const originalUrl = req.originalUrl || "";
   const baseUrl = req.baseUrl || "";
+  const hostHeader =
+    req.headers["x-forwarded-host"] || req.headers.host || "";
+  const requestHost = hostHeader.split(":")[0].toLowerCase();
+  const adminHost = (process.env.ADMIN_HOST || "").toLowerCase();
 
   return (
+    (adminHost && requestHost === adminHost) ||
     baseUrl.startsWith("/api/admin") ||
     originalUrl.startsWith("/api/admin") ||
     referer.includes("/admin")

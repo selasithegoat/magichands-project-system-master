@@ -72,7 +72,9 @@ const ProtectedLayout = ({
     onNavigateEngagedProjects={() => navigate("/engaged-projects")} // [NEW]
     onCreateProject={() => navigate("/create")}
     onNavigateAdmin={() => {
-      window.location.href = "/admin";
+      const host = window.location.hostname;
+      const adminHost = host ? `admin.${host}` : "admin.magichandsproject.lan";
+      window.location.href = `http://${adminHost}`;
     }} // [NEW]
     onSignOut={onSignOut} // Pass onSignOut to Layout
   >

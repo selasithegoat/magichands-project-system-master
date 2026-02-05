@@ -21,6 +21,20 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
+const ADMIN_HOST = (process.env.ADMIN_HOST || "").toLowerCase();
+const CLIENT_HOST = (process.env.CLIENT_HOST || "").toLowerCase();
+
+const getRequestHost = (req) => {
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "";
+  return host.split(":")[0].toLowerCase();
+};
+
+const isAdminHost = (req) => {
+  if (!ADMIN_HOST) return false;
+  return getRequestHost(req) === ADMIN_HOST;
+};
+
+const isClientHost = (req) => !isAdminHost(req);
 
 // Trust proxy for ngrok/production (required for secure cookies behind proxy)
 app.set("trust proxy", 1);
@@ -59,23 +73,47 @@ const hasClientBuild = fs.existsSync(clientDistPath);
 const hasAdminBuild = fs.existsSync(adminDistPath);
 
 if (hasAdminBuild) {
+  const adminStatic = express.static(adminDistPath);
+  app.use((req, res, next) => {
+    if (isAdminHost(req)) {
+      return adminStatic(req, res, next);
+    }
+    return next();
+  });
+}
+
+// Mobile/IP fallback: allow /admin on non-admin hosts to serve admin app
+if (hasAdminBuild) {
   app.use("/admin", express.static(adminDistPath));
 }
 
 if (hasClientBuild) {
-  app.use(express.static(clientDistPath));
-}
-
-// SPA fallbacks
-if (hasAdminBuild) {
-  app.get(/^\/admin(\/.*)?$/, (req, res) => {
-    res.sendFile(path.join(adminDistPath, "index.html"));
+  const clientStatic = express.static(clientDistPath);
+  app.use((req, res, next) => {
+    if (isClientHost(req)) {
+      return clientStatic(req, res, next);
+    }
+    return next();
   });
 }
 
-if (hasClientBuild) {
-  app.get(/^\/(?!api|admin|uploads).*/, (req, res) => {
-    res.sendFile(path.join(clientDistPath, "index.html"));
+// SPA fallbacks
+if (hasAdminBuild || hasClientBuild) {
+  app.get(/^\/admin(\/.*)?$/, (req, res, next) => {
+    if (!isAdminHost(req) && hasAdminBuild) {
+      return res.sendFile(path.join(adminDistPath, "index.html"));
+    }
+    return next();
+  });
+
+  app.get(/^\/(?!api|uploads).*/, (req, res, next) => {
+    if (isAdminHost(req) && hasAdminBuild) {
+      return res.sendFile(path.join(adminDistPath, "index.html"));
+    }
+    if (isClientHost(req) && hasClientBuild) {
+      return res.sendFile(path.join(clientDistPath, "index.html"));
+    }
+    return next();
   });
 } else {
   app.get("/", (req, res) => {

@@ -5,9 +5,13 @@ import App from "./App.jsx";
 
 import { BrowserRouter } from "react-router-dom";
 
+const baseName = window.location.pathname.startsWith("/admin")
+  ? "/admin"
+  : "/";
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter basename="/admin">
+    <BrowserRouter basename={baseName}>
       <App />
     </BrowserRouter>
   </StrictMode>,
