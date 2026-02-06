@@ -7,6 +7,9 @@
   /* Colors */
   --primary-blue: #2563eb;
   --primary-blue-hover: #1d4ed8;
+  --primary-color: var(--primary-blue);
+  --primary-color-hover: var(--primary-blue-hover);
+  --primary-rgb: 37, 99, 235;
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --text-tertiary: #94a3b8;

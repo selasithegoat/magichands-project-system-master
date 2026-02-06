@@ -184,7 +184,7 @@ const QuoteProjectWizard = () => {
   const handleCancelProject = () => setShowCancelModal(true);
   const confirmCancel = () => {
     setShowCancelModal(false);
-    navigate("/");
+    navigate("/client");
   };
 
   const handleChange = (e) => {
@@ -336,7 +336,7 @@ const QuoteProjectWizard = () => {
   };
 
   const handleProjectComplete = () => {
-    navigate("/");
+    navigate("/client");
   };
 
   if (isLoading) return <Spinner />;

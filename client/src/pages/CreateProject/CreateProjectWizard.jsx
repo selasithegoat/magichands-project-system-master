@@ -208,7 +208,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   const confirmCancel = () => {
     localStorage.removeItem("projectWizardData"); // Clear draft
     setShowCancelModal(false);
-    navigate("/"); // Go back to dashboard
+    navigate("/client"); // Go back to dashboard
   };
 
   const handleCreateProject = async () => {
@@ -296,7 +296,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
     setFormData(DEFAULT_FORM_STATE.formData);
     setCurrentStep(1);
     if (onProjectCreate) onProjectCreate(); // Refresh global count
-    navigate("/");
+    navigate("/client");
   };
 
   if (isLoading)

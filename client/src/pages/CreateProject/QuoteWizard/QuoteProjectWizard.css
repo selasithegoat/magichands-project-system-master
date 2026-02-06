@@ -121,7 +121,11 @@
 
 .header-title {
   margin: 0;
-  background: linear-gradient(135deg, var(--primary-color), #60a5fa);
+  background: linear-gradient(
+    135deg,
+    var(--primary-color, var(--primary-blue)),
+    #60a5fa
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -135,6 +139,8 @@
 .next-btn {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 160px;
+  color: #fff;
+  background: var(--primary-color, var(--primary-blue));
 }
 
 .next-btn:hover {
