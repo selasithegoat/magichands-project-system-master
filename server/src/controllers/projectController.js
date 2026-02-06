@@ -597,17 +597,23 @@ const updateProjectDepartments = async (req, res) => {
 
 // @desc    Update project status
 // @route   PATCH /api/projects/:id/status
-// @access  Private (Admin only)
+// @access  Private (Admin or permitted departments)
 const updateProjectStatus = async (req, res) => {
   try {
     const { status: newStatus } = req.body;
+    if (!newStatus) {
+      return res.status(400).json({ message: "Status is required" });
+    }
+
     const project = await Project.findById(req.params.id);
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check permissions: Admin can do anything.
+    const oldStatus = project.status;
+    const isAdmin = req.user.role === "admin";
+
     // Project Lead can transition from "Completed" to "Finished".
     const isLead =
       project.projectLeadId &&
@@ -615,14 +621,49 @@ const updateProjectStatus = async (req, res) => {
     const isFinishing =
       project.status === "Completed" && newStatus === "Finished";
 
-    if (req.user.role !== "admin" && (!isLead || !isFinishing)) {
-      return res.status(403).json({
-        message:
-          "Not authorized. Only admins can update status (except for finishing your own completed projects).",
-      });
-    }
+    // Department-based allowed completions
+    const deptActions = [
+      {
+        dept: "Graphics/Design",
+        from: "Pending Mockup",
+        to: "Mockup Completed",
+      },
+      {
+        dept: "Production",
+        from: "Pending Production",
+        to: "Production Completed",
+      },
+      {
+        dept: "Stores",
+        from: "Pending Packaging",
+        to: "Packaging Completed",
+      },
+      {
+        dept: "Front Desk",
+        from: "Pending Delivery/Pickup",
+        to: "Delivered",
+      },
+    ];
 
-    const oldStatus = project.status;
+    if (!isAdmin && !isFinishing) {
+      const userDepts = req.user.department || [];
+      const deptAction = deptActions.find(
+        (action) => userDepts.includes(action.dept) && newStatus === action.to,
+      );
+
+      if (!deptAction) {
+        return res.status(403).json({
+          message:
+            "Not authorized to update this status. Admins can update all statuses, and departments can only complete their assigned stage.",
+        });
+      }
+
+      if (project.status !== deptAction.from) {
+        return res.status(400).json({
+          message: `Status must be '${deptAction.from}' before completing this stage.`,
+        });
+      }
+    }
 
     // Status progression map: when a stage is marked complete, auto-advance to next pending
     const statusProgression = {
@@ -631,10 +672,8 @@ const updateProjectStatus = async (req, res) => {
       "Mockup Completed": "Pending Production",
       "Production Completed": "Pending Packaging",
       "Packaging Completed": "Pending Delivery/Pickup",
-      Delivered: "Completed",
       // Quote workflow
       "Quote Request Completed": "Pending Send Response",
-      "Response Sent": "Completed",
     };
 
     // If the selected status has an auto-advancement, use it

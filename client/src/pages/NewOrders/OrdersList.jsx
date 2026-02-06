@@ -7,6 +7,7 @@ const OrdersList = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [allOrders, setAllOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [allFilters, setAllFilters] = useState({
     orderId: "",
     client: "",
@@ -32,7 +33,20 @@ const OrdersList = () => {
 
   useEffect(() => {
     fetchOrders();
+    fetchCurrentUser();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data);
+      }
+    } catch (err) {
+      console.error("Error fetching current user:", err);
+    }
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -153,6 +167,34 @@ const OrdersList = () => {
     return true;
   });
 
+  const canMarkDelivered =
+    currentUser?.role === "admin" ||
+    currentUser?.department?.includes("Front Desk");
+
+  const handleDeliveryComplete = async (order) => {
+    if (!canMarkDelivered) return;
+    try {
+      const res = await fetch(`/api/projects/${order._id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Delivered" }),
+      });
+      if (res.ok) {
+        showToast("Order marked as Delivered.", "success");
+        fetchOrders();
+      } else {
+        const errorData = await res.json();
+        showToast(
+          `Error: ${errorData.message || "Failed to update status"}`,
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Delivery update error:", error);
+      showToast("Network error. Please try again.", "error");
+    }
+  };
+
   return (
     <div className="orders-management-section" style={{ marginTop: "3rem" }}>
       {toast.show && (
@@ -234,6 +276,7 @@ const OrdersList = () => {
                   <th>Status</th>
                   <th>Assignment Status</th>
                   <th>Created Date</th>
+                  {canMarkDelivered && <th>Action</th>}
                 </tr>
               </thead>
               <tbody>
@@ -261,6 +304,22 @@ const OrdersList = () => {
                       </span>
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
+                    {canMarkDelivered && (
+                      <td>
+                        <button
+                          className="action-btn complete-btn"
+                          onClick={() => handleDeliveryComplete(order)}
+                          disabled={order.status !== "Pending Delivery/Pickup"}
+                          title={
+                            order.status === "Pending Delivery/Pickup"
+                              ? "Mark as Delivered"
+                              : "Waiting for Pending Delivery/Pickup"
+                          }
+                        >
+                          Delivered Complete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

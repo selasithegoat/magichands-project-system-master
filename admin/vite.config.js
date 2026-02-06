@@ -2,8 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
-export default defineConfig(() => ({
-  base: "./",
+export default defineConfig(({ command }) => ({
+  // Use absolute base for production builds so deep-link refreshes load assets correctly.
+  // Dev stays at root for simplicity.
+  base: command === "build" ? "/admin/" : "/",
   plugins: [react()],
   server: {
     port: 3000,

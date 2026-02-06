@@ -70,7 +70,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Calculate Progress if not provided
   let progress = project.progress;
   if (progress === undefined) {
-    if (project.status === "Delivered") progress = 100;
+    if (project.status === "Completed" || project.status === "Delivered")
+      progress = 100;
+    else if (project.status === "Finished") progress = 100;
     else if (project.status === "Pending Delivery/Pickup") progress = 90;
     else if (project.status === "Pending Packaging") progress = 75;
     else if (project.status === "Pending Production") progress = 50;

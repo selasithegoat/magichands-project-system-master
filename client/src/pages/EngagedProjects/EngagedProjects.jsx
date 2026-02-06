@@ -21,6 +21,24 @@ const STATUS_OPTIONS = [
   "In Progress",
 ];
 
+const STATUS_ACTIONS = {
+  Graphics: {
+    label: "Mockup Complete",
+    pending: "Pending Mockup",
+    complete: "Mockup Completed",
+  },
+  Production: {
+    label: "Production Complete",
+    pending: "Pending Production",
+    complete: "Production Completed",
+  },
+  Stores: {
+    label: "Stocks & Packaging Complete",
+    pending: "Pending Packaging",
+    complete: "Packaging Completed",
+  },
+};
+
 const ITEMS_PER_PAGE = 10;
 
 const EngagedProjects = ({ user }) => {
@@ -28,6 +46,7 @@ const EngagedProjects = ({ user }) => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [statusUpdating, setStatusUpdating] = useState(null);
 
   // Filter State
   const [statusFilter, setStatusFilter] = useState("All");
@@ -178,6 +197,61 @@ const EngagedProjects = ({ user }) => {
     const diffMs = delivery - now;
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
     return diffDays >= 0 && diffDays <= 2;
+  };
+
+  const projectHasDept = (project, dept) => {
+    const projDepts = project.departments || [];
+    if (dept === "Graphics")
+      return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
+    if (dept === "Production")
+      return projDepts.some((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+    if (dept === "Stores")
+      return projDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
+    return false;
+  };
+
+  const getDeptActionsForProject = (project) => {
+    let allowed = userEngagedDepts.filter((d) => STATUS_ACTIONS[d]);
+    if (departmentFilter !== "All") {
+      allowed = allowed.filter((d) => d === departmentFilter);
+    }
+    return allowed
+      .filter((dept) => projectHasDept(project, dept))
+      .map((dept) => ({ dept, ...STATUS_ACTIONS[dept] }));
+  };
+
+  const handleCompleteStatus = async (project, action) => {
+    const actionKey = `${project._id}:${action.complete}`;
+    setStatusUpdating(actionKey);
+    try {
+      const res = await fetch(`/api/projects/${project._id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: action.complete }),
+      });
+
+      if (res.ok) {
+        setToast({
+          type: "success",
+          message: `${action.label} recorded.`,
+        });
+        fetchEngagedProjects();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setToast({
+          type: "error",
+          message: errorData.message || "Failed to update status.",
+        });
+      }
+    } catch (err) {
+      console.error("Error updating status:", err);
+      setToast({
+        type: "error",
+        message: "An unexpected error occurred.",
+      });
+    } finally {
+      setStatusUpdating(null);
+    }
   };
 
   const handleOpenUpdateModal = (project) => {
@@ -383,6 +457,7 @@ const EngagedProjects = ({ user }) => {
                 const projectName = project.details?.projectName || "Untitled";
                 const emergency = isEmergency(project);
                 const approaching = isApproachingDelivery(project);
+                const deptActions = getDeptActionsForProject(project);
 
                 return (
                   <tr
@@ -426,6 +501,26 @@ const EngagedProjects = ({ user }) => {
                     </td>
                     <td>
                       <div className="action-buttons">
+                        {deptActions.map((action) => {
+                          const actionKey = `${project._id}:${action.complete}`;
+                          const isUpdating = statusUpdating === actionKey;
+                          const isReady = project.status === action.pending;
+                          return (
+                            <button
+                              key={action.complete}
+                              className="complete-btn"
+                              onClick={() => handleCompleteStatus(project, action)}
+                              disabled={!isReady || isUpdating}
+                              title={
+                                isReady
+                                  ? `Mark ${action.label}`
+                                  : `Waiting for ${action.pending}`
+                              }
+                            >
+                              {isUpdating ? "Updating..." : action.label}
+                            </button>
+                          );
+                        })}
                         <button
                           className="update-btn"
                           onClick={() => handleOpenUpdateModal(project)}
