@@ -92,7 +92,9 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               label="Order Date"
               value={formData.orderDate}
               onChange={(e) => handleChange("orderDate", e.target.value)}
-              icon={<CalendarIcon />}
+              icon={<CalendarIcon />
+              }
+              readOnly={isEditing} // Prevent changing order date when editing
             />
             <Input
               type="time"
@@ -100,6 +102,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               value={formData.receivedTime}
               onChange={(e) => handleChange("receivedTime", e.target.value)}
               icon={<ClockIcon />}
+               readOnly={isEditing}
             />
           </div>
 
@@ -164,6 +167,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             value={formData.projectName}
             onChange={(e) => handleChange("projectName", e.target.value)}
             icon={<FolderIcon />}
+             readOnly={isEditing}
           />
 
           {/* Client Name */}
@@ -172,6 +176,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             placeholder="e.g. MagicHands Corp"
             value={formData.client}
             onChange={(e) => handleChange("client", e.target.value)}
+             readOnly={isEditing}
           />
 
           {/* Row: Delivery Date & Time */}
@@ -182,6 +187,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               value={formData.deliveryDate}
               onChange={(e) => handleChange("deliveryDate", e.target.value)}
               icon={<CalendarIcon />}
+               readOnly={isEditing}
             />
             <Input
               type="time"
@@ -189,6 +195,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               value={formData.deliveryTime}
               onChange={(e) => handleChange("deliveryTime", e.target.value)}
               icon={<ClockIcon />}
+               readOnly={isEditing}
             />
           </div>
 
@@ -199,6 +206,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             value={formData.deliveryLocation}
             onChange={(e) => handleChange("deliveryLocation", e.target.value)}
             icon={<LocationIcon />}
+             readOnly={isEditing}
           />
 
           {/* Contact Type - Tabs/Pills */}
