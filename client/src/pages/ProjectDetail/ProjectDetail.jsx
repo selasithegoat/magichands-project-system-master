@@ -1782,6 +1782,10 @@ const ProgressCard = ({ project }) => {
           return 90;
         case "Completed":
           return 100;
+        case "Finished":
+          return 100;
+        case "Delivered":
+          return 100;
         default:
           return 0;
       }

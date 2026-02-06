@@ -70,19 +70,38 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 
   const projectTypeInfo = getProjectTypeInfo(project.projectType);
 
-  // Calculate Progress if not provided
-  let progress = project.progress;
-  if (progress === undefined) {
-    if (project.status === "Completed" || project.status === "Delivered")
-      progress = 100;
-    else if (project.status === "Finished") progress = 100;
-    else if (project.status === "Pending Delivery/Pickup") progress = 90;
-    else if (project.status === "Pending Packaging") progress = 75;
-    else if (project.status === "Pending Production") progress = 50;
-    else if (project.status === "Pending Mockup") progress = 30;
-    else if (project.status === "Pending Scope Approval") progress = 15;
-    else progress = 5;
-  }
+  const standardProgressMap = {
+    "Order Confirmed": 5,
+    "Pending Scope Approval": 15,
+    "Scope Approval Completed": 22,
+    "Pending Mockup": 30,
+    "Mockup Completed": 40,
+    "Pending Production": 50,
+    "Production Completed": 65,
+    "Pending Packaging": 75,
+    "Packaging Completed": 82,
+    "Pending Delivery/Pickup": 90,
+    Delivered: 100,
+    Completed: 100,
+    Finished: 100,
+  };
+
+  const quoteProgressMap = {
+    "Order Confirmed": 5,
+    "Pending Scope Approval": 25,
+    "Scope Approval Completed": 35,
+    "Pending Quote Request": 50,
+    "Quote Request Completed": 60,
+    "Pending Send Response": 75,
+    "Response Sent": 90,
+    Delivered: 100,
+    Completed: 100,
+    Finished: 100,
+  };
+
+  const progressMap =
+    project.projectType === "Quote" ? quoteProgressMap : standardProgressMap;
+  const progress = progressMap[project.status] ?? 5;
 
   return (
     <div className="project-card-new">
