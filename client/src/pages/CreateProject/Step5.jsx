@@ -290,15 +290,6 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
                 {formatDate(formData.deliveryDate)} {formData.deliveryTime}
               </div>
             </div>
-            <div className="review-item">
-              <label>Lead</label>
-              <div className="user-row">
-                <UserAvatar />
-                <span className="review-value">
-                  {formData.lead ? formData.lead.label : "Unassigned"}
-                </span>
-              </div>
-            </div>
           </div>
         </div>
 
