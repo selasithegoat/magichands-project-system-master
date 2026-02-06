@@ -399,7 +399,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
-                  project.status === "Completed" ||
+                  project.status === "Finished" ||
                   project.status === "Pending Scope Approval"
                 }
               />
@@ -408,7 +408,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
-                  project.status === "Completed" ||
+                  project.status === "Finished" ||
                   project.status === "Pending Scope Approval"
                 }
               />
@@ -418,7 +418,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
-                  project.status === "Completed" ||
+                  project.status === "Finished" ||
                   project.status === "Pending Scope Approval"
                 }
               />
@@ -427,7 +427,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
-                  project.status === "Completed" ||
+                  project.status === "Finished" ||
                   project.status === "Pending Scope Approval"
                 }
               />

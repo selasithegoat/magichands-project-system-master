@@ -40,7 +40,10 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
           <div className="info-content">
             <span className="info-label">Client</span>
             <span className="info-value">
-              {details.clientName || details.department || "Internal"}
+              {details.client ||
+                details.clientName ||
+                details.department ||
+                "Internal"}
             </span>
           </div>
         </div>

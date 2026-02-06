@@ -18,10 +18,18 @@ const ConfirmationModal = ({
         <h3 className="modal-title">{title}</h3>
         <p className="modal-message">{message}</p>
         <div className="modal-actions">
-          <button className="modal-btn cancel" onClick={onCancel}>
+          <button
+            type="button"
+            className="modal-btn cancel"
+            onClick={onCancel}
+          >
             {cancelText}
           </button>
-          <button className="modal-btn confirm" onClick={onConfirm}>
+          <button
+            type="button"
+            className="modal-btn confirm"
+            onClick={onConfirm}
+          >
             {confirmText}
           </button>
         </div>

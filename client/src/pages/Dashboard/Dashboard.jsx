@@ -47,10 +47,8 @@ const Dashboard = ({
         ).length;
         setCompletedCount(completed);
 
-        // Filter out history statuses
-        const activeProjects = data.filter(
-          (p) => p.status !== "Completed" && p.status !== "Finished",
-        );
+        // Filter out history status
+        const activeProjects = data.filter((p) => p.status !== "Finished");
         // Sort by createdAt desc (newest first)
         const sortedProjects = activeProjects.sort(
           (a, b) => new Date(b.createdAt) - new Date(a.createdAt),

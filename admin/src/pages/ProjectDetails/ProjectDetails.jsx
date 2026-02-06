@@ -45,6 +45,21 @@ const SystemIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
   </svg>
 );
 
+const FolderIcon = ({ width = 24, height = 24, color = "currentColor" }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M3 7a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+  </svg>
+);
+
 const ProjectDetails = ({ user }) => {
   const { id } = useParams();
   const [project, setProject] = useState(null);
@@ -402,6 +417,15 @@ const ProjectDetails = ({ user }) => {
   };
 
   const details = project.details || {};
+
+  const normalizeAttachment = (value) => {
+    if (!value) return null;
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      return value.url || value.path || value.location || value.filename || null;
+    }
+    return null;
+  };
 
   return (
     <div
@@ -853,19 +877,21 @@ const ProjectDetails = ({ user }) => {
                       ...(project.attachments || []),
                       ...(details.attachments || []),
                     ]
+                      .map(normalizeAttachment)
+                      .filter(Boolean)
                       // Filter out duplicates if any (by path string)
                       .filter(
                         (value, index, self) => self.indexOf(value) === index,
                       )
-                        .map((path, idx) => {
-                          const isImage = path.match(
-                            /\.(jpg|jpeg|png|gif|webp)$/i,
-                          );
-                          // Safe check for path being a string before split
-                          const fileName =
-                            typeof path === "string"
-                              ? path.split("/").pop()
-                              : "File";
+                      .map((path, idx) => {
+                        const isImage =
+                          typeof path === "string" &&
+                          /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
+                        // Safe check for path being a string before split
+                        const fileName =
+                          typeof path === "string"
+                            ? path.split("/").pop()
+                            : "File";
 
                         // Debug log for path issues if any
                         // console.log("Rendering attachment path:", path);

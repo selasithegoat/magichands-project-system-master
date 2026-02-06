@@ -43,6 +43,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#14b8a6",
           textClass: "teal",
         };
+      case "Completed":
+        return { class: "completed", color: "#22c55e", textClass: "green" };
       case "Delivered":
         return { class: "completed", color: "#22c55e", textClass: "green" };
       default:
@@ -50,6 +52,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     }
   };
 
+  const isCompletedStatus = project.status === "Completed";
   const statusInfo = getStatusColor(project.status);
 
   const getProjectTypeInfo = (type) => {
@@ -146,9 +149,15 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               {progress}%
             </span>
           </div>
-          <div className="progress-track-new">
+          <div
+            className={`progress-track-new ${
+              isCompletedStatus ? "completed-glow" : ""
+            }`}
+          >
             <div
-              className="progress-fill-new"
+              className={`progress-fill-new ${
+                isCompletedStatus ? "completed-glow-fill" : ""
+              }`}
               style={{
                 width: `${progress}%`,
                 backgroundColor: statusInfo.color,

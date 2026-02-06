@@ -26,11 +26,9 @@ const ProjectHistory = ({ onBack }) => {
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        // Filter projects (Finished are archived, Completed is the new active state before archival)
-        const completed = data.filter(
-          (p) => p.status === "Finished" || p.status === "Completed",
-        );
-        setProjects(completed.reverse()); // Show newest first
+        // History should only show Finished projects
+        const finished = data.filter((p) => p.status === "Finished");
+        setProjects(finished.reverse()); // Show newest first
       }
     } catch (error) {
       console.error("Error loading history:", error);
@@ -91,7 +89,7 @@ const ProjectHistory = ({ onBack }) => {
         </div>
       ) : projects.length === 0 ? (
         <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
-          <p>No completed projects found.</p>
+          <p>No finished projects found.</p>
         </div>
       ) : (
         <div className="month-section">

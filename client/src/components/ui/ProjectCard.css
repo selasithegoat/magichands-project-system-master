@@ -176,6 +176,16 @@
   background-color: #3b82f6; /* Default */
 }
 
+.progress-track-new.completed-glow {
+  box-shadow:
+    0 0 6px rgba(34, 197, 94, 0.6),
+    0 0 14px rgba(34, 197, 94, 0.35);
+}
+
+.progress-fill-new.completed-glow-fill {
+  background-color: #22c55e;
+}
+
 /* Meta Section */
 .card-meta-row {
   display: flex;

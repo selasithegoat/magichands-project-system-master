@@ -33,17 +33,27 @@ const useInactivityLogout = (timeout = 1800000) => {
 
   useEffect(() => {
     const events = [
+      "pointerdown",
       "mousedown",
       "mousemove",
       "keydown",
       "scroll",
       "touchstart",
+      "focusin",
+      "click",
     ];
 
     // Add event listeners
     events.forEach((event) => {
-      window.addEventListener(event, resetTimer);
+      window.addEventListener(event, resetTimer, true);
     });
+    window.addEventListener("focus", resetTimer, true);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        resetTimer();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility, true);
 
     // Start initial timer
     resetTimer();
@@ -54,8 +64,10 @@ const useInactivityLogout = (timeout = 1800000) => {
         clearTimeout(timeoutRef.current);
       }
       events.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
+        window.removeEventListener(event, resetTimer, true);
       });
+      window.removeEventListener("focus", resetTimer, true);
+      document.removeEventListener("visibilitychange", handleVisibility, true);
     };
   }, []);
 

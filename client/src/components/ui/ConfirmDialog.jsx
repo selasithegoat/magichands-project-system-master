@@ -29,10 +29,15 @@ const ConfirmDialog = ({
         </div>
 
         <div className="confirm-footer">
-          <button className="confirm-btn cancel" onClick={onCancel}>
+          <button
+            type="button"
+            className="confirm-btn cancel"
+            onClick={onCancel}
+          >
             {cancelText}
           </button>
           <button
+            type="button"
             className={`confirm-btn confirm ${
               type === "primary" ? "primary" : ""
             }`}
