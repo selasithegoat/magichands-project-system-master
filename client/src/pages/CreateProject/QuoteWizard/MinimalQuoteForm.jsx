@@ -533,12 +533,12 @@ const MinimalQuoteForm = () => {
                     document.getElementById("quote-attachments").click()
                   }
                   style={{ cursor: "pointer" }}
-                >
-                  <FolderIcon />
-                  <p>Click to upload reference files</p>
-                  <span>Images, PDFs, Documents</span>
-                </div>
-              )}
+                  >
+                    <FolderIcon />
+                    <p>Click to upload reference files</p>
+                    <span>Any file type (images, PDFs, audio, video)</span>
+                  </div>
+                )}
 
             {(selectedFiles.length > 0 ||
               existingSampleImage ||

@@ -293,6 +293,15 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   <FolderIcon width="16" height="16" />
                   Add Files
                 </button>
+                <div
+                  style={{
+                    marginTop: "0.5rem",
+                    fontSize: "0.8rem",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  Any file type (images, PDFs, audio, video)
+                </div>
               </div>
             )}
 

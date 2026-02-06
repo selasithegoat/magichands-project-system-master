@@ -3,14 +3,11 @@ import BackArrow from "../../components/icons/BackArrow";
 import FolderIcon from "../../components/icons/FolderIcon";
 import BuildingIcon from "../../components/icons/BuildingIcon";
 import DollarIcon from "../../components/icons/DollarIcon";
-import EditIcon from "../../components/icons/EditIcon";
-import FileIcon from "../../components/icons/FileIcon";
+
 import CheckIcon from "../../components/icons/CheckIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
-import UserAvatar from "../../components/ui/UserAvatar";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
-import { PDFDownloadLink } from "@react-pdf/renderer";
-import ProjectSummaryPDF from "./ProjectSummaryPDF";
+
 import "./Step5.css";
 
 const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {

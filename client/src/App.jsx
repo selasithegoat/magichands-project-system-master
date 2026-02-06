@@ -101,8 +101,10 @@ function App() {
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        // Count active projects (everything except 'Completed' and 'Pending Scope Approval')
-        const active = data.filter((p) => p.status !== "Completed");
+        // Count active projects (exclude history statuses)
+        const active = data.filter(
+          (p) => p.status !== "Completed" && p.status !== "Finished",
+        );
         setProjectCount(active.length);
       }
     } catch (err) {

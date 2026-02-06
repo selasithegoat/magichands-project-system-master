@@ -24,8 +24,10 @@ const OngoingProjects = ({
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          // Filter out "Finished" projects
-          const activeProjects = data.filter((p) => p.status !== "Finished");
+          // Filter out history statuses
+          const activeProjects = data.filter(
+            (p) => p.status !== "Completed" && p.status !== "Finished",
+          );
           setProjects(activeProjects);
         }
       } catch (error) {
@@ -49,7 +51,9 @@ const OngoingProjects = ({
         // Remember to filter here too if not filtered in backend, although the use effect logic above was better.
         // The original clean fetchProjects function inside useEffect was good, but this one (line 37) was just fetching all without filtering.
         // We should probably filter here too to match.
-        const activeProjects = data.filter((p) => p.status !== "Finished");
+        const activeProjects = data.filter(
+          (p) => p.status !== "Completed" && p.status !== "Finished",
+        );
         setProjects(activeProjects);
       }
     } catch (error) {

@@ -9,8 +9,10 @@ import WarningIcon from "../../components/icons/WarningIcon";
 import RobotArmIcon from "../../components/icons/RobotArmIcon";
 import "./Step4.css";
 import ProgressBar from "../../components/ui/ProgressBar";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 
 const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+  const [showRiskModal, setShowRiskModal] = useState(false);
   const responsibleOptions = [
     { label: "Sarah Jenkins", value: "sarah" },
     { label: "Mike Ross", value: "mike" },
@@ -79,6 +81,19 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   const uncontrollableFactors = formData.uncontrollableFactors || [];
   const productionRisks = formData.productionRisks || [];
+  const hasValidProductionRisk = productionRisks.some(
+    (risk) =>
+      (risk.description && risk.description.trim()) ||
+      (risk.preventive && risk.preventive.trim()),
+  );
+
+  const handleNextStep = () => {
+    if (!hasValidProductionRisk) {
+      setShowRiskModal(true);
+      return;
+    }
+    onNext();
+  };
 
   return (
     <div className="step-container">
@@ -226,12 +241,22 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         </div>
       </div>
 
+      <ConfirmationModal
+        isOpen={showRiskModal}
+        title="Production Risk Required"
+        message="Please add at least one Production Risk before proceeding to the next step."
+        confirmText="OK"
+        cancelText="Close"
+        onConfirm={() => setShowRiskModal(false)}
+        onCancel={() => setShowRiskModal(false)}
+      />
+
       {/* Footer */}
       <div className="step-footer footer-split">
         <button className="back-text-btn" onClick={onBack}>
           Back
         </button>
-        <button className="next-btn-small" onClick={onNext}>
+        <button className="next-btn-small" onClick={handleNextStep}>
           Next Step
           <svg
             width="20"

@@ -8,8 +8,10 @@ import PlusCircleIcon from "../../../components/icons/PlusCircleIcon";
 import WarningIcon from "../../../components/icons/WarningIcon";
 import RobotArmIcon from "../../../components/icons/RobotArmIcon";
 import ProgressBar from "../../../components/ui/ProgressBar";
+import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 
 const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+  const [showRiskModal, setShowRiskModal] = React.useState(false);
   const responsibleOptions = [
     { label: "Sarah Jenkins", value: "sarah" },
     { label: "Mike Ross", value: "mike" },
@@ -76,6 +78,19 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   const uncontrollableFactors = formData.uncontrollableFactors || [];
   const productionRisks = formData.productionRisks || [];
+  const hasValidProductionRisk = productionRisks.some(
+    (risk) =>
+      (risk.description && risk.description.trim()) ||
+      (risk.preventive && risk.preventive.trim()),
+  );
+
+  const handleNextStep = () => {
+    if (!hasValidProductionRisk) {
+      setShowRiskModal(true);
+      return;
+    }
+    onNext();
+  };
 
   return (
     <div className="step-container">
@@ -229,6 +244,16 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         </div>
       </div>
 
+      <ConfirmationModal
+        isOpen={showRiskModal}
+        title="Production Risk Required"
+        message="Please add at least one Production Risk before proceeding to the next step."
+        confirmText="OK"
+        cancelText="Close"
+        onConfirm={() => setShowRiskModal(false)}
+        onCancel={() => setShowRiskModal(false)}
+      />
+
       <div
         className="step-footer"
         style={{
@@ -243,7 +268,7 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         <button className="back-text-btn" onClick={onBack}>
           Back
         </button>
-        <button className="next-btn" onClick={onNext}>
+        <button className="next-btn" onClick={handleNextStep}>
           Next Step
           <svg
             width="20"

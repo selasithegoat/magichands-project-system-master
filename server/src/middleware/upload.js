@@ -37,21 +37,8 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Accept images only as requested
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
-  const isExtValid = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase(),
-  );
-  const isMimeValid = allowedTypes.test(file.mimetype);
-
-  if (isExtValid && isMimeValid) {
-    cb(null, true);
-  } else {
-    cb(
-      new Error("Only image files (jpg, jpeg, png, gif, webp) are allowed!"),
-      false,
-    );
-  }
+  // Allow all file types (images, documents, audio, video, etc.)
+  cb(null, true);
 };
 
 const upload = multer({

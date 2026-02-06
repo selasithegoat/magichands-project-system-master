@@ -96,6 +96,10 @@ const ProjectPdfDownload = ({ project }) => {
   const getPdfFormData = () => {
     if (!project) return {};
     const details = project.details || {};
+    const allAttachments = project.attachments || details.attachments || [];
+    const imageAttachments = allAttachments.filter(
+      (path) => typeof path === "string" && path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i),
+    );
     return {
       projectName: details.projectName || project.projectName,
       contactType: details.contactType,
@@ -117,7 +121,7 @@ const ProjectPdfDownload = ({ project }) => {
       items: project.items,
       uncontrollableFactors: project.uncontrollableFactors,
       productionRisks: project.productionRisks,
-      attachments: project.attachments || details.attachments,
+      attachments: imageAttachments,
       sampleImage: project.sampleImage || details.sampleImage,
       details: details,
     };

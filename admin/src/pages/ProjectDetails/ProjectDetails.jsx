@@ -857,88 +857,109 @@ const ProjectDetails = ({ user }) => {
                       .filter(
                         (value, index, self) => self.indexOf(value) === index,
                       )
-                      .map((path, idx) => {
-                        const isImage = path.match(
-                          /\.(jpg|jpeg|png|gif|webp)$/i,
-                        );
-                        // Safe check for path being a string before split
-                        const fileName =
-                          typeof path === "string"
-                            ? path.split("/").pop()
-                            : "File";
+                        .map((path, idx) => {
+                          const isImage = path.match(
+                            /\.(jpg|jpeg|png|gif|webp)$/i,
+                          );
+                          // Safe check for path being a string before split
+                          const fileName =
+                            typeof path === "string"
+                              ? path.split("/").pop()
+                              : "File";
 
                         // Debug log for path issues if any
                         // console.log("Rendering attachment path:", path);
 
-                        return (
-                          <a
-                            key={idx}
-                            href={path}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              position: "relative",
-                              aspectRatio: "1",
-                              border: "1px solid var(--border-color)",
-                              borderRadius: "10px",
-                              overflow: "hidden",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              background: "rgba(255, 255, 255, 0.03)",
-                              textDecoration: "none",
-                              transition: "transform 0.2s",
-                            }}
-                            onMouseOver={(e) =>
-                              (e.currentTarget.style.transform = "scale(1.02)")
-                            }
-                            onMouseOut={(e) =>
-                              (e.currentTarget.style.transform = "scale(1)")
-                            }
-                            title={fileName}
-                          >
-                            {isImage ? (
-                              <img
-                                src={path}
-                                alt="attachment"
+                          return (
+                            <div
+                              key={idx}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.4rem",
+                              }}
+                            >
+                              <a
+                                href={path}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }}
-                              />
-                            ) : (
-                              <div
-                                style={{
-                                  textAlign: "center",
-                                  padding: "0.75rem",
-                                  color: "var(--text-secondary)",
-                                  width: "100%",
+                                  position: "relative",
+                                  aspectRatio: "1",
+                                  border: "1px solid var(--border-color)",
+                                  borderRadius: "10px",
                                   overflow: "hidden",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "rgba(255, 255, 255, 0.03)",
+                                  textDecoration: "none",
+                                  transition: "transform 0.2s",
+                                }}
+                                onMouseOver={(e) =>
+                                  (e.currentTarget.style.transform =
+                                    "scale(1.02)")
+                                }
+                                onMouseOut={(e) =>
+                                  (e.currentTarget.style.transform = "scale(1)")
+                                }
+                                title={fileName}
+                              >
+                                {isImage ? (
+                                  <img
+                                    src={path}
+                                    alt="attachment"
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    style={{
+                                      textAlign: "center",
+                                      padding: "0.75rem",
+                                      color: "var(--text-secondary)",
+                                      width: "100%",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    <FolderIcon width="28" height="28" />
+                                    <div
+                                      style={{
+                                        marginTop: "0.5rem",
+                                        fontSize: "0.75rem",
+                                        whiteSpace: "nowrap",
+                                        textOverflow: "ellipsis",
+                                        overflow: "hidden",
+                                        color: "#f8fafc",
+                                      }}
+                                    >
+                                      {fileName}
+                                    </div>
+                                  </div>
+                                )}
+                              </a>
+                              <a
+                                href={path}
+                                download
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#38bdf8",
+                                  textDecoration: "none",
+                                  fontWeight: 600,
                                 }}
                               >
-                                <FolderIcon width="28" height="28" />
-                                <div
-                                  style={{
-                                    marginTop: "0.5rem",
-                                    fontSize: "0.75rem",
-                                    whiteSpace: "nowrap",
-                                    textOverflow: "ellipsis",
-                                    overflow: "hidden",
-                                    color: "#f8fafc",
-                                  }}
-                                >
-                                  {fileName}
-                                </div>
-                              </div>
-                            )}
-                          </a>
-                        );
-                      })}
+                                Download
+                              </a>
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
           )}
 
           {/* Order Items */}

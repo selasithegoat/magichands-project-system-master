@@ -1106,8 +1106,8 @@ const ReferenceMaterialsCard = ({ project }) => {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {/* Sample Image */}
-        {sampleImage && (
-          <div>
+          {sampleImage && (
+            <div>
             <h4
               style={{
                 fontSize: "0.75rem",
@@ -1119,32 +1119,46 @@ const ReferenceMaterialsCard = ({ project }) => {
             >
               Sample Image
             </h4>
-            <div
-              style={{
-                borderRadius: "8px",
-                overflow: "hidden",
-                border: "1px solid #e2e8f0",
-                maxWidth: "200px",
-              }}
-            >
+              <div
+                style={{
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  border: "1px solid #e2e8f0",
+                  maxWidth: "200px",
+                }}
+              >
+                <a
+                  href={`${sampleImage}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img
+                    src={`${sampleImage}`}
+                    alt="Sample"
+                    style={{
+                      width: "100%",
+                      height: "auto",
+                      display: "block",
+                    }}
+                  />
+                </a>
+              </div>
               <a
                 href={`${sampleImage}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                download
+                style={{
+                  marginTop: "0.5rem",
+                  display: "inline-block",
+                  fontSize: "0.75rem",
+                  color: "#2563eb",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
               >
-                <img
-                  src={`${sampleImage}`}
-                  alt="Sample"
-                  style={{
-                    width: "100%",
-                    height: "auto",
-                    display: "block",
-                  }}
-                />
+                Download
               </a>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Attachments */}
         {attachments.length > 0 && (
@@ -1160,75 +1174,95 @@ const ReferenceMaterialsCard = ({ project }) => {
             >
               Attachments ({attachments.length})
             </h4>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
-                gap: "0.5rem",
-              }}
-            >
-              {attachments.map((path, idx) => {
-                const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                const fileName = path.split("/").pop();
-                return (
-                  <a
-                    key={idx}
-                    href={`${path}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      position: "relative",
-                      aspectRatio: "1",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "8px",
-                      overflow: "hidden",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "#f8fafc", // slate-50
-                      textDecoration: "none",
-                    }}
-                  >
-                    {isImage ? (
-                      <img
-                        src={`${path}`}
-                        alt="attachment"
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                  gap: "0.5rem",
+                }}
+              >
+                {attachments.map((path, idx) => {
+                  const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                  const fileName = path.split("/").pop();
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.35rem",
+                      }}
+                    >
+                      <a
+                        href={`${path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          textAlign: "center",
-                          padding: "0.5rem",
-                          color: "#64748b",
-                          width: "100%",
+                          position: "relative",
+                          aspectRatio: "1",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "8px",
                           overflow: "hidden",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "#f8fafc", // slate-50
+                          textDecoration: "none",
                         }}
                       >
-                        <FolderIcon width="24" height="24" />
-                        <div
-                          style={{
-                            marginTop: "0.25rem",
-                            fontSize: "0.7rem",
-                            whiteSpace: "nowrap",
-                            textOverflow: "ellipsis",
-                            overflow: "hidden",
-                            color: "#334155",
-                          }}
-                        >
-                          {fileName}
-                        </div>
-                      </div>
-                    )}
-                  </a>
-                );
-              })}
+                        {isImage ? (
+                          <img
+                            src={`${path}`}
+                            alt="attachment"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              textAlign: "center",
+                              padding: "0.5rem",
+                              color: "#64748b",
+                              width: "100%",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <FolderIcon width="24" height="24" />
+                            <div
+                              style={{
+                                marginTop: "0.25rem",
+                                fontSize: "0.7rem",
+                                whiteSpace: "nowrap",
+                                textOverflow: "ellipsis",
+                                overflow: "hidden",
+                                color: "#334155",
+                              }}
+                            >
+                              {fileName}
+                            </div>
+                          </div>
+                        )}
+                      </a>
+                      <a
+                        href={`${path}`}
+                        download
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "#2563eb",
+                          textDecoration: "none",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Download
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
         )}
       </div>
     </div>
