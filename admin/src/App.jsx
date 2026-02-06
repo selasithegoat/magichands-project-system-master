@@ -10,6 +10,7 @@ const Teams = lazy(() => import("./pages/Teams/Teams"));
 const Clients = lazy(() => import("./pages/Clients/Clients"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
+import useRealtimeClient from "./hooks/useRealtimeClient";
 import {
   BrowserRouter as Router,
   Routes,
@@ -61,6 +62,7 @@ function App() {
 
   // Inactivity Timeout (30 minutes)
   useInactivityLogout(30 * 60 * 1000);
+  useRealtimeClient(Boolean(user));
 
   const LoadingScreen = () => (
     <div

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import "./Clients.css";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const Clients = ({ user }) => {
   const navigate = useNavigate();
@@ -11,26 +12,29 @@ const Clients = ({ user }) => {
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [expandedClients, setExpandedClients] = useState(new Set());
 
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const res = await fetch("/api/projects/clients", {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setClients(data);
-        } else {
-          console.error("Failed to fetch clients");
-        }
-      } catch (err) {
-        console.error("Error fetching clients:", err);
-      } finally {
-        setLoading(false);
+  const fetchClients = async () => {
+    try {
+      const res = await fetch("/api/projects/clients", {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data);
+      } else {
+        console.error("Failed to fetch clients");
       }
-    };
+    } catch (err) {
+      console.error("Error fetching clients:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchClients();
   }, []);
+
+  useRealtimeRefresh(() => fetchClients());
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";

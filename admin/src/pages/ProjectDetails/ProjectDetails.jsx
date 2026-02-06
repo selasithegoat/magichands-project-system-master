@@ -8,6 +8,7 @@ import {
   CheckCircleIcon,
   XMarkIcon,
 } from "../../icons/Icons";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
@@ -84,68 +85,68 @@ const ProjectDetails = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
 
-  useEffect(() => {
-    const fetchProject = async () => {
-      try {
-        const res = await fetch(`/api/projects/${id}`, {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setProject(data);
-          // Initialize edit form with flat structure for general info
-          setEditForm({
-            client: data.details?.client || "",
-            clientEmail: data.details?.clientEmail || "", // [NEW]
-            clientPhone: data.details?.clientPhone || "", // [NEW]
-            briefOverview: data.details?.briefOverview || "", // [New]
-            orderDate: data.orderDate
-              ? data.orderDate.split("T")[0]
-              : data.createdAt
-                ? data.createdAt.split("T")[0]
-                : "",
-            receivedTime: data.receivedTime || "",
-            deliveryDate: data.details?.deliveryDate
-              ? data.details.deliveryDate.split("T")[0]
+  const fetchProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProject(data);
+        // Initialize edit form with flat structure for general info
+        setEditForm({
+          client: data.details?.client || "",
+          clientEmail: data.details?.clientEmail || "", // [NEW]
+          clientPhone: data.details?.clientPhone || "", // [NEW]
+          briefOverview: data.details?.briefOverview || "", // [New]
+          orderDate: data.orderDate
+            ? data.orderDate.split("T")[0]
+            : data.createdAt
+              ? data.createdAt.split("T")[0]
               : "",
-            deliveryTime: data.details?.deliveryTime || "",
-            deliveryLocation: data.details?.deliveryLocation || "",
-            contactType: data.details?.contactType || "",
-            supplySource: data.details?.supplySource || "",
-          });
-        } else {
-          console.error("Failed to fetch project");
-        }
-      } catch (err) {
-        console.error("Error fetching project:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchUpdates = async () => {
-      try {
-        const res = await fetch(`/api/updates/project/${id}`, {
-          credentials: "include",
+          receivedTime: data.receivedTime || "",
+          deliveryDate: data.details?.deliveryDate
+            ? data.details.deliveryDate.split("T")[0]
+            : "",
+          deliveryTime: data.details?.deliveryTime || "",
+          deliveryLocation: data.details?.deliveryLocation || "",
+          contactType: data.details?.contactType || "",
+          supplySource: data.details?.supplySource || "",
         });
-        if (res.ok) {
-          const data = await res.json();
-          setUpdates(data);
-        }
-      } catch (err) {
-        console.error("Error fetching updates:", err);
+      } else {
+        console.error("Failed to fetch project");
       }
-    };
+    } catch (err) {
+      console.error("Error fetching project:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const fetchUpdates = async () => {
+    try {
+      const res = await fetch(`/api/updates/project/${id}`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUpdates(data);
+      }
+    } catch (err) {
+      console.error("Error fetching updates:", err);
+    }
+  };
+
+  useEffect(() => {
     fetchProject();
     fetchUpdates();
 
     // Fetch users for Lead Edit
     const fetchUsers = async () => {
       try {
-      const res = await fetch("/api/auth/users", {
-        credentials: "include",
-      });
+        const res = await fetch("/api/auth/users", {
+          credentials: "include",
+        });
         if (res.ok) {
           const data = await res.json();
           setAvailableUsers(data);
@@ -156,6 +157,14 @@ const ProjectDetails = ({ user }) => {
     };
     fetchUsers();
   }, [id]);
+
+  useRealtimeRefresh(
+    () => {
+      fetchProject();
+      fetchUpdates();
+    },
+    { enabled: Boolean(id) },
+  );
 
   // Lead Edit State
   const [isEditingLead, setIsEditingLead] = useState(false);

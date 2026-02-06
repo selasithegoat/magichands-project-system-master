@@ -23,6 +23,7 @@ import ProgressDonutIcon from "../../components/icons/ProgressDonutIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -137,25 +138,36 @@ const ProjectDetail = ({ onProjectChange, user }) => {
     }
   };
 
+  const fetchUpdatesCount = async () => {
+    try {
+      const res = await fetch(`/api/updates/project/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUpdatesCount(data.length);
+      }
+    } catch (err) {
+      console.error("Error fetching updates count:", err);
+    }
+  };
+
   useEffect(() => {
     if (id) fetchProject();
   }, [id]);
 
   // [New] Fetch updates count
   useEffect(() => {
-    const fetchUpdatesCount = async () => {
-      try {
-        const res = await fetch(`/api/updates/project/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setUpdatesCount(data.length);
-        }
-      } catch (err) {
-        console.error("Error fetching updates count:", err);
-      }
-    };
     if (id) fetchUpdatesCount();
   }, [id]);
+
+  useRealtimeRefresh(
+    () => {
+      if (id) {
+        fetchProject();
+        fetchUpdatesCount();
+      }
+    },
+    { enabled: Boolean(id) },
+  );
 
   const handleFinishProject = async () => {
     try {

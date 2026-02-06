@@ -13,6 +13,7 @@ import PlusIcon from "../../components/icons/PlusIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const Dashboard = ({
   onNavigateProject,
@@ -28,6 +29,8 @@ const Dashboard = ({
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  useRealtimeRefresh(() => fetchProjects());
 
   const fetchProjects = async () => {
     try {

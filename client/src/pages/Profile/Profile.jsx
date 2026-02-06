@@ -9,6 +9,7 @@ import ClockIcon from "../../components/icons/ClockIcon";
 import UploadIcon from "../../components/icons/UploadIcon";
 import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [emailNotif, setEmailNotif] = useState(
@@ -56,19 +57,20 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     }
   }, [user]);
 
+  const fetchStats = async () => {
+    try {
+      const res = await fetch("/api/projects/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
+
   // Fetch Stats
   React.useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await fetch("/api/projects/stats");
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        }
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-      }
-    };
     fetchStats();
   }, []);
 
@@ -96,28 +98,34 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [activities, setActivities] = useState([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(true);
 
+  const fetchActivities = async () => {
+    try {
+      const res = await fetch("/api/projects/activities/me?limit=5", {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Backend now returns { activities: [], ... } due to pagination support
+        setActivities(data.activities || []);
+      }
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+    } finally {
+      setIsLoadingActivities(false);
+    }
+  };
+
   // Fetch Activities
   React.useEffect(() => {
-    const fetchActivities = async () => {
-      try {
-        const res = await fetch("/api/projects/activities/me?limit=5", {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          // Backend now returns { activities: [], ... } due to pagination support
-          setActivities(data.activities || []);
-        }
-      } catch (error) {
-        console.error("Error fetching activities:", error);
-      } finally {
-        setIsLoadingActivities(false);
-      }
-    };
     fetchActivities();
   }, []);
+
+  useRealtimeRefresh(() => {
+    fetchStats();
+    fetchActivities();
+  });
 
   const formatTimeAgo = (dateString) => {
     const date = new Date(dateString);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const OrdersList = () => {
   const navigate = useNavigate();
@@ -35,6 +36,8 @@ const OrdersList = () => {
     fetchOrders();
     fetchCurrentUser();
   }, []);
+
+  useRealtimeRefresh(() => fetchOrders());
 
   const fetchCurrentUser = async () => {
     try {

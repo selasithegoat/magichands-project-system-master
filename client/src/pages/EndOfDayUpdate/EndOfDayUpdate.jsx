@@ -4,6 +4,7 @@ import { format, differenceInHours } from "date-fns";
 import Spinner from "../../components/ui/Spinner";
 import { DownloadIcon } from "../../components/icons/DownloadIcon"; // Assuming exists or I will create an inline SVG
 import "./EndOfDayUpdate.css";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const EndOfDayUpdate = ({ user }) => {
   const [projects, setProjects] = useState([]);
@@ -23,6 +24,9 @@ const EndOfDayUpdate = ({ user }) => {
 
     fetchProjects();
   }, [user, navigate]);
+
+  const isFrontDesk = user?.department?.includes("Front Desk");
+  useRealtimeRefresh(() => fetchProjects(), { enabled: Boolean(isFrontDesk) });
 
   const fetchProjects = async () => {
     try {

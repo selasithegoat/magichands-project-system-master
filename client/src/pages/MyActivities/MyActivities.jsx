@@ -5,6 +5,7 @@ import ArrowLeftIcon from "../../components/icons/ArrowLeftIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { format, isToday, isYesterday } from "date-fns";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const MyActivities = ({ onBack }) => {
   const [activities, setActivities] = useState([]);
@@ -50,6 +51,12 @@ const MyActivities = ({ onBack }) => {
   useEffect(() => {
     fetchActivities(1);
   }, []);
+
+  useRealtimeRefresh(() => {
+    setPage(1);
+    setHasMore(true);
+    fetchActivities(1);
+  });
 
   const handleLoadMore = () => {
     const nextPage = page + 1;

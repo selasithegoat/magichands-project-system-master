@@ -8,6 +8,7 @@ import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import SystemIcon from "../../components/icons/SystemIcon";
 import CreateIcon from "../../components/icons/CreateIcon";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const ProjectActivity = ({ project }) => {
   const [filter, setFilter] = useState("All Activity");
@@ -20,6 +21,12 @@ const ProjectActivity = ({ project }) => {
       fetchActivities();
     }
   }, [project?._id]);
+
+  useRealtimeRefresh(() => {
+    if (project?._id) {
+      fetchActivities();
+    }
+  }, { enabled: Boolean(project?._id) });
 
   const fetchActivities = async () => {
     try {

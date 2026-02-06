@@ -3,6 +3,7 @@ import Layout from "./components/layout/Layout";
 import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth load
 import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for Suspense fallback
 import useInactivityLogout from "./hooks/useInactivityLogout";
+import useRealtimeClient from "./hooks/useRealtimeClient";
 
 // Lazy Loaded Pages
 const Login = lazy(() => import("./pages/Login/Login"));
@@ -92,6 +93,7 @@ function App() {
 
   // Initialize auto-logout (30 minutes)
   useInactivityLogout();
+  useRealtimeClient(Boolean(user));
 
   // Fetch project count
   const fetchProjectCount = async () => {

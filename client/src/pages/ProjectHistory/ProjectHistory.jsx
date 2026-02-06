@@ -7,6 +7,7 @@ import FilterIcon from "../../components/icons/FilterIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import HistoryProjectCard from "../../components/ui/HistoryProjectCard";
 import { useNavigate } from "react-router-dom"; // Add navigation hook
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const ProjectHistory = ({ onBack }) => {
   const [filter, setFilter] = useState("All");
@@ -17,6 +18,8 @@ const ProjectHistory = ({ onBack }) => {
   useEffect(() => {
     fetchHistory();
   }, []);
+
+  useRealtimeRefresh(() => fetchHistory());
 
   const fetchHistory = async () => {
     try {

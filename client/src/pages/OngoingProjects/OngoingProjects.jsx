@@ -7,6 +7,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import FabButton from "../../components/ui/FabButton";
 import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const OngoingProjects = ({
   onNavigateDetail,
@@ -35,6 +36,8 @@ const OngoingProjects = ({
     };
     fetchProjects();
   }, []);
+
+  useRealtimeRefresh(() => fetchProjects());
 
   const [toast, setToast] = React.useState(null);
 

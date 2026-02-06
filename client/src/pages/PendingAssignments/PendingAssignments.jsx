@@ -1,33 +1,37 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PendingAssignments.css";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const PendingAssignments = ({ onStartNew, user }) => {
   const [adjustments, setAdjustments] = useState([]);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchAssignments = async () => {
-      if (!user) return;
-      try {
-        const res = await fetch("/api/projects");
-        if (res.ok) {
-          const data = await res.json();
-          const pending = data.filter((p) => {
-            const leadId = p.projectLeadId?._id || p.projectLeadId;
-            return leadId === user._id && p.status === "Pending Scope Approval";
-          });
-          setAdjustments(pending);
-        }
-      } catch (error) {
-        console.error("Failed to load assignments", error);
-      } finally {
-        setLoading(false);
+  const fetchAssignments = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch("/api/projects");
+      if (res.ok) {
+        const data = await res.json();
+        const pending = data.filter((p) => {
+          const leadId = p.projectLeadId?._id || p.projectLeadId;
+          return leadId === user._id && p.status === "Pending Scope Approval";
+        });
+        setAdjustments(pending);
       }
-    };
+    } catch (error) {
+      console.error("Failed to load assignments", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchAssignments();
   }, [user]);
+
+  useRealtimeRefresh(() => fetchAssignments(), { enabled: Boolean(user) });
 
   const handleAccept = (projectId) => {
     navigate(`/create/wizard?edit=${projectId}`);

@@ -4,6 +4,7 @@ import "./Teams.css";
 import Modal from "../../components/Modal/Modal";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import { UserIcon, LockIcon, PencilIcon, TrashIcon } from "../../icons/Icons";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const Teams = ({ user }) => {
   const [employees, setEmployees] = useState([]);
@@ -68,6 +69,8 @@ const Teams = ({ user }) => {
   useEffect(() => {
     fetchEmployees();
   }, []);
+
+  useRealtimeRefresh(() => fetchEmployees());
 
   // Handle Input Changes
   const handleChange = (e) => {

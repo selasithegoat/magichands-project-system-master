@@ -7,6 +7,7 @@ import {
   BellIcon,
 } from "../../icons/Icons";
 import { useNavigate } from "react-router-dom";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -281,6 +282,8 @@ const Dashboard = ({ user }) => {
   useEffect(() => {
     fetchGlobalProjects();
   }, []);
+
+  useRealtimeRefresh(() => fetchGlobalProjects());
 
   const fetchGlobalProjects = async () => {
     try {

@@ -5,6 +5,7 @@ import SystemIcon from "../../components/icons/SystemIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import Toast from "../../components/ui/Toast";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const PlusIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
   <svg
@@ -80,6 +81,12 @@ const ProjectUpdates = ({ project, currentUser }) => {
       fetchUpdates();
     }
   }, [project?._id]);
+
+  useRealtimeRefresh(() => {
+    if (project?._id) {
+      fetchUpdates();
+    }
+  }, { enabled: Boolean(project?._id) });
 
   const fetchUpdates = async () => {
     try {

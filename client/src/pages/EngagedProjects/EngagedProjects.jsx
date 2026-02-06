@@ -9,6 +9,7 @@ import {
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -109,6 +110,8 @@ const EngagedProjects = ({ user }) => {
   useEffect(() => {
     fetchEngagedProjects();
   }, []);
+
+  useRealtimeRefresh(() => fetchEngagedProjects());
 
   const fetchEngagedProjects = async () => {
     try {

@@ -11,6 +11,8 @@ const projectRoutes = require("./routes/projectRoutes");
 const updateRoutes = require("./routes/updateRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const realtimeRoutes = require("./routes/realtimeRoutes");
+const { broadcastDataChange } = require("./utils/realtimeHub");
 
 // Load env vars
 dotenv.config();
@@ -54,6 +56,33 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 
+// Realtime change notifications for mutating API calls
+const realtimePaths = [
+  "/api/projects",
+  "/api/updates",
+  "/api/notifications",
+  "/api/admin",
+];
+app.use((req, res, next) => {
+  if (!req.originalUrl.startsWith("/api")) return next();
+  if (req.method === "GET") return next();
+  const shouldBroadcast = realtimePaths.some((p) =>
+    req.originalUrl.startsWith(p),
+  );
+  if (!shouldBroadcast) return next();
+
+  res.on("finish", () => {
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      broadcastDataChange({
+        path: req.originalUrl,
+        method: req.method,
+      });
+    }
+  });
+
+  next();
+});
+
 // External uploads folder (outside source)
 const UPLOAD_DIR =
   process.env.UPLOAD_DIR || path.join(__dirname, "../../../magichands-uploads");
@@ -65,6 +94,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/realtime", realtimeRoutes);
 
 // Serve built frontends (Vite builds -> dist)
 const clientDistPath = path.resolve(__dirname, "../../client/dist");

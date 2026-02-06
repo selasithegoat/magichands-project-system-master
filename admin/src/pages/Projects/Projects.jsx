@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const Projects = ({ user }) => {
   const navigate = useNavigate();
@@ -24,26 +25,29 @@ const Projects = ({ user }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const res = await fetch("/api/projects?source=admin", {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setProjects(data);
-        } else {
-          console.error("Failed to fetch projects");
-        }
-      } catch (err) {
-        console.error("Error fetching projects:", err);
-      } finally {
-        setLoading(false);
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch("/api/projects?source=admin", {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data);
+      } else {
+        console.error("Failed to fetch projects");
       }
-    };
+    } catch (err) {
+      console.error("Error fetching projects:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchProjects();
   }, []);
+
+  useRealtimeRefresh(() => fetchProjects());
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";
