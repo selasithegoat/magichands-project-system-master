@@ -487,7 +487,7 @@ const NewOrders = () => {
                           className="form-input"
                           required
                         />
-                      </div>
+                      </div> <br/>
                       <div className="item-input-group details">
                         <input
                           type="text"

@@ -29,6 +29,27 @@
   margin: 0;
 }
 
+.header-left-vertical {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.header-left-vertical .header-order {
+  margin: 0;
+  display: block;
+}
+
+.header-left-vertical .header-status {
+  display: flex;
+  align-items: center;
+}
+
+.header-left-vertical .header-project-name {
+  margin: 0;
+}
+
 .details-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;

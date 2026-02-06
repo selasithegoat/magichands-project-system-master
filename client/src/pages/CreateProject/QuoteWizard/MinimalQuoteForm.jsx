@@ -413,7 +413,7 @@ const MinimalQuoteForm = () => {
                         updateItem(index, "description", e.target.value)
                       }
                     />
-                  </div>
+                  </div> <br/>
                   <div className="item-field details" style={{ flex: 2 }}>
                     <Input
                       placeholder="Details (Optional)"

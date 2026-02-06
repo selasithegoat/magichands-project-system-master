@@ -425,73 +425,75 @@ const ProjectDetails = ({ user }) => {
           </div>
         )}
 
-      <div className="details-header">
-        <div className="header-left">
-          <h1>
-            {project.orderId || "Order #..."}
-            <select
-              className={`status-badge-select ${project.status
-                ?.toLowerCase()
-                .replace(" ", "-")}`}
-              value={project.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              disabled={
-                loading ||
-                (user &&
-                  (project.projectLeadId?._id === user._id ||
-                    project.projectLeadId === user._id))
-              }
-              style={{
-                marginLeft: "1rem",
-                padding: "0.25rem 0.5rem",
-                borderRadius: "999px",
-                border: "1px solid transparent",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                backgroundColor: "rgba(255, 255, 255, 0.2)", // Translucent background
-                color: "inherit",
-              }}
-            >
-              {(project.projectType === "Quote"
-                ? [
-                    "Order Confirmed",
-                    "Pending Scope Approval",
-                    "Scope Approval Completed",
-                    "Pending Quote Request",
-                    "Quote Request Completed",
-                    "Pending Send Response",
-                    "Response Sent",
-                    "Completed",
-                  ]
-                : [
-                    "Order Confirmed",
-                    "Pending Scope Approval",
-                    "Scope Approval Completed",
-                    "Pending Mockup",
-                    "Mockup Completed",
-                    "Pending Production",
-                    "Production Completed",
-                    "Pending Packaging",
-                    "Packaging Completed",
-                    "Pending Delivery/Pickup",
-                    "Delivered",
-                    "Completed",
-                  ]
-              ).map((status) => (
-                <option
-                  key={status}
-                  value={status}
-                  style={{ color: "#1e293b" }}
-                >
-                  {status}
-                </option>
-              ))}
-            </select>
-          </h1>
-          <p>{details.projectName}</p>
+        <div className="details-header">
+          <div className="header-left header-left-vertical">
+            <h1 className="header-order">
+              {project.orderId || "Order #..."}
+            </h1>
+            <div className="header-status">
+              <select
+                className={`status-badge-select ${project.status
+                  ?.toLowerCase()
+                  .replace(" ", "-")}`}
+                value={project.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={
+                  loading ||
+                  (user &&
+                    (project.projectLeadId?._id === user._id ||
+                      project.projectLeadId === user._id))
+                }
+                style={{
+                  marginLeft: 0,
+                  padding: "0.25rem 0.5rem",
+                  borderRadius: "999px",
+                  border: "1px solid transparent",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  backgroundColor: "rgba(255, 255, 255, 0.2)", // Translucent background
+                  color: "inherit",
+                }}
+              >
+                {(project.projectType === "Quote"
+                  ? [
+                      "Order Confirmed",
+                      "Pending Scope Approval",
+                      "Scope Approval Completed",
+                      "Pending Quote Request",
+                      "Quote Request Completed",
+                      "Pending Send Response",
+                      "Response Sent",
+                      "Completed",
+                    ]
+                  : [
+                      "Order Confirmed",
+                      "Pending Scope Approval",
+                      "Scope Approval Completed",
+                      "Pending Mockup",
+                      "Mockup Completed",
+                      "Pending Production",
+                      "Production Completed",
+                      "Pending Packaging",
+                      "Packaging Completed",
+                      "Pending Delivery/Pickup",
+                      "Delivered",
+                      "Completed",
+                    ]
+                ).map((status) => (
+                  <option
+                    key={status}
+                    value={status}
+                    style={{ color: "#1e293b" }}
+                  >
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="header-project-name">{details.projectName}</p>
+          </div>
         </div>
-      </div>
 
       <div className="details-grid">
         {/* Left Column */}
