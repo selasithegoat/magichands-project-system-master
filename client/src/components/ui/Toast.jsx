@@ -10,7 +10,7 @@ const Toast = ({
   type = "info",
   onClose,
   onClick,
-  duration = 3000,
+  duration = 5000,
 }) => {
   const [isExiting, setIsExiting] = useState(false);
 

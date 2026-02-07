@@ -1,4 +1,10 @@
 import React from "react";
+import {
+  PRODUCTION_SUB_DEPARTMENTS,
+  GRAPHICS_SUB_DEPARTMENTS,
+  STORES_SUB_DEPARTMENTS,
+  PHOTOGRAPHY_SUB_DEPARTMENTS,
+} from "../../constants/departments";
 
 import MenuIcon from "../icons/MenuIcon";
 
@@ -24,6 +30,27 @@ const Header = ({
     const l = user.lastName ? user.lastName[0] : "";
     return (f + l).toUpperCase() || "U";
   };
+
+  const userDepartments = Array.isArray(user?.department)
+    ? user.department
+    : user?.department
+      ? [user.department]
+      : [];
+
+  const hasProduction =
+    userDepartments.includes("Production") ||
+    userDepartments.some((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+  const hasGraphics =
+    userDepartments.includes("Graphics/Design") ||
+    userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
+  const hasStores =
+    userDepartments.includes("Stores") ||
+    userDepartments.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
+  const hasPhotography =
+    userDepartments.includes("Photography") ||
+    userDepartments.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
+  const showEngagedProjects =
+    hasProduction || hasGraphics || hasStores || hasPhotography;
 
   return (
     <header className="main-header">
@@ -108,10 +135,7 @@ const Header = ({
               </a>
             </>
           )}
-          {(user?.department?.includes("Production") ||
-            user?.department?.includes("Graphics/Design") ||
-            user?.department?.includes("Stores") ||
-            user?.department?.includes("Photography")) && (
+          {showEngagedProjects && (
             <a
               href="#"
               className={`nav-item ${

@@ -155,7 +155,11 @@ function App() {
           />
         </Routes>
       </Suspense>
-      <Toaster position="top-right" reverseOrder={false} />
+      <Toaster
+        position="top-right"
+        reverseOrder={false}
+        toastOptions={{ duration: 5000 }}
+      />
     </>
   );
 }

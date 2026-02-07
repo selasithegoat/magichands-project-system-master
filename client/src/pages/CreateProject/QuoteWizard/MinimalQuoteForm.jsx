@@ -148,7 +148,7 @@ const MinimalQuoteForm = () => {
         setShowToast({ show: false, message: "", type: "success" });
         setIsToastFading(false);
       }, 500);
-    }, 3000);
+    }, 4500);
   };
 
   const removeFile = (indexToRemove) => {

@@ -29,7 +29,7 @@ const OrdersList = () => {
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ ...toast, show: false }), 3000);
+    setTimeout(() => setToast({ ...toast, show: false }), 5000);
   };
 
   useEffect(() => {

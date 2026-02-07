@@ -71,7 +71,7 @@ const NewOrders = () => {
         setToast({ show: false, message: "", type: "success" });
         setIsToastFading(false);
       }, 500);
-    }, 3000);
+    }, 4500);
   };
 
   // Handle auto-generation OR reopened project sync

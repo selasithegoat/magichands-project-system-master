@@ -48,6 +48,31 @@ const Teams = ({ user }) => {
     "Stores",
     "IT Department",
   ];
+  const productionSubDepartments = [
+    { id: "dtf", label: "DTF Printing" },
+    { id: "uv-dtf", label: "UV DTF Printing" },
+    { id: "uv-printing", label: "UV Printing" },
+    { id: "engraving", label: "Engraving" },
+    { id: "large-format", label: "Large Format" },
+    { id: "digital-press", label: "Digital Press" },
+    { id: "digital-heat-press", label: "Digital Heat Press" },
+    { id: "offset-press", label: "Offset Press" },
+    { id: "screen-printing", label: "Screen Printing" },
+    { id: "embroidery", label: "Embroidery" },
+    { id: "sublimation", label: "Sublimation" },
+    { id: "digital-cutting", label: "Digital Cutting" },
+    { id: "pvc-id", label: "PVC ID Cards" },
+    { id: "business-cards", label: "Business Cards" },
+    { id: "installation", label: "Installation" },
+    { id: "overseas", label: "Overseas" },
+    { id: "woodme", label: "Woodme" },
+    { id: "fabrication", label: "Fabrication" },
+    { id: "signage", label: "Signage" },
+  ];
+  const productionSubDeptIds = productionSubDepartments.map((d) => d.id);
+  const productionSubDeptLabelMap = new Map(
+    productionSubDepartments.map((d) => [d.id, d.label]),
+  );
 
   // Fetch Employees
   const fetchEmployees = async () => {
@@ -82,18 +107,63 @@ const Teams = ({ user }) => {
     }
   };
 
+  const normalizeDepartments = (depts = []) => {
+    const unique = Array.from(new Set(depts.filter(Boolean)));
+    const hasProdSub = unique.some((d) => productionSubDeptIds.includes(d));
+    const hasProduction = unique.includes("Production") || hasProdSub;
+
+    let next = unique;
+    if (hasProdSub && !unique.includes("Production")) {
+      next = [...next, "Production"];
+    }
+    if (!hasProduction) {
+      next = next.filter((d) => !productionSubDeptIds.includes(d));
+    }
+    return next;
+  };
+
   // Handle Department Toggle (Multi-select)
   const handleDepartmentToggle = (dept) => {
     const currentDepts = formData.department;
     if (currentDepts.includes(dept)) {
+      let next = currentDepts.filter((d) => d !== dept);
+      if (dept === "Production") {
+        next = next.filter((d) => !productionSubDeptIds.includes(d));
+      }
       setFormData({
         ...formData,
-        department: currentDepts.filter((d) => d !== dept),
+        department: next,
       });
     } else {
       setFormData({ ...formData, department: [...currentDepts, dept] });
     }
   };
+
+  const handleProductionSubToggle = (subDept) => {
+    const currentDepts = formData.department;
+    let next = currentDepts.includes(subDept)
+      ? currentDepts.filter((d) => d !== subDept)
+      : [...currentDepts, subDept];
+
+    if (!next.includes("Production")) {
+      next = [...next, "Production"];
+    }
+
+    setFormData({
+      ...formData,
+      department: next,
+    });
+  };
+
+  const getDepartmentLabel = (dept) =>
+    productionSubDeptLabelMap.get(dept) || dept;
+
+  const selectedProductionSubDepts = formData.department.filter((d) =>
+    productionSubDeptIds.includes(d),
+  );
+  const showProductionSubDepts =
+    formData.department.includes("Production") ||
+    selectedProductionSubDepts.length > 0;
 
   const checkStrength = (pwd) => {
     let strength = 0;
@@ -133,9 +203,9 @@ const Teams = ({ user }) => {
       email: emp.email || "",
       password: "", // Password not editable here
       confirmPassword: "",
-      department: Array.isArray(emp.department)
-        ? emp.department
-        : [emp.department],
+      department: normalizeDepartments(
+        Array.isArray(emp.department) ? emp.department : [emp.department],
+      ),
       position: emp.position,
       employeeType: emp.employeeType,
     });
@@ -175,8 +245,20 @@ const Teams = ({ user }) => {
     e.preventDefault();
 
     // Validation
-    if (formData.department.length === 0) {
+    const normalizedDepartments = normalizeDepartments(formData.department);
+    const selectedProductionSubs = normalizedDepartments.filter((d) =>
+      productionSubDeptIds.includes(d),
+    );
+
+    if (normalizedDepartments.length === 0) {
       alert("Please select at least one department");
+      return;
+    }
+    if (
+      normalizedDepartments.includes("Production") &&
+      selectedProductionSubs.length === 0
+    ) {
+      alert("Please select at least one Production sub-department");
       return;
     }
 
@@ -191,7 +273,10 @@ const Teams = ({ user }) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            ...formData,
+            department: normalizedDepartments,
+          }),
         });
 
         const data = await res.json();
@@ -219,7 +304,7 @@ const Teams = ({ user }) => {
               lastName: formData.lastName,
               email: formData.email,
               employeeId: formData.employeeId,
-              department: formData.department,
+              department: normalizedDepartments,
               position: formData.position,
               employeeType: formData.employeeType,
             }),
@@ -351,7 +436,7 @@ const Teams = ({ user }) => {
                         color: "var(--text-primary)",
                       }}
                     >
-                      {d}
+                      {getDepartmentLabel(d)}
                     </span>
                   ))}
                   {/* Position Badge next to departments */}
@@ -469,6 +554,32 @@ const Teams = ({ user }) => {
                 ))}
               </div>
             </div>
+
+            {showProductionSubDepts && (
+              <div className="form-group">
+                <label>Production Sub-Departments</label>
+                <div className="subdept-grid">
+                  {productionSubDepartments.map((sub) => (
+                    <label
+                      key={sub.id}
+                      className={`subdept-checkbox ${
+                        formData.department.includes(sub.id) ? "selected" : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.department.includes(sub.id)}
+                        onChange={() => handleProductionSubToggle(sub.id)}
+                      />
+                      {sub.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="helper-text">
+                  Select all production units the employee belongs to.
+                </p>
+              </div>
+            )}
 
             <div className="form-row" style={{ alignItems: "flex-start" }}>
               <div className="form-group">

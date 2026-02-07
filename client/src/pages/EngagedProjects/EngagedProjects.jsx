@@ -67,16 +67,38 @@ const EngagedProjects = ({ user }) => {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  const userDepartments = Array.isArray(user?.department)
+    ? user.department
+    : user?.department
+      ? [user.department]
+      : [];
+  const productionSubDepts = useMemo(
+    () =>
+      userDepartments.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d)),
+    [userDepartments],
+  );
+
   // Determine all engaged departments the user belongs to
   const userEngagedDepts = useMemo(() => {
-    const depts = user?.department || [];
     const found = [];
-    if (depts.includes("Production")) found.push("Production");
-    if (depts.includes("Graphics/Design")) found.push("Graphics");
-    if (depts.includes("Stores")) found.push("Stores");
-    if (depts.includes("Photography")) found.push("Photography");
+    if (productionSubDepts.length > 0) found.push("Production");
+    if (
+      userDepartments.includes("Graphics/Design") ||
+      userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
+    )
+      found.push("Graphics");
+    if (
+      userDepartments.includes("Stores") ||
+      userDepartments.some((d) => STORES_SUB_DEPARTMENTS.includes(d))
+    )
+      found.push("Stores");
+    if (
+      userDepartments.includes("Photography") ||
+      userDepartments.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d))
+    )
+      found.push("Photography");
     return found;
-  }, [user]);
+  }, [userDepartments, productionSubDepts]);
 
   // Determine sub-departments to check based on the selected department filter
   const engagedSubDepts = useMemo(() => {
@@ -84,12 +106,12 @@ const EngagedProjects = ({ user }) => {
     if (departmentFilter === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
     if (departmentFilter === "Stores") return STORES_SUB_DEPARTMENTS;
     if (departmentFilter === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
-    if (departmentFilter === "Production") return PRODUCTION_SUB_DEPARTMENTS;
+    if (departmentFilter === "Production") return productionSubDepts;
 
     // If "All" or default, aggregate from all user's engaged departments
     let aggregated = [];
-    if (userEngagedDepts.includes("Production"))
-      aggregated = [...aggregated, ...PRODUCTION_SUB_DEPARTMENTS];
+    if (productionSubDepts.length > 0)
+      aggregated = [...aggregated, ...productionSubDepts];
     if (userEngagedDepts.includes("Graphics"))
       aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
     if (userEngagedDepts.includes("Stores"))
@@ -98,7 +120,7 @@ const EngagedProjects = ({ user }) => {
       aggregated = [...aggregated, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
 
     return aggregated;
-  }, [userEngagedDepts, departmentFilter]);
+  }, [userEngagedDepts, departmentFilter, productionSubDepts]);
 
   // Determine user's primary label for the current view
   const primaryDeptLabel = useMemo(() => {
@@ -207,7 +229,7 @@ const EngagedProjects = ({ user }) => {
     if (dept === "Graphics")
       return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
     if (dept === "Production")
-      return projDepts.some((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+      return projDepts.some((d) => productionSubDepts.includes(d));
     if (dept === "Stores")
       return projDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
     return false;
@@ -545,7 +567,7 @@ const EngagedProjects = ({ user }) => {
                               onClick={() => handleAcknowledge(project, dept)}
                               title={`Accept engagement for ${getDepartmentLabel(dept)}`}
                             >
-                              Accept Engagement
+                              {`Accept ${getDepartmentLabel(dept)} Engagement`}
                             </button>
                           ))}
                       </div>

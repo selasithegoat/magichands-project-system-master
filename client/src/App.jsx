@@ -4,6 +4,12 @@ import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth 
 import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for Suspense fallback
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
+import {
+  PRODUCTION_SUB_DEPARTMENTS,
+  GRAPHICS_SUB_DEPARTMENTS,
+  STORES_SUB_DEPARTMENTS,
+  PHOTOGRAPHY_SUB_DEPARTMENTS,
+} from "./constants/departments";
 
 // Lazy Loaded Pages
 const Login = lazy(() => import("./pages/Login/Login"));
@@ -112,45 +118,45 @@ function App() {
 
   // [New] Fetch engaged project count for user's department(s)
   const fetchEngagedCount = async (userData) => {
-    const userDepts = userData?.department || user?.department || [];
+    const rawDepts = userData?.department || user?.department || [];
+    const userDepts = Array.isArray(rawDepts)
+      ? rawDepts
+      : rawDepts
+        ? [rawDepts]
+        : [];
 
-    // Map user's main departments to sub-departments (same logic as EngagedProjects.jsx)
+    // Map user's departments to sub-departments (same logic as EngagedProjects.jsx)
+    const productionSubDepts = userDepts.filter((d) =>
+      PRODUCTION_SUB_DEPARTMENTS.includes(d),
+    );
+    const hasGraphics =
+      userDepts.includes("Graphics/Design") ||
+      userDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
+    const hasStores =
+      userDepts.includes("Stores") ||
+      userDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
+    const hasPhotography =
+      userDepts.includes("Photography") ||
+      userDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
+
     let subDepts = [];
-    if (userDepts.includes("Production")) {
-      subDepts = [
-        ...subDepts,
-        "dtf",
-        "uv-dtf",
-        "uv-printing",
-        "engraving",
-        "large-format",
-        "digital-press",
-        "digital-heat-press",
-        "offset-press",
-        "screen-printing",
-        "embroidery",
-        "sublimation",
-        "digital-cutting",
-        "pvc-id",
-        "business-cards",
-        "installation",
-        "overseas",
-        "woodme",
-        "fabrication",
-        "signage",
-      ];
+    if (productionSubDepts.length > 0) {
+      subDepts = [...subDepts, ...productionSubDepts];
     }
-    if (userDepts.includes("Graphics/Design")) {
-      subDepts = [...subDepts, "graphics"];
+    if (hasGraphics) {
+      subDepts = [...subDepts, ...GRAPHICS_SUB_DEPARTMENTS];
     }
-    if (userDepts.includes("Stores")) {
-      subDepts = [...subDepts, "stock", "packaging"];
+    if (hasStores) {
+      subDepts = [...subDepts, ...STORES_SUB_DEPARTMENTS];
     }
-    if (userDepts.includes("Photography")) {
-      subDepts = [...subDepts, "photography"];
+    if (hasPhotography) {
+      subDepts = [...subDepts, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
     }
 
-    if (subDepts.length === 0) {
+    const uniqueSubDepts = Array.from(new Set(subDepts));
+
+    if (uniqueSubDepts.length === 0) {
+      setEngagedCount(0);
       return;
     }
 
@@ -162,7 +168,7 @@ function App() {
         const engaged = data.filter((p) => {
           if (!p.departments || p.departments.length === 0) return false;
           return (
-            p.departments.some((dept) => subDepts.includes(dept)) &&
+            p.departments.some((dept) => uniqueSubDepts.includes(dept)) &&
             p.status !== "Completed" &&
             p.status !== "Delivered" &&
             p.status !== "Finished"

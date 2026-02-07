@@ -57,7 +57,7 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
         setShowToast({ show: false, message: "", type: "success" });
         setIsToastFading(false);
       }, 500);
-    }, 3000);
+    }, 4500);
   };
 
   const formatDate = (dateStr) => {

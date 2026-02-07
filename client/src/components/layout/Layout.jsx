@@ -12,6 +12,12 @@ import UsersIcon from "../icons/UsersIcon";
 import SettingsIcon from "../icons/SettingsIcon";
 import LogOutIcon from "../icons/LogOutIcon";
 import ClipboardListIcon from "../icons/ClipboardListIcon";
+import {
+  PRODUCTION_SUB_DEPARTMENTS,
+  GRAPHICS_SUB_DEPARTMENTS,
+  STORES_SUB_DEPARTMENTS,
+  PHOTOGRAPHY_SUB_DEPARTMENTS,
+} from "../../constants/departments";
 
 // --- Icons ---
 const MenuIcon = () => (
@@ -249,6 +255,27 @@ const Layout = ({
     return `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.name;
   };
 
+  const userDepartments = Array.isArray(user?.department)
+    ? user.department
+    : user?.department
+      ? [user.department]
+      : [];
+
+  const hasProduction =
+    userDepartments.includes("Production") ||
+    userDepartments.some((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+  const hasGraphics =
+    userDepartments.includes("Graphics/Design") ||
+    userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
+  const hasStores =
+    userDepartments.includes("Stores") ||
+    userDepartments.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
+  const hasPhotography =
+    userDepartments.includes("Photography") ||
+    userDepartments.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
+  const showEngagedProjects =
+    hasProduction || hasGraphics || hasStores || hasPhotography;
+
   return (
     <div className="layout-container">
       {/* Top Navigation Header */}
@@ -378,6 +405,27 @@ const Layout = ({
                 <UsersIcon />
                 History
               </a>
+              {showEngagedProjects && (
+                <a
+                  href="#"
+                  className={`drawer-item ${
+                    activeView === "engaged-projects" ? "active" : ""
+                  }`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsMobileMenuOpen(false);
+                    if (typeof onNavigateEngagedProjects === "function") {
+                      onNavigateEngagedProjects();
+                    }
+                  }}
+                >
+                  <ClipboardListIcon />
+                  Engaged Projects
+                  {engagedCount > 0 && (
+                    <span className="drawer-badge">{engagedCount}</span>
+                  )}
+                </a>
+              )}
               {user?.department?.includes("Front Desk") && (
                 <>
                   <a
