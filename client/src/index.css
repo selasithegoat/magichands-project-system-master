@@ -84,6 +84,25 @@
   }
 }
 
+@keyframes toastMessageLife {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  8% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  92% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
 .toast-message {
   position: fixed;
   top: 20px;
@@ -99,9 +118,10 @@
   gap: 8px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
     0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
 
   /* Animation */
-  animation: fadeIn 0.4s ease-out;
+  animation: toastMessageLife 5s ease-in-out forwards;
 }
 
 .toast-message.success {

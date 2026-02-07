@@ -11,6 +11,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const ProjectHistory = ({ onBack }) => {
   const [filter, setFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate(); // Hook for navigation
@@ -41,6 +42,57 @@ const ProjectHistory = ({ onBack }) => {
     navigate(`/detail/${id}`);
   };
 
+  const getProjectDate = (project) => {
+    const dateStr =
+      project.details?.deliveryDate || project.orderDate || project.createdAt;
+    const d = dateStr ? new Date(dateStr) : null;
+    return d && !isNaN(d.getTime()) ? d : null;
+  };
+
+  const matchesFilter = (project) => {
+    if (filter === "All") return true;
+
+    const projectDate = getProjectDate(project);
+    if (!projectDate) return false;
+
+    const now = new Date();
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const thisMonthStart = thisMonth;
+
+    if (filter === "This Month") {
+      return projectDate >= thisMonthStart && projectDate < nextMonth;
+    }
+    if (filter === "Last Month") {
+      return projectDate >= lastMonthStart && projectDate < thisMonthStart;
+    }
+    // Older
+    return projectDate < lastMonthStart;
+  };
+
+  const matchesSearch = (project) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+
+    const details = project.details || {};
+    const orderId = (project.orderId || "").toLowerCase();
+    const projectName = (details.projectName || "").toLowerCase();
+    const client =
+      (details.client || details.clientName || details.department || "")
+        .toLowerCase();
+
+    return (
+      orderId.includes(query) ||
+      projectName.includes(query) ||
+      client.includes(query)
+    );
+  };
+
+  const filteredProjects = projects.filter(
+    (project) => matchesFilter(project) && matchesSearch(project),
+  );
+
   return (
     <div className="history-container">
       {/* Header */}
@@ -59,6 +111,8 @@ const ProjectHistory = ({ onBack }) => {
           type="text"
           className="search-input"
           placeholder="Search by Order #, Client, or Project Name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
         <FilterIcon className="filter-icon" />
       </div>
@@ -91,15 +145,21 @@ const ProjectHistory = ({ onBack }) => {
         <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
           <p>No finished projects found.</p>
         </div>
+      ) : filteredProjects.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
+          <p>No projects match your search or filter.</p>
+        </div>
       ) : (
         <div className="month-section">
           <div className="month-header">
             <span className="month-label">History</span>
-            <span className="project-count">{projects.length} Projects</span>
+            <span className="project-count">
+              {filteredProjects.length} Projects
+            </span>
           </div>
 
           <div className="history-cards-grid">
-            {projects.map((project) => (
+            {filteredProjects.map((project) => (
               <HistoryProjectCard
                 key={project._id}
                 project={project}

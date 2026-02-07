@@ -23,7 +23,8 @@
   flex-direction: row;
   align-items: center; /* Vertically center items */
   gap: 12px;
-  animation: slideInToast 0.3s ease-out forwards;
+  --toast-duration: 5000ms;
+  animation: toastLifecycle var(--toast-duration) ease-in-out forwards;
   pointer-events: auto;
   border-left: 4px solid #3b82f6;
   box-sizing: border-box;
@@ -89,14 +90,22 @@
   color: #64748b;
 }
 
-@keyframes slideInToast {
-  from {
+@keyframes toastLifecycle {
+  0% {
     transform: translateX(100%);
     opacity: 0;
   }
-  to {
+  6% {
     transform: translateX(0);
     opacity: 1;
+  }
+  94% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
   }
 }
 

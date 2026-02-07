@@ -312,7 +312,7 @@ const getUserStats = async (req, res) => {
     // Count completed projects where user is the Lead
     const completedProjects = await Project.countDocuments({
       projectLeadId: userId,
-      status: "Completed",
+      status: { $in: ["Completed", "Finished", "Delivered"] },
     });
 
     // Estimate hours: 8 hours per completed project (mock calculation)

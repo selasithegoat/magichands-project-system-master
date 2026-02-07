@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useRef, useState } from "react";
 import XIcon from "../icons/XIcon";
 import CheckIcon from "../icons/CheckIcon";
 import WarningIcon from "../icons/WarningIcon";
@@ -13,23 +13,20 @@ const Toast = ({
   duration = 5000,
 }) => {
   const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsExiting(true);
-      setTimeout(() => {
-        onClose();
-      }, 300); // Match animation duration
-    }, duration);
-
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  const hasClosedRef = useRef(false);
 
   const handleClose = () => {
+    if (hasClosedRef.current) return;
     setIsExiting(true);
-    setTimeout(() => {
+  };
+
+  const handleAnimationEnd = (e) => {
+    if (hasClosedRef.current) return;
+
+    if (isExiting || e.animationName === "toastLifecycle") {
+      hasClosedRef.current = true;
       onClose();
-    }, 300);
+    }
   };
 
   const getIcon = () => {
@@ -49,7 +46,11 @@ const Toast = ({
     <div
       className={`ui-toast ${type} ${isExiting ? "exiting" : ""}`}
       onClick={onClick}
-      style={{ cursor: onClick ? "pointer" : "default" }}
+      onAnimationEnd={handleAnimationEnd}
+      style={{
+        cursor: onClick ? "pointer" : "default",
+        "--toast-duration": `${duration}ms`,
+      }}
     >
       <div className="ui-toast-icon">{getIcon()}</div>
       <div className="ui-toast-message">{message}</div>

@@ -158,7 +158,10 @@ function App() {
       <Toaster
         position="top-right"
         reverseOrder={false}
-        toastOptions={{ duration: 5000 }}
+        toastOptions={{
+          duration: 5000,
+          style: { pointerEvents: "none" },
+        }}
       />
     </>
   );

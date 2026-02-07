@@ -717,7 +717,8 @@
   gap: 0.75rem;
   font-weight: 500;
   z-index: 1000;
-  animation: slideIn 0.3s ease-out;
+  animation: toastMessageLife 5s ease-in-out forwards;
+  pointer-events: none;
 }
 
 .toast-message.success {
