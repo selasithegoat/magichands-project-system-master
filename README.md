@@ -1,4 +1,4 @@
-# MagicHands Project Form (LAN Host)
+# MagicHands Project System
 
 Multi‑portal job/project management system with a **Client Portal** and **Admin Portal** backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, project updates, notifications, and file uploads.
 
