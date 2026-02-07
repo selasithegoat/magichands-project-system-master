@@ -170,11 +170,15 @@ const ProjectStatusOverview = ({ projects }) => {
 
     filtered.forEach((p) => {
       // Logic:
-      // 1. If status is Completed or Delivered -> Completed
+      // 1. If status is Completed, Finished, or Delivered -> Completed
       // 2. If deliveryDate is in the past (overdue) and not delivered -> Delayed
       // 3. Otherwise -> In Progress (except for 'Completed')
 
-      if (p.status === "Completed" || p.status === "Delivered") {
+      if (
+        p.status === "Completed" ||
+        p.status === "Finished" ||
+        p.status === "Delivered"
+      ) {
         completed++;
       } else {
         const dDate = p.details?.deliveryDate
@@ -321,7 +325,11 @@ const Dashboard = ({ user }) => {
     let overdue = 0;
 
     data.forEach((p) => {
-      if (p.status === "Completed") {
+      if (
+        p.status === "Completed" ||
+        p.status === "Finished" ||
+        p.status === "Delivered"
+      ) {
         completed++;
       } else {
         active++;
@@ -346,7 +354,7 @@ const Dashboard = ({ user }) => {
   };
 
   const getStatusPillClass = (status) => {
-    if (status === "Completed") return "completed";
+    if (status === "Completed" || status === "Finished") return "completed";
     if (status === "Pending Scope Approval" || status === "Pending Acceptance")
       return "pending";
     if (status === "Delivered") return "completed";
@@ -496,7 +504,10 @@ const Dashboard = ({ user }) => {
             {(() => {
               const leadCounts = {};
               const activeOnes = projects.filter(
-                (p) => p.status !== "Completed" && p.status !== "Delivered",
+                (p) =>
+                  p.status !== "Completed" &&
+                  p.status !== "Finished" &&
+                  p.status !== "Delivered",
               );
 
               // Calculate counts per lead
