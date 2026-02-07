@@ -1,6 +1,5 @@
 const ActivityLog = require("../models/ActivityLog");
-const { createNotification } = require("./notificationService");
-const Project = require("../models/Project");
+// Notifications removed to avoid duplicate "Project Activity Updated" alerts.
 
 /**
  * Log a project activity
@@ -26,20 +25,7 @@ const logActivity = async (
       details,
     });
 
-    // [New] Notify Lead of status changes or other important actions
-    if (action === "status_change" || action === "update") {
-      const project = await Project.findById(projectId);
-      if (project && project.projectLeadId) {
-        await createNotification(
-          project.projectLeadId,
-          userId,
-          projectId,
-          "ACTIVITY",
-          "Project Activity Updated",
-          `Project #${project.orderId}: ${description}`,
-        );
-      }
-    }
+    // [Note] No notifications here to avoid duplicate "Project Activity Updated" alerts.
   } catch (err) {
     console.error("Failed to log activity:", err);
     // Silent fail to not block main flow
