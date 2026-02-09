@@ -1,3 +1,18 @@
+## ⚠️DISCLAIMER:
+## 📦 Template Origin
+
+This project was originally bootstrapped from the **MagicHands Project Form Template**.
+
+- **Template repository:** https://github.com/selasithegoat/magichands-project-system.git
+- **Template branch:** MASTER
+- **Template version at fork:** cc83f0f373e147701ccdf57884a6943d33a95185
+- **Template integration date:** 2026-02-09
+
+The template is used as a **reference upstream**. This repository evolves independently.
+
+
+
+
 # MagicHands Project System
 
 Multi‑portal job/project management system with a **Client Portal** and **Admin Portal** backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, project updates, notifications, and file uploads.
