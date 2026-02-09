@@ -28,12 +28,12 @@ Because of these changes, **upstream template updates are not merged automatical
 The template repository is tracked as a Git **upstream remote**.
 
 ### To check for template updates
-```bash
+``bash
 git fetch upstream
 git log HEAD..upstream/master --oneline
 
 
-# MagicHands Project System
+### MagicHands Project System
 
 Multi‑portal job/project management system with a **Client Portal** and **Admin Portal** backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, project updates, notifications, and file uploads.
 
