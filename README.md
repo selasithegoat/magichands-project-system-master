@@ -1,7 +1,7 @@
 ## ⚠️DISCLAIMER:
 ## 📦 Template Origin
 
-This project was originally bootstrapped from the **MagicHands Project Form Template**.
+This project was originally bootstrapped from the **MagicHands Project System**.
 
 - **Template repository:** https://github.com/selasithegoat/magichands-project-system.git
 - **Template branch:** MASTER
@@ -10,7 +10,27 @@ This project was originally bootstrapped from the **MagicHands Project Form Temp
 
 The template is used as a **reference upstream**. This repository evolves independently.
 
+## 🔧 Project-Specific Customizations
 
+This repository contains significant customizations beyond the base template, including:
+
+- Assistant Lead support across all project flows
+- Dual Lead notification logic
+- Enhanced History views (Completed / Finished / Delivered separation)
+- Dashboard stat recalculations
+- Production sub-department normalization
+- UI and workflow refinements across admin and client portals
+
+Because of these changes, **upstream template updates are not merged automatically**.
+
+## ⬆️ Template Upgrade Strategy
+
+The template repository is tracked as a Git **upstream remote**.
+
+### To check for template updates
+```bash
+git fetch upstream
+git log HEAD..upstream/master --oneline
 
 
 # MagicHands Project System
