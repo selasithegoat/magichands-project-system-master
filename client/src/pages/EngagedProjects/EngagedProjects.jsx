@@ -549,6 +549,22 @@ const EngagedProjects = ({ user }) => {
             </div>
           )}
 
+          <div className="filter-group">
+            <label>Engaged Department</label>
+            <select
+              className="filter-select"
+              value={historyDeptFilter}
+              onChange={(e) => setHistoryDeptFilter(e.target.value)}
+            >
+              <option value="All">All Engaged</option>
+              {Array.from(new Set(engagedSubDepts)).map((dept) => (
+                <option key={dept} value={dept}>
+                  {getDepartmentLabel(dept)}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="filter-group search-group">
             <label>Project ID</label>
             <input
@@ -738,7 +754,7 @@ const EngagedProjects = ({ user }) => {
                     <th>Lead</th>
                     <th>Client</th>
                     <th>Status</th>
-                    <th>Completion</th>
+                    <th>Department</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -749,6 +765,13 @@ const EngagedProjects = ({ user }) => {
                     const client = project.details?.client || "N/A";
                     const projectId =
                       project.orderId || project._id.slice(-6).toUpperCase();
+                    const engagedDeptsForUser = (project.departments || [])
+                      .filter((dept) => engagedSubDepts.includes(dept))
+                      .map((dept) => getDepartmentLabel(dept));
+                    const engagedDeptLabel =
+                      engagedDeptsForUser.length > 0
+                        ? engagedDeptsForUser.join(", ")
+                        : "N/A";
 
                     return (
                       <tr key={project._id}>
@@ -767,7 +790,7 @@ const EngagedProjects = ({ user }) => {
                             {project.status}
                           </span>
                         </td>
-                        <td>{project.status}</td>
+                        <td>{engagedDeptLabel}</td>
                       </tr>
                     );
                   })}
