@@ -117,7 +117,7 @@ const StatusDonut = ({ stats }) => {
         />
       </svg>
       <div className="donut-content">
-        <span className="donut-label">Total Active</span>
+        <span className="donut-label">Total Projects</span>
         <span className="donut-value">
           {total === 1 && stats.inProgress === 0 ? 0 : total}
         </span>
