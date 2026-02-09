@@ -9,7 +9,6 @@ import {
   XMarkIcon,
 } from "../../icons/Icons";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { getLeadDisplay } from "../../utils/leadDisplay";
 
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
@@ -1313,7 +1312,9 @@ const ProjectDetails = ({ user }) => {
                 </select>
               ) : (
                 <p>
-                  {getLeadDisplay(project, "Unassigned")}
+                  {project.projectLeadId
+                    ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
+                    : details.lead || "Unassigned"}
                 </p>
               )}
             </div>
