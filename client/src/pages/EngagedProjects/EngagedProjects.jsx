@@ -44,7 +44,9 @@ const ITEMS_PER_PAGE = 10;
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("active");
   const [projects, setProjects] = useState([]);
+  const [historyProjects, setHistoryProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [statusUpdating, setStatusUpdating] = useState(null);
@@ -53,9 +55,12 @@ const EngagedProjects = ({ user }) => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [departmentFilter, setDepartmentFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [historyProjectIdQuery, setHistoryProjectIdQuery] = useState("");
+  const [historyDeptFilter, setHistoryDeptFilter] = useState("All");
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   // Modal State
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -131,7 +136,7 @@ const EngagedProjects = ({ user }) => {
 
   useEffect(() => {
     fetchEngagedProjects();
-  }, []);
+  }, [engagedSubDepts]);
 
   useRealtimeRefresh(() => fetchEngagedProjects());
 
@@ -149,14 +154,17 @@ const EngagedProjects = ({ user }) => {
             engagedSubDepts.includes(dept),
           );
         });
-        // Exclude completed/finished projects
+        const completedStatuses = new Set(["Completed", "Finished"]);
+        // Active engaged (exclude completed/finished/delivered)
         const activeEngaged = engaged.filter(
-          (p) =>
-            p.status !== "Completed" &&
-            p.status !== "Delivered" &&
-            p.status !== "Finished",
+          (p) => !completedStatuses.has(p.status) && p.status !== "Delivered",
+        );
+        // History engaged (completed/finished only)
+        const historyEngaged = engaged.filter((p) =>
+          completedStatuses.has(p.status),
         );
         setProjects(activeEngaged);
+        setHistoryProjects(historyEngaged);
       }
     } catch (err) {
       console.error("Error fetching engaged projects:", err);
@@ -201,12 +209,60 @@ const EngagedProjects = ({ user }) => {
     setCurrentPage(1);
   }, [statusFilter, departmentFilter, searchQuery]);
 
+  useEffect(() => {
+    setHistoryPage(1);
+    setHistoryDeptFilter("All");
+  }, [departmentFilter]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historyProjectIdQuery, historyDeptFilter]);
+
   // Pagination logic
   const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
   const paginatedProjects = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredProjects.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredProjects, currentPage]);
+
+  const filteredHistoryProjects = useMemo(() => {
+    return historyProjects.filter((project) => {
+      const engagedDeptsForUser = (project.departments || []).filter((dept) =>
+        engagedSubDepts.includes(dept),
+      );
+      if (engagedDeptsForUser.length === 0) return false;
+
+      if (historyProjectIdQuery.trim()) {
+        const query = historyProjectIdQuery.toLowerCase();
+        const projectId = (project.orderId || project._id).toLowerCase();
+        if (!projectId.includes(query)) return false;
+      }
+
+      if (
+        historyDeptFilter !== "All" &&
+        !engagedDeptsForUser.includes(historyDeptFilter)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    historyProjects,
+    historyProjectIdQuery,
+    historyDeptFilter,
+    engagedSubDepts,
+  ]);
+
+  const historyTotalPages = Math.ceil(
+    filteredHistoryProjects.length / ITEMS_PER_PAGE,
+  );
+  const paginatedHistoryProjects = useMemo(() => {
+    const startIndex = (historyPage - 1) * ITEMS_PER_PAGE;
+    return filteredHistoryProjects.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE,
+    );
+  }, [filteredHistoryProjects, historyPage]);
 
   // Check if project is emergency
   const isEmergency = (project) => {
@@ -395,214 +451,356 @@ const EngagedProjects = ({ user }) => {
   return (
     <div className="engaged-projects-container">
       <header className="engaged-header">
-        <h1>{primaryDeptLabel} Projects</h1>
+        <h1>
+          {activeTab === "active"
+            ? `${primaryDeptLabel} Projects`
+            : `${primaryDeptLabel} Project History`}
+        </h1>
         <p className="engaged-subtitle">
-          Projects where your department is actively engaged.
+          {activeTab === "active"
+            ? "Projects where your department is actively engaged."
+            : "Completed or finished projects for your engaged departments."}
         </p>
       </header>
 
+      <div className="engaged-tabs">
+        <button
+          className={`engaged-tab ${activeTab === "active" ? "active" : ""}`}
+          onClick={() => setActiveTab("active")}
+        >
+          Active
+        </button>
+        <button
+          className={`engaged-tab ${activeTab === "history" ? "active" : ""}`}
+          onClick={() => setActiveTab("history")}
+        >
+          History
+        </button>
+      </div>
+
       {/* Filter Controls */}
-      <div className="filter-controls">
-        {userEngagedDepts.length > 1 && (
+      {activeTab === "active" ? (
+        <div className="filter-controls">
+          {userEngagedDepts.length > 1 && (
+            <div className="filter-group">
+              <label>Department</label>
+              <select
+                className="filter-select"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                <option value="All">All Departments</option>
+                {userEngagedDepts.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="filter-group">
-            <label>Department</label>
+            <label>Status</label>
             <select
               className="filter-select"
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <option value="All">All Departments</option>
-              {userEngagedDepts.map((d) => (
-                <option key={d} value={d}>
-                  {d}
+              {STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
                 </option>
               ))}
             </select>
           </div>
-        )}
 
-        <div className="filter-group">
-          <label>Status</label>
-          <select
-            className="filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="filter-group search-group">
-          <label>Search</label>
-          <input
-            type="text"
-            className="filter-input"
-            placeholder="Project ID, Name, or Lead..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        <div className="filter-results">
-          Showing {filteredProjects.length} of {projects.length} projects
-        </div>
-      </div>
-
-      <div className="engaged-table-wrapper">
-        {filteredProjects.length === 0 ? (
-          <div className="empty-state">
-            <p>No projects match your filters.</p>
+          <div className="filter-group search-group">
+            <label>Search</label>
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="Project ID, Name, or Lead..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-        ) : (
-          <table className="engaged-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Project ID</th>
-                <th>Project Name</th>
-                <th>Lead</th>
-                <th>Client</th>
-                <th>Delivery Date & Time</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedProjects.map((project) => {
-                const lead = project.projectLeadId
-                  ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
-                  : project.details?.lead || "Unassigned";
-                const client = project.details?.client || "N/A";
-                const deliveryDate = formatDate(project.details?.deliveryDate);
-                const deliveryTime = formatTime(project.details?.deliveryTime);
-                const projectName = project.details?.projectName || "Untitled";
-                const emergency = isEmergency(project);
-                const approaching = isApproachingDelivery(project);
-                const deptActions = getDeptActionsForProject(project);
 
-                return (
-                  <tr
-                    key={project._id}
-                    className={`${emergency ? "emergency-row" : ""} ${approaching ? "approaching-row" : ""}`}
-                  >
-                    <td className="indicator-cell">
-                      {emergency && (
-                        <span className="indicator emergency" title="Emergency">
-                          🔥
-                        </span>
-                      )}
-                      {approaching && !emergency && (
-                        <span
-                          className="indicator approaching"
-                          title="Approaching Delivery"
-                        >
-                          ⏰
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className="project-id-cell"
-                      onClick={() => navigate(`/detail/${project._id}`)}
-                    >
-                      {project.orderId || project._id.slice(-6).toUpperCase()}
-                    </td>
-                    <td className="project-name-cell">{projectName}</td>
-                    <td>{lead}</td>
-                    <td>{client}</td>
-                    <td className={approaching ? "delivery-approaching" : ""}>
-                      {deliveryDate}
-                      {deliveryTime && ` (${deliveryTime})`}
-                    </td>
-                    <td>
-                      <span
-                        className={`status-badge ${project.status.toLowerCase().replace(/\s+/g, "-")}`}
-                      >
-                        {project.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        {deptActions.map((action) => {
-                          const actionKey = `${project._id}:${action.complete}`;
-                          const isUpdating = statusUpdating === actionKey;
-                          const isReady = project.status === action.pending;
-                          return (
-                            <button
-                              key={action.complete}
-                              className="complete-btn"
-                              onClick={() => handleCompleteStatus(project, action)}
-                              disabled={!isReady || isUpdating}
-                              title={
-                                isReady
-                                  ? `Mark ${action.label}`
-                                  : `Waiting for ${action.pending}`
-                              }
-                            >
-                              {isUpdating ? "Updating..." : action.label}
-                            </button>
-                          );
-                        })}
-                        <button
-                          className="update-btn"
-                          onClick={() => handleOpenUpdateModal(project)}
-                        >
-                          Update
-                        </button>
-                        {project.departments
-                          .filter((dept) => engagedSubDepts.includes(dept))
-                          .filter(
-                            (dept) =>
-                              !project.acknowledgements?.some(
-                                (a) => a.department === dept,
-                              ),
-                          )
-                          .map((dept) => (
-                            <button
-                              key={dept}
-                              className="acknowledge-btn"
-                              onClick={() => handleAcknowledge(project, dept)}
-                              title={`Accept engagement for ${getDepartmentLabel(dept)}`}
-                            >
-                              {`Accept ${getDepartmentLabel(dept)} Engagement`}
-                            </button>
-                          ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="pagination-controls">
-          <button
-            className="pagination-btn"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-          >
-            ← Previous
-          </button>
-          <div className="pagination-info">
-            Page {currentPage} of {totalPages}
+          <div className="filter-results">
+            Showing {filteredProjects.length} of {projects.length} projects
           </div>
-          <button
-            className="pagination-btn"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Next →
-          </button>
+        </div>
+      ) : (
+        <div className="filter-controls">
+          {userEngagedDepts.length > 1 && (
+            <div className="filter-group">
+              <label>Department</label>
+              <select
+                className="filter-select"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
+                <option value="All">All Departments</option>
+                {userEngagedDepts.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="filter-group search-group">
+            <label>Project ID</label>
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="Filter by Project ID..."
+              value={historyProjectIdQuery}
+              onChange={(e) => setHistoryProjectIdQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="filter-results">
+            Showing {filteredHistoryProjects.length} of{" "}
+            {historyProjects.length} projects
+          </div>
         </div>
       )}
 
+      {activeTab === "active" ? (
+        <>
+          <div className="engaged-table-wrapper">
+            {filteredProjects.length === 0 ? (
+              <div className="empty-state">
+                <p>No projects match your filters.</p>
+              </div>
+            ) : (
+              <table className="engaged-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Project ID</th>
+                    <th>Project Name</th>
+                    <th>Lead</th>
+                    <th>Client</th>
+                    <th>Delivery Date & Time</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedProjects.map((project) => {
+                    const lead = project.projectLeadId
+                      ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
+                      : project.details?.lead || "Unassigned";
+                    const client = project.details?.client || "N/A";
+                    const deliveryDate = formatDate(project.details?.deliveryDate);
+                    const deliveryTime = formatTime(project.details?.deliveryTime);
+                    const projectName = project.details?.projectName || "Untitled";
+                    const emergency = isEmergency(project);
+                    const approaching = isApproachingDelivery(project);
+                    const deptActions = getDeptActionsForProject(project);
+
+                    return (
+                      <tr
+                        key={project._id}
+                        className={`${emergency ? "emergency-row" : ""} ${approaching ? "approaching-row" : ""}`}
+                      >
+                        <td className="indicator-cell">
+                          {emergency && (
+                            <span
+                              className="indicator emergency"
+                              title="Emergency"
+                            >
+                              🔥
+                            </span>
+                          )}
+                          {approaching && !emergency && (
+                            <span
+                              className="indicator approaching"
+                              title="Approaching Delivery"
+                            >
+                              ⏰
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          className="project-id-cell"
+                          onClick={() => navigate(`/detail/${project._id}`)}
+                        >
+                          {project.orderId || project._id.slice(-6).toUpperCase()}
+                        </td>
+                        <td className="project-name-cell">{projectName}</td>
+                        <td>{lead}</td>
+                        <td>{client}</td>
+                        <td className={approaching ? "delivery-approaching" : ""}>
+                          {deliveryDate}
+                          {deliveryTime && ` (${deliveryTime})`}
+                        </td>
+                        <td>
+                          <span
+                            className={`status-badge ${project.status.toLowerCase().replace(/\s+/g, "-")}`}
+                          >
+                            {project.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            {deptActions.map((action) => {
+                              const actionKey = `${project._id}:${action.complete}`;
+                              const isUpdating = statusUpdating === actionKey;
+                              const isReady = project.status === action.pending;
+                              return (
+                                <button
+                                  key={action.complete}
+                                  className="complete-btn"
+                                  onClick={() => handleCompleteStatus(project, action)}
+                                  disabled={!isReady || isUpdating}
+                                  title={
+                                    isReady
+                                      ? `Mark ${action.label}`
+                                      : `Waiting for ${action.pending}`
+                                  }
+                                >
+                                  {isUpdating ? "Updating..." : action.label}
+                                </button>
+                              );
+                            })}
+                            <button
+                              className="update-btn"
+                              onClick={() => handleOpenUpdateModal(project)}
+                            >
+                              Update
+                            </button>
+                            {project.departments
+                              .filter((dept) => engagedSubDepts.includes(dept))
+                              .filter(
+                                (dept) =>
+                                  !project.acknowledgements?.some(
+                                    (a) => a.department === dept,
+                                  ),
+                              )
+                              .map((dept) => (
+                                <button
+                                  key={dept}
+                                  className="acknowledge-btn"
+                                  onClick={() => handleAcknowledge(project, dept)}
+                                  title={`Accept engagement for ${getDepartmentLabel(dept)}`}
+                                >
+                                  {`Accept ${getDepartmentLabel(dept)} Engagement`}
+                                </button>
+                              ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                ← Previous
+              </button>
+              <div className="pagination-info">
+                Page {currentPage} of {totalPages}
+              </div>
+              <button
+                className="pagination-btn"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="engaged-table-wrapper">
+            {filteredHistoryProjects.length === 0 ? (
+              <div className="empty-state">
+                <p>No history projects match your filters.</p>
+              </div>
+            ) : (
+              <table className="engaged-table">
+                <thead>
+                  <tr>
+                    <th>Project ID</th>
+                    <th>Lead</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>Completion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedHistoryProjects.map((project) => {
+                    const lead = project.projectLeadId
+                      ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
+                      : project.details?.lead || "Unassigned";
+                    const client = project.details?.client || "N/A";
+                    const projectId =
+                      project.orderId || project._id.slice(-6).toUpperCase();
+
+                    return (
+                      <tr key={project._id}>
+                        <td
+                          className="project-id-cell"
+                          onClick={() => navigate(`/detail/${project._id}`)}
+                        >
+                          {projectId}
+                        </td>
+                        <td>{lead}</td>
+                        <td>{client}</td>
+                        <td>
+                          <span
+                            className={`status-badge ${project.status.toLowerCase().replace(/\s+/g, "-")}`}
+                          >
+                            {project.status}
+                          </span>
+                        </td>
+                        <td>{project.status}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {historyTotalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn"
+                onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                disabled={historyPage === 1}
+              >
+                ← Previous
+              </button>
+              <div className="pagination-info">
+                Page {historyPage} of {historyTotalPages}
+              </div>
+              <button
+                className="pagination-btn"
+                onClick={() =>
+                  setHistoryPage((p) => Math.min(historyTotalPages, p + 1))
+                }
+                disabled={historyPage === historyTotalPages}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      )}
       {/* Update Modal */}
       {showUpdateModal && selectedProject && (
         <div className="modal-overlay">
@@ -694,3 +892,4 @@ const EngagedProjects = ({ user }) => {
 };
 
 export default EngagedProjects;
+
