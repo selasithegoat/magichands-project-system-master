@@ -1513,16 +1513,29 @@ const updateProject = async (req, res) => {
       );
     }
 
-    // Notify Assistant Lead if newly assigned
+    // Notify Lead / Assistant Lead if newly assigned
+    const prevLeadId = oldValues.lead ? oldValues.lead.toString() : null;
+    const nextLeadId = updatedProject.projectLeadId
+      ? updatedProject.projectLeadId.toString()
+      : null;
     const prevAssistantId = oldValues.assistantLead
       ? oldValues.assistantLead.toString()
       : null;
     const nextAssistantId = updatedProject.assistantLeadId
       ? updatedProject.assistantLeadId.toString()
       : null;
-    const leadId = updatedProject.projectLeadId
-      ? updatedProject.projectLeadId.toString()
-      : null;
+    const leadId = nextLeadId;
+
+    if (nextLeadId && nextLeadId !== prevLeadId) {
+      await createNotification(
+        updatedProject.projectLeadId,
+        req.user._id,
+        updatedProject._id,
+        "ASSIGNMENT",
+        "New Project Assigned",
+        `Project #${updatedProject.orderId || updatedProject._id}: You have been assigned as the lead for project: ${updatedProject.details?.projectName || "Unnamed Project"}`,
+      );
+    }
 
     if (
       nextAssistantId &&
