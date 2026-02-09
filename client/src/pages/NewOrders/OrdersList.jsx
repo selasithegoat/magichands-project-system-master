@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadSearchText } from "../../utils/leadDisplay";
 
 const OrdersList = () => {
   const navigate = useNavigate();
@@ -162,10 +163,8 @@ const OrdersList = () => {
     )
       return false;
     if (historyFilters.lead) {
-      const leadName = order.projectLeadId
-        ? `${order.projectLeadId.firstName} ${order.projectLeadId.lastName}`.toLowerCase()
-        : "";
-      if (!leadName.includes(historyFilters.lead.toLowerCase())) return false;
+      const leadText = getLeadSearchText(order);
+      if (!leadText.includes(historyFilters.lead.toLowerCase())) return false;
     }
     return true;
   });

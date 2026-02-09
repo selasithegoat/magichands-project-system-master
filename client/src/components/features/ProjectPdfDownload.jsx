@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ProjectSummaryPDF from "../../pages/CreateProject/ProjectSummaryPDF";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 
 const ProjectPdfDownload = ({ project }) => {
   const [imageUrls, setImageUrls] = useState({});
@@ -114,9 +115,7 @@ const ProjectPdfDownload = ({ project }) => {
       deliveryTime: details.deliveryTime,
       deliveryLocation: details.deliveryLocation,
       briefOverview: details.briefOverview,
-      leadLabel: project.projectLeadId
-        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-        : details.lead,
+      leadLabel: getLeadDisplay(project, details.lead || "Unassigned"),
       departments: project.departments,
       items: project.items,
       uncontrollableFactors: project.uncontrollableFactors,

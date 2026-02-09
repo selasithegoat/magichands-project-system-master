@@ -10,6 +10,7 @@ import {
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -187,9 +188,7 @@ const EngagedProjects = ({ user }) => {
         const query = searchQuery.toLowerCase();
         const projectId = (project.orderId || project._id).toLowerCase();
         const projectName = (project.details?.projectName || "").toLowerCase();
-        const lead = project.projectLeadId
-          ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.toLowerCase()
-          : (project.details?.lead || "").toLowerCase();
+        const lead = getLeadSearchText(project);
 
         if (
           !projectId.includes(query) &&
@@ -606,9 +605,7 @@ const EngagedProjects = ({ user }) => {
                 </thead>
                 <tbody>
                   {paginatedProjects.map((project) => {
-                    const lead = project.projectLeadId
-                      ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
-                      : project.details?.lead || "Unassigned";
+                    const lead = getLeadDisplay(project, "Unassigned");
                     const client = project.details?.client || "N/A";
                     const deliveryDate = formatDate(project.details?.deliveryDate);
                     const deliveryTime = formatTime(project.details?.deliveryTime);
@@ -759,9 +756,7 @@ const EngagedProjects = ({ user }) => {
                 </thead>
                 <tbody>
                   {paginatedHistoryProjects.map((project) => {
-                    const lead = project.projectLeadId
-                      ? `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()
-                      : project.details?.lead || "Unassigned";
+                    const lead = getLeadDisplay(project, "Unassigned");
                     const client = project.details?.client || "N/A";
                     const projectId =
                       project.orderId || project._id.slice(-6).toUpperCase();

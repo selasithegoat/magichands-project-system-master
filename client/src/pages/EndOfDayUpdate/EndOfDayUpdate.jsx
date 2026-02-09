@@ -5,6 +5,7 @@ import Spinner from "../../components/ui/Spinner";
 import { DownloadIcon } from "../../components/icons/DownloadIcon"; // Assuming exists or I will create an inline SVG
 import "./EndOfDayUpdate.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 
 const EndOfDayUpdate = ({ user }) => {
   const [projects, setProjects] = useState([]);
@@ -131,9 +132,7 @@ const EndOfDayUpdate = ({ user }) => {
       ];
 
       projects.forEach((project) => {
-        const leadName = project.projectLeadId
-          ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-          : project.details?.lead || "Unassigned";
+        const leadName = getLeadDisplay(project, "Unassigned");
 
         const deliveryContent = `${formatDate(
           project.details?.deliveryDate,
@@ -450,9 +449,7 @@ const EndOfDayUpdate = ({ user }) => {
                     className={`${getRowClass(project.projectType)} ${isUrgent ? "is-urgent" : ""}`}
                   >
                     <td>
-                      {project.projectLeadId
-                        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                        : project.details?.lead || "Unassigned"}
+                      {getLeadDisplay(project, "Unassigned")}
                     </td>
                     <td>{project.orderId || "N/A"}</td>
                     <td>{project.details?.projectName || "Untitled"}</td>

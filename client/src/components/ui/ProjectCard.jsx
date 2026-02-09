@@ -4,6 +4,7 @@ import UserAvatar from "../ui/UserAvatar";
 import ThreeDotsIcon from "../icons/ThreeDotsIcon";
 import ClockIcon from "../icons/ClockIcon";
 import FolderIcon from "../icons/FolderIcon";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Helpers
@@ -102,6 +103,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const progressMap =
     project.projectType === "Quote" ? quoteProgressMap : standardProgressMap;
   const progress = progressMap[project.status] ?? 5;
+  const leadDisplay = getLeadDisplay(project, "Unassigned");
+  const avatarName = getLeadDisplay(project, "U");
 
   return (
     <div className="project-card-new">
@@ -190,17 +193,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             <UserAvatar
               width="24px"
               height="24px"
-              name={
-                project.projectLeadId
-                  ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                  : "U"
-              }
+              name={avatarName}
             />
-            <span className="lead-name">
-              {project.projectLeadId
-                ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                : "Unassigned"}
-            </span>
+            <span className="lead-name">{leadDisplay}</span>
           </div>
           <div className="card-date" title="Delivery Date">
             <CalendarIcon />

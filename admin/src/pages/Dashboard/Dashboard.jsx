@@ -8,6 +8,7 @@ import {
 } from "../../icons/Icons";
 import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -455,9 +456,7 @@ const Dashboard = ({ user }) => {
                   <h4>{project.details?.projectName}</h4>
                   <div className="project-meta">
                     {project.orderId} •{" "}
-                    {project.projectLeadId
-                      ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                      : project.details?.lead || "No Lead"}
+                    {getLeadDisplay(project, "No Lead")}
                   </div>
                 </div>
 
@@ -512,9 +511,7 @@ const Dashboard = ({ user }) => {
 
               // Calculate counts per lead
               activeOnes.forEach((p) => {
-                const leadName = p.projectLeadId
-                  ? `${p.projectLeadId.firstName} ${p.projectLeadId.lastName}`
-                  : "Unassigned";
+                const leadName = getLeadDisplay(p, "Unassigned");
                 leadCounts[leadName] = (leadCounts[leadName] || 0) + 1;
               });
 

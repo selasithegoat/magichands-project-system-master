@@ -5,6 +5,7 @@ import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 
 const Projects = ({ user }) => {
   const navigate = useNavigate();
@@ -126,10 +127,7 @@ const Projects = ({ user }) => {
   const uniqueLeads = [
     ...new Set(
       projects.map((p) => {
-        if (p.projectLeadId) {
-          return `${p.projectLeadId.firstName} ${p.projectLeadId.lastName}`;
-        }
-        return p.details?.lead || "";
+        return getLeadDisplay(p, "");
       }),
     ),
   ]
@@ -164,9 +162,7 @@ const Projects = ({ user }) => {
 
     // 4. Lead
     if (leadFilter !== "All") {
-      const leadName = project.projectLeadId
-        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-        : project.details?.lead || "";
+      const leadName = getLeadDisplay(project, "");
       if (leadName !== leadFilter) return false;
     }
 
@@ -360,9 +356,7 @@ const Projects = ({ user }) => {
                       </span>
                     </td>
                     <td>
-                      {project.projectLeadId
-                        ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                        : project.details?.lead || "Unassigned"}
+                      {getLeadDisplay(project, "Unassigned")}
                     </td>
                     <td>{project.details?.client || "-"}</td>
                     <td>

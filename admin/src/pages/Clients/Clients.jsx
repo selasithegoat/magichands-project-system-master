@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import "./Clients.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 
 const Clients = ({ user }) => {
   const navigate = useNavigate();
@@ -239,9 +240,7 @@ const Clients = ({ user }) => {
                               {project.details?.projectName || "Untitled"}
                             </td>
                             <td>
-                              {project.projectLeadId
-                                ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-                                : project.details?.lead || "Unassigned"}
+                              {getLeadDisplay(project, "Unassigned")}
                             </td>
                             <td>
                               {formatDate(

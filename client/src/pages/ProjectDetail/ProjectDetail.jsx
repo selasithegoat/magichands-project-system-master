@@ -24,6 +24,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadDisplay } from "../../utils/leadDisplay";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -456,9 +457,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
 
 const ProjectInfoCard = ({ project }) => {
   const details = project.details || {};
-  const lead = project.projectLeadId
-    ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
-    : details.lead || "Unassigned";
+  const lead = getLeadDisplay(project, "Unassigned");
 
   // Format Date
   const formatDate = (d) => {
