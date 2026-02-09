@@ -30,6 +30,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       uncontrollableFactors: [], // Step 4
       productionRisks: [], // Step 4
       status: "Order Confirmed", // Default for new, overwritten if editing
+      assistantLeadId: "", // Optional assistant lead
     },
   };
 
@@ -141,6 +142,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
                   "Assigned Lead"
                 : "Assigned Lead",
             projectLead: data.projectLeadId,
+            assistantLeadId:
+              data.assistantLeadId?._id || data.assistantLeadId || "",
             client: data.details?.client || "", // [NEW] Map client name
             deliveryLocation: data.details?.deliveryLocation || "", // [NEW] Map delivery location
             briefOverview: data.details?.briefOverview || "", // [NEW] Map brief overview

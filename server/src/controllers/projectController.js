@@ -29,6 +29,7 @@ const createProject = async (req, res) => {
       uncontrollableFactors,
       productionRisks,
       projectLeadId, // [NEW] For Admin Assignment
+      assistantLeadId, // [NEW] Optional assistant lead
       status, // [NEW] Allow explicit status setting (e.g. "Pending Scope Approval")
       description, // [NEW]
       details, // [NEW]
@@ -51,6 +52,16 @@ const createProject = async (req, res) => {
 
     // Helper to extract value if object
     const getValue = (field) => (field && field.value ? field.value : field);
+    const parseMaybeJson = (field) => {
+      if (typeof field === "string" && field.trim().startsWith("{")) {
+        try {
+          return JSON.parse(field);
+        } catch (e) {
+          return field;
+        }
+      }
+      return field;
+    };
 
     // [NEW] Handle File Uploads (Multiple Fields)
     let sampleImagePath = req.body.existingSampleImage || "";
@@ -130,6 +141,10 @@ const createProject = async (req, res) => {
     });
     const finalReceivedTime = getValue(receivedTime) || currentTime;
 
+    const normalizedAssistantLeadId = getValue(
+      parseMaybeJson(assistantLeadId),
+    );
+
     // Create project
     const project = new Project({
       orderId: finalOrderId,
@@ -158,6 +173,7 @@ const createProject = async (req, res) => {
       status: status || "Order Confirmed", // Default or Explicit
       createdBy: req.user._id,
       projectLeadId: projectLeadId || null,
+      assistantLeadId: normalizedAssistantLeadId || null,
       // [NEW] Project Type System
       projectType: req.body.projectType || "Standard",
       priority:
@@ -186,6 +202,23 @@ const createProject = async (req, res) => {
         "ASSIGNMENT",
         "New Project Assigned",
         `Project #${savedProject.orderId}: You have been assigned as the lead for project: ${savedProject.details.projectName}`,
+      );
+    }
+
+    // [New] Notify Assistant Lead (if provided and different from lead)
+    if (
+      savedProject.assistantLeadId &&
+      (!savedProject.projectLeadId ||
+        savedProject.assistantLeadId.toString() !==
+          savedProject.projectLeadId.toString())
+    ) {
+      await createNotification(
+        savedProject.assistantLeadId,
+        req.user._id,
+        savedProject._id,
+        "ASSIGNMENT",
+        "Assistant Lead Assigned",
+        `Project #${savedProject.orderId}: You have been added as an assistant lead for project: ${savedProject.details.projectName}`,
       );
     }
 
@@ -226,7 +259,7 @@ const getProjects = async (req, res) => {
   try {
     let query = {};
 
-    // If user is not an admin, they only see projects where they are the assigned Lead
+    // If user is not an admin, they only see projects where they are the assigned Lead (or Assistant Lead)
     // Unless they are Front Desk, who need to see everything for End of Day updates
     // Access Control Logic:
     // 1. Admins see everything ONLY IF using Admin Portal (source=admin).
@@ -255,9 +288,12 @@ const getProjects = async (req, res) => {
       (isEngagedMode && isEngagedDept); // Engaged Projects Mode
 
     if (!canSeeAll) {
-      // [STRICT] Default View: ONLY projects where user is the Lead
+      // [STRICT] Default View: ONLY projects where user is the Lead or Assistant
       query = {
-        projectLeadId: req.user._id,
+        $or: [
+          { projectLeadId: req.user._id },
+          { assistantLeadId: req.user._id },
+        ],
       };
 
       // [Mode: Report / All Orders]
@@ -266,6 +302,7 @@ const getProjects = async (req, res) => {
         query = {
           $or: [
             { projectLeadId: req.user._id },
+            { assistantLeadId: req.user._id },
             { endOfDayUpdateBy: req.user._id },
             { createdBy: req.user._id },
           ],
@@ -276,6 +313,7 @@ const getProjects = async (req, res) => {
     const projects = await Project.find(query)
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName")
+      .populate("assistantLeadId", "firstName lastName employeeId email")
       .sort({ createdAt: -1 });
 
     if (isAdminPortal) {
@@ -304,14 +342,14 @@ const getUserStats = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Count all projects where user is the Lead
+    // Count all projects where user is the Lead or Assistant Lead
     const totalProjects = await Project.countDocuments({
-      projectLeadId: userId,
+      $or: [{ projectLeadId: userId }, { assistantLeadId: userId }],
     });
 
-    // Count completed projects where user is the Lead
+    // Count completed projects where user is the Lead or Assistant Lead
     const completedProjects = await Project.countDocuments({
-      projectLeadId: userId,
+      $or: [{ projectLeadId: userId }, { assistantLeadId: userId }],
       status: { $in: ["Completed", "Finished", "Delivered"] },
     });
 
@@ -336,7 +374,8 @@ const getProjectById = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
       .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName employeeId email");
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
 
     if (project) {
       // Access Check: Admin OR Project Lead
@@ -345,7 +384,12 @@ const getProjectById = async (req, res) => {
         (project.projectLeadId._id.toString() === req.user._id.toString() ||
           project.projectLeadId.toString() === req.user._id.toString());
 
-      if (req.user.role !== "admin" && !isLead) {
+      const isAssistant =
+        project.assistantLeadId &&
+        (project.assistantLeadId._id?.toString() === req.user._id.toString() ||
+          project.assistantLeadId.toString() === req.user._id.toString());
+
+      if (req.user.role !== "admin" && !isLead && !isAssistant) {
         return res
           .status(403)
           .json({ message: "Not authorized to view this project" });
@@ -1237,6 +1281,7 @@ const updateProject = async (req, res) => {
       status,
       currentStep,
       projectLeadId,
+      assistantLeadId,
       description,
       details,
       attachments, // Existing attachments (urls)
@@ -1258,6 +1303,8 @@ const updateProject = async (req, res) => {
       quoteDetails = JSON.parse(quoteDetails);
     if (typeof lead === "string" && lead.startsWith("{"))
       lead = JSON.parse(lead);
+    if (typeof assistantLeadId === "string" && assistantLeadId.startsWith("{"))
+      assistantLeadId = JSON.parse(assistantLeadId);
 
     const project = await Project.findById(id);
 
@@ -1281,6 +1328,7 @@ const updateProject = async (req, res) => {
       contactType: project.details?.contactType,
       supplySource: project.details?.supplySource,
       lead: project.projectLeadId,
+      assistantLead: project.assistantLeadId,
       status: project.status,
     };
 
@@ -1299,6 +1347,11 @@ const updateProject = async (req, res) => {
     }
     if (projectLeadId) {
       project.projectLeadId = projectLeadId;
+      detailsChanged = true;
+    }
+    if (assistantLeadId !== undefined) {
+      const normalizedAssistantLeadId = getValue(assistantLeadId);
+      project.assistantLeadId = normalizedAssistantLeadId || null;
       detailsChanged = true;
     }
 
@@ -1460,6 +1513,32 @@ const updateProject = async (req, res) => {
       );
     }
 
+    // Notify Assistant Lead if newly assigned
+    const prevAssistantId = oldValues.assistantLead
+      ? oldValues.assistantLead.toString()
+      : null;
+    const nextAssistantId = updatedProject.assistantLeadId
+      ? updatedProject.assistantLeadId.toString()
+      : null;
+    const leadId = updatedProject.projectLeadId
+      ? updatedProject.projectLeadId.toString()
+      : null;
+
+    if (
+      nextAssistantId &&
+      nextAssistantId !== prevAssistantId &&
+      nextAssistantId !== leadId
+    ) {
+      await createNotification(
+        updatedProject.assistantLeadId,
+        req.user._id,
+        updatedProject._id,
+        "ASSIGNMENT",
+        "Assistant Lead Assigned",
+        `Project #${updatedProject.orderId || updatedProject._id}: You have been added as an assistant lead for project: ${updatedProject.details?.projectName || "Unnamed Project"}`,
+      );
+    }
+
     // Notify Admins of significant updates (if changes > 0)
     if (changes.length > 0) {
       await notifyAdmins(
@@ -1488,7 +1567,8 @@ const updateProject = async (req, res) => {
 
     const populatedProject = await Project.findById(updatedProject._id)
       .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName employeeId email");
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
 
     res.json(populatedProject);
   } catch (error) {
@@ -1513,6 +1593,7 @@ const getClients = async (req, res) => {
     const projects = await Project.find({})
       .populate("createdBy", "firstName lastName email")
       .populate("projectLeadId", "firstName lastName")
+      .populate("assistantLeadId", "firstName lastName")
       .sort({ createdAt: -1 });
 
     // Group projects by client

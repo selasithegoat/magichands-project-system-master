@@ -185,11 +185,15 @@ const ProjectDetails = ({ user }) => {
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [leadForm, setLeadForm] = useState("");
+  const [assistantLeadForm, setAssistantLeadForm] = useState("");
 
   // Sync leadForm when project loads
   useEffect(() => {
     if (project) {
       setLeadForm(project.projectLeadId?._id || project.projectLeadId || "");
+      setAssistantLeadForm(
+        project.assistantLeadId?._id || project.assistantLeadId || "",
+      );
     }
   }, [project]);
 
@@ -207,6 +211,7 @@ const ProjectDetails = ({ user }) => {
         credentials: "include",
         body: JSON.stringify({
           projectLeadId: leadForm,
+          assistantLeadId: assistantLeadForm,
           lead: leadLabel, // Also update duplicate lead name in details if needed
         }),
       });
@@ -1270,6 +1275,11 @@ const ProjectDetails = ({ user }) => {
                           project.projectLeadId ||
                           "",
                       );
+                      setAssistantLeadForm(
+                        project.assistantLeadId?._id ||
+                          project.assistantLeadId ||
+                          "",
+                      );
                     }}
                     style={{
                       background: "none",
@@ -1305,6 +1315,33 @@ const ProjectDetails = ({ user }) => {
                   {project.projectLeadId
                     ? `${project.projectLeadId.firstName} ${project.projectLeadId.lastName}`
                     : details.lead || "Unassigned"}
+                </p>
+              )}
+            </div>
+
+            <div className="info-item" style={{ marginBottom: "1.5rem" }}>
+              <label>Assistant Lead</label>
+              {isEditingLead ? (
+                <select
+                  className="edit-input"
+                  value={assistantLeadForm}
+                  onChange={(e) => setAssistantLeadForm(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem" }}
+                >
+                  <option value="">None</option>
+                  {availableUsers
+                    .filter((u) => u._id !== leadForm)
+                    .map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.firstName} {u.lastName}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <p>
+                  {project.assistantLeadId
+                    ? `${project.assistantLeadId.firstName} ${project.assistantLeadId.lastName}`
+                    : "None"}
                 </p>
               )}
             </div>

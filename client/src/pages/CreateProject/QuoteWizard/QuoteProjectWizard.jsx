@@ -27,6 +27,7 @@ const QuoteProjectWizard = () => {
     projectName: "",
     lead: "", // ID
     leadLabel: "", // Display Name
+    assistantLeadId: "", // Optional assistant lead
     orderDate: new Date().toISOString().split("T")[0],
     receivedTime: new Date().toLocaleTimeString("en-GB", {
       hour: "2-digit",
@@ -145,6 +146,8 @@ const QuoteProjectWizard = () => {
             projectName: data.details?.projectName || "",
             lead: data.projectLeadId?._id || data.projectLeadId || "",
             leadLabel: data.details?.lead || "",
+            assistantLeadId:
+              data.assistantLeadId?._id || data.assistantLeadId || "",
             deliveryDate: data.details?.deliveryDate
               ? data.details.deliveryDate.split("T")[0]
               : "",
@@ -305,6 +308,7 @@ const QuoteProjectWizard = () => {
           attachments: formData.attachments,
         },
         projectLeadId: formData.lead,
+        assistantLeadId: formData.assistantLeadId,
       };
 
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";

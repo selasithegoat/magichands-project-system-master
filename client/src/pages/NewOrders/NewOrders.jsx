@@ -23,6 +23,7 @@ const NewOrders = () => {
     projectType: location.state?.projectType || "Standard",
     priority: location.state?.priority || "Normal",
     projectLeadId: "",
+    assistantLeadId: "",
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -99,6 +100,7 @@ const NewOrders = () => {
         projectType: p.projectType || "Standard",
         priority: p.priority || "Normal",
         projectLeadId: p.projectLeadId?._id || p.projectLeadId || "",
+        assistantLeadId: p.assistantLeadId?._id || p.assistantLeadId || "",
       });
       setExistingSampleImage(p.details?.sampleImage || "");
       setExistingAttachments(p.details?.attachments || []);
@@ -131,7 +133,13 @@ const NewOrders = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === "projectLeadId" && value === prev.assistantLeadId) {
+        next.assistantLeadId = "";
+      }
+      return next;
+    });
   };
 
   const addItem = () => {
@@ -189,6 +197,9 @@ const NewOrders = () => {
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
     formPayload.append("projectLeadId", formData.projectLeadId);
+    if (formData.assistantLeadId) {
+      formPayload.append("assistantLeadId", formData.assistantLeadId);
+    }
     formPayload.append("status", "Pending Scope Approval");
     formPayload.append("briefOverview", formData.briefOverview);
     formPayload.append("projectType", formData.projectType);
@@ -243,6 +254,7 @@ const NewOrders = () => {
           projectType: formData.projectType,
           priority: formData.priority,
           projectLeadId: "",
+          assistantLeadId: "",
         });
         setSelectedFiles([]);
         setExistingSampleImage("");
@@ -369,6 +381,30 @@ const NewOrders = () => {
                         {lead.label}
                       </option>
                     ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="assistantLeadId">
+                    Assistant Lead{" "}
+                    <span style={{ color: "var(--text-secondary)" }}>
+                      (Optional)
+                    </span>
+                  </label>
+                  <select
+                    id="assistantLeadId"
+                    name="assistantLeadId"
+                    value={formData.assistantLeadId}
+                    onChange={handleChange}
+                    className="form-input"
+                  >
+                    <option value="">Select an Assistant Lead</option>
+                    {leads
+                      .filter((lead) => lead.value !== formData.projectLeadId)
+                      .map((lead) => (
+                        <option key={lead.value} value={lead.value}>
+                          {lead.label}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>

@@ -49,6 +49,9 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
     setFormData({ ...formData, [field]: value });
   };
 
+  const selectedLeadValue =
+    formData.lead?.value || formData.lead || "";
+
   const handleNextStep = () => {
     // Basic Validation
     if (!formData.projectName || !formData.lead) {
@@ -159,6 +162,27 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               )}
             />
           )}
+
+          <Select
+            label="Assistant Lead (Optional)"
+            options={leads.filter((l) => l.value !== selectedLeadValue)}
+            value={leads.find((l) => l.value === formData.assistantLeadId)}
+            onChange={(val) => handleChange("assistantLeadId", val.value)}
+            placeholder={isLoadingLeads ? "Loading users..." : "Select Assistant"}
+            disabled={isEditing}
+            renderValue={(option) => (
+              <>
+                <UserAvatar />
+                <span>{option.label}</span>
+              </>
+            )}
+            renderOption={(option) => (
+              <>
+                <UserAvatar />
+                <span>{option.label}</span>
+              </>
+            )}
+          />
 
           {/* Project Name */}
           <Input

@@ -35,6 +35,7 @@ const MinimalQuoteForm = () => {
     clientPhone: "", // [NEW]
     deliveryDate: "",
     projectLeadId: "",
+    assistantLeadId: "",
     quoteNumber: "",
     briefOverview: "",
     items: [{ description: "", breakdown: "", qty: 1 }],
@@ -82,6 +83,7 @@ const MinimalQuoteForm = () => {
           ? new Date(p.details.deliveryDate).toISOString().slice(0, 10)
           : "",
         projectLeadId: p.projectLeadId?._id || p.projectLeadId || "",
+        assistantLeadId: p.assistantLeadId?._id || p.assistantLeadId || "",
         quoteNumber: p.orderId || "",
         briefOverview: p.details?.briefOverview || "",
         items:
@@ -199,6 +201,9 @@ const MinimalQuoteForm = () => {
       formPayload.append("briefOverview", formData.briefOverview);
       formPayload.append("deliveryDate", formData.deliveryDate);
       formPayload.append("projectLeadId", formData.projectLeadId);
+      if (formData.assistantLeadId) {
+        formPayload.append("assistantLeadId", formData.assistantLeadId);
+      }
       formPayload.append("items", JSON.stringify(formData.items));
       formPayload.append(
         "quoteDetails",
@@ -299,9 +304,38 @@ const MinimalQuoteForm = () => {
                   setFormData((prev) => ({
                     ...prev,
                     projectLeadId: option.value,
+                    assistantLeadId:
+                      option.value === prev.assistantLeadId
+                        ? ""
+                        : prev.assistantLeadId,
                   }))
                 }
                 placeholder="Select Lead"
+                renderValue={(option) => (
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <span>{option.label}</span>
+                  </div>
+                )}
+                renderOption={(option) => (
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <span>{option.label}</span>
+                  </div>
+                )}
+              />
+
+              <Select
+                label="Assistant Lead (Optional)"
+                options={leads.filter(
+                  (l) => l.value !== formData.projectLeadId,
+                )}
+                value={leads.find((l) => l.value === formData.assistantLeadId)}
+                onChange={(option) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    assistantLeadId: option.value,
+                  }))
+                }
+                placeholder="Select Assistant"
                 renderValue={(option) => (
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span>{option.label}</span>

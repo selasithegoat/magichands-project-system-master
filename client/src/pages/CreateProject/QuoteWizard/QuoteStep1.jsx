@@ -42,6 +42,8 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
     setFormData({ [field]: value });
   };
 
+  const selectedLeadValue = formData.lead || "";
+
   const handleNextStep = () => {
     if (!formData.projectName || !formData.deliveryDate || !formData.lead) {
       alert("Please fill in Project Name, Completion Date, and select a Lead.");
@@ -109,6 +111,45 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               onChange={(val) => handleChange("lead", val)}
               disabled={true}
               placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
+              renderValue={(option) => (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </div>
+              )}
+              renderOption={(option) => (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <UserAvatar />
+                  <span>{option.label}</span>
+                </div>
+              )}
+            />
+          </div>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <Select
+              label="Assistant Lead (Optional)"
+              options={leads.filter((l) => l.value !== selectedLeadValue)}
+              value={leads.find((l) => l.value === formData.assistantLeadId)}
+              onChange={(val) =>
+                handleChange("assistantLeadId", val.value)
+              }
+              placeholder={
+                isLoadingLeads ? "Loading users..." : "Select Assistant"
+              }
+              disabled={isEditing}
               renderValue={(option) => (
                 <div
                   style={{

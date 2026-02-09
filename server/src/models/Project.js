@@ -148,6 +148,10 @@ const ProjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    assistantLeadId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     // Track last update time for specific sections
     sectionUpdates: {
       details: Date,
@@ -241,6 +245,7 @@ ProjectSchema.index({ status: 1, projectType: 1, createdAt: -1 });
 // Single field indexes for specific lookups
 ProjectSchema.index({ priority: 1 });
 ProjectSchema.index({ projectLeadId: 1 });
+ProjectSchema.index({ assistantLeadId: 1 });
 ProjectSchema.index({ createdBy: 1 });
 ProjectSchema.index({ "details.client": 1 });
 ProjectSchema.index({ "details.deliveryDate": 1 });
