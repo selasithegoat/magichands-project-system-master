@@ -4,6 +4,8 @@ import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadSearchText } from "../../utils/leadDisplay";
 
+const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
+
 const OrdersList = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
@@ -35,6 +37,12 @@ const OrdersList = () => {
   const [feedbackType, setFeedbackType] = useState("Positive");
   const [feedbackNotes, setFeedbackNotes] = useState("");
   const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [deliveryModal, setDeliveryModal] = useState({
+    open: false,
+    project: null,
+  });
+  const [deliveryInput, setDeliveryInput] = useState("");
+  const [deliverySubmitting, setDeliverySubmitting] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -210,16 +218,43 @@ const OrdersList = () => {
       if (res.ok) {
         showToast("Order delivered. Feedback is now pending.", "success");
         fetchOrders();
+        return true;
       } else {
         const errorData = await res.json();
         showToast(
           `Error: ${errorData.message || "Failed to update status"}`,
           "error",
         );
+        return false;
       }
     } catch (error) {
       console.error("Delivery update error:", error);
       showToast("Network error. Please try again.", "error");
+      return false;
+    }
+  };
+
+  const openDeliveryModal = (order) => {
+    setDeliveryInput("");
+    setDeliveryModal({ open: true, project: order });
+  };
+
+  const closeDeliveryModal = () => {
+    if (deliverySubmitting) return;
+    setDeliveryModal({ open: false, project: null });
+    setDeliveryInput("");
+    setDeliverySubmitting(false);
+  };
+
+  const handleConfirmDelivery = async () => {
+    if (!deliveryModal.project) return;
+    if (deliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE) return;
+    setDeliverySubmitting(true);
+    const delivered = await handleDeliveryComplete(deliveryModal.project);
+    setDeliverySubmitting(false);
+    if (delivered) {
+      setDeliveryModal({ open: false, project: null });
+      setDeliveryInput("");
     }
   };
 
@@ -433,7 +468,7 @@ const OrdersList = () => {
                         <td>
                           <button
                             className="action-btn complete-btn"
-                            onClick={() => handleDeliveryComplete(order)}
+                            onClick={() => openDeliveryModal(order)}
                             disabled={order.status !== "Pending Delivery/Pickup"}
                             title={
                               order.status === "Pending Delivery/Pickup"
@@ -564,6 +599,49 @@ const OrdersList = () => {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {deliveryModal.open && (
+        <div className="confirm-modal-overlay" onClick={closeDeliveryModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Confirm Delivery</h3>
+              <p>
+                {deliveryModal.project?.orderId ||
+                  deliveryModal.project?._id ||
+                  "Project"}
+              </p>
+            </div>
+            <p className="confirm-modal-text">
+              Type the phrase below to confirm delivery completion.
+            </p>
+            <div className="confirm-phrase">{DELIVERY_CONFIRM_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={deliveryInput}
+                onChange={(e) => setDeliveryInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeDeliveryModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn complete-btn"
+                onClick={handleConfirmDelivery}
+                disabled={
+                  deliverySubmitting ||
+                  deliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE
+                }
+              >
+                {deliverySubmitting ? "Confirming..." : "Confirm Delivery"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

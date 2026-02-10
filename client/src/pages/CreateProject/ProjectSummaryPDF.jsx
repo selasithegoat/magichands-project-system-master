@@ -84,6 +84,9 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 9,
   },
+  departmentBadgeAcknowledged: {
+    backgroundColor: "#10B981", // Green
+  },
   itemRow: {
     flexDirection: "row",
     borderBottomWidth: 1,
@@ -127,6 +130,9 @@ const ProjectSummaryPDF = ({
   imageUrls = {},
   pdfType = "STANDARD",
 }) => {
+  const acknowledgedDepartments = new Set(
+    (formData.acknowledgements || []).map((ack) => ack.department),
+  );
   // Theme Colors
   const THEME = {
     EMERGENCY: "#e74c3c", // Red
@@ -242,11 +248,21 @@ const ProjectSummaryPDF = ({
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {formData.departments && formData.departments.length > 0 ? (
-              formData.departments.map((dept, index) => (
-                <Text key={index} style={styles.departmentBadge}>
-                  {dept}
-                </Text>
-              ))
+              formData.departments.map((dept, index) => {
+                const isAcknowledged = acknowledgedDepartments.has(dept);
+                return (
+                  <Text
+                    key={index}
+                    style={[
+                      styles.departmentBadge,
+                      isAcknowledged && styles.departmentBadgeAcknowledged,
+                    ]}
+                  >
+                    {dept}
+                    {isAcknowledged ? " - Acknowledged" : ""}
+                  </Text>
+                );
+              })
             ) : (
               <Text style={{ fontSize: 10, color: "#64748B" }}>
                 None Selected

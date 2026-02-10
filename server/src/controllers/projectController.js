@@ -1896,7 +1896,7 @@ const acknowledgeProject = async (req, res) => {
     }
 
     // Check if department has already acknowledged
-    const existingIndex = project.acknowledgements.indexOf(
+    const existingIndex = (project.acknowledgements || []).findIndex(
       (a) => a.department === department,
     );
 
@@ -1942,6 +1942,68 @@ const acknowledgeProject = async (req, res) => {
   }
 };
 
+// @desc    Undo project engagement acknowledgement (Admin only)
+// @route   DELETE /api/projects/:id/acknowledge
+// @access  Private (Admin)
+const undoAcknowledgeProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { department } = req.body;
+
+    if (!department) {
+      return res.status(400).json({ message: "Department is required" });
+    }
+
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to undo acknowledgements" });
+    }
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const ackIndex = (project.acknowledgements || []).findIndex(
+      (ack) => ack.department === department,
+    );
+
+    if (ackIndex === -1) {
+      return res
+        .status(400)
+        .json({ message: "Acknowledgement not found for department" });
+    }
+
+    project.acknowledgements.splice(ackIndex, 1);
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "engagement_unacknowledge",
+      `${department} acknowledgement was removed by ${req.user.firstName} ${req.user.lastName}.`,
+      { department },
+    );
+
+    if (project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "ACTIVITY",
+        "Department Acknowledgement Removed",
+        `${department} department acknowledgement was removed for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
+      );
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error undoing acknowledgement:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -1971,4 +2033,5 @@ module.exports = {
   getClients, // [NEW]
   reopenProject, // [NEW]
   acknowledgeProject,
+  undoAcknowledgeProject,
 };

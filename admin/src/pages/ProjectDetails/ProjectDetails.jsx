@@ -65,6 +65,7 @@ const ProjectDetails = ({ user }) => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updates, setUpdates] = useState([]); // New state for updates
+  const [undoingDept, setUndoingDept] = useState(null);
 
   // Status handling
   const handleStatusChange = async (newStatus) => {
@@ -335,6 +336,31 @@ const ProjectDetails = ({ user }) => {
       alert("Failed to update checklist");
       // Revert is not strictly necessary if we rely on next fetch, but good practice
       // For now, simpler to just re-fetch if needed or rely on alert
+    }
+  };
+
+  const handleUndoAcknowledgement = async (department) => {
+    if (!project) return;
+    setUndoingDept(department);
+    try {
+      const res = await fetch(`/api/projects/${id}/acknowledge`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ department }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to undo acknowledgement");
+      }
+
+      const updatedProject = await res.json();
+      setProject(updatedProject);
+    } catch (err) {
+      console.error("Error undoing acknowledgement:", err);
+      alert("Failed to undo acknowledgement");
+    } finally {
+      setUndoingDept(null);
     }
   };
 
@@ -1452,6 +1478,17 @@ const ProjectDetails = ({ user }) => {
                           >
                             ✓
                           </span>
+                        )}
+                        {isAcknowledged && user?.role === "admin" && (
+                          <button
+                            type="button"
+                            className="dept-undo-btn"
+                            onClick={() => handleUndoAcknowledgement(dept)}
+                            disabled={undoingDept === dept}
+                            title="Undo acknowledgement"
+                          >
+                            {undoingDept === dept ? "Undoing..." : "Undo"}
+                          </button>
                         )}
                       </span>
                     );

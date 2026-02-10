@@ -34,6 +34,7 @@ const ActivityLogSchema = new mongoose.Schema(
         "factor_update", // [NEW]
         "update_post", // [NEW]
         "engagement_acknowledge", // [NEW]
+        "engagement_unacknowledge", // [NEW]
       ],
     },
     description: {

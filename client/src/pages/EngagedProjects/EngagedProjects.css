@@ -353,6 +353,23 @@
   color: var(--text-primary);
 }
 
+.acknowledge-confirm-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.acknowledge-phrase {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+}
+
 .engaged-depts-section {
   margin-bottom: 1.5rem;
 }

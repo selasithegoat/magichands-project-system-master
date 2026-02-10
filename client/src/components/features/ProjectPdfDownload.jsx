@@ -117,6 +117,7 @@ const ProjectPdfDownload = ({ project }) => {
       briefOverview: details.briefOverview,
       leadLabel: getLeadDisplay(project, details.lead || "Unassigned"),
       departments: project.departments,
+      acknowledgements: project.acknowledgements || [],
       items: project.items,
       uncontrollableFactors: project.uncontrollableFactors,
       productionRisks: project.productionRisks,

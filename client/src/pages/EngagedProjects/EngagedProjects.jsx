@@ -42,6 +42,8 @@ const STATUS_ACTIONS = {
 };
 
 const ITEMS_PER_PAGE = 10;
+const ACKNOWLEDGE_PHRASE = "I agree to be engaged in this project";
+const COMPLETE_PHRASE = "I confirm this engagement is complete";
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
@@ -72,6 +74,14 @@ const EngagedProjects = ({ user }) => {
     department: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [showAcknowledgeModal, setShowAcknowledgeModal] = useState(false);
+  const [acknowledgeTarget, setAcknowledgeTarget] = useState(null);
+  const [acknowledgeInput, setAcknowledgeInput] = useState("");
+  const [acknowledgeSubmitting, setAcknowledgeSubmitting] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState(null);
+  const [completeInput, setCompleteInput] = useState("");
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -323,12 +333,14 @@ const EngagedProjects = ({ user }) => {
           message: `${action.label} recorded.`,
         });
         fetchEngagedProjects();
+        return true;
       } else {
         const errorData = await res.json().catch(() => ({}));
         setToast({
           type: "error",
           message: errorData.message || "Failed to update status.",
         });
+        return false;
       }
     } catch (err) {
       console.error("Error updating status:", err);
@@ -336,6 +348,7 @@ const EngagedProjects = ({ user }) => {
         type: "error",
         message: "An unexpected error occurred.",
       });
+      return false;
     } finally {
       setStatusUpdating(null);
     }
@@ -419,16 +432,79 @@ const EngagedProjects = ({ user }) => {
           message: `${getDepartmentLabel(department)} acknowledged!`,
         });
         fetchEngagedProjects(); // Refresh the list
+        return true;
       } else {
         const errorData = await res.json();
         setToast({
           type: "error",
           message: errorData.message || "Acknowledgement failed.",
         });
+        return false;
       }
     } catch (err) {
       console.error("Error acknowledging project:", err);
       setToast({ type: "error", message: "An unexpected error occurred." });
+      return false;
+    }
+  };
+
+  const openAcknowledgeModal = (project, department) => {
+    setAcknowledgeTarget({ project, department });
+    setAcknowledgeInput("");
+    setShowAcknowledgeModal(true);
+  };
+
+  const closeAcknowledgeModal = () => {
+    setShowAcknowledgeModal(false);
+    setAcknowledgeTarget(null);
+    setAcknowledgeInput("");
+    setAcknowledgeSubmitting(false);
+  };
+
+  const handleConfirmAcknowledge = async () => {
+    if (!acknowledgeTarget) return;
+    if (acknowledgeInput.trim() !== ACKNOWLEDGE_PHRASE) return;
+
+    setAcknowledgeSubmitting(true);
+    const acknowledged = await handleAcknowledge(
+      acknowledgeTarget.project,
+      acknowledgeTarget.department,
+    );
+    setAcknowledgeSubmitting(false);
+    if (acknowledged) {
+      setShowAcknowledgeModal(false);
+      setAcknowledgeTarget(null);
+      setAcknowledgeInput("");
+    }
+  };
+
+  const openCompleteModal = (project, action) => {
+    setCompleteTarget({ project, action });
+    setCompleteInput("");
+    setShowCompleteModal(true);
+  };
+
+  const closeCompleteModal = () => {
+    setShowCompleteModal(false);
+    setCompleteTarget(null);
+    setCompleteInput("");
+    setCompleteSubmitting(false);
+  };
+
+  const handleConfirmComplete = async () => {
+    if (!completeTarget) return;
+    if (completeInput.trim() !== COMPLETE_PHRASE) return;
+
+    setCompleteSubmitting(true);
+    const completed = await handleCompleteStatus(
+      completeTarget.project,
+      completeTarget.action,
+    );
+    setCompleteSubmitting(false);
+    if (completed) {
+      setShowCompleteModal(false);
+      setCompleteTarget(null);
+      setCompleteInput("");
     }
   };
 
@@ -674,7 +750,7 @@ const EngagedProjects = ({ user }) => {
                                 <button
                                   key={action.complete}
                                   className="complete-btn"
-                                  onClick={() => handleCompleteStatus(project, action)}
+                                  onClick={() => openCompleteModal(project, action)}
                                   disabled={!isReady || isUpdating}
                                   title={
                                     isReady
@@ -704,7 +780,7 @@ const EngagedProjects = ({ user }) => {
                                 <button
                                   key={dept}
                                   className="acknowledge-btn"
-                                  onClick={() => handleAcknowledge(project, dept)}
+                                  onClick={() => openAcknowledgeModal(project, dept)}
                                   title={`Accept engagement for ${getDepartmentLabel(dept)}`}
                                 >
                                   {`Accept ${getDepartmentLabel(dept)} Engagement`}
@@ -911,6 +987,113 @@ const EngagedProjects = ({ user }) => {
           type={toast.type}
           onClose={() => setToast(null)}
         />
+      )}
+
+      {/* Complete Engagement Confirmation Modal */}
+      {showCompleteModal && completeTarget && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3 className="modal-title">Confirm Engagement Completion</h3>
+            <p className="acknowledge-confirm-text">
+              You are about to mark{" "}
+              <strong>{completeTarget.action.label}</strong> for project{" "}
+              <strong>
+                {completeTarget.project.orderId ||
+                  completeTarget.project._id.slice(-6).toUpperCase()}
+              </strong>
+              .
+            </p>
+            <p className="acknowledge-confirm-text">
+              Type the phrase below to confirm:
+            </p>
+            <div className="acknowledge-phrase">{COMPLETE_PHRASE}</div>
+            <div className="form-group" style={{ marginTop: "1rem" }}>
+              <label>Confirmation</label>
+              <input
+                type="text"
+                className="input-field"
+                value={completeInput}
+                onChange={(e) => setCompleteInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeCompleteModal}
+                disabled={completeSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleConfirmComplete}
+                disabled={
+                  completeSubmitting ||
+                  completeInput.trim() !== COMPLETE_PHRASE
+                }
+              >
+                {completeSubmitting ? "Confirming..." : "Confirm Completion"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Acknowledge Confirmation Modal */}
+      {showAcknowledgeModal && acknowledgeTarget && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3 className="modal-title">Confirm Engagement Acceptance</h3>
+            <p className="acknowledge-confirm-text">
+              You are about to acknowledge engagement for{" "}
+              <strong>{getDepartmentLabel(acknowledgeTarget.department)}</strong>{" "}
+              on project{" "}
+              <strong>
+                {acknowledgeTarget.project.orderId ||
+                  acknowledgeTarget.project._id.slice(-6).toUpperCase()}
+              </strong>
+              .
+            </p>
+            <p className="acknowledge-confirm-text">
+              Type the phrase below to confirm:
+            </p>
+            <div className="acknowledge-phrase">{ACKNOWLEDGE_PHRASE}</div>
+            <div className="form-group" style={{ marginTop: "1rem" }}>
+              <label>Confirmation</label>
+              <input
+                type="text"
+                className="input-field"
+                value={acknowledgeInput}
+                onChange={(e) => setAcknowledgeInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeAcknowledgeModal}
+                disabled={acknowledgeSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleConfirmAcknowledge}
+                disabled={
+                  acknowledgeSubmitting ||
+                  acknowledgeInput.trim() !== ACKNOWLEDGE_PHRASE
+                }
+              >
+                {acknowledgeSubmitting ? "Confirming..." : "Confirm Acceptance"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
