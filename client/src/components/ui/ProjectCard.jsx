@@ -82,7 +82,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Pending Packaging": 75,
     "Packaging Completed": 82,
     "Pending Delivery/Pickup": 90,
-    Delivered: 100,
+    Delivered: 95,
     Completed: 100,
     Finished: 100,
   };
@@ -95,7 +95,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Quote Request Completed": 60,
     "Pending Send Response": 75,
     "Response Sent": 90,
-    Delivered: 100,
+    Delivered: 95,
     Completed: 100,
     Finished: 100,
   };

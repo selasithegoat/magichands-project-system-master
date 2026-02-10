@@ -1784,7 +1784,7 @@ const ProgressCard = ({ project }) => {
         case "Finished":
           return 100;
         case "Delivered":
-          return 100;
+          return 95;
         default:
           return 0;
       }
@@ -1812,7 +1812,7 @@ const ProgressCard = ({ project }) => {
       case "Pending Delivery/Pickup":
         return 90;
       case "Delivered":
-        return 100;
+        return 95;
       case "Completed":
         return 100;
       case "Finished":
