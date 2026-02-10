@@ -69,10 +69,12 @@ const Clients = ({ user }) => {
   const getStatusClass = (status) => {
     if (!status) return "draft";
     const lower = status.toLowerCase();
+    if (lower.includes("feedback")) return "in-progress";
     if (lower.includes("pending")) return "pending";
-    if (lower.includes("completed") || lower.includes("delivered"))
-      return "completed";
-    if (lower.includes("progress")) return "in-progress";
+    if (lower.includes("finished")) return "completed";
+    if (lower.includes("completed")) return "completed";
+    if (lower.includes("delivered") || lower.includes("progress"))
+      return "in-progress";
     return "draft";
   };
 
@@ -94,11 +96,11 @@ const Clients = ({ user }) => {
 
       if (projectStatusFilter === "ongoing") {
         filteredProjects = client.projects.filter(
-          (p) => p.status !== "Completed" && p.status !== "Delivered",
+          (p) => p.status !== "Completed" && p.status !== "Finished",
         );
       } else if (projectStatusFilter === "completed") {
         filteredProjects = client.projects.filter(
-          (p) => p.status === "Completed" || p.status === "Delivered",
+          (p) => p.status === "Completed" || p.status === "Finished",
         );
       }
 

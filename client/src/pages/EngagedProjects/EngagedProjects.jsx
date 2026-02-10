@@ -156,9 +156,16 @@ const EngagedProjects = ({ user }) => {
           );
         });
         const completedStatuses = new Set(["Completed", "Finished"]);
-        // Active engaged (exclude completed/finished/delivered)
+        const postDeliveryStatuses = new Set([
+          "Delivered",
+          "Pending Feedback",
+          "Feedback Completed",
+        ]);
+        // Active engaged (exclude completed/finished/post-delivery)
         const activeEngaged = engaged.filter(
-          (p) => !completedStatuses.has(p.status) && p.status !== "Delivered",
+          (p) =>
+            !completedStatuses.has(p.status) &&
+            !postDeliveryStatuses.has(p.status),
         );
         // History engaged (completed/finished only)
         const historyEngaged = engaged.filter((p) =>

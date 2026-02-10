@@ -95,6 +95,18 @@
   background-color: #f0fdf4;
   color: #22c55e;
 }
+.status-badge.pending-delivery {
+  background-color: #ecfeff;
+  color: #0f766e;
+}
+.status-badge.pending-feedback {
+  background-color: #ecfeff;
+  color: #06b6d4;
+}
+.status-badge.feedback-completed {
+  background-color: #cffafe;
+  color: #0891b2;
+}
 .status-badge.blocked {
   background-color: #fef2f2;
   color: #ef4444;
@@ -157,6 +169,9 @@
 }
 .progress-val.green {
   color: #22c55e;
+}
+.progress-val.teal {
+  color: #06b6d4;
 }
 .progress-val.red {
   color: #ef4444;

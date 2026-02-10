@@ -973,3 +973,68 @@ textarea.input-field {
 .project-detail-container.quote-theme .edit-link {
   color: #b45309;
 }
+
+/* Feedback Card */
+.feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.feedback-item {
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+}
+
+.feedback-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.feedback-pill {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.feedback-pill.positive {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.feedback-pill.negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.feedback-by {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.feedback-date {
+  font-size: 0.7rem;
+}
+
+.feedback-notes {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.empty-feedback {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}

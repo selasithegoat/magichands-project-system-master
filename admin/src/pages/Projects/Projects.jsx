@@ -107,9 +107,11 @@ const Projects = ({ user }) => {
   const getStatusClass = (status) => {
     if (!status) return "draft";
     const lower = status.toLowerCase();
+    if (lower.includes("feedback")) return "in-progress";
     if (lower.includes("pending")) return "pending";
-    if (lower.includes("completed") || lower.includes("delivered"))
-      return "completed";
+    if (lower.includes("finished")) return "completed";
+    if (lower.includes("completed")) return "completed";
+    if (lower.includes("delivered")) return "in-progress";
     if (lower.includes("progress") || lower.includes("sent"))
       return "in-progress";
     return "draft";
@@ -237,6 +239,8 @@ const Projects = ({ user }) => {
                 Pending Scope Approval
               </option>
               <option value="In Progress">In Progress</option>
+              <option value="Pending Feedback">Pending Feedback</option>
+              <option value="Feedback Completed">Feedback Completed</option>
               <option value="Completed">Completed</option>
               <option value="Delivered">Delivered</option>
               <option value="Pending Quote Request">

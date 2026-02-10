@@ -8,6 +8,8 @@ const {
   addItemToProject,
   deleteItemFromProject,
   updateProjectStatus,
+  addFeedbackToProject,
+  deleteFeedbackFromProject,
   addChallengeToProject,
   updateChallengeStatus,
   deleteChallenge,
@@ -69,6 +71,10 @@ router.patch(
   updateChallengeStatus,
 );
 router.delete("/:id/challenges/:challengeId", protect, deleteChallenge);
+
+// Feedback
+router.post("/:id/feedback", protect, addFeedbackToProject);
+router.delete("/:id/feedback/:feedbackId", protect, deleteFeedbackFromProject);
 
 // Production Risks
 router.post("/:id/production-risks", protect, addProductionRisk);

@@ -350,7 +350,7 @@ const getUserStats = async (req, res) => {
     // Count completed projects where user is the Lead or Assistant Lead
     const completedProjects = await Project.countDocuments({
       $or: [{ projectLeadId: userId }, { assistantLeadId: userId }],
-      status: { $in: ["Completed", "Finished", "Delivered"] },
+      status: { $in: ["Completed", "Finished"] },
     });
 
     // Estimate hours: 8 hours per completed project (mock calculation)
@@ -687,6 +687,11 @@ const updateProjectStatus = async (req, res) => {
         from: "Pending Delivery/Pickup",
         to: "Delivered",
       },
+      {
+        dept: "Front Desk",
+        from: "Pending Feedback",
+        to: "Feedback Completed",
+      },
     ];
 
     if (!isAdmin && !isFinishing) {
@@ -716,6 +721,7 @@ const updateProjectStatus = async (req, res) => {
       "Mockup Completed": "Pending Production",
       "Production Completed": "Pending Packaging",
       "Packaging Completed": "Pending Delivery/Pickup",
+      Delivered: "Pending Feedback",
       // Quote workflow
       "Quote Request Completed": "Pending Send Response",
     };
@@ -750,6 +756,161 @@ const updateProjectStatus = async (req, res) => {
     res.json(project);
   } catch (error) {
     console.error("Error updating status:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Add feedback to project
+// @route   POST /api/projects/:id/feedback
+// @access  Private (Front Desk / Admin)
+const addFeedbackToProject = async (req, res) => {
+  try {
+    const { type, notes } = req.body;
+
+    if (!type || !["Positive", "Negative"].includes(type)) {
+      return res
+        .status(400)
+        .json({ message: "Feedback type must be Positive or Negative." });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const userDepts = Array.isArray(req.user.department)
+      ? req.user.department
+      : req.user.department
+        ? [req.user.department]
+        : [];
+    const isFrontDesk = userDepts.includes("Front Desk");
+    const isAdmin = req.user.role === "admin";
+
+    if (!isAdmin && !isFrontDesk) {
+      return res.status(403).json({
+        message: "Not authorized to add feedback to this project.",
+      });
+    }
+
+    const feedbackEntry = {
+      type,
+      notes: notes || "",
+      createdBy: req.user._id,
+      createdByName: `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim(),
+    };
+
+    project.feedbacks = project.feedbacks || [];
+    project.feedbacks.push(feedbackEntry);
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.feedbacks = new Date();
+
+    const oldStatus = project.status;
+    if (project.status === "Pending Feedback" || project.status === "Delivered") {
+      project.status = "Feedback Completed";
+    }
+
+    const updatedProject = await project.save();
+
+    await logActivity(
+      updatedProject._id,
+      req.user.id,
+      "feedback_add",
+      `Feedback added (${type})`,
+      {
+        feedback: feedbackEntry,
+        statusChange:
+          oldStatus !== updatedProject.status
+            ? { from: oldStatus, to: updatedProject.status }
+            : undefined,
+      },
+    );
+
+    await notifyAdmins(
+      req.user.id,
+      updatedProject._id,
+      "UPDATE",
+      "Project Feedback Added",
+      `Feedback (${type}) added to project #${updatedProject.orderId || updatedProject._id} by ${req.user.firstName}`,
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error adding feedback:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Delete feedback from project
+// @route   DELETE /api/projects/:id/feedback/:feedbackId
+// @access  Private (Front Desk / Admin)
+const deleteFeedbackFromProject = async (req, res) => {
+  try {
+    const { id, feedbackId } = req.params;
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const userDepts = Array.isArray(req.user.department)
+      ? req.user.department
+      : req.user.department
+        ? [req.user.department]
+        : [];
+    const isFrontDesk = userDepts.includes("Front Desk");
+    const isAdmin = req.user.role === "admin";
+
+    if (!isAdmin && !isFrontDesk) {
+      return res.status(403).json({
+        message: "Not authorized to delete feedback from this project.",
+      });
+    }
+
+    const feedback = project.feedbacks?.id(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({ message: "Feedback not found" });
+    }
+
+    const deletedType = feedback.type;
+    feedback.remove();
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.feedbacks = new Date();
+
+    const oldStatus = project.status;
+    if (
+      project.feedbacks.length === 0 &&
+      project.status === "Feedback Completed"
+    ) {
+      project.status = "Pending Feedback";
+    }
+
+    const updatedProject = await project.save();
+
+    await logActivity(
+      updatedProject._id,
+      req.user.id,
+      "feedback_delete",
+      `Feedback deleted (${deletedType})`,
+      {
+        feedbackId,
+        statusChange:
+          oldStatus !== updatedProject.status
+            ? { from: oldStatus, to: updatedProject.status }
+            : undefined,
+      },
+    );
+
+    await notifyAdmins(
+      req.user.id,
+      updatedProject._id,
+      "UPDATE",
+      "Project Feedback Deleted",
+      `Feedback (${deletedType}) removed from project #${updatedProject.orderId || updatedProject._id} by ${req.user.firstName}`,
+    );
+
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error deleting feedback:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -1652,9 +1813,15 @@ const reopenProject = async (req, res) => {
     }
 
     // Check if project is completed or delivered
-    if (project.status !== "Completed" && project.status !== "Delivered") {
+    if (
+      project.status !== "Completed" &&
+      project.status !== "Delivered" &&
+      project.status !== "Feedback Completed" &&
+      project.status !== "Finished"
+    ) {
       return res.status(400).json({
-        message: "Only completed or delivered projects can be reopened",
+        message:
+          "Only completed, delivered, feedback-completed, or finished projects can be reopened",
       });
     }
 
@@ -1783,6 +1950,8 @@ module.exports = {
   addItemToProject,
   deleteItemFromProject,
   updateProjectStatus,
+  addFeedbackToProject,
+  deleteFeedbackFromProject,
   addChallengeToProject,
   updateChallengeStatus,
   deleteChallenge,

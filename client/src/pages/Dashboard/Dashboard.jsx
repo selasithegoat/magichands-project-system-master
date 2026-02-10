@@ -169,7 +169,14 @@ const Dashboard = ({
                 const dDate = new Date(p.details.deliveryDate);
                 const now = new Date();
                 now.setHours(0, 0, 0, 0); // Start of today
-                return dDate < now && p.status !== "Delivered";
+                const deliveredStatuses = new Set([
+                  "Delivered",
+                  "Pending Feedback",
+                  "Feedback Completed",
+                  "Completed",
+                  "Finished",
+                ]);
+                return dDate < now && !deliveredStatuses.has(p.status);
               }).length
             }
           </div>

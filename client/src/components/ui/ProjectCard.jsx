@@ -44,16 +44,31 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#14b8a6",
           textClass: "teal",
         };
+      case "Pending Feedback":
+        return {
+          class: "pending-feedback",
+          color: "#06b6d4",
+          textClass: "teal",
+        };
       case "Completed":
         return { class: "completed", color: "#22c55e", textClass: "green" };
-      case "Delivered":
+      case "Finished":
         return { class: "completed", color: "#22c55e", textClass: "green" };
+      case "Delivered":
+        return {
+          class: "pending-delivery",
+          color: "#14b8a6",
+          textClass: "teal",
+        };
+      case "Feedback Completed":
+        return { class: "feedback-completed", color: "#06b6d4", textClass: "teal" };
       default:
         return { class: "draft", color: "#cbd5e1", textClass: "gray" };
     }
   };
 
-  const isCompletedStatus = project.status === "Completed";
+  const isCompletedStatus =
+    project.status === "Completed" || project.status === "Finished";
   const statusInfo = getStatusColor(project.status);
 
   const getProjectTypeInfo = (type) => {
@@ -83,6 +98,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Packaging Completed": 82,
     "Pending Delivery/Pickup": 90,
     Delivered: 95,
+    "Pending Feedback": 97,
+    "Feedback Completed": 99,
     Completed: 100,
     Finished: 100,
   };
@@ -96,6 +113,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Pending Send Response": 75,
     "Response Sent": 90,
     Delivered: 95,
+    "Pending Feedback": 97,
+    "Feedback Completed": 99,
     Completed: 100,
     Finished: 100,
   };

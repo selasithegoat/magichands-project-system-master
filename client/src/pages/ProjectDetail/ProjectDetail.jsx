@@ -54,6 +54,10 @@ const STATUS_STEPS = [
     label: "Delivery/Pickup",
     statuses: ["Pending Delivery/Pickup", "Delivered"],
   },
+  {
+    label: "Feedback",
+    statuses: ["Pending Feedback", "Feedback Completed"],
+  },
 ];
 
 const QUOTE_STEPS = [
@@ -96,6 +100,10 @@ const getStatusColor = (status) => {
     case "Delivered":
     case "Delivery/Pickup":
       return "#14b8a6"; // Teal
+    case "Pending Feedback":
+    case "Feedback Completed":
+    case "Feedback":
+      return "#06b6d4"; // Cyan
     case "Completed":
     case "Finished":
       return "#22c55e"; // Green
@@ -394,6 +402,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               {project.projectType === "Quote" && (
                 <QuoteChecklistCard project={project} />
               )}
+              <FeedbackCard feedbacks={project.feedbacks} />
               <DepartmentsCard
                 departments={project.departments}
                 acknowledgements={project.acknowledgements}
@@ -589,6 +598,66 @@ const QuoteChecklistCard = ({ project }) => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+const FeedbackCard = ({ feedbacks = [] }) => {
+  const sortedFeedbacks = [...feedbacks].sort((a, b) => {
+    const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  const formatFeedbackDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <div className="detail-card">
+      <div className="card-header">
+        <h3 className="card-title">Feedback</h3>
+      </div>
+      {sortedFeedbacks.length === 0 ? (
+        <div className="empty-feedback">No feedback submitted yet.</div>
+      ) : (
+        <div className="feedback-list">
+          {sortedFeedbacks.map((feedback) => (
+            <div
+              className="feedback-item"
+              key={feedback._id || feedback.createdAt}
+            >
+              <div className="feedback-meta">
+                <span
+                  className={`feedback-pill ${
+                    feedback.type === "Positive" ? "positive" : "negative"
+                  }`}
+                >
+                  {feedback.type || "Feedback"}
+                </span>
+                <span className="feedback-by">
+                  {feedback.createdByName || "Unknown"}
+                </span>
+                <span className="feedback-date">
+                  {formatFeedbackDate(feedback.createdAt)}
+                </span>
+              </div>
+              <div className="feedback-notes">
+                {feedback.notes?.trim()
+                  ? feedback.notes
+                  : "No notes provided."}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -1779,6 +1848,10 @@ const ProgressCard = ({ project }) => {
           return 75;
         case "Response Sent":
           return 90;
+        case "Pending Feedback":
+          return 97;
+        case "Feedback Completed":
+          return 99;
         case "Completed":
           return 100;
         case "Finished":
@@ -1813,6 +1886,10 @@ const ProgressCard = ({ project }) => {
         return 90;
       case "Delivered":
         return 95;
+      case "Pending Feedback":
+        return 97;
+      case "Feedback Completed":
+        return 99;
       case "Completed":
         return 100;
       case "Finished":
@@ -1890,6 +1967,7 @@ const ApprovalsCard = ({ status, type }) => {
     Production: FactoryIcon,
     Packaging: PackageIcon,
     "Delivery/Pickup": TruckIcon,
+    Feedback: CheckCircleIcon,
     "Quote Request": ClipboardListIcon,
     "Send Response": ClockIcon,
   };

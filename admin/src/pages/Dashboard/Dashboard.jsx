@@ -171,25 +171,28 @@ const ProjectStatusOverview = ({ projects }) => {
 
     filtered.forEach((p) => {
       // Logic:
-      // 1. If status is Completed, Finished, or Delivered -> Completed
+      // 1. If status is Completed or Finished -> Completed
       // 2. If deliveryDate is in the past (overdue) and not delivered -> Delayed
       // 3. Otherwise -> In Progress (except for 'Completed')
 
-      if (
-        p.status === "Completed" ||
-        p.status === "Finished" ||
-        p.status === "Delivered"
-      ) {
+      if (p.status === "Completed" || p.status === "Finished") {
         completed++;
       } else {
         const dDate = p.details?.deliveryDate
           ? new Date(p.details.deliveryDate)
           : null;
 
+        const postDeliveryStatuses = new Set([
+          "Delivered",
+          "Pending Feedback",
+          "Feedback Completed",
+          "Completed",
+          "Finished",
+        ]);
         // Count as delayed if overdue OR within 3 days (72 hours) of delivery
         const isUrgent = dDate && dDate - now <= 3 * 24 * 60 * 60 * 1000;
 
-        if (isUrgent) {
+        if (isUrgent && !postDeliveryStatuses.has(p.status)) {
           delayed++;
         } else {
           inProgress++;
@@ -326,11 +329,7 @@ const Dashboard = ({ user }) => {
     let overdue = 0;
 
     data.forEach((p) => {
-      if (
-        p.status === "Completed" ||
-        p.status === "Finished" ||
-        p.status === "Delivered"
-      ) {
+      if (p.status === "Completed" || p.status === "Finished") {
         completed++;
       } else {
         active++;
@@ -342,9 +341,16 @@ const Dashboard = ({ user }) => {
         }
         if (p.details?.deliveryDate) {
           const dDate = new Date(p.details.deliveryDate);
+          const postDeliveryStatuses = new Set([
+            "Delivered",
+            "Pending Feedback",
+            "Feedback Completed",
+            "Completed",
+            "Finished",
+          ]);
           // Count as overdue if already passed OR within 3 days (72 hours)
           const isUrgent = dDate - now <= 3 * 24 * 60 * 60 * 1000;
-          if (isUrgent && p.status !== "Delivered") {
+          if (isUrgent && !postDeliveryStatuses.has(p.status)) {
             overdue++;
           }
         }
@@ -358,7 +364,7 @@ const Dashboard = ({ user }) => {
     if (status === "Completed" || status === "Finished") return "completed";
     if (status === "Pending Scope Approval" || status === "Pending Acceptance")
       return "pending";
-    if (status === "Delivered") return "completed";
+    if (status === "Pending Feedback") return "pending";
     return "active";
   };
 
@@ -506,7 +512,9 @@ const Dashboard = ({ user }) => {
                 (p) =>
                   p.status !== "Completed" &&
                   p.status !== "Finished" &&
-                  p.status !== "Delivered",
+                  p.status !== "Delivered" &&
+                  p.status !== "Pending Feedback" &&
+                  p.status !== "Feedback Completed",
               );
 
               // Calculate counts per lead

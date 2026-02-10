@@ -28,6 +28,14 @@ const OrdersList = () => {
     type: "success",
   });
 
+  const [feedbackModal, setFeedbackModal] = useState({
+    open: false,
+    project: null,
+  });
+  const [feedbackType, setFeedbackType] = useState("Positive");
+  const [feedbackNotes, setFeedbackNotes] = useState("");
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ ...toast, show: false }), 5000);
@@ -37,6 +45,17 @@ const OrdersList = () => {
     fetchOrders();
     fetchCurrentUser();
   }, []);
+
+  useEffect(() => {
+    if (feedbackModal.open && feedbackModal.project) {
+      const updated = allOrders.find(
+        (order) => order._id === feedbackModal.project._id,
+      );
+      if (updated && updated !== feedbackModal.project) {
+        setFeedbackModal((prev) => ({ ...prev, project: updated }));
+      }
+    }
+  }, [allOrders, feedbackModal.open, feedbackModal.project]);
 
   useRealtimeRefresh(() => fetchOrders());
 
@@ -112,16 +131,18 @@ const OrdersList = () => {
   const getStatusClass = (status) => {
     if (!status) return "draft";
     const lower = status.toLowerCase();
+    if (lower.includes("feedback")) return "feedback";
     if (lower.includes("pending") || lower.includes("new order"))
       return "pending";
-    if (lower.includes("completed") || lower.includes("delivered"))
-      return "completed";
-    if (lower.includes("progress")) return "in-progress";
+    if (lower.includes("finished")) return "completed";
+    if (lower.includes("completed")) return "completed";
+    if (lower.includes("delivered") || lower.includes("progress"))
+      return "in-progress";
     return "draft";
   };
 
   const allOrdersFiltered = allOrders.filter((order) => {
-    if (order.status === "Completed" || order.status === "Delivered")
+    if (order.status === "Completed" || order.status === "Finished")
       return false;
     if (
       allFilters.orderId &&
@@ -146,7 +167,7 @@ const OrdersList = () => {
   });
 
   const historyOrdersFiltered = allOrders.filter((order) => {
-    if (order.status !== "Completed" && order.status !== "Delivered")
+    if (order.status !== "Completed" && order.status !== "Finished")
       return false;
     if (
       historyFilters.orderId &&
@@ -172,6 +193,11 @@ const OrdersList = () => {
   const canMarkDelivered =
     currentUser?.role === "admin" ||
     currentUser?.department?.includes("Front Desk");
+  const canManageFeedback = canMarkDelivered;
+  const canAddFeedbackFor = (order) =>
+    ["Pending Feedback", "Feedback Completed", "Delivered"].includes(
+      order.status,
+    );
 
   const handleDeliveryComplete = async (order) => {
     if (!canMarkDelivered) return;
@@ -182,7 +208,7 @@ const OrdersList = () => {
         body: JSON.stringify({ status: "Delivered" }),
       });
       if (res.ok) {
-        showToast("Order marked as Delivered.", "success");
+        showToast("Order delivered. Feedback is now pending.", "success");
         fetchOrders();
       } else {
         const errorData = await res.json();
@@ -196,6 +222,95 @@ const OrdersList = () => {
       showToast("Network error. Please try again.", "error");
     }
   };
+
+  const openFeedbackModal = (order) => {
+    setFeedbackType("Positive");
+    setFeedbackNotes("");
+    setFeedbackModal({ open: true, project: order });
+  };
+
+  const closeFeedbackModal = () => {
+    setFeedbackModal({ open: false, project: null });
+    setFeedbackType("Positive");
+    setFeedbackNotes("");
+  };
+
+  const handleAddFeedback = async () => {
+    if (!feedbackModal.project) return;
+    setFeedbackSaving(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${feedbackModal.project._id}/feedback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: feedbackType,
+            notes: feedbackNotes,
+          }),
+        },
+      );
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setAllOrders((prev) =>
+          prev.map((p) => (p._id === updatedProject._id ? updatedProject : p)),
+        );
+        setFeedbackModal({ open: true, project: updatedProject });
+        setFeedbackNotes("");
+        showToast("Feedback added successfully.", "success");
+      } else {
+        const errorData = await res.json();
+        showToast(
+          `Error: ${errorData.message || "Failed to add feedback"}`,
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Feedback add error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setFeedbackSaving(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (feedbackId) => {
+    if (!feedbackModal.project) return;
+    try {
+      const res = await fetch(
+        `/api/projects/${feedbackModal.project._id}/feedback/${feedbackId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setAllOrders((prev) =>
+          prev.map((p) => (p._id === updatedProject._id ? updatedProject : p)),
+        );
+        setFeedbackModal({ open: true, project: updatedProject });
+        showToast("Feedback deleted.", "success");
+      } else {
+        const errorData = await res.json();
+        showToast(
+          `Error: ${errorData.message || "Failed to delete feedback"}`,
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Feedback delete error:", error);
+      showToast("Network error. Please try again.", "error");
+    }
+  };
+
+  const sortedFeedbackEntries = (
+    feedbackModal.project?.feedbacks || []
+  ).slice().sort((a, b) => {
+    const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
 
   return (
     <div className="orders-management-section" style={{ marginTop: "3rem" }}>
@@ -250,6 +365,8 @@ const OrdersList = () => {
               <option value="New Order">New Order</option>
               <option value="Order Confirmed">Order Confirmed</option>
               <option value="In Progress">In Progress</option>
+              <option value="Pending Feedback">Pending Feedback</option>
+              <option value="Feedback Completed">Feedback Completed</option>
             </select>
             <select
               value={allFilters.assignment}
@@ -278,7 +395,12 @@ const OrdersList = () => {
                   <th>Status</th>
                   <th>Assignment Status</th>
                   <th>Created Date</th>
-                  {canMarkDelivered && <th>Action</th>}
+                  {canManageFeedback && (
+                    <>
+                      <th>Delivery</th>
+                      <th>Feedback</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -306,21 +428,37 @@ const OrdersList = () => {
                       </span>
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
-                    {canMarkDelivered && (
-                      <td>
-                        <button
-                          className="action-btn complete-btn"
-                          onClick={() => handleDeliveryComplete(order)}
-                          disabled={order.status !== "Pending Delivery/Pickup"}
-                          title={
-                            order.status === "Pending Delivery/Pickup"
-                              ? "Mark as Delivered"
-                              : "Waiting for Pending Delivery/Pickup"
-                          }
-                        >
-                          Delivered Complete
-                        </button>
-                      </td>
+                    {canManageFeedback && (
+                      <>
+                        <td>
+                          <button
+                            className="action-btn complete-btn"
+                            onClick={() => handleDeliveryComplete(order)}
+                            disabled={order.status !== "Pending Delivery/Pickup"}
+                            title={
+                              order.status === "Pending Delivery/Pickup"
+                                ? "Mark as Delivered"
+                                : "Waiting for Pending Delivery/Pickup"
+                            }
+                          >
+                            Delivery Complete
+                          </button>
+                        </td>
+                        <td>
+                          <button
+                            className="action-btn feedback-btn"
+                            onClick={() => openFeedbackModal(order)}
+                            disabled={!canAddFeedbackFor(order)}
+                            title={
+                              canAddFeedbackFor(order)
+                                ? "Add feedback"
+                                : "Feedback available after delivery"
+                            }
+                          >
+                            Add Feedback
+                          </button>
+                        </td>
+                      </>
                     )}
                   </tr>
                 ))}
@@ -411,7 +549,7 @@ const OrdersList = () => {
                     <td>{formatDate(order.createdAt)}</td>
                     <td>
                       {(order.status === "Completed" ||
-                        order.status === "Delivered") && (
+                        order.status === "Finished") && (
                         <button
                           className="action-btn reopen-btn"
                           onClick={() => handleReopenProject(order._id)}
@@ -426,6 +564,109 @@ const OrdersList = () => {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {feedbackModal.open && (
+        <div className="feedback-modal-overlay" onClick={closeFeedbackModal}>
+          <div
+            className="feedback-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="feedback-modal-header">
+              <div>
+                <h3>Project Feedback</h3>
+                <p>
+                  {feedbackModal.project?.orderId ||
+                    feedbackModal.project?._id ||
+                    "Project"}
+                </p>
+              </div>
+              <button
+                className="feedback-modal-close"
+                onClick={closeFeedbackModal}
+                aria-label="Close feedback modal"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="feedback-form">
+              <label>Feedback Type</label>
+              <select
+                value={feedbackType}
+                onChange={(e) => setFeedbackType(e.target.value)}
+              >
+                <option value="Positive">Positive</option>
+                <option value="Negative">Negative</option>
+              </select>
+
+              <label>Add some few notes</label>
+              <textarea
+                rows="3"
+                value={feedbackNotes}
+                onChange={(e) => setFeedbackNotes(e.target.value)}
+                placeholder="Share brief notes about the delivery..."
+              />
+
+              <div className="feedback-actions">
+                <button className="action-btn" onClick={closeFeedbackModal}>
+                  Cancel
+                </button>
+                <button
+                  className="action-btn feedback-submit"
+                  onClick={handleAddFeedback}
+                  disabled={feedbackSaving}
+                >
+                  {feedbackSaving ? "Saving..." : "Submit Feedback"}
+                </button>
+              </div>
+            </div>
+
+            <div className="feedback-history">
+              <h4>Previous Feedback</h4>
+              {sortedFeedbackEntries.length === 0 ? (
+                <div className="empty-feedback">No feedback yet.</div>
+              ) : (
+                <div className="feedback-history-list">
+                  {sortedFeedbackEntries.map((entry) => (
+                    <div className="feedback-history-item" key={entry._id}>
+                      <div className="feedback-history-meta">
+                        <span
+                          className={`feedback-pill ${
+                            entry.type === "Positive" ? "positive" : "negative"
+                          }`}
+                        >
+                          {entry.type}
+                        </span>
+                        <span className="feedback-history-by">
+                          {entry.createdByName || "Unknown"}
+                        </span>
+                        <span className="feedback-history-date">
+                          {entry.createdAt
+                            ? new Date(entry.createdAt).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : ""}
+                        </span>
+                      </div>
+                      <p>{entry.notes || "No notes provided."}</p>
+                      <button
+                        className="feedback-delete"
+                        onClick={() => handleDeleteFeedback(entry._id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

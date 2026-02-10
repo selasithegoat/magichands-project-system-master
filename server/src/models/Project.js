@@ -126,6 +126,8 @@ const ProjectSchema = new mongoose.Schema(
         "Packaging Completed",
         "Pending Delivery/Pickup",
         "Delivered",
+        "Pending Feedback",
+        "Feedback Completed",
         "Finished",
         // Quote-Specific Statuses
         "Pending Quote Request",
@@ -159,8 +161,25 @@ const ProjectSchema = new mongoose.Schema(
       departments: Date,
       uncontrollableFactors: Date,
       productionRisks: Date,
+      feedbacks: Date,
       challenges: Date,
     },
+    feedbacks: [
+      {
+        type: {
+          type: String,
+          enum: ["Positive", "Negative"],
+          required: true,
+        },
+        notes: String,
+        createdBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        createdByName: String,
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     endOfDayUpdate: {
       type: String,
     },

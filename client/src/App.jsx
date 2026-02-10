@@ -171,6 +171,8 @@ function App() {
             p.departments.some((dept) => uniqueSubDepts.includes(dept)) &&
             p.status !== "Completed" &&
             p.status !== "Delivered" &&
+            p.status !== "Pending Feedback" &&
+            p.status !== "Feedback Completed" &&
             p.status !== "Finished"
           );
         });

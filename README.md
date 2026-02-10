@@ -28,9 +28,10 @@ Because of these changes, **upstream template updates are not merged automatical
 The template repository is tracked as a Git **upstream remote**.
 
 ### To check for template updates
-``bash
+```bash
 git fetch upstream
 git log HEAD..upstream/master --oneline
+``
 
 
 ### MagicHands Project System

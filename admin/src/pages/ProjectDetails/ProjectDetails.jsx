@@ -421,7 +421,23 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
+  const formatFeedbackDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const details = project.details || {};
+  const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
+    const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
 
   const normalizeAttachment = (value) => {
     if (!value) return null;
@@ -493,6 +509,8 @@ const ProjectDetails = ({ user }) => {
                       "Quote Request Completed",
                       "Pending Send Response",
                       "Response Sent",
+                      "Pending Feedback",
+                      "Feedback Completed",
                       "Completed",
                     ]
                   : [
@@ -507,6 +525,8 @@ const ProjectDetails = ({ user }) => {
                       "Packaging Completed",
                       "Pending Delivery/Pickup",
                       "Delivered",
+                      "Pending Feedback",
+                      "Feedback Completed",
                       "Completed",
                     ]
                 ).map((status) => (
@@ -781,6 +801,45 @@ const ProjectDetails = ({ user }) => {
               </div>
             </div>
           )}
+
+          {/* Feedback */}
+          <div className="detail-card">
+            <h3 className="card-title">Feedback</h3>
+            {feedbacksSorted.length === 0 ? (
+              <p style={{ color: "var(--text-secondary)" }}>
+                No feedback submitted yet.
+              </p>
+            ) : (
+              <div className="feedback-list">
+                {feedbacksSorted.map((feedback) => (
+                  <div className="feedback-item" key={feedback._id}>
+                    <div className="feedback-meta">
+                      <span
+                        className={`feedback-pill ${
+                          feedback.type === "Positive"
+                            ? "positive"
+                            : "negative"
+                        }`}
+                      >
+                        {feedback.type}
+                      </span>
+                      <span className="feedback-by">
+                        {feedback.createdByName || "Unknown"}
+                      </span>
+                      <span className="feedback-date">
+                        {formatFeedbackDate(feedback.createdAt)}
+                      </span>
+                    </div>
+                    <p className="feedback-notes">
+                      {feedback.notes?.trim()
+                        ? feedback.notes
+                        : "No notes provided."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Quote Checklist (Only for Quote projects) */}
           {project.projectType === "Quote" && (
