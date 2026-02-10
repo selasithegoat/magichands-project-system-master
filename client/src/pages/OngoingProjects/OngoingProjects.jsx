@@ -8,6 +8,7 @@ import FabButton from "../../components/ui/FabButton";
 import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getLeadSearchText } from "../../utils/leadDisplay";
 
 const OngoingProjects = ({
   onNavigateDetail,
@@ -17,6 +18,7 @@ const OngoingProjects = ({
 }) => {
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   React.useEffect(() => {
     const fetchProjects = async () => {
@@ -110,6 +112,31 @@ const OngoingProjects = ({
     });
   };
 
+  const filteredProjects = React.useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return projects;
+
+    return projects.filter((project) => {
+      const orderId = (project.orderId || project._id || "")
+        .toString()
+        .toLowerCase();
+      const projectName = (project.details?.projectName || "").toLowerCase();
+      const client = (project.details?.client || "").toLowerCase();
+      const leadText = getLeadSearchText(project);
+
+      return (
+        orderId.includes(query) ||
+        projectName.includes(query) ||
+        client.includes(query) ||
+        leadText.includes(query)
+      );
+    });
+  }, [projects, searchQuery]);
+
+  const totalActive = projects.length;
+  const visibleCount = filteredProjects.length;
+  const isFiltering = searchQuery.trim().length > 0;
+
   return (
     <div className="ongoing-container">
       {/* Header */}
@@ -123,7 +150,11 @@ const OngoingProjects = ({
       {/* Stats */}
       <div className="ongoing-stats-row">
         <div>
-          <h1 className="stats-main-text">{projects.length} Active Orders</h1>
+          <h1 className="stats-main-text">
+            {isFiltering
+              ? `${visibleCount} of ${totalActive} Active Orders`
+              : `${totalActive} Active Orders`}
+          </h1>
           <span className="stats-sub-text">Updates synced just now</span>
         </div>
       </div>
@@ -135,6 +166,8 @@ const OngoingProjects = ({
           type="text"
           className="ongoing-search-input"
           placeholder="Search by project or order #..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
 
@@ -142,10 +175,10 @@ const OngoingProjects = ({
       <div className="projects-grid">
         {loading ? (
           <LoadingSpinner />
-        ) : projects.length === 0 ? (
+        ) : filteredProjects.length === 0 ? (
           <p>No ongoing projects found.</p>
         ) : (
-          projects.map((p) => (
+          filteredProjects.map((p) => (
             <ProjectCard
               key={p._id}
               project={p}
