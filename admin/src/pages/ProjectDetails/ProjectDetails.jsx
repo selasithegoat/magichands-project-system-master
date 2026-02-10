@@ -438,6 +438,13 @@ const ProjectDetails = ({ user }) => {
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
     return bTime - aTime;
   });
+  const showFeedbackSection = [
+    "Delivered",
+    "Pending Feedback",
+    "Feedback Completed",
+    "Completed",
+    "Finished",
+  ].includes(project.status);
 
   const normalizeAttachment = (value) => {
     if (!value) return null;
@@ -803,43 +810,45 @@ const ProjectDetails = ({ user }) => {
           )}
 
           {/* Feedback */}
-          <div className="detail-card">
-            <h3 className="card-title">Feedback</h3>
-            {feedbacksSorted.length === 0 ? (
-              <p style={{ color: "var(--text-secondary)" }}>
-                No feedback submitted yet.
-              </p>
-            ) : (
-              <div className="feedback-list">
-                {feedbacksSorted.map((feedback) => (
-                  <div className="feedback-item" key={feedback._id}>
-                    <div className="feedback-meta">
-                      <span
-                        className={`feedback-pill ${
-                          feedback.type === "Positive"
-                            ? "positive"
-                            : "negative"
-                        }`}
-                      >
-                        {feedback.type}
-                      </span>
-                      <span className="feedback-by">
-                        {feedback.createdByName || "Unknown"}
-                      </span>
-                      <span className="feedback-date">
-                        {formatFeedbackDate(feedback.createdAt)}
-                      </span>
+          {showFeedbackSection && (
+            <div className="detail-card">
+              <h3 className="card-title">Feedback</h3>
+              {feedbacksSorted.length === 0 ? (
+                <p style={{ color: "var(--text-secondary)" }}>
+                  No feedback submitted yet.
+                </p>
+              ) : (
+                <div className="feedback-list">
+                  {feedbacksSorted.map((feedback) => (
+                    <div className="feedback-item" key={feedback._id}>
+                      <div className="feedback-meta">
+                        <span
+                          className={`feedback-pill ${
+                            feedback.type === "Positive"
+                              ? "positive"
+                              : "negative"
+                          }`}
+                        >
+                          {feedback.type}
+                        </span>
+                        <span className="feedback-by">
+                          {feedback.createdByName || "Unknown"}
+                        </span>
+                        <span className="feedback-date">
+                          {formatFeedbackDate(feedback.createdAt)}
+                        </span>
+                      </div>
+                      <p className="feedback-notes">
+                        {feedback.notes?.trim()
+                          ? feedback.notes
+                          : "No notes provided."}
+                      </p>
                     </div>
-                    <p className="feedback-notes">
-                      {feedback.notes?.trim()
-                        ? feedback.notes
-                        : "No notes provided."}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quote Checklist (Only for Quote projects) */}
           {project.projectType === "Quote" && (

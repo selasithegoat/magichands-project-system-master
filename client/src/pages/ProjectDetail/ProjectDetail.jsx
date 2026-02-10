@@ -224,6 +224,13 @@ const ProjectDetail = ({ onProjectChange, user }) => {
     project.priority === "Urgent" || project.projectType === "Emergency";
   const isCorporate = project.projectType === "Corporate Job";
   const isQuote = project.projectType === "Quote";
+  const showFeedbackSection = [
+    "Delivered",
+    "Pending Feedback",
+    "Feedback Completed",
+    "Completed",
+    "Finished",
+  ].includes(project.status);
 
   let themeClass = "";
   if (isEmergency) themeClass = "emergency-theme";
@@ -402,7 +409,9 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               {project.projectType === "Quote" && (
                 <QuoteChecklistCard project={project} />
               )}
-              <FeedbackCard feedbacks={project.feedbacks} />
+              {showFeedbackSection && (
+                <FeedbackCard feedbacks={project.feedbacks} />
+              )}
               <DepartmentsCard
                 departments={project.departments}
                 acknowledgements={project.acknowledgements}
@@ -1993,15 +2002,21 @@ const ApprovalsCard = ({ status, type }) => {
           if (isCompleted) {
             subText = "Completed";
           } else if (isActive) {
-            // Check if specifically completed within this step
-            if (
-              status.includes("Completed") ||
-              status === "Response Sent" ||
-              status === "Delivered"
-            ) {
-              subText = "Completed";
+            const stepStatuses = step.statuses || [];
+            const pendingStatus = stepStatuses[0];
+            const completedStatus = stepStatuses[stepStatuses.length - 1];
+
+            if (step.label === "Feedback") {
+              subText =
+                status === "Feedback Completed" ? "Completed" : "Pending";
             } else if (status === "Order Confirmed") {
               subText = "Confirmed";
+            } else if (
+              stepStatuses.includes(status) &&
+              status === completedStatus &&
+              completedStatus !== pendingStatus
+            ) {
+              subText = "Completed";
             } else {
               subText = "Pending";
             }
