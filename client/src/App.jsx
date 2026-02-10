@@ -126,17 +126,22 @@ function App() {
         : [];
 
     // Map user's departments to sub-departments (same logic as EngagedProjects.jsx)
-    const productionSubDepts = userDepts.filter((d) =>
-      PRODUCTION_SUB_DEPARTMENTS.includes(d),
-    );
+    const hasProductionParent = userDepts.includes("Production");
+    const hasGraphicsParent = userDepts.includes("Graphics/Design");
+    const hasStoresParent = userDepts.includes("Stores");
+    const hasPhotographyParent = userDepts.includes("Photography");
+
+    const productionSubDepts = hasProductionParent
+      ? PRODUCTION_SUB_DEPARTMENTS
+      : userDepts.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
     const hasGraphics =
-      userDepts.includes("Graphics/Design") ||
+      hasGraphicsParent ||
       userDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
     const hasStores =
-      userDepts.includes("Stores") ||
+      hasStoresParent ||
       userDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
     const hasPhotography =
-      userDepts.includes("Photography") ||
+      hasPhotographyParent ||
       userDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
 
     let subDepts = [];

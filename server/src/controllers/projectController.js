@@ -5,6 +5,39 @@ const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
 
+const ENGAGED_PARENT_DEPARTMENTS = new Set([
+  "Production",
+  "Graphics/Design",
+  "Stores",
+  "Photography",
+]);
+
+const ENGAGED_SUB_DEPARTMENTS = new Set([
+  "graphics",
+  "stock",
+  "packaging",
+  "photography",
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+]);
+
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
 // @access  Private
@@ -271,11 +304,16 @@ const getProjects = async (req, res) => {
     const isEngagedMode = req.query.mode === "engaged"; // [NEW] Production Engaged Mode
     const isAdminPortal = req.query.source === "admin";
     const isFrontDesk = req.user.department?.includes("Front Desk");
-    const isEngagedDept =
-      req.user.department?.includes("Production") ||
-      req.user.department?.includes("Graphics/Design") ||
-      req.user.department?.includes("Stores") ||
-      req.user.department?.includes("Photography");
+    const userDepartments = Array.isArray(req.user.department)
+      ? req.user.department
+      : req.user.department
+        ? [req.user.department]
+        : [];
+    const isEngagedDept = userDepartments.some(
+      (dept) =>
+        ENGAGED_PARENT_DEPARTMENTS.has(dept) ||
+        ENGAGED_SUB_DEPARTMENTS.has(dept),
+    );
 
     // Access Control:
     // - Admins (non-Front Desk) can see all projects in Admin Portal

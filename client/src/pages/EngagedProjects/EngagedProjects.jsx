@@ -88,33 +88,47 @@ const EngagedProjects = ({ user }) => {
     : user?.department
       ? [user.department]
       : [];
-  const productionSubDepts = useMemo(
-    () =>
-      userDepartments.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d)),
-    [userDepartments],
-  );
+  const hasProductionParent = userDepartments.includes("Production");
+  const hasGraphicsParent = userDepartments.includes("Graphics/Design");
+  const hasStoresParent = userDepartments.includes("Stores");
+  const hasPhotographyParent = userDepartments.includes("Photography");
+
+  const productionSubDepts = useMemo(() => {
+    if (hasProductionParent) return PRODUCTION_SUB_DEPARTMENTS;
+    return userDepartments.filter((d) =>
+      PRODUCTION_SUB_DEPARTMENTS.includes(d),
+    );
+  }, [userDepartments, hasProductionParent]);
 
   // Determine all engaged departments the user belongs to
   const userEngagedDepts = useMemo(() => {
     const found = [];
-    if (productionSubDepts.length > 0) found.push("Production");
+    if (hasProductionParent || productionSubDepts.length > 0)
+      found.push("Production");
     if (
-      userDepartments.includes("Graphics/Design") ||
+      hasGraphicsParent ||
       userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
     )
       found.push("Graphics");
     if (
-      userDepartments.includes("Stores") ||
+      hasStoresParent ||
       userDepartments.some((d) => STORES_SUB_DEPARTMENTS.includes(d))
     )
       found.push("Stores");
     if (
-      userDepartments.includes("Photography") ||
+      hasPhotographyParent ||
       userDepartments.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d))
     )
       found.push("Photography");
     return found;
-  }, [userDepartments, productionSubDepts]);
+  }, [
+    userDepartments,
+    productionSubDepts,
+    hasProductionParent,
+    hasGraphicsParent,
+    hasStoresParent,
+    hasPhotographyParent,
+  ]);
 
   // Determine sub-departments to check based on the selected department filter
   const engagedSubDepts = useMemo(() => {
@@ -126,7 +140,7 @@ const EngagedProjects = ({ user }) => {
 
     // If "All" or default, aggregate from all user's engaged departments
     let aggregated = [];
-    if (productionSubDepts.length > 0)
+    if (hasProductionParent || productionSubDepts.length > 0)
       aggregated = [...aggregated, ...productionSubDepts];
     if (userEngagedDepts.includes("Graphics"))
       aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
