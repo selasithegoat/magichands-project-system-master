@@ -14,13 +14,15 @@ import ConfirmationModal from "../../components/ui/ConfirmationModal";
 const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const [showRiskModal, setShowRiskModal] = useState(false);
   const responsibleOptions = [
-    { label: "Sarah Jenkins", value: "sarah" },
-    { label: "Mike Ross", value: "mike" },
+    { label: "Magic Hands", value: "MH" },
+    { label: "Client", value: "Client" },
+    { label: "3rd Party", value: "3rd Party" },
   ];
 
   const statusOptions = [
-    { label: "Identified", value: "identified" },
-    { label: "Resolved", value: "resolved" },
+    { label: "Pending", value: "Pending" },
+    { label: "Resolved", value: "Resolved" },
+    { label: "Escalated", value: "Escalated" },
   ];
 
   // Logic for Uncontrollable Factors
@@ -30,23 +32,32 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
     setFormData({
       uncontrollableFactors: [
         ...currentFactors,
-        { id: newId, description: "", responsible: null, status: null },
+        {
+          id: newId,
+          description: "",
+          responsible: responsibleOptions[0],
+          status: statusOptions[0],
+        },
       ],
     });
   };
 
+  const getItemKey = (item, index) => item.id || item._id || index;
+
   const removeUncontrollable = (id) => {
     const currentFactors = formData.uncontrollableFactors || [];
     setFormData({
-      uncontrollableFactors: currentFactors.filter((item) => item.id !== id),
+      uncontrollableFactors: currentFactors.filter(
+        (item, index) => getItemKey(item, index) !== id,
+      ),
     });
   };
 
   const updateUncontrollable = (id, field, value) => {
     const currentFactors = formData.uncontrollableFactors || [];
     setFormData({
-      uncontrollableFactors: currentFactors.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
+      uncontrollableFactors: currentFactors.map((item, index) =>
+        getItemKey(item, index) === id ? { ...item, [field]: value } : item,
       ),
     });
   };
@@ -66,15 +77,17 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const removeRisk = (id) => {
     const currentRisks = formData.productionRisks || [];
     setFormData({
-      productionRisks: currentRisks.filter((item) => item.id !== id),
+      productionRisks: currentRisks.filter(
+        (item, index) => getItemKey(item, index) !== id,
+      ),
     });
   };
 
   const updateRisk = (id, field, value) => {
     const currentRisks = formData.productionRisks || [];
     setFormData({
-      productionRisks: currentRisks.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
+      productionRisks: currentRisks.map((item, index) =>
+        getItemKey(item, index) === id ? { ...item, [field]: value } : item,
       ),
     });
   };
@@ -134,13 +147,15 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
           </div>
 
           <div className="risk-list">
-            {uncontrollableFactors.map((item) => (
-              <div key={item.id} className="risk-card">
+            {uncontrollableFactors.map((item, index) => {
+              const factorId = getItemKey(item, index);
+              return (
+              <div key={factorId} className="risk-card">
                 <div className="risk-card-header">
                   <div className="badge-high">High Priority</div>
                   <button
                     className="delete-btn"
-                    onClick={() => removeUncontrollable(item.id)}
+                    onClick={() => removeUncontrollable(factorId)}
                   >
                     <TrashIcon />
                   </button>
@@ -152,7 +167,7 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                     value={item.description}
                     onChange={(e) =>
                       updateUncontrollable(
-                        item.id,
+                        factorId,
                         "description",
                         e.target.value
                       )
@@ -166,7 +181,7 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                     options={responsibleOptions}
                     value={item.responsible}
                     onChange={(val) =>
-                      updateUncontrollable(item.id, "responsible", val)
+                      updateUncontrollable(factorId, "responsible", val)
                     }
                   />
                   <Select
@@ -174,12 +189,12 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                     options={statusOptions}
                     value={item.status}
                     onChange={(val) =>
-                      updateUncontrollable(item.id, "status", val)
+                      updateUncontrollable(factorId, "status", val)
                     }
                   />
                 </div>
               </div>
-            ))}
+            )})}
           </div>
 
           <button className="add-risk-btn" onClick={addUncontrollable}>
@@ -200,13 +215,15 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
           </div>
 
           <div className="risk-list">
-            {productionRisks.map((item, index) => (
-              <div key={item.id} className="risk-card">
+            {productionRisks.map((item, index) => {
+              const riskId = getItemKey(item, index);
+              return (
+              <div key={riskId} className="risk-card">
                 <div className="risk-card-header">
                   <span className="risk-number">Risk #{index + 1}</span>
                   <button
                     className="delete-btn"
-                    onClick={() => removeRisk(item.id)}
+                    onClick={() => removeRisk(riskId)}
                   >
                     <TrashIcon />
                   </button>
@@ -217,7 +234,7 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                     label="Risk Description"
                     value={item.description}
                     onChange={(e) =>
-                      updateRisk(item.id, "description", e.target.value)
+                      updateRisk(riskId, "description", e.target.value)
                     }
                   />
                 </div>
@@ -227,12 +244,12 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                     label="Preventive Measure"
                     value={item.preventive}
                     onChange={(e) =>
-                      updateRisk(item.id, "preventive", e.target.value)
+                      updateRisk(riskId, "preventive", e.target.value)
                     }
                   />
                 </div>
               </div>
-            ))}
+            )})}
           </div>
 
           <button className="add-risk-btn" onClick={addRisk}>

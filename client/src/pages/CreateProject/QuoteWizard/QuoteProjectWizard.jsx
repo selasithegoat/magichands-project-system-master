@@ -21,6 +21,62 @@ const QuoteProjectWizard = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdOrderNumber, setCreatedOrderNumber] = useState("");
 
+  const normalizeResponsible = (responsible) => {
+    if (!responsible) return null;
+    const rawValue =
+      typeof responsible === "object" ? responsible.value : responsible;
+    const rawLabel =
+      typeof responsible === "object" ? responsible.label : responsible;
+    const normalized = String(rawValue || rawLabel || "").toLowerCase();
+    if (normalized === "mh" || normalized.includes("magic")) {
+      return { label: "Magic Hands", value: "MH" };
+    }
+    if (normalized.includes("client")) {
+      return { label: "Client", value: "Client" };
+    }
+    if (normalized.includes("3rd") || normalized.includes("third")) {
+      return { label: "3rd Party", value: "3rd Party" };
+    }
+    if (rawValue) {
+      return { label: rawLabel || String(rawValue), value: rawValue };
+    }
+    return { label: "Magic Hands", value: "MH" };
+  };
+
+  const normalizeStatus = (status) => {
+    if (!status) return null;
+    const rawValue = typeof status === "object" ? status.value : status;
+    const rawLabel = typeof status === "object" ? status.label : status;
+    const normalized = String(rawValue || rawLabel || "").toLowerCase();
+    if (normalized === "identified" || normalized === "pending") {
+      return { label: "Pending", value: "Pending" };
+    }
+    if (normalized === "resolved") {
+      return { label: "Resolved", value: "Resolved" };
+    }
+    if (normalized === "escalated") {
+      return { label: "Escalated", value: "Escalated" };
+    }
+    if (rawValue) {
+      return { label: rawLabel || String(rawValue), value: rawValue };
+    }
+    return { label: "Pending", value: "Pending" };
+  };
+
+  const normalizeFactors = (factors = []) =>
+    factors.map((factor, index) => ({
+      ...factor,
+      id: factor.id || factor._id || `factor-${index}`,
+      responsible: normalizeResponsible(factor.responsible),
+      status: normalizeStatus(factor.status),
+    }));
+
+  const normalizeRisks = (risks = []) =>
+    risks.map((risk, index) => ({
+      ...risk,
+      id: risk.id || risk._id || `risk-${index}`,
+    }));
+
   // Form State
   const [formData, setFormData] = useState({
     // Basic Project Fields (Mapped to existing schema)
@@ -169,8 +225,10 @@ const QuoteProjectWizard = () => {
             attachments: data.details?.attachments || [],
             // Step 2 & 3 & 4
             departments: data.departments || [],
-            uncontrollableFactors: data.uncontrollableFactors || [],
-            productionRisks: data.productionRisks || [],
+            uncontrollableFactors: normalizeFactors(
+              data.uncontrollableFactors || [],
+            ),
+            productionRisks: normalizeRisks(data.productionRisks || []),
           }));
         })
         .catch((err) => console.error("Failed to fetch project", err))

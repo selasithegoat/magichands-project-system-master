@@ -48,23 +48,6 @@ const PendingAssignments = ({ onStartNew, user }) => {
           <h1>Pending Project Assignments</h1>
           <p>You have {adjustments.length} projects waiting for acceptance.</p>
         </div>
-        {isFrontDesk && (
-          <button
-            className="btn-start-new-header"
-            onClick={onStartNew}
-            style={{
-              padding: "0.75rem 1.5rem",
-              background: "#3498db",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            Start New Project
-          </button>
-        )}
       </div>
 
       <div className="pa-grid">
