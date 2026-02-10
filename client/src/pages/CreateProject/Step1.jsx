@@ -51,6 +51,10 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
 
   const selectedLeadValue =
     formData.lead?.value || formData.lead || "";
+  const leadDisplayName =
+    formData.leadLabel ||
+    leads.find((l) => l.value === formData.lead)?.label ||
+    "Assigned Lead";
 
   const handleNextStep = () => {
     // Basic Validation
@@ -124,11 +128,9 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   gap: "0.5rem",
                 }}
               >
-                <UserAvatar />
+                <UserAvatar name={leadDisplayName} />
                 <span style={{ color: "var(--text-primary)" }}>
-                  {formData.leadLabel ||
-                    leads.find((l) => l.value === formData.lead)?.label ||
-                    "Assigned Lead"}
+                  {leadDisplayName}
                 </span>
               </div>
             </div>
@@ -150,13 +152,13 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
               renderValue={(option) => (
                 <>
-                  <UserAvatar />
+                  <UserAvatar name={option.label} />
                   <span>{option.label}</span>
                 </>
               )}
               renderOption={(option) => (
                 <>
-                  <UserAvatar />
+                  <UserAvatar name={option.label} />
                   <span>{option.label}</span>
                 </>
               )}
@@ -172,13 +174,13 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             disabled={isEditing}
             renderValue={(option) => (
               <>
-                <UserAvatar />
+                <UserAvatar name={option.label} />
                 <span>{option.label}</span>
               </>
             )}
             renderOption={(option) => (
               <>
-                <UserAvatar />
+                <UserAvatar name={option.label} />
                 <span>{option.label}</span>
               </>
             )}

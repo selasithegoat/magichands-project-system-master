@@ -43,6 +43,10 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   };
 
   const selectedLeadValue = formData.lead || "";
+  const leadDisplayName =
+    formData.leadLabel ||
+    leads.find((l) => l.value === formData.lead)?.label ||
+    "Assigned Lead";
 
   const handleNextStep = () => {
     if (!formData.projectName || !formData.deliveryDate || !formData.lead) {
@@ -119,7 +123,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                     gap: "0.5rem",
                   }}
                 >
-                  <UserAvatar />
+                  <UserAvatar name={leadDisplayName} />
                   <span>{option.label}</span>
                 </div>
               )}
@@ -131,7 +135,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                     gap: "0.5rem",
                   }}
                 >
-                  <UserAvatar />
+                  <UserAvatar name={option.label} />
                   <span>{option.label}</span>
                 </div>
               )}
@@ -142,39 +146,39 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             <Select
               label="Assistant Lead (Optional)"
               options={leads.filter((l) => l.value !== selectedLeadValue)}
-              value={leads.find((l) => l.value === formData.assistantLeadId)}
-              onChange={(val) =>
-                handleChange("assistantLeadId", val.value)
-              }
-              placeholder={
-                isLoadingLeads ? "Loading users..." : "Select Assistant"
-              }
-              disabled={isEditing}
-              renderValue={(option) => (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <UserAvatar />
-                  <span>{option.label}</span>
-                </div>
-              )}
-              renderOption={(option) => (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <UserAvatar />
-                  <span>{option.label}</span>
-                </div>
-              )}
-            />
+            value={leads.find((l) => l.value === formData.assistantLeadId)}
+            onChange={(val) =>
+              handleChange("assistantLeadId", val.value)
+            }
+            placeholder={
+              isLoadingLeads ? "Loading users..." : "Select Assistant"
+            }
+            disabled={isEditing}
+            renderValue={(option) => (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <UserAvatar name={option.label} />
+                <span>{option.label}</span>
+              </div>
+            )}
+            renderOption={(option) => (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <UserAvatar name={option.label} />
+                <span>{option.label}</span>
+              </div>
+            )}
+          />
           </div>
 
           <div className="form-row">

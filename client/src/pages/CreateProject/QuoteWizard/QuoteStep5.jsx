@@ -168,7 +168,7 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
             <div className="review-item">
               <label>Lead</label>
               <div className="user-row">
-                <UserAvatar />
+                <UserAvatar name={formData.leadLabel || "Assigned Lead"} />
                 <span className="review-value">
                   {formData.leadLabel || "Assigned Lead"}
                 </span>
