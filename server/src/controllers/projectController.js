@@ -38,6 +38,32 @@ const ENGAGED_SUB_DEPARTMENTS = new Set([
   "signage",
 ]);
 
+const PRODUCTION_DEPARTMENTS = new Set([
+  "Production",
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+]);
+
+const getProductionUsers = async () =>
+  User.find({ department: { $in: Array.from(PRODUCTION_DEPARTMENTS) } });
+
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
 // @access  Private
@@ -752,6 +778,12 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
+    if (newStatus === "Mockup Completed" && !project.mockup?.fileUrl) {
+      return res.status(400).json({
+        message: "Please upload the approved mockup before completing this stage.",
+      });
+    }
+
     // Status progression map: when a stage is marked complete, auto-advance to next pending
     const statusProgression = {
       // Standard workflow
@@ -791,9 +823,110 @@ const updateProjectStatus = async (req, res) => {
       );
     }
 
+    // Notify Lead when mockup is marked complete
+    if (newStatus === "Mockup Completed" && project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "UPDATE",
+        "Mockup Completed",
+        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Mockup has been completed and is ready for production.`,
+      );
+    }
+
+    // Notify Production team when production becomes pending
+    if (finalStatus === "Pending Production" && oldStatus !== finalStatus) {
+      const productionUsers = await getProductionUsers();
+      for (const prodUser of productionUsers) {
+        await createNotification(
+          prodUser._id,
+          req.user._id,
+          project._id,
+          "UPDATE",
+          "Production Ready",
+          `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Approved mockup is ready and production can begin.`,
+        );
+      }
+    }
+
     res.json(project);
   } catch (error) {
     console.error("Error updating status:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Upload approved mockup file for a project
+// @route   POST /api/projects/:id/mockup
+// @access  Private (Graphics/Design or Admin)
+const uploadProjectMockup = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Mockup file is required" });
+    }
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const userDepts = Array.isArray(req.user.department)
+      ? req.user.department
+      : req.user.department
+        ? [req.user.department]
+        : [];
+    const isAdmin = req.user.role === "admin";
+    const isGraphics = userDepts.includes("Graphics/Design");
+
+    if (!isAdmin && !isGraphics) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to upload mockups" });
+    }
+
+    if (project.status !== "Pending Mockup") {
+      return res.status(400).json({
+        message: "Mockup upload is only allowed while status is Pending Mockup.",
+      });
+    }
+
+    project.mockup = {
+      fileUrl: `/uploads/${req.file.filename}`,
+      fileName: req.file.originalname,
+      fileType: req.file.mimetype,
+      note: (note || "").trim(),
+      uploadedBy: req.user._id,
+      uploadedAt: new Date(),
+    };
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_upload",
+      `Approved mockup uploaded`,
+      { fileUrl: project.mockup.fileUrl, note: project.mockup.note },
+    );
+
+    if (project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "UPDATE",
+        "Mockup Uploaded",
+        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Approved mockup has been uploaded for review.`,
+      );
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error uploading mockup:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -1764,7 +1897,7 @@ const updateProject = async (req, res) => {
 
     // [New] Notify Production Team on Acceptance
     if (updatedProject.status === "Pending Production") {
-      const productionUsers = await User.find({ department: "Production" });
+      const productionUsers = await getProductionUsers();
       for (const prodUser of productionUsers) {
         await createNotification(
           prodUser._id,
@@ -2050,6 +2183,7 @@ module.exports = {
   addItemToProject,
   deleteItemFromProject,
   updateProjectStatus,
+  uploadProjectMockup,
   addFeedbackToProject,
   deleteFeedbackFromProject,
   addChallengeToProject,

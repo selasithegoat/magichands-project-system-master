@@ -8,6 +8,7 @@ const {
   addItemToProject,
   deleteItemFromProject,
   updateProjectStatus,
+  uploadProjectMockup,
   addFeedbackToProject,
   deleteFeedbackFromProject,
   addChallengeToProject,
@@ -43,6 +44,20 @@ const projectUploadFields = [
 
 const handleProjectUploads = (req, res, next) => {
   upload.fields(projectUploadFields)(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ message: `File too large. Max limit is ${maxFileSizeMb}MB.` });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+    next();
+  });
+};
+
+const handleMockupUpload = (req, res, next) => {
+  upload.single("mockup")(req, res, (err) => {
     if (err) {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res
@@ -95,6 +110,7 @@ router.delete(
   deleteUncontrollableFactor,
 );
 
+router.post("/:id/mockup", protect, handleMockupUpload, uploadProjectMockup);
 router.patch("/:id/status", protect, updateProjectStatus);
 router.patch("/:id/reopen", protect, reopenProject); // [NEW] - Reopen completed project
 router.post("/:id/acknowledge", protect, acknowledgeProject); // [NEW] - Acknowledge engagement

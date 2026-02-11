@@ -316,6 +316,40 @@
   box-shadow: 0 4px 12px rgba(16, 184, 166, 0.3);
 }
 
+.mockup-link {
+  padding: 0.5rem 0.9rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.mockup-link:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.15);
+}
+
+.mockup-link.download {
+  color: #0f766e;
+  border-color: rgba(13, 148, 136, 0.35);
+}
+
+.mockup-link.download:hover {
+  border-color: #0f766e;
+  color: #0f766e;
+  box-shadow: 0 4px 10px rgba(15, 118, 110, 0.15);
+}
+
+.file-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .empty-state {
   padding: 3rem;
   text-align: center;

@@ -25,7 +25,7 @@ const STATUS_OPTIONS = [
 
 const STATUS_ACTIONS = {
   Graphics: {
-    label: "Mockup Complete",
+    label: "Mockup",
     pending: "Pending Mockup",
     complete: "Mockup Completed",
   },
@@ -82,6 +82,11 @@ const EngagedProjects = ({ user }) => {
   const [completeTarget, setCompleteTarget] = useState(null);
   const [completeInput, setCompleteInput] = useState("");
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [showMockupModal, setShowMockupModal] = useState(false);
+  const [mockupTarget, setMockupTarget] = useState(null);
+  const [mockupFile, setMockupFile] = useState(null);
+  const [mockupNote, setMockupNote] = useState("");
+  const [mockupUploading, setMockupUploading] = useState(false);
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -498,11 +503,26 @@ const EngagedProjects = ({ user }) => {
     setShowCompleteModal(true);
   };
 
+  const openMockupModal = (project, action) => {
+    setMockupTarget({ project, action });
+    setMockupFile(null);
+    setMockupNote("");
+    setShowMockupModal(true);
+  };
+
   const closeCompleteModal = () => {
     setShowCompleteModal(false);
     setCompleteTarget(null);
     setCompleteInput("");
     setCompleteSubmitting(false);
+  };
+
+  const closeMockupModal = () => {
+    setShowMockupModal(false);
+    setMockupTarget(null);
+    setMockupFile(null);
+    setMockupNote("");
+    setMockupUploading(false);
   };
 
   const handleConfirmComplete = async () => {
@@ -519,6 +539,53 @@ const EngagedProjects = ({ user }) => {
       setShowCompleteModal(false);
       setCompleteTarget(null);
       setCompleteInput("");
+    }
+  };
+
+  const handleUploadMockup = async (e) => {
+    e.preventDefault();
+    if (!mockupTarget) return;
+    if (!mockupFile) {
+      setToast({ type: "error", message: "Please select a mockup file." });
+      return;
+    }
+
+    setMockupUploading(true);
+    const target = mockupTarget;
+    try {
+      const data = new FormData();
+      data.append("mockup", mockupFile);
+      if (mockupNote.trim()) data.append("note", mockupNote.trim());
+
+      const res = await fetch(`/api/projects/${target.project._id}/mockup`, {
+        method: "POST",
+        body: data,
+      });
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setToast({
+          type: "success",
+          message: "Mockup uploaded. Please confirm completion.",
+        });
+        closeMockupModal();
+        fetchEngagedProjects();
+        openCompleteModal(updatedProject || target.project, target.action);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setToast({
+          type: "error",
+          message: errorData.message || "Failed to upload mockup.",
+        });
+      }
+    } catch (err) {
+      console.error("Error uploading mockup:", err);
+      setToast({
+        type: "error",
+        message: "An unexpected error occurred.",
+      });
+    } finally {
+      setMockupUploading(false);
     }
   };
 
@@ -710,6 +777,10 @@ const EngagedProjects = ({ user }) => {
                     const emergency = isEmergency(project);
                     const approaching = isApproachingDelivery(project);
                     const deptActions = getDeptActionsForProject(project);
+                    const mockup = project.mockup || {};
+                    const mockupUrl = mockup.fileUrl;
+                    const canViewMockup =
+                      userEngagedDepts.includes("Production") && mockupUrl;
 
                     return (
                       <tr
@@ -760,15 +831,23 @@ const EngagedProjects = ({ user }) => {
                               const actionKey = `${project._id}:${action.complete}`;
                               const isUpdating = statusUpdating === actionKey;
                               const isReady = project.status === action.pending;
+                              const isMockupAction =
+                                action.complete === "Mockup Completed";
                               return (
                                 <button
                                   key={action.complete}
                                   className="complete-btn"
-                                  onClick={() => openCompleteModal(project, action)}
+                                  onClick={() =>
+                                    isMockupAction
+                                      ? openMockupModal(project, action)
+                                      : openCompleteModal(project, action)
+                                  }
                                   disabled={!isReady || isUpdating}
                                   title={
                                     isReady
-                                      ? `Mark ${action.label}`
+                                      ? isMockupAction
+                                        ? "Upload approved mockup"
+                                        : `Mark ${action.label}`
                                       : `Waiting for ${action.pending}`
                                   }
                                 >
@@ -782,6 +861,31 @@ const EngagedProjects = ({ user }) => {
                             >
                               Update
                             </button>
+                            {canViewMockup && (
+                              <>
+                                <a
+                                  className="mockup-link"
+                                  href={`${mockupUrl}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={
+                                    mockup.note
+                                      ? `Note: ${mockup.note}`
+                                      : "View approved mockup"
+                                  }
+                                >
+                                  View Mockup
+                                </a>
+                                <a
+                                  className="mockup-link download"
+                                  href={`${mockupUrl}`}
+                                  download
+                                  title="Download approved mockup"
+                                >
+                                  Download Mockup
+                                </a>
+                              </>
+                            )}
                             {project.departments
                               .filter((dept) => engagedSubDepts.includes(dept))
                               .filter(
@@ -1001,6 +1105,72 @@ const EngagedProjects = ({ user }) => {
           type={toast.type}
           onClose={() => setToast(null)}
         />
+      )}
+
+      {/* Mockup Upload Modal */}
+      {showMockupModal && mockupTarget && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3 className="modal-title">Upload Approved Mockup</h3>
+            <p className="acknowledge-confirm-text">
+              Upload the approved mockup for project{" "}
+              <strong>
+                {mockupTarget.project.orderId ||
+                  mockupTarget.project._id.slice(-6).toUpperCase()}
+              </strong>
+              .
+            </p>
+            <form onSubmit={handleUploadMockup}>
+              <div className="form-group">
+                <label>Approved Mockup File</label>
+                <input
+                  type="file"
+                  className="input-field"
+                  onChange={(e) => setMockupFile(e.target.files?.[0] || null)}
+                  required
+                />
+                <div
+                  className="file-hint"
+                  style={{ marginTop: "0.5rem" }}
+                >
+                  Any file type allowed (e.g., .cdr, .pdf, .png)
+                </div>
+                {mockupFile && (
+                  <div className="file-hint" style={{ marginTop: "0.25rem" }}>
+                    Selected: {mockupFile.name}
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Note (optional)</label>
+                <textarea
+                  className="input-field"
+                  rows="3"
+                  value={mockupNote}
+                  onChange={(e) => setMockupNote(e.target.value)}
+                  placeholder="Add a short note for production..."
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={closeMockupModal}
+                  disabled={mockupUploading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={mockupUploading || !mockupFile}
+                >
+                  {mockupUploading ? "Uploading..." : "Upload & Continue"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Complete Engagement Confirmation Modal */}

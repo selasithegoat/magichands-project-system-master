@@ -245,6 +245,14 @@ const ProjectSchema = new mongoose.Schema(
         date: { type: Date, default: Date.now },
       },
     ],
+    mockup: {
+      fileUrl: String,
+      fileName: String,
+      fileType: String,
+      note: String,
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      uploadedAt: Date,
+    },
     updates: [
       {
         date: { type: Date, default: Date.now },
