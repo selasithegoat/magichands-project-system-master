@@ -249,7 +249,9 @@
 
 .action-buttons {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -263,7 +265,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  width: 100%;
+  width: auto;
 }
 
 .update-btn:hover {
@@ -281,7 +283,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  width: 100%;
+  width: auto;
 }
 
 .complete-btn:hover {
@@ -306,7 +308,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  width: 100%;
+  width: auto;
 }
 
 .acknowledge-btn:hover {
