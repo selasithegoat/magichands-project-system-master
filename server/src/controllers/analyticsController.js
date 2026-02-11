@@ -57,6 +57,64 @@ const computeStats = (values) => {
   return { count, avgHours, medianHours, minHours, maxHours };
 };
 
+const percentile = (sorted, pct) => {
+  if (!sorted.length) return null;
+  const idx = (sorted.length - 1) * pct;
+  const lower = Math.floor(idx);
+  const upper = Math.ceil(idx);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
+};
+
+const buildHistogram = (values, bins = 6) => {
+  if (!values.length) return [];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) {
+    return [{ start: min, end: max, count: values.length }];
+  }
+  const width = (max - min) / bins;
+  const buckets = Array.from({ length: bins }, (_, idx) => ({
+    start: min + idx * width,
+    end: idx === bins - 1 ? max : min + (idx + 1) * width,
+    count: 0,
+  }));
+  values.forEach((value) => {
+    const idx = Math.min(
+      bins - 1,
+      Math.floor((value - min) / width),
+    );
+    buckets[idx].count += 1;
+  });
+  return buckets;
+};
+
+const computeDistribution = (values) => {
+  if (!values.length) {
+    return { bins: [], q1: null, q3: null, iqr: null };
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = q1 !== null && q3 !== null ? q3 - q1 : null;
+  return {
+    bins: buildHistogram(values),
+    q1,
+    q3,
+    iqr,
+  };
+};
+
+const getBucketConfig = (fromDate, toDate) => {
+  const rangeDays = Math.max(
+    1,
+    Math.ceil((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000)),
+  );
+  if (rangeDays <= 21) return { bucketDays: 1, label: "Daily" };
+  if (rangeDays <= 150) return { bucketDays: 7, label: "Weekly" };
+  return { bucketDays: 30, label: "Monthly" };
+};
+
 // @desc    Get stage duration analytics
 // @route   GET /api/admin/analytics/stage-durations
 // @access  Admin
@@ -100,7 +158,46 @@ const getStageDurations = async (req, res) => {
       production: [],
       packaging: [],
     };
+    const stageTrendBuckets = {
+      mockup: new Map(),
+      production: new Map(),
+      packaging: new Map(),
+    };
     const projectResults = [];
+    const { bucketDays, label: bucketLabel } = getBucketConfig(
+      range.fromDate,
+      range.toDate,
+    );
+    const bucketMs = bucketDays * 24 * 60 * 60 * 1000;
+    const base = new Date(range.fromDate);
+    base.setHours(0, 0, 0, 0);
+    const bucketStarts = [];
+    for (
+      let cursor = base.getTime();
+      cursor <= range.toDate.getTime();
+      cursor += bucketMs
+    ) {
+      bucketStarts.push(new Date(cursor));
+    }
+
+    const addTrendPoint = (stageKey, endAt, hours) => {
+      const bucketIndex = Math.floor(
+        (endAt.getTime() - base.getTime()) / bucketMs,
+      );
+      if (bucketIndex < 0) return;
+      const bucketStart = bucketStarts[Math.min(bucketIndex, bucketStarts.length - 1)];
+      const bucketKey = bucketStart.toISOString();
+      if (!stageTrendBuckets[stageKey].has(bucketKey)) {
+        stageTrendBuckets[stageKey].set(bucketKey, {
+          start: bucketStart,
+          sum: 0,
+          count: 0,
+        });
+      }
+      const bucket = stageTrendBuckets[stageKey].get(bucketKey);
+      bucket.sum += hours;
+      bucket.count += 1;
+    };
 
     for (const [projectId, events] of byProject.entries()) {
       const statusTimes = {};
@@ -127,6 +224,7 @@ const getStageDurations = async (req, res) => {
           hours,
         };
         stageBuckets[stage.key].push(hours);
+        addTrendPoint(stage.key, endAt, hours);
         totalHours += hours;
       });
 
@@ -145,11 +243,29 @@ const getStageDurations = async (req, res) => {
 
     projectResults.sort((a, b) => b.totalHours - a.totalHours);
 
-    const stageStats = STAGES.map((stage) => ({
-      key: stage.key,
-      label: stage.label,
-      ...computeStats(stageBuckets[stage.key]),
-    }));
+    const stageStats = STAGES.map((stage) => {
+      const trendPoints = bucketStarts.map((bucketStart) => {
+        const bucketKey = bucketStart.toISOString();
+        const bucket = stageTrendBuckets[stage.key].get(bucketKey);
+        return {
+          start: bucketStart,
+          avgHours: bucket ? bucket.sum / bucket.count : null,
+          count: bucket ? bucket.count : 0,
+        };
+      });
+
+      return {
+        key: stage.key,
+        label: stage.label,
+        ...computeStats(stageBuckets[stage.key]),
+        distribution: computeDistribution(stageBuckets[stage.key]),
+        trend: {
+          bucketDays,
+          bucketLabel,
+          points: trendPoints,
+        },
+      };
+    });
 
     res.json({
       range: {
