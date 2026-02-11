@@ -862,29 +862,18 @@ const EngagedProjects = ({ user }) => {
                               Update
                             </button>
                             {canViewMockup && (
-                              <>
-                                <a
-                                  className="mockup-link"
-                                  href={`${mockupUrl}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title={
-                                    mockup.note
-                                      ? `Note: ${mockup.note}`
-                                      : "View approved mockup"
-                                  }
-                                >
-                                  View Mockup
-                                </a>
-                                <a
-                                  className="mockup-link download"
-                                  href={`${mockupUrl}`}
-                                  download
-                                  title="Download approved mockup"
-                                >
-                                  Download Mockup
-                                </a>
-                              </>
+                              <a
+                                className="mockup-link download"
+                                href={`${mockupUrl}`}
+                                download
+                                title={
+                                  mockup.note
+                                    ? `Note: ${mockup.note}`
+                                    : "Download approved mockup"
+                                }
+                              >
+                                Download Mockup
+                              </a>
                             )}
                             {project.departments
                               .filter((dept) => engagedSubDepts.includes(dept))

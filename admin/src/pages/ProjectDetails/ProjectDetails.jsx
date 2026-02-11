@@ -459,6 +459,10 @@ const ProjectDetails = ({ user }) => {
   };
 
   const details = project.details || {};
+  const mockup = project.mockup || {};
+  const mockupUrl = mockup.fileUrl;
+  const mockupName =
+    mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
   const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
     const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -947,7 +951,8 @@ const ProjectDetails = ({ user }) => {
           {(project.sampleImage ||
             details.sampleImage ||
             (project.attachments && project.attachments.length > 0) ||
-            (details.attachments && details.attachments.length > 0)) && (
+            (details.attachments && details.attachments.length > 0) ||
+            mockupUrl) && (
             <div className="detail-card">
               <h3 className="card-title">Reference Material</h3>
               <div
@@ -958,6 +963,72 @@ const ProjectDetails = ({ user }) => {
                   marginTop: "1rem",
                 }}
               >
+                {mockupUrl && (
+                  <div>
+                    <h4
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        color: "var(--text-secondary)",
+                        marginBottom: "0.5rem",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Approved Mockup
+                    </h4>
+                    <div
+                      style={{
+                        borderRadius: "10px",
+                        border: "1px solid var(--border-color)",
+                        padding: "0.75rem",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "0.75rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <a
+                        href={mockupUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: "#38bdf8",
+                          textDecoration: "none",
+                          fontWeight: 600,
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {mockupName || "View Mockup"}
+                      </a>
+                      <a
+                        href={mockupUrl}
+                        download
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#22d3ee",
+                          textDecoration: "none",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Download
+                      </a>
+                    </div>
+                    {mockup.note && (
+                      <div
+                        style={{
+                          marginTop: "0.5rem",
+                          fontSize: "0.75rem",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        Note: {mockup.note}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Unified Attachments Grid */}
                 <div>
                   <div
