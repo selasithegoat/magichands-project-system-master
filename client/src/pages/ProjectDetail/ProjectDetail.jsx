@@ -432,6 +432,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                 }
               />
               <ReferenceMaterialsCard project={project} />
+              <ApprovedMockupCard project={project} />
               <RisksCard
                 risks={project.uncontrollableFactors}
                 projectId={project._id}
@@ -1173,17 +1174,8 @@ const ReferenceMaterialsCard = ({ project }) => {
   const details = project.details || {};
   const sampleImage = project.sampleImage || details.sampleImage;
   const attachments = project.attachments || details.attachments || [];
-  const mockup = project.mockup || {};
-  const mockupUrl = mockup.fileUrl;
-  const mockupName =
-    mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
 
-  if (
-    !sampleImage &&
-    (!attachments || attachments.length === 0) &&
-    !mockupUrl
-  )
-    return null;
+  if (!sampleImage && (!attachments || attachments.length === 0)) return null;
 
   return (
     <div className="detail-card">
@@ -1245,73 +1237,6 @@ const ReferenceMaterialsCard = ({ project }) => {
               </a>
             </div>
           )}
-
-        {/* Approved Mockup */}
-        {mockupUrl && (
-          <div>
-            <h4
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: "600",
-                color: "#64748b",
-                marginBottom: "0.5rem",
-                textTransform: "uppercase",
-              }}
-            >
-              Approved Mockup
-            </h4>
-            <div
-              style={{
-                borderRadius: "8px",
-                border: "1px solid #e2e8f0",
-                padding: "0.75rem",
-                background: "#f8fafc",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "0.75rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <a
-                href={`${mockupUrl}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: "#2563eb",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                  fontSize: "0.8rem",
-                }}
-              >
-                {mockupName || "View Mockup"}
-              </a>
-              <a
-                href={`${mockupUrl}`}
-                download
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#0f766e",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                }}
-              >
-                Download
-              </a>
-            </div>
-            {mockup.note && (
-              <div
-                style={{
-                  marginTop: "0.5rem",
-                  fontSize: "0.75rem",
-                  color: "#64748b",
-                }}
-              >
-                Note: {mockup.note}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Attachments */}
         {attachments.length > 0 && (
@@ -1416,6 +1341,74 @@ const ReferenceMaterialsCard = ({ project }) => {
                 })}
               </div>
             </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ApprovedMockupCard = ({ project }) => {
+  const mockup = project.mockup || {};
+  const mockupUrl = mockup.fileUrl;
+  const mockupName =
+    mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
+
+  if (!mockupUrl) return null;
+
+  return (
+    <div className="detail-card">
+      <div className="card-header">
+        <h3 className="card-title">Approved Mockup</h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div
+          style={{
+            borderRadius: "8px",
+            border: "1px solid #e2e8f0",
+            padding: "0.75rem",
+            background: "#f8fafc",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <a
+            href={`${mockupUrl}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "#2563eb",
+              textDecoration: "none",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+            }}
+          >
+            {mockupName || "View Mockup"}
+          </a>
+          <a
+            href={`${mockupUrl}`}
+            download
+            style={{
+              fontSize: "0.8rem",
+              color: "#0f766e",
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Download
+          </a>
+        </div>
+        {mockup.note && (
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "#64748b",
+            }}
+          >
+            Note: {mockup.note}
+          </div>
         )}
       </div>
     </div>
