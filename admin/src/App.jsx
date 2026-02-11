@@ -6,6 +6,9 @@ const Projects = lazy(() => import("./pages/Projects/Projects"));
 const ProjectDetails = lazy(
   () => import("./pages/ProjectDetails/ProjectDetails"),
 );
+const PerformanceAnalytics = lazy(
+  () => import("./pages/Analytics/PerformanceAnalytics"),
+);
 const Teams = lazy(() => import("./pages/Teams/Teams"));
 const Clients = lazy(() => import("./pages/Clients/Clients"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
@@ -144,6 +147,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Clients user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute>
+                <PerformanceAnalytics />
               </ProtectedRoute>
             }
           />
