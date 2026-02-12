@@ -316,6 +316,13 @@
   box-shadow: 0 4px 12px rgba(16, 184, 166, 0.3);
 }
 
+.acknowledge-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .mockup-link {
   padding: 0.5rem 0.9rem;
   background: var(--card-bg);

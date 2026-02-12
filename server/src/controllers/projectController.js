@@ -2049,6 +2049,24 @@ const deleteProject = async (req, res) => {
   }
 };
 
+const SCOPE_APPROVAL_READY_STATUSES = new Set([
+  "Scope Approval Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Finished",
+  "In Progress",
+  "Completed",
+  "On Hold",
+]);
+
 // @desc    Acknowledge project engagement by a department
 // @route   POST /api/projects/:id/acknowledge
 // @access  Private
@@ -2064,6 +2082,13 @@ const acknowledgeProject = async (req, res) => {
     const project = await Project.findById(id);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (!SCOPE_APPROVAL_READY_STATUSES.has(project.status)) {
+      return res.status(400).json({
+        message:
+          "Scope approval must be completed before engagement can be accepted.",
+      });
     }
 
     // Check if department has already acknowledged

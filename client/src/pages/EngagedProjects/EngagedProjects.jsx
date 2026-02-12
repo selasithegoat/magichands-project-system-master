@@ -44,6 +44,26 @@ const STATUS_ACTIONS = {
 const ITEMS_PER_PAGE = 10;
 const ACKNOWLEDGE_PHRASE = "I agree to be engaged in this project";
 const COMPLETE_PHRASE = "I confirm this engagement is complete";
+const SCOPE_APPROVAL_READY_STATUSES = new Set([
+  "Scope Approval Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Finished",
+  "In Progress",
+  "Completed",
+  "On Hold",
+]);
+
+const isScopeApprovalComplete = (status) =>
+  Boolean(status && SCOPE_APPROVAL_READY_STATUSES.has(status));
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
@@ -468,6 +488,13 @@ const EngagedProjects = ({ user }) => {
   };
 
   const openAcknowledgeModal = (project, department) => {
+    if (!isScopeApprovalComplete(project.status)) {
+      setToast({
+        type: "error",
+        message: "Scope approval must be completed before engagement can be accepted.",
+      });
+      return;
+    }
     setAcknowledgeTarget({ project, department });
     setAcknowledgeInput("");
     setShowAcknowledgeModal(true);
@@ -883,16 +910,27 @@ const EngagedProjects = ({ user }) => {
                                     (a) => a.department === dept,
                                   ),
                               )
-                              .map((dept) => (
-                                <button
-                                  key={dept}
-                                  className="acknowledge-btn"
-                                  onClick={() => openAcknowledgeModal(project, dept)}
-                                  title={`Accept engagement for ${getDepartmentLabel(dept)}`}
-                                >
-                                  {`Accept ${getDepartmentLabel(dept)} Engagement`}
-                                </button>
-                              ))}
+                              .map((dept) => {
+                                const scopeApproved = isScopeApprovalComplete(
+                                  project.status,
+                                );
+                                const title = scopeApproved
+                                  ? `Accept engagement for ${getDepartmentLabel(dept)}`
+                                  : "Waiting for scope approval to be completed";
+                                return (
+                                  <button
+                                    key={dept}
+                                    className="acknowledge-btn"
+                                    onClick={() =>
+                                      openAcknowledgeModal(project, dept)
+                                    }
+                                    title={title}
+                                    disabled={!scopeApproved}
+                                  >
+                                    {`Accept ${getDepartmentLabel(dept)} Engagement`}
+                                  </button>
+                                );
+                              })}
                           </div>
                         </td>
                       </tr>
