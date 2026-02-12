@@ -84,7 +84,8 @@ const ProjectDetails = ({ user }) => {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to update status");
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update status");
       }
 
       const updatedProject = await res.json();
@@ -93,7 +94,7 @@ const ProjectDetails = ({ user }) => {
       console.error("Error updating status:", err);
       // Revert on error
       setProject({ ...project, status: oldStatus });
-      alert("Failed to update status");
+      alert(err.message || "Failed to update status");
     }
   };
 
@@ -463,6 +464,22 @@ const ProjectDetails = ({ user }) => {
   const mockupUrl = mockup.fileUrl;
   const mockupName =
     mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
+  const paymentLabels = {
+    part_payment: "Part Payment",
+    full_payment: "Full Payment",
+    po: "P.O",
+    authorized: "Authorized",
+  };
+  const paymentTypes = (project.paymentVerifications || []).map(
+    (entry) => entry.type,
+  );
+  const hasPaymentVerification = paymentTypes.length > 0;
+  const invoiceSent = Boolean(project.invoice?.sent);
+  const showPaymentWarning =
+    !hasPaymentVerification &&
+    ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
+      project.status,
+    );
   const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
     const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -577,6 +594,21 @@ const ProjectDetails = ({ user }) => {
                 ))}
               </select>
             </div>
+            <div className="billing-tags">
+              {invoiceSent && (
+                <span className="billing-tag invoice">Invoice Sent</span>
+              )}
+              {paymentTypes.map((type) => (
+                <span key={type} className="billing-tag payment">
+                  {paymentLabels[type] || type}
+                </span>
+              ))}
+            </div>
+            {showPaymentWarning && (
+              <div className="payment-warning">
+                Payment verification is required before production can begin.
+              </div>
+            )}
             <p className="header-project-name">{details.projectName}</p>
           </div>
         </div>

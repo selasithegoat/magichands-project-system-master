@@ -860,6 +860,12 @@ const EngagedProjects = ({ user }) => {
                               const isReady = project.status === action.pending;
                               const isMockupAction =
                                 action.complete === "Mockup Completed";
+                              const requiresPayment =
+                                action.complete === "Production Completed";
+                              const hasPaymentVerification =
+                                (project.paymentVerifications || []).length > 0;
+                              const paymentBlocked =
+                                requiresPayment && !hasPaymentVerification;
                               return (
                                 <button
                                   key={action.complete}
@@ -869,13 +875,15 @@ const EngagedProjects = ({ user }) => {
                                       ? openMockupModal(project, action)
                                       : openCompleteModal(project, action)
                                   }
-                                  disabled={!isReady || isUpdating}
+                                  disabled={!isReady || isUpdating || paymentBlocked}
                                   title={
-                                    isReady
-                                      ? isMockupAction
-                                        ? "Upload approved mockup"
-                                        : `Mark ${action.label}`
-                                      : `Waiting for ${action.pending}`
+                                    paymentBlocked
+                                      ? "Payment verification required before production"
+                                      : isReady
+                                        ? isMockupAction
+                                          ? "Upload approved mockup"
+                                          : `Mark ${action.label}`
+                                        : `Waiting for ${action.pending}`
                                   }
                                 >
                                   {isUpdating ? "Updating..." : action.label}

@@ -23,6 +23,7 @@ const OngoingProjects = lazy(
 );
 const Profile = lazy(() => import("./pages/Profile/Profile"));
 const NewOrders = lazy(() => import("./pages/NewOrders/NewOrders"));
+const OrderActions = lazy(() => import("./pages/NewOrders/OrderActions"));
 const EndOfDayUpdate = lazy(
   () => import("./pages/EndOfDayUpdate/EndOfDayUpdate"),
 );
@@ -430,6 +431,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <NewOrders />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/new-orders/actions/:id"
+          element={
+            <ProtectedLayout
+              activeView="new-orders"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <OrderActions />
             </ProtectedLayout>
           }
         />

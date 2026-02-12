@@ -31,6 +31,8 @@ const {
   reopenProject, // [NEW]
   acknowledgeProject,
   undoAcknowledgeProject,
+  markInvoiceSent,
+  verifyPayment,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -115,6 +117,8 @@ router.patch("/:id/status", protect, updateProjectStatus);
 router.patch("/:id/reopen", protect, reopenProject); // [NEW] - Reopen completed project
 router.post("/:id/acknowledge", protect, acknowledgeProject); // [NEW] - Acknowledge engagement
 router.delete("/:id/acknowledge", protect, undoAcknowledgeProject); // [NEW] - Undo acknowledgement (Admin)
+router.post("/:id/invoice-sent", protect, markInvoiceSent);
+router.post("/:id/payment-verification", protect, verifyPayment);
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, deleteProject); // Delete Project
 router.put(

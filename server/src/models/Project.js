@@ -245,6 +245,22 @@ const ProjectSchema = new mongoose.Schema(
         date: { type: Date, default: Date.now },
       },
     ],
+    invoice: {
+      sent: { type: Boolean, default: false },
+      sentAt: Date,
+      sentBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
+    paymentVerifications: [
+      {
+        type: {
+          type: String,
+          enum: ["part_payment", "full_payment", "po", "authorized"],
+          required: true,
+        },
+        verifiedAt: { type: Date, default: Date.now },
+        verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
     mockup: {
       fileUrl: String,
       fileName: String,

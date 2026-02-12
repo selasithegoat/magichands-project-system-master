@@ -430,17 +430,24 @@ const OrdersList = () => {
                   <th>Status</th>
                   <th>Assignment Status</th>
                   <th>Created Date</th>
-                  {canManageFeedback && (
-                    <>
-                      <th>Delivery</th>
-                      <th>Feedback</th>
-                    </>
-                  )}
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {allOrdersFiltered.map((order) => (
-                  <tr key={order._id}>
+                  <tr
+                    key={order._id}
+                    className="clickable-row"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/new-orders/actions/${order._id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        navigate(`/new-orders/actions/${order._id}`);
+                      }
+                    }}
+                  >
                     <td>
                       <span style={{ fontWeight: 600 }}>
                         {order.orderId || "N/A"}
@@ -463,38 +470,17 @@ const OrdersList = () => {
                       </span>
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
-                    {canManageFeedback && (
-                      <>
-                        <td>
-                          <button
-                            className="action-btn complete-btn"
-                            onClick={() => openDeliveryModal(order)}
-                            disabled={order.status !== "Pending Delivery/Pickup"}
-                            title={
-                              order.status === "Pending Delivery/Pickup"
-                                ? "Mark as Delivered"
-                                : "Waiting for Pending Delivery/Pickup"
-                            }
-                          >
-                            Delivery Complete
-                          </button>
-                        </td>
-                        <td>
-                          <button
-                            className="action-btn feedback-btn"
-                            onClick={() => openFeedbackModal(order)}
-                            disabled={!canAddFeedbackFor(order)}
-                            title={
-                              canAddFeedbackFor(order)
-                                ? "Add feedback"
-                                : "Feedback available after delivery"
-                            }
-                          >
-                            Add Feedback
-                          </button>
-                        </td>
-                      </>
-                    )}
+                    <td>
+                      <button
+                        className="action-btn view-btn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/new-orders/actions/${order._id}`);
+                        }}
+                      >
+                        View Actions
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

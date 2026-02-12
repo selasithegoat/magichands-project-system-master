@@ -231,6 +231,22 @@ const ProjectDetail = ({ onProjectChange, user }) => {
     "Completed",
     "Finished",
   ].includes(project.status);
+  const paymentLabels = {
+    part_payment: "Part Payment",
+    full_payment: "Full Payment",
+    po: "P.O",
+    authorized: "Authorized",
+  };
+  const paymentTypes = (project.paymentVerifications || []).map(
+    (entry) => entry.type,
+  );
+  const hasPaymentVerification = paymentTypes.length > 0;
+  const invoiceSent = Boolean(project.invoice?.sent);
+  const showPaymentWarning =
+    !hasPaymentVerification &&
+    ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
+      project.status,
+    );
 
   let themeClass = "";
   if (isEmergency) themeClass = "emergency-theme";
@@ -330,6 +346,22 @@ const ProjectDetail = ({ onProjectChange, user }) => {
             {/* Only show Edit if NOT pending acceptance and NOT completed */}
           </div>
         </div>
+
+        <div className="billing-tags">
+          {invoiceSent && (
+            <span className="billing-tag invoice">Invoice Sent</span>
+          )}
+          {paymentTypes.map((type) => (
+            <span key={type} className="billing-tag payment">
+              {paymentLabels[type] || type}
+            </span>
+          ))}
+        </div>
+        {showPaymentWarning && (
+          <div className="payment-warning">
+            Payment verification is required before production can begin.
+          </div>
+        )}
 
         {/* Acceptance Banner */}
         {project.status === "Pending Scope Approval" && (

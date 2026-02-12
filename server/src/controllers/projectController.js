@@ -64,6 +64,28 @@ const PRODUCTION_DEPARTMENTS = new Set([
 const getProductionUsers = async () =>
   User.find({ department: { $in: Array.from(PRODUCTION_DEPARTMENTS) } });
 
+const PAYMENT_TYPES = new Set([
+  "part_payment",
+  "full_payment",
+  "po",
+  "authorized",
+]);
+
+const canManageBilling = (user) => {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const departments = Array.isArray(user.department)
+    ? user.department
+    : user.department
+      ? [user.department]
+      : [];
+  return departments.includes("Front Desk");
+};
+
+const hasPaymentVerification = (project) =>
+  Array.isArray(project?.paymentVerifications) &&
+  project.paymentVerifications.length > 0;
+
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
 // @access  Private
@@ -798,6 +820,15 @@ const updateProjectStatus = async (req, res) => {
 
     // If the selected status has an auto-advancement, use it
     const finalStatus = statusProgression[newStatus] || newStatus;
+
+    const requiresPayment = newStatus === "Production Completed";
+
+    if (requiresPayment && !hasPaymentVerification(project)) {
+      return res.status(400).json({
+        message:
+          "Payment verification is required before production can begin.",
+      });
+    }
     project.status = finalStatus;
     await project.save();
 
@@ -853,6 +884,124 @@ const updateProjectStatus = async (req, res) => {
     res.json(project);
   } catch (error) {
     console.error("Error updating status:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Mark invoice sent for a project
+// @route   POST /api/projects/:id/invoice-sent
+// @access  Private (Admin or Front Desk)
+const markInvoiceSent = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to mark invoice as sent.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (project.invoice?.sent) {
+      return res.status(400).json({ message: "Invoice already marked as sent." });
+    }
+
+    project.invoice = {
+      sent: true,
+      sentAt: new Date(),
+      sentBy: req.user._id,
+    };
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Invoice marked as sent.",
+      { invoice: { sent: true } },
+    );
+
+    if (project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "ACTIVITY",
+        "Invoice Sent",
+        `Invoice sent for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
+      );
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error marking invoice sent:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Verify payment for a project
+// @route   POST /api/projects/:id/payment-verification
+// @access  Private (Admin or Front Desk)
+const verifyPayment = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to verify payments.",
+      });
+    }
+
+    const { type } = req.body;
+    if (!type || !PAYMENT_TYPES.has(type)) {
+      return res.status(400).json({ message: "Invalid payment type." });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const existing = (project.paymentVerifications || []).find(
+      (entry) => entry.type === type,
+    );
+    if (existing) {
+      return res
+        .status(400)
+        .json({ message: "Payment type already verified." });
+    }
+
+    project.paymentVerifications.push({
+      type,
+      verifiedAt: new Date(),
+      verifiedBy: req.user._id,
+    });
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      `Payment verified: ${type}.`,
+      { paymentVerification: { type } },
+    );
+
+    if (project.projectLeadId) {
+      await createNotification(
+        project.projectLeadId,
+        req.user._id,
+        project._id,
+        "ACTIVITY",
+        "Payment Verified",
+        `Payment verified (${type.replace("_", " ")}) for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
+      );
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error verifying payment:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -2208,6 +2357,8 @@ module.exports = {
   addItemToProject,
   deleteItemFromProject,
   updateProjectStatus,
+  markInvoiceSent,
+  verifyPayment,
   uploadProjectMockup,
   addFeedbackToProject,
   deleteFeedbackFromProject,
