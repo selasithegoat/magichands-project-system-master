@@ -204,7 +204,9 @@ const EngagedProjectActions = ({ user }) => {
         key,
         label,
         subDepts,
-        action: STATUS_ACTIONS[key] || null,
+        action: STATUS_ACTIONS[key]
+          ? { dept: key, ...STATUS_ACTIONS[key] }
+          : null,
       });
     };
 
@@ -531,7 +533,6 @@ const EngagedProjectActions = ({ user }) => {
         });
         setProject(updatedProject);
         closeMockupModal();
-        openCompleteModal(updatedProject || target.project, target.action);
       } else {
         const errorData = await res.json().catch(() => ({}));
         setToast({
@@ -724,11 +725,6 @@ const EngagedProjectActions = ({ user }) => {
                     const isMockupAction = action.dept === "Graphics";
                     const mockupAlreadySubmitted =
                       isMockupAction && Boolean(mockupUrl);
-                    const buttonLabel = mockupAlreadySubmitted
-                      ? "Mockup Already submitted"
-                      : isMockupAction
-                        ? "Upload Mockup & Complete"
-                        : action.label;
 
                     let disabledReason = "";
                     if (!isPending) {
@@ -736,8 +732,6 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (blockedByPayment) {
                       disabledReason =
                         "Payment verification is required before production can be completed.";
-                    } else if (mockupAlreadySubmitted) {
-                      disabledReason = "Mockup already submitted.";
                     }
 
                     return (
@@ -748,23 +742,51 @@ const EngagedProjectActions = ({ user }) => {
                             ? "Upload the approved mockup and confirm completion."
                             : "Confirm this stage is complete for the project."}
                         </p>
-                        <button
-                          className="complete-btn"
-                          onClick={() =>
-                            isMockupAction
-                              ? openMockupModal(project, action)
-                              : openCompleteModal(project, action)
-                          }
-                          disabled={
-                            !isPending ||
-                            blockedByPayment ||
-                            isUpdating ||
-                            mockupAlreadySubmitted
-                          }
-                          title={disabledReason || "Confirm stage completion"}
-                        >
-                          {isUpdating ? "Updating..." : buttonLabel}
-                        </button>
+                        {isMockupAction ? (
+                          <div className="mockup-action-stack">
+                            <button
+                              className="complete-btn"
+                              onClick={() => openMockupModal(project, action)}
+                              disabled={
+                                !isPending || isUpdating || mockupAlreadySubmitted
+                              }
+                              title={
+                                !isPending
+                                  ? `Waiting for ${action.pending}.`
+                                  : mockupAlreadySubmitted
+                                    ? "Mockup already submitted."
+                                    : "Upload approved mockup"
+                              }
+                            >
+                              {mockupAlreadySubmitted
+                                ? "Mockup Already submitted"
+                                : "Upload Mockup"}
+                            </button>
+                            <button
+                              className="complete-btn confirm-btn"
+                              onClick={() => openCompleteModal(project, action)}
+                              disabled={!isPending || isUpdating || !mockupAlreadySubmitted}
+                              title={
+                                !isPending
+                                  ? `Waiting for ${action.pending}.`
+                                  : mockupAlreadySubmitted
+                                    ? "Confirm mockup completion"
+                                    : "Upload mockup before confirming"
+                              }
+                            >
+                              Confirm Mockup Completion
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="complete-btn"
+                            onClick={() => openCompleteModal(project, action)}
+                            disabled={!isPending || blockedByPayment || isUpdating}
+                            title={disabledReason || "Confirm stage completion"}
+                          >
+                            {isUpdating ? "Updating..." : action.label}
+                          </button>
+                        )}
                         {blockedByPayment && (
                           <div className="engaged-action-meta">
                             Payment verification must be recorded first.
