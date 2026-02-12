@@ -45,6 +45,190 @@ const formatDateTime = (value) => {
   });
 };
 
+const formatDateTimeISO = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString();
+};
+
+const formatShortDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const escapeCSV = (value) => {
+  if (value === null || value === undefined) return "";
+  const stringValue = String(value);
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, "\"\"")}"`;
+  }
+  return stringValue;
+};
+
+const downloadCSV = (rows, filename) => {
+  const csvContent = `\ufeff${rows.map((row) => row.join(",")).join("\n")}`;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const LineChart = ({ points, label }) => {
+  const width = 640;
+  const height = 240;
+  const padding = { top: 20, right: 24, bottom: 40, left: 56 };
+  const values = points
+    .map((point) => point.value)
+    .filter((value) => value !== null && value !== undefined);
+  if (!values.length) {
+    return <div className="line-chart-empty">No trend data</div>;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const step = points.length > 1 ? chartWidth / (points.length - 1) : 0;
+
+  let path = "";
+  let move = true;
+  let lastPoint = null;
+
+  points.forEach((point, index) => {
+    const value = point.value;
+    if (value === null || value === undefined) {
+      move = true;
+      return;
+    }
+    const x = padding.left + index * step;
+    const y =
+      padding.top + chartHeight - ((value - min) / range) * chartHeight;
+    if (move) {
+      path += `M ${x} ${y}`;
+      move = false;
+    } else {
+      path += ` L ${x} ${y}`;
+    }
+    lastPoint = { x, y };
+  });
+
+  const yLabels = [
+    { value: max, y: padding.top },
+    { value: min + range / 2, y: padding.top + chartHeight / 2 },
+    { value: min, y: padding.top + chartHeight },
+  ];
+  const firstLabel = formatShortDate(points[0]?.at);
+  const midLabel = formatShortDate(points[Math.floor(points.length / 2)]?.at);
+  const lastLabel = formatShortDate(points[points.length - 1]?.at);
+
+  return (
+    <div className="line-chart">
+      <svg
+        className="line-chart-svg"
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={label}
+      >
+        <rect
+          x={padding.left}
+          y={padding.top}
+          width={chartWidth}
+          height={chartHeight}
+          className="line-chart-frame"
+        />
+        {yLabels.map((labelItem, index) => (
+          <g key={`y-${index}`}>
+            <line
+              x1={padding.left}
+              x2={padding.left + chartWidth}
+              y1={labelItem.y}
+              y2={labelItem.y}
+              className="line-chart-grid"
+            />
+            <text
+              x={padding.left - 12}
+              y={labelItem.y + 4}
+              className="line-chart-axis"
+              textAnchor="end"
+            >
+              {formatDuration(labelItem.value)}
+            </text>
+          </g>
+        ))}
+        <line
+          x1={padding.left}
+          x2={padding.left + chartWidth}
+          y1={padding.top + chartHeight}
+          y2={padding.top + chartHeight}
+          className="line-chart-axis-line"
+        />
+        <path d={path} className="line-chart-line" />
+        {lastPoint ? (
+          <circle
+            cx={lastPoint.x}
+            cy={lastPoint.y}
+            r="4"
+            className="line-chart-point"
+          />
+        ) : null}
+        <text
+          x={padding.left}
+          y={height - 10}
+          className="line-chart-axis"
+          textAnchor="start"
+        >
+          {firstLabel}
+        </text>
+        <text
+          x={padding.left + chartWidth / 2}
+          y={height - 10}
+          className="line-chart-axis"
+          textAnchor="middle"
+        >
+          {midLabel}
+        </text>
+        <text
+          x={padding.left + chartWidth}
+          y={height - 10}
+          className="line-chart-axis"
+          textAnchor="end"
+        >
+          {lastLabel}
+        </text>
+        <text
+          x={padding.left - 40}
+          y={padding.top - 6}
+          className="line-chart-axis-label"
+        >
+          Hours
+        </text>
+        <text
+          x={padding.left + chartWidth}
+          y={height - 26}
+          className="line-chart-axis-label"
+          textAnchor="end"
+        >
+          Date
+        </text>
+      </svg>
+    </div>
+  );
+};
+
 const ProjectAnalytics = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -106,8 +290,81 @@ const ProjectAnalytics = () => {
       ),
     [stages],
   );
+  const progressPoints = useMemo(() => {
+    if (!timeline.length) return [];
+    const startAt = new Date(timeline[0].at);
+    if (Number.isNaN(startAt.getTime())) return [];
+    return timeline
+      .map((event) => {
+        const at = new Date(event.at);
+        if (Number.isNaN(at.getTime())) return null;
+        return {
+          at,
+          value: (at.getTime() - startAt.getTime()) / 36e5,
+        };
+      })
+      .filter(Boolean);
+  }, [timeline]);
   const lastEvent = timeline.length ? timeline[timeline.length - 1] : null;
   const endToEndBenchmark = benchmarkMap.get("endToEnd");
+
+  const handleExportStageCSV = () => {
+    if (!data) return;
+
+    const rows = [];
+    rows.push(
+      [
+        "Project",
+        project?.name || "",
+        project?.orderId || project?.id || "",
+      ].map(escapeCSV),
+    );
+    rows.push(["Status", project?.status || ""].map(escapeCSV));
+    rows.push([]);
+    rows.push(["Stage Breakdown"].map(escapeCSV));
+    rows.push(
+      [
+        "Stage",
+        "Start Status",
+        "End Status",
+        "Start",
+        "End",
+        "Duration Hours",
+        "Percent of Total",
+        "Benchmark Avg Hours",
+        "Delta Hours",
+      ].map(escapeCSV),
+    );
+
+    stages.forEach((stage) => {
+      const benchmark = benchmarkMap.get(stage.key);
+      const delta =
+        stage.hours !== null &&
+        stage.hours !== undefined &&
+        benchmark?.avgHours !== null &&
+        benchmark?.avgHours !== undefined
+          ? stage.hours - benchmark.avgHours
+          : null;
+      rows.push(
+        [
+          stage.label,
+          stage.startStatus,
+          stage.endStatus,
+          formatDateTimeISO(stage.start),
+          formatDateTimeISO(stage.end),
+          stage.hours?.toFixed(2) ?? "",
+          stage.percentOfTotal !== null && stage.percentOfTotal !== undefined
+            ? stage.percentOfTotal.toFixed(2)
+            : "",
+          benchmark?.avgHours?.toFixed(2) ?? "",
+          delta !== null && delta !== undefined ? delta.toFixed(2) : "",
+        ].map(escapeCSV),
+      );
+    });
+
+    const filename = `project-stage-breakdown-${project?.orderId || project?.id || "analytics"}.csv`;
+    downloadCSV(rows, filename);
+  };
 
   return (
     <div className="project-analytics-page">
@@ -125,6 +382,14 @@ const ProjectAnalytics = () => {
             onClick={() => navigate("/analytics")}
           >
             Back to Analytics
+          </button>
+          <button
+            type="button"
+            className="export-button"
+            onClick={handleExportStageCSV}
+            disabled={!data || loading}
+          >
+            Export Stage Breakdown
           </button>
         </div>
       </div>
@@ -169,6 +434,19 @@ const ProjectAnalytics = () => {
                 {lastEvent ? formatDateTime(lastEvent.at) : "No status changes yet"}
               </div>
             </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <div>
+                <h2>End-to-End Progress</h2>
+                <p>Cumulative duration since the first status change.</p>
+              </div>
+            </div>
+            <LineChart
+              points={progressPoints}
+              label="End-to-end duration progression"
+            />
           </div>
 
           <div className="analytics-card">

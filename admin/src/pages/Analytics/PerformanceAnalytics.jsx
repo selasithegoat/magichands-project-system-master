@@ -5,7 +5,7 @@ import "./PerformanceAnalytics.css";
 const formatDateInput = (date) => date.toISOString().slice(0, 10);
 
 const formatDuration = (hours) => {
-  if (hours === null || hours === undefined) return "—";
+  if (hours === null || hours === undefined) return "-";
   if (hours < 1) {
     return `${Math.round(hours * 60)}m`;
   }
@@ -24,6 +24,16 @@ const formatDateTime = (value) => {
   return date.toISOString();
 };
 
+const formatShortDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+};
+
 const formatBucketUnit = (label) => {
   if (!label) return "period";
   const normalized = label.toLowerCase();
@@ -40,6 +50,19 @@ const escapeCSV = (value) => {
     return `"${stringValue.replace(/"/g, "\"\"")}"`;
   }
   return stringValue;
+};
+
+const downloadCSV = (rows, filename) => {
+  const csvContent = `\ufeff${rows.map((row) => row.join(",")).join("\n")}`;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 };
 
 const Sparkline = ({ points }) => {
@@ -84,6 +107,151 @@ const Sparkline = ({ points }) => {
         <circle cx={lastPoint.x} cy={lastPoint.y} r="3.5" fill="currentColor" />
       ) : null}
     </svg>
+  );
+};
+
+const LineChart = ({ points, label }) => {
+  const width = 640;
+  const height = 240;
+  const padding = { top: 20, right: 24, bottom: 40, left: 56 };
+  const values = points
+    .map((point) => point.avgHours)
+    .filter((value) => value !== null && value !== undefined);
+  if (!values.length) {
+    return <div className="line-chart-empty">No trend data</div>;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const step = points.length > 1 ? chartWidth / (points.length - 1) : 0;
+
+  let path = "";
+  let move = true;
+  let lastPoint = null;
+
+  points.forEach((point, index) => {
+    const value = point.avgHours;
+    if (value === null || value === undefined) {
+      move = true;
+      return;
+    }
+    const x = padding.left + index * step;
+    const y =
+      padding.top + chartHeight - ((value - min) / range) * chartHeight;
+    if (move) {
+      path += `M ${x} ${y}`;
+      move = false;
+    } else {
+      path += ` L ${x} ${y}`;
+    }
+    lastPoint = { x, y };
+  });
+
+  const yLabels = [
+    { value: max, y: padding.top },
+    { value: min + range / 2, y: padding.top + chartHeight / 2 },
+    { value: min, y: padding.top + chartHeight },
+  ];
+  const firstLabel = formatShortDate(points[0]?.start);
+  const midLabel = formatShortDate(points[Math.floor(points.length / 2)]?.start);
+  const lastLabel = formatShortDate(points[points.length - 1]?.start);
+
+  return (
+    <div className="line-chart">
+      <svg
+        className="line-chart-svg"
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={label}
+      >
+        <rect
+          x={padding.left}
+          y={padding.top}
+          width={chartWidth}
+          height={chartHeight}
+          className="line-chart-frame"
+        />
+        {yLabels.map((labelItem, index) => (
+          <g key={`y-${index}`}>
+            <line
+              x1={padding.left}
+              x2={padding.left + chartWidth}
+              y1={labelItem.y}
+              y2={labelItem.y}
+              className="line-chart-grid"
+            />
+            <text
+              x={padding.left - 12}
+              y={labelItem.y + 4}
+              className="line-chart-axis"
+              textAnchor="end"
+            >
+              {formatDuration(labelItem.value)}
+            </text>
+          </g>
+        ))}
+        <line
+          x1={padding.left}
+          x2={padding.left + chartWidth}
+          y1={padding.top + chartHeight}
+          y2={padding.top + chartHeight}
+          className="line-chart-axis-line"
+        />
+        <path d={path} className="line-chart-line" />
+        {lastPoint ? (
+          <circle
+            cx={lastPoint.x}
+            cy={lastPoint.y}
+            r="4"
+            className="line-chart-point"
+          />
+        ) : null}
+        <text
+          x={padding.left}
+          y={height - 10}
+          className="line-chart-axis"
+          textAnchor="start"
+        >
+          {firstLabel}
+        </text>
+        <text
+          x={padding.left + chartWidth / 2}
+          y={height - 10}
+          className="line-chart-axis"
+          textAnchor="middle"
+        >
+          {midLabel}
+        </text>
+        <text
+          x={padding.left + chartWidth}
+          y={height - 10}
+          className="line-chart-axis"
+          textAnchor="end"
+        >
+          {lastLabel}
+        </text>
+        <text
+          x={padding.left - 40}
+          y={padding.top - 6}
+          className="line-chart-axis-label"
+        >
+          Hours
+        </text>
+        <text
+          x={padding.left + chartWidth}
+          y={height - 26}
+          className="line-chart-axis-label"
+          textAnchor="end"
+        >
+          Date
+        </text>
+      </svg>
+    </div>
   );
 };
 
@@ -181,6 +349,12 @@ const PerformanceAnalytics = () => {
     const otherStages = stageStats.filter((stage) => !stage.isProcess);
     return processStage ? [processStage, ...otherStages] : stageStats;
   }, [stageStats]);
+  const endToEndStage = useMemo(
+    () =>
+      stageStats.find((stage) => stage.isProcess) ||
+      stageStats.find((stage) => stage.key === "endToEnd"),
+    [stageStats],
+  );
   const statusOptions = useMemo(() => {
     const statuses = projectRows
       .map((row) => row.status)
@@ -223,6 +397,47 @@ const PerformanceAnalytics = () => {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
+
+  const handleExportStageCSV = () => {
+    if (!data) return;
+
+    const rows = [];
+    rows.push(["Report Range", fromDate, toDate].map(escapeCSV));
+    rows.push([]);
+    rows.push(["Stage Breakdown"].map(escapeCSV));
+    rows.push(
+      [
+        "Stage",
+        "Definition",
+        "Status Range",
+        "Projects",
+        "Avg Hours",
+        "Median Hours",
+        "Min Hours",
+        "Max Hours",
+      ].map(escapeCSV),
+    );
+
+    stageStats.forEach((stage) => {
+      rows.push(
+        [
+          stage.label,
+          stage.description || "",
+          stage.rangeLabel || "",
+          stage.count,
+          stage.avgHours?.toFixed(2) ?? "",
+          stage.medianHours?.toFixed(2) ?? "",
+          stage.minHours?.toFixed(2) ?? "",
+          stage.maxHours?.toFixed(2) ?? "",
+        ].map(escapeCSV),
+      );
+    });
+
+    downloadCSV(
+      rows,
+      `performance-stage-breakdown-${fromDate}-to-${toDate}.csv`,
+    );
+  };
 
   const handleExportCSV = () => {
     if (!data) return;
@@ -306,16 +521,7 @@ const PerformanceAnalytics = () => {
       );
     });
 
-    const csvContent = `\ufeff${rows.map((row) => row.join(",")).join("\n")}`;
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `performance-analytics-${fromDate}-to-${toDate}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadCSV(rows, `performance-analytics-${fromDate}-to-${toDate}.csv`);
   };
 
   return (
@@ -352,6 +558,14 @@ const PerformanceAnalytics = () => {
           >
             Export CSV
           </button>
+          <button
+            type="button"
+            className="export-button export-button--secondary"
+            onClick={handleExportStageCSV}
+            disabled={!data || loading}
+          >
+            Export Stage Breakdown
+          </button>
         </div>
       </div>
 
@@ -361,6 +575,21 @@ const PerformanceAnalytics = () => {
         <div className="performance-error">{error}</div>
       ) : (
         <>
+          <div className="chart-card">
+            <div className="chart-header">
+              <div>
+                <h2>End-to-End Duration Trend</h2>
+                <p>
+                  Average end-to-end duration per{" "}
+                  {formatBucketUnit(endToEndStage?.trend?.bucketLabel)}.
+                </p>
+              </div>
+            </div>
+            <LineChart
+              points={endToEndStage?.trend?.points || []}
+              label="End-to-end duration over time"
+            />
+          </div>
           <div className="stat-grid">
             {orderedStages.map((stage) => (
               <div
