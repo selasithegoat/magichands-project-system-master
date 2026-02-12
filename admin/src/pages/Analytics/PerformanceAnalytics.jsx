@@ -23,6 +23,15 @@ const formatDateTime = (value) => {
   return date.toISOString();
 };
 
+const formatBucketUnit = (label) => {
+  if (!label) return "period";
+  const normalized = label.toLowerCase();
+  if (normalized.includes("day")) return "day";
+  if (normalized.includes("week")) return "week";
+  if (normalized.includes("month")) return "month";
+  return "period";
+};
+
 const escapeCSV = (value) => {
   if (value === null || value === undefined) return "";
   const stringValue = String(value);
@@ -83,26 +92,40 @@ const Distribution = ({ distribution, median }) => {
     return <div className="distribution-empty">No distribution data</div>;
   }
   const maxCount = Math.max(...bins.map((bin) => bin.count), 1);
+  const minValue = bins[0]?.start ?? 0;
+  const maxValue = bins[bins.length - 1]?.end ?? 0;
+  const midValue = (minValue + maxValue) / 2;
   return (
     <div className="distribution">
-      <div className="distribution-bars">
-        {bins.map((bin, index) => {
-          const height = `${(bin.count / maxCount) * 100}%`;
-          const title = `${bin.count} project(s) • ${bin.start.toFixed(1)}h–${bin.end.toFixed(1)}h`;
-          return (
-            <div
-              key={`${bin.start}-${index}`}
-              className="distribution-bar"
-              style={{ height }}
-              title={title}
-            />
-          );
-        })}
+      <div className="distribution-chart">
+        <div className="distribution-y-label">Projects</div>
+        <div className="distribution-bars" role="img" aria-label="Project duration distribution">
+          {bins.map((bin, index) => {
+            const height = `${(bin.count / maxCount) * 100}%`;
+            const title = `${bin.count} project(s) - ${formatDuration(bin.start)} to ${formatDuration(
+              bin.end,
+            )}`;
+            return (
+              <div
+                key={`${bin.start}-${index}`}
+                className="distribution-bar"
+                style={{ height }}
+                title={title}
+              />
+            );
+          })}
+        </div>
+        <div className="distribution-x-scale">
+          <span>{formatDuration(minValue)}</span>
+          <span>{formatDuration(midValue)}</span>
+          <span>{formatDuration(maxValue)}</span>
+        </div>
+        <div className="distribution-x-label">Duration</div>
       </div>
       <div className="distribution-meta">
-        <span>Q1: {formatDuration(distribution.q1)}</span>
+        <span>25th pct: {formatDuration(distribution.q1)}</span>
         <span>Median: {formatDuration(median)}</span>
-        <span>Q3: {formatDuration(distribution.q3)}</span>
+        <span>75th pct: {formatDuration(distribution.q3)}</span>
       </div>
     </div>
   );
@@ -146,6 +169,12 @@ const PerformanceAnalytics = () => {
 
   const stageStats = data?.stages || [];
   const projectRows = data?.projects || [];
+  const orderedStages = useMemo(() => {
+    if (!stageStats.length) return [];
+    const processStage = stageStats.find((stage) => stage.isProcess);
+    const otherStages = stageStats.filter((stage) => !stage.isProcess);
+    return processStage ? [processStage, ...otherStages] : stageStats;
+  }, [stageStats]);
 
   const handleExportCSV = () => {
     if (!data) return;
@@ -157,6 +186,7 @@ const PerformanceAnalytics = () => {
     rows.push(
       [
         "Stage",
+        "Definition",
         "Projects",
         "Avg Hours",
         "Median Hours",
@@ -166,9 +196,13 @@ const PerformanceAnalytics = () => {
     );
 
     stageStats.forEach((stage) => {
+      const definitionParts = [];
+      if (stage.description) definitionParts.push(stage.description);
+      if (stage.rangeLabel) definitionParts.push(stage.rangeLabel);
       rows.push(
         [
           stage.label,
+          definitionParts.join(" | "),
           stage.count,
           stage.avgHours?.toFixed(2) ?? "",
           stage.medianHours?.toFixed(2) ?? "",
@@ -186,6 +220,9 @@ const PerformanceAnalytics = () => {
         "Project ID",
         "Project Name",
         "Status",
+        "End-to-End Hours",
+        "End-to-End Start",
+        "End-to-End End",
         "Mockup Hours",
         "Production Hours",
         "Packaging Hours",
@@ -205,6 +242,9 @@ const PerformanceAnalytics = () => {
           row.projectId,
           row.projectName,
           row.status,
+          row.endToEnd?.hours?.toFixed(2) ?? "",
+          formatDateTime(row.endToEnd?.start),
+          formatDateTime(row.endToEnd?.end),
           row.stages.mockup?.hours?.toFixed(2) ?? "",
           row.stages.production?.hours?.toFixed(2) ?? "",
           row.stages.packaging?.hours?.toFixed(2) ?? "",
@@ -235,7 +275,7 @@ const PerformanceAnalytics = () => {
       <div className="performance-header">
         <div>
           <h1>Performance Analytics</h1>
-          <p>Stage duration tracking for Mockup, Production, and Packaging.</p>
+          <p>Stage and end-to-end duration tracking for the project lifecycle.</p>
         </div>
         <div className="header-actions">
           <div className="date-controls">
@@ -274,26 +314,35 @@ const PerformanceAnalytics = () => {
       ) : (
         <>
           <div className="stat-grid">
-            {stageStats.map((stage) => (
-              <div key={stage.key} className="stat-card">
+            {orderedStages.map((stage) => (
+              <div
+                key={stage.key}
+                className={`stat-card${stage.isProcess ? " stat-card--process" : ""}`}
+              >
                 <div className="stat-label">{stage.label}</div>
+                {stage.description ? (
+                  <div className="stat-caption">{stage.description}</div>
+                ) : null}
+                {stage.rangeLabel ? (
+                  <div className="stat-range">From {stage.rangeLabel}</div>
+                ) : null}
                 <div className="stat-metric">
                   {formatDuration(stage.avgHours)}
                 </div>
                 <div className="stat-meta">
-                  <span>Median: {formatDuration(stage.medianHours)}</span>
-                  <span>Min: {formatDuration(stage.minHours)}</span>
-                  <span>Max: {formatDuration(stage.maxHours)}</span>
-                  <span>Projects: {stage.count}</span>
+                  <span>Typical (Median): {formatDuration(stage.medianHours)}</span>
+                  <span>Fastest: {formatDuration(stage.minHours)}</span>
+                  <span>Slowest: {formatDuration(stage.maxHours)}</span>
+                  <span>Projects analyzed: {stage.count}</span>
                 </div>
                 <div className="stat-section">
                   <div className="stat-section-title">
-                    Trend ({stage.trend?.bucketLabel || "Weekly"})
+                    Average duration per {formatBucketUnit(stage.trend?.bucketLabel)}
                   </div>
                   <Sparkline points={stage.trend?.points || []} />
                 </div>
                 <div className="stat-section">
-                  <div className="stat-section-title">Distribution</div>
+                  <div className="stat-section-title">Distribution (projects by duration)</div>
                   <Distribution
                     distribution={stage.distribution}
                     median={stage.medianHours}
@@ -319,6 +368,7 @@ const PerformanceAnalytics = () => {
                     <tr>
                       <th>Project</th>
                       <th>Status</th>
+                      <th>End-to-End</th>
                       <th>Mockup</th>
                       <th>Production</th>
                       <th>Packaging</th>
@@ -336,6 +386,7 @@ const PerformanceAnalytics = () => {
                           </div>
                         </td>
                         <td>{row.status}</td>
+                        <td>{formatDuration(row.endToEnd?.hours)}</td>
                         <td>{formatDuration(row.stages.mockup?.hours)}</td>
                         <td>{formatDuration(row.stages.production?.hours)}</td>
                         <td>{formatDuration(row.stages.packaging?.hours)}</td>

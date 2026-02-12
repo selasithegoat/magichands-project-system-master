@@ -4,23 +4,37 @@ const Project = require("../models/Project");
 const STAGES = [
   {
     key: "mockup",
-    label: "Mockup",
+    label: "Mockup Stage",
     startStatus: "Pending Mockup",
     endStatus: "Pending Production",
+    description: "Average time spent in the mockup phase",
   },
   {
     key: "production",
-    label: "Production",
+    label: "Production Stage",
     startStatus: "Pending Production",
     endStatus: "Pending Packaging",
+    description: "Average time spent in the production phase",
   },
   {
     key: "packaging",
-    label: "Packaging",
+    label: "Packaging Stage",
     startStatus: "Pending Packaging",
     endStatus: "Pending Delivery/Pickup",
+    description: "Average time spent in the packaging phase",
   },
 ];
+
+const PROCESS_STAGE = {
+  key: "endToEnd",
+  label: "End-to-End Cycle",
+  startStatus: STAGES[0].startStatus,
+  endStatus: STAGES[STAGES.length - 1].endStatus,
+  description: "Average total time for a project from start to finish",
+  isProcess: true,
+};
+
+const ANALYTICS_STAGES = [...STAGES, PROCESS_STAGE];
 
 const STATUS_SET = Array.from(
   new Set(
@@ -153,16 +167,12 @@ const getStageDurations = async (req, res) => {
       projects.map((project) => [project._id.toString(), project]),
     );
 
-    const stageBuckets = {
-      mockup: [],
-      production: [],
-      packaging: [],
-    };
-    const stageTrendBuckets = {
-      mockup: new Map(),
-      production: new Map(),
-      packaging: new Map(),
-    };
+    const stageBuckets = Object.fromEntries(
+      ANALYTICS_STAGES.map((stage) => [stage.key, []]),
+    );
+    const stageTrendBuckets = Object.fromEntries(
+      ANALYTICS_STAGES.map((stage) => [stage.key, new Map()]),
+    );
     const projectResults = [];
     const { bucketDays, label: bucketLabel } = getBucketConfig(
       range.fromDate,
@@ -208,7 +218,7 @@ const getStageDurations = async (req, res) => {
       }
 
       const stageData = {};
-      let totalHours = 0;
+      let stageHoursTotal = 0;
 
       STAGES.forEach((stage) => {
         const startAt = statusTimes[stage.startStatus];
@@ -225,10 +235,28 @@ const getStageDurations = async (req, res) => {
         };
         stageBuckets[stage.key].push(hours);
         addTrendPoint(stage.key, endAt, hours);
-        totalHours += hours;
+        stageHoursTotal += hours;
       });
 
-      if (Object.keys(stageData).length === 0) continue;
+      let endToEnd = null;
+      const processStart = statusTimes[PROCESS_STAGE.startStatus];
+      const processEnd = statusTimes[PROCESS_STAGE.endStatus];
+      if (processStart && processEnd && processEnd > processStart) {
+        const inRange =
+          processEnd >= range.fromDate && processEnd <= range.toDate;
+        if (inRange) {
+          const hours = (processEnd.getTime() - processStart.getTime()) / 36e5;
+          endToEnd = {
+            start: processStart,
+            end: processEnd,
+            hours,
+          };
+          stageBuckets[PROCESS_STAGE.key].push(hours);
+          addTrendPoint(PROCESS_STAGE.key, processEnd, hours);
+        }
+      }
+
+      if (Object.keys(stageData).length === 0 && !endToEnd) continue;
 
       const project = projectMap.get(projectId);
       projectResults.push({
@@ -236,14 +264,15 @@ const getStageDurations = async (req, res) => {
         orderId: project?.orderId || null,
         projectName: project?.details?.projectName || "Untitled",
         status: project?.status || "Unknown",
-        totalHours,
+        totalHours: endToEnd?.hours ?? stageHoursTotal,
+        endToEnd,
         stages: stageData,
       });
     }
 
     projectResults.sort((a, b) => b.totalHours - a.totalHours);
 
-    const stageStats = STAGES.map((stage) => {
+    const stageStats = ANALYTICS_STAGES.map((stage) => {
       const trendPoints = bucketStarts.map((bucketStart) => {
         const bucketKey = bucketStart.toISOString();
         const bucket = stageTrendBuckets[stage.key].get(bucketKey);
@@ -257,6 +286,9 @@ const getStageDurations = async (req, res) => {
       return {
         key: stage.key,
         label: stage.label,
+        description: stage.description,
+        rangeLabel: `${stage.startStatus} to ${stage.endStatus}`,
+        isProcess: Boolean(stage.isProcess),
         ...computeStats(stageBuckets[stage.key]),
         distribution: computeDistribution(stageBuckets[stage.key]),
         trend: {
