@@ -25,9 +25,12 @@ const Dashboard = ({
   const [projects, setProjects] = useState([]);
   const [completedCount, setCompletedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [digest, setDigest] = useState(null);
+  const [digestLoading, setDigestLoading] = useState(true);
 
   useEffect(() => {
     fetchProjects();
+    fetchDigest();
   }, []);
 
   useRealtimeRefresh(() => fetchProjects());
@@ -61,6 +64,20 @@ const Dashboard = ({
       console.error("Error fetching projects:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchDigest = async () => {
+    try {
+      const res = await fetch("/api/digests/latest");
+      if (res.ok) {
+        const data = await res.json();
+        setDigest(data.digest || null);
+      }
+    } catch (error) {
+      console.error("Error fetching digest:", error);
+    } finally {
+      setDigestLoading(false);
     }
   };
 
@@ -98,6 +115,28 @@ const Dashboard = ({
       console.error(err);
       setToast({ message: "Server error", type: "error" });
     }
+  };
+
+  const formatDigestRange = (start, end) => {
+    if (!start || !end) return "";
+    const from = new Date(start).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    const to = new Date(end).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return `${from} - ${to}`;
+  };
+
+  const formatDigestDate = (value, time) => {
+    if (!value) return "No date";
+    const dateLabel = new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return time ? `${dateLabel} (${time})` : dateLabel;
   };
 
   return (
@@ -295,6 +334,63 @@ const Dashboard = ({
                 );
               });
             })()}
+          </div>
+
+          <div className="section-header" style={{ marginTop: "2rem" }}>
+            <h3 className="section-title">Weekly Digest</h3>
+            {digest?.periodStart && digest?.periodEnd && (
+              <span className="digest-period">
+                {formatDigestRange(digest.periodStart, digest.periodEnd)}
+              </span>
+            )}
+          </div>
+          <div className="digest-card">
+            {digestLoading ? (
+              <div className="digest-empty">Loading weekly digest...</div>
+            ) : !digest ? (
+              <div className="digest-empty">
+                Your weekly digest will appear here once it's generated.
+              </div>
+            ) : (
+              <div className="digest-section">
+                <div className="digest-section-header">
+                  <span>Who needs to act</span>
+                  <span className="digest-count">
+                    {digest.summary?.actionCount ??
+                      digest.actionRequired?.length ??
+                      0}
+                  </span>
+                </div>
+                {digest.actionRequired?.length ? (
+                  <ul className="digest-list">
+                    {digest.actionRequired.map((item) => (
+                      <li key={item.project || item.orderId}>
+                        <span className="digest-item-title">
+                          {item.projectName || item.orderId || "Project"}
+                        </span>
+                        <span className="digest-item-meta">
+                          {item.owner || "Team"} • {item.status} •{" "}
+                          <span className="digest-due">
+                            Due {formatDigestDate(item.deliveryDate, item.deliveryTime)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="digest-empty">No actions required.</div>
+                )}
+                {(digest.summary?.actionCount || 0) >
+                  (digest.actionRequired?.length || 0) && (
+                  <div className="digest-more">
+                    +
+                    {(digest.summary?.actionCount || 0) -
+                      (digest.actionRequired?.length || 0)}{" "}
+                    more
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Department Workload */}

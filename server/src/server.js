@@ -12,7 +12,9 @@ const updateRoutes = require("./routes/updateRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
+const digestRoutes = require("./routes/digestRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
+const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 
 // Load env vars
 dotenv.config();
@@ -95,6 +97,7 @@ app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/realtime", realtimeRoutes);
+app.use("/api/digests", digestRoutes);
 
 // Serve built frontends (Vite builds -> dist)
 const clientDistPath = path.resolve(__dirname, "../../client/dist");
@@ -154,5 +157,6 @@ if (hasAdminBuild || hasClientBuild) {
 // Start Server
 app.listen(PORT, HOST, () => {
   console.log(`Server is running at http://${HOST}:${PORT}`);
+  startWeeklyDigestScheduler();
 });
 // Trigger restart to rebuild indexes
