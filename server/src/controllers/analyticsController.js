@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const ActivityLog = require("../models/ActivityLog");
 const Project = require("../models/Project");
 
@@ -127,6 +128,49 @@ const getBucketConfig = (fromDate, toDate) => {
   if (rangeDays <= 21) return { bucketDays: 1, label: "Daily" };
   if (rangeDays <= 150) return { bucketDays: 7, label: "Weekly" };
   return { bucketDays: 30, label: "Monthly" };
+};
+
+const buildStageBucketsFromLogs = (logs) => {
+  const byProject = new Map();
+  for (const log of logs) {
+    const projectId = log.project?.toString();
+    const statusTo = log.details?.statusChange?.to;
+    if (!projectId || !statusTo) continue;
+    if (!byProject.has(projectId)) {
+      byProject.set(projectId, []);
+    }
+    byProject.get(projectId).push({ status: statusTo, at: log.createdAt });
+  }
+
+  const stageBuckets = Object.fromEntries(
+    ANALYTICS_STAGES.map((stage) => [stage.key, []]),
+  );
+
+  for (const events of byProject.values()) {
+    const statusTimes = {};
+    for (const event of events) {
+      if (!statusTimes[event.status]) {
+        statusTimes[event.status] = event.at;
+      }
+    }
+
+    STAGES.forEach((stage) => {
+      const startAt = statusTimes[stage.startStatus];
+      const endAt = statusTimes[stage.endStatus];
+      if (!startAt || !endAt || endAt <= startAt) return;
+      const hours = (endAt.getTime() - startAt.getTime()) / 36e5;
+      stageBuckets[stage.key].push(hours);
+    });
+
+    const processStart = statusTimes[PROCESS_STAGE.startStatus];
+    const processEnd = statusTimes[PROCESS_STAGE.endStatus];
+    if (processStart && processEnd && processEnd > processStart) {
+      const hours = (processEnd.getTime() - processStart.getTime()) / 36e5;
+      stageBuckets[PROCESS_STAGE.key].push(hours);
+    }
+  }
+
+  return stageBuckets;
 };
 
 // @desc    Get stage duration analytics
@@ -313,4 +357,159 @@ const getStageDurations = async (req, res) => {
   }
 };
 
-module.exports = { getStageDurations };
+// @desc    Get single project analytics
+// @route   GET /api/admin/analytics/project/:id
+// @access  Admin
+const getProjectAnalytics = async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return res.status(400).json({ message: "Invalid project id." });
+    }
+
+    const project = await Project.findById(projectId)
+      .select(
+        "orderId details projectType priority status orderDate createdAt projectLeadId assistantLeadId",
+      )
+      .populate("projectLeadId", "firstName lastName")
+      .populate("assistantLeadId", "firstName lastName")
+      .lean();
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    const timelineLogs = await ActivityLog.find({
+      project: projectId,
+      action: "status_change",
+    })
+      .select("details createdAt description user")
+      .populate("user", "firstName lastName")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const timeline = timelineLogs.map((log) => {
+      const userName = log.user
+        ? `${log.user.firstName || ""} ${log.user.lastName || ""}`.trim()
+        : null;
+      return {
+        at: log.createdAt,
+        from: log.details?.statusChange?.from || null,
+        to: log.details?.statusChange?.to || null,
+        by: log.user
+          ? { id: log.user._id, name: userName || "User" }
+          : null,
+        description: log.description,
+      };
+    });
+
+    const statusTimes = {};
+    for (const log of timelineLogs) {
+      const statusTo = log.details?.statusChange?.to;
+      if (statusTo && !statusTimes[statusTo]) {
+        statusTimes[statusTo] = log.createdAt;
+      }
+    }
+
+    const stageDetails = [];
+    let stageHoursTotal = 0;
+    for (const stage of STAGES) {
+      const startAt = statusTimes[stage.startStatus];
+      const endAt = statusTimes[stage.endStatus];
+      let hours = null;
+      if (startAt && endAt && endAt > startAt) {
+        hours = (endAt.getTime() - startAt.getTime()) / 36e5;
+        stageHoursTotal += hours;
+      }
+      stageDetails.push({
+        key: stage.key,
+        label: stage.label,
+        startStatus: stage.startStatus,
+        endStatus: stage.endStatus,
+        start: startAt || null,
+        end: endAt || null,
+        hours,
+      });
+    }
+
+    let endToEnd = null;
+    const processStart = statusTimes[PROCESS_STAGE.startStatus];
+    const processEnd = statusTimes[PROCESS_STAGE.endStatus];
+    if (processStart && processEnd && processEnd > processStart) {
+      endToEnd = {
+        start: processStart,
+        end: processEnd,
+        hours: (processEnd.getTime() - processStart.getTime()) / 36e5,
+      };
+    }
+
+    const totalHours = endToEnd?.hours || stageHoursTotal || null;
+    const stagesWithPercent = stageDetails.map((stage) => ({
+      ...stage,
+      percentOfTotal:
+        totalHours && stage.hours ? (stage.hours / totalHours) * 100 : null,
+    }));
+
+    const bottleneck = stageDetails
+      .filter((stage) => stage.hours !== null && stage.hours !== undefined)
+      .reduce(
+        (acc, stage) =>
+          !acc || stage.hours > acc.hours ? stage : acc,
+        null,
+      );
+
+    const benchmarkLogs = await ActivityLog.find({
+      action: "status_change",
+      "details.statusChange.to": { $in: STATUS_SET },
+    })
+      .select("project details createdAt")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const benchmarkBuckets = buildStageBucketsFromLogs(benchmarkLogs);
+    const benchmarks = ANALYTICS_STAGES.map((stage) => ({
+      key: stage.key,
+      label: stage.label,
+      ...computeStats(benchmarkBuckets[stage.key]),
+    }));
+
+    const leadName =
+      (project.projectLeadId &&
+        `${project.projectLeadId.firstName || ""} ${project.projectLeadId.lastName || ""}`.trim()) ||
+      project.details?.lead ||
+      null;
+    const assistantName =
+      project.assistantLeadId &&
+      `${project.assistantLeadId.firstName || ""} ${project.assistantLeadId.lastName || ""}`.trim();
+
+    res.json({
+      project: {
+        id: project._id,
+        orderId: project.orderId || null,
+        name: project.details?.projectName || "Untitled",
+        client: project.details?.client || null,
+        type: project.projectType || null,
+        priority: project.priority || null,
+        status: project.status || null,
+        orderDate: project.orderDate || null,
+        createdAt: project.createdAt || null,
+        deliveryDate: project.details?.deliveryDate || null,
+        deliveryTime: project.details?.deliveryTime || null,
+        lead: leadName || null,
+        assistantLead: assistantName || null,
+      },
+      endToEnd,
+      stages: stagesWithPercent,
+      benchmarks,
+      bottleneck: bottleneck
+        ? { key: bottleneck.key, label: bottleneck.label, hours: bottleneck.hours }
+        : null,
+      timeline,
+    });
+  } catch (error) {
+    console.error("Error fetching project analytics:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+module.exports = { getStageDurations, getProjectAnalytics };

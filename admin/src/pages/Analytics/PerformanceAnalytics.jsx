@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./PerformanceAnalytics.css";
 
 const formatDateInput = (date) => date.toISOString().slice(0, 10);
@@ -132,6 +133,7 @@ const Distribution = ({ distribution, median }) => {
 };
 
 const PerformanceAnalytics = () => {
+  const navigate = useNavigate();
   const today = useMemo(() => new Date(), []);
   const [fromDate, setFromDate] = useState(
     formatDateInput(new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)),
@@ -140,6 +142,10 @@ const PerformanceAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -175,6 +181,48 @@ const PerformanceAnalytics = () => {
     const otherStages = stageStats.filter((stage) => !stage.isProcess);
     return processStage ? [processStage, ...otherStages] : stageStats;
   }, [stageStats]);
+  const statusOptions = useMemo(() => {
+    const statuses = projectRows
+      .map((row) => row.status)
+      .filter((status) => status && String(status).trim() !== "");
+    return ["All", ...Array.from(new Set(statuses)).sort()];
+  }, [projectRows]);
+
+  useEffect(() => {
+    if (!statusOptions.includes(statusFilter)) {
+      setStatusFilter("All");
+    }
+  }, [statusOptions, statusFilter]);
+  const filteredProjects = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    return projectRows.filter((row) => {
+      if (statusFilter !== "All" && row.status !== statusFilter) return false;
+      if (!term) return true;
+      const haystack = [
+        row.projectName,
+        row.orderId,
+        row.projectId,
+        row.status,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value).toLowerCase());
+      return haystack.some((value) => value.includes(term));
+    });
+  }, [projectRows, searchQuery, statusFilter]);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProjects.length / itemsPerPage),
+  );
+  const paginatedProjects = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredProjects.slice(start, start + itemsPerPage);
+  }, [filteredProjects, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleExportCSV = () => {
     if (!data) return;
@@ -362,39 +410,118 @@ const PerformanceAnalytics = () => {
             {projectRows.length === 0 ? (
               <div className="empty-state">No project durations found.</div>
             ) : (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Project</th>
-                      <th>Status</th>
-                      <th>End-to-End</th>
-                      <th>Mockup</th>
-                      <th>Production</th>
-                      <th>Packaging</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projectRows.map((row) => (
-                      <tr key={row.projectId}>
-                        <td>
-                          <div className="project-cell">
-                            <span className="project-id">
-                              {row.orderId || row.projectId.slice(-6).toUpperCase()}
-                            </span>
-                            <span className="project-name">{row.projectName}</span>
-                          </div>
-                        </td>
-                        <td>{row.status}</td>
-                        <td>{formatDuration(row.endToEnd?.hours)}</td>
-                        <td>{formatDuration(row.stages.mockup?.hours)}</td>
-                        <td>{formatDuration(row.stages.production?.hours)}</td>
-                        <td>{formatDuration(row.stages.packaging?.hours)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="table-controls">
+                  <div className="table-search">
+                    <input
+                      type="text"
+                      placeholder="Search by project, order ID, status..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                    />
+                  </div>
+                  <div className="table-filters">
+                    <label>
+                      Status
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => {
+                          setStatusFilter(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                      >
+                        {statusOptions.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="table-count">
+                    Showing {paginatedProjects.length} of {filteredProjects.length}
+                  </div>
+                </div>
+                {filteredProjects.length === 0 ? (
+                  <div className="empty-state">No projects match your filters.</div>
+                ) : (
+                  <>
+                    <div className="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>End-to-End</th>
+                            <th>Mockup</th>
+                            <th>Production</th>
+                            <th>Packaging</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedProjects.map((row) => (
+                            <tr
+                              key={row.projectId}
+                              className="clickable-row"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => navigate(`/analytics/projects/${row.projectId}`)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  navigate(`/analytics/projects/${row.projectId}`);
+                                }
+                              }}
+                            >
+                              <td>
+                                <div className="project-cell">
+                                  <span className="project-id">
+                                    {row.orderId || row.projectId.slice(-6).toUpperCase()}
+                                  </span>
+                                  <span className="project-name">{row.projectName}</span>
+                                </div>
+                              </td>
+                              <td>{row.status}</td>
+                              <td>{formatDuration(row.endToEnd?.hours)}</td>
+                              <td>{formatDuration(row.stages.mockup?.hours)}</td>
+                              <td>{formatDuration(row.stages.production?.hours)}</td>
+                              <td>{formatDuration(row.stages.packaging?.hours)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {totalPages > 1 ? (
+                      <div className="table-pagination">
+                        <button
+                          type="button"
+                          className="pagination-btn"
+                          disabled={currentPage === 1}
+                          onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                        >
+                          Prev
+                        </button>
+                        <span>
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="pagination-btn"
+                          disabled={currentPage === totalPages}
+                          onClick={() =>
+                            setCurrentPage((page) => Math.min(totalPages, page + 1))
+                          }
+                        >
+                          Next
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </>
             )}
           </div>
         </>

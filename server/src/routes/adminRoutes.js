@@ -7,7 +7,10 @@ const {
   deleteEmployee,
   updateEmployeePassword,
 } = require("../controllers/adminController");
-const { getStageDurations } = require("../controllers/analyticsController");
+const {
+  getStageDurations,
+  getProjectAnalytics,
+} = require("../controllers/analyticsController");
 const { protect, requireRole } = require("../middleware/authMiddleware");
 
 // All routes are protected and admin-only
@@ -18,5 +21,6 @@ router.route("/employees").post(registerEmployee).get(getAllEmployees);
 router.route("/employees/:id").put(updateEmployee).delete(deleteEmployee);
 router.route("/employees/:id/password").put(updateEmployeePassword);
 router.get("/analytics/stage-durations", getStageDurations);
+router.get("/analytics/project/:id", getProjectAnalytics);
 
 module.exports = router;
