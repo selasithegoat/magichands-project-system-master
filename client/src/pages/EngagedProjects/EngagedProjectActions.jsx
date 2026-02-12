@@ -188,8 +188,6 @@ const EngagedProjectActions = ({ user }) => {
     /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(mockupUrl || "");
   const isPdfMockup =
     mockupType === "application/pdf" || /\.pdf$/i.test(mockupUrl || "");
-  const canViewMockup =
-    Boolean(mockupUrl) && userEngagedDepts.includes("Production");
   const departmentSections = useMemo(() => {
     if (!project) return [];
 
@@ -793,49 +791,40 @@ const EngagedProjectActions = ({ user }) => {
                           </div>
                         )}
                         {isMockupAction && mockupUrl && (
-                          <a
-                            className="mockup-link"
-                            href={mockupUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            View current mockup
-                          </a>
+                          <>
+                            <div className="mockup-preview">
+                              {isImageMockup ? (
+                                <img
+                                  src={mockupUrl}
+                                  alt={mockupName}
+                                  loading="lazy"
+                                />
+                              ) : isPdfMockup ? (
+                                <iframe
+                                  src={mockupUrl}
+                                  title={`Preview of ${mockupName}`}
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="mockup-preview-fallback">
+                                  Preview not available for this file type.
+                                </div>
+                              )}
+                            </div>
+                            <a
+                              className="mockup-link download"
+                              href={mockupUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                            >
+                              Download {mockupName}
+                            </a>
+                          </>
                         )}
                       </div>
                     );
                   })()}
-
-                  {isProductionSection && canViewMockup && (
-                    <div className="engaged-action-card">
-                      <h3>Approved Mockup</h3>
-                      <p>Review or download the approved mockup before production.</p>
-                      <div className="mockup-preview">
-                        {isImageMockup ? (
-                          <img src={mockupUrl} alt={mockupName} loading="lazy" />
-                        ) : isPdfMockup ? (
-                          <iframe
-                            src={mockupUrl}
-                            title={`Preview of ${mockupName}`}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="mockup-preview-fallback">
-                            Preview not available for this file type.
-                          </div>
-                        )}
-                      </div>
-                      <a
-                        className="mockup-link download"
-                        href={mockupUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        download
-                      >
-                        Download {mockupName}
-                      </a>
-                    </div>
-                  )}
                 </div>
               </section>
             );
