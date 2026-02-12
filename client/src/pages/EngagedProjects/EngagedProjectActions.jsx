@@ -65,6 +65,7 @@ const EngagedProjectActions = ({ user }) => {
   const [statusUpdating, setStatusUpdating] = useState(null);
 
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateScopeDepts, setUpdateScopeDepts] = useState([]);
   const [updateForm, setUpdateForm] = useState({
     content: "",
     category: "Production",
@@ -181,27 +182,47 @@ const EngagedProjectActions = ({ user }) => {
 
   const mockupUrl = project?.mockup?.fileUrl;
   const mockupName = project?.mockup?.fileName || "Approved Mockup";
+  const mockupType = project?.mockup?.fileType || "";
+  const isImageMockup =
+    mockupType.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(mockupUrl || "");
+  const isPdfMockup =
+    mockupType === "application/pdf" || /\.pdf$/i.test(mockupUrl || "");
   const canViewMockup =
     Boolean(mockupUrl) && userEngagedDepts.includes("Production");
-
-  const projectHasDept = (targetProject, dept) => {
-    const projDepts = targetProject.departments || [];
-    if (dept === "Graphics")
-      return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
-    if (dept === "Production")
-      return projDepts.some((d) => productionSubDepts.includes(d));
-    if (dept === "Stores")
-      return projDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
-    return false;
-  };
-
-  const deptActions = useMemo(() => {
+  const departmentSections = useMemo(() => {
     if (!project) return [];
-    let allowed = userEngagedDepts.filter((d) => STATUS_ACTIONS[d]);
-    return allowed
-      .filter((dept) => projectHasDept(project, dept))
-      .map((dept) => ({ dept, ...STATUS_ACTIONS[dept] }));
-  }, [project, userEngagedDepts, productionSubDepts]);
+
+    const sections = [];
+
+    const buildSection = (key, label, pool) => {
+      const subDepts = pool.filter((dept) =>
+        projectEngagedSubDepts.includes(dept),
+      );
+      if (subDepts.length === 0) return;
+      sections.push({
+        key,
+        label,
+        subDepts,
+        action: STATUS_ACTIONS[key] || null,
+      });
+    };
+
+    if (userEngagedDepts.includes("Graphics")) {
+      buildSection("Graphics", "Graphics", GRAPHICS_SUB_DEPARTMENTS);
+    }
+    if (userEngagedDepts.includes("Production")) {
+      buildSection("Production", "Production", productionSubDepts);
+    }
+    if (userEngagedDepts.includes("Stores")) {
+      buildSection("Stores", "Stores", STORES_SUB_DEPARTMENTS);
+    }
+    if (userEngagedDepts.includes("Photography")) {
+      buildSection("Photography", "Photography", PHOTOGRAPHY_SUB_DEPARTMENTS);
+    }
+
+    return sections;
+  }, [project, projectEngagedSubDepts, userEngagedDepts, productionSubDepts]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "TBD";
@@ -304,16 +325,20 @@ const EngagedProjectActions = ({ user }) => {
     return "Production";
   };
 
-  const handleOpenUpdateModal = () => {
+  const handleOpenUpdateModal = (departments = projectEngagedSubDepts) => {
     if (!project) return;
-    if (projectEngagedSubDepts.length === 0) {
+    const availableDepts = departments?.length
+      ? departments
+      : projectEngagedSubDepts;
+    if (availableDepts.length === 0) {
       setToast({
         type: "error",
         message: "No engaged departments available for updates.",
       });
       return;
     }
-    const defaultDept = projectEngagedSubDepts[0];
+    const defaultDept = availableDepts[0];
+    setUpdateScopeDepts(availableDepts);
     setUpdateForm({
       content: "",
       category: getCategoryForDepartment(defaultDept),
@@ -350,6 +375,7 @@ const EngagedProjectActions = ({ user }) => {
       if (res.ok) {
         setToast({ type: "success", message: "Update posted successfully!" });
         setShowUpdateModal(false);
+        setUpdateScopeDepts([]);
         setUpdateForm({ content: "", category: "Production", department: "" });
       } else {
         const errorData = await res.json();
@@ -599,149 +625,199 @@ const EngagedProjectActions = ({ user }) => {
         </div>
       </div>
 
-      {showPaymentWarning && (
-        <div className="engaged-warning-banner">
-          Payment verification is required before production can be completed.
-        </div>
-      )}
+      <div className="engaged-sections">
+        {departmentSections.length === 0 ? (
+          <div className="empty-state">No engaged departments available.</div>
+        ) : (
+          departmentSections.map((section) => {
+            const action = section.action;
+            const isProductionSection = section.key === "Production";
 
-      <div className="engaged-action-grid">
-        <div className="engaged-action-card">
-          <h3>Post Update</h3>
-          <p>Share a quick update for your engaged department.</p>
-          <button
-            className="update-btn"
-            onClick={handleOpenUpdateModal}
-            disabled={projectEngagedSubDepts.length === 0}
-          >
-            Post Update
-          </button>
-        </div>
+            return (
+              <section key={section.key} className="engaged-section">
+                <div className="engaged-section-header">
+                  <div>
+                    <h2 className="engaged-section-title">{section.label}</h2>
+                    <p className="engaged-section-subtitle">
+                      {section.subDepts.length > 1
+                        ? "Engaged departments"
+                        : "Engaged department"}
+                    </p>
+                  </div>
+                  <div className="engaged-section-tags">
+                    {section.subDepts.map((dept) => (
+                      <span key={dept} className="engaged-section-chip">
+                        {getDepartmentLabel(dept)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
 
-        <div className="engaged-action-card">
-          <h3>Engagement Acceptance</h3>
-          <p>Confirm engagement for the departments assigned to you.</p>
-          <div className="engaged-ack-list">
-            {projectEngagedSubDepts.length === 0 ? (
-              <div className="engaged-action-meta">
-                No engaged departments available.
-              </div>
-            ) : (
-              projectEngagedSubDepts.map((dept) => {
-                const isAcknowledged = acknowledgedDepts.has(dept);
-                const canAcknowledge =
-                  !isAcknowledged && isScopeApprovalComplete(project.status);
-                return (
-                  <div key={dept} className="engaged-ack-row">
-                    <div className="engaged-ack-info">
-                      <span>{getDepartmentLabel(dept)}</span>
-                      {isAcknowledged && (
-                        <span className="engaged-ack-status">Acknowledged</span>
-                      )}
-                    </div>
+                {isProductionSection && showPaymentWarning && (
+                  <div className="engaged-warning-banner">
+                    Payment verification is required before production can be completed.
+                  </div>
+                )}
+
+                <div className="engaged-section-grid">
+                  <div className="engaged-action-card">
+                    <h3>Post Update</h3>
+                    <p>
+                      Share a quick update for the {section.label.toLowerCase()} team.
+                    </p>
                     <button
-                      className="acknowledge-btn"
-                      onClick={() => openAcknowledgeModal(project, dept)}
-                      disabled={!canAcknowledge}
-                      title={
-                        isAcknowledged
-                          ? "Already acknowledged"
-                          : isScopeApprovalComplete(project.status)
-                            ? "Confirm engagement"
-                            : "Scope approval must be completed"
-                      }
+                      className="update-btn"
+                      onClick={() => handleOpenUpdateModal(section.subDepts)}
+                      disabled={section.subDepts.length === 0}
                     >
-                      {isAcknowledged ? "Acknowledged" : "Acknowledge"}
+                      Post Update
                     </button>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
 
-        {deptActions.map((action) => {
-          const isPending = project.status === action.pending;
-          const isProductionAction = action.complete === "Production Completed";
-          const blockedByPayment = isProductionAction && !hasPaymentVerification;
-          const actionKey = `${project._id}:${action.complete}`;
-          const isUpdating = statusUpdating === actionKey;
-          const isMockupAction = action.dept === "Graphics";
-          const mockupAlreadySubmitted = isMockupAction && Boolean(mockupUrl);
-          const buttonLabel = mockupAlreadySubmitted
-            ? "Mockup Already submitted"
-            : isMockupAction
-              ? "Upload Mockup & Complete"
-              : action.label;
+                  <div className="engaged-action-card">
+                    <h3>Engagement Acceptance</h3>
+                    <p>Confirm engagement for the departments assigned to you.</p>
+                    <div className="engaged-ack-list">
+                      {section.subDepts.map((dept) => {
+                        const isAcknowledged = acknowledgedDepts.has(dept);
+                        const canAcknowledge =
+                          !isAcknowledged &&
+                          isScopeApprovalComplete(project.status);
+                        return (
+                          <div key={dept} className="engaged-ack-row">
+                            <div className="engaged-ack-info">
+                              <span>{getDepartmentLabel(dept)}</span>
+                              {isAcknowledged && (
+                                <span className="engaged-ack-status">
+                                  Acknowledged
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="acknowledge-btn"
+                              onClick={() => openAcknowledgeModal(project, dept)}
+                              disabled={!canAcknowledge}
+                              title={
+                                isAcknowledged
+                                  ? "Already acknowledged"
+                                  : isScopeApprovalComplete(project.status)
+                                    ? "Confirm engagement"
+                                    : "Scope approval must be completed"
+                              }
+                            >
+                              {isAcknowledged ? "Acknowledged" : "Acknowledge"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-          let disabledReason = "";
-          if (!isPending) {
-            disabledReason = `Waiting for ${action.pending}.`;
-          } else if (blockedByPayment) {
-            disabledReason =
-              "Payment verification is required before production can be completed.";
-          } else if (mockupAlreadySubmitted) {
-            disabledReason = "Mockup already submitted.";
-          }
+                  {action && (() => {
+                    const isPending = project.status === action.pending;
+                    const isProductionAction =
+                      action.complete === "Production Completed";
+                    const blockedByPayment =
+                      isProductionAction && !hasPaymentVerification;
+                    const actionKey = `${project._id}:${action.complete}`;
+                    const isUpdating = statusUpdating === actionKey;
+                    const isMockupAction = action.dept === "Graphics";
+                    const mockupAlreadySubmitted =
+                      isMockupAction && Boolean(mockupUrl);
+                    const buttonLabel = mockupAlreadySubmitted
+                      ? "Mockup Already submitted"
+                      : isMockupAction
+                        ? "Upload Mockup & Complete"
+                        : action.label;
 
-          return (
-            <div key={action.dept} className="engaged-action-card">
-              <h3>{action.dept} Stage</h3>
-              <p>
-                {isMockupAction
-                  ? "Upload the approved mockup and confirm completion."
-                  : "Confirm this stage is complete for the project."}
-              </p>
-              <button
-                className="complete-btn"
-                onClick={() =>
-                  isMockupAction
-                    ? openMockupModal(project, action)
-                    : openCompleteModal(project, action)
-                }
-                disabled={
-                  !isPending ||
-                  blockedByPayment ||
-                  isUpdating ||
-                  mockupAlreadySubmitted
-                }
-                title={disabledReason || "Confirm stage completion"}
-              >
-                {isUpdating ? "Updating..." : buttonLabel}
-              </button>
-              {blockedByPayment && (
-                <div className="engaged-action-meta">
-                  Payment verification must be recorded first.
+                    let disabledReason = "";
+                    if (!isPending) {
+                      disabledReason = `Waiting for ${action.pending}.`;
+                    } else if (blockedByPayment) {
+                      disabledReason =
+                        "Payment verification is required before production can be completed.";
+                    } else if (mockupAlreadySubmitted) {
+                      disabledReason = "Mockup already submitted.";
+                    }
+
+                    return (
+                      <div className="engaged-action-card">
+                        <h3>{action.dept} Stage</h3>
+                        <p>
+                          {isMockupAction
+                            ? "Upload the approved mockup and confirm completion."
+                            : "Confirm this stage is complete for the project."}
+                        </p>
+                        <button
+                          className="complete-btn"
+                          onClick={() =>
+                            isMockupAction
+                              ? openMockupModal(project, action)
+                              : openCompleteModal(project, action)
+                          }
+                          disabled={
+                            !isPending ||
+                            blockedByPayment ||
+                            isUpdating ||
+                            mockupAlreadySubmitted
+                          }
+                          title={disabledReason || "Confirm stage completion"}
+                        >
+                          {isUpdating ? "Updating..." : buttonLabel}
+                        </button>
+                        {blockedByPayment && (
+                          <div className="engaged-action-meta">
+                            Payment verification must be recorded first.
+                          </div>
+                        )}
+                        {isMockupAction && mockupUrl && (
+                          <a
+                            className="mockup-link"
+                            href={mockupUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View current mockup
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {isProductionSection && canViewMockup && (
+                    <div className="engaged-action-card">
+                      <h3>Approved Mockup</h3>
+                      <p>Review or download the approved mockup before production.</p>
+                      <div className="mockup-preview">
+                        {isImageMockup ? (
+                          <img src={mockupUrl} alt={mockupName} loading="lazy" />
+                        ) : isPdfMockup ? (
+                          <iframe
+                            src={mockupUrl}
+                            title={`Preview of ${mockupName}`}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="mockup-preview-fallback">
+                            Preview not available for this file type.
+                          </div>
+                        )}
+                      </div>
+                      <a
+                        className="mockup-link download"
+                        href={mockupUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                      >
+                        Download {mockupName}
+                      </a>
+                    </div>
+                  )}
                 </div>
-              )}
-              {isMockupAction && mockupUrl && (
-                <a
-                  className="mockup-link"
-                  href={mockupUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View current mockup
-                </a>
-              )}
-            </div>
-          );
-        })}
-
-        {canViewMockup && (
-          <div className="engaged-action-card">
-            <h3>Approved Mockup</h3>
-            <p>Review or download the approved mockup before production.</p>
-            <a
-              className="mockup-link download"
-              href={mockupUrl}
-              target="_blank"
-              rel="noreferrer"
-              download
-            >
-              Download {mockupName}
-            </a>
-          </div>
+              </section>
+            );
+          })
         )}
       </div>
 
@@ -753,7 +829,10 @@ const EngagedProjectActions = ({ user }) => {
             <div className="engaged-depts-section">
               <label>Engaged Departments</label>
               <div className="dept-chips">
-                {projectEngagedSubDepts.map((dept) => (
+                {(updateScopeDepts.length
+                  ? updateScopeDepts
+                  : projectEngagedSubDepts
+                ).map((dept) => (
                   <span
                     key={dept}
                     className={`dept-chip ${
@@ -799,6 +878,7 @@ const EngagedProjectActions = ({ user }) => {
                       category: "Production",
                       department: "",
                     });
+                    setUpdateScopeDepts([]);
                   }}
                 >
                   Cancel

@@ -357,6 +357,13 @@
   color: #2563eb;
   text-decoration: none;
   transition: all 0.2s;
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 
 .mockup-link:hover {
@@ -374,6 +381,39 @@
   border-color: #0f766e;
   color: #0f766e;
   box-shadow: 0 4px 10px rgba(15, 118, 110, 0.15);
+}
+
+.mockup-preview {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: #f8fafc;
+  overflow: hidden;
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mockup-preview img {
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+  object-fit: contain;
+  display: block;
+}
+
+.mockup-preview iframe {
+  width: 100%;
+  height: 260px;
+  border: none;
+}
+
+.mockup-preview-fallback {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding: 1rem;
+  text-align: center;
 }
 
 .file-hint {
@@ -471,6 +511,67 @@
 }
 
 .engaged-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.engaged-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.engaged-section {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.25rem;
+  background: var(--card-bg);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+}
+
+.engaged-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.engaged-section-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.engaged-section-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.engaged-section-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.engaged-section-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.engaged-section-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
