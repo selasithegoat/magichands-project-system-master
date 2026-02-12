@@ -812,7 +812,18 @@ const EngagedProjects = ({ user }) => {
                     return (
                       <tr
                         key={project._id}
-                        className={`${emergency ? "emergency-row" : ""} ${approaching ? "approaching-row" : ""}`}
+                        className={`${emergency ? "emergency-row" : ""} ${approaching ? "approaching-row" : ""} clickable-row`}
+                        onClick={() =>
+                          navigate(`/engaged-projects/actions/${project._id}`)
+                        }
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`/engaged-projects/actions/${project._id}`);
+                          }
+                        }}
                       >
                         <td className="indicator-cell">
                           {emergency && (
@@ -834,7 +845,6 @@ const EngagedProjects = ({ user }) => {
                         </td>
                         <td
                           className="project-id-cell"
-                          onClick={() => navigate(`/detail/${project._id}`)}
                         >
                           {project.orderId || project._id.slice(-6).toUpperCase()}
                         </td>
@@ -853,93 +863,15 @@ const EngagedProjects = ({ user }) => {
                           </span>
                         </td>
                         <td>
-                          <div className="action-buttons">
-                            {deptActions.map((action) => {
-                              const actionKey = `${project._id}:${action.complete}`;
-                              const isUpdating = statusUpdating === actionKey;
-                              const isReady = project.status === action.pending;
-                              const isMockupAction =
-                                action.complete === "Mockup Completed";
-                              const requiresPayment =
-                                action.complete === "Production Completed";
-                              const hasPaymentVerification =
-                                (project.paymentVerifications || []).length > 0;
-                              const paymentBlocked =
-                                requiresPayment && !hasPaymentVerification;
-                              return (
-                                <button
-                                  key={action.complete}
-                                  className="complete-btn"
-                                  onClick={() =>
-                                    isMockupAction
-                                      ? openMockupModal(project, action)
-                                      : openCompleteModal(project, action)
-                                  }
-                                  disabled={!isReady || isUpdating || paymentBlocked}
-                                  title={
-                                    paymentBlocked
-                                      ? "Payment verification required before production"
-                                      : isReady
-                                        ? isMockupAction
-                                          ? "Upload approved mockup"
-                                          : `Mark ${action.label}`
-                                        : `Waiting for ${action.pending}`
-                                  }
-                                >
-                                  {isUpdating ? "Updating..." : action.label}
-                                </button>
-                              );
-                            })}
-                            <button
-                              className="update-btn"
-                              onClick={() => handleOpenUpdateModal(project)}
-                            >
-                              Update
-                            </button>
-                            {canViewMockup && (
-                              <a
-                                className="mockup-link download"
-                                href={`${mockupUrl}`}
-                                download
-                                title={
-                                  mockup.note
-                                    ? `Note: ${mockup.note}`
-                                    : "Download approved mockup"
-                                }
-                              >
-                                Download Mockup
-                              </a>
-                            )}
-                            {project.departments
-                              .filter((dept) => engagedSubDepts.includes(dept))
-                              .filter(
-                                (dept) =>
-                                  !project.acknowledgements?.some(
-                                    (a) => a.department === dept,
-                                  ),
-                              )
-                              .map((dept) => {
-                                const scopeApproved = isScopeApprovalComplete(
-                                  project.status,
-                                );
-                                const title = scopeApproved
-                                  ? `Accept engagement for ${getDepartmentLabel(dept)}`
-                                  : "Waiting for scope approval to be completed";
-                                return (
-                                  <button
-                                    key={dept}
-                                    className="acknowledge-btn"
-                                    onClick={() =>
-                                      openAcknowledgeModal(project, dept)
-                                    }
-                                    title={title}
-                                    disabled={!scopeApproved}
-                                  >
-                                    {`Accept ${getDepartmentLabel(dept)} Engagement`}
-                                  </button>
-                                );
-                              })}
-                          </div>
+                          <button
+                            className="update-btn view-actions-btn"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(`/engaged-projects/actions/${project._id}`);
+                            }}
+                          >
+                            View Actions
+                          </button>
                         </td>
                       </tr>
                     );

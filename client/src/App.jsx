@@ -30,6 +30,9 @@ const EndOfDayUpdate = lazy(
 const EngagedProjects = lazy(
   () => import("./pages/EngagedProjects/EngagedProjects"),
 );
+const EngagedProjectActions = lazy(
+  () => import("./pages/EngagedProjects/EngagedProjectActions"),
+);
 
 import {
   Routes,
@@ -473,6 +476,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <EngagedProjects user={user} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/engaged-projects/actions/:id"
+          element={
+            <ProtectedLayout
+              activeView="engaged-projects"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <EngagedProjectActions user={user} />
             </ProtectedLayout>
           }
         />
