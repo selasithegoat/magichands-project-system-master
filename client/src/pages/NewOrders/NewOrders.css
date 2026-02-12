@@ -369,6 +369,29 @@
   gap: 0.5rem;
 }
 
+.payment-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.action-btn.undo-btn {
+  background: rgba(249, 115, 22, 0.12);
+  color: #ea580c;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.action-btn.undo-btn:hover {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.45);
+  color: #c2410c;
+}
+
+.action-btn.undo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Loading and Empty States */
 .loading-state,
 .empty-state {

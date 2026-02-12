@@ -4,26 +4,31 @@ import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const INVOICE_CONFIRM_PHRASE = "I confirm the invoice has been sent";
+const INVOICE_UNDO_PHRASE = "I confirm the invoice status should be reset";
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
     label: "Part Payment",
     phrase: "I confirm part payment has been received",
+    undoPhrase: "I confirm part payment verification should be removed",
   },
   {
     type: "full_payment",
     label: "Full Payment",
     phrase: "I confirm full payment has been received",
+    undoPhrase: "I confirm full payment verification should be removed",
   },
   {
     type: "po",
     label: "P.O",
     phrase: "I confirm a purchase order has been received",
+    undoPhrase: "I confirm P.O verification should be removed",
   },
   {
     type: "authorized",
     label: "Authorized",
     phrase: "I confirm payment authorization has been received",
+    undoPhrase: "I confirm authorization verification should be removed",
   },
 ];
 
@@ -74,6 +79,9 @@ const OrderActions = () => {
   const [invoiceModal, setInvoiceModal] = useState(false);
   const [invoiceInput, setInvoiceInput] = useState("");
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
+  const [invoiceUndoModal, setInvoiceUndoModal] = useState(false);
+  const [invoiceUndoInput, setInvoiceUndoInput] = useState("");
+  const [invoiceUndoSubmitting, setInvoiceUndoSubmitting] = useState(false);
 
   const [paymentModal, setPaymentModal] = useState({
     open: false,
@@ -81,6 +89,12 @@ const OrderActions = () => {
   });
   const [paymentInput, setPaymentInput] = useState("");
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentUndoModal, setPaymentUndoModal] = useState({
+    open: false,
+    type: null,
+  });
+  const [paymentUndoInput, setPaymentUndoInput] = useState("");
+  const [paymentUndoSubmitting, setPaymentUndoSubmitting] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -127,7 +141,10 @@ const OrderActions = () => {
 
   useEffect(() => {
     if (feedbackModal.open && feedbackModal.project && project?._id) {
-      if (project._id === feedbackModal.project._id && project !== feedbackModal.project) {
+      if (
+        project._id === feedbackModal.project._id &&
+        project !== feedbackModal.project
+      ) {
         setFeedbackModal((prev) => ({ ...prev, project }));
       }
     }
@@ -314,15 +331,65 @@ const OrderActions = () => {
     setInvoiceInput("");
   };
 
+  const openInvoiceUndoModal = () => {
+    setInvoiceUndoInput("");
+    setInvoiceUndoModal(true);
+  };
+
+  const closeInvoiceUndoModal = () => {
+    if (invoiceUndoSubmitting) return;
+    setInvoiceUndoModal(false);
+    setInvoiceUndoInput("");
+  };
+
+  const handleConfirmInvoiceUndo = async () => {
+    if (!project || invoiceUndoInput.trim() !== INVOICE_UNDO_PHRASE) return;
+    setInvoiceUndoSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${project._id}/invoice-sent/undo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Invoice status reset.", "success");
+        closeInvoiceUndoModal();
+      } else {
+        const errorData = await res.json();
+        showToast(
+          errorData.message || "Failed to undo invoice status.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Invoice undo error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setInvoiceUndoSubmitting(false);
+    }
+  };
+
   const openPaymentModal = (type) => {
     setPaymentModal({ open: true, type });
     setPaymentInput("");
+  };
+
+  const openPaymentUndoModal = (type) => {
+    setPaymentUndoModal({ open: true, type });
+    setPaymentUndoInput("");
   };
 
   const closePaymentModal = () => {
     if (paymentSubmitting) return;
     setPaymentModal({ open: false, type: null });
     setPaymentInput("");
+  };
+
+  const closePaymentUndoModal = () => {
+    if (paymentUndoSubmitting) return;
+    setPaymentUndoModal({ open: false, type: null });
+    setPaymentUndoInput("");
   };
 
   const handleConfirmPayment = async () => {
@@ -359,6 +426,43 @@ const OrderActions = () => {
       showToast("Network error. Please try again.", "error");
     } finally {
       setPaymentSubmitting(false);
+    }
+  };
+
+  const handleConfirmPaymentUndo = async () => {
+    if (!project || !paymentUndoModal.type) return;
+    const option = PAYMENT_OPTIONS.find(
+      (item) => item.type === paymentUndoModal.type,
+    );
+    if (!option || paymentUndoInput.trim() !== option.undoPhrase) return;
+
+    setPaymentUndoSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/payment-verification/undo`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: paymentUndoModal.type }),
+        },
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(`${option.label} verification removed.`, "success");
+        closePaymentUndoModal();
+      } else {
+        const errorData = await res.json();
+        showToast(
+          errorData.message || "Failed to undo payment verification.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Payment undo error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setPaymentUndoSubmitting(false);
     }
   };
 
@@ -471,36 +575,53 @@ const OrderActions = () => {
 
           <div className="action-card">
             <h3>Billing</h3>
-            <p>Confirm invoice and payment milestones.</p>
-            <div className="billing-actions">
-              <button
-                className="action-btn"
-                onClick={openInvoiceModal}
-                disabled={!canManageBilling || invoiceSent}
-              >
-                {invoiceSent ? "Invoice Sent" : "Mark Invoice Sent"}
-              </button>
-              <div className="payment-actions">
-                {PAYMENT_OPTIONS.map((option) => (
+              <p>Confirm invoice and payment milestones.</p>
+              <div className="billing-actions">
+                {!invoiceSent ? (
                   <button
-                    key={option.type}
                     className="action-btn"
-                    onClick={() => openPaymentModal(option.type)}
-                    disabled={!canManageBilling || paymentTypes.has(option.type)}
-                    title={
-                      paymentTypes.has(option.type)
-                        ? `${option.label} confirmed`
-                        : `Confirm ${option.label}`
-                    }
+                    onClick={openInvoiceModal}
+                    disabled={!canManageBilling}
                   >
-                    {paymentTypes.has(option.type)
-                      ? `${option.label} Confirmed`
-                      : `Confirm ${option.label}`}
+                    Mark Invoice Sent
                   </button>
-                ))}
+                ) : (
+                  <button
+                    className="action-btn undo-btn"
+                    onClick={openInvoiceUndoModal}
+                    disabled={!canManageBilling}
+                    title="Undo invoice sent"
+                  >
+                    Undo Invoice Sent
+                  </button>
+                )}
+                <div className="payment-actions">
+                  {PAYMENT_OPTIONS.map((option) => (
+                    <div key={option.type} className="payment-action-group">
+                      {!paymentTypes.has(option.type) ? (
+                        <button
+                          className="action-btn"
+                          onClick={() => openPaymentModal(option.type)}
+                          disabled={!canManageBilling}
+                          title={`Confirm ${option.label}`}
+                        >
+                          Confirm {option.label}
+                        </button>
+                      ) : (
+                        <button
+                          className="action-btn undo-btn"
+                          onClick={() => openPaymentUndoModal(option.type)}
+                          disabled={!canManageBilling}
+                          title={`Undo ${option.label}`}
+                        >
+                          Undo {option.label}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
         </div>
       </div>
 
@@ -582,6 +703,45 @@ const OrderActions = () => {
         </div>
       )}
 
+      {invoiceUndoModal && (
+        <div className="confirm-modal-overlay" onClick={closeInvoiceUndoModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Undo Invoice Sent</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              Type the phrase below to reset invoice status.
+            </p>
+            <div className="confirm-phrase">{INVOICE_UNDO_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={invoiceUndoInput}
+                onChange={(e) => setInvoiceUndoInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeInvoiceUndoModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn complete-btn"
+                onClick={handleConfirmInvoiceUndo}
+                disabled={
+                  invoiceUndoSubmitting ||
+                  invoiceUndoInput.trim() !== INVOICE_UNDO_PHRASE
+                }
+              >
+                {invoiceUndoSubmitting ? "Confirming..." : "Undo Invoice Sent"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {paymentModal.open && (
         <div className="confirm-modal-overlay" onClick={closePaymentModal}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
@@ -621,6 +781,51 @@ const OrderActions = () => {
                 }
               >
                 {paymentSubmitting ? "Confirming..." : "Confirm Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentUndoModal.open && (
+        <div className="confirm-modal-overlay" onClick={closePaymentUndoModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Undo Payment Verification</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              Type the phrase below to undo payment verification.
+            </p>
+            <div className="confirm-phrase">
+              {PAYMENT_OPTIONS.find((option) => option.type === paymentUndoModal.type)
+                ?.undoPhrase || ""}
+            </div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={paymentUndoInput}
+                onChange={(e) => setPaymentUndoInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closePaymentUndoModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn complete-btn"
+                onClick={handleConfirmPaymentUndo}
+                disabled={
+                  paymentUndoSubmitting ||
+                  paymentUndoInput.trim() !==
+                    (PAYMENT_OPTIONS.find(
+                      (option) => option.type === paymentUndoModal.type,
+                    )?.undoPhrase || "")
+                }
+              >
+                {paymentUndoSubmitting ? "Confirming..." : "Undo Payment"}
               </button>
             </div>
           </div>

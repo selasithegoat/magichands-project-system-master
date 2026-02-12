@@ -1006,6 +1006,98 @@ const verifyPayment = async (req, res) => {
   }
 };
 
+// @desc    Undo invoice sent for a project
+// @route   POST /api/projects/:id/invoice-sent/undo
+// @access  Private (Admin or Front Desk)
+const undoInvoiceSent = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to undo invoice status.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (!project.invoice?.sent) {
+      return res.status(400).json({ message: "Invoice is not marked as sent." });
+    }
+
+    project.invoice = {
+      sent: false,
+      sentAt: null,
+      sentBy: null,
+    };
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Invoice status reset.",
+      { invoice: { sent: false } },
+    );
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error undoing invoice sent:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Undo payment verification for a project
+// @route   POST /api/projects/:id/payment-verification/undo
+// @access  Private (Admin or Front Desk)
+const undoPaymentVerification = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to undo payment verification.",
+      });
+    }
+
+    const { type } = req.body;
+    if (!type || !PAYMENT_TYPES.has(type)) {
+      return res.status(400).json({ message: "Invalid payment type." });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const existingIndex = (project.paymentVerifications || []).findIndex(
+      (entry) => entry.type === type,
+    );
+
+    if (existingIndex === -1) {
+      return res
+        .status(400)
+        .json({ message: "Payment verification not found." });
+    }
+
+    project.paymentVerifications.splice(existingIndex, 1);
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      `Payment verification removed (${type}).`,
+      { paymentVerification: { type, removed: true } },
+    );
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error undoing payment verification:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Upload approved mockup file for a project
 // @route   POST /api/projects/:id/mockup
 // @access  Private (Graphics/Design or Admin)
@@ -2359,6 +2451,8 @@ module.exports = {
   updateProjectStatus,
   markInvoiceSent,
   verifyPayment,
+  undoInvoiceSent,
+  undoPaymentVerification,
   uploadProjectMockup,
   addFeedbackToProject,
   deleteFeedbackFromProject,
