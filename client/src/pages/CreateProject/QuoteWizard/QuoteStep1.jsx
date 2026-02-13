@@ -5,7 +5,6 @@ import BackArrow from "../../../components/icons/BackArrow";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
 import FolderIcon from "../../../components/icons/FolderIcon";
 import PersonIcon from "../../../components/icons/PersonIcon";
-import Select from "../../../components/ui/Select";
 import UserAvatar from "../../../components/ui/UserAvatar";
 
 const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
@@ -42,11 +41,23 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
     setFormData({ [field]: value });
   };
 
-  const selectedLeadValue = formData.lead || "";
+  const isLikelyLeadId = (value) =>
+    typeof value === "string" && /^[a-f0-9]{24}$/i.test(value.trim());
+
+  const selectedLeadValue = formData.lead?.value || formData.lead || "";
+  const selectedLeadOption = leads.find((l) => l.value === selectedLeadValue);
+  const rawLeadLabel =
+    typeof formData.leadLabel === "string" ? formData.leadLabel.trim() : "";
   const leadDisplayName =
-    formData.leadLabel ||
-    leads.find((l) => l.value === formData.lead)?.label ||
+    selectedLeadOption?.label ||
+    (rawLeadLabel && !isLikelyLeadId(rawLeadLabel) ? rawLeadLabel : "") ||
     "Assigned Lead";
+
+  const assistantLeadValue =
+    formData.assistantLeadId?.value || formData.assistantLeadId || "";
+  const assistantLeadDisplayName =
+    leads.find((l) => l.value === assistantLeadValue)?.label ||
+    "Not assigned";
 
   const handleNextStep = () => {
     if (!formData.projectName || !formData.deliveryDate || !formData.lead) {
@@ -88,6 +99,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               label="Received Time"
               value={formData.receivedTime}
               onChange={(e) => handleChange("receivedTime", e.target.value)}
+              readOnly
             />
             <Input
               type="date"
@@ -100,85 +112,34 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               onChange={(e) => handleChange("deliveryDate", e.target.value)}
               icon={<CalendarIcon />}
               required
+              readOnly
             />
           </div>
 
-          <div style={{ marginBottom: "1.5rem" }}>
-            <Select
-              label={
-                <>
-                  Lead Assignment <span style={{ color: "#ef4444" }}>*</span>
-                </>
-              }
-              options={leads}
-              value={leads.find((l) => l.value === formData.lead)}
-              onChange={(val) => handleChange("lead", val)}
-              disabled={true}
-              placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
-              renderValue={(option) => (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <UserAvatar name={leadDisplayName} />
-                  <span>{option.label}</span>
-                </div>
-              )}
-              renderOption={(option) => (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <UserAvatar name={option.label} />
-                  <span>{option.label}</span>
-                </div>
-              )}
-            />
+          <div className="quote-lead-display">
+            <label className="quote-lead-label">
+              Project Lead <span style={{ color: "#ef4444" }}>*</span>
+            </label>
+            <div className="quote-lead-card">
+              <UserAvatar name={leadDisplayName} />
+              <span className="quote-avatar-name">
+                {isLoadingLeads && !selectedLeadOption
+                  ? "Loading lead..."
+                  : leadDisplayName}
+              </span>
+            </div>
           </div>
 
-          <div style={{ marginBottom: "1.5rem" }}>
-            <Select
-              label="Assistant Lead (Optional)"
-              options={leads.filter((l) => l.value !== selectedLeadValue)}
-            value={leads.find((l) => l.value === formData.assistantLeadId)}
-            onChange={(val) =>
-              handleChange("assistantLeadId", val.value)
-            }
-            placeholder={
-              isLoadingLeads ? "Loading users..." : "Select Assistant"
-            }
-            disabled={isEditing}
-            renderValue={(option) => (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                <UserAvatar name={option.label} />
-                <span>{option.label}</span>
-              </div>
-            )}
-            renderOption={(option) => (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                <UserAvatar name={option.label} />
-                <span>{option.label}</span>
-              </div>
-            )}
-          />
+          <div className="quote-lead-display">
+            <label className="quote-lead-label">Assistant Lead (Optional)</label>
+            <div className="quote-lead-card">
+              <UserAvatar name={assistantLeadDisplayName} />
+              <span className="quote-avatar-name">
+                {isLoadingLeads && assistantLeadValue && assistantLeadDisplayName === "Not assigned"
+                  ? "Loading assistant lead..."
+                  : assistantLeadDisplayName}
+              </span>
+            </div>
           </div>
 
           <div className="form-row">
@@ -188,6 +149,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               onChange={(e) => handleChange("projectName", e.target.value)}
               icon={<FolderIcon />}
               required
+              readOnly
             />
             <Input
               label="Client Name"
@@ -195,6 +157,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               value={formData.client}
               onChange={(e) => handleChange("client", e.target.value)}
               icon={<PersonIcon />}
+              readOnly
             />
           </div>
 
@@ -230,6 +193,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               onChange={(e) => handleChange("briefOverview", e.target.value)}
               placeholder="High-level summary of the request..."
               rows="3"
+              readOnly
               style={{
                 width: "100%",
                 padding: "0.75rem",

@@ -8,7 +8,7 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const addItem = () => {
     const newItems = [
       ...(formData.items || []),
-      { description: "", qty: 1, breakdown: "", department: "" },
+      { description: "", qty: 1, breakdown: "" },
     ];
     setFormData({ items: newItems });
   };
@@ -55,7 +55,7 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
           )}
 
           {(formData.items || []).map((item, idx) => (
-            <div key={idx} className="item-row">
+            <div key={idx} className="item-row quote-item-row-no-department">
               <Input
                 label={idx === 0 ? "Description" : ""}
                 placeholder="Item Description"
@@ -74,12 +74,6 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                 placeholder="Size/Style breakdown"
                 value={item.breakdown}
                 onChange={(e) => updateItem(idx, "breakdown", e.target.value)}
-              />
-              <Input
-                label={idx === 0 ? "Department" : ""}
-                placeholder="Assigned Dept"
-                value={item.department}
-                onChange={(e) => updateItem(idx, "department", e.target.value)}
               />
               <button
                 type="button"

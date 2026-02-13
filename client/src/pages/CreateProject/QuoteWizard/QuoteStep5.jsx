@@ -3,7 +3,7 @@ import BackArrow from "../../../components/icons/BackArrow";
 import FolderIcon from "../../../components/icons/FolderIcon";
 import BuildingIcon from "../../../components/icons/BuildingIcon";
 import DollarIcon from "../../../components/icons/DollarIcon";
-import CheckIcon from "../../../components/icons/CheckIcon";
+import ClipboardListIcon from "../../../components/icons/ClipboardListIcon";
 import WarningIcon from "../../../components/icons/WarningIcon";
 import RobotArmIcon from "../../../components/icons/RobotArmIcon";
 import UserAvatar from "../../../components/ui/UserAvatar";
@@ -12,7 +12,14 @@ import ProgressBar from "../../../components/ui/ProgressBar";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 import "./QuoteStep5.css"; // We'll create this or use Step5.css if shared
 
-const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
+const QuoteStep5 = ({
+  formData,
+  leadDisplayName,
+  onCreate,
+  onBack,
+  onCancel,
+  onComplete,
+}) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -167,10 +174,10 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
             </div>
             <div className="review-item">
               <label>Lead</label>
-              <div className="user-row">
-                <UserAvatar name={formData.leadLabel || "Assigned Lead"} />
-                <span className="review-value">
-                  {formData.leadLabel || "Assigned Lead"}
+              <div className="quote-avatar-row user-row">
+                <UserAvatar name={leadDisplayName || "Assigned Lead"} />
+                <span className="review-value quote-avatar-name">
+                  {leadDisplayName || "Assigned Lead"}
                 </span>
               </div>
             </div>
@@ -216,8 +223,7 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
                   formData.items.map((item, idx) => (
                     <div key={idx} className="review-item-row-simple">
                       • {item.qty}x {item.description}{" "}
-                      {item.breakdown && `(${item.breakdown})`}{" "}
-                      {item.department && `[${item.department}]`}
+                      {item.breakdown && `(${item.breakdown})`}
                     </div>
                   ))}
               </div>
@@ -284,7 +290,7 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
           <div className="review-card-header">
             <div className="header-left">
               <div className="icon-box-blue">
-                <CheckIcon />
+                <ClipboardListIcon width="18" height="18" color="currentColor" />
               </div>
               <span className="card-title">Quote Requirements</span>
             </div>
@@ -386,7 +392,7 @@ const QuoteStep5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
         onConfirm={handleConfirmFinish}
         onCancel={() => setShowConfirmModal(false)}
         title="Confirm Project Acceptance"
-        message={`Are you sure you want to accept this quote and create the project "${formData.projectName}"? It will be assigned to ${formData.leadLabel || "the selected Lead"} for approval.`}
+        message={`Are you sure you want to accept this quote and create the project "${formData.projectName}"? It will be assigned to ${leadDisplayName || "the selected Lead"} for approval.`}
         confirmText="Yes, Accept Project"
         cancelText="Cancel"
       />

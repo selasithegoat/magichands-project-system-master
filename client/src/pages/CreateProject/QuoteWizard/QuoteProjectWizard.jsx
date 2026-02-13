@@ -21,6 +21,9 @@ const QuoteProjectWizard = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdOrderNumber, setCreatedOrderNumber] = useState("");
 
+  const isLikelyLeadId = (value) =>
+    typeof value === "string" && /^[a-f0-9]{24}$/i.test(value.trim());
+
   const normalizeResponsible = (responsible) => {
     if (!responsible) return null;
     const rawValue =
@@ -151,7 +154,7 @@ const QuoteProjectWizard = () => {
     },
 
     // Arrays for lists
-    items: [], // { description, quantity, breakdown, department }
+    items: [], // { description, quantity, breakdown }
     departments: [], // [NEW]
     uncontrollableFactors: [], // { activity, responsible, status, riskFactors }
     productionRisks: [], // [NEW]
@@ -240,6 +243,16 @@ const QuoteProjectWizard = () => {
     setFormData((prev) => ({ ...prev, ...updates }));
   };
 
+  const selectedLeadValue = formData.lead?.value || formData.lead || "";
+  const matchedLeadLabel =
+    leads.find((option) => option.value === selectedLeadValue)?.label || "";
+  const rawLeadLabel =
+    typeof formData.leadLabel === "string" ? formData.leadLabel.trim() : "";
+  const resolvedLeadLabel =
+    matchedLeadLabel ||
+    (rawLeadLabel && !isLikelyLeadId(rawLeadLabel) ? rawLeadLabel : "") ||
+    "Assigned Lead";
+
   const handleNext = () => setCurrentStep((prev) => prev + 1);
   const handleBack = () => setCurrentStep((prev) => prev - 1);
   const handleCancelProject = () => setShowCancelModal(true);
@@ -289,10 +302,7 @@ const QuoteProjectWizard = () => {
   const addItem = () => {
     setFormData((prev) => ({
       ...prev,
-      items: [
-        ...prev.items,
-        { description: "", qty: 1, breakdown: "", department: "" },
-      ],
+      items: [...prev.items, { description: "", qty: 1, breakdown: "" }],
     }));
   };
 
@@ -360,7 +370,7 @@ const QuoteProjectWizard = () => {
         details: {
           projectName: formData.projectName,
           client: formData.client,
-          lead: formData.leadLabel,
+          lead: resolvedLeadLabel,
           deliveryDate: formData.deliveryDate,
           briefOverview: formData.briefOverview,
           attachments: formData.attachments,
@@ -444,6 +454,7 @@ const QuoteProjectWizard = () => {
       {currentStep === 5 && (
         <QuoteStep5
           formData={formData}
+          leadDisplayName={resolvedLeadLabel}
           setFormData={handleUpdateFormData}
           onCreate={handleCreateProject}
           onBack={handleBack}
