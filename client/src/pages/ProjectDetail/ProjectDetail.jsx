@@ -25,6 +25,11 @@ import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import {
+  mergeProductionRiskSuggestions,
+  requestProductionRiskSuggestions,
+} from "../../utils/productionRiskAi";
+import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -548,6 +553,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               />
               <ProductionRisksCard
                 risks={project.productionRisks}
+                project={project}
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
@@ -1538,6 +1544,7 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
   // Confirmation Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const getRiskEntryId = (risk) => risk?._id || risk?.id || "";
 
   // Reset form when modal opens
   useEffect(() => {
@@ -1565,7 +1572,7 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
     setLoading(true);
     try {
       const url = editingRisk
-        ? `/api/projects/${projectId}/uncontrollable-factors/${editingRisk._id}`
+        ? `/api/projects/${projectId}/uncontrollable-factors/${getRiskEntryId(editingRisk)}`
         : `/api/projects/${projectId}/uncontrollable-factors`;
 
       const method = editingRisk ? "PATCH" : "POST";
@@ -1668,7 +1675,7 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
                       </button>
                       <button
                         className="btn-icon-small delete"
-                        onClick={() => handleDeleteClick(risk._id)}
+                        onClick={() => handleDeleteClick(getRiskEntryId(risk))}
                       >
                         <TrashIcon width="14" height="14" color="#ef4444" />
                       </button>
@@ -1780,6 +1787,8 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
         isOpen={isDeleteModalOpen}
         title="Delete Factor"
         message="Are you sure you want to delete this uncontrollable factor? This action cannot be undone."
+        confirmText="Yes, Delete"
+        cancelText="No, Keep"
         onConfirm={confirmDelete}
         onCancel={() => setIsDeleteModalOpen(false)}
       />
@@ -1789,6 +1798,7 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
 
 const ProductionRisksCard = ({
   risks = [],
+  project = null,
   projectId,
   onUpdate,
   readOnly = false,
@@ -1798,10 +1808,16 @@ const ProductionRisksCard = ({
   const [editingRisk, setEditingRisk] = useState(null);
   const [formData, setFormData] = useState({ description: "", preventive: "" });
   const [loading, setLoading] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isApplyingAiSuggestions, setIsApplyingAiSuggestions] = useState(false);
+  const [showAiReviewModal, setShowAiReviewModal] = useState(false);
+  const [pendingAiSuggestions, setPendingAiSuggestions] = useState([]);
+  const [aiNotice, setAiNotice] = useState(null);
 
   // Confirmation Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const getRiskEntryId = (risk) => risk?._id || risk?.id || "";
 
   // Reset form when modal opens
   useEffect(() => {
@@ -1824,7 +1840,7 @@ const ProductionRisksCard = ({
     setLoading(true);
     try {
       const url = editingRisk
-        ? `/api/projects/${projectId}/production-risks/${editingRisk._id}`
+        ? `/api/projects/${projectId}/production-risks/${getRiskEntryId(editingRisk)}`
         : `/api/projects/${projectId}/production-risks`;
 
       const method = editingRisk ? "PATCH" : "POST";
@@ -1875,6 +1891,139 @@ const ProductionRisksCard = ({
     }
   };
 
+  const handleMagicAiAssistance = async () => {
+    if (isAiLoading || !project || !projectId) return;
+
+    setIsAiLoading(true);
+    setAiNotice(null);
+
+    try {
+      const suggestions = await requestProductionRiskSuggestions(project);
+      const { addedCount, addedSuggestions } = mergeProductionRiskSuggestions(
+        risks,
+        suggestions,
+      );
+
+      if (addedCount === 0) {
+        setAiNotice({
+          type: "info",
+          text: "No new suggestions to add. Update project details and try again.",
+        });
+        return;
+      }
+
+      setPendingAiSuggestions(addedSuggestions);
+      setShowAiReviewModal(true);
+    } catch (error) {
+      setAiNotice({
+        type: "error",
+        text: error.message || "Magic AI Assistance failed. Please try again.",
+      });
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleApplyAiSuggestions = async (selectedSuggestions) => {
+    if (
+      isApplyingAiSuggestions ||
+      !projectId ||
+      !Array.isArray(selectedSuggestions) ||
+      selectedSuggestions.length === 0
+    ) {
+      return;
+    }
+
+    setIsApplyingAiSuggestions(true);
+    setAiNotice(null);
+
+    try {
+      const { addedCount, addedSuggestions } = mergeProductionRiskSuggestions(
+        risks,
+        selectedSuggestions,
+      );
+
+      if (addedCount === 0) {
+        setAiNotice({
+          type: "info",
+          text: "No new suggestions were added after review.",
+        });
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        addedSuggestions.map((suggestion) =>
+          fetch(`/api/projects/${projectId}/production-risks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(suggestion),
+          }),
+        ),
+      );
+
+      let successCount = 0;
+      let firstFailureMessage = "";
+
+      for (const result of results) {
+        if (result.status === "rejected") {
+          if (!firstFailureMessage) {
+            firstFailureMessage =
+              result.reason?.message ||
+              "Network error while adding suggested risks.";
+          }
+          continue;
+        }
+
+        if (result.value.ok) {
+          successCount += 1;
+          continue;
+        }
+
+        if (!firstFailureMessage) {
+          const errorPayload = await result.value.json().catch(() => ({}));
+          firstFailureMessage =
+            errorPayload?.message || "Failed to add one or more suggestions.";
+        }
+      }
+
+      if (successCount > 0) {
+        await onUpdate();
+      }
+
+      if (successCount === addedCount) {
+        setAiNotice({
+          type: "success",
+          text: `Added ${successCount} reviewed suggestion${successCount === 1 ? "" : "s"}.`,
+        });
+        return;
+      }
+
+      if (successCount > 0) {
+        setAiNotice({
+          type: "error",
+          text:
+            firstFailureMessage ||
+            `Added ${successCount} of ${addedCount} reviewed suggestions.`,
+        });
+        return;
+      }
+
+      setAiNotice({
+        type: "error",
+        text: firstFailureMessage || "Unable to add selected suggestions.",
+      });
+    } catch (error) {
+      setAiNotice({
+        type: "error",
+        text: error.message || "Failed to apply selected suggestions.",
+      });
+    } finally {
+      setIsApplyingAiSuggestions(false);
+      setShowAiReviewModal(false);
+      setPendingAiSuggestions([]);
+    }
+  };
+
   return (
     <div className="detail-card" style={{ padding: "0" }}>
       <div
@@ -1921,7 +2070,7 @@ const ProductionRisksCard = ({
                       </button>
                       <button
                         className="btn-icon-small delete"
-                        onClick={() => handleDeleteClick(risk._id)}
+                        onClick={() => handleDeleteClick(getRiskEntryId(risk))}
                       >
                         <TrashIcon width="14" height="14" color="#ef4444" />
                       </button>
@@ -1939,7 +2088,18 @@ const ProductionRisksCard = ({
           </div>
 
           {!readOnly && (
-            <div className="risk-card-footer">
+            <div className="risk-card-footer risk-card-footer-actions">
+              <button
+                type="button"
+                className="btn-magic-ai"
+                onClick={handleMagicAiAssistance}
+                disabled={isAiLoading || isApplyingAiSuggestions}
+              >
+                {isAiLoading ? "Generating Suggestions..." : "Magic AI Assistance"}
+              </button>
+              {aiNotice && (
+                <p className={`magic-ai-status ${aiNotice.type}`}>{aiNotice.text}</p>
+              )}
               <button
                 className="btn-add-risk"
                 onClick={() => {
@@ -2010,8 +2170,22 @@ const ProductionRisksCard = ({
         isOpen={isDeleteModalOpen}
         title="Delete Risk"
         message="Are you sure you want to delete this production risk? This action cannot be undone."
+        confirmText="Yes, Delete"
+        cancelText="No, Keep"
         onConfirm={confirmDelete}
         onCancel={() => setIsDeleteModalOpen(false)}
+      />
+      <ProductionRiskSuggestionModal
+        isOpen={showAiReviewModal}
+        title="Review before add"
+        suggestions={pendingAiSuggestions}
+        onClose={() => {
+          if (isApplyingAiSuggestions) return;
+          setShowAiReviewModal(false);
+          setPendingAiSuggestions([]);
+        }}
+        onConfirm={handleApplyAiSuggestions}
+        isApplying={isApplyingAiSuggestions}
       />
     </div>
   );

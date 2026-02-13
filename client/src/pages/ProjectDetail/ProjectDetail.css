@@ -453,6 +453,53 @@
   border-bottom-right-radius: 12px;
 }
 
+.risk-card-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.btn-magic-ai {
+  width: 100%;
+  padding: 0.65rem;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-magic-ai:hover:not(:disabled) {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+.btn-magic-ai:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.magic-ai-status {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.magic-ai-status.success {
+  color: #166534;
+}
+
+.magic-ai-status.error {
+  color: #b91c1c;
+}
+
+.magic-ai-status.info {
+  color: #475569;
+}
+
 .btn-add-risk {
   width: 100%;
   padding: 0.6rem;

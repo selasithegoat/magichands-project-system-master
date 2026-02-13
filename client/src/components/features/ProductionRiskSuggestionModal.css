@@ -1,0 +1,143 @@
+.ai-suggest-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 1rem;
+}
+
+.ai-suggest-modal {
+  width: min(560px, 96vw);
+  max-height: 88vh;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dbe1ec;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-suggest-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.5rem;
+}
+
+.ai-suggest-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ai-suggest-close-btn {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ai-suggest-modal-subtitle {
+  margin: 0;
+  padding: 0 1rem 0.75rem;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.ai-suggest-selection-tools {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0 1rem 0.75rem;
+}
+
+.ai-suggest-select-link {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ai-suggest-list {
+  overflow: auto;
+  padding: 0 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ai-suggest-item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.7rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.ai-suggest-item input[type="checkbox"] {
+  margin-top: 0.1rem;
+}
+
+.ai-suggest-item-content h4 {
+  margin: 0 0 0.28rem;
+  font-size: 0.88rem;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.ai-suggest-item-content p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.ai-suggest-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.ai-suggest-cancel-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-suggest-confirm-btn {
+  border: 1px solid #4f46e5;
+  background: #4f46e5;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ai-suggest-confirm-btn:disabled,
+.ai-suggest-cancel-btn:disabled,
+.ai-suggest-close-btn:disabled,
+.ai-suggest-select-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

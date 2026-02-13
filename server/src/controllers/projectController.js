@@ -93,6 +93,828 @@ const hasPaymentVerification = (project) =>
   Array.isArray(project?.paymentVerifications) &&
   project.paymentVerifications.length > 0;
 
+const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
+const AI_RISK_TIMEOUT_MS = 12000;
+const AI_RISK_TEMPERATURE = 0.75;
+const MIN_RISK_SUGGESTIONS = 5;
+const MAX_RISK_SUGGESTIONS = 8;
+
+const PRODUCTION_SUGGESTION_DEPARTMENTS = [
+  "graphics",
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+  "outside-production",
+  "in-house-production",
+  "local-outsourcing",
+];
+
+const PRODUCTION_SUGGESTION_DEPARTMENT_SET = new Set(
+  PRODUCTION_SUGGESTION_DEPARTMENTS,
+);
+
+const PRODUCTION_DEPARTMENT_LABELS = {
+  graphics: "Mockup / Graphics / Design",
+  dtf: "DTF Printing",
+  "uv-dtf": "UV DTF Printing",
+  "uv-printing": "UV Printing",
+  engraving: "Engraving",
+  "large-format": "Large Format",
+  "digital-press": "Digital Press",
+  "digital-heat-press": "Digital Heat Press",
+  "offset-press": "Offset Press",
+  "screen-printing": "Screen Printing",
+  embroidery: "Embroidery",
+  sublimation: "Sublimation",
+  "digital-cutting": "Digital Cutting",
+  "pvc-id": "PVC ID Cards",
+  "business-cards": "Business Cards",
+  installation: "Installation",
+  overseas: "Overseas",
+  woodme: "Woodme",
+  fabrication: "Fabrication",
+  signage: "Signage",
+  "outside-production": "Outside Production",
+  "in-house-production": "In-house Production",
+  "local-outsourcing": "Local Outsourcing",
+};
+
+const PRODUCTION_DEPARTMENT_ALIASES = {
+  graphics: "graphics",
+  design: "graphics",
+  "graphics design": "graphics",
+  "graphics/design": "graphics",
+  mockup: "graphics",
+  "mock up": "graphics",
+  "mockup design": "graphics",
+  "uv dtf": "uv-dtf",
+  "uv dtf printing": "uv-dtf",
+  "dtf printing": "dtf",
+  "large format printing": "large-format",
+  "screen print": "screen-printing",
+  "pvc id": "pvc-id",
+  "pvc id cards": "pvc-id",
+  "business cards": "business-cards",
+  "outside production": "outside-production",
+  "in house production": "in-house-production",
+  "local outsourcing": "local-outsourcing",
+};
+
+const toSafeArray = (value) => (Array.isArray(value) ? value : []);
+const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const normalizeTextToken = (value) =>
+  toText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const toOptionValue = (value) => {
+  if (typeof value === "string") return value.trim();
+  if (value && typeof value === "object") {
+    return toText(value.value || value.label);
+  }
+  return "";
+};
+
+const normalizeProductionDepartment = (value) => {
+  const raw = toOptionValue(value);
+  if (!raw) return "";
+
+  const normalized = raw.toLowerCase();
+  if (PRODUCTION_SUGGESTION_DEPARTMENT_SET.has(normalized)) {
+    return normalized;
+  }
+
+  const normalizedDash = normalized.replace(/_/g, "-").trim();
+  if (PRODUCTION_SUGGESTION_DEPARTMENT_SET.has(normalizedDash)) {
+    return normalizedDash;
+  }
+
+  const token = normalizeTextToken(raw);
+  if (!token) return "";
+  if (PRODUCTION_DEPARTMENT_ALIASES[token]) {
+    return PRODUCTION_DEPARTMENT_ALIASES[token];
+  }
+
+  for (const [deptId, label] of Object.entries(PRODUCTION_DEPARTMENT_LABELS)) {
+    if (token === normalizeTextToken(label)) {
+      return deptId;
+    }
+  }
+
+  return "";
+};
+
+const sanitizeRiskSuggestions = (
+  value,
+  limit = Number.POSITIVE_INFINITY,
+) => {
+  const uniqueDescriptions = new Set();
+  const cleaned = [];
+
+  toSafeArray(value).forEach((item) => {
+    const description = toText(item?.description);
+    const preventive = toText(item?.preventive);
+    if (!description || !preventive) return;
+
+    const descriptionKey = description.toLowerCase();
+    if (uniqueDescriptions.has(descriptionKey)) return;
+    uniqueDescriptions.add(descriptionKey);
+
+    cleaned.push({
+      description: description.slice(0, 160),
+      preventive: preventive.slice(0, 220),
+    });
+  });
+
+  return cleaned.slice(0, limit);
+};
+
+const buildRiskSuggestionContext = (projectData = {}) => {
+  const details =
+    projectData?.details && typeof projectData.details === "object"
+      ? projectData.details
+      : {};
+
+  const departments = toSafeArray(projectData?.departments)
+    .map(toOptionValue)
+    .filter(Boolean)
+    .slice(0, 30);
+
+  const items = toSafeArray(projectData?.items)
+    .map((item) => ({
+      description: toText(item?.description),
+      breakdown: toText(item?.breakdown),
+      quantity:
+        typeof item?.quantity === "number"
+          ? item.quantity
+          : typeof item?.qty === "number"
+            ? item.qty
+            : null,
+      department: toOptionValue(item?.department),
+      departmentRaw: toText(item?.departmentRaw),
+    }))
+    .filter(
+      (item) =>
+        item.description ||
+        item.breakdown ||
+        item.department ||
+        item.departmentRaw ||
+        item.quantity,
+    )
+    .slice(0, 30);
+
+  const requestedProductionDepartments = toSafeArray(
+    projectData?.productionDepartments,
+  )
+    .map(normalizeProductionDepartment)
+    .filter(Boolean);
+
+  const inferredProductionDepartments = [
+    ...departments.map(normalizeProductionDepartment).filter(Boolean),
+    ...items
+      .map((item) => normalizeProductionDepartment(item.department))
+      .filter(Boolean),
+    ...items
+      .map((item) => normalizeProductionDepartment(item.departmentRaw))
+      .filter(Boolean),
+  ];
+
+  const productionDepartments = Array.from(
+    new Set([...requestedProductionDepartments, ...inferredProductionDepartments]),
+  );
+
+  const uncontrollableFactors = toSafeArray(projectData?.uncontrollableFactors)
+    .map((factor) => ({
+      description: toText(factor?.description),
+      responsible: toOptionValue(factor?.responsible),
+      status: toOptionValue(factor?.status),
+    }))
+    .filter((factor) => factor.description)
+    .slice(0, 12);
+
+  const existingRiskDescriptions = toSafeArray(projectData?.productionRisks)
+    .map((risk) => toText(risk?.description))
+    .filter(Boolean);
+
+  return {
+    projectType: toText(projectData?.projectType) || "Standard",
+    priority: toText(projectData?.priority) || "Normal",
+    projectName: toText(details?.projectName),
+    briefOverview: toText(details?.briefOverview),
+    client: toText(details?.client),
+    deliveryDate: toText(details?.deliveryDate),
+    deliveryLocation: toText(details?.deliveryLocation),
+    departments,
+    productionDepartments,
+    productionDepartmentLabels: productionDepartments.map(
+      (deptId) => PRODUCTION_DEPARTMENT_LABELS[deptId] || deptId,
+    ),
+    items,
+    uncontrollableFactors,
+    existingRiskDescriptions,
+  };
+};
+
+const filterExistingRiskSuggestions = (
+  suggestions = [],
+  existingRiskDescriptions = [],
+) => {
+  const existingDescriptionSet = new Set(
+    existingRiskDescriptions.map((description) => description.toLowerCase()),
+  );
+
+  return sanitizeRiskSuggestions(suggestions, Number.POSITIVE_INFINITY).filter(
+    (suggestion) => {
+      const key = suggestion.description.toLowerCase();
+      if (existingDescriptionSet.has(key)) return false;
+      existingDescriptionSet.add(key);
+      return true;
+    },
+  );
+};
+
+const shuffleArray = (items = []) => {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
+const mergeRiskSuggestions = (...collections) => {
+  const seen = new Set();
+  const merged = [];
+
+  collections.forEach((collection) => {
+    sanitizeRiskSuggestions(collection, Number.POSITIVE_INFINITY).forEach(
+      (suggestion) => {
+        const key = toText(suggestion.description).toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        merged.push(suggestion);
+      },
+    );
+  });
+
+  return merged;
+};
+
+const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
+  graphics: [
+    {
+      description:
+        "Artwork version mismatch can carry unapproved edits into production.",
+      preventive:
+        "Lock a single approved artwork version and require revision IDs on all exports.",
+    },
+    {
+      description:
+        "Mockup dimensions may not match the final substrate print area.",
+      preventive:
+        "Cross-check mockup dimensions against production templates before release.",
+    },
+    {
+      description:
+        "Color output can shift between design preview and production device profiles.",
+      preventive:
+        "Apply the correct output ICC profile and approve a calibrated proof before printing.",
+    },
+    {
+      description:
+        "Font substitution may alter spacing and alignment in final output files.",
+      preventive:
+        "Outline fonts or package font assets with a preflight check before handoff.",
+    },
+    {
+      description:
+        "Low-resolution linked assets may pixelate at final production scale.",
+      preventive:
+        "Run preflight for minimum DPI at actual size and replace weak assets before release.",
+    },
+  ],
+  dtf: [
+    {
+      description: "Adhesive powder cure may be uneven on complex surfaces.",
+      preventive:
+        "Run a test press and lock curing settings before full production.",
+    },
+    {
+      description: "Film humidity may affect transfer quality and crack resistance.",
+      preventive:
+        "Store films in a dry environment and verify transfer adhesion on sample pieces.",
+    },
+  ],
+  "uv-dtf": [
+    {
+      description: "UV DTF lamination may delaminate on curved or textured substrates.",
+      preventive:
+        "Validate substrate compatibility and perform adhesion tests on representative samples.",
+    },
+    {
+      description: "Ink curing imbalance may cause brittle transfers.",
+      preventive:
+        "Calibrate UV intensity and curing passes before mass output.",
+    },
+  ],
+  "uv-printing": [
+    {
+      description: "UV ink adhesion may fail on untreated substrate surfaces.",
+      preventive:
+        "Apply surface prep/primer and approve a scratch test before production.",
+    },
+    {
+      description: "Head strike risk increases with warped rigid materials.",
+      preventive:
+        "Measure substrate flatness and set print head clearance per material batch.",
+    },
+  ],
+  "large-format": [
+    {
+      description: "Long-run banding may appear due to nozzle inconsistency.",
+      preventive:
+        "Run nozzle checks and maintenance cycles at scheduled intervals.",
+    },
+    {
+      description: "Media stretch can distort final dimensions on large panels.",
+      preventive:
+        "Use calibrated tension settings and verify dimensions before finishing.",
+    },
+  ],
+  "digital-press": [
+    {
+      description: "Color drift may occur between batches on digital press.",
+      preventive:
+        "Create batch color controls and approve first-sheet references for every run.",
+    },
+    {
+      description: "Paper humidity variance may cause feed or registration issues.",
+      preventive:
+        "Condition paper stock and monitor feed alignment through setup prints.",
+    },
+  ],
+  "offset-press": [
+    {
+      description: "Plate registration drift may affect fine text and linework.",
+      preventive:
+        "Lock registration controls and inspect makeready output before run approval.",
+    },
+    {
+      description: "Ink-water balance instability can reduce print consistency.",
+      preventive:
+        "Standardize fountain settings and monitor densitometer readings per batch.",
+    },
+  ],
+  "screen-printing": [
+    {
+      description: "Screen tension inconsistency may blur print edges.",
+      preventive:
+        "Check mesh tension and perform trial pulls before production starts.",
+    },
+    {
+      description: "Incorrect flash cure timing can cause poor layer bonding.",
+      preventive:
+        "Validate flash cure parameters on production material samples.",
+    },
+  ],
+  "digital-heat-press": [
+    {
+      description: "Heat press temperature variance may cause incomplete transfer.",
+      preventive:
+        "Calibrate platen temperature and confirm transfer durability with wash tests.",
+    },
+    {
+      description: "Pressure variation may leave inconsistent transfer texture.",
+      preventive:
+        "Set pressure standards by material type and verify on pilot samples.",
+    },
+  ],
+  sublimation: [
+    {
+      description: "Sublimation color shift may occur across polyester blends.",
+      preventive:
+        "Profile color per fabric type and approve strike-offs before production.",
+    },
+    {
+      description: "Ghosting risk increases if transfer paper shifts during pressing.",
+      preventive:
+        "Secure transfer sheets and validate fixture method before bulk runs.",
+    },
+  ],
+  embroidery: [
+    {
+      description: "Thread tension mismatch may pucker lightweight fabrics.",
+      preventive:
+        "Test stabilization and thread tension on actual garment material first.",
+    },
+    {
+      description: "Digitized file density may cause thread breaks on small text.",
+      preventive:
+        "Review stitch density and run sample sew-out before full production.",
+    },
+  ],
+  engraving: [
+    {
+      description: "Depth inconsistency may occur across mixed material hardness.",
+      preventive:
+        "Run material-specific power/speed tests and lock settings per substrate.",
+    },
+    {
+      description: "Fine-detail burn risk may reduce readability.",
+      preventive:
+        "Use preview passes and inspect detail clarity before production batches.",
+    },
+  ],
+  "digital-cutting": [
+    {
+      description: "Blade wear may produce rough edges on precision cuts.",
+      preventive:
+        "Track blade life and replace before tolerance-critical production.",
+    },
+    {
+      description: "Registration mismatch can offset contour cuts from print guides.",
+      preventive:
+        "Verify registration marks with a pilot sheet before cutting the full run.",
+    },
+  ],
+  "pvc-id": [
+    {
+      description: "Card lamination bubbles may appear after thermal processing.",
+      preventive:
+        "Control lamination temperature and inspect sample cards from each batch.",
+    },
+    {
+      description: "Chip/slot placement drift may fail card usability checks.",
+      preventive:
+        "Use alignment jigs and run dimensional QA before card finishing.",
+    },
+  ],
+  "business-cards": [
+    {
+      description: "Trim drift may cause uneven margins on business card stacks.",
+      preventive:
+        "Run trim calibration and verify alignment after blade setup.",
+    },
+    {
+      description: "Stack offset during finishing may scuff coated surfaces.",
+      preventive:
+        "Use protective interleaving and controlled stacking during post-press.",
+    },
+  ],
+  installation: [
+    {
+      description: "Site surface mismatch may prevent secure installation.",
+      preventive:
+        "Confirm mounting surface conditions and hardware requirements before dispatch.",
+    },
+    {
+      description: "On-site measurement variance may cause fitment rework.",
+      preventive:
+        "Perform final site verification and pre-assemble critical parts where possible.",
+    },
+  ],
+  fabrication: [
+    {
+      description: "Tolerance stacking may cause assembly misalignment.",
+      preventive:
+        "Introduce first-piece inspection and enforce dimension checkpoints per stage.",
+    },
+    {
+      description: "Weld/finish defects may appear after paint or coating.",
+      preventive:
+        "Inspect weld quality before finishing and maintain a documented QA checklist.",
+    },
+  ],
+  woodme: [
+    {
+      description: "Wood moisture variance may cause warping after fabrication.",
+      preventive:
+        "Condition wood stock and measure moisture content before cutting.",
+    },
+    {
+      description: "Surface finish inconsistency may expose grain defects.",
+      preventive:
+        "Prepare sanding/finishing sequence and approve sample finish panels.",
+    },
+  ],
+  signage: [
+    {
+      description: "Signage panel bonding may fail under outdoor conditions.",
+      preventive:
+        "Use outdoor-rated adhesives and validate weather exposure on sample assemblies.",
+    },
+    {
+      description: "Illumination uniformity may be inconsistent across sign faces.",
+      preventive:
+        "Run illumination tests and balance light distribution before final closure.",
+    },
+  ],
+  overseas: [
+    {
+      description: "Overseas production handoff may cause specification mismatch.",
+      preventive:
+        "Send signed technical specs with visuals and require pre-production samples.",
+    },
+    {
+      description: "International shipment handling may damage finished goods.",
+      preventive:
+        "Define export-grade packaging specs and confirm them with supplier QA.",
+    },
+  ],
+  "outside-production": [
+    {
+      description: "Third-party process quality may not match internal standards.",
+      preventive:
+        "Issue clear QC acceptance criteria and require approval samples before full run.",
+    },
+    {
+      description: "External lead-time slippage can delay downstream production stages.",
+      preventive:
+        "Set milestone checkpoints with contingency turnaround options.",
+    },
+  ],
+  "in-house-production": [
+    {
+      description: "Internal capacity saturation may create bottlenecks across machines.",
+      preventive:
+        "Balance workload by machine availability and set daily capacity caps.",
+    },
+    {
+      description: "Shift handover gaps can cause rework on active production jobs.",
+      preventive:
+        "Use standardized handover checklists and end-of-shift production logs.",
+    },
+  ],
+  "local-outsourcing": [
+    {
+      description: "Local outsourcing quality variance may affect output consistency.",
+      preventive:
+        "Align on approved sample standards and perform incoming QC at receipt.",
+    },
+    {
+      description: "Specification interpretation differences may trigger rework.",
+      preventive:
+        "Use a signed production brief with measurable acceptance criteria.",
+    },
+  ],
+};
+
+const SHARED_DEPARTMENT_RISK_TEMPLATES = [
+  {
+    description: "Machine/setup parameters may drift between operators or shifts.",
+    preventive:
+      "Use a signed setup sheet and re-validate first-piece output at every shift change.",
+  },
+  {
+    description:
+      "Material batch variation may alter adhesion, color, or finishing consistency.",
+    preventive:
+      "Run a short batch verification test before committing to full production.",
+  },
+  {
+    description:
+      "Rework risk increases when tolerance checkpoints are skipped mid-process.",
+    preventive:
+      "Add stage-by-stage QC checkpoints with hold points before final finishing.",
+  },
+  {
+    description:
+      "Handoff gaps between departments can cause missing specs on active jobs.",
+    preventive:
+      "Issue a handoff checklist with measurable acceptance criteria for each stage.",
+  },
+  {
+    description:
+      "Final finishing/packing can introduce defects if output cure time is rushed.",
+    preventive:
+      "Enforce minimum cure/drying windows and final inspection before packing.",
+  },
+  {
+    description:
+      "Urgent reprioritization may create queue bottlenecks and delayed completion.",
+    preventive:
+      "Reserve buffer capacity and re-balance machine queues daily for critical jobs.",
+  },
+];
+
+const stripSentencePeriod = (text) =>
+  toText(text).replace(/[.!?\s]+$/, "").trim();
+
+const normalizeRiskItemSubject = (item) => {
+  const rawSubject = toText(item?.description) || toText(item?.breakdown);
+  if (!rawSubject) return "";
+  return rawSubject.replace(/\s+/g, " ").slice(0, 80);
+};
+
+const buildProductionItemSubjectsByDepartment = (items = []) => {
+  const map = new Map();
+
+  items.forEach((item) => {
+    const departmentId = normalizeProductionDepartment(
+      item?.department || item?.departmentRaw,
+    );
+    if (!departmentId) return;
+
+    const subject = normalizeRiskItemSubject(item);
+    if (!subject) return;
+
+    if (!map.has(departmentId)) {
+      map.set(departmentId, []);
+    }
+
+    const existing = map.get(departmentId);
+    if (existing.includes(subject)) return;
+    if (existing.length >= 3) return;
+    existing.push(subject);
+  });
+
+  return map;
+};
+
+const buildDepartmentScopedFallbackSuggestion = ({
+  template,
+  departmentLabel,
+  itemSubject,
+}) => {
+  if (!itemSubject) {
+    return {
+      description: `[${departmentLabel}] ${template.description}`,
+      preventive: template.preventive,
+    };
+  }
+
+  return {
+    description: `[${departmentLabel}] ${stripSentencePeriod(template.description)} for "${itemSubject}".`,
+    preventive: `${stripSentencePeriod(template.preventive)} for "${itemSubject}".`,
+  };
+};
+
+const buildFallbackRiskSuggestions = (context) => {
+  if (context.productionDepartments.length === 0) {
+    return [];
+  }
+
+  const fallbackSuggestions = [];
+  const itemSubjectsByDepartment = buildProductionItemSubjectsByDepartment(
+    context.items,
+  );
+
+  context.productionDepartments.forEach((departmentId) => {
+    const departmentTemplates =
+      PRODUCTION_DEPARTMENT_RISK_TEMPLATES[departmentId] || [];
+    const templates = shuffleArray([
+      ...departmentTemplates,
+      ...SHARED_DEPARTMENT_RISK_TEMPLATES,
+    ]);
+    const label = PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId;
+    const departmentItemSubjects = itemSubjectsByDepartment.get(departmentId) || [];
+    const itemSubjectPool = departmentItemSubjects.length
+      ? shuffleArray(departmentItemSubjects)
+      : [];
+
+    templates.forEach((template, index) => {
+      const itemSubject =
+        itemSubjectPool.length > 0
+          ? itemSubjectPool[index % itemSubjectPool.length]
+          : "";
+
+      fallbackSuggestions.push(
+        buildDepartmentScopedFallbackSuggestion({
+          template,
+          departmentLabel: label,
+          itemSubject,
+        }),
+      );
+    });
+  });
+
+  const filteredSuggestions = filterExistingRiskSuggestions(
+    fallbackSuggestions,
+    context.existingRiskDescriptions,
+  );
+
+  return shuffleArray(filteredSuggestions).slice(0, MAX_RISK_SUGGESTIONS);
+};
+
+const getFetchClient = async () => {
+  if (typeof fetch === "function") return fetch;
+  const nodeFetch = await import("node-fetch");
+  return nodeFetch.default;
+};
+
+const requestAiRiskSuggestions = async (context) => {
+  const apiKey = toText(process.env.OPENAI_API_KEY);
+  if (!apiKey || context.productionDepartments.length === 0) return [];
+
+  const fetchClient = await getFetchClient();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_RISK_TIMEOUT_MS);
+
+  const contextPayload = {
+    projectType: context.projectType,
+    priority: context.priority,
+    projectName: context.projectName,
+    briefOverview: context.briefOverview,
+    client: context.client,
+    deliveryDate: context.deliveryDate,
+    deliveryLocation: context.deliveryLocation,
+    productionDepartments: context.productionDepartments,
+    productionDepartmentLabels: context.productionDepartmentLabels,
+    items: context.items,
+    productionItemsByDepartment: context.productionDepartments.map(
+      (departmentId) => ({
+        departmentId,
+        departmentLabel:
+          PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId,
+        items: context.items
+          .filter((item) => {
+            const normalizedDepartment = normalizeProductionDepartment(
+              item?.department || item?.departmentRaw,
+            );
+            return normalizedDepartment === departmentId;
+          })
+          .map((item) => ({
+            description: toText(item?.description),
+            breakdown: toText(item?.breakdown),
+            quantity:
+              typeof item?.quantity === "number" ? item.quantity : undefined,
+          }))
+          .filter((item) => item.description || item.breakdown)
+          .slice(0, 5),
+      }),
+    ),
+    existingProductionRisks: context.existingRiskDescriptions,
+    variationSeed: Math.floor(Math.random() * 1_000_000),
+  };
+
+  try {
+    const response = await fetchClient(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: AI_RISK_MODEL,
+          temperature: AI_RISK_TEMPERATURE,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a production-risk assistant for print/fabrication workflows. Return only strict JSON: {\"suggestions\":[{\"description\":\"...\",\"preventive\":\"...\"}]}. Generate 5-8 concise suggestions. Every suggestion must map to one of the provided productionDepartmentLabels and, when possible, reference provided production items. Include Mockup/Graphics/Design risks when that department is present. Cover only production execution risks (machine setup, mockup/design handoff, material behavior, finishing, installation, outsourcing handoff, capacity). Do not include billing, approvals, payment, client communication, or generic project management risks. Avoid duplicate ideas and avoid repeating existingProductionRisks. Use variationSeed internally to diversify outputs for repeated requests with similar context.",
+            },
+            {
+              role: "user",
+              content: JSON.stringify(contextPayload),
+            },
+          ],
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI request failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+
+    const contentText = Array.isArray(content)
+      ? content
+          .map((part) =>
+            typeof part === "string" ? part : toText(part?.text || part?.value),
+          )
+          .join("")
+      : toText(content);
+
+    if (!contentText) return [];
+
+    const parsed = JSON.parse(contentText);
+    return sanitizeRiskSuggestions(parsed?.suggestions, MAX_RISK_SUGGESTIONS);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const getBillingDocumentLabel = (project) =>
   isQuoteProject(project) ? "Quote" : "Invoice";
@@ -1724,6 +2546,88 @@ const getProjectActivity = async (req, res) => {
   }
 };
 
+// @desc    Suggest production risks from project details
+// @route   POST /api/projects/ai/production-risk-suggestions
+// @access  Private
+const suggestProductionRisks = async (req, res) => {
+  try {
+    const projectData =
+      req.body?.projectData && typeof req.body.projectData === "object"
+        ? req.body.projectData
+        : {};
+    const context = buildRiskSuggestionContext(projectData);
+
+    if (
+      !context.projectName &&
+      !context.briefOverview &&
+      context.items.length === 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Add project details or items first so Magic AI can generate relevant risks.",
+      });
+    }
+
+    if (context.productionDepartments.length === 0) {
+      return res.status(400).json({
+        message:
+          "Select at least one production engagement/sub-department first so Magic AI can suggest production-specific risks.",
+      });
+    }
+
+    let suggestions = [];
+    let source = "fallback";
+    let aiHadResults = false;
+
+    try {
+      const aiSuggestions = await requestAiRiskSuggestions(context);
+      suggestions = filterExistingRiskSuggestions(
+        aiSuggestions,
+        context.existingRiskDescriptions,
+      );
+      if (suggestions.length > 0) {
+        source = "ai";
+        aiHadResults = true;
+      }
+    } catch (error) {
+      console.error(
+        "AI production risk suggestion failed, using fallback:",
+        error?.message || error,
+      );
+    }
+
+    if (suggestions.length < MIN_RISK_SUGGESTIONS) {
+      const fallbackSuggestions = buildFallbackRiskSuggestions(context);
+      suggestions = mergeRiskSuggestions(suggestions, fallbackSuggestions);
+      suggestions = filterExistingRiskSuggestions(
+        suggestions,
+        context.existingRiskDescriptions,
+      );
+      suggestions = shuffleArray(suggestions).slice(0, MAX_RISK_SUGGESTIONS);
+
+      if (aiHadResults && suggestions.length > 0) {
+        source = "ai+fallback";
+      } else {
+        source = "fallback";
+      }
+    } else {
+      suggestions = shuffleArray(suggestions).slice(0, MAX_RISK_SUGGESTIONS);
+    }
+
+    if (suggestions.length === 0) {
+      return res.status(400).json({
+        message:
+          "Not enough production context to generate risk suggestions. Add more item and department details, then try again.",
+      });
+    }
+
+    res.json({ suggestions, source });
+  } catch (error) {
+    console.error("Error suggesting production risks:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Add production risk
 // @route   POST /api/projects/:id/production-risks
 // @access  Private
@@ -2701,6 +3605,7 @@ module.exports = {
   updateChallengeStatus,
   deleteChallenge,
   getProjectActivity,
+  suggestProductionRisks,
   addProductionRisk,
   updateProductionRisk,
   deleteProductionRisk,

@@ -7,7 +7,7 @@ const ConfirmationModal = ({
   onCancel,
   title,
   message,
-  confirmText = "Yes, Cancel",
+  confirmText = "Yes, Confirm",
   cancelText = "No, Go Back",
 }) => {
   if (!isOpen) return null;

@@ -10,9 +10,19 @@ import RobotArmIcon from "../../components/icons/RobotArmIcon";
 import "./Step4.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import {
+  mergeProductionRiskSuggestions,
+  requestProductionRiskSuggestions,
+} from "../../utils/productionRiskAi";
+import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 
 const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const [showRiskModal, setShowRiskModal] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isApplyingAiSuggestions, setIsApplyingAiSuggestions] = useState(false);
+  const [showAiReviewModal, setShowAiReviewModal] = useState(false);
+  const [pendingAiSuggestions, setPendingAiSuggestions] = useState([]);
+  const [aiNotice, setAiNotice] = useState(null);
   const responsibleOptions = [
     { label: "Magic Hands", value: "MH" },
     { label: "Client", value: "Client" },
@@ -106,6 +116,71 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
       return;
     }
     onNext();
+  };
+
+  const handleMagicAiAssistance = async () => {
+    if (isAiLoading) return;
+
+    setIsAiLoading(true);
+    setAiNotice(null);
+
+    try {
+      const suggestions = await requestProductionRiskSuggestions(formData);
+      const { addedCount, addedSuggestions } = mergeProductionRiskSuggestions(
+        formData.productionRisks || [],
+        suggestions,
+      );
+
+      if (addedCount === 0) {
+        setAiNotice({
+          type: "info",
+          text: "No new suggestions were added. Add more project details and try again.",
+        });
+        return;
+      }
+
+      setPendingAiSuggestions(addedSuggestions);
+      setShowAiReviewModal(true);
+    } catch (error) {
+      setAiNotice({
+        type: "error",
+        text: error.message || "Magic AI Assistance failed. Please try again.",
+      });
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleApplyAiSuggestions = async (selectedSuggestions) => {
+    if (!Array.isArray(selectedSuggestions) || selectedSuggestions.length === 0) {
+      return;
+    }
+
+    setIsApplyingAiSuggestions(true);
+
+    try {
+      const { mergedRisks, addedCount } = mergeProductionRiskSuggestions(
+        formData.productionRisks || [],
+        selectedSuggestions,
+      );
+
+      if (addedCount === 0) {
+        setAiNotice({
+          type: "info",
+          text: "No new suggestions were added after review.",
+        });
+      } else {
+        setFormData({ productionRisks: mergedRisks });
+        setAiNotice({
+          type: "success",
+          text: `Added ${addedCount} reviewed suggestion${addedCount === 1 ? "" : "s"} to Production Risks.`,
+        });
+      }
+    } finally {
+      setIsApplyingAiSuggestions(false);
+      setShowAiReviewModal(false);
+      setPendingAiSuggestions([]);
+    }
   };
 
   return (
@@ -214,6 +289,21 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
             </div>
           </div>
 
+          <div className="magic-ai-actions">
+            <button
+              type="button"
+              className="magic-ai-btn"
+              onClick={handleMagicAiAssistance}
+              disabled={isAiLoading}
+            >
+              <RobotArmIcon />
+              {isAiLoading ? "Generating Suggestions..." : "Magic AI Assistance"}
+            </button>
+            {aiNotice && (
+              <p className={`magic-ai-notice ${aiNotice.type}`}>{aiNotice.text}</p>
+            )}
+          </div>
+
           <div className="risk-list">
             {productionRisks.map((item, index) => {
               const riskId = getItemKey(item, index);
@@ -266,6 +356,18 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         cancelText="Close"
         onConfirm={() => setShowRiskModal(false)}
         onCancel={() => setShowRiskModal(false)}
+      />
+      <ProductionRiskSuggestionModal
+        isOpen={showAiReviewModal}
+        title="Review before add"
+        suggestions={pendingAiSuggestions}
+        onClose={() => {
+          if (isApplyingAiSuggestions) return;
+          setShowAiReviewModal(false);
+          setPendingAiSuggestions([]);
+        }}
+        onConfirm={handleApplyAiSuggestions}
+        isApplying={isApplyingAiSuggestions}
       />
 
       {/* Footer */}
