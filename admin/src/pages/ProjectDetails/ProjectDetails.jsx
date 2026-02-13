@@ -9,6 +9,7 @@ import {
   XMarkIcon,
 } from "../../icons/Icons";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal";
 
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
@@ -66,10 +67,24 @@ const ProjectDetails = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [updates, setUpdates] = useState([]); // New state for updates
   const [undoingDept, setUndoingDept] = useState(null);
+  const [isTogglingHold, setIsTogglingHold] = useState(false);
+  const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
+  const [holdReasonDraft, setHoldReasonDraft] = useState("");
+
+  const ensureProjectIsEditable = () => {
+    const currentlyOnHold =
+      project?.hold?.isOnHold || project?.status === "On Hold";
+    if (currentlyOnHold) {
+      alert("This project is on hold. Release hold before making changes.");
+      return false;
+    }
+    return true;
+  };
 
   // Status handling
   const handleStatusChange = async (newStatus) => {
     if (!project) return;
+    if (!ensureProjectIsEditable()) return;
     const oldStatus = project.status;
 
     // Optimistic update
@@ -88,14 +103,58 @@ const ProjectDetails = ({ user }) => {
         throw new Error(errorData.message || "Failed to update status");
       }
 
-      const updatedProject = await res.json();
-      setProject(updatedProject);
+      await fetchProject();
     } catch (err) {
       console.error("Error updating status:", err);
       // Revert on error
       setProject({ ...project, status: oldStatus });
       alert(err.message || "Failed to update status");
     }
+  };
+
+  const handleProjectHoldToggle = async (nextOnHold, reason = "") => {
+    if (!project || isTogglingHold) return;
+
+    setIsTogglingHold(true);
+    try {
+      const res = await fetch(`/api/projects/${id}/hold`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(
+          nextOnHold ? { onHold: true, reason } : { onHold: false },
+        ),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update hold state.");
+      }
+
+      const updatedProject = await res.json();
+      setProject(updatedProject);
+      setHoldReasonDraft(updatedProject.hold?.reason || "");
+      setIsEditing(false);
+      setIsEditingLead(false);
+      setIsHoldModalOpen(false);
+    } catch (error) {
+      console.error("Error toggling project hold:", error);
+      alert(error.message || "Failed to update hold state.");
+    } finally {
+      setIsTogglingHold(false);
+    }
+  };
+
+  const handleHoldActionClick = () => {
+    if (!project || isTogglingHold) return;
+
+    if (isProjectOnHold) {
+      handleProjectHoldToggle(false);
+      return;
+    }
+
+    setHoldReasonDraft(project.hold?.reason || "");
+    setIsHoldModalOpen(true);
   };
 
   // Edit State
@@ -200,6 +259,7 @@ const ProjectDetails = ({ user }) => {
   }, [project]);
 
   const handleSaveLead = async () => {
+    if (!ensureProjectIsEditable()) return;
     try {
       // Find selected user object for optimistic update (optional but good)
       const selectedUser = availableUsers.find((u) => u._id === leadForm);
@@ -233,6 +293,7 @@ const ProjectDetails = ({ user }) => {
 
   const handleEditToggle = () => {
     if (!project) return;
+    if (!isEditing && !ensureProjectIsEditable()) return;
     // Reset form to current project state when opening edit
     if (!isEditing) {
       setEditForm({
@@ -263,6 +324,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const handleSave = async () => {
+    if (!ensureProjectIsEditable()) return;
     try {
       // Construct payload with flattened fields as expected by the controller
       const payload = {
@@ -301,6 +363,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const handleChecklistToggle = async (key, val) => {
+    if (!ensureProjectIsEditable()) return;
     if (!project || !project.quoteDetails) return;
 
     const currentChecklist = project.quoteDetails.checklist || {};
@@ -342,6 +405,7 @@ const ProjectDetails = ({ user }) => {
 
   const handleUndoAcknowledgement = async (department) => {
     if (!project) return;
+    if (!ensureProjectIsEditable()) return;
     setUndoingDept(department);
     try {
       const res = await fetch(`/api/projects/${id}/acknowledge`, {
@@ -380,6 +444,15 @@ const ProjectDetails = ({ user }) => {
       </div>
     );
   }
+
+  const isProjectOnHold = Boolean(
+    project.hold?.isOnHold || project.status === "On Hold",
+  );
+  const isLeadUser = Boolean(
+    user &&
+      (project.projectLeadId?._id === user._id ||
+        project.projectLeadId === user._id),
+  );
 
   // Helpers
   const formatDate = (dateString) => {
@@ -529,7 +602,7 @@ const ProjectDetails = ({ user }) => {
             <h1 className="header-order">
               {project.orderId || "Order #..."}
             </h1>
-            <div className="header-status">
+            <div className="header-status header-status-actions">
               <select
                 className={`status-badge-select ${project.status
                   ?.toLowerCase()
@@ -538,9 +611,9 @@ const ProjectDetails = ({ user }) => {
                 onChange={(e) => handleStatusChange(e.target.value)}
                 disabled={
                   loading ||
-                  (user &&
-                    (project.projectLeadId?._id === user._id ||
-                      project.projectLeadId === user._id))
+                  isLeadUser ||
+                  isProjectOnHold ||
+                  isTogglingHold
                 }
                 style={{
                   marginLeft: 0,
@@ -566,6 +639,7 @@ const ProjectDetails = ({ user }) => {
                       "Pending Feedback",
                       "Feedback Completed",
                       "Completed",
+                      ...(isProjectOnHold ? ["On Hold"] : []),
                     ]
                   : [
                       "Order Confirmed",
@@ -582,6 +656,7 @@ const ProjectDetails = ({ user }) => {
                       "Pending Feedback",
                       "Feedback Completed",
                       "Completed",
+                      ...(isProjectOnHold ? ["On Hold"] : []),
                     ]
                 ).map((status) => (
                   <option
@@ -593,6 +668,22 @@ const ProjectDetails = ({ user }) => {
                   </option>
                 ))}
               </select>
+              {user?.role === "admin" && (
+                <button
+                  type="button"
+                  className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
+                  onClick={handleHoldActionClick}
+                  disabled={isTogglingHold}
+                >
+                  {isTogglingHold
+                    ? isProjectOnHold
+                      ? "Releasing..."
+                      : "Holding..."
+                    : isProjectOnHold
+                      ? "Release Hold"
+                      : "Put On Hold"}
+                </button>
+              )}
             </div>
             <div className="billing-tags">
               {invoiceSent && (
@@ -607,6 +698,12 @@ const ProjectDetails = ({ user }) => {
             {showPaymentWarning && (
               <div className="payment-warning">
                 Payment verification is required before production can begin.
+              </div>
+            )}
+            {isProjectOnHold && (
+              <div className="hold-alert">
+                This project is on hold
+                {project.hold?.reason ? `: ${project.hold.reason}` : "."}
               </div>
             )}
             <p className="header-project-name">{details.projectName}</p>
@@ -639,11 +736,7 @@ const ProjectDetails = ({ user }) => {
                 )}
               </span>
               {!isEditing ? (
-                !(
-                  user &&
-                  (project.projectLeadId?._id === user._id ||
-                    project.projectLeadId === user._id)
-                ) && (
+                !isLeadUser && !isProjectOnHold && (
                   <button
                     onClick={handleEditToggle}
                     style={{
@@ -1429,11 +1522,7 @@ const ProjectDetails = ({ user }) => {
             >
               <span>People & Departments</span>
               {!isEditingLead ? (
-                !(
-                  user &&
-                  (project.projectLeadId?._id === user._id ||
-                    project.projectLeadId === user._id)
-                ) && (
+                !isLeadUser && !isProjectOnHold && (
                   <button
                     onClick={() => setIsEditingLead(true)}
                     style={{
@@ -1696,6 +1785,21 @@ const ProjectDetails = ({ user }) => {
           )}
         </div>
       </div>
+
+      <ProjectHoldModal
+        isOpen={isHoldModalOpen}
+        onClose={() => {
+          if (!isTogglingHold) {
+            setIsHoldModalOpen(false);
+          }
+        }}
+        onConfirm={(reason) => {
+          setHoldReasonDraft(reason);
+          handleProjectHoldToggle(true, reason);
+        }}
+        defaultReason={holdReasonDraft}
+        isSubmitting={isTogglingHold}
+      />
     </div>
   );
 };

@@ -3,6 +3,10 @@ const Project = require("../models/Project");
 const { createNotification } = require("../utils/notificationService");
 const { logActivity } = require("../utils/activityLogger");
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
+const {
+  isProjectOnHold,
+  sendProjectOnHoldResponse,
+} = require("../middleware/projectHoldMiddleware");
 
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
@@ -32,6 +36,10 @@ exports.createProjectUpdate = async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (isProjectOnHold(project)) {
+      return sendProjectOnHoldResponse(res, project);
     }
 
     let attachmentsArray = [];
@@ -141,6 +149,11 @@ exports.deleteProjectUpdate = async (req, res) => {
     const update = await ProjectUpdate.findById(id);
     if (!update) {
       return res.status(404).json({ message: "Update not found" });
+    }
+
+    const project = await Project.findById(update.project).select("status hold");
+    if (project && isProjectOnHold(project)) {
+      return sendProjectOnHoldResponse(res, project);
     }
 
     // Check authorization (optional: only author or admin can delete)

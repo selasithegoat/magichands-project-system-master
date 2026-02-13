@@ -137,6 +137,27 @@ const ProjectSchema = new mongoose.Schema(
       ],
       default: "Order Confirmed",
     },
+    hold: {
+      isOnHold: {
+        type: Boolean,
+        default: false,
+      },
+      reason: {
+        type: String,
+        default: "",
+      },
+      heldAt: Date,
+      heldBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      previousStatus: String,
+      releasedAt: Date,
+      releasedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
     currentStep: {
       type: Number,
       default: 1,

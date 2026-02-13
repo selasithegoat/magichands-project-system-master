@@ -76,6 +76,69 @@ const QUOTE_STEPS = [
   },
 ];
 
+const DEFAULT_WORKFLOW_STATUS = "Order Confirmed";
+
+const STANDARD_WORKFLOW_STATUSES = new Set([
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+
+const QUOTE_WORKFLOW_STATUSES = new Set([
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Quote Request",
+  "Quote Request Completed",
+  "Pending Send Response",
+  "Response Sent",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+  "Delivered",
+]);
+
+const resolveWorkflowStatus = (project) => {
+  const isProjectOnHold = Boolean(
+    project?.hold?.isOnHold || project?.status === "On Hold",
+  );
+
+  if (!isProjectOnHold) {
+    return project?.status || DEFAULT_WORKFLOW_STATUS;
+  }
+
+  const previousStatus =
+    typeof project?.hold?.previousStatus === "string"
+      ? project.hold.previousStatus.trim()
+      : "";
+
+  if (!previousStatus || previousStatus === "On Hold") {
+    return DEFAULT_WORKFLOW_STATUS;
+  }
+
+  const validStatuses =
+    project?.projectType === "Quote"
+      ? QUOTE_WORKFLOW_STATUSES
+      : STANDARD_WORKFLOW_STATUSES;
+
+  return validStatuses.has(previousStatus)
+    ? previousStatus
+    : DEFAULT_WORKFLOW_STATUS;
+};
+
 const getStatusColor = (status) => {
   switch (status) {
     case "Order Confirmed":
@@ -219,6 +282,11 @@ const ProjectDetail = ({ onProjectChange, user }) => {
       </div>
     );
   if (!project) return null;
+
+  const isProjectOnHold = Boolean(
+    project.hold?.isOnHold || project.status === "On Hold",
+  );
+  const workflowStatus = resolveWorkflowStatus(project);
 
   const isEmergency =
     project.priority === "Urgent" || project.projectType === "Emergency";
@@ -485,11 +553,16 @@ const ProjectDetail = ({ onProjectChange, user }) => {
               />
             </div>
             <div className="side-column">
-              <ProgressCard project={project} />
+              <ProgressCard
+                project={project}
+                workflowStatus={workflowStatus}
+                isOnHold={isProjectOnHold}
+              />
               {/* Quick Actions Removed */}
               <ApprovalsCard
-                status={project.status}
+                workflowStatus={workflowStatus}
                 type={project.projectType}
+                isOnHold={isProjectOnHold}
               />
             </div>
           </>
@@ -1940,7 +2013,7 @@ const ProductionRisksCard = ({
   );
 };
 
-const ProgressCard = ({ project }) => {
+const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
       switch (status) {
@@ -2009,8 +2082,8 @@ const ProgressCard = ({ project }) => {
     }
   };
 
-  const progress = calculateProgress(project.status, project.projectType);
-  const color = getStatusColor(project.status);
+  const progress = calculateProgress(workflowStatus, project.projectType);
+  const color = getStatusColor(workflowStatus);
 
   return (
     <div className="detail-card progress-card">
@@ -2031,24 +2104,29 @@ const ProgressCard = ({ project }) => {
         {/* Simple SVG Donut Chart */}
         <ProgressDonutIcon percentage={progress} color={color} />
       </div>
+      {isOnHold && (
+        <div className="workflow-hold-indicator">
+          On Hold - Workflow paused at {workflowStatus}
+        </div>
+      )}
     </div>
   );
 };
 
-const ApprovalsCard = ({ status, type }) => {
+const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
   const steps = type === "Quote" ? QUOTE_STEPS : STATUS_STEPS;
 
   // Find current step index
   let currentStepIndex = steps.findIndex((step) =>
-    step.statuses.includes(status),
+    step.statuses.includes(workflowStatus),
   );
 
-  if (currentStepIndex !== -1 && status !== "Order Confirmed") {
+  if (currentStepIndex !== -1 && workflowStatus !== "Order Confirmed") {
     // Determine if the status represents a completed step
     const isCompletedVariant =
-      status.includes("Completed") ||
-      status === "Delivered" ||
-      status === "Response Sent";
+      workflowStatus.includes("Completed") ||
+      workflowStatus === "Delivered" ||
+      workflowStatus === "Response Sent";
 
     if (isCompletedVariant) {
       // If completed, visually move to the next step (making it "Pending")
@@ -2057,15 +2135,15 @@ const ApprovalsCard = ({ status, type }) => {
   }
 
   // Handle global Completed/Finished status
-  if (status === "Completed" || status === "Finished") {
+  if (workflowStatus === "Completed" || workflowStatus === "Finished") {
     currentStepIndex = steps.length;
   }
 
   // Fallback
   if (
     currentStepIndex === -1 &&
-    status !== "Completed" &&
-    status !== "Finished"
+    workflowStatus !== "Completed" &&
+    workflowStatus !== "Finished"
   ) {
     currentStepIndex = 0;
   }
@@ -2087,6 +2165,11 @@ const ApprovalsCard = ({ status, type }) => {
       <div className="card-header">
         <h3 className="card-title">✅ Approvals</h3>
       </div>
+      {isOnHold && (
+        <div className="workflow-hold-indicator approvals-hold-indicator">
+          On Hold - Workflow paused at {workflowStatus}
+        </div>
+      )}
       <div className="approval-list">
         {steps.map((step, index) => {
           // Status States:
@@ -2109,12 +2192,14 @@ const ApprovalsCard = ({ status, type }) => {
 
             if (step.label === "Feedback") {
               subText =
-                status === "Feedback Completed" ? "Completed" : "Pending";
-            } else if (status === "Order Confirmed") {
+                workflowStatus === "Feedback Completed"
+                  ? "Completed"
+                  : "Pending";
+            } else if (workflowStatus === "Order Confirmed") {
               subText = "Confirmed";
             } else if (
-              stepStatuses.includes(status) &&
-              status === completedStatus &&
+              stepStatuses.includes(workflowStatus) &&
+              workflowStatus === completedStatus &&
               completedStatus !== pendingStatus
             ) {
               subText = "Completed";
@@ -2197,7 +2282,7 @@ const ApprovalsCard = ({ status, type }) => {
                   </span>
                   {isActive &&
                     subText === "Pending" &&
-                    status !== "Order Confirmed"}
+                    workflowStatus !== "Order Confirmed"}
                 </div>
 
                 <span className="approval-sub">{subText}</span>

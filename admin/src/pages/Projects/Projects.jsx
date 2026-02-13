@@ -107,6 +107,7 @@ const Projects = ({ user }) => {
   const getStatusClass = (status) => {
     if (!status) return "draft";
     const lower = status.toLowerCase();
+    if (lower.includes("hold")) return "on-hold";
     if (lower.includes("feedback")) return "in-progress";
     if (lower.includes("pending")) return "pending";
     if (lower.includes("finished")) return "completed";
@@ -238,6 +239,7 @@ const Projects = ({ user }) => {
               <option value="Pending Scope Approval">
                 Pending Scope Approval
               </option>
+              <option value="On Hold">On Hold</option>
               <option value="In Progress">In Progress</option>
               <option value="Pending Feedback">Pending Feedback</option>
               <option value="Feedback Completed">Feedback Completed</option>

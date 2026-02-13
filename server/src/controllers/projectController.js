@@ -70,6 +70,13 @@ const PAYMENT_TYPES = new Set([
   "po",
   "authorized",
 ]);
+const DEFAULT_RELEASE_STATUS = "In Progress";
+const HOLD_STATUS = "On Hold";
+const HOLDABLE_STATUSES = new Set(
+  (Project.schema.path("status")?.enumValues || []).filter(
+    (status) => status !== HOLD_STATUS,
+  ),
+);
 
 const canManageBilling = (user) => {
   if (!user) return false;
@@ -725,6 +732,207 @@ const updateProjectDepartments = async (req, res) => {
   }
 };
 
+// @desc    Put a project on hold or release hold
+// @route   PATCH /api/projects/:id/hold
+// @access  Private (Admin only)
+const setProjectHold = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Only admins can place or release a project hold.",
+      });
+    }
+
+    const { onHold, reason, releaseStatus } = req.body;
+
+    if (typeof onHold !== "boolean") {
+      return res
+        .status(400)
+        .json({ message: "`onHold` must be provided as a boolean." });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const now = new Date();
+    const oldStatus = project.status;
+    const alreadyOnHold =
+      Boolean(project.hold?.isOnHold) || project.status === HOLD_STATUS;
+    const normalizedReason =
+      typeof reason === "string" ? reason.trim() : project.hold?.reason || "";
+
+    if (onHold) {
+      if (!alreadyOnHold) {
+        project.hold = {
+          ...(project.hold?.toObject?.() || {}),
+          isOnHold: true,
+          reason: normalizedReason,
+          heldAt: now,
+          heldBy: req.user._id,
+          previousStatus:
+            oldStatus && oldStatus !== HOLD_STATUS
+              ? oldStatus
+              : DEFAULT_RELEASE_STATUS,
+          releasedAt: null,
+          releasedBy: null,
+        };
+        project.status = HOLD_STATUS;
+      } else {
+        project.hold = {
+          ...(project.hold?.toObject?.() || {}),
+          isOnHold: true,
+          reason: normalizedReason,
+          heldAt: project.hold?.heldAt || now,
+          heldBy: project.hold?.heldBy || req.user._id,
+          previousStatus:
+            project.hold?.previousStatus || DEFAULT_RELEASE_STATUS,
+          releasedAt: null,
+          releasedBy: null,
+        };
+      }
+
+      const savedProject = await project.save();
+
+      if (!alreadyOnHold && oldStatus !== HOLD_STATUS) {
+        await logActivity(
+          savedProject._id,
+          req.user._id,
+          "status_change",
+          "Project was put on hold.",
+          {
+            statusChange: { from: oldStatus, to: HOLD_STATUS },
+            hold: { reason: normalizedReason || null },
+          },
+        );
+      }
+
+      if (savedProject.projectLeadId) {
+        await createNotification(
+          savedProject.projectLeadId,
+          req.user._id,
+          savedProject._id,
+          "SYSTEM",
+          "Project Put On Hold",
+          `Project #${savedProject.orderId || savedProject._id} is now on hold${normalizedReason ? `: ${normalizedReason}` : "."}`,
+        );
+      }
+
+      if (
+        savedProject.assistantLeadId &&
+        savedProject.assistantLeadId.toString() !==
+          savedProject.projectLeadId?.toString()
+      ) {
+        await createNotification(
+          savedProject.assistantLeadId,
+          req.user._id,
+          savedProject._id,
+          "SYSTEM",
+          "Project Put On Hold",
+          `Project #${savedProject.orderId || savedProject._id} is now on hold${normalizedReason ? `: ${normalizedReason}` : "."}`,
+        );
+      }
+
+      await notifyAdmins(
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Put On Hold",
+        `${req.user.firstName} ${req.user.lastName} put project #${savedProject.orderId || savedProject._id} on hold${normalizedReason ? `: ${normalizedReason}` : "."}`,
+      );
+
+      const populatedProject = await Project.findById(savedProject._id)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName employeeId email")
+        .populate("assistantLeadId", "firstName lastName employeeId email");
+
+      return res.json(populatedProject);
+    }
+
+    if (!alreadyOnHold) {
+      return res.status(400).json({ message: "Project is not on hold." });
+    }
+
+    const requestedStatus =
+      typeof releaseStatus === "string" ? releaseStatus.trim() : "";
+    let nextStatus =
+      requestedStatus ||
+      project.hold?.previousStatus ||
+      DEFAULT_RELEASE_STATUS;
+
+    if (!HOLDABLE_STATUSES.has(nextStatus)) {
+      nextStatus = DEFAULT_RELEASE_STATUS;
+    }
+
+    project.status = nextStatus;
+    project.hold = {
+      ...(project.hold?.toObject?.() || {}),
+      isOnHold: false,
+      reason: normalizedReason,
+      releasedAt: now,
+      releasedBy: req.user._id,
+    };
+
+    const savedProject = await project.save();
+
+    await logActivity(
+      savedProject._id,
+      req.user._id,
+      "status_change",
+      `Project hold released. Status restored to ${nextStatus}.`,
+      {
+        statusChange: { from: oldStatus, to: nextStatus },
+        hold: { reason: normalizedReason || null },
+      },
+    );
+
+    if (savedProject.projectLeadId) {
+      await createNotification(
+        savedProject.projectLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Hold Released",
+        `Project #${savedProject.orderId || savedProject._id} has been released from hold and is now ${nextStatus}.`,
+      );
+    }
+
+    if (
+      savedProject.assistantLeadId &&
+      savedProject.assistantLeadId.toString() !==
+        savedProject.projectLeadId?.toString()
+    ) {
+      await createNotification(
+        savedProject.assistantLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Hold Released",
+        `Project #${savedProject.orderId || savedProject._id} has been released from hold and is now ${nextStatus}.`,
+      );
+    }
+
+    await notifyAdmins(
+      req.user._id,
+      savedProject._id,
+      "SYSTEM",
+      "Project Hold Released",
+      `${req.user.firstName} ${req.user.lastName} released hold on project #${savedProject.orderId || savedProject._id}. Restored status: ${nextStatus}.`,
+    );
+
+    const populatedProject = await Project.findById(savedProject._id)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
+
+    return res.json(populatedProject);
+  } catch (error) {
+    console.error("Error updating project hold state:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Update project status
 // @route   PATCH /api/projects/:id/status
 // @access  Private (Admin or permitted departments)
@@ -733,6 +941,13 @@ const updateProjectStatus = async (req, res) => {
     const { status: newStatus } = req.body;
     if (!newStatus) {
       return res.status(400).json({ message: "Status is required" });
+    }
+
+    if (newStatus === HOLD_STATUS) {
+      return res.status(400).json({
+        message:
+          "Use the project hold endpoint to put this project on hold.",
+      });
     }
 
     const project = await Project.findById(req.params.id);
@@ -2448,6 +2663,7 @@ module.exports = {
   getProjectById,
   addItemToProject,
   deleteItemFromProject,
+  setProjectHold,
   updateProjectStatus,
   markInvoiceSent,
   verifyPayment,

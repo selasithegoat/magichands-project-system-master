@@ -46,6 +46,37 @@
   align-items: center;
 }
 
+.header-status-actions {
+  gap: 0.6rem;
+}
+
+.hold-toggle-btn {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hold-toggle-btn.hold {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.hold-toggle-btn.release {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+
+.hold-toggle-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .billing-tags {
   display: flex;
   flex-wrap: wrap;
@@ -83,6 +114,16 @@
   padding: 0.4rem 0.75rem;
   border-radius: 8px;
   font-size: 0.75rem;
+}
+
+.hold-alert {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .header-left-vertical .header-project-name {

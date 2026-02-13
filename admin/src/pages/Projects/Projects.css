@@ -79,6 +79,10 @@
   background: #f1f5f9;
   color: #64748b;
 }
+.status-badge.on-hold {
+  background: #fef2f2;
+  color: #dc2626;
+}
 
 .action-btn {
   padding: 0.375rem 0.75rem;

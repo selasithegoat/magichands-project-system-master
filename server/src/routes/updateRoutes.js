@@ -3,8 +3,14 @@ const router = express.Router();
 const updateController = require("../controllers/updateController");
 const { protect } = require("../middleware/authMiddleware");
 const upload = require("../middleware/upload");
+const {
+  requireProjectNotOnHold,
+} = require("../middleware/projectHoldMiddleware");
 
 const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const enforceProjectNotOnHold = requireProjectNotOnHold({
+  paramName: "projectId",
+});
 
 // Get updates for a project
 // GET /api/updates/project/:projectId
@@ -15,6 +21,7 @@ router.get("/project/:projectId", protect, updateController.getProjectUpdates);
 router.post(
   "/project/:projectId",
   protect,
+  enforceProjectNotOnHold,
   (req, res, next) => {
     upload.single("attachment")(req, res, (err) => {
       if (err) {

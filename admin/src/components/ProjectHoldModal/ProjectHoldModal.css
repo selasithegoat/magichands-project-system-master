@@ -1,0 +1,81 @@
+.hold-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hold-modal-description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.hold-modal-label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.hold-modal-textarea {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 110px;
+  padding: 0.7rem 0.8rem;
+}
+
+.hold-modal-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus, #3b82f6);
+}
+
+.hold-modal-textarea::placeholder {
+  color: var(--text-placeholder);
+}
+
+.hold-modal-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.hold-modal-btn {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.hold-modal-btn.cancel {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.hold-modal-btn.cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.hold-modal-btn.confirm {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.hold-modal-btn.confirm:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.hold-modal-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

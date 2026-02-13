@@ -561,6 +561,24 @@
   font-weight: 600;
 }
 
+.workflow-hold-indicator {
+  margin-top: 0.4rem;
+  width: 100%;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.approvals-hold-indicator {
+  margin-top: -0.45rem;
+  margin-bottom: 1rem;
+}
+
 .chart-container {
   position: relative;
   width: 120px;
