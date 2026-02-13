@@ -171,10 +171,12 @@ const EngagedProjectActions = ({ user }) => {
     [project],
   );
 
+  const paymentChecksEnabled = project?.projectType !== "Quote";
   const hasPaymentVerification = paymentTypes.size > 0;
 
   const showPaymentWarning =
     project &&
+    paymentChecksEnabled &&
     !hasPaymentVerification &&
     ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
       project.status,
@@ -717,7 +719,9 @@ const EngagedProjectActions = ({ user }) => {
                     const isProductionAction =
                       action.complete === "Production Completed";
                     const blockedByPayment =
-                      isProductionAction && !hasPaymentVerification;
+                      isProductionAction &&
+                      paymentChecksEnabled &&
+                      !hasPaymentVerification;
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";

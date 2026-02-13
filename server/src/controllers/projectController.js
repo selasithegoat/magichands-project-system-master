@@ -93,6 +93,10 @@ const hasPaymentVerification = (project) =>
   Array.isArray(project?.paymentVerifications) &&
   project.paymentVerifications.length > 0;
 
+const isQuoteProject = (project) => project?.projectType === "Quote";
+const getBillingDocumentLabel = (project) =>
+  isQuoteProject(project) ? "Quote" : "Invoice";
+
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
 // @access  Private
@@ -1036,7 +1040,8 @@ const updateProjectStatus = async (req, res) => {
     // If the selected status has an auto-advancement, use it
     const finalStatus = statusProgression[newStatus] || newStatus;
 
-    const requiresPayment = newStatus === "Production Completed";
+    const requiresPayment =
+      newStatus === "Production Completed" && !isQuoteProject(project);
 
     if (requiresPayment && !hasPaymentVerification(project)) {
       return res.status(400).json({
@@ -1119,8 +1124,12 @@ const markInvoiceSent = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const billingDocumentLabel = getBillingDocumentLabel(project);
+
     if (project.invoice?.sent) {
-      return res.status(400).json({ message: "Invoice already marked as sent." });
+      return res.status(400).json({
+        message: `${billingDocumentLabel} already marked as sent.`,
+      });
     }
 
     project.invoice = {
@@ -1135,7 +1144,7 @@ const markInvoiceSent = async (req, res) => {
       project._id,
       req.user._id,
       "update",
-      "Invoice marked as sent.",
+      `${billingDocumentLabel} marked as sent.`,
       { invoice: { sent: true } },
     );
 
@@ -1145,8 +1154,8 @@ const markInvoiceSent = async (req, res) => {
         req.user._id,
         project._id,
         "ACTIVITY",
-        "Invoice Sent",
-        `Invoice sent for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
+        `${billingDocumentLabel} Sent`,
+        `${billingDocumentLabel} sent for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
       );
     }
 
@@ -1176,6 +1185,12 @@ const verifyPayment = async (req, res) => {
     const project = await Project.findById(req.params.id);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Payment verification is not required for quote projects.",
+      });
     }
 
     const existing = (project.paymentVerifications || []).find(
@@ -1237,8 +1252,12 @@ const undoInvoiceSent = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const billingDocumentLabel = getBillingDocumentLabel(project);
+
     if (!project.invoice?.sent) {
-      return res.status(400).json({ message: "Invoice is not marked as sent." });
+      return res.status(400).json({
+        message: `${billingDocumentLabel} is not marked as sent.`,
+      });
     }
 
     project.invoice = {
@@ -1253,7 +1272,7 @@ const undoInvoiceSent = async (req, res) => {
       project._id,
       req.user._id,
       "update",
-      "Invoice status reset.",
+      `${billingDocumentLabel} status reset.`,
       { invoice: { sent: false } },
     );
 
@@ -1283,6 +1302,12 @@ const undoPaymentVerification = async (req, res) => {
     const project = await Project.findById(req.params.id);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Payment verification is not required for quote projects.",
+      });
     }
 
     const existingIndex = (project.paymentVerifications || []).findIndex(

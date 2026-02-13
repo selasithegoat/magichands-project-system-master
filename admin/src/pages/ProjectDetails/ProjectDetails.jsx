@@ -546,9 +546,11 @@ const ProjectDetails = ({ user }) => {
   const paymentTypes = (project.paymentVerifications || []).map(
     (entry) => entry.type,
   );
+  const isQuoteProject = project.projectType === "Quote";
   const hasPaymentVerification = paymentTypes.length > 0;
   const invoiceSent = Boolean(project.invoice?.sent);
   const showPaymentWarning =
+    !isQuoteProject &&
     !hasPaymentVerification &&
     ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
       project.status,
@@ -687,13 +689,16 @@ const ProjectDetails = ({ user }) => {
             </div>
             <div className="billing-tags">
               {invoiceSent && (
-                <span className="billing-tag invoice">Invoice Sent</span>
-              )}
-              {paymentTypes.map((type) => (
-                <span key={type} className="billing-tag payment">
-                  {paymentLabels[type] || type}
+                <span className="billing-tag invoice">
+                  {isQuoteProject ? "Quote Sent" : "Invoice Sent"}
                 </span>
-              ))}
+              )}
+              {!isQuoteProject &&
+                paymentTypes.map((type) => (
+                  <span key={type} className="billing-tag payment">
+                    {paymentLabels[type] || type}
+                  </span>
+                ))}
             </div>
             {showPaymentWarning && (
               <div className="payment-warning">

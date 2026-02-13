@@ -5,6 +5,8 @@ import "./NewOrders.css";
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const INVOICE_CONFIRM_PHRASE = "I confirm the invoice has been sent";
 const INVOICE_UNDO_PHRASE = "I confirm the invoice status should be reset";
+const QUOTE_CONFIRM_PHRASE = "I confirm the quote has been sent";
+const QUOTE_UNDO_PHRASE = "I confirm the quote status should be reset";
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -164,8 +166,17 @@ const OrderActions = () => {
     () => new Set((project?.paymentVerifications || []).map((p) => p.type)),
     [project],
   );
+  const isQuoteProject = project?.projectType === "Quote";
   const hasPaymentVerification = paymentTypes.size > 0;
   const invoiceSent = Boolean(project?.invoice?.sent);
+  const billingDocumentLabel = isQuoteProject ? "Quote" : "Invoice";
+  const billingDocumentLower = isQuoteProject ? "quote" : "invoice";
+  const billingConfirmPhrase = isQuoteProject
+    ? QUOTE_CONFIRM_PHRASE
+    : INVOICE_CONFIRM_PHRASE;
+  const billingUndoPhrase = isQuoteProject
+    ? QUOTE_UNDO_PHRASE
+    : INVOICE_UNDO_PHRASE;
 
   const handleDeliveryComplete = async () => {
     if (!canMarkDelivered || !project) return;
@@ -292,7 +303,7 @@ const OrderActions = () => {
     });
 
   const handleConfirmInvoice = async () => {
-    if (!project || invoiceInput.trim() !== INVOICE_CONFIRM_PHRASE) return;
+    if (!project || invoiceInput.trim() !== billingConfirmPhrase) return;
     setInvoiceSubmitting(true);
     try {
       const res = await fetch(`/api/projects/${project._id}/invoice-sent`, {
@@ -302,13 +313,14 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        showToast("Invoice marked as sent.", "success");
+        showToast(`${billingDocumentLabel} marked as sent.`, "success");
         setInvoiceModal(false);
         setInvoiceInput("");
       } else {
         const errorData = await res.json();
         showToast(
-          errorData.message || "Failed to mark invoice sent.",
+          errorData.message ||
+            `Failed to mark ${billingDocumentLower} as sent.`,
           "error",
         );
       }
@@ -343,7 +355,7 @@ const OrderActions = () => {
   };
 
   const handleConfirmInvoiceUndo = async () => {
-    if (!project || invoiceUndoInput.trim() !== INVOICE_UNDO_PHRASE) return;
+    if (!project || invoiceUndoInput.trim() !== billingUndoPhrase) return;
     setInvoiceUndoSubmitting(true);
     try {
       const res = await fetch(`/api/projects/${project._id}/invoice-sent/undo`, {
@@ -353,12 +365,13 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        showToast("Invoice status reset.", "success");
+        showToast(`${billingDocumentLabel} status reset.`, "success");
         closeInvoiceUndoModal();
       } else {
         const errorData = await res.json();
         showToast(
-          errorData.message || "Failed to undo invoice status.",
+          errorData.message ||
+            `Failed to undo ${billingDocumentLower} status.`,
           "error",
         );
       }
@@ -468,6 +481,7 @@ const OrderActions = () => {
 
   const showPaymentWarning =
     project &&
+    !isQuoteProject &&
     !hasPaymentVerification &&
     ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
       project.status,
@@ -521,12 +535,15 @@ const OrderActions = () => {
             </p>
           </div>
           <div className="status-tags">
-            {invoiceSent && <span className="status-tag invoice">Invoice Sent</span>}
-            {Array.from(paymentTypes).map((type) => (
-              <span key={type} className="status-tag payment">
-                {paymentLabels[type] || type}
-              </span>
-            ))}
+            {invoiceSent && (
+              <span className="status-tag invoice">{billingDocumentLabel} Sent</span>
+            )}
+            {!isQuoteProject &&
+              Array.from(paymentTypes).map((type) => (
+                <span key={type} className="status-tag payment">
+                  {paymentLabels[type] || type}
+                </span>
+              ))}
           </div>
         </div>
 
@@ -575,7 +592,11 @@ const OrderActions = () => {
 
           <div className="action-card">
             <h3>Billing</h3>
-              <p>Confirm invoice and payment milestones.</p>
+              <p>
+                {isQuoteProject
+                  ? "Confirm quote response sent."
+                  : "Confirm invoice and payment milestones."}
+              </p>
               <div className="billing-actions">
                 {!invoiceSent ? (
                   <button
@@ -583,43 +604,45 @@ const OrderActions = () => {
                     onClick={openInvoiceModal}
                     disabled={!canManageBilling}
                   >
-                    Mark Invoice Sent
+                    Mark {billingDocumentLabel} Sent
                   </button>
                 ) : (
                   <button
                     className="action-btn undo-btn"
                     onClick={openInvoiceUndoModal}
                     disabled={!canManageBilling}
-                    title="Undo invoice sent"
+                    title={`Undo ${billingDocumentLower} sent`}
                   >
-                    Undo Invoice Sent
+                    Undo {billingDocumentLabel} Sent
                   </button>
                 )}
-                <div className="payment-actions">
-                  {PAYMENT_OPTIONS.map((option) => (
-                    <div key={option.type} className="payment-action-group">
-                      {!paymentTypes.has(option.type) ? (
-                        <button
-                          className="action-btn"
-                          onClick={() => openPaymentModal(option.type)}
-                          disabled={!canManageBilling}
-                          title={`Confirm ${option.label}`}
-                        >
-                          Confirm {option.label}
-                        </button>
-                      ) : (
-                        <button
-                          className="action-btn undo-btn"
-                          onClick={() => openPaymentUndoModal(option.type)}
-                          disabled={!canManageBilling}
-                          title={`Undo ${option.label}`}
-                        >
-                          Undo {option.label}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {!isQuoteProject && (
+                  <div className="payment-actions">
+                    {PAYMENT_OPTIONS.map((option) => (
+                      <div key={option.type} className="payment-action-group">
+                        {!paymentTypes.has(option.type) ? (
+                          <button
+                            className="action-btn"
+                            onClick={() => openPaymentModal(option.type)}
+                            disabled={!canManageBilling}
+                            title={`Confirm ${option.label}`}
+                          >
+                            Confirm {option.label}
+                          </button>
+                        ) : (
+                          <button
+                            className="action-btn undo-btn"
+                            onClick={() => openPaymentUndoModal(option.type)}
+                            disabled={!canManageBilling}
+                            title={`Undo ${option.label}`}
+                          >
+                            Undo {option.label}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
         </div>
@@ -668,13 +691,13 @@ const OrderActions = () => {
         <div className="confirm-modal-overlay" onClick={closeInvoiceModal}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-modal-header">
-              <h3>Confirm Invoice Sent</h3>
+              <h3>Confirm {billingDocumentLabel} Sent</h3>
               <p>{project.orderId || project._id || "Project"}</p>
             </div>
             <p className="confirm-modal-text">
-              Type the phrase below to confirm invoice delivery.
+              Type the phrase below to confirm {billingDocumentLower} delivery.
             </p>
-            <div className="confirm-phrase">{INVOICE_CONFIRM_PHRASE}</div>
+            <div className="confirm-phrase">{billingConfirmPhrase}</div>
             <div className="confirm-input-group">
               <label>Confirmation</label>
               <input
@@ -693,10 +716,12 @@ const OrderActions = () => {
                 onClick={handleConfirmInvoice}
                 disabled={
                   invoiceSubmitting ||
-                  invoiceInput.trim() !== INVOICE_CONFIRM_PHRASE
+                  invoiceInput.trim() !== billingConfirmPhrase
                 }
               >
-                {invoiceSubmitting ? "Confirming..." : "Confirm Invoice Sent"}
+                {invoiceSubmitting
+                  ? "Confirming..."
+                  : `Confirm ${billingDocumentLabel} Sent`}
               </button>
             </div>
           </div>
@@ -707,13 +732,13 @@ const OrderActions = () => {
         <div className="confirm-modal-overlay" onClick={closeInvoiceUndoModal}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-modal-header">
-              <h3>Undo Invoice Sent</h3>
+              <h3>Undo {billingDocumentLabel} Sent</h3>
               <p>{project.orderId || project._id || "Project"}</p>
             </div>
             <p className="confirm-modal-text">
-              Type the phrase below to reset invoice status.
+              Type the phrase below to reset {billingDocumentLower} status.
             </p>
-            <div className="confirm-phrase">{INVOICE_UNDO_PHRASE}</div>
+            <div className="confirm-phrase">{billingUndoPhrase}</div>
             <div className="confirm-input-group">
               <label>Confirmation</label>
               <input
@@ -732,10 +757,12 @@ const OrderActions = () => {
                 onClick={handleConfirmInvoiceUndo}
                 disabled={
                   invoiceUndoSubmitting ||
-                  invoiceUndoInput.trim() !== INVOICE_UNDO_PHRASE
+                  invoiceUndoInput.trim() !== billingUndoPhrase
                 }
               >
-                {invoiceUndoSubmitting ? "Confirming..." : "Undo Invoice Sent"}
+                {invoiceUndoSubmitting
+                  ? "Confirming..."
+                  : `Undo ${billingDocumentLabel} Sent`}
               </button>
             </div>
           </div>
