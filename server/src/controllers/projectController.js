@@ -96,8 +96,8 @@ const hasPaymentVerification = (project) =>
 const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
 const AI_RISK_TIMEOUT_MS = 12000;
 const AI_RISK_TEMPERATURE = 0.75;
-const MIN_RISK_SUGGESTIONS = 5;
-const MAX_RISK_SUGGESTIONS = 8;
+const MIN_RISK_SUGGESTIONS = 3;
+const MAX_RISK_SUGGESTIONS = 5;
 
 const PRODUCTION_SUGGESTION_DEPARTMENTS = [
   "graphics",
@@ -179,7 +179,10 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const normalizeTextToken = (value) =>
-  toText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  toText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 const toOptionValue = (value) => {
   if (typeof value === "string") return value.trim();
@@ -218,10 +221,7 @@ const normalizeProductionDepartment = (value) => {
   return "";
 };
 
-const sanitizeRiskSuggestions = (
-  value,
-  limit = Number.POSITIVE_INFINITY,
-) => {
+const sanitizeRiskSuggestions = (value, limit = Number.POSITIVE_INFINITY) => {
   const uniqueDescriptions = new Set();
   const cleaned = [];
 
@@ -294,7 +294,10 @@ const buildRiskSuggestionContext = (projectData = {}) => {
   ];
 
   const productionDepartments = Array.from(
-    new Set([...requestedProductionDepartments, ...inferredProductionDepartments]),
+    new Set([
+      ...requestedProductionDepartments,
+      ...inferredProductionDepartments,
+    ]),
   );
 
   const uncontrollableFactors = toSafeArray(projectData?.uncontrollableFactors)
@@ -414,14 +417,16 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Run a test press and lock curing settings before full production.",
     },
     {
-      description: "Film humidity may affect transfer quality and crack resistance.",
+      description:
+        "Film humidity may affect transfer quality and crack resistance.",
       preventive:
         "Store films in a dry environment and verify transfer adhesion on sample pieces.",
     },
   ],
   "uv-dtf": [
     {
-      description: "UV DTF lamination may delaminate on curved or textured substrates.",
+      description:
+        "UV DTF lamination may delaminate on curved or textured substrates.",
       preventive:
         "Validate substrate compatibility and perform adhesion tests on representative samples.",
     },
@@ -450,7 +455,8 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Run nozzle checks and maintenance cycles at scheduled intervals.",
     },
     {
-      description: "Media stretch can distort final dimensions on large panels.",
+      description:
+        "Media stretch can distort final dimensions on large panels.",
       preventive:
         "Use calibrated tension settings and verify dimensions before finishing.",
     },
@@ -462,19 +468,22 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Create batch color controls and approve first-sheet references for every run.",
     },
     {
-      description: "Paper humidity variance may cause feed or registration issues.",
+      description:
+        "Paper humidity variance may cause feed or registration issues.",
       preventive:
         "Condition paper stock and monitor feed alignment through setup prints.",
     },
   ],
   "offset-press": [
     {
-      description: "Plate registration drift may affect fine text and linework.",
+      description:
+        "Plate registration drift may affect fine text and linework.",
       preventive:
         "Lock registration controls and inspect makeready output before run approval.",
     },
     {
-      description: "Ink-water balance instability can reduce print consistency.",
+      description:
+        "Ink-water balance instability can reduce print consistency.",
       preventive:
         "Standardize fountain settings and monitor densitometer readings per batch.",
     },
@@ -493,12 +502,14 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
   ],
   "digital-heat-press": [
     {
-      description: "Heat press temperature variance may cause incomplete transfer.",
+      description:
+        "Heat press temperature variance may cause incomplete transfer.",
       preventive:
         "Calibrate platen temperature and confirm transfer durability with wash tests.",
     },
     {
-      description: "Pressure variation may leave inconsistent transfer texture.",
+      description:
+        "Pressure variation may leave inconsistent transfer texture.",
       preventive:
         "Set pressure standards by material type and verify on pilot samples.",
     },
@@ -510,7 +521,8 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Profile color per fabric type and approve strike-offs before production.",
     },
     {
-      description: "Ghosting risk increases if transfer paper shifts during pressing.",
+      description:
+        "Ghosting risk increases if transfer paper shifts during pressing.",
       preventive:
         "Secure transfer sheets and validate fixture method before bulk runs.",
     },
@@ -522,14 +534,16 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Test stabilization and thread tension on actual garment material first.",
     },
     {
-      description: "Digitized file density may cause thread breaks on small text.",
+      description:
+        "Digitized file density may cause thread breaks on small text.",
       preventive:
         "Review stitch density and run sample sew-out before full production.",
     },
   ],
   engraving: [
     {
-      description: "Depth inconsistency may occur across mixed material hardness.",
+      description:
+        "Depth inconsistency may occur across mixed material hardness.",
       preventive:
         "Run material-specific power/speed tests and lock settings per substrate.",
     },
@@ -546,14 +560,16 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Track blade life and replace before tolerance-critical production.",
     },
     {
-      description: "Registration mismatch can offset contour cuts from print guides.",
+      description:
+        "Registration mismatch can offset contour cuts from print guides.",
       preventive:
         "Verify registration marks with a pilot sheet before cutting the full run.",
     },
   ],
   "pvc-id": [
     {
-      description: "Card lamination bubbles may appear after thermal processing.",
+      description:
+        "Card lamination bubbles may appear after thermal processing.",
       preventive:
         "Control lamination temperature and inspect sample cards from each batch.",
     },
@@ -565,7 +581,8 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
   ],
   "business-cards": [
     {
-      description: "Trim drift may cause uneven margins on business card stacks.",
+      description:
+        "Trim drift may cause uneven margins on business card stacks.",
       preventive:
         "Run trim calibration and verify alignment after blade setup.",
     },
@@ -601,7 +618,8 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
   ],
   woodme: [
     {
-      description: "Wood moisture variance may cause warping after fabrication.",
+      description:
+        "Wood moisture variance may cause warping after fabrication.",
       preventive:
         "Condition wood stock and measure moisture content before cutting.",
     },
@@ -618,14 +636,16 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Use outdoor-rated adhesives and validate weather exposure on sample assemblies.",
     },
     {
-      description: "Illumination uniformity may be inconsistent across sign faces.",
+      description:
+        "Illumination uniformity may be inconsistent across sign faces.",
       preventive:
         "Run illumination tests and balance light distribution before final closure.",
     },
   ],
   overseas: [
     {
-      description: "Overseas production handoff may cause specification mismatch.",
+      description:
+        "Overseas production handoff may cause specification mismatch.",
       preventive:
         "Send signed technical specs with visuals and require pre-production samples.",
     },
@@ -637,36 +657,42 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
   ],
   "outside-production": [
     {
-      description: "Third-party process quality may not match internal standards.",
+      description:
+        "Third-party process quality may not match internal standards.",
       preventive:
         "Issue clear QC acceptance criteria and require approval samples before full run.",
     },
     {
-      description: "External lead-time slippage can delay downstream production stages.",
+      description:
+        "External lead-time slippage can delay downstream production stages.",
       preventive:
         "Set milestone checkpoints with contingency turnaround options.",
     },
   ],
   "in-house-production": [
     {
-      description: "Internal capacity saturation may create bottlenecks across machines.",
+      description:
+        "Internal capacity saturation may create bottlenecks across machines.",
       preventive:
         "Balance workload by machine availability and set daily capacity caps.",
     },
     {
-      description: "Shift handover gaps can cause rework on active production jobs.",
+      description:
+        "Shift handover gaps can cause rework on active production jobs.",
       preventive:
         "Use standardized handover checklists and end-of-shift production logs.",
     },
   ],
   "local-outsourcing": [
     {
-      description: "Local outsourcing quality variance may affect output consistency.",
+      description:
+        "Local outsourcing quality variance may affect output consistency.",
       preventive:
         "Align on approved sample standards and perform incoming QC at receipt.",
     },
     {
-      description: "Specification interpretation differences may trigger rework.",
+      description:
+        "Specification interpretation differences may trigger rework.",
       preventive:
         "Use a signed production brief with measurable acceptance criteria.",
     },
@@ -675,7 +701,8 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
 
 const SHARED_DEPARTMENT_RISK_TEMPLATES = [
   {
-    description: "Machine/setup parameters may drift between operators or shifts.",
+    description:
+      "Machine/setup parameters may drift between operators or shifts.",
     preventive:
       "Use a signed setup sheet and re-validate first-piece output at every shift change.",
   },
@@ -712,7 +739,9 @@ const SHARED_DEPARTMENT_RISK_TEMPLATES = [
 ];
 
 const stripSentencePeriod = (text) =>
-  toText(text).replace(/[.!?\s]+$/, "").trim();
+  toText(text)
+    .replace(/[.!?\s]+$/, "")
+    .trim();
 
 const normalizeRiskItemSubject = (item) => {
   const rawSubject = toText(item?.description) || toText(item?.breakdown);
@@ -781,7 +810,8 @@ const buildFallbackRiskSuggestions = (context) => {
       ...SHARED_DEPARTMENT_RISK_TEMPLATES,
     ]);
     const label = PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId;
-    const departmentItemSubjects = itemSubjectsByDepartment.get(departmentId) || [];
+    const departmentItemSubjects =
+      itemSubjectsByDepartment.get(departmentId) || [];
     const itemSubjectPool = departmentItemSubjects.length
       ? shuffleArray(departmentItemSubjects)
       : [];
@@ -879,7 +909,7 @@ const requestAiRiskSuggestions = async (context) => {
             {
               role: "system",
               content:
-                "You are a production-risk assistant for print/fabrication workflows. Return only strict JSON: {\"suggestions\":[{\"description\":\"...\",\"preventive\":\"...\"}]}. Generate 5-8 concise suggestions. Every suggestion must map to one of the provided productionDepartmentLabels and, when possible, reference provided production items. Include Mockup/Graphics/Design risks when that department is present. Cover only production execution risks (machine setup, mockup/design handoff, material behavior, finishing, installation, outsourcing handoff, capacity). Do not include billing, approvals, payment, client communication, or generic project management risks. Avoid duplicate ideas and avoid repeating existingProductionRisks. Use variationSeed internally to diversify outputs for repeated requests with similar context.",
+                'You are a production-risk assistant for print/fabrication workflows. Return only strict JSON: {"suggestions":[{"description":"...","preventive":"..."}]}. Generate 5-8 concise suggestions. Every suggestion must map to one of the provided productionDepartmentLabels and, when possible, reference provided production items. Include Mockup/Graphics/Design risks when that department is present. Cover only production execution risks (machine setup, mockup/design handoff, material behavior, finishing, installation, outsourcing handoff, capacity). Do not include billing, approvals, payment, client communication, or generic project management risks. Avoid duplicate ideas and avoid repeating existingProductionRisks. Use variationSeed internally to diversify outputs for repeated requests with similar context.',
             },
             {
               role: "user",
@@ -1055,9 +1085,7 @@ const createProject = async (req, res) => {
     });
     const finalReceivedTime = getValue(receivedTime) || currentTime;
 
-    const normalizedAssistantLeadId = getValue(
-      parseMaybeJson(assistantLeadId),
-    );
+    const normalizedAssistantLeadId = getValue(parseMaybeJson(assistantLeadId));
 
     // Create project
     const project = new Project({
@@ -1683,9 +1711,7 @@ const setProjectHold = async (req, res) => {
     const requestedStatus =
       typeof releaseStatus === "string" ? releaseStatus.trim() : "";
     let nextStatus =
-      requestedStatus ||
-      project.hold?.previousStatus ||
-      DEFAULT_RELEASE_STATUS;
+      requestedStatus || project.hold?.previousStatus || DEFAULT_RELEASE_STATUS;
 
     if (!HOLDABLE_STATUSES.has(nextStatus)) {
       nextStatus = DEFAULT_RELEASE_STATUS;
@@ -1771,8 +1797,7 @@ const updateProjectStatus = async (req, res) => {
 
     if (newStatus === HOLD_STATUS) {
       return res.status(400).json({
-        message:
-          "Use the project hold endpoint to put this project on hold.",
+        message: "Use the project hold endpoint to put this project on hold.",
       });
     }
 
@@ -1843,7 +1868,8 @@ const updateProjectStatus = async (req, res) => {
 
     if (newStatus === "Mockup Completed" && !project.mockup?.fileUrl) {
       return res.status(400).json({
-        message: "Please upload the approved mockup before completing this stage.",
+        message:
+          "Please upload the approved mockup before completing this stage.",
       });
     }
 
@@ -2193,7 +2219,8 @@ const uploadProjectMockup = async (req, res) => {
 
     if (project.status !== "Pending Mockup") {
       return res.status(400).json({
-        message: "Mockup upload is only allowed while status is Pending Mockup.",
+        message:
+          "Mockup upload is only allowed while status is Pending Mockup.",
       });
     }
 
@@ -2270,7 +2297,8 @@ const addFeedbackToProject = async (req, res) => {
       type,
       notes: notes || "",
       createdBy: req.user._id,
-      createdByName: `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim(),
+      createdByName:
+        `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim(),
     };
 
     project.feedbacks = project.feedbacks || [];
@@ -2279,7 +2307,10 @@ const addFeedbackToProject = async (req, res) => {
     project.sectionUpdates.feedbacks = new Date();
 
     const oldStatus = project.status;
-    if (project.status === "Pending Feedback" || project.status === "Delivered") {
+    if (
+      project.status === "Pending Feedback" ||
+      project.status === "Delivered"
+    ) {
       project.status = "Feedback Completed";
     }
 
