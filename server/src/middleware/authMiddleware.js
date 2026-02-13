@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { resolveCookieOptions } = require("../utils/cookieOptions");
 
-const isAdminPortalRequest = (req) => {
+const isPrivilegedPortalRequest = (req) => {
   const referer = req.headers.referer || "";
   const originalUrl = req.originalUrl || "";
   const baseUrl = req.baseUrl || "";
@@ -10,17 +10,22 @@ const isAdminPortalRequest = (req) => {
     req.headers["x-forwarded-host"] || req.headers.host || "";
   const requestHost = hostHeader.split(":")[0].toLowerCase();
   const adminHost = (process.env.ADMIN_HOST || "").toLowerCase();
+  const opsHost = (process.env.OPS_HOST || "").toLowerCase();
 
   return (
     (adminHost && requestHost === adminHost) ||
+    (opsHost && requestHost === opsHost) ||
     baseUrl.startsWith("/api/admin") ||
+    baseUrl.startsWith("/api/ops") ||
     originalUrl.startsWith("/api/admin") ||
-    referer.includes("/admin")
+    originalUrl.startsWith("/api/ops") ||
+    referer.includes("/admin") ||
+    referer.includes("/ops")
   );
 };
 
 const selectAuthToken = (req) => {
-  if (isAdminPortalRequest(req)) {
+  if (isPrivilegedPortalRequest(req)) {
     return req.cookies.token_admin;
   }
 

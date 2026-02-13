@@ -13,6 +13,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
 const digestRoutes = require("./routes/digestRoutes");
+const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 
@@ -27,6 +28,7 @@ const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 const ADMIN_HOST = (process.env.ADMIN_HOST || "").toLowerCase();
 const CLIENT_HOST = (process.env.CLIENT_HOST || "").toLowerCase();
+const OPS_HOST = (process.env.OPS_HOST || "").toLowerCase();
 
 const getRequestHost = (req) => {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "";
@@ -38,7 +40,12 @@ const isAdminHost = (req) => {
   return getRequestHost(req) === ADMIN_HOST;
 };
 
-const isClientHost = (req) => !isAdminHost(req);
+const isOpsHost = (req) => {
+  if (!OPS_HOST) return false;
+  return getRequestHost(req) === OPS_HOST;
+};
+
+const isClientHost = (req) => !isAdminHost(req) && !isOpsHost(req);
 
 // Trust proxy for ngrok/production (required for secure cookies behind proxy)
 app.set("trust proxy", 1);
@@ -98,12 +105,15 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api/digests", digestRoutes);
+app.use("/api/ops/wallboard", opsWallboardRoutes);
 
 // Serve built frontends (Vite builds -> dist)
 const clientDistPath = path.resolve(__dirname, "../../client/dist");
 const adminDistPath = path.resolve(__dirname, "../../admin/dist");
+const opsDistPath = path.resolve(__dirname, "../../opsportal/dist");
 const hasClientBuild = fs.existsSync(clientDistPath);
 const hasAdminBuild = fs.existsSync(adminDistPath);
+const hasOpsBuild = fs.existsSync(opsDistPath);
 
 if (hasAdminBuild) {
   const adminStatic = express.static(adminDistPath);
@@ -115,9 +125,24 @@ if (hasAdminBuild) {
   });
 }
 
+if (hasOpsBuild) {
+  const opsStatic = express.static(opsDistPath);
+  app.use((req, res, next) => {
+    if (isOpsHost(req)) {
+      return opsStatic(req, res, next);
+    }
+    return next();
+  });
+}
+
 // Mobile/IP fallback: allow /admin on non-admin hosts to serve admin app
 if (hasAdminBuild) {
   app.use("/admin", express.static(adminDistPath));
+}
+
+// Fallback path for ops wallboard
+if (hasOpsBuild) {
+  app.use("/ops", express.static(opsDistPath));
 }
 
 if (hasClientBuild) {
@@ -131,7 +156,7 @@ if (hasClientBuild) {
 }
 
 // SPA fallbacks
-if (hasAdminBuild || hasClientBuild) {
+if (hasAdminBuild || hasClientBuild || hasOpsBuild) {
   app.get(/^\/admin(\/.*)?$/, (req, res, next) => {
     if (!isAdminHost(req) && hasAdminBuild) {
       return res.sendFile(path.join(adminDistPath, "index.html"));
@@ -139,9 +164,19 @@ if (hasAdminBuild || hasClientBuild) {
     return next();
   });
 
+  app.get(/^\/ops(\/.*)?$/, (req, res, next) => {
+    if (hasOpsBuild) {
+      return res.sendFile(path.join(opsDistPath, "index.html"));
+    }
+    return next();
+  });
+
   app.get(/^\/(?!api|uploads).*/, (req, res, next) => {
     if (isAdminHost(req) && hasAdminBuild) {
       return res.sendFile(path.join(adminDistPath, "index.html"));
+    }
+    if (isOpsHost(req) && hasOpsBuild) {
+      return res.sendFile(path.join(opsDistPath, "index.html"));
     }
     if (isClientHost(req) && hasClientBuild) {
       return res.sendFile(path.join(clientDistPath, "index.html"));

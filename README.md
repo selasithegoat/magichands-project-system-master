@@ -1,6 +1,6 @@
 # MagicHands Project System
 
-Multi-portal job/project management system with a Client Portal and Admin Portal backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, project updates, notifications, and file uploads.
+Multi-portal job/project management system with Client, Admin, and Operations Wallboard portals backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, project updates, notifications, and file uploads.
 
 ## Disclaimer
 
@@ -43,6 +43,7 @@ git log HEAD..upstream/master --oneline
 
 - Client portal: dashboard, project list, history, engaged projects, profile, and notifications.
 - Admin portal: dashboards, project details, team management, and client overview.
+- Operations wallboard portal: full-screen manager overview of live orders, deadlines, team capacity, and risk signals.
 - Project creation wizards (standard and quote workflows).
 - Departmental engagement + acknowledgements (including production sub-departments).
 - Real-time refresh via polling/realtime hooks.
@@ -51,7 +52,7 @@ git log HEAD..upstream/master --oneline
 
 ## Tech Stack
 
-- Frontend: React + Vite (Admin and Client apps)
+- Frontend: React + Vite (Admin, Client, and Ops Wallboard apps)
 - Backend: Node.js + Express
 - Database: MongoDB (Mongoose)
 - Auth: JWT + HttpOnly cookies
@@ -61,6 +62,7 @@ git log HEAD..upstream/master --oneline
 
 - `client/` - Client portal (Vite + React)
 - `admin/` - Admin portal (Vite + React)
+- `opsportal/` - Operations wallboard portal (Vite + React)
 - `server/` - Express API, MongoDB models, auth, notifications
 - `scripts/` - Helper scripts
 
@@ -84,6 +86,7 @@ PORT=5000
 HOST=0.0.0.0
 ADMIN_HOST=admin.magichandsproject.lan
 CLIENT_HOST=magichandsproject.lan
+OPS_HOST=ops.magichandsproject.lan
 
 # Uploads
 UPLOAD_DIR=C:/magichands-uploads
@@ -105,8 +108,9 @@ If you use subdomains locally, map them in your hosts file.
 
 - `magichandsproject.lan`
 - `admin.magichandsproject.lan`
+- `ops.magichandsproject.lan`
 
-Then set `ADMIN_HOST` and `CLIENT_HOST` to match.
+Then set `ADMIN_HOST`, `CLIENT_HOST`, and `OPS_HOST` to match.
 
 ## Install
 
@@ -122,11 +126,15 @@ npm install
 # Admin
 cd ../admin
 npm install
+
+# Ops wallboard
+cd ../opsportal
+npm install
 ```
 
 ## Run (Development)
 
-Open three terminals.
+Open four terminals.
 
 ```bash
 # 1) API server
@@ -146,13 +154,20 @@ cd admin
 npm run dev
 ```
 
+```bash
+# 4) Ops wallboard portal
+cd opsportal
+npm run dev
+```
+
 Default ports:
 
 - API: `http://localhost:5000`
 - Client: `http://localhost:5173`
 - Admin: `http://localhost:3000`
+- Ops wallboard: `http://localhost:3002`
 
-Both frontends proxy `/api` (and `/uploads` for client) to the API server.
+All frontends proxy `/api` (and `/uploads` for client) to the API server.
 
 ## Build for Production
 
@@ -163,6 +178,10 @@ npm run build
 
 # Build admin
 cd ../admin
+npm run build
+
+# Build ops wallboard
+cd ../opsportal
 npm run build
 ```
 
