@@ -316,11 +316,13 @@ const buildRiskSuggestionContext = (projectData = {}) => {
   return {
     projectType: toText(projectData?.projectType) || "Standard",
     priority: toText(projectData?.priority) || "Normal",
-    projectName: toText(details?.projectName),
-    briefOverview: toText(details?.briefOverview),
-    client: toText(details?.client),
-    deliveryDate: toText(details?.deliveryDate),
-    deliveryLocation: toText(details?.deliveryLocation),
+    projectName: toText(details?.projectName || projectData?.projectName),
+    briefOverview: toText(details?.briefOverview || projectData?.briefOverview),
+    client: toText(details?.client || projectData?.client),
+    deliveryDate: toText(details?.deliveryDate || projectData?.deliveryDate),
+    deliveryLocation: toText(
+      details?.deliveryLocation || projectData?.deliveryLocation,
+    ),
     departments,
     productionDepartments,
     productionDepartmentLabels: productionDepartments.map(
@@ -774,12 +776,37 @@ const buildProductionItemSubjectsByDepartment = (items = []) => {
   return map;
 };
 
+const buildGlobalItemSubjects = (items = []) => {
+  const subjects = [];
+  const seen = new Set();
+
+  items.forEach((item) => {
+    const subject = normalizeRiskItemSubject(item);
+    if (!subject) return;
+
+    const key = subject.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    subjects.push(subject);
+  });
+
+  return subjects.slice(0, 8);
+};
+
 const buildDepartmentScopedFallbackSuggestion = ({
   template,
   departmentLabel,
   itemSubject,
+  projectName,
 }) => {
   if (!itemSubject) {
+    if (projectName) {
+      return {
+        description: `[${departmentLabel}] ${stripSentencePeriod(template.description)} for "${projectName}".`,
+        preventive: `${stripSentencePeriod(template.preventive)} for "${projectName}".`,
+      };
+    }
+
     return {
       description: `[${departmentLabel}] ${template.description}`,
       preventive: template.preventive,
@@ -801,6 +828,10 @@ const buildFallbackRiskSuggestions = (context) => {
   const itemSubjectsByDepartment = buildProductionItemSubjectsByDepartment(
     context.items,
   );
+  const globalItemSubjects = buildGlobalItemSubjects(context.items);
+  const globalItemSubjectPool = globalItemSubjects.length
+    ? shuffleArray(globalItemSubjects)
+    : [];
 
   context.productionDepartments.forEach((departmentId) => {
     const departmentTemplates =
@@ -814,7 +845,7 @@ const buildFallbackRiskSuggestions = (context) => {
       itemSubjectsByDepartment.get(departmentId) || [];
     const itemSubjectPool = departmentItemSubjects.length
       ? shuffleArray(departmentItemSubjects)
-      : [];
+      : globalItemSubjectPool;
 
     templates.forEach((template, index) => {
       const itemSubject =
@@ -827,6 +858,7 @@ const buildFallbackRiskSuggestions = (context) => {
           template,
           departmentLabel: label,
           itemSubject,
+          projectName: context.projectName,
         }),
       );
     });
@@ -853,6 +885,7 @@ const requestAiRiskSuggestions = async (context) => {
   const fetchClient = await getFetchClient();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_RISK_TIMEOUT_MS);
+  const globalItemHighlights = buildGlobalItemSubjects(context.items);
 
   const contextPayload = {
     projectType: context.projectType,
@@ -865,6 +898,7 @@ const requestAiRiskSuggestions = async (context) => {
     productionDepartments: context.productionDepartments,
     productionDepartmentLabels: context.productionDepartmentLabels,
     items: context.items,
+    itemHighlights: globalItemHighlights,
     productionItemsByDepartment: context.productionDepartments.map(
       (departmentId) => ({
         departmentId,
@@ -891,6 +925,17 @@ const requestAiRiskSuggestions = async (context) => {
     variationSeed: Math.floor(Math.random() * 1_000_000),
   };
 
+  contextPayload.productionItemsByDepartment =
+    contextPayload.productionItemsByDepartment.map((departmentEntry) => ({
+      ...departmentEntry,
+      items:
+        departmentEntry.items.length > 0
+          ? departmentEntry.items
+          : globalItemHighlights.map((highlight) => ({
+              description: highlight,
+            })),
+    }));
+
   try {
     const response = await fetchClient(
       "https://api.openai.com/v1/chat/completions",
@@ -909,7 +954,7 @@ const requestAiRiskSuggestions = async (context) => {
             {
               role: "system",
               content:
-                'You are a production-risk assistant for print/fabrication workflows. Return only strict JSON: {"suggestions":[{"description":"...","preventive":"..."}]}. Generate 5-8 concise suggestions. Every suggestion must map to one of the provided productionDepartmentLabels and, when possible, reference provided production items. Include Mockup/Graphics/Design risks when that department is present. Cover only production execution risks (machine setup, mockup/design handoff, material behavior, finishing, installation, outsourcing handoff, capacity). Do not include billing, approvals, payment, client communication, or generic project management risks. Avoid duplicate ideas and avoid repeating existingProductionRisks. Use variationSeed internally to diversify outputs for repeated requests with similar context.',
+                'You are a production-risk assistant for print/fabrication workflows. Return only strict JSON: {"suggestions":[{"description":"...","preventive":"..."}]}. Generate 5-8 concise suggestions. Every suggestion must map to one of the provided productionDepartmentLabels. Prioritize projectName and itemHighlights to make risks specific to the actual production work, not generic department boilerplate. When production items are available, reference concrete item/material terms from them in each suggestion whenever feasible. If a department has no directly mapped items, infer from projectName and itemHighlights. Include Mockup/Graphics/Design risks when that department is present. Cover only production execution risks (machine setup, mockup/design handoff, material behavior, finishing, installation, outsourcing handoff, capacity). Do not include billing, approvals, payment, client communication, or generic project management risks. Avoid duplicate ideas and avoid repeating existingProductionRisks. Use variationSeed internally to diversify outputs for repeated requests with similar context.',
             },
             {
               role: "user",
