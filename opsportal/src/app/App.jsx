@@ -25,6 +25,9 @@ import { formatNumber, formatPercent, formatTimestamp } from "../utils/formatter
 const REFRESH_INTERVAL_MS = 30 * 1000;
 const DECK_ROTATE_INTERVAL_MS = 30 * 1000;
 const RISK_DECK_INDEX = 1;
+const SWIPE_MIN_DISTANCE_PX = 52;
+const SWIPE_DIRECTION_RATIO = 1.2;
+const SWIPE_IGNORE_SELECTOR = "button, a, input, select, textarea, .table-wrap";
 
 const DECKS = [
   { id: "overview", label: "Overview" },
@@ -34,6 +37,11 @@ const DECKS = [
   { id: "forecast", label: "SLA + Forecast" },
   { id: "handoff", label: "Handoff Snapshot" },
 ];
+
+const isSwipeBlockedTarget = (target) =>
+  typeof Element !== "undefined" &&
+  target instanceof Element &&
+  Boolean(target.closest(SWIPE_IGNORE_SELECTOR));
 
 const App = () => {
   const [authChecking, setAuthChecking] = useState(true);
@@ -48,7 +56,15 @@ const App = () => {
   const [activeDeckIndex, setActiveDeckIndex] = useState(0);
   const [hoverPaused, setHoverPaused] = useState(false);
   const [manualPaused, setManualPaused] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const hadCriticalAlertRef = useRef(false);
+  const swipeGestureRef = useRef({
+    tracking: false,
+    startX: 0,
+    startY: 0,
+    deltaX: 0,
+    deltaY: 0,
+  });
   const deckPaused = hoverPaused || manualPaused;
 
   const logout = useCallback(async () => {
@@ -67,6 +83,19 @@ const App = () => {
       hadCriticalAlertRef.current = false;
     }
   }, []);
+
+  const handleLogoutClick = useCallback(() => {
+    setShowLogoutDialog(true);
+  }, []);
+
+  const closeLogoutDialog = useCallback(() => {
+    setShowLogoutDialog(false);
+  }, []);
+
+  const confirmLogout = useCallback(() => {
+    setShowLogoutDialog(false);
+    void logout();
+  }, [logout]);
 
   const refreshOverview = useCallback(
     async ({ silent = false } = {}) => {
@@ -234,6 +263,19 @@ const App = () => {
     return () => clearInterval(timer);
   }, [deckPaused, user]);
 
+  useEffect(() => {
+    if (!showLogoutDialog) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setShowLogoutDialog(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [showLogoutDialog]);
+
   const goToDeck = useCallback((index) => {
     const normalized = ((index % DECKS.length) + DECKS.length) % DECKS.length;
     setActiveDeckIndex(normalized);
@@ -246,6 +288,61 @@ const App = () => {
   const goToPreviousDeck = useCallback(() => {
     goToDeck(activeDeckIndex - 1);
   }, [activeDeckIndex, goToDeck]);
+
+  const handleDeckTouchStart = useCallback((event) => {
+    if (event.touches.length !== 1 || isSwipeBlockedTarget(event.target)) {
+      swipeGestureRef.current.tracking = false;
+      return;
+    }
+
+    const touch = event.touches[0];
+    swipeGestureRef.current = {
+      tracking: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      deltaX: 0,
+      deltaY: 0,
+    };
+  }, []);
+
+  const handleDeckTouchMove = useCallback((event) => {
+    const gesture = swipeGestureRef.current;
+    if (!gesture.tracking || event.touches.length !== 1) return;
+
+    const touch = event.touches[0];
+    gesture.deltaX = touch.clientX - gesture.startX;
+    gesture.deltaY = touch.clientY - gesture.startY;
+  }, []);
+
+  const handleDeckTouchEnd = useCallback(
+    (event) => {
+      const gesture = swipeGestureRef.current;
+      if (!gesture.tracking) return;
+
+      if (event.changedTouches.length === 1) {
+        const touch = event.changedTouches[0];
+        gesture.deltaX = touch.clientX - gesture.startX;
+        gesture.deltaY = touch.clientY - gesture.startY;
+      }
+
+      const absX = Math.abs(gesture.deltaX);
+      const absY = Math.abs(gesture.deltaY);
+      if (absX >= SWIPE_MIN_DISTANCE_PX && absX > absY * SWIPE_DIRECTION_RATIO) {
+        if (gesture.deltaX < 0) {
+          goToNextDeck();
+        } else {
+          goToPreviousDeck();
+        }
+      }
+
+      gesture.tracking = false;
+    },
+    [goToNextDeck, goToPreviousDeck],
+  );
+
+  const handleDeckTouchCancel = useCallback(() => {
+    swipeGestureRef.current.tracking = false;
+  }, []);
 
   const activeDeck = DECKS[activeDeckIndex] || DECKS[0];
   const rotationStatusLabel = manualPaused
@@ -299,17 +396,24 @@ const App = () => {
               {rotationStatusLabel}
             </div>
           </div>
-
           <div className="header-actions">
             <button onClick={() => refreshOverview()} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
+              <span className="btn-icon" aria-hidden="true">&#8635;</span>
+              <span className="btn-label">{loading ? "Refreshing..." : "Refresh"}</span>
             </button>
             <button onClick={() => setManualPaused((previous) => !previous)}>
-              {manualPaused ? "Resume Rotate" : "Pause Rotate"}
+              <span className="btn-icon" aria-hidden="true">
+                {manualPaused ? <>&#9654;</> : <>&#9208;</>}
+              </span>
+              <span className="btn-label">{manualPaused ? "Resume Rotate" : "Pause Rotate"}</span>
             </button>
-            <button onClick={handleFullscreen}>Fullscreen</button>
-            <button className="danger" onClick={logout}>
-              Logout
+            <button onClick={handleFullscreen}>
+              <span className="btn-icon" aria-hidden="true">&#9974;</span>
+              <span className="btn-label">Fullscreen</span>
+            </button>
+            <button className="danger" onClick={handleLogoutClick}>
+              <span className="btn-icon" aria-hidden="true">&#8689;</span>
+              <span className="btn-label">Logout</span>
             </button>
           </div>
         </div>
@@ -322,6 +426,10 @@ const App = () => {
         onMouseEnter={() => setHoverPaused(true)}
         onMouseLeave={() => setHoverPaused(false)}
         onFocusCapture={() => setHoverPaused(true)}
+        onTouchStart={handleDeckTouchStart}
+        onTouchMove={handleDeckTouchMove}
+        onTouchEnd={handleDeckTouchEnd}
+        onTouchCancel={handleDeckTouchCancel}
         onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) {
             setHoverPaused(false);
@@ -433,24 +541,41 @@ const App = () => {
         </div>
       </section>
 
-      <EventTicker events={overview?.events} />
+      <footer className="ops-footer">
+        <EventTicker events={overview?.events} />
+      </footer>
 
-      <div className="deck-pagination" role="tablist" aria-label="Wallboard decks">
-        {DECKS.map((deck, index) => (
-          <button
-            key={deck.id}
-            type="button"
-            className={`deck-dot ${index === activeDeckIndex ? "active" : ""}`}
-            onClick={() => goToDeck(index)}
-            aria-label={`Open ${deck.label}`}
-            aria-pressed={index === activeDeckIndex}
+      {showLogoutDialog ? (
+        <div className="dialog-overlay" onClick={closeLogoutDialog}>
+          <div
+            className="dialog-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-dialog-title"
+            onClick={(event) => event.stopPropagation()}
           >
-            <span>{index + 1}</span>
-          </button>
-        ))}
-      </div>
+            <h2 id="logout-dialog-title">Confirm Logout</h2>
+            <p>Are you sure you want to log out?</p>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="dialog-cancel"
+                onClick={closeLogoutDialog}
+                autoFocus
+              >
+                Cancel
+              </button>
+              <button type="button" className="danger" onClick={confirmLogout}>
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
 
 export default App;
+
+

@@ -12,9 +12,7 @@ const RiskDeck = ({ alerts = [], deadlines = [], handoff = {} }) => {
 
   return (
     <div className="deck-grid deck-grid-risk">
-      <div className="panel-stack">
-        <AlertsPanel alerts={alerts} />
-      </div>
+      <AlertsPanel alerts={alerts} />
 
       <DeadlinesPanel deadlines={deadlines} />
 
