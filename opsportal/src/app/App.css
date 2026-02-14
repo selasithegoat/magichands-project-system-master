@@ -359,6 +359,12 @@ button.danger {
   background: rgba(255, 255, 255, 0.96);
 }
 
+.deck-nav-icon {
+  width: 1.18rem;
+  height: 1.18rem;
+  display: block;
+}
+
 .deck-nav-prev {
   left: 0.32rem;
 }
@@ -1509,12 +1515,6 @@ button.dialog-cancel:hover {
   .status-pill {
     font-size: 0.68rem;
     padding: 0.3rem 0.5rem;
-  }
-
-  .header-actions button {
-    min-width: 1.9rem;
-    width: 1.9rem;
-    height: 1.9rem;
   }
 
   .kpi-card p {
