@@ -27,6 +27,9 @@ const DECK_ROTATE_INTERVAL_MS = 30 * 1000;
 const RISK_DECK_INDEX = 1;
 const SWIPE_MIN_DISTANCE_PX = 52;
 const SWIPE_DIRECTION_RATIO = 1.2;
+const SWIPE_LOCK_DISTANCE_PX = 10;
+const SWIPE_THRESHOLD_RATIO = 0.16;
+const SWIPE_EDGE_RESISTANCE = 0.28;
 const SWIPE_IGNORE_SELECTOR = "button, a, input, select, textarea, .table-wrap";
 
 const DECKS = [
@@ -57,15 +60,24 @@ const App = () => {
   const [hoverPaused, setHoverPaused] = useState(false);
   const [manualPaused, setManualPaused] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [disableDeckTransition, setDisableDeckTransition] = useState(false);
+  const [deckJumpFading, setDeckJumpFading] = useState(false);
+  const [touchDragOffsetPx, setTouchDragOffsetPx] = useState(0);
+  const [isTouchDragging, setIsTouchDragging] = useState(false);
   const hadCriticalAlertRef = useRef(false);
+  const deckTransitionResetRef = useRef(null);
+  const deckJumpFrameRef = useRef(null);
+  const deckShellRef = useRef(null);
   const swipeGestureRef = useRef({
     tracking: false,
     startX: 0,
     startY: 0,
     deltaX: 0,
     deltaY: 0,
+    directionLocked: false,
+    horizontalSwipe: false,
   });
-  const deckPaused = hoverPaused || manualPaused;
+  const deckPaused = hoverPaused || manualPaused || isTouchDragging;
 
   const logout = useCallback(async () => {
     try {
@@ -80,6 +92,8 @@ const App = () => {
       setActiveDeckIndex(0);
       setHoverPaused(false);
       setManualPaused(false);
+      setTouchDragOffsetPx(0);
+      setIsTouchDragging(false);
       hadCriticalAlertRef.current = false;
     }
   }, []);
@@ -136,6 +150,18 @@ const App = () => {
     };
     checkSession();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (deckTransitionResetRef.current) {
+        clearTimeout(deckTransitionResetRef.current);
+      }
+      if (deckJumpFrameRef.current) {
+        cancelAnimationFrame(deckJumpFrameRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!user) return undefined;
@@ -244,26 +270,6 @@ const App = () => {
   );
 
   useEffect(() => {
-    if (!user) return;
-
-    if (hasCriticalAlert && !hadCriticalAlertRef.current) {
-      setActiveDeckIndex(RISK_DECK_INDEX);
-    }
-
-    hadCriticalAlertRef.current = hasCriticalAlert;
-  }, [hasCriticalAlert, user]);
-
-  useEffect(() => {
-    if (!user || deckPaused) return undefined;
-
-    const timer = setInterval(() => {
-      setActiveDeckIndex((previous) => (previous + 1) % DECKS.length);
-    }, DECK_ROTATE_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, [deckPaused, user]);
-
-  useEffect(() => {
     if (!showLogoutDialog) return undefined;
 
     const handleEscape = (event) => {
@@ -278,8 +284,41 @@ const App = () => {
 
   const goToDeck = useCallback((index) => {
     const normalized = ((index % DECKS.length) + DECKS.length) % DECKS.length;
+    if (normalized === activeDeckIndex) return;
+
+    if (deckTransitionResetRef.current) {
+      clearTimeout(deckTransitionResetRef.current);
+      deckTransitionResetRef.current = null;
+    }
+    if (deckJumpFrameRef.current) {
+      cancelAnimationFrame(deckJumpFrameRef.current);
+      deckJumpFrameRef.current = null;
+    }
+
+    const indexDelta = Math.abs(normalized - activeDeckIndex);
+    const isWrapJump = indexDelta === DECKS.length - 1;
+    const isLongJump = indexDelta > 1;
+
+    if (isWrapJump || isLongJump) {
+      setDeckJumpFading(true);
+      deckTransitionResetRef.current = setTimeout(() => {
+        setDisableDeckTransition(true);
+        setActiveDeckIndex(normalized);
+        deckTransitionResetRef.current = null;
+
+        deckJumpFrameRef.current = requestAnimationFrame(() => {
+          setDisableDeckTransition(false);
+          setDeckJumpFading(false);
+          deckJumpFrameRef.current = null;
+        });
+      }, 120);
+      return;
+    }
+
+    setDisableDeckTransition(false);
+    setDeckJumpFading(false);
     setActiveDeckIndex(normalized);
-  }, []);
+  }, [activeDeckIndex]);
 
   const goToNextDeck = useCallback(() => {
     goToDeck(activeDeckIndex + 1);
@@ -289,8 +328,32 @@ const App = () => {
     goToDeck(activeDeckIndex - 1);
   }, [activeDeckIndex, goToDeck]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    if (hasCriticalAlert && !hadCriticalAlertRef.current) {
+      goToDeck(RISK_DECK_INDEX);
+    }
+
+    hadCriticalAlertRef.current = hasCriticalAlert;
+  }, [goToDeck, hasCriticalAlert, user]);
+
+  useEffect(() => {
+    if (!user || deckPaused) return undefined;
+
+    const timer = setInterval(() => {
+      goToDeck(activeDeckIndex + 1);
+    }, DECK_ROTATE_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+  }, [activeDeckIndex, deckPaused, goToDeck, user]);
+
   const handleDeckTouchStart = useCallback((event) => {
-    if (event.touches.length !== 1 || isSwipeBlockedTarget(event.target)) {
+    if (
+      event.touches.length !== 1 ||
+      isSwipeBlockedTarget(event.target) ||
+      showLogoutDialog
+    ) {
       swipeGestureRef.current.tracking = false;
       return;
     }
@@ -302,8 +365,10 @@ const App = () => {
       startY: touch.clientY,
       deltaX: 0,
       deltaY: 0,
+      directionLocked: false,
+      horizontalSwipe: false,
     };
-  }, []);
+  }, [showLogoutDialog]);
 
   const handleDeckTouchMove = useCallback((event) => {
     const gesture = swipeGestureRef.current;
@@ -312,7 +377,38 @@ const App = () => {
     const touch = event.touches[0];
     gesture.deltaX = touch.clientX - gesture.startX;
     gesture.deltaY = touch.clientY - gesture.startY;
-  }, []);
+
+    if (!gesture.directionLocked) {
+      const absX = Math.abs(gesture.deltaX);
+      const absY = Math.abs(gesture.deltaY);
+      if (absX < SWIPE_LOCK_DISTANCE_PX && absY < SWIPE_LOCK_DISTANCE_PX) {
+        return;
+      }
+
+      gesture.directionLocked = true;
+      gesture.horizontalSwipe = absX > absY * SWIPE_DIRECTION_RATIO;
+      if (!gesture.horizontalSwipe) {
+        gesture.tracking = false;
+        setIsTouchDragging(false);
+        setTouchDragOffsetPx(0);
+        return;
+      }
+    }
+
+    if (!gesture.horizontalSwipe) return;
+
+    const atLeftEdge = activeDeckIndex === 0 && gesture.deltaX > 0;
+    const atRightEdge = activeDeckIndex === DECKS.length - 1 && gesture.deltaX < 0;
+    const visualOffset = atLeftEdge || atRightEdge
+      ? gesture.deltaX * SWIPE_EDGE_RESISTANCE
+      : gesture.deltaX;
+
+    setIsTouchDragging(true);
+    setTouchDragOffsetPx(visualOffset);
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+  }, [activeDeckIndex]);
 
   const handleDeckTouchEnd = useCallback(
     (event) => {
@@ -325,9 +421,20 @@ const App = () => {
         gesture.deltaY = touch.clientY - gesture.startY;
       }
 
+      const shellWidth = deckShellRef.current?.clientWidth || window.innerWidth || 0;
+      const swipeThreshold = Math.max(
+        SWIPE_MIN_DISTANCE_PX,
+        Math.min(160, shellWidth * SWIPE_THRESHOLD_RATIO),
+      );
       const absX = Math.abs(gesture.deltaX);
       const absY = Math.abs(gesture.deltaY);
-      if (absX >= SWIPE_MIN_DISTANCE_PX && absX > absY * SWIPE_DIRECTION_RATIO) {
+      const canSwipe = gesture.horizontalSwipe && absX >= swipeThreshold
+        && absX > absY * SWIPE_DIRECTION_RATIO;
+
+      setIsTouchDragging(false);
+      setTouchDragOffsetPx(0);
+
+      if (canSwipe) {
         if (gesture.deltaX < 0) {
           goToNextDeck();
         } else {
@@ -336,15 +443,24 @@ const App = () => {
       }
 
       gesture.tracking = false;
+      gesture.directionLocked = false;
+      gesture.horizontalSwipe = false;
     },
     [goToNextDeck, goToPreviousDeck],
   );
 
   const handleDeckTouchCancel = useCallback(() => {
     swipeGestureRef.current.tracking = false;
+    swipeGestureRef.current.directionLocked = false;
+    swipeGestureRef.current.horizontalSwipe = false;
+    setIsTouchDragging(false);
+    setTouchDragOffsetPx(0);
   }, []);
 
   const activeDeck = DECKS[activeDeckIndex] || DECKS[0];
+  const deckTrackTransform = touchDragOffsetPx
+    ? `translateX(calc(-${activeDeckIndex * 100}% + ${touchDragOffsetPx}px))`
+    : `translateX(-${activeDeckIndex * 100}%)`;
   const rotationStatusLabel = manualPaused
     ? "Rotation paused (manual)"
     : hoverPaused
@@ -422,6 +538,7 @@ const App = () => {
       {error ? <p className="error-banner">{error}</p> : null}
 
       <section
+        ref={deckShellRef}
         className="deck-shell"
         onMouseEnter={() => setHoverPaused(true)}
         onMouseLeave={() => setHoverPaused(false)}
@@ -454,8 +571,10 @@ const App = () => {
         </button>
 
         <div
-          className="deck-track"
-          style={{ transform: `translateX(-${activeDeckIndex * 100}%)` }}
+          className={`deck-track${disableDeckTransition ? " deck-track-no-transform" : ""}${deckJumpFading ? " deck-track-fade" : ""}${isTouchDragging ? " deck-track-dragging" : ""}`}
+          style={{
+            transform: deckTrackTransform,
+          }}
         >
           <section className="deck-page deck-page-overview" aria-label="Overview">
             <section className="kpi-grid">
