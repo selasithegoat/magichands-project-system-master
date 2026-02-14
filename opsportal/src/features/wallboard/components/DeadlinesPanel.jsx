@@ -1,4 +1,7 @@
-import { formatRelativeHours, formatTimestamp } from "../../../utils/formatters";
+import {
+  formatDeadlineTimestamp,
+  formatRelativeHours,
+} from "../../../utils/formatters";
 
 const getDeadlineClass = (hoursRemaining) => {
   if (!Number.isFinite(hoursRemaining)) return "deadline-neutral";
@@ -39,7 +42,7 @@ const DeadlinesPanel = ({ deadlines = [] }) => (
                   <span className={`deadline-chip ${getDeadlineClass(item.hoursRemaining)}`}>
                     {formatRelativeHours(item.hoursRemaining)}
                   </span>
-                  <small>{formatTimestamp(item.dueAt)}</small>
+                  <small>{formatDeadlineTimestamp(item.dueAt, item.deliveryTime)}</small>
                 </td>
                 <td>{item.lead}</td>
               </tr>

@@ -26,6 +26,26 @@ export const formatTimestamp = (value) => {
   });
 };
 
+export const formatDeadlineTimestamp = (value, deliveryTime) => {
+  const normalizedTime =
+    typeof deliveryTime === "string" ? deliveryTime.trim() : "";
+
+  if (!normalizedTime) {
+    return formatTimestamp(value);
+  }
+
+  if (!value) return normalizedTime;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return normalizedTime;
+
+  const dateLabel = date.toLocaleDateString([], {
+    month: "short",
+    day: "2-digit",
+  });
+
+  return `${dateLabel}, ${normalizedTime}`;
+};
+
 export const formatRelativeHours = (hoursRemaining) => {
   if (!Number.isFinite(hoursRemaining)) return "No deadline";
   if (hoursRemaining < 0) {

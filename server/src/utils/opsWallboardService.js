@@ -96,6 +96,55 @@ const clampNumber = (value, digits = 0) => {
   return Number(value.toFixed(digits));
 };
 
+const parseClockTime = (value) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const twentyFourHourMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (twentyFourHourMatch) {
+    const hours = Number(twentyFourHourMatch[1]);
+    const minutes = Number(twentyFourHourMatch[2]);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return { hours, minutes };
+    }
+    return null;
+  }
+
+  const twelveHourMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!twelveHourMatch) return null;
+
+  const hourValue = Number(twelveHourMatch[1]);
+  const minutes = Number(twelveHourMatch[2]);
+  const meridian = twelveHourMatch[3].toUpperCase();
+
+  if (hourValue < 1 || hourValue > 12 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  const hours = meridian === "PM" && hourValue !== 12
+    ? hourValue + 12
+    : meridian === "AM" && hourValue === 12
+      ? 0
+      : hourValue;
+
+  return { hours, minutes };
+};
+
+const resolveDeadlineAt = (deliveryDateValue, deliveryTimeValue) => {
+  if (!deliveryDateValue) return null;
+
+  const baseDate = new Date(deliveryDateValue);
+  if (Number.isNaN(baseDate.getTime())) return null;
+
+  const parsedTime = parseClockTime(deliveryTimeValue);
+  if (!parsedTime) return baseDate;
+
+  const deadlineAt = new Date(baseDate);
+  deadlineAt.setHours(parsedTime.hours, parsedTime.minutes, 0, 0);
+  return deadlineAt;
+};
+
 const isClosedStatus = (status) => CLOSED_STATUS_SET.has(status);
 
 const getMapValue = (source, key) => {
@@ -218,6 +267,7 @@ const getOpsWallboardOverview = async () => {
           "details.projectName",
           "details.client",
           "details.deliveryDate",
+          "details.deliveryTime",
           "projectLeadId",
           "assistantLeadId",
           "createdAt",
@@ -295,10 +345,10 @@ const getOpsWallboardOverview = async () => {
     const isBlocked = Boolean(project?.hold?.isOnHold) || status === "On Hold";
     const isUrgent = priority === "Urgent";
     const dueDateRaw = project?.details?.deliveryDate;
-    const dueAt = dueDateRaw ? new Date(dueDateRaw) : null;
-    const validDueDate = dueAt && !Number.isNaN(dueAt.getTime()) ? dueAt : null;
-    const hoursRemaining = validDueDate
-      ? (validDueDate.getTime() - now.getTime()) / HOUR_MS
+    const dueTimeRaw = project?.details?.deliveryTime;
+    const deadlineAt = resolveDeadlineAt(dueDateRaw, dueTimeRaw);
+    const hoursRemaining = deadlineAt
+      ? (deadlineAt.getTime() - now.getTime()) / HOUR_MS
       : null;
 
     const isOverdue = Number.isFinite(hoursRemaining) && hoursRemaining < 0;
@@ -317,7 +367,7 @@ const getOpsWallboardOverview = async () => {
       unassignedCount += 1;
     }
 
-    if (validDueDate) {
+    if (deadlineAt) {
       deadlines.push({
         id: project._id.toString(),
         orderId: project.orderId || project._id.toString().slice(-6).toUpperCase(),
@@ -325,7 +375,8 @@ const getOpsWallboardOverview = async () => {
         client: project?.details?.client || "Unknown Client",
         status,
         priority,
-        dueAt: validDueDate.toISOString(),
+        dueAt: deadlineAt.toISOString(),
+        deliveryTime: typeof dueTimeRaw === "string" ? dueTimeRaw.trim() : "",
         hoursRemaining: clampNumber(hoursRemaining, 1),
         lead: hasLead
           ? toUserName(project.projectLeadId)
