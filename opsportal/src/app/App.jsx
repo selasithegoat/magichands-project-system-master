@@ -61,6 +61,8 @@ const App = () => {
   const [pendingWrapDirection, setPendingWrapDirection] = useState(null);
   const [hoverPaused, setHoverPaused] = useState(false);
   const [manualPaused, setManualPaused] = useState(false);
+  const [rotationRestartToken, setRotationRestartToken] = useState(0);
+  const [touchPauseActive, setTouchPauseActive] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [disableDeckTransition, setDisableDeckTransition] = useState(false);
   const [touchDragOffsetPx, setTouchDragOffsetPx] = useState(0);
@@ -77,7 +79,7 @@ const App = () => {
     directionLocked: false,
     horizontalSwipe: false,
   });
-  const deckPaused = hoverPaused || manualPaused || isTouchDragging;
+  const deckPaused = hoverPaused || manualPaused || touchPauseActive || isTouchDragging;
 
   const logout = useCallback(async () => {
     try {
@@ -94,6 +96,7 @@ const App = () => {
       setPendingWrapDirection(null);
       setHoverPaused(false);
       setManualPaused(false);
+      setTouchPauseActive(false);
       setTouchDragOffsetPx(0);
       setIsTouchDragging(false);
       hadCriticalAlertRef.current = false;
@@ -208,6 +211,15 @@ const App = () => {
     }
   };
 
+  const restartRotationClock = useCallback(() => {
+    setRotationRestartToken((previous) => previous + 1);
+  }, []);
+
+  const releaseTouchPause = useCallback(() => {
+    setTouchPauseActive(false);
+    setHoverPaused(false);
+  }, []);
+
   const summary = useMemo(() => overview?.summary || {}, [overview]);
   const kpiCards = useMemo(
     () => [
@@ -280,6 +292,18 @@ const App = () => {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [showLogoutDialog]);
+
+  useEffect(() => {
+    if (!touchPauseActive) return undefined;
+
+    window.addEventListener("touchend", releaseTouchPause, { passive: true, capture: true });
+    window.addEventListener("touchcancel", releaseTouchPause, { passive: true, capture: true });
+
+    return () => {
+      window.removeEventListener("touchend", releaseTouchPause, { capture: true });
+      window.removeEventListener("touchcancel", releaseTouchPause, { capture: true });
+    };
+  }, [releaseTouchPause, touchPauseActive]);
 
   const commitTrackReset = useCallback((realIndex) => {
     if (trackResetTimerRef.current) {
@@ -387,9 +411,11 @@ const App = () => {
     }, DECK_ROTATE_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [activeDeckIndex, deckPaused, goToDeck, user]);
+  }, [activeDeckIndex, deckPaused, goToDeck, rotationRestartToken, user]);
 
   const handleDeckTouchStart = useCallback((event) => {
+    setTouchPauseActive(true);
+
     if (
       event.touches.length !== 1 ||
       isSwipeBlockedTarget(event.target) ||
@@ -448,6 +474,8 @@ const App = () => {
 
   const handleDeckTouchEnd = useCallback(
     (event) => {
+      releaseTouchPause();
+
       const gesture = swipeGestureRef.current;
       if (!gesture.tracking) return;
 
@@ -482,16 +510,17 @@ const App = () => {
       gesture.directionLocked = false;
       gesture.horizontalSwipe = false;
     },
-    [goToNextDeck, goToPreviousDeck],
+    [goToNextDeck, goToPreviousDeck, releaseTouchPause],
   );
 
   const handleDeckTouchCancel = useCallback(() => {
+    releaseTouchPause();
     swipeGestureRef.current.tracking = false;
     swipeGestureRef.current.directionLocked = false;
     swipeGestureRef.current.horizontalSwipe = false;
     setIsTouchDragging(false);
     setTouchDragOffsetPx(0);
-  }, []);
+  }, [releaseTouchPause]);
 
   const activeDeck = DECKS[activeDeckIndex] || DECKS[0];
   const deckTrackTransform = touchDragOffsetPx
@@ -499,6 +528,8 @@ const App = () => {
     : `translateX(-${trackIndex * 100}%)`;
   const rotationStatusLabel = manualPaused
     ? "Rotation paused (manual)"
+    : touchPauseActive
+      ? "Rotation paused (touch)"
     : hoverPaused
       ? "Rotation paused (hover/focus)"
       : "Auto-swipe: 30s";
@@ -634,7 +665,12 @@ const App = () => {
   }
 
   return (
-    <div className="ops-wall">
+    <div
+      className="ops-wall"
+      onTouchStartCapture={restartRotationClock}
+      onTouchEndCapture={releaseTouchPause}
+      onTouchCancelCapture={releaseTouchPause}
+    >
       <div className="ambient-shape ambient-shape-a" />
       <div className="ambient-shape ambient-shape-b" />
 
