@@ -1,5 +1,6 @@
 import React, { useState, Suspense, lazy } from "react";
 import Layout from "./components/layout/Layout";
+import ConfirmDialog from "./components/ui/ConfirmDialog";
 import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth load
 import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for Suspense fallback
 import useInactivityLogout from "./hooks/useInactivityLogout";
@@ -59,40 +60,6 @@ const PendingAssignments = lazy(
 );
 const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
-// Helper to wrap protected content in Layout
-const ProtectedLayout = ({
-  children,
-  activeView,
-  user,
-  navigate,
-  onSignOut, // Receive onSignOut
-  projectCount, // Receive projectCount
-  engagedCount, // [New] Receive engagedCount
-}) => (
-  <Layout
-    activeView={activeView}
-    user={user} // Pass user to Layout
-    projectCount={projectCount} // Pass to Layout
-    engagedCount={engagedCount} // [New] Pass to Layout
-    onNavigateDashboard={() => navigate("/client")}
-    onNavigateProject={() => navigate("/projects")}
-    onNavigateHistory={() => navigate("/history")}
-    onNavigateProfile={() => navigate("/profile")}
-    onNavigateNewOrders={() => navigate("/new-orders")} // Pass handler
-    onNavigateEndOfDay={() => navigate("/end-of-day")} // Pass handler
-    onNavigateEngagedProjects={() => navigate("/engaged-projects")} // [NEW]
-    onCreateProject={() => navigate("/create")}
-    onNavigateAdmin={() => {
-      const host = window.location.hostname;
-      const adminHost = host ? `admin.${host}` : "admin.magichandsproject.lan";
-      window.location.href = `http://${adminHost}`;
-    }} // [NEW]
-    onSignOut={onSignOut} // Pass onSignOut to Layout
-  >
-    {children}
-  </Layout>
-);
-
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -100,6 +67,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [projectCount, setProjectCount] = useState(0); // Global project count
   const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
 
   // Initialize auto-logout (30 minutes)
   useInactivityLogout();
@@ -234,7 +202,7 @@ function App() {
     }
   }, [user]);
 
-  const handleLogout = async () => {
+  const performLogout = async () => {
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -247,6 +215,48 @@ function App() {
       navigate("/login");
     }
   };
+
+  const handleRequestLogout = () => {
+    setIsLogoutDialogOpen(true);
+  };
+
+  const handleCancelLogout = () => {
+    setIsLogoutDialogOpen(false);
+  };
+
+  const handleConfirmLogout = async () => {
+    setIsLogoutDialogOpen(false);
+    await performLogout();
+  };
+
+  const ProtectedLayout = ({
+    children,
+    activeView,
+    onSignOut = handleRequestLogout,
+  }) => (
+    <Layout
+      activeView={activeView}
+      user={user}
+      projectCount={projectCount}
+      engagedCount={engagedCount}
+      onNavigateDashboard={() => navigate("/client")}
+      onNavigateProject={() => navigate("/projects")}
+      onNavigateHistory={() => navigate("/history")}
+      onNavigateProfile={() => navigate("/profile")}
+      onNavigateNewOrders={() => navigate("/new-orders")}
+      onNavigateEndOfDay={() => navigate("/end-of-day")}
+      onNavigateEngagedProjects={() => navigate("/engaged-projects")}
+      onCreateProject={() => navigate("/create")}
+      onNavigateAdmin={() => {
+        const host = window.location.hostname;
+        const adminHost = host ? `admin.${host}` : "admin.magichandsproject.lan";
+        window.location.href = `http://${adminHost}`;
+      }}
+      onSignOut={onSignOut}
+    >
+      {children}
+    </Layout>
+  );
 
   if (isLoading) {
     return (
@@ -264,8 +274,9 @@ function App() {
   }
 
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
+    <>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
         <Route path="/login" element={<Login onLogin={fetchUser} />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route
@@ -277,7 +288,7 @@ function App() {
               navigate={navigate}
               projectCount={projectCount}
               engagedCount={engagedCount}
-              onSignOut={handleLogout}
+              onSignOut={handleRequestLogout}
             >
               <Dashboard
                 user={user} // Pass user to Dashboard
@@ -506,7 +517,7 @@ function App() {
               <Profile
                 user={user}
                 onUpdateProfile={fetchUser}
-                onSignOut={handleLogout}
+                onSignOut={handleRequestLogout}
               />
             </ProtectedLayout>
           }
@@ -525,8 +536,18 @@ function App() {
             </ProtectedLayout>
           }
         />
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+      <ConfirmDialog
+        isOpen={isLogoutDialogOpen}
+        title="Confirm Sign Out"
+        message="Are you sure you want to sign out from your account?"
+        confirmText="Sign Out"
+        cancelText="Stay Logged In"
+        onConfirm={handleConfirmLogout}
+        onCancel={handleCancelLogout}
+      />
+    </>
   );
 }
 
