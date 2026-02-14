@@ -384,10 +384,6 @@ button.danger {
   transition-timing-function: ease;
 }
 
-.deck-track.deck-track-fade {
-  opacity: 0;
-}
-
 .deck-track.deck-track-dragging {
   transition: none;
 }

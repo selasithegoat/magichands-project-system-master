@@ -29,7 +29,6 @@ const SWIPE_MIN_DISTANCE_PX = 52;
 const SWIPE_DIRECTION_RATIO = 1.2;
 const SWIPE_LOCK_DISTANCE_PX = 10;
 const SWIPE_THRESHOLD_RATIO = 0.16;
-const SWIPE_EDGE_RESISTANCE = 0.28;
 const SWIPE_IGNORE_SELECTOR = "button, a, input, select, textarea, .table-wrap";
 
 const DECKS = [
@@ -40,6 +39,7 @@ const DECKS = [
   { id: "forecast", label: "SLA + Forecast" },
   { id: "handoff", label: "Handoff Snapshot" },
 ];
+const LOOP_DECK_IDS = [DECKS[DECKS.length - 1].id, ...DECKS.map((deck) => deck.id), DECKS[0].id];
 
 const isSwipeBlockedTarget = (target) =>
   typeof Element !== "undefined" &&
@@ -57,16 +57,16 @@ const App = () => {
   const [error, setError] = useState("");
 
   const [activeDeckIndex, setActiveDeckIndex] = useState(0);
+  const [trackIndex, setTrackIndex] = useState(1);
+  const [pendingWrapDirection, setPendingWrapDirection] = useState(null);
   const [hoverPaused, setHoverPaused] = useState(false);
   const [manualPaused, setManualPaused] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [disableDeckTransition, setDisableDeckTransition] = useState(false);
-  const [deckJumpFading, setDeckJumpFading] = useState(false);
   const [touchDragOffsetPx, setTouchDragOffsetPx] = useState(0);
   const [isTouchDragging, setIsTouchDragging] = useState(false);
   const hadCriticalAlertRef = useRef(false);
-  const deckTransitionResetRef = useRef(null);
-  const deckJumpFrameRef = useRef(null);
+  const trackResetTimerRef = useRef(null);
   const deckShellRef = useRef(null);
   const swipeGestureRef = useRef({
     tracking: false,
@@ -90,6 +90,8 @@ const App = () => {
       setError("");
       setLoginError("");
       setActiveDeckIndex(0);
+      setTrackIndex(1);
+      setPendingWrapDirection(null);
       setHoverPaused(false);
       setManualPaused(false);
       setTouchDragOffsetPx(0);
@@ -153,11 +155,8 @@ const App = () => {
 
   useEffect(
     () => () => {
-      if (deckTransitionResetRef.current) {
-        clearTimeout(deckTransitionResetRef.current);
-      }
-      if (deckJumpFrameRef.current) {
-        cancelAnimationFrame(deckJumpFrameRef.current);
+      if (trackResetTimerRef.current) {
+        clearTimeout(trackResetTimerRef.current);
       }
     },
     [],
@@ -282,43 +281,66 @@ const App = () => {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [showLogoutDialog]);
 
+  const commitTrackReset = useCallback((realIndex) => {
+    if (trackResetTimerRef.current) {
+      clearTimeout(trackResetTimerRef.current);
+      trackResetTimerRef.current = null;
+    }
+
+    setDisableDeckTransition(true);
+    setTrackIndex(realIndex + 1);
+
+    // Keep transitions disabled long enough to guarantee the snap has painted.
+    trackResetTimerRef.current = setTimeout(() => {
+      setDisableDeckTransition(false);
+      trackResetTimerRef.current = null;
+    }, 40);
+  }, []);
+
   const goToDeck = useCallback((index) => {
     const normalized = ((index % DECKS.length) + DECKS.length) % DECKS.length;
-    if (normalized === activeDeckIndex) return;
+    if (pendingWrapDirection || normalized === activeDeckIndex) return;
 
-    if (deckTransitionResetRef.current) {
-      clearTimeout(deckTransitionResetRef.current);
-      deckTransitionResetRef.current = null;
-    }
-    if (deckJumpFrameRef.current) {
-      cancelAnimationFrame(deckJumpFrameRef.current);
-      deckJumpFrameRef.current = null;
-    }
+    setTouchDragOffsetPx(0);
+    setIsTouchDragging(false);
 
-    const indexDelta = Math.abs(normalized - activeDeckIndex);
-    const isWrapJump = indexDelta === DECKS.length - 1;
-    const isLongJump = indexDelta > 1;
+    const nextIndex = (activeDeckIndex + 1) % DECKS.length;
+    const previousIndex = (activeDeckIndex - 1 + DECKS.length) % DECKS.length;
+    const goingNext = normalized === nextIndex;
+    const goingPrevious = normalized === previousIndex;
 
-    if (isWrapJump || isLongJump) {
-      setDeckJumpFading(true);
-      deckTransitionResetRef.current = setTimeout(() => {
-        setDisableDeckTransition(true);
-        setActiveDeckIndex(normalized);
-        deckTransitionResetRef.current = null;
+    if (goingNext) {
+      setDisableDeckTransition(false);
+      if (activeDeckIndex === DECKS.length - 1) {
+        setPendingWrapDirection("next");
+        setActiveDeckIndex(0);
+        setTrackIndex(DECKS.length + 1);
+        return;
+      }
 
-        deckJumpFrameRef.current = requestAnimationFrame(() => {
-          setDisableDeckTransition(false);
-          setDeckJumpFading(false);
-          deckJumpFrameRef.current = null;
-        });
-      }, 120);
+      setActiveDeckIndex(normalized);
+      setTrackIndex(normalized + 1);
       return;
     }
 
-    setDisableDeckTransition(false);
-    setDeckJumpFading(false);
+    if (goingPrevious) {
+      setDisableDeckTransition(false);
+      if (activeDeckIndex === 0) {
+        setPendingWrapDirection("previous");
+        setActiveDeckIndex(DECKS.length - 1);
+        setTrackIndex(0);
+        return;
+      }
+
+      setActiveDeckIndex(normalized);
+      setTrackIndex(normalized + 1);
+      return;
+    }
+
+    setPendingWrapDirection(null);
     setActiveDeckIndex(normalized);
-  }, [activeDeckIndex]);
+    commitTrackReset(normalized);
+  }, [activeDeckIndex, commitTrackReset, pendingWrapDirection]);
 
   const goToNextDeck = useCallback(() => {
     goToDeck(activeDeckIndex + 1);
@@ -327,6 +349,25 @@ const App = () => {
   const goToPreviousDeck = useCallback(() => {
     goToDeck(activeDeckIndex - 1);
   }, [activeDeckIndex, goToDeck]);
+
+  const handleDeckTrackTransitionEnd = useCallback((event) => {
+    if (
+      event.target !== event.currentTarget ||
+      event.propertyName !== "transform" ||
+      !pendingWrapDirection
+    ) {
+      return;
+    }
+
+    if (pendingWrapDirection === "next") {
+      setPendingWrapDirection(null);
+      commitTrackReset(0);
+      return;
+    }
+
+    setPendingWrapDirection(null);
+    commitTrackReset(DECKS.length - 1);
+  }, [commitTrackReset, pendingWrapDirection]);
 
   useEffect(() => {
     if (!user) return;
@@ -352,7 +393,8 @@ const App = () => {
     if (
       event.touches.length !== 1 ||
       isSwipeBlockedTarget(event.target) ||
-      showLogoutDialog
+      showLogoutDialog ||
+      pendingWrapDirection
     ) {
       swipeGestureRef.current.tracking = false;
       return;
@@ -368,7 +410,7 @@ const App = () => {
       directionLocked: false,
       horizontalSwipe: false,
     };
-  }, [showLogoutDialog]);
+  }, [pendingWrapDirection, showLogoutDialog]);
 
   const handleDeckTouchMove = useCallback((event) => {
     const gesture = swipeGestureRef.current;
@@ -397,18 +439,12 @@ const App = () => {
 
     if (!gesture.horizontalSwipe) return;
 
-    const atLeftEdge = activeDeckIndex === 0 && gesture.deltaX > 0;
-    const atRightEdge = activeDeckIndex === DECKS.length - 1 && gesture.deltaX < 0;
-    const visualOffset = atLeftEdge || atRightEdge
-      ? gesture.deltaX * SWIPE_EDGE_RESISTANCE
-      : gesture.deltaX;
-
     setIsTouchDragging(true);
-    setTouchDragOffsetPx(visualOffset);
+    setTouchDragOffsetPx(gesture.deltaX);
     if (event.cancelable) {
       event.preventDefault();
     }
-  }, [activeDeckIndex]);
+  }, []);
 
   const handleDeckTouchEnd = useCallback(
     (event) => {
@@ -459,13 +495,125 @@ const App = () => {
 
   const activeDeck = DECKS[activeDeckIndex] || DECKS[0];
   const deckTrackTransform = touchDragOffsetPx
-    ? `translateX(calc(-${activeDeckIndex * 100}% + ${touchDragOffsetPx}px))`
-    : `translateX(-${activeDeckIndex * 100}%)`;
+    ? `translateX(calc(-${trackIndex * 100}% + ${touchDragOffsetPx}px))`
+    : `translateX(-${trackIndex * 100}%)`;
   const rotationStatusLabel = manualPaused
     ? "Rotation paused (manual)"
     : hoverPaused
       ? "Rotation paused (hover/focus)"
       : "Auto-swipe: 30s";
+
+  const renderDeckPage = useCallback((deckId, key, isClone = false) => {
+    const cloneProps = isClone ? { "aria-hidden": true } : {};
+
+    if (deckId === "overview") {
+      return (
+        <section key={key} className="deck-page deck-page-overview" aria-label="Overview" {...cloneProps}>
+          <section className="kpi-grid">
+            {kpiCards.map((card) => (
+              <KpiCard
+                key={card.label}
+                label={card.label}
+                value={card.value}
+                hint={card.hint}
+                tone={card.tone}
+              />
+            ))}
+          </section>
+
+          <section className="content-grid">
+            <div className="panel-stack">
+              <AlertsPanel alerts={overview?.alerts} />
+              <PipelinePanel pipeline={overview?.pipeline} />
+            </div>
+
+            <DeadlinesPanel deadlines={overview?.deadlines} />
+
+            <div className="panel-stack">
+              <CapacityPanel
+                workload={overview?.workload}
+                teamUtilizationPercent={summary.teamUtilizationPercent}
+              />
+              <OrderTrendPanel trend={overview?.orderTrend12h} />
+            </div>
+          </section>
+        </section>
+      );
+    }
+
+    if (deckId === "risk") {
+      return (
+        <section key={key} className="deck-page deck-page-risk" aria-label="Risk Deck" {...cloneProps}>
+          <div className="deck-headline">
+            <h2>Risk Deck</h2>
+            <p>Escalation-focused view of critical alerts, urgent deadlines, and owner actions.</p>
+          </div>
+          <RiskDeck
+            alerts={overview?.alerts}
+            deadlines={overview?.deadlines}
+            handoff={overview?.handoff}
+          />
+        </section>
+      );
+    }
+
+    if (deckId === "flow") {
+      return (
+        <section key={key} className="deck-page deck-page-flow" aria-label="Flow Deck" {...cloneProps}>
+          <div className="deck-headline">
+            <h2>Flow Deck</h2>
+            <p>Pipeline bottlenecks, aging, and stalled-stage visibility.</p>
+          </div>
+          <FlowDeck
+            flow={overview?.flow}
+            trend={overview?.orderTrend12h}
+          />
+        </section>
+      );
+    }
+
+    if (deckId === "team") {
+      return (
+        <section key={key} className="deck-page deck-page-team" aria-label="Team Deck" {...cloneProps}>
+          <div className="deck-headline">
+            <h2>Team Deck</h2>
+            <p>Workload pressure, ownership gaps, and handoff readiness.</p>
+          </div>
+          <TeamDeck
+            workload={overview?.workload}
+            team={overview?.team}
+            summary={summary}
+          />
+        </section>
+      );
+    }
+
+    if (deckId === "forecast") {
+      return (
+        <section key={key} className="deck-page deck-page-forecast" aria-label="SLA + Forecast" {...cloneProps}>
+          <div className="deck-headline">
+            <h2>SLA + Forecast</h2>
+            <p>On-time performance and projected incoming load over the next 6 hours.</p>
+          </div>
+          <ForecastDeck forecast={overview?.forecast} />
+        </section>
+      );
+    }
+
+    if (deckId === "handoff") {
+      return (
+        <section key={key} className="deck-page deck-page-handoff" aria-label="Handoff Snapshot" {...cloneProps}>
+          <div className="deck-headline">
+            <h2>Handoff Snapshot</h2>
+            <p>Status changes in the last 30 minutes and immediate owner actions.</p>
+          </div>
+          <HandoffDeck handoff={overview?.handoff} />
+        </section>
+      );
+    }
+
+    return null;
+  }, [kpiCards, overview, summary]);
 
   if (authChecking) {
     return (
@@ -571,92 +719,19 @@ const App = () => {
         </button>
 
         <div
-          className={`deck-track${disableDeckTransition ? " deck-track-no-transform" : ""}${deckJumpFading ? " deck-track-fade" : ""}${isTouchDragging ? " deck-track-dragging" : ""}`}
+          className={`deck-track${disableDeckTransition ? " deck-track-no-transform" : ""}${isTouchDragging ? " deck-track-dragging" : ""}`}
+          onTransitionEnd={handleDeckTrackTransitionEnd}
           style={{
             transform: deckTrackTransform,
           }}
         >
-          <section className="deck-page deck-page-overview" aria-label="Overview">
-            <section className="kpi-grid">
-              {kpiCards.map((card) => (
-                <KpiCard
-                  key={card.label}
-                  label={card.label}
-                  value={card.value}
-                  hint={card.hint}
-                  tone={card.tone}
-                />
-              ))}
-            </section>
-
-            <section className="content-grid">
-              <div className="panel-stack">
-                <AlertsPanel alerts={overview?.alerts} />
-                <PipelinePanel pipeline={overview?.pipeline} />
-              </div>
-
-              <DeadlinesPanel deadlines={overview?.deadlines} />
-
-              <div className="panel-stack">
-                <CapacityPanel
-                  workload={overview?.workload}
-                  teamUtilizationPercent={summary.teamUtilizationPercent}
-                />
-                <OrderTrendPanel trend={overview?.orderTrend12h} />
-              </div>
-            </section>
-          </section>
-
-          <section className="deck-page deck-page-risk" aria-label="Risk Deck">
-            <div className="deck-headline">
-              <h2>Risk Deck</h2>
-              <p>Escalation-focused view of critical alerts, urgent deadlines, and owner actions.</p>
-            </div>
-            <RiskDeck
-              alerts={overview?.alerts}
-              deadlines={overview?.deadlines}
-              handoff={overview?.handoff}
-            />
-          </section>
-
-          <section className="deck-page deck-page-flow" aria-label="Flow Deck">
-            <div className="deck-headline">
-              <h2>Flow Deck</h2>
-              <p>Pipeline bottlenecks, aging, and stalled-stage visibility.</p>
-            </div>
-            <FlowDeck
-              flow={overview?.flow}
-              trend={overview?.orderTrend12h}
-            />
-          </section>
-
-          <section className="deck-page deck-page-team" aria-label="Team Deck">
-            <div className="deck-headline">
-              <h2>Team Deck</h2>
-              <p>Workload pressure, ownership gaps, and handoff readiness.</p>
-            </div>
-            <TeamDeck
-              workload={overview?.workload}
-              team={overview?.team}
-              summary={summary}
-            />
-          </section>
-
-          <section className="deck-page deck-page-forecast" aria-label="SLA + Forecast">
-            <div className="deck-headline">
-              <h2>SLA + Forecast</h2>
-              <p>On-time performance and projected incoming load over the next 6 hours.</p>
-            </div>
-            <ForecastDeck forecast={overview?.forecast} />
-          </section>
-
-          <section className="deck-page deck-page-handoff" aria-label="Handoff Snapshot">
-            <div className="deck-headline">
-              <h2>Handoff Snapshot</h2>
-              <p>Status changes in the last 30 minutes and immediate owner actions.</p>
-            </div>
-            <HandoffDeck handoff={overview?.handoff} />
-          </section>
+          {LOOP_DECK_IDS.map((deckId, index) =>
+            renderDeckPage(
+              deckId,
+              `deck-page-${deckId}-${index}`,
+              index === 0 || index === LOOP_DECK_IDS.length - 1,
+            ),
+          )}
         </div>
       </section>
 
