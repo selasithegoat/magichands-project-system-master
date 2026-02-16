@@ -4,6 +4,9 @@ const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
+const {
+  notifyBillingOptionChange,
+} = require("../utils/billingNotificationService");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -1091,6 +1094,14 @@ const requestOllamaRiskSuggestions = async (context) => {
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const getBillingDocumentLabel = (project) =>
   isQuoteProject(project) ? "Quote" : "Invoice";
+const getProjectDisplayRef = (project) =>
+  project?.orderId ||
+  project?._id?.toString()?.slice(-6)?.toUpperCase() ||
+  "N/A";
+const getProjectDisplayName = (project) =>
+  project?.details?.projectName || "Unnamed Project";
+const formatPaymentTypeLabel = (type = "") =>
+  toText(type).replace(/_/g, " ");
 
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
@@ -2139,16 +2150,12 @@ const markInvoiceSent = async (req, res) => {
       { invoice: { sent: true } },
     );
 
-    if (project.projectLeadId) {
-      await createNotification(
-        project.projectLeadId,
-        req.user._id,
-        project._id,
-        "ACTIVITY",
-        `${billingDocumentLabel} Sent`,
-        `${billingDocumentLabel} sent for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
-      );
-    }
+    await notifyBillingOptionChange({
+      project,
+      senderId: req.user._id,
+      title: `${billingDocumentLabel} Sent`,
+      message: `${billingDocumentLabel} sent for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
 
     res.json(project);
   } catch (error) {
@@ -2209,16 +2216,12 @@ const verifyPayment = async (req, res) => {
       { paymentVerification: { type } },
     );
 
-    if (project.projectLeadId) {
-      await createNotification(
-        project.projectLeadId,
-        req.user._id,
-        project._id,
-        "ACTIVITY",
-        "Payment Verified",
-        `Payment verified (${type.replace("_", " ")}) for project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details?.projectName || "Unnamed Project"}`,
-      );
-    }
+    await notifyBillingOptionChange({
+      project,
+      senderId: req.user._id,
+      title: "Payment Verified",
+      message: `Payment verified (${formatPaymentTypeLabel(type)}) for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
 
     res.json(project);
   } catch (error) {
@@ -2266,6 +2269,13 @@ const undoInvoiceSent = async (req, res) => {
       `${billingDocumentLabel} status reset.`,
       { invoice: { sent: false } },
     );
+
+    await notifyBillingOptionChange({
+      project,
+      senderId: req.user._id,
+      title: `${billingDocumentLabel} Status Reset`,
+      message: `${billingDocumentLabel} status reset for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
 
     res.json(project);
   } catch (error) {
@@ -2321,6 +2331,13 @@ const undoPaymentVerification = async (req, res) => {
       `Payment verification removed (${type}).`,
       { paymentVerification: { type, removed: true } },
     );
+
+    await notifyBillingOptionChange({
+      project,
+      senderId: req.user._id,
+      title: "Payment Verification Removed",
+      message: `Payment verification removed (${formatPaymentTypeLabel(type)}) for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
 
     res.json(project);
   } catch (error) {
