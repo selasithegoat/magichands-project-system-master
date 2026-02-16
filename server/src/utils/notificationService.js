@@ -2,6 +2,12 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { sendEmail } = require("./emailService");
 
+const NOTIFICATION_DEDUPE_WINDOW_MS = Number.isFinite(
+  Number.parseInt(process.env.NOTIFICATION_DEDUPE_WINDOW_MS, 10),
+)
+  ? Number.parseInt(process.env.NOTIFICATION_DEDUPE_WINDOW_MS, 10)
+  : 20000;
+
 /**
  * Create a new notification and trigger delivery channels based on user preferences
  * @param {string} recipientId - User ID of the recipient
@@ -25,14 +31,31 @@ const createNotification = async (
       return null;
     }
 
+    const recipientKey = recipientId?.toString?.() || "";
+    const senderKey = senderId?.toString?.() || "";
+    const projectKey = projectId?.toString?.() || null;
+
     // Fetch recipient to check notification preferences
-    const recipient = await User.findById(recipientId);
+    const recipient = await User.findById(recipientKey);
     if (!recipient) return null;
 
+    // Guard against duplicate notifications from overlapping triggers
+    const dedupeStart = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
+    const existing = await Notification.findOne({
+      recipient: recipientKey,
+      project: projectKey,
+      title,
+      message,
+      createdAt: { $gte: dedupeStart },
+    }).lean();
+    if (existing) {
+      return existing;
+    }
+
     const notification = await Notification.create({
-      recipient: recipientId,
-      sender: senderId,
-      project: projectId,
+      recipient: recipientKey,
+      sender: senderKey,
+      project: projectKey,
       type,
       title,
       message,
