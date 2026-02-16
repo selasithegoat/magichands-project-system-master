@@ -95,9 +95,24 @@ const hasPaymentVerification = (project) =>
 
 const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
 const AI_RISK_TIMEOUT_MS = 12000;
-const AI_RISK_TEMPERATURE = 0.75;
+const AI_RISK_TEMPERATURE = 0.9;
+const OLLAMA_RISK_URL =
+  process.env.OLLAMA_RISK_URL || "http://localhost:11434/api/generate";
+const OLLAMA_RISK_MODEL = process.env.OLLAMA_RISK_MODEL || "llama3.1:8b";
+const OLLAMA_RISK_TIMEOUT_MS = Number.isFinite(
+  Number.parseInt(process.env.OLLAMA_RISK_TIMEOUT_MS, 10),
+)
+  ? Number.parseInt(process.env.OLLAMA_RISK_TIMEOUT_MS, 10)
+  : 20000;
+const OLLAMA_RISK_TEMPERATURE = Number.isFinite(
+  Number.parseFloat(process.env.OLLAMA_RISK_TEMPERATURE),
+)
+  ? Number.parseFloat(process.env.OLLAMA_RISK_TEMPERATURE)
+  : 0.7;
 const MIN_RISK_SUGGESTIONS = 3;
 const MAX_RISK_SUGGESTIONS = 5;
+const DEFAULT_AI_PREVENTIVE_MEASURE =
+  "Run a pilot sample and QA preflight before full production.";
 
 const PRODUCTION_SUGGESTION_DEPARTMENTS = [
   "graphics",
@@ -878,6 +893,89 @@ const getFetchClient = async () => {
   return nodeFetch.default;
 };
 
+const buildAiRiskPrompt = (context = {}) => {
+  const itemHighlights = buildGlobalItemSubjects(context.items);
+
+  const projectName = context.projectName || "N/A";
+  const projectDescription =
+    context.briefOverview ||
+    (itemHighlights.length ? itemHighlights.join("; ") : "N/A");
+
+  const timelineParts = [];
+  if (context.deliveryDate) {
+    timelineParts.push(`Delivery date: ${context.deliveryDate}`);
+  }
+  if (context.priority) {
+    timelineParts.push(`Priority: ${context.priority}`);
+  }
+  const timeline = timelineParts.length
+    ? timelineParts.join(" | ")
+    : "Not specified";
+
+  const productionDepartments = context.productionDepartmentLabels.length
+    ? context.productionDepartmentLabels.join(", ")
+    : "N/A";
+
+  const existingRisks = context.existingRiskDescriptions.length
+    ? context.existingRiskDescriptions.join("; ")
+    : "None";
+
+  return [
+    "Use the following to suggest 3-5 realistic production risks.",
+    "",
+    `Project Name: ${projectName}`,
+    `Project Description: ${projectDescription}`,
+    `Timeline: ${timeline}`,
+    `production department: ${productionDepartments}`,
+    "",
+    "Rules:",
+    "- Make each risk specific to the project details above.",
+    "- Cover production execution risks only.",
+    `- Do not repeat or paraphrase these existing risks: ${existingRisks}`,
+    "- Keep each bullet unique and non-recurring.",
+    "- Avoid generic boilerplate risks.",
+    "",
+    "Respond as a bullet list only.",
+  ].join("\n");
+};
+
+const parseAiRiskBulletSuggestions = (value = "") => {
+  const content = toText(value).replace(/```/g, "").trim();
+  if (!content) return [];
+
+  const bulletPattern = /^\s*(?:[-*]|\u2022|\d+[.)])\s+/;
+  const cleanLine = (line) =>
+    toText(line)
+      .replace(bulletPattern, "")
+      .replace(/^risk\s*[:\-]\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const lines = content.split(/\r?\n/).map((line) => toText(line)).filter(Boolean);
+
+  let candidates = lines
+    .filter((line) => bulletPattern.test(line))
+    .map(cleanLine)
+    .filter(Boolean);
+
+  if (candidates.length === 0) {
+    candidates = lines
+      .map(cleanLine)
+      .filter(
+        (line) =>
+          line &&
+          !/^(project name|project description|timeline|production department|rules|respond as)/i.test(
+            line,
+          ),
+      );
+  }
+
+  return candidates.map((description) => ({
+    description,
+    preventive: DEFAULT_AI_PREVENTIVE_MEASURE,
+  }));
+};
+
 const requestAiRiskSuggestions = async (context) => {
   const apiKey = toText(process.env.OPENAI_API_KEY);
   if (!apiKey || context.productionDepartments.length === 0) return [];
@@ -885,56 +983,7 @@ const requestAiRiskSuggestions = async (context) => {
   const fetchClient = await getFetchClient();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_RISK_TIMEOUT_MS);
-  const globalItemHighlights = buildGlobalItemSubjects(context.items);
-
-  const contextPayload = {
-    projectType: context.projectType,
-    priority: context.priority,
-    projectName: context.projectName,
-    briefOverview: context.briefOverview,
-    client: context.client,
-    deliveryDate: context.deliveryDate,
-    deliveryLocation: context.deliveryLocation,
-    productionDepartments: context.productionDepartments,
-    productionDepartmentLabels: context.productionDepartmentLabels,
-    items: context.items,
-    itemHighlights: globalItemHighlights,
-    productionItemsByDepartment: context.productionDepartments.map(
-      (departmentId) => ({
-        departmentId,
-        departmentLabel:
-          PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId,
-        items: context.items
-          .filter((item) => {
-            const normalizedDepartment = normalizeProductionDepartment(
-              item?.department || item?.departmentRaw,
-            );
-            return normalizedDepartment === departmentId;
-          })
-          .map((item) => ({
-            description: toText(item?.description),
-            breakdown: toText(item?.breakdown),
-            quantity:
-              typeof item?.quantity === "number" ? item.quantity : undefined,
-          }))
-          .filter((item) => item.description || item.breakdown)
-          .slice(0, 5),
-      }),
-    ),
-    existingProductionRisks: context.existingRiskDescriptions,
-    variationSeed: Math.floor(Math.random() * 1_000_000),
-  };
-
-  contextPayload.productionItemsByDepartment =
-    contextPayload.productionItemsByDepartment.map((departmentEntry) => ({
-      ...departmentEntry,
-      items:
-        departmentEntry.items.length > 0
-          ? departmentEntry.items
-          : globalItemHighlights.map((highlight) => ({
-              description: highlight,
-            })),
-    }));
+  const prompt = buildAiRiskPrompt(context);
 
   try {
     const response = await fetchClient(
@@ -949,16 +998,15 @@ const requestAiRiskSuggestions = async (context) => {
         body: JSON.stringify({
           model: AI_RISK_MODEL,
           temperature: AI_RISK_TEMPERATURE,
-          response_format: { type: "json_object" },
           messages: [
             {
               role: "system",
               content:
-                'You are a production-risk assistant for print/fabrication workflows. Return only strict JSON: {"suggestions":[{"description":"...","preventive":"..."}]}. Generate 5-8 concise suggestions. Every suggestion must map to one of the provided productionDepartmentLabels. Prioritize projectName and itemHighlights to make risks specific to the actual production work, not generic department boilerplate. When production items are available, reference concrete item/material terms from them in each suggestion whenever feasible. If a department has no directly mapped items, infer from projectName and itemHighlights. Include Mockup/Graphics/Design risks when that department is present. Cover only production execution risks (machine setup, mockup/design handoff, material behavior, finishing, installation, outsourcing handoff, capacity). Do not include billing, approvals, payment, client communication, or generic project management risks. Avoid duplicate ideas and avoid repeating existingProductionRisks. Use variationSeed internally to diversify outputs for repeated requests with similar context.',
+                "You are a production-risk assistant for print/fabrication workflows. Follow the user format exactly and return only bullet points.",
             },
             {
               role: "user",
-              content: JSON.stringify(contextPayload),
+              content: prompt,
             },
           ],
         }),
@@ -983,8 +1031,58 @@ const requestAiRiskSuggestions = async (context) => {
 
     if (!contentText) return [];
 
-    const parsed = JSON.parse(contentText);
-    return sanitizeRiskSuggestions(parsed?.suggestions, MAX_RISK_SUGGESTIONS);
+    const parsed = parseAiRiskBulletSuggestions(contentText);
+    return sanitizeRiskSuggestions(parsed, MAX_RISK_SUGGESTIONS);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const requestOllamaRiskSuggestions = async (context) => {
+  if (
+    !toText(OLLAMA_RISK_URL) ||
+    !toText(OLLAMA_RISK_MODEL) ||
+    context.productionDepartments.length === 0
+  ) {
+    return [];
+  }
+
+  const fetchClient = await getFetchClient();
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    OLLAMA_RISK_TIMEOUT_MS,
+  );
+  const prompt = buildAiRiskPrompt(context);
+
+  try {
+    const response = await fetchClient(OLLAMA_RISK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OLLAMA_RISK_MODEL,
+        prompt,
+        stream: false,
+        options: {
+          temperature: OLLAMA_RISK_TEMPERATURE,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Ollama request failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    const contentText = toText(data?.response);
+    if (!contentText) return [];
+
+    const parsed = parseAiRiskBulletSuggestions(contentText);
+    return sanitizeRiskSuggestions(parsed, MAX_RISK_SUGGESTIONS);
   } finally {
     clearTimeout(timeout);
   }
@@ -2653,7 +2751,10 @@ const suggestProductionRisks = async (req, res) => {
 
     let suggestions = [];
     let source = "fallback";
-    let aiHadResults = false;
+    let openAiError = null;
+    let ollamaError = null;
+    let usedOpenAi = false;
+    let usedOllama = false;
 
     try {
       const aiSuggestions = await requestAiRiskSuggestions(context);
@@ -2662,17 +2763,50 @@ const suggestProductionRisks = async (req, res) => {
         context.existingRiskDescriptions,
       );
       if (suggestions.length > 0) {
-        source = "ai";
-        aiHadResults = true;
+        usedOpenAi = true;
+        source = "openai";
       }
     } catch (error) {
+      openAiError = error;
       console.error(
-        "AI production risk suggestion failed, using fallback:",
+        "OpenAI production risk suggestion failed, trying Ollama backup:",
         error?.message || error,
       );
     }
 
+    if (openAiError || suggestions.length < MIN_RISK_SUGGESTIONS) {
+      try {
+        const ollamaSuggestions = await requestOllamaRiskSuggestions(context);
+        const filteredOllamaSuggestions = filterExistingRiskSuggestions(
+          ollamaSuggestions,
+          [
+            ...context.existingRiskDescriptions,
+            ...suggestions.map((entry) => entry.description),
+          ],
+        );
+
+        if (filteredOllamaSuggestions.length > 0) {
+          suggestions = mergeRiskSuggestions(
+            suggestions,
+            filteredOllamaSuggestions,
+          );
+          usedOllama = true;
+        }
+      } catch (error) {
+        ollamaError = error;
+        console.error(
+          "Ollama production risk backup failed, using template fallback:",
+          error?.message || error,
+        );
+      }
+    }
+
+    if (!usedOpenAi && usedOllama) {
+      source = "ollama";
+    }
+
     if (suggestions.length < MIN_RISK_SUGGESTIONS) {
+      const preFallbackCount = suggestions.length;
       const fallbackSuggestions = buildFallbackRiskSuggestions(context);
       suggestions = mergeRiskSuggestions(suggestions, fallbackSuggestions);
       suggestions = filterExistingRiskSuggestions(
@@ -2681,13 +2815,27 @@ const suggestProductionRisks = async (req, res) => {
       );
       suggestions = shuffleArray(suggestions).slice(0, MAX_RISK_SUGGESTIONS);
 
-      if (aiHadResults && suggestions.length > 0) {
-        source = "ai+fallback";
+      if (suggestions.length > preFallbackCount) {
+        if (usedOpenAi && source !== "openai+fallback") {
+          source = "openai+fallback";
+        } else if (usedOllama && source !== "ollama+fallback") {
+          source = "ollama+fallback";
+        } else {
+          source = "fallback";
+        }
       } else {
-        source = "fallback";
+        if (usedOpenAi) source = "openai";
+        else if (usedOllama) source = "ollama";
+        else source = "fallback";
       }
     } else {
       suggestions = shuffleArray(suggestions).slice(0, MAX_RISK_SUGGESTIONS);
+      if (usedOpenAi) source = "openai";
+      else if (usedOllama) source = "ollama";
+    }
+
+    if (openAiError && ollamaError) {
+      console.error("Both OpenAI and Ollama risk suggestion attempts failed.");
     }
 
     if (suggestions.length === 0) {
