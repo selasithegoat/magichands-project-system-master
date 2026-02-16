@@ -96,6 +96,16 @@ const hasPaymentVerification = (project) =>
   Array.isArray(project?.paymentVerifications) &&
   project.paymentVerifications.length > 0;
 
+const getPaymentVerificationTypes = (project) =>
+  new Set(
+    (Array.isArray(project?.paymentVerifications)
+      ? project.paymentVerifications
+      : []
+    )
+      .map((entry) => toText(entry?.type))
+      .filter(Boolean),
+  );
+
 const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
 const AI_RISK_TIMEOUT_MS = 12000;
 const AI_RISK_TEMPERATURE = 0.9;
@@ -954,7 +964,10 @@ const parseAiRiskBulletSuggestions = (value = "") => {
       .replace(/\s+/g, " ")
       .trim();
 
-  const lines = content.split(/\r?\n/).map((line) => toText(line)).filter(Boolean);
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => toText(line))
+    .filter(Boolean);
 
   let candidates = lines
     .filter((line) => bulletPattern.test(line))
@@ -1052,10 +1065,7 @@ const requestOllamaRiskSuggestions = async (context) => {
 
   const fetchClient = await getFetchClient();
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    OLLAMA_RISK_TIMEOUT_MS,
-  );
+  const timeout = setTimeout(() => controller.abort(), OLLAMA_RISK_TIMEOUT_MS);
   const prompt = buildAiRiskPrompt(context);
 
   try {
@@ -1100,8 +1110,7 @@ const getProjectDisplayRef = (project) =>
   "N/A";
 const getProjectDisplayName = (project) =>
   project?.details?.projectName || "Unnamed Project";
-const formatPaymentTypeLabel = (type = "") =>
-  toText(type).replace(/_/g, " ");
+const formatPaymentTypeLabel = (type = "") => toText(type).replace(/_/g, " ");
 
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
@@ -2051,6 +2060,20 @@ const updateProjectStatus = async (req, res) => {
           "Payment verification is required before production can begin.",
       });
     }
+
+    const paymentTypes = getPaymentVerificationTypes(project);
+    const isPartPaymentOnly =
+      paymentTypes.size === 1 && paymentTypes.has("part_payment");
+    const requiresFullPaymentBeforeDelivery =
+      newStatus === "Delivered" && !isQuoteProject(project);
+
+    if (requiresFullPaymentBeforeDelivery && isPartPaymentOnly) {
+      return res.status(400).json({
+        message:
+          "Full payment must be verified before confirming delivery. Current verification only confirms part payment.",
+      });
+    }
+
     project.status = finalStatus;
     await project.save();
 
