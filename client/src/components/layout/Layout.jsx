@@ -138,12 +138,26 @@ const Layout = ({
         const unreadCount = data.filter((n) => !n.isRead).length;
         setNotificationCount(unreadCount);
 
-        // Show toasts for unread notifications not yet shown
-        data.forEach((n) => {
-          if (!n.isRead && !shownToastsRef.current.has(n._id)) {
-            addToast(n);
-          }
-        });
+        // On refresh/first load, do not popup existing unread notifications.
+        if (isInitial) {
+          data.forEach((n) => {
+            if (!n.isRead) {
+              shownToastsRef.current.add(n._id);
+            }
+          });
+        } else {
+          // Show toasts only for newly arrived unread notifications.
+          data.forEach((n) => {
+            const isNewSinceLastFetch = !lastIdsRef.current.has(n._id);
+            if (
+              isNewSinceLastFetch &&
+              !n.isRead &&
+              !shownToastsRef.current.has(n._id)
+            ) {
+              addToast(n);
+            }
+          });
+        }
 
         // Update tracking IDs
         lastIdsRef.current = new Set(data.map((n) => n._id));
