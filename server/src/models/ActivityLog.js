@@ -51,4 +51,11 @@ const ActivityLogSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Indexes tuned to current read patterns in controllers/services
+ActivityLogSchema.index({ project: 1, createdAt: -1 }); // project activity timeline
+ActivityLogSchema.index({ user: 1, createdAt: -1 }); // user activity feed + pagination
+ActivityLogSchema.index({ project: 1, action: 1, createdAt: 1 }); // project status timeline/digest queries
+ActivityLogSchema.index({ action: 1, "details.statusChange.to": 1, createdAt: 1 }); // analytics filters
+ActivityLogSchema.index({ createdAt: -1 }); // latest events feed
+
 module.exports = mongoose.model("ActivityLog", ActivityLogSchema);

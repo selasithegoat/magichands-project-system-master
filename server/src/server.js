@@ -4,6 +4,7 @@ const path = require("path");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
@@ -29,6 +30,48 @@ const HOST = process.env.HOST || "0.0.0.0";
 const ADMIN_HOST = (process.env.ADMIN_HOST || "").toLowerCase();
 const CLIENT_HOST = (process.env.CLIENT_HOST || "").toLowerCase();
 const OPS_HOST = (process.env.OPS_HOST || "").toLowerCase();
+
+const toPositiveInt = (value, fallback) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const API_RATE_LIMIT_WINDOW_MS = toPositiveInt(
+  process.env.RATE_LIMIT_WINDOW_MS,
+  15 * 60 * 1000,
+);
+const API_RATE_LIMIT_MAX_REQUESTS = toPositiveInt(
+  process.env.RATE_LIMIT_MAX_REQUESTS,
+  300,
+);
+const AUTH_RATE_LIMIT_WINDOW_MS = toPositiveInt(
+  process.env.AUTH_RATE_LIMIT_WINDOW_MS,
+  API_RATE_LIMIT_WINDOW_MS,
+);
+const AUTH_RATE_LIMIT_MAX_REQUESTS = toPositiveInt(
+  process.env.AUTH_RATE_LIMIT_MAX_REQUESTS,
+  20,
+);
+
+const apiLimiter = rateLimit({
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+  max: API_RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    message: "Too many requests from this IP. Please try again shortly.",
+  },
+});
+
+const authLimiter = rateLimit({
+  windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+  max: AUTH_RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    message: "Too many authentication attempts. Please try again later.",
+  },
+});
 
 const getRequestHost = (req) => {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "";
@@ -64,6 +107,7 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json());
+app.use("/api", apiLimiter);
 
 // Realtime change notifications for mutating API calls
 const realtimePaths = [
@@ -98,7 +142,7 @@ const UPLOAD_DIR =
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 // Routes
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);

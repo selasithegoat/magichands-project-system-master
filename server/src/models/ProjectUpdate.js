@@ -42,4 +42,7 @@ const ProjectUpdateSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Optimizes GET /api/updates/project/:projectId sorted by newest first
+ProjectUpdateSchema.index({ project: 1, createdAt: -1 });
+
 module.exports = mongoose.model("ProjectUpdate", ProjectUpdateSchema);
