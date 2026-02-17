@@ -5,6 +5,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
+const ALL_ORDERS_PAGE_SIZE = 10;
 
 const OrdersList = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const OrdersList = () => {
     status: "All",
     assignment: "All",
   });
+  const [allOrdersPage, setAllOrdersPage] = useState(1);
   const [historyFilters, setHistoryFilters] = useState({
     orderId: "",
     client: "",
@@ -70,6 +72,15 @@ const OrdersList = () => {
       }
     }
   }, [allOrders, feedbackModal.open, feedbackModal.project]);
+
+  useEffect(() => {
+    setAllOrdersPage(1);
+  }, [
+    allFilters.orderId,
+    allFilters.client,
+    allFilters.status,
+    allFilters.assignment,
+  ]);
 
   useRealtimeRefresh(() => fetchOrders());
 
@@ -237,7 +248,11 @@ const OrdersList = () => {
   }, [allOrders]);
 
   const canReopenFromHistory = (order) => {
-    if (order.status !== "Completed" && order.status !== "Finished") {
+    if (
+      order.status !== "Feedback Completed" &&
+      order.status !== "Completed" &&
+      order.status !== "Finished"
+    ) {
       return false;
     }
     const lineageKey = getLineageKey(order);
@@ -245,9 +260,16 @@ const OrdersList = () => {
     return latestProjectIdByLineage.get(lineageKey) === String(order._id);
   };
 
+  const isHistoryEligible = (order) => {
+    return (
+      order.status === "Feedback Completed" ||
+      order.status === "Completed" ||
+      order.status === "Finished"
+    );
+  };
+
   const allOrdersFiltered = allOrders.filter((order) => {
-    if (order.status === "Completed" || order.status === "Finished")
-      return false;
+    if (isHistoryEligible(order)) return false;
     if (
       allFilters.orderId &&
       !order.orderId?.toLowerCase().includes(allFilters.orderId.toLowerCase())
@@ -271,8 +293,7 @@ const OrdersList = () => {
   });
 
   const historyOrdersFiltered = allOrders.filter((order) => {
-    if (order.status !== "Completed" && order.status !== "Finished")
-      return false;
+    if (!isHistoryEligible(order)) return false;
     if (
       historyFilters.orderId &&
       !order.orderId
@@ -293,6 +314,27 @@ const OrdersList = () => {
     }
     return true;
   });
+
+  const allOrdersTotalPages = Math.max(
+    1,
+    Math.ceil(allOrdersFiltered.length / ALL_ORDERS_PAGE_SIZE),
+  );
+  const safeAllOrdersPage = Math.min(allOrdersPage, allOrdersTotalPages);
+  const allOrdersPageStart = (safeAllOrdersPage - 1) * ALL_ORDERS_PAGE_SIZE;
+  const allOrdersPageEnd = Math.min(
+    allOrdersPageStart + ALL_ORDERS_PAGE_SIZE,
+    allOrdersFiltered.length,
+  );
+  const paginatedAllOrders = allOrdersFiltered.slice(
+    allOrdersPageStart,
+    allOrdersPageEnd,
+  );
+
+  useEffect(() => {
+    if (allOrdersPage > allOrdersTotalPages) {
+      setAllOrdersPage(allOrdersTotalPages);
+    }
+  }, [allOrdersPage, allOrdersTotalPages]);
 
   const canMarkDelivered =
     currentUser?.role === "admin" ||
@@ -517,80 +559,115 @@ const OrdersList = () => {
           ) : allOrdersFiltered.length === 0 ? (
             <div className="empty-state">No ongoing orders found.</div>
           ) : (
-            <table className="orders-table">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Client</th>
-                  <th>Project Name</th>
-                  <th>Status</th>
-                  <th>Assignment Status</th>
-                  <th>Created Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allOrdersFiltered.map((order) => (
-                  <tr
-                    key={order._id}
-                    className="clickable-row"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => navigate(`/new-orders/actions/${order._id}`)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        navigate(`/new-orders/actions/${order._id}`);
-                      }
-                    }}
-                  >
-                    <td>
-                      <div className="order-id-cell">
-                        <span className="order-id-value">
-                          {order.orderId || "N/A"}
-                        </span>
-                        {getVersionNumber(order) > 1 && (
-                          <span className="order-id-version">
-                            Version v{getVersionNumber(order)}
-                          </span>
-                        )}
-                        <span className="order-id-lead">
-                          {getLeadDisplay(order, "Unassigned")}
-                        </span>
-                      </div>
-                    </td>
-                    <td>{order.details?.client || "-"}</td>
-                    <td>{order.details?.projectName || "Untitled"}</td>
-                    <td>
-                      <span
-                        className={`status-badge ${getStatusClass(order.projectLeadId ? order.status : "New Order")}`}
-                      >
-                        {order.projectLeadId ? order.status : "New Order"}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`assignment-badge ${order.projectLeadId ? "assigned" : "unassigned"}`}
-                      >
-                        {getAssignmentStatus(order)}
-                      </span>
-                    </td>
-                    <td>{formatDate(order.createdAt)}</td>
-                    <td>
-                      <button
-                        className="action-btn view-btn"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/new-orders/actions/${order._id}`);
-                        }}
-                      >
-                        View Actions
-                      </button>
-                    </td>
+            <>
+              <table className="orders-table">
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Client</th>
+                    <th>Project Name</th>
+                    <th>Status</th>
+                    <th>Assignment Status</th>
+                    <th>Created Date</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedAllOrders.map((order) => (
+                    <tr
+                      key={order._id}
+                      className="clickable-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/new-orders/actions/${order._id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/new-orders/actions/${order._id}`);
+                        }
+                      }}
+                    >
+                      <td>
+                        <div className="order-id-cell">
+                          <span className="order-id-value">
+                            {order.orderId || "N/A"}
+                          </span>
+                          {getVersionNumber(order) > 1 && (
+                            <span className="order-id-version">
+                              Version v{getVersionNumber(order)}
+                            </span>
+                          )}
+                          <span className="order-id-lead">
+                            {getLeadDisplay(order, "Unassigned")}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{order.details?.client || "-"}</td>
+                      <td>{order.details?.projectName || "Untitled"}</td>
+                      <td>
+                        <span
+                          className={`status-badge ${getStatusClass(order.projectLeadId ? order.status : "New Order")}`}
+                        >
+                          {order.projectLeadId ? order.status : "New Order"}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`assignment-badge ${order.projectLeadId ? "assigned" : "unassigned"}`}
+                        >
+                          {getAssignmentStatus(order)}
+                        </span>
+                      </td>
+                      <td>{formatDate(order.createdAt)}</td>
+                      <td>
+                        <button
+                          className="action-btn view-btn"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/new-orders/actions/${order._id}`);
+                          }}
+                        >
+                          View Actions
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {allOrdersTotalPages > 1 && (
+                <div className="orders-pagination">
+                  <span className="orders-pagination-summary">
+                    Showing {allOrdersPageStart + 1}-{allOrdersPageEnd} of{" "}
+                    {allOrdersFiltered.length} orders
+                  </span>
+                  <div className="orders-pagination-controls">
+                    <button
+                      className="action-btn orders-pagination-btn"
+                      onClick={() =>
+                        setAllOrdersPage((prev) => Math.max(1, prev - 1))
+                      }
+                      disabled={safeAllOrdersPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span className="orders-pagination-page">
+                      Page {safeAllOrdersPage} of {allOrdersTotalPages}
+                    </span>
+                    <button
+                      className="action-btn orders-pagination-btn"
+                      onClick={() =>
+                        setAllOrdersPage((prev) =>
+                          Math.min(allOrdersTotalPages, prev + 1),
+                        )
+                      }
+                      disabled={safeAllOrdersPage === allOrdersTotalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -634,7 +711,7 @@ const OrdersList = () => {
             <div className="loading-state">Loading orders...</div>
           ) : historyOrdersFiltered.length === 0 ? (
             <div className="empty-state">
-              No completed orders found matching filters.
+              No orders that passed Feedback Completed found matching filters.
             </div>
           ) : (
             <table className="orders-table">

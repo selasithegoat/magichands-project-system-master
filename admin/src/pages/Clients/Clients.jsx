@@ -78,6 +78,14 @@ const Clients = ({ user }) => {
     return "draft";
   };
 
+  const getContactOrEmail = (project) => {
+    const email = (project?.details?.clientEmail || "").trim();
+    const phone = (project?.details?.clientPhone || "").trim();
+
+    if (email && phone) return `${email} / ${phone}`;
+    return email || phone || "-";
+  };
+
   const toggleClientExpand = (clientName) => {
     const newExpanded = new Set(expandedClients);
     if (newExpanded.has(clientName)) {
@@ -249,7 +257,7 @@ const Clients = ({ user }) => {
                                 project.orderDate || project.createdAt,
                               )}
                             </td>
-                            <td>{project.details?.clientEmail || "-"}</td>
+                            <td>{getContactOrEmail(project)}</td>
                             <td>
                               <span
                                 className={`status-badge ${getStatusClass(

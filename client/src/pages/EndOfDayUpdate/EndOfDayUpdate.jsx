@@ -34,7 +34,10 @@ const EndOfDayUpdate = ({ user }) => {
       const res = await fetch("/api/projects?mode=report");
       if (res.ok) {
         const data = await res.json();
-        const activeProjects = data.filter((p) => p.status !== "Completed");
+        const nowMs = Date.now();
+        const activeProjects = data.filter((project) =>
+          shouldShowProjectInEndOfDay(project, nowMs),
+        );
         setProjects(activeProjects);
         setCurrentPage(1); // Reset to page 1 on new fetch
       }
@@ -75,6 +78,29 @@ const EndOfDayUpdate = ({ user }) => {
     return Number.isFinite(parsedVersion) && parsedVersion > 0
       ? parsedVersion
       : 1;
+  };
+
+  const shouldShowProjectInEndOfDay = (project, nowMs = Date.now()) => {
+    if (project?.status === "Completed") return false;
+    if (project?.status !== "Finished") return true;
+
+    const feedbackEntries = Array.isArray(project?.feedbacks)
+      ? project.feedbacks
+      : [];
+    if (feedbackEntries.length === 0) return true;
+
+    const latestFeedbackMs = feedbackEntries.reduce((latest, feedback) => {
+      const rawDate = feedback?.createdAt || feedback?.date;
+      if (!rawDate) return latest;
+      const ms = new Date(rawDate).getTime();
+      if (Number.isNaN(ms)) return latest;
+      return Math.max(latest, ms);
+    }, 0);
+
+    if (!latestFeedbackMs) return true;
+
+    const elapsedHours = (nowMs - latestFeedbackMs) / (1000 * 60 * 60);
+    return elapsedHours < 24;
   };
 
   const handleDownload = async () => {

@@ -294,6 +294,36 @@
   border-color: rgba(59, 130, 246, 0.35);
 }
 
+.orders-pagination {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.orders-pagination-summary {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.orders-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.orders-pagination-btn {
+  min-width: 88px;
+}
+
+.orders-pagination-page {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 .order-actions-header {
   display: flex;
   justify-content: space-between;
@@ -993,6 +1023,20 @@
   .orders-table th,
   .orders-table td {
     padding: 0.5rem;
+  }
+
+  .orders-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .orders-pagination-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .orders-pagination-btn {
+    min-width: 72px;
   }
 
   .updates-standalone-body {

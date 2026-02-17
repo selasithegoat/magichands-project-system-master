@@ -533,6 +533,12 @@ const ProjectDetails = ({ user }) => {
   };
 
   const details = project.details || {};
+  const clientEmail = (details.clientEmail || "").trim();
+  const clientPhone = (details.clientPhone || "").trim();
+  const clientContactDisplay =
+    clientEmail && clientPhone
+      ? `${clientEmail} / ${clientPhone}`
+      : clientEmail || clientPhone || "N/A";
   const mockup = project.mockup || {};
   const mockupUrl = mockup.fileUrl;
   const mockupName =
@@ -806,29 +812,26 @@ const ProjectDetails = ({ user }) => {
                 )}
               </div>
               <div className="info-item">
-                <label>Client Email</label>
+                <label>Client Contact / Email</label>
                 {isEditing ? (
-                  <input
-                    className="edit-input"
-                    name="clientEmail"
-                    value={editForm.clientEmail}
-                    onChange={handleChange}
-                  />
+                  <div style={{ display: "grid", gap: "0.5rem" }}>
+                    <input
+                      className="edit-input"
+                      name="clientEmail"
+                      value={editForm.clientEmail}
+                      onChange={handleChange}
+                      placeholder="Email"
+                    />
+                    <input
+                      className="edit-input"
+                      name="clientPhone"
+                      value={editForm.clientPhone}
+                      onChange={handleChange}
+                      placeholder="Phone"
+                    />
+                  </div>
                 ) : (
-                  <p>{details.clientEmail || "N/A"}</p>
-                )}
-              </div>
-              <div className="info-item">
-                <label>Client Phone</label>
-                {isEditing ? (
-                  <input
-                    className="edit-input"
-                    name="clientPhone"
-                    value={editForm.clientPhone}
-                    onChange={handleChange}
-                  />
-                ) : (
-                  <p>{details.clientPhone || "N/A"}</p>
+                  <p>{clientContactDisplay}</p>
                 )}
               </div>
               <div className="info-item">
