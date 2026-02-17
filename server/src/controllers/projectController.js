@@ -1825,6 +1825,8 @@ const setProjectHold = async (req, res) => {
         );
       }
 
+      const directlyNotifiedUserIds = new Set();
+
       if (savedProject.projectLeadId) {
         await createNotification(
           savedProject.projectLeadId,
@@ -1834,6 +1836,7 @@ const setProjectHold = async (req, res) => {
           "Project Put On Hold",
           `Project #${savedProject.orderId || savedProject._id} is now on hold${normalizedReason ? `: ${normalizedReason}` : "."}`,
         );
+        directlyNotifiedUserIds.add(savedProject.projectLeadId.toString());
       }
 
       if (
@@ -1849,6 +1852,7 @@ const setProjectHold = async (req, res) => {
           "Project Put On Hold",
           `Project #${savedProject.orderId || savedProject._id} is now on hold${normalizedReason ? `: ${normalizedReason}` : "."}`,
         );
+        directlyNotifiedUserIds.add(savedProject.assistantLeadId.toString());
       }
 
       await notifyAdmins(
@@ -1857,6 +1861,7 @@ const setProjectHold = async (req, res) => {
         "SYSTEM",
         "Project Put On Hold",
         `${req.user.firstName} ${req.user.lastName} put project #${savedProject.orderId || savedProject._id} on hold${normalizedReason ? `: ${normalizedReason}` : "."}`,
+        { excludeUserIds: Array.from(directlyNotifiedUserIds) },
       );
 
       const populatedProject = await Project.findById(savedProject._id)
@@ -1902,6 +1907,8 @@ const setProjectHold = async (req, res) => {
       },
     );
 
+    const directlyNotifiedUserIds = new Set();
+
     if (savedProject.projectLeadId) {
       await createNotification(
         savedProject.projectLeadId,
@@ -1911,6 +1918,7 @@ const setProjectHold = async (req, res) => {
         "Project Hold Released",
         `Project #${savedProject.orderId || savedProject._id} has been released from hold and is now ${nextStatus}.`,
       );
+      directlyNotifiedUserIds.add(savedProject.projectLeadId.toString());
     }
 
     if (
@@ -1926,6 +1934,7 @@ const setProjectHold = async (req, res) => {
         "Project Hold Released",
         `Project #${savedProject.orderId || savedProject._id} has been released from hold and is now ${nextStatus}.`,
       );
+      directlyNotifiedUserIds.add(savedProject.assistantLeadId.toString());
     }
 
     await notifyAdmins(
@@ -1934,6 +1943,7 @@ const setProjectHold = async (req, res) => {
       "SYSTEM",
       "Project Hold Released",
       `${req.user.firstName} ${req.user.lastName} released hold on project #${savedProject.orderId || savedProject._id}. Restored status: ${nextStatus}.`,
+      { excludeUserIds: Array.from(directlyNotifiedUserIds) },
     );
 
     const populatedProject = await Project.findById(savedProject._id)
