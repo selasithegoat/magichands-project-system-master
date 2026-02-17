@@ -1288,6 +1288,13 @@ const createProject = async (req, res) => {
       updates: req.body.updates || [],
     });
 
+    // Root project in a lineage starts at version 1 and points to itself.
+    project.lineageId = project._id;
+    project.parentProjectId = null;
+    project.versionNumber = 1;
+    project.isLatestVersion = true;
+    project.versionState = "active";
+
     const savedProject = await project.save();
 
     // Log Activity
@@ -3636,18 +3643,18 @@ const getClients = async (req, res) => {
 // @access  Private
 const reopenProject = async (req, res) => {
   try {
-    const project = await Project.findById(req.params.id);
+    const sourceProject = await Project.findById(req.params.id);
 
-    if (!project) {
+    if (!sourceProject) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Check if project is completed or delivered
+    // Check if project is in a terminal status
     if (
-      project.status !== "Completed" &&
-      project.status !== "Delivered" &&
-      project.status !== "Feedback Completed" &&
-      project.status !== "Finished"
+      sourceProject.status !== "Completed" &&
+      sourceProject.status !== "Delivered" &&
+      sourceProject.status !== "Feedback Completed" &&
+      sourceProject.status !== "Finished"
     ) {
       return res.status(400).json({
         message:
@@ -3655,31 +3662,184 @@ const reopenProject = async (req, res) => {
       });
     }
 
-    const oldStatus = project.status;
-    project.status = "In Progress";
-    await project.save();
+    const lineageId = sourceProject.lineageId || sourceProject._id;
+    const lineageQuery = { $or: [{ lineageId }, { _id: lineageId }] };
+    const sourceVersion =
+      Number.isFinite(sourceProject.versionNumber) &&
+      sourceProject.versionNumber > 0
+        ? sourceProject.versionNumber
+        : 1;
+    const latestInLineage = await Project.findOne(lineageQuery)
+      .select("_id versionNumber createdAt")
+      .sort({ versionNumber: -1, createdAt: -1 });
+    const sourceIsLatest =
+      !latestInLineage ||
+      latestInLineage._id.toString() === sourceProject._id.toString();
 
-    // Log activity
+    if (!sourceIsLatest) {
+      return res.status(400).json({
+        message:
+          "Only the latest project revision can be reopened. Please reopen the latest version.",
+      });
+    }
+
+    const now = new Date();
+    const reopenReason =
+      typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    const sourceStatus = sourceProject.status;
+    const nextVersion = sourceVersion + 1;
+
+    const sourceObject = sourceProject.toObject({ depopulate: true });
+    delete sourceObject._id;
+    delete sourceObject.__v;
+    delete sourceObject.createdAt;
+    delete sourceObject.updatedAt;
+
+    // Reopened revision starts a fresh active cycle while preserving core details.
+    const reopenedProject = new Project({
+      ...sourceObject,
+      status: "Pending Scope Approval",
+      currentStep: 1,
+      orderDate: now,
+      createdBy: req.user._id,
+      hold: {
+        isOnHold: false,
+        reason: "",
+        heldAt: null,
+        heldBy: null,
+        previousStatus: null,
+        releasedAt: null,
+        releasedBy: null,
+      },
+      acknowledgements: [],
+      feedbacks: [],
+      invoice: {
+        sent: false,
+        sentAt: null,
+        sentBy: null,
+      },
+      paymentVerifications: [],
+      mockup: {},
+      endOfDayUpdate: "",
+      endOfDayUpdateDate: null,
+      endOfDayUpdateBy: null,
+      updates: [],
+      sectionUpdates: {
+        details: now,
+      },
+      lineageId,
+      parentProjectId: sourceProject._id,
+      versionNumber: nextVersion,
+      isLatestVersion: true,
+      versionState: "active",
+      reopenMeta: {
+        reason: reopenReason || "",
+        reopenedBy: req.user._id,
+        reopenedAt: now,
+        sourceProjectId: sourceProject._id,
+        sourceStatus,
+      },
+    });
+
+    if (isQuoteProject(reopenedProject)) {
+      reopenedProject.quoteDetails = {
+        ...(reopenedProject.quoteDetails || {}),
+        emailResponseSent: false,
+        clientFeedback: "",
+        finalUpdate: {
+          accepted: false,
+          cancelled: false,
+        },
+        submissionDate: null,
+      };
+    }
+
+    sourceProject.lineageId = lineageId;
+    sourceProject.versionNumber = sourceVersion;
+    sourceProject.isLatestVersion = false;
+    sourceProject.versionState = "superseded";
+
+    // Keep a single "latest" revision in this lineage.
+    await Project.updateMany(lineageQuery, {
+      $set: { isLatestVersion: false },
+    });
+    await sourceProject.save();
+    const savedReopenedProject = await reopenedProject.save();
+
     await logActivity(
-      project._id,
+      sourceProject._id,
       req.user.id,
-      "status_change",
-      `Project reopened from ${oldStatus} to In Progress`,
+      "system",
+      `Project reopened as revision v${nextVersion}.`,
       {
-        statusChange: { from: oldStatus, to: "In Progress" },
+        reopen: {
+          sourceVersion,
+          newVersion: nextVersion,
+          newProjectId: savedReopenedProject._id,
+          reason: reopenReason || null,
+        },
       },
     );
 
-    // Notify Admins
-    await notifyAdmins(
+    await logActivity(
+      savedReopenedProject._id,
       req.user.id,
-      project._id,
-      "SYSTEM",
-      "Project Reopened",
-      `Project #${project.orderId} was reopened by ${req.user.firstName}`,
+      "create",
+      `Created reopened revision v${nextVersion} from v${sourceVersion}.`,
+      {
+        reopen: {
+          sourceProjectId: sourceProject._id,
+          sourceVersion,
+          reason: reopenReason || null,
+          sourceStatus,
+        },
+      },
     );
 
-    res.json(project);
+    if (savedReopenedProject.projectLeadId) {
+      await createNotification(
+        savedReopenedProject.projectLeadId,
+        req.user._id,
+        savedReopenedProject._id,
+        "ASSIGNMENT",
+        "Project Reopened",
+        `Project #${savedReopenedProject.orderId || savedReopenedProject._id} has been reopened as revision v${nextVersion} and is now pending scope approval.`,
+      );
+    }
+
+    if (
+      savedReopenedProject.assistantLeadId &&
+      savedReopenedProject.assistantLeadId.toString() !==
+        savedReopenedProject.projectLeadId?.toString()
+    ) {
+      await createNotification(
+        savedReopenedProject.assistantLeadId,
+        req.user._id,
+        savedReopenedProject._id,
+        "ASSIGNMENT",
+        "Project Reopened",
+        `Project #${savedReopenedProject.orderId || savedReopenedProject._id} has been reopened as revision v${nextVersion} and is now pending scope approval.`,
+      );
+    }
+
+    const notifyMessage = `${req.user.firstName} ${req.user.lastName} reopened project #${savedReopenedProject.orderId || savedReopenedProject._id} as revision v${nextVersion}${reopenReason ? `: ${reopenReason}` : "."}`;
+
+    await notifyAdmins(
+      req.user.id,
+      savedReopenedProject._id,
+      "SYSTEM",
+      "Project Reopened",
+      notifyMessage,
+    );
+
+    const populatedReopenedProject = await Project.findById(
+      savedReopenedProject._id,
+    )
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
+
+    res.json(populatedReopenedProject);
   } catch (error) {
     console.error("Error reopening project:", error);
     res.status(500).json({ message: "Server Error" });
@@ -3697,9 +3857,41 @@ const deleteProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const lineageId = project.lineageId || project._id;
+    const lineageQuery = { $or: [{ lineageId }, { _id: lineageId }] };
+    const wasLatest = project.isLatestVersion !== false;
+
     await Project.deleteOne({ _id: req.params.id });
     // Cleanup activities
     await ActivityLog.deleteMany({ project: req.params.id });
+
+    // If the deleted record was latest (or flags drifted), promote the highest
+    // remaining revision in the lineage to be latest so reopen remains available.
+    const remainingInLineage = await Project.find({
+      $and: [lineageQuery, { _id: { $ne: req.params.id } }],
+    })
+      .select("_id versionNumber createdAt isLatestVersion")
+      .sort({ versionNumber: -1, createdAt: -1 });
+
+    if (remainingInLineage.length > 0) {
+      const hasLatest = remainingInLineage.some(
+        (entry) => entry.isLatestVersion !== false,
+      );
+
+      if (wasLatest || !hasLatest) {
+        const promoted = remainingInLineage[0];
+        await Project.updateMany(lineageQuery, {
+          $set: { isLatestVersion: false, versionState: "superseded" },
+        });
+        await Project.findByIdAndUpdate(promoted._id, {
+          $set: {
+            isLatestVersion: true,
+            versionState: "active",
+            lineageId: promoted.lineageId || lineageId,
+          },
+        });
+      }
+    }
 
     res.json({ message: "Project removed" });
   } catch (error) {

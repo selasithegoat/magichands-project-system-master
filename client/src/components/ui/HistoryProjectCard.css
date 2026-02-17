@@ -21,6 +21,12 @@
   align-items: center;
 }
 
+.order-meta-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .order-id-tag {
   background: #eff6ff;
   color: #3b82f6;
@@ -29,6 +35,17 @@
   padding: 4px 10px;
   border-radius: 6px;
   font-family: monospace; /* Optional for ID look */
+}
+
+.version-tag {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
 }
 
 .status-badge {

@@ -167,6 +167,45 @@ const ProjectSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    lineageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+    },
+    parentProjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      default: null,
+    },
+    versionNumber: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    isLatestVersion: {
+      type: Boolean,
+      default: true,
+    },
+    versionState: {
+      type: String,
+      enum: ["active", "superseded", "archived"],
+      default: "active",
+    },
+    reopenMeta: {
+      reason: {
+        type: String,
+        default: "",
+      },
+      reopenedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      reopenedAt: Date,
+      sourceProjectId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Project",
+      },
+      sourceStatus: String,
+    },
     projectLeadId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -313,5 +352,7 @@ ProjectSchema.index({ assistantLeadId: 1 });
 ProjectSchema.index({ createdBy: 1 });
 ProjectSchema.index({ "details.client": 1 });
 ProjectSchema.index({ "details.deliveryDate": 1 });
+ProjectSchema.index({ lineageId: 1, versionNumber: -1 });
+ProjectSchema.index({ isLatestVersion: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Project", ProjectSchema);

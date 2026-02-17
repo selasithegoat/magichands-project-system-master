@@ -549,6 +549,10 @@ const ProjectDetails = ({ user }) => {
   const isQuoteProject = project.projectType === "Quote";
   const hasPaymentVerification = paymentTypes.length > 0;
   const invoiceSent = Boolean(project.invoice?.sent);
+  const parsedVersion = Number(project.versionNumber);
+  const projectVersion =
+    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+  const showVersionTag = projectVersion > 1;
   const showPaymentWarning =
     !isQuoteProject &&
     !hasPaymentVerification &&
@@ -603,6 +607,9 @@ const ProjectDetails = ({ user }) => {
           <div className="header-left header-left-vertical">
             <h1 className="header-order">
               {project.orderId || "Order #..."}
+              {showVersionTag && (
+                <span className="project-version-badge">v{projectVersion}</span>
+              )}
             </h1>
             <div className="header-status header-status-actions">
               <select

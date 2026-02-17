@@ -315,6 +315,10 @@ const ProjectDetail = ({ onProjectChange, user }) => {
   );
   const hasPaymentVerification = paymentTypes.length > 0;
   const invoiceSent = Boolean(project.invoice?.sent);
+  const parsedVersion = Number(project.versionNumber);
+  const projectVersion =
+    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+  const showVersionTag = projectVersion > 1;
   const showPaymentWarning =
     !isQuote &&
     !hasPaymentVerification &&
@@ -379,6 +383,9 @@ const ProjectDetail = ({ onProjectChange, user }) => {
             </button>
             <h1 className="project-title">
               {project.orderId || "Untitled"}
+              {showVersionTag && (
+                <span className="project-version-badge">v{projectVersion}</span>
+              )}
               <span className="status-badge">
                 <ClockIcon width="14" height="14" />{" "}
                 {project.status === "Pending Scope Approval"

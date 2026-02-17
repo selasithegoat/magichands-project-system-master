@@ -212,6 +212,26 @@
   text-decoration: underline;
 }
 
+.project-id-with-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.project-version-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
 .project-name-cell {
   font-weight: 500;
   color: var(--text-primary);

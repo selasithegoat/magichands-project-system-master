@@ -13,7 +13,9 @@ import "./MinimalQuoteForm.css";
 
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+  const [editingId, setEditingId] = useState("");
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [existingSampleImage, setExistingSampleImage] = useState("");
@@ -48,7 +50,41 @@ const MinimalQuoteForm = () => {
     },
   });
 
-  const location = useLocation();
+  const applyProjectToForm = (project) => {
+    if (!project) return;
+    setFormData({
+      projectName: project.details?.projectName || "",
+      clientName: project.details?.client || "",
+      clientEmail: project.details?.clientEmail || "",
+      clientPhone: project.details?.clientPhone || "",
+      deliveryDate: project.details?.deliveryDate
+        ? new Date(project.details.deliveryDate).toISOString().slice(0, 10)
+        : "",
+      projectLeadId: project.projectLeadId?._id || project.projectLeadId || "",
+      assistantLeadId:
+        project.assistantLeadId?._id || project.assistantLeadId || "",
+      quoteNumber: project.orderId || "",
+      briefOverview: project.details?.briefOverview || "",
+      items:
+        project.items?.length > 0
+          ? project.items
+          : [{ description: "", breakdown: "", qty: 1 }],
+      checklist: project.quoteDetails?.checklist || {
+        cost: false,
+        mockup: false,
+        previousSamples: false,
+        sampleProduction: false,
+        bidSubmission: false,
+      },
+    });
+    setExistingSampleImage(project.details?.sampleImage || "");
+    setExistingAttachments(project.details?.attachments || []);
+  };
+
+  useEffect(() => {
+    const editParam = new URLSearchParams(location.search).get("edit");
+    setEditingId(editParam || "");
+  }, [location.search]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -72,40 +108,41 @@ const MinimalQuoteForm = () => {
     };
     fetchUsers();
 
-    if (location.state?.reopenedProject) {
-      const p = location.state.reopenedProject;
-      setFormData({
-        projectName: p.details?.projectName || "",
-        clientName: p.details?.client || "",
-        clientEmail: p.details?.clientEmail || "",
-        clientPhone: p.details?.clientPhone || "",
-        deliveryDate: p.details?.deliveryDate
-          ? new Date(p.details.deliveryDate).toISOString().slice(0, 10)
-          : "",
-        projectLeadId: p.projectLeadId?._id || p.projectLeadId || "",
-        assistantLeadId: p.assistantLeadId?._id || p.assistantLeadId || "",
-        quoteNumber: p.orderId || "",
-        briefOverview: p.details?.briefOverview || "",
-        items:
-          p.items?.length > 0
-            ? p.items
-            : [{ description: "", breakdown: "", qty: 1 }],
-        checklist: p.quoteDetails?.checklist || {
-          cost: false,
-          mockup: false,
-          previousSamples: false,
-          sampleProduction: false,
-          bidSubmission: false,
-        },
-      });
-      setExistingSampleImage(p.details?.sampleImage || "");
-      setExistingAttachments(p.details?.attachments || []);
-    } else {
+    const loadEditProject = async () => {
+      if (!editingId) return false;
+
+      if (location.state?.reopenedProject?._id === editingId) {
+        applyProjectToForm(location.state.reopenedProject);
+        return true;
+      }
+
+      try {
+        const res = await fetch(`/api/projects/${editingId}`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          applyProjectToForm(data);
+          return true;
+        }
+      } catch (error) {
+        console.error("Failed to load quote for editing", error);
+      }
+      triggerToast("Failed to load quote revision for editing.", "error");
+      return true;
+    };
+
+    loadEditProject().then((handledEdit) => {
+      if (handledEdit) return;
+      if (location.state?.reopenedProject) {
+        applyProjectToForm(location.state.reopenedProject);
+        return;
+      }
       // Auto-generate quote number
       const qNumber = `Q-${Date.now().toString().slice(-6)}`;
       setFormData((prev) => ({ ...prev, quoteNumber: qNumber }));
-    }
-  }, [location.state]);
+    });
+  }, [location.state, editingId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -192,7 +229,9 @@ const MinimalQuoteForm = () => {
     try {
       const formPayload = new FormData();
       formPayload.append("projectType", "Quote");
-      formPayload.append("status", "Pending Scope Approval");
+      if (!editingId) {
+        formPayload.append("status", "Pending Scope Approval");
+      }
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);
       formPayload.append("client", formData.clientName);
@@ -240,14 +279,21 @@ const MinimalQuoteForm = () => {
         });
       }
 
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
+      const method = editingId ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         body: formPayload,
       });
 
       if (res.ok) {
         setCreatedOrderNumber(formData.quoteNumber);
-        triggerToast("Project Created Successfully!", "success");
+        triggerToast(
+          editingId
+            ? "Quote revision updated successfully!"
+            : "Project Created Successfully!",
+          "success",
+        );
         setShowSuccessModal(true);
       } else {
         const err = await res.json();
@@ -275,7 +321,7 @@ const MinimalQuoteForm = () => {
         </div>
       )}
       <div className="page-header">
-        <h1>Create New Quote</h1>
+        <h1>{editingId ? "Edit Reopened Quote" : "Create New Quote"}</h1>
         <p className="subtitle">Front Desk entry for new quote requests</p>
       </div>
 
@@ -666,7 +712,7 @@ const MinimalQuoteForm = () => {
               Cancel
             </button>
             <button type="submit" className="minimal-quote-btn-submit">
-              Create Quote Project
+              {editingId ? "Save Reopened Quote" : "Create Quote Project"}
             </button>
           </div>
         </form>
@@ -676,8 +722,12 @@ const MinimalQuoteForm = () => {
         isOpen={showSuccessModal}
         onClose={() => navigate("/")}
         onConfirm={() => navigate("/")}
-        title="Quote Created Successfully"
-        message={`New quote project ${createdOrderNumber} has been created and assigned to the Project Lead for scope approval.`}
+        title={editingId ? "Quote Updated Successfully" : "Quote Created Successfully"}
+        message={
+          editingId
+            ? `Quote revision ${createdOrderNumber} has been saved successfully.`
+            : `New quote project ${createdOrderNumber} has been created and assigned to the Project Lead for scope approval.`
+        }
         confirmText="Back to Dashboard"
         hideCancel={true}
       />
@@ -685,9 +735,13 @@ const MinimalQuoteForm = () => {
         isOpen={showConfirmModal}
         onConfirm={handleConfirmSubmit}
         onCancel={() => setShowConfirmModal(false)}
-        title="Confirm New Quote Order"
-        message={`Are you sure you want to create a new project for ${formData.clientName}? It will be assigned to the selected Project Lead for approval.`}
-        confirmText="Yes, Create Quote"
+        title={editingId ? "Confirm Quote Update" : "Confirm New Quote Order"}
+        message={
+          editingId
+            ? `Are you sure you want to save reopened quote ${formData.quoteNumber}?`
+            : `Are you sure you want to create a new project for ${formData.clientName}? It will be assigned to the selected Project Lead for approval.`
+        }
+        confirmText={editingId ? "Yes, Save Changes" : "Yes, Create Quote"}
         cancelText="Cancel"
       />
     </div>

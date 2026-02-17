@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -43,6 +43,12 @@ const OrdersList = () => {
   });
   const [deliveryInput, setDeliveryInput] = useState("");
   const [deliverySubmitting, setDeliverySubmitting] = useState(false);
+  const [reopenModal, setReopenModal] = useState({
+    open: false,
+    project: null,
+  });
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenSubmitting, setReopenSubmitting] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -95,23 +101,44 @@ const OrdersList = () => {
   };
 
   const handleReopenProject = async (projectId) => {
-    if (!window.confirm("Are you sure you want to reopen this project?")) {
-      return;
-    }
+    const target = allOrders.find((order) => order._id === projectId) || null;
+    setReopenReason("");
+    setReopenModal({ open: true, project: target });
+  };
+
+  const closeReopenModal = (force = false) => {
+    if (reopenSubmitting && !force) return;
+    setReopenModal({ open: false, project: null });
+    setReopenReason("");
+  };
+
+  const handleConfirmReopen = async () => {
+    if (!reopenModal.project?._id) return;
+
     try {
-      const res = await fetch(`/api/projects/${projectId}/reopen`, {
+      setReopenSubmitting(true);
+      const res = await fetch(`/api/projects/${reopenModal.project._id}/reopen`, {
         method: "PATCH",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reason: reopenReason.trim() }),
       });
       if (res.ok) {
         const project = await res.json();
-        showToast("Project reopened successfully!", "success");
+        showToast("Project reopened as a new revision.", "success");
+        closeReopenModal(true);
 
-        // Navigate back to form with details
+        // Open the new revision in edit mode so user updates that revision record only.
         if (project.projectType === "Quote") {
-          navigate("/create/quote", { state: { reopenedProject: project } });
+          navigate(`/create/quote?edit=${project._id}`, {
+            state: { reopenedProject: project },
+          });
         } else {
-          navigate("/new-orders/form", { state: { reopenedProject: project } });
+          navigate(`/new-orders/form?edit=${project._id}`, {
+            state: { reopenedProject: project },
+          });
         }
       } else {
         const errorData = await res.json();
@@ -120,6 +147,8 @@ const OrdersList = () => {
     } catch (error) {
       console.error("Reopen error:", error);
       showToast("Network error. Please try again.", "error");
+    } finally {
+      setReopenSubmitting(false);
     }
   };
 
@@ -147,6 +176,73 @@ const OrdersList = () => {
     if (lower.includes("delivered") || lower.includes("progress"))
       return "in-progress";
     return "draft";
+  };
+
+  const getLineageKey = (order) => {
+    const rawLineageId = order?.lineageId;
+    if (!rawLineageId) return order?._id ? String(order._id) : "";
+    if (typeof rawLineageId === "string") return rawLineageId;
+    if (typeof rawLineageId === "object") {
+      const rawId = rawLineageId._id || rawLineageId.id;
+      return rawId ? String(rawId) : order?._id ? String(order._id) : "";
+    }
+    return order?._id ? String(order._id) : "";
+  };
+
+  const getVersionNumber = (order) => {
+    const value = Number(order?.versionNumber);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  };
+
+  const latestProjectIdByLineage = useMemo(() => {
+    const latestByLineage = new Map();
+
+    allOrders.forEach((order) => {
+      if (!order?._id) return;
+      const lineageKey = getLineageKey(order);
+      if (!lineageKey) return;
+
+      const existing = latestByLineage.get(lineageKey);
+      if (!existing) {
+        latestByLineage.set(lineageKey, order);
+        return;
+      }
+
+      const incomingVersion = getVersionNumber(order);
+      const existingVersion = getVersionNumber(existing);
+      if (incomingVersion > existingVersion) {
+        latestByLineage.set(lineageKey, order);
+        return;
+      }
+
+      if (incomingVersion === existingVersion) {
+        const incomingCreatedAt = order.createdAt
+          ? new Date(order.createdAt).getTime()
+          : 0;
+        const existingCreatedAt = existing.createdAt
+          ? new Date(existing.createdAt).getTime()
+          : 0;
+
+        if (incomingCreatedAt > existingCreatedAt) {
+          latestByLineage.set(lineageKey, order);
+        }
+      }
+    });
+
+    const latestIdMap = new Map();
+    latestByLineage.forEach((project, lineageKey) => {
+      latestIdMap.set(lineageKey, project?._id ? String(project._id) : "");
+    });
+    return latestIdMap;
+  }, [allOrders]);
+
+  const canReopenFromHistory = (order) => {
+    if (order.status !== "Completed" && order.status !== "Finished") {
+      return false;
+    }
+    const lineageKey = getLineageKey(order);
+    if (!lineageKey) return false;
+    return latestProjectIdByLineage.get(lineageKey) === String(order._id);
   };
 
   const allOrdersFiltered = allOrders.filter((order) => {
@@ -453,6 +549,11 @@ const OrdersList = () => {
                         <span className="order-id-value">
                           {order.orderId || "N/A"}
                         </span>
+                        {getVersionNumber(order) > 1 && (
+                          <span className="order-id-version">
+                            Version v{getVersionNumber(order)}
+                          </span>
+                        )}
                         <span className="order-id-lead">
                           {getLeadDisplay(order, "Unassigned")}
                         </span>
@@ -556,6 +657,11 @@ const OrdersList = () => {
                         <span className="order-id-value">
                           {order.orderId || "N/A"}
                         </span>
+                        {getVersionNumber(order) > 1 && (
+                          <span className="order-id-version">
+                            Version v{getVersionNumber(order)}
+                          </span>
+                        )}
                         <span className="order-id-lead">
                           {getLeadDisplay(order, "Unassigned")}
                         </span>
@@ -579,8 +685,7 @@ const OrdersList = () => {
                     </td>
                     <td>{formatDate(order.createdAt)}</td>
                     <td>
-                      {(order.status === "Completed" ||
-                        order.status === "Finished") && (
+                      {canReopenFromHistory(order) && (
                         <button
                           className="action-btn reopen-btn"
                           onClick={() => handleReopenProject(order._id)}
@@ -635,6 +740,46 @@ const OrdersList = () => {
                 }
               >
                 {deliverySubmitting ? "Confirming..." : "Confirm Delivery"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reopenModal.open && (
+        <div className="confirm-modal-overlay" onClick={closeReopenModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Reopen as New Revision</h3>
+              <p>
+                {reopenModal.project?.orderId ||
+                  reopenModal.project?._id ||
+                  "Project"}
+              </p>
+            </div>
+            <p className="confirm-modal-text">
+              This keeps the old project in history and creates a new editable
+              revision.
+            </p>
+            <div className="confirm-input-group">
+              <label>Reason (Optional)</label>
+              <textarea
+                rows={3}
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                placeholder="Add a note for why this project is being reopened..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeReopenModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn reopen-btn"
+                onClick={handleConfirmReopen}
+                disabled={reopenSubmitting}
+              >
+                {reopenSubmitting ? "Reopening..." : "Reopen Revision"}
               </button>
             </div>
           </div>

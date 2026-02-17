@@ -38,6 +38,7 @@ const NewOrders = () => {
   });
   const [isToastFading, setIsToastFading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [editingId, setEditingId] = useState("");
 
   // Fetch users for project lead
   useEffect(() => {
@@ -75,61 +76,99 @@ const NewOrders = () => {
     }, 4500);
   };
 
-  // Handle auto-generation OR reopened project sync
+  const toDateTimeLocal = (value) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const applyProjectToForm = (project) => {
+    if (!project) return;
+    setFormData({
+      orderNumber: project.orderId || "",
+      clientName: project.details?.client || "",
+      clientEmail: project.details?.clientEmail || "",
+      clientPhone: project.details?.clientPhone || "",
+      deliveryLocation: project.details?.deliveryLocation || "",
+      projectName: project.details?.projectName || "",
+      briefOverview: project.details?.briefOverview || "",
+      items:
+        project.items?.length > 0
+          ? project.items
+          : [{ description: "", breakdown: "", qty: 1 }],
+      orderDate: project.orderDate
+        ? toDateTimeLocal(project.orderDate)
+        : toDateTimeLocal(new Date()),
+      deliveryDate: project.details?.deliveryDate
+        ? toDateTimeLocal(project.details.deliveryDate)
+        : "",
+      projectType: project.projectType || "Standard",
+      priority: project.priority || "Normal",
+      projectLeadId: project.projectLeadId?._id || project.projectLeadId || "",
+      assistantLeadId:
+        project.assistantLeadId?._id || project.assistantLeadId || "",
+    });
+    setExistingSampleImage(project.details?.sampleImage || "");
+    setExistingAttachments(project.details?.attachments || []);
+  };
+
   useEffect(() => {
-    if (location.state?.reopenedProject) {
-      const p = location.state.reopenedProject;
-      setFormData({
-        orderNumber: p.orderId || "",
-        clientName: p.details?.client || "",
-        clientEmail: p.details?.clientEmail || "",
-        clientPhone: p.details?.clientPhone || "",
-        deliveryLocation: p.details?.deliveryLocation || "",
-        projectName: p.details?.projectName || "",
-        briefOverview: p.details?.briefOverview || "",
-        items:
-          p.items?.length > 0
-            ? p.items
-            : [{ description: "", breakdown: "", qty: 1 }],
-        orderDate: p.orderDate
-          ? new Date(p.orderDate).toISOString().slice(0, 16)
-          : new Date().toISOString().slice(0, 16),
-        deliveryDate: p.details?.deliveryDate
-          ? new Date(p.details.deliveryDate).toISOString().slice(0, 16)
-          : "",
-        projectType: p.projectType || "Standard",
-        priority: p.priority || "Normal",
-        projectLeadId: p.projectLeadId?._id || p.projectLeadId || "",
-        assistantLeadId: p.assistantLeadId?._id || p.assistantLeadId || "",
-      });
-      setExistingSampleImage(p.details?.sampleImage || "");
-      setExistingAttachments(p.details?.attachments || []);
-    } else {
-      const generateOrderNumber = () => {
-        const datePart = new Date()
-          .toISOString()
-          .slice(2, 10)
-          .replace(/-/g, "");
-        const randomPart = Math.floor(1000 + Math.random() * 9000);
-        return `ORD-${datePart}-${randomPart}`;
-      };
+    const editParam = new URLSearchParams(location.search).get("edit");
+    setEditingId(editParam || "");
+  }, [location.search]);
 
-      const now = new Date();
-      const isoString = new Date(
-        now.getTime() - now.getTimezoneOffset() * 60000,
-      )
-        .toISOString()
-        .slice(0, 16);
+  // Handle auto-generation OR edit/reopen sync
+  useEffect(() => {
+    const generateOrderNumber = () => {
+      const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+      const randomPart = Math.floor(1000 + Math.random() * 9000);
+      return `ORD-${datePart}-${randomPart}`;
+    };
 
-      setFormData((prev) => ({
-        ...prev,
-        orderNumber: generateOrderNumber(),
-        orderDate: isoString,
-        projectType: location.state?.projectType || prev.projectType,
-        priority: location.state?.priority || prev.priority,
-      }));
+    const loadEditProject = async (projectId) => {
+      if (location.state?.reopenedProject?._id === projectId) {
+        applyProjectToForm(location.state.reopenedProject);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/projects/${projectId}`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          applyProjectToForm(data);
+        } else {
+          showToast("Unable to load project for editing.", "error");
+        }
+      } catch (error) {
+        console.error("Failed to load project for editing", error);
+        showToast("Unable to load project for editing.", "error");
+      }
+    };
+
+    if (editingId) {
+      loadEditProject(editingId);
+      return;
     }
-  }, [location.state]);
+
+    if (location.state?.reopenedProject) {
+      applyProjectToForm(location.state.reopenedProject);
+      return;
+    }
+
+    const now = new Date();
+    const isoString = toDateTimeLocal(now);
+    setFormData((prev) => ({
+      ...prev,
+      orderNumber: generateOrderNumber(),
+      orderDate: isoString,
+      projectType: location.state?.projectType || prev.projectType,
+      priority: location.state?.priority || prev.priority,
+    }));
+  }, [editingId, location.state]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -200,7 +239,9 @@ const NewOrders = () => {
     if (formData.assistantLeadId) {
       formPayload.append("assistantLeadId", formData.assistantLeadId);
     }
-    formPayload.append("status", "Pending Scope Approval");
+    if (!editingId) {
+      formPayload.append("status", "Pending Scope Approval");
+    }
     formPayload.append("briefOverview", formData.briefOverview);
     formPayload.append("projectType", formData.projectType);
     formPayload.append("priority", formData.priority);
@@ -232,33 +273,42 @@ const NewOrders = () => {
     }
 
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
+      const method = editingId ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         body: formPayload,
       });
 
       if (res.ok) {
-        showToast("Order Created Successfully!", "success");
+        showToast(
+          editingId
+            ? "Order revision updated successfully!"
+            : "Order Created Successfully!",
+          "success",
+        );
         // Reset form
-        setFormData({
-          orderNumber: `ORD-${Date.now().toString().slice(-6)}`,
-          clientName: "",
-          clientEmail: "",
-          clientPhone: "",
-          deliveryLocation: "",
-          projectName: "",
-          briefOverview: "",
-          items: [{ description: "", breakdown: "", qty: 1 }],
-          orderDate: new Date().toISOString().slice(0, 16),
-          deliveryDate: "",
-          projectType: formData.projectType,
-          priority: formData.priority,
-          projectLeadId: "",
-          assistantLeadId: "",
-        });
-        setSelectedFiles([]);
-        setExistingSampleImage("");
-        setExistingAttachments([]);
+        if (!editingId) {
+          setFormData({
+            orderNumber: `ORD-${Date.now().toString().slice(-6)}`,
+            clientName: "",
+            clientEmail: "",
+            clientPhone: "",
+            deliveryLocation: "",
+            projectName: "",
+            briefOverview: "",
+            items: [{ description: "", breakdown: "", qty: 1 }],
+            orderDate: new Date().toISOString().slice(0, 16),
+            deliveryDate: "",
+            projectType: formData.projectType,
+            priority: formData.priority,
+            projectLeadId: "",
+            assistantLeadId: "",
+          });
+          setSelectedFiles([]);
+          setExistingSampleImage("");
+          setExistingAttachments([]);
+        }
 
         // Navigate back to landing after short delay
         setTimeout(() => navigate("/create"), 1500);
@@ -290,7 +340,7 @@ const NewOrders = () => {
       )}
 
       <div className="page-header">
-        <h1>Create New Order</h1>
+        <h1>{editingId ? "Edit Reopened Order" : "Create New Order"}</h1>
         <p className="subtitle">
           Fill in the details for the{" "}
           <span style={{ color: isCorporate ? "#42a165" : "inherit" }}>
@@ -694,7 +744,13 @@ const NewOrders = () => {
 
             <div className="form-actions">
               <button type="submit" className="submit-btn" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Order"}
+                {isLoading
+                  ? editingId
+                    ? "Saving..."
+                    : "Creating..."
+                  : editingId
+                    ? "Save Reopened Order"
+                    : "Create Order"}
               </button>
             </div>
           </form>
@@ -705,9 +761,13 @@ const NewOrders = () => {
         isOpen={showConfirmModal}
         onConfirm={handleConfirmSubmit}
         onCancel={() => setShowConfirmModal(false)}
-        title="Confirm New Order"
-        message={`Are you sure you want to create order ${formData.orderNumber} for ${formData.projectName}? It will be assigned to the selected Project Lead for approval.`}
-        confirmText="Yes, Create Order"
+        title={editingId ? "Confirm Order Update" : "Confirm New Order"}
+        message={
+          editingId
+            ? `Are you sure you want to save reopened order ${formData.orderNumber}?`
+            : `Are you sure you want to create order ${formData.orderNumber} for ${formData.projectName}? It will be assigned to the selected Project Lead for approval.`
+        }
+        confirmText={editingId ? "Yes, Save Changes" : "Yes, Create Order"}
         cancelText="Cancel"
       />
     </div>

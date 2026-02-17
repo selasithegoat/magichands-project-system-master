@@ -576,6 +576,10 @@ const EngagedProjectActions = ({ user }) => {
   const deliveryTime = formatTime(project.details?.deliveryTime);
   const projectId = project.orderId || project._id.slice(-6).toUpperCase();
   const projectName = project.details?.projectName || "Untitled";
+  const parsedVersion = Number(project.versionNumber);
+  const projectVersion =
+    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+  const showVersionTag = projectVersion > 1;
 
   return (
     <div className="engaged-projects-container engaged-actions-page">
@@ -591,7 +595,13 @@ const EngagedProjectActions = ({ user }) => {
         <div>
           <h1>Engaged Project Actions</h1>
           <p className="engaged-subtitle">
-            {projectId} - {projectName}
+            <span className="project-id-with-version">
+              <span>{projectId}</span>
+              {showVersionTag && (
+                <span className="project-version-chip">v{projectVersion}</span>
+              )}
+            </span>{" "}
+            - {projectName}
           </p>
         </div>
         <button

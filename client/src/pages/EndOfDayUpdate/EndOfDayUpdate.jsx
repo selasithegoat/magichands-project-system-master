@@ -70,6 +70,13 @@ const EndOfDayUpdate = ({ user }) => {
     return timeString;
   };
 
+  const getProjectVersion = (project) => {
+    const parsedVersion = Number(project?.versionNumber);
+    return Number.isFinite(parsedVersion) && parsedVersion > 0
+      ? parsedVersion
+      : 1;
+  };
+
   const handleDownload = async () => {
     if (!projects.length) return;
 
@@ -133,6 +140,10 @@ const EndOfDayUpdate = ({ user }) => {
 
       projects.forEach((project) => {
         const leadName = getLeadDisplay(project, "Unassigned");
+        const projectVersion = getProjectVersion(project);
+        const orderNumber = project.orderId || "N/A";
+        const orderNumberWithVersion =
+          projectVersion > 1 ? `${orderNumber} (v${projectVersion})` : orderNumber;
 
         const deliveryContent = `${formatDate(
           project.details?.deliveryDate,
@@ -173,7 +184,7 @@ const EndOfDayUpdate = ({ user }) => {
           new TableRow({
             children: [
               leadName,
-              project.orderId || "N/A",
+              orderNumberWithVersion,
               project.details?.projectName || "Untitled",
               deliveryContent,
               project.status || "N/A",
@@ -442,6 +453,7 @@ const EndOfDayUpdate = ({ user }) => {
                     new Date(project.details.deliveryDate),
                     new Date(),
                   ) <= 72;
+                const projectVersion = getProjectVersion(project);
 
                 return (
                   <tr
@@ -451,7 +463,16 @@ const EndOfDayUpdate = ({ user }) => {
                     <td>
                       {getLeadDisplay(project, "Unassigned")}
                     </td>
-                    <td>{project.orderId || "N/A"}</td>
+                    <td>
+                      <div className="order-number-cell">
+                        <span>{project.orderId || "N/A"}</span>
+                        {projectVersion > 1 && (
+                          <span className="order-version-sub">
+                            Version v{projectVersion}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td>{project.details?.projectName || "Untitled"}</td>
                     <td>
                       <div className="delivery-cell">

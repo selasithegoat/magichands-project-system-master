@@ -630,6 +630,13 @@ const EngagedProjects = ({ user }) => {
     return timeStr;
   };
 
+  const getProjectVersion = (project) => {
+    const parsedVersion = Number(project?.versionNumber);
+    return Number.isFinite(parsedVersion) && parsedVersion > 0
+      ? parsedVersion
+      : 1;
+  };
+
   if (loading) {
     return (
       <div className="engaged-projects-container">
@@ -808,6 +815,8 @@ const EngagedProjects = ({ user }) => {
                     const mockupUrl = mockup.fileUrl;
                     const canViewMockup =
                       userEngagedDepts.includes("Production") && mockupUrl;
+                    const projectVersion = getProjectVersion(project);
+                    const showVersionTag = projectVersion > 1;
 
                     return (
                       <tr
@@ -846,7 +855,16 @@ const EngagedProjects = ({ user }) => {
                         <td
                           className="project-id-cell"
                         >
-                          {project.orderId || project._id.slice(-6).toUpperCase()}
+                          <div className="project-id-with-version">
+                            <span>
+                              {project.orderId || project._id.slice(-6).toUpperCase()}
+                            </span>
+                            {showVersionTag && (
+                              <span className="project-version-chip">
+                                v{projectVersion}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="project-name-cell">{projectName}</td>
                         <td>{lead}</td>
@@ -935,6 +953,8 @@ const EngagedProjects = ({ user }) => {
                       engagedDeptsForUser.length > 0
                         ? engagedDeptsForUser.join(", ")
                         : "N/A";
+                    const projectVersion = getProjectVersion(project);
+                    const showVersionTag = projectVersion > 1;
 
                     return (
                       <tr key={project._id}>
@@ -942,7 +962,14 @@ const EngagedProjects = ({ user }) => {
                           className="project-id-cell"
                           onClick={() => navigate(`/detail/${project._id}`)}
                         >
-                          {projectId}
+                          <div className="project-id-with-version">
+                            <span>{projectId}</span>
+                            {showVersionTag && (
+                              <span className="project-version-chip">
+                                v{projectVersion}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td>{lead}</td>
                         <td>{client}</td>

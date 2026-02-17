@@ -8,6 +8,10 @@ import EyeIcon from "../icons/EyeIcon";
 
 const HistoryProjectCard = ({ project, onViewDetails }) => {
   const details = project.details || {};
+  const parsedVersion = Number(project.versionNumber);
+  const projectVersion =
+    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+  const showVersionTag = projectVersion > 1;
 
   // Format Date
   const formatDate = (dateString) => {
@@ -22,7 +26,10 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
   return (
     <div className="history-card">
       <div className="card-top-row">
-        <span className="order-id-tag">{project.orderId || "NO-ID"}</span>
+        <div className="order-meta-tags">
+          <span className="order-id-tag">{project.orderId || "NO-ID"}</span>
+          {showVersionTag && <span className="version-tag">v{projectVersion}</span>}
+        </div>
         <span className="status-badge delivered">
           <CheckCircleIcon width="16" height="16" /> {project.status}
         </span>

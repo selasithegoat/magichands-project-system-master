@@ -124,6 +124,10 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const progress = progressMap[project.status] ?? 5;
   const leadDisplay = getLeadDisplay(project, "Unassigned");
   const avatarName = getLeadDisplay(project, "U");
+  const parsedVersion = Number(project.versionNumber);
+  const projectVersion =
+    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+  const showVersionTag = projectVersion > 1;
 
   return (
     <div className="project-card-new">
@@ -168,7 +172,12 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         <h3 className="project-title-new">
           {project.details?.projectName || "Untitled Project"}
         </h3>
-        <span className="project-id">{project.orderId || "#ORD-PENDING"}</span>
+        <div className="project-id-row">
+          <span className="project-id">{project.orderId || "#ORD-PENDING"}</span>
+          {showVersionTag && (
+            <span className="version-badge">v{projectVersion}</span>
+          )}
+        </div>
         {project.details?.client && (
           <span
             className="project-client"
