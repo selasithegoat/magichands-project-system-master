@@ -131,6 +131,24 @@
   font-size: 0.875rem;
 }
 
+.order-id-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.order-id-value {
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.order-id-lead {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
 .clickable-row {
   cursor: pointer;
   transition: background-color 0.2s ease;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { getLeadSearchText } from "../../utils/leadDisplay";
+import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 
@@ -449,9 +449,14 @@ const OrdersList = () => {
                     }}
                   >
                     <td>
-                      <span style={{ fontWeight: 600 }}>
-                        {order.orderId || "N/A"}
-                      </span>
+                      <div className="order-id-cell">
+                        <span className="order-id-value">
+                          {order.orderId || "N/A"}
+                        </span>
+                        <span className="order-id-lead">
+                          {getLeadDisplay(order, "Unassigned")}
+                        </span>
+                      </div>
                     </td>
                     <td>{order.details?.client || "-"}</td>
                     <td>{order.details?.projectName || "Untitled"}</td>
@@ -547,9 +552,14 @@ const OrdersList = () => {
                 {historyOrdersFiltered.map((order) => (
                   <tr key={order._id}>
                     <td>
-                      <span style={{ fontWeight: 600 }}>
-                        {order.orderId || "N/A"}
-                      </span>
+                      <div className="order-id-cell">
+                        <span className="order-id-value">
+                          {order.orderId || "N/A"}
+                        </span>
+                        <span className="order-id-lead">
+                          {getLeadDisplay(order, "Unassigned")}
+                        </span>
+                      </div>
                     </td>
                     <td>{order.details?.client || "-"}</td>
                     <td>{order.details?.projectName || "Untitled"}</td>
