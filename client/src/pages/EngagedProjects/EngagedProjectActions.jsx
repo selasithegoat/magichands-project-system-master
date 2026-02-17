@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
@@ -825,15 +825,16 @@ const EngagedProjectActions = ({ user }) => {
                                 </div>
                               )}
                             </div>
-                            <a
+                            <Link
                               className="mockup-link download"
-                              href={mockupUrl}
+                              to={mockupUrl}
                               target="_blank"
                               rel="noreferrer"
                               download
+                              reloadDocument
                             >
                               Download {mockupName}
-                            </a>
+                            </Link>
                           </>
                         )}
                       </div>

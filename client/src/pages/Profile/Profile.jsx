@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import "./Profile.css";
 import EditIcon from "../../components/icons/EditIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
@@ -651,9 +652,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           <div className="content-card">
             <div className="card-header">
               <h3>Activity</h3>
-              <a href="/my-activities" className="view-all-link">
+              <Link to="/my-activities" className="view-all-link">
                 View All
-              </a>
+              </Link>
             </div>
             <div className="activity-list">
               {isLoadingActivities ? (

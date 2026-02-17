@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import BackArrow from "../../../components/icons/BackArrow";
 import FolderIcon from "../../../components/icons/FolderIcon";
 import BuildingIcon from "../../../components/icons/BuildingIcon";
@@ -339,9 +340,14 @@ const QuoteStep5 = ({
                 <div className="attachments-grid-simple">
                   {formData.attachments.map((file, idx) => (
                     <div key={idx} className="attachment-tile-simple">
-                      <a href={file} target="_blank" rel="noopener noreferrer">
+                      <Link
+                        to={file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        reloadDocument
+                      >
                         {file.split("/").pop()}
-                      </a>
+                      </Link>
                     </div>
                   ))}
                 </div>

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import CardOption from "../../components/ui/CardOption";
@@ -437,11 +438,12 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                   const fileName = path.split("/").pop();
                   return (
-                    <a
+                    <Link
                       key={`exist-${idx}`}
-                      href={`${path}`}
+                      to={`${path}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      reloadDocument
                       style={{
                         position: "relative",
                         aspectRatio: "1",
@@ -492,7 +494,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                           </div>
                         </div>
                       )}
-                    </a>
+                    </Link>
                   );
                 })}
               </div>

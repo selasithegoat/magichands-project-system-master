@@ -1148,10 +1148,11 @@ const ProjectDetails = ({ user }) => {
                                 gap: "0.4rem",
                               }}
                             >
-                              <a
-                                href={path}
+                              <Link
+                                to={path}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                reloadDocument
                                 style={{
                                   position: "relative",
                                   aspectRatio: "1",
@@ -1209,10 +1210,11 @@ const ProjectDetails = ({ user }) => {
                                     </div>
                                   </div>
                                 )}
-                              </a>
-                              <a
-                                href={path}
+                              </Link>
+                              <Link
+                                to={path}
                                 download
+                                reloadDocument
                                 style={{
                                   fontSize: "0.75rem",
                                   color: "#38bdf8",
@@ -1221,7 +1223,7 @@ const ProjectDetails = ({ user }) => {
                                 }}
                               >
                                 Download
-                              </a>
+                              </Link>
                             </div>
                           );
                         })}
@@ -1255,10 +1257,11 @@ const ProjectDetails = ({ user }) => {
                     flexWrap: "wrap",
                   }}
                 >
-                  <a
-                    href={mockupUrl}
+                  <Link
+                    to={mockupUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    reloadDocument
                     style={{
                       color: "#38bdf8",
                       textDecoration: "none",
@@ -1267,10 +1270,11 @@ const ProjectDetails = ({ user }) => {
                     }}
                   >
                     {mockupName || "View Mockup"}
-                  </a>
-                  <a
-                    href={mockupUrl}
+                  </Link>
+                  <Link
+                    to={mockupUrl}
                     download
+                    reloadDocument
                     style={{
                       fontSize: "0.8rem",
                       color: "#22d3ee",
@@ -1279,7 +1283,7 @@ const ProjectDetails = ({ user }) => {
                     }}
                   >
                     Download
-                  </a>
+                  </Link>
                 </div>
                 {mockup.note && (
                   <div
@@ -1445,11 +1449,12 @@ const ProjectDetails = ({ user }) => {
                           borderTop: "1px solid var(--border-color)",
                         }}
                       >
-                        <a
-                          href={update.attachments[0].url}
+                        <Link
+                          to={update.attachments[0].url}
                           target="_blank"
                           rel="noopener noreferrer"
                           download
+                          reloadDocument
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -1460,7 +1465,7 @@ const ProjectDetails = ({ user }) => {
                           }}
                         >
                           <DownloadIcon /> {update.attachments[0].name}
-                        </a>
+                        </Link>
                       </div>
                     )}
                   </div>

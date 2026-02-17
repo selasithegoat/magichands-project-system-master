@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import Input from "../../../components/ui/Input";
 import ProgressBar from "../../../components/ui/ProgressBar";
 import BackArrow from "../../../components/icons/BackArrow";
@@ -234,14 +235,15 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                       fontSize: "0.85rem",
                     }}
                   >
-                    <a
-                      href={file}
+                    <Link
+                      to={file}
                       target="_blank"
                       rel="noopener noreferrer"
+                      reloadDocument
                       style={{ color: "#3b82f6", textDecoration: "none" }}
                     >
                       {file.split("/").pop()}
-                    </a>
+                    </Link>
                   </div>
                 ))}
               </div>

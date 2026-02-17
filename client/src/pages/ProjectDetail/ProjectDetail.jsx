@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useParams,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { DEPARTMENTS, getDepartmentLabel } from "../../constants/departments";
 import "./ProjectDetail.css";
 import UserAvatar from "../../components/ui/UserAvatar";
@@ -490,10 +495,14 @@ const ProjectDetail = ({ onProjectChange, user }) => {
         <div className="project-subtitle">{project.details?.projectName}</div>
         <nav className="header-nav">
           {["Overview", "Updates", "Challenges", "Activities"].map((tab) => (
-            <a
+            <Link
               key={tab}
+              to="#"
               className={`nav-item ${activeTab === tab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
+              onClick={(event) => {
+                event.preventDefault();
+                setActiveTab(tab);
+              }}
             >
               {tab}
               {tab === "Updates" && updatesCount > 0 && (
@@ -512,7 +521,7 @@ const ProjectDetail = ({ onProjectChange, user }) => {
                   {updatesCount}
                 </span>
               )}
-            </a>
+            </Link>
           ))}
         </nav>
       </header>
@@ -1327,10 +1336,11 @@ const ReferenceMaterialsCard = ({ project }) => {
                   maxWidth: "200px",
                 }}
               >
-                <a
-                  href={`${sampleImage}`}
+                <Link
+                  to={`${sampleImage}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  reloadDocument
                 >
                   <img
                     src={`${sampleImage}`}
@@ -1341,11 +1351,12 @@ const ReferenceMaterialsCard = ({ project }) => {
                       display: "block",
                     }}
                   />
-                </a>
+                </Link>
               </div>
-              <a
-                href={`${sampleImage}`}
+              <Link
+                to={`${sampleImage}`}
                 download
+                reloadDocument
                 style={{
                   marginTop: "0.5rem",
                   display: "inline-block",
@@ -1356,7 +1367,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                 }}
               >
                 Download
-              </a>
+              </Link>
             </div>
           )}
 
@@ -1393,10 +1404,11 @@ const ReferenceMaterialsCard = ({ project }) => {
                         gap: "0.35rem",
                       }}
                     >
-                      <a
-                        href={`${path}`}
+                      <Link
+                        to={`${path}`}
                         target="_blank"
                         rel="noopener noreferrer"
+                        reloadDocument
                         style={{
                           position: "relative",
                           aspectRatio: "1",
@@ -1445,10 +1457,11 @@ const ReferenceMaterialsCard = ({ project }) => {
                             </div>
                           </div>
                         )}
-                      </a>
-                      <a
-                        href={`${path}`}
+                      </Link>
+                      <Link
+                        to={`${path}`}
                         download
+                        reloadDocument
                         style={{
                           fontSize: "0.7rem",
                           color: "#2563eb",
@@ -1457,7 +1470,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                         }}
                       >
                         Download
-                      </a>
+                      </Link>
                     </div>
                   );
                 })}
@@ -1496,10 +1509,11 @@ const ApprovedMockupCard = ({ project }) => {
             flexWrap: "wrap",
           }}
         >
-          <a
-            href={`${mockupUrl}`}
+          <Link
+            to={`${mockupUrl}`}
             target="_blank"
             rel="noopener noreferrer"
+            reloadDocument
             style={{
               color: "#2563eb",
               textDecoration: "none",
@@ -1508,10 +1522,11 @@ const ApprovedMockupCard = ({ project }) => {
             }}
           >
             {mockupName || "View Mockup"}
-          </a>
-          <a
-            href={`${mockupUrl}`}
+          </Link>
+          <Link
+            to={`${mockupUrl}`}
             download
+            reloadDocument
             style={{
               fontSize: "0.8rem",
               color: "#0f766e",
@@ -1520,7 +1535,7 @@ const ApprovedMockupCard = ({ project }) => {
             }}
           >
             Download
-          </a>
+          </Link>
         </div>
         {mockup.note && (
           <div

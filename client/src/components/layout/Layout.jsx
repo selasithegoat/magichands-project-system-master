@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
@@ -348,8 +348,8 @@ const Layout = ({
             </div>
 
             <nav className="drawer-menu">
-              <a
-                href="#"
+              <Link
+                to="#"
                 className={`drawer-item ${
                   activeView === "dashboard" ? "active" : ""
                 }`}
@@ -361,9 +361,9 @@ const Layout = ({
               >
                 <LayoutGridIcon />
                 Dashboard
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="#"
                 className={`drawer-item ${
                   activeView === "projects" ? "active" : ""
                 }`}
@@ -378,9 +378,9 @@ const Layout = ({
                 {projectCount > 0 && (
                   <span className="drawer-badge">{projectCount}</span>
                 )}
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="#"
                 className={`drawer-item ${
                   activeView === "create" ? "active" : ""
                 }`}
@@ -404,9 +404,9 @@ const Layout = ({
                   +
                 </div>
                 New Project
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="#"
                 className={`drawer-item ${
                   activeView === "history" ? "active" : ""
                 }`}
@@ -418,10 +418,10 @@ const Layout = ({
               >
                 <UsersIcon />
                 History
-              </a>
+              </Link>
               {showEngagedProjects && (
-                <a
-                  href="#"
+                <Link
+                  to="#"
                   className={`drawer-item ${
                     activeView === "engaged-projects" ? "active" : ""
                   }`}
@@ -438,12 +438,12 @@ const Layout = ({
                   {engagedCount > 0 && (
                     <span className="drawer-badge">{engagedCount}</span>
                   )}
-                </a>
+                </Link>
               )}
               {user?.department?.includes("Front Desk") && (
                 <>
-                  <a
-                    href="#"
+                  <Link
+                    to="#"
                     className={`drawer-item ${
                       activeView === "new-orders" ? "active" : ""
                     }`}
@@ -455,9 +455,9 @@ const Layout = ({
                   >
                     <ClipboardListIcon />
                     New Orders
-                  </a>
-                  <a
-                    href="#"
+                  </Link>
+                  <Link
+                    to="#"
                     className={`drawer-item ${
                       activeView === "end-of-day" ? "active" : ""
                     }`}
@@ -469,7 +469,7 @@ const Layout = ({
                   >
                     <ClipboardListIcon />
                     End of Day Update
-                  </a>
+                  </Link>
                 </>
               )}
             </nav>

@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import "./Login.css";
 // Importing a simple icon for the "Tools" logo.
 // If 'SystemIcon' or 'SettingsIcon' isn't quite right, we'll build a custom SVG.
@@ -232,9 +233,13 @@ const Login = ({ onLogin }) => {
         {/* Footer */}
         <div className="login-footer">
           New team member?{" "}
-          <a href="#" className="request-access-link">
+          <Link
+            to="#"
+            className="request-access-link"
+            onClick={(event) => event.preventDefault()}
+          >
             Request Access
-          </a>
+          </Link>
         </div>
       </div>
     </div>

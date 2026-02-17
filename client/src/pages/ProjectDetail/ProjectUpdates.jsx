@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import "./ProjectUpdates.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import SystemIcon from "../../components/icons/SystemIcon";
@@ -454,15 +455,16 @@ const ProjectUpdates = ({ project, currentUser }) => {
                       {update.attachments[0].name}
                     </span>
                   </div>
-                  <a
-                    href={getDownloadUrl(update.attachments[0].url)}
+                  <Link
+                    to={getDownloadUrl(update.attachments[0].url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="download-btn"
                     download
+                    reloadDocument
                   >
                     <DownloadIcon width="14" height="14" /> Download
-                  </a>
+                  </Link>
                 </div>
               )}
             </div>

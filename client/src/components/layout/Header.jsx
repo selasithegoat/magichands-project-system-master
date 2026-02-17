@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
@@ -71,8 +72,8 @@ const Header = ({
         </div>
 
         <nav className="main-nav">
-          <a
-            href="#"
+          <Link
+            to="#"
             className={`nav-item ${activeView === "dashboard" ? "active" : ""}`}
             onClick={(e) => {
               e.preventDefault();
@@ -80,9 +81,9 @@ const Header = ({
             }}
           >
             Dashboard
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            to="#"
             className={`nav-item ${activeView === "projects" ? "active" : ""}`}
             onClick={(e) => {
               e.preventDefault();
@@ -93,9 +94,9 @@ const Header = ({
             {projectCount > 0 && (
               <span className="nav-badge">{projectCount}</span>
             )}
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            to="#"
             className={`nav-item ${activeView === "history" ? "active" : ""}`}
             onClick={(e) => {
               e.preventDefault();
@@ -103,11 +104,11 @@ const Header = ({
             }}
           >
             History
-          </a>
+          </Link>
           {user?.department?.includes("Front Desk") && (
             <>
-              <a
-                href="#"
+              <Link
+                to="#"
                 className={`nav-item ${
                   activeView === "new-orders" ? "active" : ""
                 }`}
@@ -117,9 +118,9 @@ const Header = ({
                 }}
               >
                 New Orders
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="#"
                 className={`nav-item ${
                   activeView === "end-of-day" ? "active" : ""
                 }`}
@@ -132,12 +133,12 @@ const Header = ({
                 }}
               >
                 End of Day Update
-              </a>
+              </Link>
             </>
           )}
           {showEngagedProjects && (
-            <a
-              href="#"
+            <Link
+              to="#"
               className={`nav-item ${
                 activeView === "engaged-projects" ? "active" : ""
               }`}
@@ -152,7 +153,7 @@ const Header = ({
               {engagedCount > 0 && (
                 <span className="nav-badge">{engagedCount}</span>
               )}
-            </a>
+            </Link>
           )}
         </nav>
         <div className="header-actions">
