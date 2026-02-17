@@ -88,6 +88,11 @@ ADMIN_HOST=admin.magichandsproject.lan
 CLIENT_HOST=magichandsproject.lan
 OPS_HOST=ops.magichandsproject.lan
 
+# Smart email notification links (LAN/mobile fallback)
+CLIENT_PORTAL_FALLBACK_URL=http://192.168.100.203
+EMAIL_LINK_BASE_URL=http://192.168.100.203:5000
+NOTIFICATION_CENTER_PATH=/
+
 # Uploads
 UPLOAD_DIR=C:/magichands-uploads
 UPLOAD_MAX_MB=50

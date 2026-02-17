@@ -168,22 +168,28 @@ function App() {
 
       if (res.ok) {
         const userData = await res.json();
-        setUser(userData);
-
         if (userData) {
+          setUser(userData);
           fetchProjectCount(); // Fetch count when user is loaded
           // If on login page and authorized, go to dashboard
           if (location.pathname === "/login") {
             navigate("/client");
           }
+        } else {
+          setUser(null);
+          if (location.pathname !== "/login") {
+            navigate("/login");
+          }
         }
       } else {
+        setUser(null);
         // If unauthorized and trying to access protected route, go to login
         if (location.pathname !== "/login") {
           navigate("/login");
         }
       }
     } catch (err) {
+      setUser(null);
       navigate("/login");
     } finally {
       setIsLoading(false);
@@ -233,30 +239,36 @@ function App() {
     children,
     activeView,
     onSignOut = handleRequestLogout,
-  }) => (
-    <Layout
-      activeView={activeView}
-      user={user}
-      projectCount={projectCount}
-      engagedCount={engagedCount}
-      onNavigateDashboard={() => navigate("/client")}
-      onNavigateProject={() => navigate("/projects")}
-      onNavigateHistory={() => navigate("/history")}
-      onNavigateProfile={() => navigate("/profile")}
-      onNavigateNewOrders={() => navigate("/new-orders")}
-      onNavigateEndOfDay={() => navigate("/end-of-day")}
-      onNavigateEngagedProjects={() => navigate("/engaged-projects")}
-      onCreateProject={() => navigate("/create")}
-      onNavigateAdmin={() => {
-        const host = window.location.hostname;
-        const adminHost = host ? `admin.${host}` : "admin.magichandsproject.lan";
-        window.location.href = `http://${adminHost}`;
-      }}
-      onSignOut={onSignOut}
-    >
-      {children}
-    </Layout>
-  );
+  }) => {
+    if (!user) {
+      return <Navigate to="/login" replace />;
+    }
+
+    return (
+      <Layout
+        activeView={activeView}
+        user={user}
+        projectCount={projectCount}
+        engagedCount={engagedCount}
+        onNavigateDashboard={() => navigate("/client")}
+        onNavigateProject={() => navigate("/projects")}
+        onNavigateHistory={() => navigate("/history")}
+        onNavigateProfile={() => navigate("/profile")}
+        onNavigateNewOrders={() => navigate("/new-orders")}
+        onNavigateEndOfDay={() => navigate("/end-of-day")}
+        onNavigateEngagedProjects={() => navigate("/engaged-projects")}
+        onCreateProject={() => navigate("/create")}
+        onNavigateAdmin={() => {
+          const host = window.location.hostname;
+          const adminHost = host ? `admin.${host}` : "admin.magichandsproject.lan";
+          window.location.href = `http://${adminHost}`;
+        }}
+        onSignOut={onSignOut}
+      >
+        {children}
+      </Layout>
+    );
+  };
 
   if (isLoading) {
     return (

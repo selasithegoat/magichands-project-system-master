@@ -15,6 +15,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
 const digestRoutes = require("./routes/digestRoutes");
 const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
+const portalRoutes = require("./routes/portalRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 
@@ -150,6 +151,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api/digests", digestRoutes);
 app.use("/api/ops/wallboard", opsWallboardRoutes);
+app.use("/api/portal", portalRoutes);
 
 // Serve built frontends (Vite builds -> dist)
 const clientDistPath = path.resolve(__dirname, "../../client/dist");
