@@ -191,6 +191,26 @@
   color: #84cc16;
 }
 
+.update-tag.graphics {
+  background: #ecfccb;
+  color: #65a30d;
+}
+
+.update-tag.photography {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.update-tag.stores {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.update-tag.it-department {
+  background: #cffafe;
+  color: #0e7490;
+}
+
 .update-content {
   color: #334155;
   font-size: 0.9375rem;
@@ -372,6 +392,51 @@
 
 .delete-update-btn:hover svg path {
   stroke: #ef4444;
+}
+
+.update-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edit-update-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.edit-update-btn:hover {
+  background-color: #e2e8f0;
+}
+
+.edit-update-btn svg {
+  width: 14px;
+  height: 14px;
+  color: #94a3b8;
+}
+
+.edit-update-btn:hover svg {
+  color: #475569;
+}
+
+.update-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.update-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 /* File Input Styling */

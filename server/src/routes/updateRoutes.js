@@ -40,6 +40,10 @@ router.post(
   updateController.createProjectUpdate,
 );
 
+// Edit an update
+// PATCH /api/updates/:id
+router.patch("/:id", protect, updateController.updateProjectUpdate);
+
 // Delete an update
 // DELETE /api/updates/:id
 router.delete("/:id", protect, updateController.deleteProjectUpdate);

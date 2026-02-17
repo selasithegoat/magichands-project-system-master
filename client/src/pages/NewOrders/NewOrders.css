@@ -375,6 +375,245 @@
   gap: 0.4rem;
 }
 
+.updates-standalone-section {
+  margin-top: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.updates-standalone-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.updates-standalone-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.updates-standalone-header p {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.updates-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.updates-standalone-body {
+  display: grid;
+  grid-template-columns: minmax(250px, 340px) 1fr;
+  gap: 0.85rem;
+}
+
+.updates-inline-form-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.updates-inline-form-container h4 {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.updates-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.updates-inline-form label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.updates-inline-form select,
+.updates-inline-form textarea {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.updates-inline-form textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.updates-inline-form select:focus,
+.updates-inline-form textarea:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.action-btn.update-submit-btn {
+  align-self: flex-start;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.action-btn.update-submit-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #1e40af;
+}
+
+.updates-preview {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.updates-preview h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.updates-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.updates-preview-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.65rem;
+}
+
+.updates-preview-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.updates-preview-category {
+  margin-top: 0.35rem;
+  display: inline-flex;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.updates-preview-category-row {
+  margin-top: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.updates-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.action-btn.updates-preview-action {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.updates-preview-content {
+  margin: 0.45rem 0 0;
+  color: #334155;
+  font-size: 0.83rem;
+  white-space: pre-wrap;
+}
+
+.updates-preview-edit-form {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.updates-preview-edit-form label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.updates-preview-edit-form select,
+.updates-preview-edit-form textarea {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.updates-preview-edit-form textarea {
+  resize: vertical;
+  min-height: 74px;
+}
+
+.updates-preview-edit-form select:focus,
+.updates-preview-edit-form textarea:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.updates-preview-edit-actions {
+  margin-top: 0.2rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.updates-preview-empty {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
 .action-btn.undo-btn {
   background: rgba(249, 115, 22, 0.12);
   color: #ea580c;
@@ -730,6 +969,10 @@
   .orders-table th,
   .orders-table td {
     padding: 0.5rem;
+  }
+
+  .updates-standalone-body {
+    grid-template-columns: 1fr;
   }
 }
 

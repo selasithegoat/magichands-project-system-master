@@ -3,6 +3,7 @@ import "./ProjectUpdates.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import SystemIcon from "../../components/icons/SystemIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
+import EditIcon from "../../components/icons/EditIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -59,12 +60,34 @@ const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
   </svg>
 );
 
+const UPDATE_CATEGORY_OPTIONS = [
+  "General",
+  "Client",
+  "Production",
+  "Graphics",
+  "Photography",
+  "Stores",
+  "IT Department",
+];
+
+const normalizeUpdateCategory = (category) => {
+  if (category === "Design" || category === "Graphics/Design") {
+    return "Graphics";
+  }
+  return category || "General";
+};
+
 const ProjectUpdates = ({ project, currentUser }) => {
   const [updates, setUpdates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [updateToDelete, setUpdateToDelete] = useState(null);
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    content: "",
+    category: "General",
+  });
   const [toast, setToast] = useState(null);
 
   // Form State
@@ -75,6 +98,7 @@ const ProjectUpdates = ({ project, currentUser }) => {
     isEndOfDayUpdate: false,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [editingSubmitting, setEditingSubmitting] = useState(false);
 
   useEffect(() => {
     if (project?._id) {
@@ -167,6 +191,10 @@ const ProjectUpdates = ({ project, currentUser }) => {
         setUpdates(updates.filter((u) => u._id !== updateToDelete));
         setDeleteModalOpen(false);
         setUpdateToDelete(null);
+        if (editingUpdateId === updateToDelete) {
+          setEditingUpdateId(null);
+          setEditFormData({ content: "", category: "General" });
+        }
         setToast({ type: "success", message: "Update deleted successfully." });
       } else {
         setToast({ type: "error", message: "Failed to delete update." });
@@ -200,11 +228,75 @@ const ProjectUpdates = ({ project, currentUser }) => {
     return `${path}`;
   };
 
-  const isAuthor = (update) => {
-    if (!currentUser || !update.author) return false;
+  const canManageUpdate = (update) => {
+    if (!currentUser || !update?.author) return false;
+    if (currentUser.role === "admin") return true;
+    const authorId =
+      typeof update.author === "string" ? update.author : update.author._id;
     return (
-      currentUser._id === update.author._id || currentUser._id === update.author
+      Boolean(authorId) && currentUser._id === authorId
     );
+  };
+
+  const getCategoryClassName = (category) => {
+    return normalizeUpdateCategory(category)
+      .toLowerCase()
+      .replaceAll("/", "-")
+      .replaceAll(" ", "-");
+  };
+
+  const handleEditClick = (update) => {
+    setEditingUpdateId(update._id);
+    setEditFormData({
+      content: update.content || "",
+      category: normalizeUpdateCategory(update.category),
+    });
+  };
+
+  const handleCancelEdit = () => {
+    if (editingSubmitting) return;
+    setEditingUpdateId(null);
+    setEditFormData({ content: "", category: "General" });
+  };
+
+  const handleSaveEdit = async (updateId) => {
+    const trimmedContent = editFormData.content.trim();
+    if (!trimmedContent) {
+      setToast({ type: "error", message: "Update content cannot be empty." });
+      return;
+    }
+
+    setEditingSubmitting(true);
+    try {
+      const res = await fetch(`/api/updates/${updateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: trimmedContent,
+          category: editFormData.category,
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setUpdates((prev) =>
+          prev.map((item) => (item._id === updateId ? updated : item)),
+        );
+        handleCancelEdit();
+        setToast({ type: "success", message: "Update edited successfully." });
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setToast({
+          type: "error",
+          message: errorData.message || "Failed to edit update.",
+        });
+      }
+    } catch (err) {
+      console.error("Error editing update:", err);
+      setToast({ type: "error", message: "Error editing update." });
+    } finally {
+      setEditingSubmitting(false);
+    }
   };
 
   if (loading) return <LoadingSpinner />;
@@ -262,26 +354,97 @@ const ProjectUpdates = ({ project, currentUser }) => {
                 >
                   {update.category && (
                     <div
-                      className={`update-tag ${update.category.toLowerCase()}`}
+                      className={`update-tag ${getCategoryClassName(update.category)}`}
                     >
-                      {update.category}
+                      {normalizeUpdateCategory(update.category)}
                     </div>
                   )}
-                  {isAuthor(update) && (
-                    <button
-                      className="delete-update-btn"
-                      title="Delete Update"
-                      onClick={() => handleDeleteClick(update._id)}
-                    >
-                      <TrashIcon width="14" height="14" color="#cbd5e1" />
-                    </button>
+                  {canManageUpdate(update) && (
+                    <div className="update-item-actions">
+                      <button
+                        className="edit-update-btn"
+                        title="Edit Update"
+                        onClick={() => handleEditClick(update)}
+                        disabled={editingSubmitting}
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        className="delete-update-btn"
+                        title="Delete Update"
+                        onClick={() => handleDeleteClick(update._id)}
+                        disabled={editingSubmitting}
+                      >
+                        <TrashIcon width="14" height="14" color="#cbd5e1" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="update-content">
-                <p className="update-content-text">{update.content}</p>
-              </div>
+              {editingUpdateId === update._id ? (
+                <div className="update-edit-form">
+                  <div className="form-group">
+                    <label>Category</label>
+                    <select
+                      className="input-field"
+                      value={editFormData.category}
+                      onChange={(e) =>
+                        setEditFormData((prev) => ({
+                          ...prev,
+                          category: e.target.value,
+                        }))
+                      }
+                      disabled={editingSubmitting}
+                    >
+                      {UPDATE_CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Update Content</label>
+                    <textarea
+                      className="input-field"
+                      rows="4"
+                      value={editFormData.content}
+                      onChange={(e) =>
+                        setEditFormData((prev) => ({
+                          ...prev,
+                          content: e.target.value,
+                        }))
+                      }
+                      disabled={editingSubmitting}
+                    />
+                  </div>
+
+                  <div className="update-edit-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleCancelEdit}
+                      disabled={editingSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => handleSaveEdit(update._id)}
+                      disabled={editingSubmitting || !editFormData.content.trim()}
+                    >
+                      {editingSubmitting ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="update-content">
+                  <p className="update-content-text">{update.content}</p>
+                </div>
+              )}
 
               {update.attachments && update.attachments.length > 0 && (
                 <div className="update-attachment-row">
@@ -346,10 +509,11 @@ const ProjectUpdates = ({ project, currentUser }) => {
                       setFormData({ ...formData, category: e.target.value })
                     }
                   >
-                    <option value="General">General</option>
-                    <option value="Production">Production</option>
-                    <option value="Client">Client</option>
-                    <option value="Design">Design</option>
+                    {UPDATE_CATEGORY_OPTIONS.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

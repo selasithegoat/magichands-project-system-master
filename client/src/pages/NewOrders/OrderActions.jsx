@@ -50,6 +50,23 @@ const paymentLabels = {
   authorized: "Authorized",
 };
 
+const UPDATE_CATEGORY_OPTIONS = [
+  "General",
+  "Client",
+  "Production",
+  "Graphics",
+  "Photography",
+  "Stores",
+  "IT Department",
+];
+
+const normalizeUpdateCategory = (category) => {
+  if (category === "Design" || category === "Graphics/Design") {
+    return "Graphics";
+  }
+  return category || "General";
+};
+
 const OrderActions = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -71,6 +88,16 @@ const OrderActions = () => {
   const [feedbackType, setFeedbackType] = useState("Positive");
   const [feedbackNotes, setFeedbackNotes] = useState("");
   const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [projectUpdates, setProjectUpdates] = useState([]);
+  const [updatesLoading, setUpdatesLoading] = useState(false);
+  const [updateCategory, setUpdateCategory] = useState("General");
+  const [updateContent, setUpdateContent] = useState("");
+  const [updateSubmitting, setUpdateSubmitting] = useState(false);
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
+  const [editUpdateCategory, setEditUpdateCategory] = useState("General");
+  const [editUpdateContent, setEditUpdateContent] = useState("");
+  const [updateEditSubmitting, setUpdateEditSubmitting] = useState(false);
+  const [updateDeleteSubmittingId, setUpdateDeleteSubmittingId] = useState(null);
 
   const [deliveryModal, setDeliveryModal] = useState({
     open: false,
@@ -136,10 +163,39 @@ const OrderActions = () => {
     }
   };
 
+  const fetchProjectUpdates = async (projectId) => {
+    if (!projectId) {
+      setProjectUpdates([]);
+      return;
+    }
+
+    setUpdatesLoading(true);
+    try {
+      const res = await fetch(`/api/updates/project/${projectId}`);
+      if (!res.ok) {
+        throw new Error("Failed to load project updates.");
+      }
+      const data = await res.json();
+      setProjectUpdates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching project updates:", err);
+    } finally {
+      setUpdatesLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchCurrentUser();
     fetchProject();
   }, [id]);
+
+  useEffect(() => {
+    if (project?._id) {
+      fetchProjectUpdates(project._id);
+    } else {
+      setProjectUpdates([]);
+    }
+  }, [project?._id]);
 
   useEffect(() => {
     if (feedbackModal.open && feedbackModal.project && project?._id) {
@@ -157,6 +213,7 @@ const OrderActions = () => {
     currentUser?.department?.includes("Front Desk");
   const canMarkDelivered = canManageBilling;
   const canManageFeedback = canManageBilling;
+  const canShareUpdates = canManageBilling;
   const canAddFeedbackFor = (order) =>
     ["Pending Feedback", "Feedback Completed", "Delivered"].includes(
       order?.status,
@@ -301,6 +358,156 @@ const OrderActions = () => {
       const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
       return bTime - aTime;
     });
+
+  const recentUpdates = useMemo(() => projectUpdates || [], [projectUpdates]);
+
+  const getUpdateAuthorName = (update) => {
+    if (!update?.author || typeof update.author === "string") {
+      return "System";
+    }
+    const fullName =
+      `${update.author.firstName || ""} ${update.author.lastName || ""}`.trim();
+    return fullName || update.author.email || "System";
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const canManageUpdate = (update) => {
+    if (!currentUser || !update) return false;
+    if (currentUser.role === "admin") return true;
+    const authorId =
+      typeof update.author === "string" ? update.author : update.author?._id;
+    return Boolean(authorId && currentUser._id === authorId);
+  };
+
+  const handlePostUpdate = async () => {
+    if (!project || !canShareUpdates) return;
+    const trimmedContent = updateContent.trim();
+    if (!trimmedContent) {
+      showToast("Please enter an update before posting.", "error");
+      return;
+    }
+
+    setUpdateSubmitting(true);
+    try {
+      const data = new FormData();
+      data.append("content", trimmedContent);
+      data.append("category", updateCategory);
+      data.append("isEndOfDayUpdate", false);
+
+      const res = await fetch(`/api/updates/project/${project._id}`, {
+        method: "POST",
+        body: data,
+      });
+
+      if (res.ok) {
+        const createdUpdate = await res.json();
+        setProjectUpdates((prev) => [createdUpdate, ...prev]);
+        setUpdateContent("");
+        setUpdateCategory("General");
+        showToast("Update posted successfully.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to post update.", "error");
+      }
+    } catch (error) {
+      console.error("Update post error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setUpdateSubmitting(false);
+    }
+  };
+
+  const handleStartEditUpdate = (update) => {
+    setEditingUpdateId(update._id);
+    setEditUpdateCategory(normalizeUpdateCategory(update.category));
+    setEditUpdateContent(update.content || "");
+  };
+
+  const handleCancelEditUpdate = () => {
+    if (updateEditSubmitting) return;
+    setEditingUpdateId(null);
+    setEditUpdateCategory("General");
+    setEditUpdateContent("");
+  };
+
+  const handleSaveEditUpdate = async (updateId) => {
+    if (!updateId) return;
+    const trimmedContent = editUpdateContent.trim();
+    if (!trimmedContent) {
+      showToast("Update content cannot be empty.", "error");
+      return;
+    }
+
+    setUpdateEditSubmitting(true);
+    try {
+      const res = await fetch(`/api/updates/${updateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: trimmedContent,
+          category: editUpdateCategory,
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProjectUpdates((prev) =>
+          prev.map((item) => (item._id === updateId ? updated : item)),
+        );
+        handleCancelEditUpdate();
+        showToast("Update edited successfully.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to edit update.", "error");
+      }
+    } catch (error) {
+      console.error("Update edit error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setUpdateEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteUpdate = async (update) => {
+    if (!update?._id || !canManageUpdate(update)) return;
+    const confirmed = window.confirm(
+      "Delete this update? This action cannot be undone.",
+    );
+    if (!confirmed) return;
+
+    setUpdateDeleteSubmittingId(update._id);
+    try {
+      const res = await fetch(`/api/updates/${update._id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setProjectUpdates((prev) => prev.filter((item) => item._id !== update._id));
+        if (editingUpdateId === update._id) {
+          handleCancelEditUpdate();
+        }
+        showToast("Update deleted.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to delete update.", "error");
+      }
+    } catch (error) {
+      console.error("Update delete error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setUpdateDeleteSubmittingId(null);
+    }
+  };
 
   const handleConfirmInvoice = async () => {
     if (!project || invoiceInput.trim() !== billingConfirmPhrase) return;
@@ -646,6 +853,169 @@ const OrderActions = () => {
               </div>
             </div>
         </div>
+
+        <section className="updates-standalone-section">
+          <div className="updates-standalone-header">
+            <div>
+              <h3>Project Updates</h3>
+              <p>Share project-specific updates with the team.</p>
+            </div>
+            <span className="updates-count-badge">
+              {projectUpdates.length} updates
+            </span>
+          </div>
+
+          <div className="updates-standalone-body">
+            <div className="updates-inline-form-container">
+              <h4>Add Update</h4>
+              <div className="updates-inline-form">
+                <label htmlFor="order-update-category">Category</label>
+                <select
+                  id="order-update-category"
+                  value={updateCategory}
+                  onChange={(e) => setUpdateCategory(e.target.value)}
+                  disabled={!canShareUpdates || updateSubmitting}
+                >
+                  {UPDATE_CATEGORY_OPTIONS.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+
+                <label htmlFor="order-update-content">Update Details</label>
+                <textarea
+                  id="order-update-content"
+                  rows="3"
+                  value={updateContent}
+                  onChange={(e) => setUpdateContent(e.target.value)}
+                  placeholder="Share what changed on this project..."
+                  disabled={!canShareUpdates || updateSubmitting}
+                />
+
+                <button
+                  className="action-btn update-submit-btn"
+                  onClick={handlePostUpdate}
+                  disabled={
+                    !canShareUpdates ||
+                    updateSubmitting ||
+                    updateContent.trim().length === 0
+                  }
+                >
+                  {updateSubmitting ? "Posting..." : "Post Update"}
+                </button>
+              </div>
+            </div>
+
+            <div className="updates-preview">
+              <h4>Updates</h4>
+              {updatesLoading ? (
+                <div className="updates-preview-empty">Loading updates...</div>
+              ) : recentUpdates.length === 0 ? (
+                <div className="updates-preview-empty">No updates yet.</div>
+              ) : (
+                <div className="updates-preview-list">
+                  {recentUpdates.map((update) => (
+                    <div className="updates-preview-item" key={update._id}>
+                      <div className="updates-preview-meta">
+                        <span>{getUpdateAuthorName(update)}</span>
+                        <span>{formatDateTime(update.createdAt)}</span>
+                      </div>
+                      <div className="updates-preview-category-row">
+                        <div className="updates-preview-category">
+                          {normalizeUpdateCategory(update.category)}
+                        </div>
+                        {canManageUpdate(update) && (
+                          <div className="updates-preview-actions">
+                            {editingUpdateId === update._id ? (
+                              <button
+                                className="action-btn updates-preview-action"
+                                onClick={handleCancelEditUpdate}
+                                disabled={updateEditSubmitting}
+                              >
+                                Cancel
+                              </button>
+                            ) : (
+                              <button
+                                className="action-btn updates-preview-action"
+                                onClick={() => handleStartEditUpdate(update)}
+                                disabled={updateDeleteSubmittingId === update._id}
+                              >
+                                Edit
+                              </button>
+                            )}
+                            <button
+                              className="action-btn undo-btn updates-preview-action"
+                              onClick={() => handleDeleteUpdate(update)}
+                              disabled={updateDeleteSubmittingId === update._id}
+                            >
+                              {updateDeleteSubmittingId === update._id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {editingUpdateId === update._id ? (
+                        <div className="updates-preview-edit-form">
+                          <label htmlFor={`update-edit-category-${update._id}`}>
+                            Category
+                          </label>
+                          <select
+                            id={`update-edit-category-${update._id}`}
+                            value={editUpdateCategory}
+                            onChange={(e) => setEditUpdateCategory(e.target.value)}
+                            disabled={updateEditSubmitting}
+                          >
+                            {UPDATE_CATEGORY_OPTIONS.map((category) => (
+                              <option key={category} value={category}>
+                                {category}
+                              </option>
+                            ))}
+                          </select>
+
+                          <label htmlFor={`update-edit-content-${update._id}`}>
+                            Content
+                          </label>
+                          <textarea
+                            id={`update-edit-content-${update._id}`}
+                            rows="3"
+                            value={editUpdateContent}
+                            onChange={(e) => setEditUpdateContent(e.target.value)}
+                            disabled={updateEditSubmitting}
+                          />
+
+                          <div className="updates-preview-edit-actions">
+                            <button
+                              className="action-btn"
+                              onClick={handleCancelEditUpdate}
+                              disabled={updateEditSubmitting}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="action-btn update-submit-btn"
+                              onClick={() => handleSaveEditUpdate(update._id)}
+                              disabled={
+                                updateEditSubmitting ||
+                                editUpdateContent.trim().length === 0
+                              }
+                            >
+                              {updateEditSubmitting ? "Saving..." : "Save Changes"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="updates-preview-content">{update.content}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
 
       {deliveryModal.open && (
