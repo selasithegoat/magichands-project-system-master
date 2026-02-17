@@ -553,24 +553,30 @@ const EndOfDayUpdate = ({ user }) => {
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="pagination-controls">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="pagination-btn"
-            >
-              Previous
-            </button>
-            <span className="page-info">
-              Page {currentPage} of {totalPages}
+          <div className="eod-pagination">
+            <span className="eod-pagination-summary">
+              Showing {indexOfFirstItem + 1}-{indexOfFirstItem + paginatedProjects.length} of{" "}
+              {projects.length} projects
             </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="pagination-btn"
-            >
-              Next
-            </button>
+            <div className="eod-pagination-controls">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="eod-pagination-btn"
+              >
+                Previous
+              </button>
+              <span className="eod-page-info">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="eod-pagination-btn"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>

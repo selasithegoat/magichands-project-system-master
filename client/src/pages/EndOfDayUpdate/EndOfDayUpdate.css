@@ -204,3 +204,82 @@
   align-items: center;
   height: 100vh;
 }
+
+.eod-pagination {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.eod-pagination-summary {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.eod-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: auto;
+}
+
+.eod-pagination-btn {
+  min-width: 90px;
+  padding: 0.45rem 0.9rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.eod-pagination-btn:hover:not(:disabled) {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.eod-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.eod-page-info {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .eod-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .eod-pagination-controls {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .eod-pagination-btn {
+    min-width: 78px;
+  }
+
+  .eod-page-info {
+    text-align: center;
+    flex: 1;
+  }
+}
