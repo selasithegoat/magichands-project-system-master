@@ -1,15 +1,77 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Profile.css";
-// Icons
-import UserAvatar from "../../components/ui/UserAvatar";
 import EditIcon from "../../components/icons/EditIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
-import UploadIcon from "../../components/icons/UploadIcon";
 import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CONTACT_PATTERN = /^\+?[0-9()\-\s]{7,20}$/;
+const MAX_AVATAR_SIZE_MB = 5;
+
+const DEFAULT_FORM_DATA = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  employeeType: "Staff",
+  department: "",
+  contact: "",
+  avatarUrl: "",
+};
+
+const normalizeDepartmentInput = (value) => {
+  if (!value) return "";
+  return value
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .join(", ");
+};
+
+const buildComparableProfileState = (formData, emailNotif, pushNotif) => ({
+  firstName: formData.firstName.trim(),
+  lastName: formData.lastName.trim(),
+  email: formData.email.trim().toLowerCase(),
+  employeeType: formData.employeeType || "Staff",
+  department: normalizeDepartmentInput(formData.department),
+  contact: formData.contact.trim(),
+  avatarUrl: formData.avatarUrl || "",
+  notificationSettings: {
+    email: Boolean(emailNotif),
+    push: Boolean(pushNotif),
+  },
+});
+
+const validateProfile = (formData) => {
+  const errors = {};
+
+  if (!formData.firstName.trim()) {
+    errors.firstName = "First name is required.";
+  }
+
+  if (!formData.lastName.trim()) {
+    errors.lastName = "Last name is required.";
+  }
+
+  const emailValue = formData.email.trim();
+  if (!emailValue) {
+    errors.email = "Email is required.";
+  } else if (!EMAIL_PATTERN.test(emailValue)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  const contactValue = formData.contact.trim();
+  if (!contactValue) {
+    errors.contact = "Contact is required.";
+  } else if (!CONTACT_PATTERN.test(contactValue)) {
+    errors.contact = "Enter a valid phone number.";
+  }
+
+  return errors;
+};
 
 const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [emailNotif, setEmailNotif] = useState(
@@ -18,43 +80,67 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [pushNotif, setPushNotif] = useState(
     user?.notificationSettings?.push ?? true,
   );
+  const [notificationHint, setNotificationHint] = useState("");
 
-  // User Data State
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    employeeType: "Staff",
-    department: "",
-    contact: "",
-  });
+  const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
+  const [initialSnapshot, setInitialSnapshot] = useState(null);
+  const [fieldTouched, setFieldTouched] = useState({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
   const [stats, setStats] = useState({
     totalProjects: 0,
     completedProjects: 0,
     hoursLogged: 0,
   });
-  const [loading, setLoading] = useState(!user); // If user prop exists, not loading
+  const [loading, setLoading] = useState(!user);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null); // { type: 'success' | 'error', text: '' }
+  const [message, setMessage] = useState(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
 
-  // Sync state with user prop when it changes
-  React.useEffect(() => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        email: user.email || "",
-        employeeType: user.employeeType || "Staff",
-        department: Array.isArray(user.department)
-          ? user.department.join(", ")
-          : user.department || "",
-        contact: user.contact || "",
-      });
-      setEmailNotif(user.notificationSettings?.email ?? false);
-      setPushNotif(user.notificationSettings?.push ?? true);
-      setLoading(false);
-    }
+  const [activities, setActivities] = useState([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
+  const [avatarError, setAvatarError] = useState("");
+  const avatarInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!avatarPreviewUrl) return undefined;
+    return () => {
+      URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const nextFormData = {
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      email: user.email || "",
+      employeeType: user.employeeType || "Staff",
+      department: Array.isArray(user.department)
+        ? user.department.join(", ")
+        : user.department || "",
+      contact: user.contact || "",
+      avatarUrl: user.avatarUrl || "",
+    };
+
+    const nextEmailNotif = user.notificationSettings?.email ?? false;
+    const nextPushNotif = user.notificationSettings?.push ?? true;
+
+    setFormData(nextFormData);
+    setEmailNotif(nextEmailNotif);
+    setPushNotif(nextPushNotif);
+    setFieldTouched({});
+    setSubmitAttempted(false);
+    setAvatarError("");
+    setNotificationHint("");
+    setInitialSnapshot(
+      buildComparableProfileState(nextFormData, nextEmailNotif, nextPushNotif),
+    );
+    setLoading(false);
   }, [user]);
 
   const fetchStats = async () => {
@@ -69,34 +155,27 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     }
   };
 
-  // Fetch Stats
-  React.useEffect(() => {
+  useEffect(() => {
     fetchStats();
   }, []);
 
-  // Handle Toast Timeout
-  React.useEffect(() => {
-    if (message) {
-      // Start fade out after 4.5s
-      const fadeTimer = setTimeout(() => {
-        setIsFadingOut(true);
-      }, 4500);
+  useEffect(() => {
+    if (!message) return undefined;
 
-      // Remove after 5s
-      const removeTimer = setTimeout(() => {
-        setMessage(null);
-        setIsFadingOut(false);
-      }, 5000);
+    const fadeTimer = setTimeout(() => {
+      setIsFadingOut(true);
+    }, 4500);
 
-      return () => {
-        clearTimeout(fadeTimer);
-        clearTimeout(removeTimer);
-      };
-    }
+    const removeTimer = setTimeout(() => {
+      setMessage(null);
+      setIsFadingOut(false);
+    }, 5000);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
   }, [message]);
-
-  const [activities, setActivities] = useState([]);
-  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
 
   const fetchActivities = async () => {
     try {
@@ -107,7 +186,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
       });
       if (res.ok) {
         const data = await res.json();
-        // Backend now returns { activities: [], ... } due to pagination support
         setActivities(data.activities || []);
       }
     } catch (error) {
@@ -117,8 +195,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     }
   };
 
-  // Fetch Activities
-  React.useEffect(() => {
+  useEffect(() => {
     fetchActivities();
   }, []);
 
@@ -126,6 +203,24 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     fetchStats();
     fetchActivities();
   });
+
+  const validationErrors = useMemo(() => validateProfile(formData), [formData]);
+
+  const currentComparableState = useMemo(
+    () => buildComparableProfileState(formData, emailNotif, pushNotif),
+    [formData, emailNotif, pushNotif],
+  );
+
+  const hasChanges = useMemo(() => {
+    if (!initialSnapshot) return false;
+    return JSON.stringify(initialSnapshot) !== JSON.stringify(currentComparableState);
+  }, [initialSnapshot, currentComparableState]);
+
+  const canSave =
+    hasChanges &&
+    !saving &&
+    !avatarUploading &&
+    Object.keys(validationErrors).length === 0;
 
   const formatTimeAgo = (dateString) => {
     const date = new Date(dateString);
@@ -143,24 +238,138 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   };
 
   const getActivityIcon = (action) => {
-    if (action.includes("create")) return { icon: "📁", color: "blue" };
-    if (action.includes("update") || action.includes("status"))
+    const lowerAction = String(action || "").toLowerCase();
+    if (lowerAction.includes("create")) return { icon: "📁", color: "blue" };
+    if (lowerAction.includes("update") || lowerAction.includes("status")) {
       return { icon: "✏️", color: "orange" };
-    if (action.includes("delete")) return { icon: "🗑️", color: "red" };
-    if (action.includes("add")) return { icon: "➕", color: "green" };
-    if (action.includes("approval")) return { icon: "✅", color: "green" };
+    }
+    if (lowerAction.includes("delete")) return { icon: "🗑️", color: "red" };
+    if (lowerAction.includes("add")) return { icon: "➕", color: "green" };
+    if (lowerAction.includes("approval")) return { icon: "✅", color: "green" };
     return { icon: "📝", color: "gray" };
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (event) => {
+    const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setFieldTouched((prev) => ({ ...prev, [name]: true }));
+  };
+
+  const handleBlur = (event) => {
+    const { name } = event.target;
+    setFieldTouched((prev) => ({ ...prev, [name]: true }));
+  };
+
+  const getFieldError = (name) => {
+    if (!submitAttempted && !fieldTouched[name]) return "";
+    return validationErrors[name] || "";
+  };
+
+  const handleToggleEmailNotif = () => {
+    if (emailNotif && !pushNotif) {
+      setNotificationHint("At least one notification channel must stay enabled.");
+      return;
+    }
+    setNotificationHint("");
+    setEmailNotif((prev) => !prev);
+  };
+
+  const handleTogglePushNotif = () => {
+    if (pushNotif && !emailNotif) {
+      setNotificationHint("At least one notification channel must stay enabled.");
+      return;
+    }
+    setNotificationHint("");
+    setPushNotif((prev) => !prev);
+  };
+
+  const openAvatarSelector = () => {
+    if (avatarUploading) return;
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    setAvatarError("");
+    setMessage(null);
+
+    if (!file.type || !file.type.startsWith("image/")) {
+      setAvatarError("Please select a valid image file.");
+      return;
+    }
+
+    const maxBytes = MAX_AVATAR_SIZE_MB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setAvatarError(`Image must be ${MAX_AVATAR_SIZE_MB}MB or less.`);
+      return;
+    }
+
+    const localPreview = URL.createObjectURL(file);
+    setAvatarPreviewUrl(localPreview);
+
+    try {
+      setAvatarUploading(true);
+      const payload = new FormData();
+      payload.append("avatar", file);
+
+      const res = await fetch("/api/auth/profile/avatar", {
+        method: "POST",
+        credentials: "include",
+        body: payload,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to upload avatar.");
+      }
+
+      const nextAvatarUrl = data.avatarUrl || "";
+      setFormData((prev) => ({ ...prev, avatarUrl: nextAvatarUrl }));
+      setInitialSnapshot((prev) =>
+        prev
+          ? { ...prev, avatarUrl: nextAvatarUrl }
+          : buildComparableProfileState(
+              { ...formData, avatarUrl: nextAvatarUrl },
+              emailNotif,
+              pushNotif,
+            ),
+      );
+      setAvatarPreviewUrl("");
+      setMessage({ type: "success", text: "Avatar updated successfully!" });
+      if (onUpdateProfile) onUpdateProfile();
+    } catch (error) {
+      const errorMessage = error.message || "Failed to upload avatar.";
+      setAvatarError(errorMessage);
+      setAvatarPreviewUrl("");
+      setMessage({ type: "error", text: errorMessage });
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const handleSave = async () => {
-    setSaving(true);
+    setSubmitAttempted(true);
     setMessage(null);
     setIsFadingOut(false);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setMessage({
+        type: "error",
+        text: "Please correct the highlighted fields before saving.",
+      });
+      return;
+    }
+
+    if (!hasChanges) {
+      return;
+    }
+
+    setSaving(true);
+
     try {
       const res = await fetch("/api/auth/profile", {
         method: "PUT",
@@ -169,13 +378,10 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         },
         credentials: "include",
         body: JSON.stringify({
-          ...formData,
-          department: formData.department
-            ? formData.department
-                .split(",")
-                .map((d) => d.trim())
-                .filter((d) => d !== "")
-            : [],
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
+          contact: formData.contact.trim(),
           notificationSettings: {
             email: emailNotif,
             push: pushNotif,
@@ -183,11 +389,19 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
         setMessage({ type: "success", text: "Profile updated successfully!" });
-        if (onUpdateProfile) onUpdateProfile(); // Refresh app state
+        setFieldTouched({});
+        setSubmitAttempted(false);
+        setInitialSnapshot(currentComparableState);
+        if (onUpdateProfile) onUpdateProfile();
       } else {
-        setMessage({ type: "error", text: "Failed to update profile." });
+        setMessage({
+          type: "error",
+          text: data.message || "Failed to update profile.",
+        });
       }
     } catch (error) {
       console.error("Error updating profile", error);
@@ -199,20 +413,42 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
   if (loading) return <div className="profile-container">Loading...</div>;
 
+  const avatarDisplaySrc = avatarPreviewUrl || formData.avatarUrl;
+
   return (
     <div className="profile-container">
-      {/* Top Section: Header & Stats */}
       <div className="profile-top-grid">
-        {/* ... (rest of top grid remains same) ... */}
-        {/* Profile Card */}
         <div className="profile-header-card">
           <div className="profile-wrapper">
             <div className="profile-avatar-large">
-              {formData.firstName ? formData.firstName[0] : "U"}
-              {formData.lastName ? formData.lastName[0] : ""}
-              <button className="edit-avatar-btn">
+              {avatarDisplaySrc ? (
+                <img
+                  src={avatarDisplaySrc}
+                  alt={`${formData.firstName} ${formData.lastName}`.trim() || "User avatar"}
+                  className="profile-avatar-image"
+                />
+              ) : (
+                <>
+                  {formData.firstName ? formData.firstName[0] : "U"}
+                  {formData.lastName ? formData.lastName[0] : ""}
+                </>
+              )}
+              <button
+                className="edit-avatar-btn"
+                type="button"
+                onClick={openAvatarSelector}
+                disabled={avatarUploading}
+                title="Upload avatar"
+              >
                 <EditIcon width="12" height="12" />
               </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                style={{ display: "none" }}
+              />
             </div>
             <div className="profile-info-main">
               <div className="profile-name-row">
@@ -222,16 +458,21 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 <span className="role-badge">{formData.employeeType}</span>
               </div>
               <p className="profile-handle">{formData.department}</p>
+              <p className="avatar-helper-text">
+                {avatarUploading
+                  ? "Uploading avatar..."
+                  : `Upload a JPG/PNG image up to ${MAX_AVATAR_SIZE_MB}MB.`}
+              </p>
+              {avatarError && <p className="field-error avatar-error">{avatarError}</p>}
 
               <label>Contact (phone)</label>
               <div className="contact-value">
-                <span>📞</span> {formData.contact || "Not set"}
+                <span>Tel</span> {formData.contact || "Not set"}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Stats Column */}
         <div className="profile-stats-column">
           <div className="stat-card-row">
             <div>
@@ -263,16 +504,11 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         </div>
       </div>
 
-      {/* Main Content Grid: Form, Activity, Settings */}
       <div className="profile-content-grid">
-        {/* Left Column: Form & Settings */}
         <div className="profile-left-col">
-          {/* My Profile Form */}
           <div className="content-card">
             <div className="card-header">
-              <h3>
-                <span style={{ marginRight: "0.5rem" }}>👤</span> My Profile
-              </h3>
+              <h3>My Profile</h3>
             </div>
 
             {message && (
@@ -284,7 +520,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                 {message.type === "success" ? (
                   <CheckCircleIcon width="16" height="16" />
                 ) : (
-                  "⚠️"
+                  "!"
                 )}
                 {message.text}
               </div>
@@ -298,7 +534,12 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  className={getFieldError("firstName") ? "has-error" : ""}
                 />
+                {getFieldError("firstName") && (
+                  <p className="field-error">{getFieldError("firstName")}</p>
+                )}
               </div>
               <div className="form-group">
                 <label>Last Name</label>
@@ -307,7 +548,12 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  className={getFieldError("lastName") ? "has-error" : ""}
                 />
+                {getFieldError("lastName") && (
+                  <p className="field-error">{getFieldError("lastName")}</p>
+                )}
               </div>
               <div className="form-group full-width">
                 <label>Email Address</label>
@@ -316,30 +562,39 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  className={getFieldError("email") ? "has-error" : ""}
                 />
+                {getFieldError("email") && (
+                  <p className="field-error">{getFieldError("email")}</p>
+                )}
               </div>
-              <div className="form-group">
+              <div className="form-group full-width">
                 <label>Contact</label>
                 <input
                   type="text"
                   name="contact"
                   value={formData.contact}
                   onChange={handleChange}
+                  onBlur={handleBlur}
+                  className={getFieldError("contact") ? "has-error" : ""}
                 />
+                {getFieldError("contact") && (
+                  <p className="field-error">{getFieldError("contact")}</p>
+                )}
               </div>
             </div>
-        
           </div>
 
-          {/* Settings - Notifications */}
           <div className="content-card">
             <div className="card-header">
-              <h3>
-                <span style={{ marginRight: "0.5rem" }}>⚙️</span> Settings
-              </h3>
+              <h3>Settings</h3>
             </div>
             <div className="settings-section">
               <h4>Notifications</h4>
+              <p className="setting-helper">
+                At least one notification channel must stay enabled.
+              </p>
 
               <div className="setting-row">
                 <div>
@@ -352,11 +607,8 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   <input
                     type="checkbox"
                     checked={emailNotif}
-                    onChange={() => {
-                      if (emailNotif && !pushNotif) return; // Prevent turning both off
-                      setEmailNotif(!emailNotif);
-                    }}
-                    disabled={emailNotif && !pushNotif} // Visually disable if it's the only one left
+                    onChange={handleToggleEmailNotif}
+                    aria-label="Toggle email notifications"
                   />
                   <span className="slider round"></span>
                 </label>
@@ -373,36 +625,32 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   <input
                     type="checkbox"
                     checked={pushNotif}
-                    onChange={() => {
-                      if (pushNotif && !emailNotif) return; // Prevent turning both off
-                      setPushNotif(!pushNotif);
-                    }}
-                    disabled={pushNotif && !emailNotif} // Visually disable if it's the only one left
+                    onChange={handleTogglePushNotif}
+                    aria-label="Toggle push notifications"
                   />
                   <span className="slider round"></span>
                 </label>
               </div>
+
+              {notificationHint && (
+                <p className="setting-warning" role="status">
+                  {notificationHint}
+                </p>
+              )}
             </div>
           </div>
+
           <div className="form-actions">
-              <button
-                className="save-btn"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
+            <button className="save-btn" onClick={handleSave} disabled={!canSave}>
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         </div>
 
-        {/* Right Column: Activity & Support */}
         <div className="profile-right-col">
-          {/* Activity */}
           <div className="content-card">
             <div className="card-header">
-              <h3>
-                <span style={{ marginRight: "0.5rem" }}>⏱️</span> Activity
-              </h3>
+              <h3>Activity</h3>
               <a href="/my-activities" className="view-all-link">
                 View All
               </a>
@@ -426,9 +674,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                       <div className={`activity-icon ${color}`}>{icon}</div>
                       <div className="activity-content">
                         <p>{activity.description}</p>
-                        <span className="time">
-                          {formatTimeAgo(activity.createdAt)}
-                        </span>
+                        <span className="time">{formatTimeAgo(activity.createdAt)}</span>
                       </div>
                     </div>
                   );
@@ -447,20 +693,16 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
             </div>
           </div>
 
-          {/* Help & Support */}
           <div className="content-card">
             <div className="card-header">
-              <h3>
-                <span style={{ marginRight: "0.5rem" }}>❓</span> Help & Support
-              </h3>
+              <h3>Help & Support</h3>
             </div>
             <div className="support-list">
-              <button className="support-btn">
-                <HelpIcon /> Browse FAQs <span className="arrow">›</span>
+              <button className="support-btn" type="button">
+                <HelpIcon /> Browse FAQs <span className="arrow">&gt;</span>
               </button>
-              <button className="support-btn">
-                <span style={{ fontSize: "1.2rem", lineHeight: 0 }}>🎧</span>{" "}
-                Contact Support <span className="arrow">›</span>
+              <button className="support-btn" type="button">
+                Contact Support <span className="arrow">&gt;</span>
               </button>
             </div>
             <div className="support-tip">
@@ -469,7 +711,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
             </div>
           </div>
 
-          {/* Sign Out */}
           <button className="sign-out-btn" onClick={onSignOut}>
             <LogOutIcon /> Sign Out
           </button>

@@ -64,12 +64,20 @@
   font-weight: 700;
   position: relative;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.profile-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .edit-avatar-btn {
   position: absolute;
-  bottom: 0;
-  right: 0;
+  bottom: 4px;
+  right: 4px;
   background-color: #3b82f6;
   color: #fff;
   border: 2px solid #fff;
@@ -80,6 +88,12 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  z-index: 2;
+}
+
+.edit-avatar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .profile-info-main {
@@ -129,6 +143,12 @@
   font-weight: 500;
   font-size: 0.875rem;
   margin: 0 0 1rem 0;
+}
+
+.avatar-helper-text {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  color: #64748b;
 }
 
 .profile-bio {
@@ -312,10 +332,28 @@
   outline: none;
   font-family: inherit;
 }
+
 .form-group input:focus,
 .form-group select:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group input.has-error,
+.form-group select.has-error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
+.field-error {
+  margin: 0.25rem 0 0;
+  color: #dc2626;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.avatar-error {
+  margin-bottom: 0.7rem;
 }
 
 .select-wrapper {
@@ -343,11 +381,32 @@
   background: #1e293b;
 }
 
+.save-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* SETTINGS */
 .settings-section h4 {
   font-size: 0.875rem;
   color: #0f172a;
   margin-bottom: 1rem;
+}
+
+.setting-helper {
+  margin: -0.35rem 0 0.85rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.setting-warning {
+  margin: 0.85rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
 }
 
 .setting-row {
@@ -451,6 +510,14 @@ input:checked + .slider:before {
 .activity-icon.orange {
   background: #fff7ed;
   color: #ea580c;
+}
+.activity-icon.red {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.activity-icon.gray {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .activity-content p {

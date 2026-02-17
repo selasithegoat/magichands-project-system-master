@@ -73,6 +73,7 @@ const UserSchema = new mongoose.Schema({
   },
   contact: String,
   bio: String,
+  avatarUrl: String,
   createdAt: {
     type: Date,
     default: Date.now,

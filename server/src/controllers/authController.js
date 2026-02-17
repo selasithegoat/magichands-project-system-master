@@ -92,6 +92,7 @@ const loginUser = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        avatarUrl: user.avatarUrl,
       });
     } else {
       res.status(401).json({ message: "Invalid credentials" });
@@ -176,11 +177,45 @@ const updateProfile = async (req, res) => {
       department: updatedUser.department,
       employeeType: updatedUser.employeeType,
       contact: updatedUser.contact,
+      avatarUrl: updatedUser.avatarUrl,
       notificationSettings: updatedUser.notificationSettings,
     });
   } else {
     res.status(404);
     throw new Error("User not found");
+  }
+};
+
+// @desc    Upload profile avatar
+// @route   POST /api/auth/profile/avatar
+// @access  Private
+const uploadProfileAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Please select an image to upload" });
+    }
+
+    if (!req.file.mimetype || !req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({
+        message: "Only image files are allowed for avatar upload",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.avatarUrl = `/uploads/${req.file.filename}`;
+    const updatedUser = await user.save();
+
+    return res.json({
+      _id: updatedUser._id,
+      avatarUrl: updatedUser.avatarUrl,
+    });
+  } catch (error) {
+    console.error("Error uploading avatar:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -203,5 +238,6 @@ module.exports = {
   logoutUser,
   getMe,
   updateProfile,
+  uploadProfileAvatar,
   getUsers, // [NEW]
 };

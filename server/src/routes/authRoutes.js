@@ -6,14 +6,31 @@ const {
   logoutUser,
   getMe,
   updateProfile,
+  uploadProfileAvatar,
   getUsers, // [NEW]
 } = require("../controllers/authController");
 const { protect, admin, checkAuth } = require("../middleware/authMiddleware");
+const upload = require("../middleware/upload");
+
+const maxFileSizeMb = upload.maxFileSizeMb || 50;
+
+const avatarUploadHandler = (req, res, next) => {
+  upload.single("avatar")(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        message: `File is too large. Maximum size is ${maxFileSizeMb}MB.`,
+      });
+    }
+    return res.status(400).json({ message: err.message || "Upload failed" });
+  });
+};
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/me", checkAuth, getMe);
 router.put("/profile", protect, updateProfile);
+router.post("/profile/avatar", protect, avatarUploadHandler, uploadProfileAvatar);
 router.get("/users", protect, getUsers); // [NEW]
 router.post("/logout", logoutUser);
 
