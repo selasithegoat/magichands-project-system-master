@@ -46,7 +46,7 @@ const getDisplayName = (user) => {
 
 // @desc    Register new user
 // @route   POST /api/auth/register
-// @access  Public
+// @access  Public (when AUTH_ALLOW_SELF_REGISTRATION=true) / Private Admin
 const registerUser = async (req, res) => {
   const { name, employeeId, password, email, firstName, lastName } = req.body;
 

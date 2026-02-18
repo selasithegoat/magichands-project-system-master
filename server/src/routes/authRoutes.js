@@ -13,6 +13,8 @@ const { protect, admin, checkAuth } = require("../middleware/authMiddleware");
 const upload = require("../middleware/upload");
 
 const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const allowSelfRegistration =
+  String(process.env.AUTH_ALLOW_SELF_REGISTRATION || "").toLowerCase() === "true";
 
 const avatarUploadHandler = (req, res, next) => {
   upload.single("avatar")(req, res, (err) => {
@@ -38,7 +40,11 @@ const avatarUploadHandler = (req, res, next) => {
   });
 };
 
-router.post("/register", registerUser);
+router.post(
+  "/register",
+  ...(allowSelfRegistration ? [] : [protect, admin]),
+  registerUser,
+);
 router.post("/login", loginUser);
 router.get("/me", checkAuth, getMe);
 router.put("/profile", protect, updateProfile);
