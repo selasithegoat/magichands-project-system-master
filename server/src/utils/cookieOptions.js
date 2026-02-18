@@ -1,13 +1,18 @@
 const resolveCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === "production";
   const envSecure = process.env.COOKIE_SECURE;
+  const envSameSite = String(process.env.COOKIE_SAMESITE || "")
+    .trim()
+    .toLowerCase();
 
   // Allow explicit override via env while keeping safe defaults.
   const secure =
     envSecure === "true" ? true : envSecure === "false" ? false : isProduction;
 
-  let sameSite =
-    process.env.COOKIE_SAMESITE || (secure ? "none" : "lax");
+  // Default to Lax to reduce CSRF risk when cookies are credentialed.
+  let sameSite = ["lax", "strict", "none"].includes(envSameSite)
+    ? envSameSite
+    : "lax";
 
   // Browsers reject SameSite=None without Secure.
   if (sameSite === "none" && !secure) {

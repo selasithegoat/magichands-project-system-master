@@ -6,6 +6,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
+const createCsrfProtection = require("./middleware/csrfProtection");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -32,6 +33,66 @@ const HOST = process.env.HOST || "0.0.0.0";
 const ADMIN_HOST = (process.env.ADMIN_HOST || "").toLowerCase();
 const CLIENT_HOST = (process.env.CLIENT_HOST || "").toLowerCase();
 const OPS_HOST = (process.env.OPS_HOST || "").toLowerCase();
+
+const normalizeOrigin = (value) => {
+  if (!value || typeof value !== "string") return "";
+
+  try {
+    return new URL(value).origin.toLowerCase();
+  } catch {
+    return "";
+  }
+};
+
+const parseOriginAllowlist = (value) =>
+  String(value || "")
+    .split(",")
+    .map((entry) => normalizeOrigin(entry.trim()))
+    .filter(Boolean);
+
+const buildHostBasedOrigins = (hostValue) => {
+  const value = String(hostValue || "").trim();
+  if (!value) return [];
+
+  const normalizedAsOrigin = normalizeOrigin(value);
+  if (normalizedAsOrigin) return [normalizedAsOrigin];
+
+  return [`http://${value}`, `https://${value}`]
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean);
+};
+
+const ALLOWED_CORS_ORIGINS = new Set([
+  ...parseOriginAllowlist(process.env.CORS_ALLOWED_ORIGINS),
+  ...buildHostBasedOrigins(CLIENT_HOST),
+  ...buildHostBasedOrigins(ADMIN_HOST),
+  ...buildHostBasedOrigins(OPS_HOST),
+]);
+
+const getRequestOrigin = (req) => {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const protocol = forwardedProto || req.protocol || "http";
+  const rawHost = String(req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim();
+
+  if (!rawHost) return "";
+  return normalizeOrigin(`${protocol}://${rawHost}`);
+};
+
+const isTrustedOrigin = (origin, req) => {
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+  if (ALLOWED_CORS_ORIGINS.has(normalized)) return true;
+  return normalized === getRequestOrigin(req);
+};
+
+const allowNoOriginUnsafeMethods =
+  process.env.CSRF_ALLOW_NO_ORIGIN === "true" ||
+  (process.env.CSRF_ALLOW_NO_ORIGIN !== "false" &&
+    process.env.NODE_ENV !== "production");
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -102,18 +163,36 @@ app.set("trust proxy", 1);
 
 // Middleware
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      // Allow any origin
-      callback(null, true);
-    },
-    credentials: true,
+  cors((req, callback) => {
+    const requestOrigin = req.headers.origin;
+    const trusted = !requestOrigin || isTrustedOrigin(requestOrigin, req);
+
+    return callback(null, {
+      origin: trusted ? true : false,
+      credentials: true,
+      methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    });
   }),
 );
 app.use(cookieParser());
 app.use(express.json());
+app.use("/api", (req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  if (!requestOrigin) return next();
+  if (isTrustedOrigin(requestOrigin, req)) return next();
+
+  return res.status(403).json({
+    message: "Origin is not allowed by CORS policy.",
+  });
+});
+app.use(
+  "/api",
+  createCsrfProtection({
+    allowedOrigins: Array.from(ALLOWED_CORS_ORIGINS),
+    allowNoOriginUnsafeMethods,
+    isTrustedOrigin,
+  }),
+);
 app.use("/api", (req, res, next) => {
   if (isNotificationPollRequest(req)) {
     return next();
