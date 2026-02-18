@@ -62,7 +62,17 @@ const handleProjectUploads = (req, res, next) => {
       }
       return res.status(400).json({ message: err.message });
     }
-    next();
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please upload a different file.",
+        });
+      });
   });
 };
 
@@ -76,7 +86,17 @@ const handleMockupUpload = (req, res, next) => {
       }
       return res.status(400).json({ message: err.message });
     }
-    next();
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please upload a different file.",
+        });
+      });
   });
 };
 

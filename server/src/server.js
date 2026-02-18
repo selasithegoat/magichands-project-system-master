@@ -7,6 +7,7 @@ const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const createCsrfProtection = require("./middleware/csrfProtection");
+const { protect } = require("./middleware/authMiddleware");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -158,6 +159,59 @@ const isOpsHost = (req) => {
 
 const isClientHost = (req) => !isAdminHost(req) && !isOpsHost(req);
 
+const FORCE_DOWNLOAD_UPLOAD_EXTENSIONS = new Set([
+  ".html",
+  ".htm",
+  ".svg",
+  ".xml",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".xhtml",
+  ".bat",
+  ".cmd",
+  ".ps1",
+  ".sh",
+  ".php",
+  ".aspx",
+  ".jsp",
+  ".exe",
+  ".dll",
+  ".msi",
+]);
+
+const SAFE_INLINE_UPLOAD_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".pdf",
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".mp3",
+  ".wav",
+  ".m4a",
+]);
+
+const setUploadSecurityHeaders = (res, filePath) => {
+  const extension = path.extname(filePath || "").toLowerCase();
+  const basename = path.basename(filePath || "download");
+  const safeName = basename.replace(/["\r\n]/g, "");
+  const shouldForceDownload =
+    FORCE_DOWNLOAD_UPLOAD_EXTENSIONS.has(extension) ||
+    !SAFE_INLINE_UPLOAD_EXTENSIONS.has(extension);
+
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+
+  if (shouldForceDownload) {
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+  }
+};
+
 // Trust proxy for ngrok/production (required for secure cookies behind proxy)
 app.set("trust proxy", 1);
 
@@ -231,7 +285,17 @@ app.use((req, res, next) => {
 // External uploads folder (outside source)
 const UPLOAD_DIR =
   process.env.UPLOAD_DIR || path.join(__dirname, "../../../magichands-uploads");
-app.use("/uploads", express.static(UPLOAD_DIR));
+app.use(
+  "/uploads",
+  protect,
+  express.static(UPLOAD_DIR, {
+    dotfiles: "deny",
+    index: false,
+    redirect: false,
+    fallthrough: false,
+    setHeaders: setUploadSecurityHeaders,
+  }),
+);
 
 // Routes
 app.use("/api/auth", authLimiter, authRoutes);

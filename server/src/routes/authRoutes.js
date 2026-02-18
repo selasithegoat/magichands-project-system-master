@@ -16,13 +16,25 @@ const maxFileSizeMb = upload.maxFileSizeMb || 50;
 
 const avatarUploadHandler = (req, res, next) => {
   upload.single("avatar")(req, res, (err) => {
-    if (!err) return next();
-    if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({
-        message: `File is too large. Maximum size is ${maxFileSizeMb}MB.`,
-      });
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          message: `File is too large. Maximum size is ${maxFileSizeMb}MB.`,
+        });
+      }
+      return res.status(400).json({ message: err.message || "Upload failed" });
     }
-    return res.status(400).json({ message: err.message || "Upload failed" });
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please upload a different file.",
+        });
+      });
   });
 };
 

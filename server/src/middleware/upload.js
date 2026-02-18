@@ -1,6 +1,10 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
+
+const execFileAsync = promisify(execFile);
 
 // Configurable upload directory - default to a folder outside the project root
 const uploadDir =
@@ -19,6 +23,195 @@ const maxFileSizeMb =
   Number.isFinite(parsedMaxMb) && parsedMaxMb > 0 ? parsedMaxMb : 50;
 
 console.log(`Upload max file size: ${maxFileSizeMb}MB`);
+
+const scanCommand = String(process.env.UPLOAD_SCAN_COMMAND || "").trim();
+const scanArgs = String(process.env.UPLOAD_SCAN_ARGS || "")
+  .split(/\s+/)
+  .filter(Boolean);
+const parsedScanTimeoutMs = Number.parseInt(
+  process.env.UPLOAD_SCAN_TIMEOUT_MS,
+  10,
+);
+const uploadScanTimeoutMs =
+  Number.isFinite(parsedScanTimeoutMs) && parsedScanTimeoutMs > 0
+    ? parsedScanTimeoutMs
+    : 30_000;
+
+if (scanCommand) {
+  console.log(
+    `Upload malware scanning enabled via "${scanCommand}" with timeout ${uploadScanTimeoutMs}ms`,
+  );
+} else {
+  console.log("Upload malware scanning is disabled (UPLOAD_SCAN_COMMAND not set).");
+}
+
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+const DOCUMENT_EXTENSIONS = new Set([
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".csv",
+  ".zip",
+  ".rar",
+  ".7z",
+]);
+const DOCUMENT_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/x-rar-compressed",
+  "application/x-7z-compressed",
+]);
+const MEDIA_EXTENSIONS = new Set([
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".mp3",
+  ".wav",
+  ".m4a",
+]);
+const MEDIA_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/webm",
+]);
+
+const GENERAL_SAFE_EXTENSIONS = new Set([
+  ...IMAGE_EXTENSIONS,
+  ...DOCUMENT_EXTENSIONS,
+  ...MEDIA_EXTENSIONS,
+]);
+const GENERAL_SAFE_MIME_TYPES = new Set([
+  ...IMAGE_MIME_TYPES,
+  ...DOCUMENT_MIME_TYPES,
+  ...MEDIA_MIME_TYPES,
+]);
+
+const FILE_POLICY_BY_FIELD = {
+  avatar: {
+    extensions: IMAGE_EXTENSIONS,
+    mimeTypes: IMAGE_MIME_TYPES,
+  },
+  sampleImage: {
+    extensions: IMAGE_EXTENSIONS,
+    mimeTypes: IMAGE_MIME_TYPES,
+  },
+  mockup: {
+    extensions: new Set([...IMAGE_EXTENSIONS, ".pdf"]),
+    mimeTypes: new Set([...IMAGE_MIME_TYPES, "application/pdf"]),
+  },
+  attachments: {
+    extensions: GENERAL_SAFE_EXTENSIONS,
+    mimeTypes: GENERAL_SAFE_MIME_TYPES,
+  },
+  attachment: {
+    extensions: GENERAL_SAFE_EXTENSIONS,
+    mimeTypes: GENERAL_SAFE_MIME_TYPES,
+  },
+  default: {
+    extensions: GENERAL_SAFE_EXTENSIONS,
+    mimeTypes: GENERAL_SAFE_MIME_TYPES,
+  },
+};
+
+const getFilePolicy = (fieldname) =>
+  FILE_POLICY_BY_FIELD[fieldname] || FILE_POLICY_BY_FIELD.default;
+
+const getNormalizedExtension = (filename) =>
+  path.extname(String(filename || "")).toLowerCase();
+
+const getUploadedFiles = (req) => {
+  const files = [];
+  if (req.file) files.push(req.file);
+  if (Array.isArray(req.files)) {
+    files.push(...req.files);
+    return files;
+  }
+
+  if (req.files && typeof req.files === "object") {
+    Object.values(req.files).forEach((entry) => {
+      if (Array.isArray(entry)) {
+        files.push(...entry);
+      }
+    });
+  }
+
+  return files;
+};
+
+const getUploadedFilePath = (file) => {
+  if (!file) return "";
+  if (file.path) return file.path;
+  if (file.filename) return path.join(uploadDir, file.filename);
+  return "";
+};
+
+const scanUploadedFile = async (filePath) => {
+  if (!scanCommand || !filePath) return;
+
+  await execFileAsync(scanCommand, [...scanArgs, filePath], {
+    timeout: uploadScanTimeoutMs,
+    windowsHide: true,
+  });
+};
+
+const scanRequestFiles = async (req) => {
+  const files = getUploadedFiles(req);
+
+  for (const file of files) {
+    const filePath = getUploadedFilePath(file);
+    try {
+      await scanUploadedFile(filePath);
+    } catch (error) {
+      throw new Error(
+        "Uploaded file failed the security scan. Please contact support if this is unexpected.",
+      );
+    }
+  }
+};
+
+const cleanupRequestFiles = async (req) => {
+  const files = getUploadedFiles(req);
+
+  await Promise.all(
+    files.map(async (file) => {
+      const filePath = getUploadedFilePath(file);
+      if (!filePath) return;
+
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (error) {
+        if (error && error.code !== "ENOENT") {
+          console.error("Failed to remove uploaded file:", error);
+        }
+      }
+    }),
+  );
+};
 
 const sanitizeSegment = (value, fallback) => {
   if (!value || typeof value !== "string") return fallback;
@@ -133,8 +326,22 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // Allow all file types (images, documents, audio, video, etc.)
-  cb(null, true);
+  const policy = getFilePolicy(file.fieldname);
+  const extension = getNormalizedExtension(file.originalname);
+  const mimeType = String(file.mimetype || "").toLowerCase();
+  const extensionAllowed = policy.extensions.has(extension);
+  const mimeAllowed = policy.mimeTypes.has(mimeType);
+
+  if (extensionAllowed && mimeAllowed) {
+    return cb(null, true);
+  }
+
+  return cb(
+    new Error(
+      `Unsupported file type for ${file.fieldname || "upload"}. Please upload an approved format.`,
+    ),
+    false,
+  );
 };
 
 const upload = multer({
@@ -144,5 +351,8 @@ const upload = multer({
 });
 
 upload.maxFileSizeMb = maxFileSizeMb;
+upload.scanRequestFiles = scanRequestFiles;
+upload.cleanupRequestFiles = cleanupRequestFiles;
+upload.getUploadedFiles = getUploadedFiles;
 
 module.exports = upload;
