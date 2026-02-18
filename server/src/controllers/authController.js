@@ -44,6 +44,12 @@ const getDisplayName = (user) => {
   return fullName || fallbackName || "Unnamed User";
 };
 
+const toNonEmptyString = (value) => {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return trimmed;
+};
+
 // @desc    Register new user
 // @route   POST /api/auth/register
 // @access  Public (when AUTH_ALLOW_SELF_REGISTRATION=true) / Private Admin
@@ -101,10 +107,18 @@ const registerUser = async (req, res) => {
 // @access  Public
 const loginUser = async (req, res) => {
   try {
-    const { employeeId, password } = req.body;
+    const employeeId = toNonEmptyString(req.body?.employeeId);
+    const password =
+      typeof req.body?.password === "string" ? req.body.password : "";
+
+    if (!employeeId || !password) {
+      return res.status(400).json({
+        message: "Employee ID and password are required",
+      });
+    }
 
     // Check for user email via employeeId
-    const user = await User.findOne({ employeeId });
+    const user = await User.findOne({ employeeId: { $eq: employeeId } });
 
     if (user && (await user.matchPassword(password))) {
       const token = generateToken(user._id);

@@ -8,6 +8,7 @@ const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const createCsrfProtection = require("./middleware/csrfProtection");
 const { protect } = require("./middleware/authMiddleware");
+const enforceUploadAccess = require("./middleware/uploadAccessMiddleware");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -288,6 +289,7 @@ const UPLOAD_DIR =
 app.use(
   "/uploads",
   protect,
+  enforceUploadAccess,
   express.static(UPLOAD_DIR, {
     dotfiles: "deny",
     index: false,
