@@ -92,6 +92,139 @@ const canManageBilling = (user) => {
   return departments.includes("Front Desk");
 };
 
+const PROJECT_MUTATION_ACCESS_FIELDS =
+  "createdBy projectLeadId assistantLeadId departments";
+
+const toObjectIdString = (value) => {
+  if (!value) return "";
+  if (typeof value === "object" && value._id) return String(value._id);
+  return String(value);
+};
+
+const toDepartmentArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === "") return [];
+  return [value];
+};
+
+const normalizeDepartmentValue = (value) => {
+  if (value && typeof value === "object") {
+    const optionValue = value.value || value.label || "";
+    return String(optionValue).trim().toLowerCase();
+  }
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const PRODUCTION_DEPARTMENT_TOKENS = new Set(
+  Array.from(PRODUCTION_DEPARTMENTS)
+    .map(normalizeDepartmentValue)
+    .filter(Boolean),
+);
+const GRAPHICS_DEPARTMENT_TOKENS = new Set([
+  "graphics/design",
+  "graphics",
+  "design",
+]);
+const STORES_DEPARTMENT_TOKENS = new Set(["stores", "stock", "packaging"]);
+const PHOTOGRAPHY_DEPARTMENT_TOKENS = new Set(["photography"]);
+
+const canonicalizeDepartment = (value) => {
+  const token = normalizeDepartmentValue(value);
+  if (!token) return "";
+  if (PRODUCTION_DEPARTMENT_TOKENS.has(token)) return "production";
+  if (GRAPHICS_DEPARTMENT_TOKENS.has(token)) return "graphics";
+  if (STORES_DEPARTMENT_TOKENS.has(token)) return "stores";
+  if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) return "photography";
+  return token;
+};
+
+const hasDepartmentOverlap = (userDepartments, projectDepartments) => {
+  const userCanonical = new Set(
+    toDepartmentArray(userDepartments)
+      .map(canonicalizeDepartment)
+      .filter(Boolean),
+  );
+  if (userCanonical.size === 0) return false;
+
+  const projectCanonical = new Set(
+    toDepartmentArray(projectDepartments)
+      .map(canonicalizeDepartment)
+      .filter(Boolean),
+  );
+  if (projectCanonical.size === 0) return false;
+
+  for (const dept of userCanonical) {
+    if (projectCanonical.has(dept)) return true;
+  }
+  return false;
+};
+
+const userHasDepartmentMatch = (userDepartments, targetDepartment) => {
+  const targetCanonical = canonicalizeDepartment(targetDepartment);
+  if (!targetCanonical) return false;
+  return toDepartmentArray(userDepartments)
+    .map(canonicalizeDepartment)
+    .some((dept) => dept === targetCanonical);
+};
+
+const projectHasDepartment = (projectDepartments, targetDepartment) => {
+  const targetCanonical = canonicalizeDepartment(targetDepartment);
+  if (!targetCanonical) return false;
+  return toDepartmentArray(projectDepartments)
+    .map(canonicalizeDepartment)
+    .some((dept) => dept === targetCanonical);
+};
+
+const canMutateProject = (user, project, action = "default") => {
+  if (!user || !project) return false;
+  if (user.role === "admin") return true;
+
+  const userId = toObjectIdString(user._id || user.id);
+  const stakeholderIds = new Set(
+    [
+      toObjectIdString(project.createdBy),
+      toObjectIdString(project.projectLeadId),
+      toObjectIdString(project.assistantLeadId),
+    ].filter(Boolean),
+  );
+  const isStakeholder = Boolean(userId && stakeholderIds.has(userId));
+
+  const userDepartmentTokens = toDepartmentArray(user.department).map(
+    normalizeDepartmentValue,
+  );
+  const isFrontDesk = userDepartmentTokens.includes("front desk");
+  const hasDeptScope = hasDepartmentOverlap(user.department, project.departments);
+
+  switch (action) {
+    case "manage":
+    case "delete":
+    case "reopen":
+    case "billing":
+    case "feedback":
+      return isStakeholder || isFrontDesk;
+    case "status":
+    case "department":
+    case "acknowledge":
+    case "mockup":
+    default:
+      return isStakeholder || isFrontDesk || hasDeptScope;
+  }
+};
+
+const ensureProjectMutationAccess = (req, res, project, action = "default") => {
+  if (!project) {
+    res.status(404).json({ message: "Project not found" });
+    return false;
+  }
+  if (!canMutateProject(req.user, project, action)) {
+    res.status(403).json({ message: "Not authorized to modify this project." });
+    return false;
+  }
+  return true;
+};
+
 const hasPaymentVerification = (project) =>
   Array.isArray(project?.paymentVerifications) &&
   project.paymentVerifications.length > 0;
@@ -1541,10 +1674,7 @@ const addItemToProject = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     const newItem = {
       description,
@@ -1588,6 +1718,11 @@ const updateItemInProject = async (req, res) => {
   try {
     const { description, breakdown, qty } = req.body;
     const { id, itemId } = req.params;
+
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "manage")) return;
 
     const project = await Project.findOneAndUpdate(
       { _id: id, "items._id": itemId },
@@ -1638,10 +1773,7 @@ const deleteItemFromProject = async (req, res) => {
     const { id, itemId } = req.params;
 
     const project = await Project.findById(id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     // Pull item from array
     project.items.pull({ _id: itemId });
@@ -1678,10 +1810,7 @@ const updateProjectDepartments = async (req, res) => {
     const { id } = req.params;
 
     const project = await Project.findById(id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     const oldDepartments = project.departments || [];
     const newDepartments = departments || [];
@@ -1776,9 +1905,7 @@ const setProjectHold = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     const now = new Date();
     const oldStatus = project.status;
@@ -1982,10 +2109,7 @@ const updateProjectStatus = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
 
     const oldStatus = project.status;
     const isAdmin = req.user.role === "admin";
@@ -2162,9 +2286,7 @@ const markInvoiceSent = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
 
     const billingDocumentLabel = getBillingDocumentLabel(project);
 
@@ -2221,9 +2343,7 @@ const verifyPayment = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
 
     if (isQuoteProject(project)) {
       return res.status(400).json({
@@ -2282,9 +2402,7 @@ const undoInvoiceSent = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
 
     const billingDocumentLabel = getBillingDocumentLabel(project);
 
@@ -2341,9 +2459,7 @@ const undoPaymentVerification = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
 
     if (isQuoteProject(project)) {
       return res.status(400).json({
@@ -2399,9 +2515,7 @@ const uploadProjectMockup = async (req, res) => {
     }
 
     const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
 
     const userDepts = Array.isArray(req.user.department)
       ? req.user.department
@@ -2475,9 +2589,7 @@ const addFeedbackToProject = async (req, res) => {
     }
 
     const project = await Project.findById(req.params.id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
 
     const userDepts = Array.isArray(req.user.department)
       ? req.user.department
@@ -2553,9 +2665,7 @@ const deleteFeedbackFromProject = async (req, res) => {
     const { id, feedbackId } = req.params;
 
     const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
 
     const userDepts = Array.isArray(req.user.department)
       ? req.user.department
@@ -2643,6 +2753,12 @@ const addChallengeToProject = async (req, res) => {
       resolvedDate: status === "Resolved" ? new Date().toLocaleString() : "--",
     };
 
+    const projectForAccess = await Project.findById(req.params.id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
+
     const updatedProject = await Project.findByIdAndUpdate(
       req.params.id,
       {
@@ -2688,6 +2804,12 @@ const updateChallengeStatus = async (req, res) => {
     const { status } = req.body;
     const { id, challengeId } = req.params;
 
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
+
     let updateFields = {
       "challenges.$.status": status,
       "sectionUpdates.challenges": new Date(),
@@ -2732,6 +2854,12 @@ const updateChallengeStatus = async (req, res) => {
 const deleteChallenge = async (req, res) => {
   try {
     const { id, challengeId } = req.params;
+
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
 
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id },
@@ -2917,6 +3045,12 @@ const addProductionRisk = async (req, res) => {
     const { description, preventive } = req.body;
     const { id } = req.params;
 
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
+
     const newRisk = {
       description,
       preventive,
@@ -2967,6 +3101,12 @@ const updateProductionRisk = async (req, res) => {
     const { description, preventive } = req.body;
     const { id, riskId } = req.params;
 
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
+
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id, "productionRisks._id": riskId },
       {
@@ -3014,6 +3154,12 @@ const deleteProductionRisk = async (req, res) => {
   try {
     const { id, riskId } = req.params;
 
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
+
     const updatedProject = await Project.findByIdAndUpdate(
       id,
       {
@@ -3058,6 +3204,12 @@ const addUncontrollableFactor = async (req, res) => {
   try {
     const { description, responsible, status } = req.body;
     const { id } = req.params;
+
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
 
     const newFactor = {
       description,
@@ -3110,6 +3262,12 @@ const updateUncontrollableFactor = async (req, res) => {
     const { description, responsible, status } = req.body;
     const { id, factorId } = req.params;
 
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
+
     const updatedProject = await Project.findOneAndUpdate(
       { _id: id, "uncontrollableFactors._id": factorId },
       {
@@ -3157,6 +3315,12 @@ const updateUncontrollableFactor = async (req, res) => {
 const deleteUncontrollableFactor = async (req, res) => {
   try {
     const { id, factorId } = req.params;
+
+    const projectForAccess = await Project.findById(id).select(
+      PROJECT_MUTATION_ACCESS_FIELDS,
+    );
+    if (!ensureProjectMutationAccess(req, res, projectForAccess, "department"))
+      return;
 
     const updatedProject = await Project.findByIdAndUpdate(
       id,
@@ -3305,10 +3469,7 @@ const updateProject = async (req, res) => {
       assistantLeadId = JSON.parse(assistantLeadId);
 
     const project = await Project.findById(id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     // Helper
     const getValue = (field) => (field && field.value ? field.value : field);
@@ -3644,10 +3805,7 @@ const getClients = async (req, res) => {
 const reopenProject = async (req, res) => {
   try {
     const sourceProject = await Project.findById(req.params.id);
-
-    if (!sourceProject) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, sourceProject, "reopen")) return;
 
     // Check if project is in a terminal status
     if (
@@ -3852,10 +4010,7 @@ const reopenProject = async (req, res) => {
 const deleteProject = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     const lineageId = project.lineageId || project._id;
     const lineageQuery = { $or: [{ lineageId }, { _id: lineageId }] };
@@ -3931,8 +4086,19 @@ const acknowledgeProject = async (req, res) => {
     }
 
     const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
+    if (!ensureProjectMutationAccess(req, res, project, "acknowledge")) return;
+
+    const isAdmin = req.user.role === "admin";
+    if (!projectHasDepartment(project.departments, department)) {
+      return res.status(400).json({
+        message: "This department is not engaged on the selected project.",
+      });
+    }
+
+    if (!isAdmin && !userHasDepartmentMatch(req.user.department, department)) {
+      return res.status(403).json({
+        message: "Not authorized to acknowledge for this department.",
+      });
     }
 
     if (!SCOPE_APPROVAL_READY_STATUSES.has(project.status)) {
