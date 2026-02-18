@@ -225,6 +225,11 @@ This creates a default admin user (check the script for credentials) and updates
 - `npm run build`: Production build
 - `npm run preview`: Preview build
 
+### Security
+
+- `powershell -ExecutionPolicy Bypass -File .\scripts\secret-scan.ps1`: Run secret scan (uses `gitleaks` if installed, else regex fallback)
+- `powershell -ExecutionPolicy Bypass -File .\scripts\secret-scan.ps1 -SkipHistory`: Faster scan without git history diff checks
+
 ## Notes
 
 - The client portal shows engaged projects based on engaged sub-departments.
