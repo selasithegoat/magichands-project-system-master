@@ -8,10 +8,71 @@ const {
   sendProjectOnHoldResponse,
 } = require("../middleware/projectHoldMiddleware");
 
+const normalizeObjectId = (value) => {
+  if (!value) return "";
+  if (typeof value === "object" && value._id) return String(value._id);
+  return String(value);
+};
+
+const normalizeDepartments = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value) return [value];
+  return [];
+};
+
+const normalizeDepartmentToken = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    const optionValue = value.value || value.label;
+    return String(optionValue || "").trim().toLowerCase();
+  }
+  return String(value).trim().toLowerCase();
+};
+
+const canAccessProjectUpdates = (user, project) => {
+  if (!user || !project) return false;
+  if (user.role === "admin") return true;
+
+  const userId = normalizeObjectId(user._id || user.id);
+  const leadId = normalizeObjectId(project.projectLeadId);
+  const assistantLeadId = normalizeObjectId(project.assistantLeadId);
+
+  if (userId && (userId === leadId || userId === assistantLeadId)) {
+    return true;
+  }
+
+  const userDepartments = new Set(
+    normalizeDepartments(user.department)
+      .map(normalizeDepartmentToken)
+      .filter(Boolean),
+  );
+
+  if (userDepartments.size === 0) return false;
+
+  const projectDepartments = normalizeDepartments(project.departments)
+    .map(normalizeDepartmentToken)
+    .filter(Boolean);
+
+  return projectDepartments.some((dept) => userDepartments.has(dept));
+};
+
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const project = await Project.findById(projectId).select(
+      "projectLeadId assistantLeadId departments",
+    );
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (!canAccessProjectUpdates(req.user, project)) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to access updates for this project" });
+    }
 
     const updates = await ProjectUpdate.find({ project: projectId })
       .populate("author", "firstName lastName email role") // Populate author details
@@ -36,6 +97,12 @@ exports.createProjectUpdate = async (req, res) => {
     const project = await Project.findById(projectId);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (!canAccessProjectUpdates(req.user, project)) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to post updates for this project" });
     }
 
     if (isProjectOnHold(project)) {
@@ -156,12 +223,25 @@ exports.updateProjectUpdate = async (req, res) => {
     const isAuthor = update.author?.toString() === currentUserId;
     const isAdmin = req.user?.role === "admin";
 
+    const project = await Project.findById(update.project).select(
+      "status hold projectLeadId assistantLeadId departments",
+    );
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (!canAccessProjectUpdates(req.user, project)) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to access updates for this project" });
+    }
+
     if (!isAuthor && !isAdmin) {
       return res.status(403).json({ message: "Not authorized to edit this update" });
     }
 
-    const project = await Project.findById(update.project).select("status hold");
-    if (project && isProjectOnHold(project)) {
+    if (isProjectOnHold(project)) {
       return sendProjectOnHoldResponse(res, project);
     }
 
@@ -210,15 +290,33 @@ exports.deleteProjectUpdate = async (req, res) => {
       return res.status(404).json({ message: "Update not found" });
     }
 
-    const project = await Project.findById(update.project).select("status hold");
-    if (project && isProjectOnHold(project)) {
+    const project = await Project.findById(update.project).select(
+      "status hold projectLeadId assistantLeadId departments",
+    );
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (!canAccessProjectUpdates(req.user, project)) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to access updates for this project" });
+    }
+
+    if (isProjectOnHold(project)) {
       return sendProjectOnHoldResponse(res, project);
     }
 
-    // Check authorization (optional: only author or admin can delete)
-    // if (update.author.toString() !== req.user.userId && req.user.role !== 'admin') {
-    //   return res.status(403).json({ message: "Not authorized to delete this update" });
-    // }
+    const currentUserId = req.user?._id?.toString();
+    const isAuthor = update.author?.toString() === currentUserId;
+    const isAdmin = req.user?.role === "admin";
+
+    if (!isAuthor && !isAdmin) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to delete this update" });
+    }
 
     await update.deleteOne();
 
