@@ -12,12 +12,16 @@ import UsersIcon from "../icons/UsersIcon";
 import SettingsIcon from "../icons/SettingsIcon";
 import LogOutIcon from "../icons/LogOutIcon";
 import ClipboardListIcon from "../icons/ClipboardListIcon";
+import PackageIcon from "../icons/PackageIcon";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
 } from "../../constants/departments";
+
+const NOTIFICATION_POLL_INTERVAL_MS = 15000;
+let notificationBootstrapUserId = "";
 
 // --- Icons ---
 const MenuIcon = () => (
@@ -46,6 +50,7 @@ const Layout = ({
   onNavigateNewOrders, // [New]
   onNavigateEndOfDay, // [New]
   onNavigateEngagedProjects, // [New] Production Team
+  onNavigateInventory, // [New] Stores Team
   onCreateProject,
   activeView,
   user, // Receive user
@@ -168,9 +173,18 @@ const Layout = ({
   };
 
   useEffect(() => {
-    if (user) {
-      fetchNotifications(true);
-      const interval = setInterval(() => fetchNotifications(false), 5000); // 5s for near real-time
+    const currentUserId = user?._id || "";
+    if (currentUserId) {
+      const shouldBootstrap = notificationBootstrapUserId !== currentUserId;
+      if (shouldBootstrap) {
+        notificationBootstrapUserId = currentUserId;
+        fetchNotifications(true);
+      }
+
+      const interval = setInterval(
+        () => fetchNotifications(false),
+        NOTIFICATION_POLL_INTERVAL_MS,
+      );
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -304,6 +318,7 @@ const Layout = ({
         onNavigateNewOrders={onNavigateNewOrders} // Pass prop
         onNavigateEndOfDay={onNavigateEndOfDay} // Pass prop
         onNavigateEngagedProjects={onNavigateEngagedProjects} // [New]
+        onNavigateInventory={onNavigateInventory} // [New]
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
@@ -419,6 +434,24 @@ const Layout = ({
                 <UsersIcon />
                 History
               </Link>
+              {hasStores && (
+                <Link
+                  to="#"
+                  className={`drawer-item ${
+                    activeView === "inventory" ? "active" : ""
+                  }`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsMobileMenuOpen(false);
+                    if (typeof onNavigateInventory === "function") {
+                      onNavigateInventory();
+                    }
+                  }}
+                >
+                  <PackageIcon width={20} height={20} />
+                  INVENTORY
+                </Link>
+              )}
               {showEngagedProjects && (
                 <Link
                   to="#"

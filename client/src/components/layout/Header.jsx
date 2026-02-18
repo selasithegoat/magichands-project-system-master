@@ -20,6 +20,7 @@ const Header = ({
   onNavigateNewOrders, // [New]
   onNavigateEndOfDay, // [New]
   onNavigateEngagedProjects, // [New] Production Team
+  onNavigateInventory, // [New] Stores Team
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
@@ -105,6 +106,20 @@ const Header = ({
           >
             History
           </Link>
+          {hasStores && (
+            <Link
+              to="#"
+              className={`nav-item ${activeView === "inventory" ? "active" : ""}`}
+              onClick={(e) => {
+                e.preventDefault();
+                if (typeof onNavigateInventory === "function") {
+                  onNavigateInventory();
+                }
+              }}
+            >
+              Inventory
+            </Link>
+          )}
           {user?.department?.includes("Front Desk") && (
             <>
               <Link

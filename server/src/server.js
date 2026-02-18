@@ -16,6 +16,7 @@ const realtimeRoutes = require("./routes/realtimeRoutes");
 const digestRoutes = require("./routes/digestRoutes");
 const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const portalRoutes = require("./routes/portalRoutes");
+const inventoryRoutes = require("./routes/inventoryRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 
@@ -74,6 +75,11 @@ const authLimiter = rateLimit({
   },
 });
 
+const isNotificationPollRequest = (req) =>
+  req.method === "GET" &&
+  req.originalUrl &&
+  req.originalUrl.startsWith("/api/notifications");
+
 const getRequestHost = (req) => {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "";
   return host.split(":")[0].toLowerCase();
@@ -108,7 +114,12 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json());
-app.use("/api", apiLimiter);
+app.use("/api", (req, res, next) => {
+  if (isNotificationPollRequest(req)) {
+    return next();
+  }
+  return apiLimiter(req, res, next);
+});
 
 // Realtime change notifications for mutating API calls
 const realtimePaths = [
@@ -116,6 +127,7 @@ const realtimePaths = [
   "/api/updates",
   "/api/notifications",
   "/api/admin",
+  "/api/inventory",
 ];
 app.use((req, res, next) => {
   if (!req.originalUrl.startsWith("/api")) return next();
@@ -152,6 +164,7 @@ app.use("/api/realtime", realtimeRoutes);
 app.use("/api/digests", digestRoutes);
 app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 // Serve built frontends (Vite builds -> dist)
 const clientDistPath = path.resolve(__dirname, "../../client/dist");

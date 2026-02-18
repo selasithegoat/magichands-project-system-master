@@ -34,6 +34,7 @@ const EngagedProjects = lazy(
 const EngagedProjectActions = lazy(
   () => import("./pages/EngagedProjects/EngagedProjectActions"),
 );
+const Inventory = lazy(() => import("./pages/Inventory/Inventory"));
 
 import {
   Routes,
@@ -257,6 +258,7 @@ function App() {
         onNavigateNewOrders={() => navigate("/new-orders")}
         onNavigateEndOfDay={() => navigate("/end-of-day")}
         onNavigateEngagedProjects={() => navigate("/engaged-projects")}
+        onNavigateInventory={() => navigate("/inventory")}
         onCreateProject={() => navigate("/create")}
         onNavigateAdmin={() => {
           const host = window.location.hostname;
@@ -513,6 +515,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <EngagedProjectActions user={user} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/inventory/*"
+          element={
+            <ProtectedLayout
+              activeView="inventory"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <Inventory user={user} />
             </ProtectedLayout>
           }
         />

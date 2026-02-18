@@ -224,7 +224,9 @@ const uploadProfileAvatar = async (req, res) => {
 // @access  Private
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find({}).select("name firstName lastName _id"); // Removed avatar as it might cause issues if not in schema
+    const users = await User.find({}).select(
+      "name firstName lastName employeeId email _id",
+    );
     res.json(users);
   } catch (error) {
     console.error("Error in getUsers:", error);
