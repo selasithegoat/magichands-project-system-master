@@ -264,7 +264,9 @@ const ProjectDetails = ({ user }) => {
       // Find selected user object for optimistic update (optional but good)
       const selectedUser = availableUsers.find((u) => u._id === leadForm);
       const leadLabel = selectedUser
-        ? `${selectedUser.firstName} ${selectedUser.lastName}`
+        ? `${selectedUser.firstName || ""} ${selectedUser.lastName || ""}`.trim() ||
+          selectedUser.name ||
+          ""
         : "";
 
       const res = await fetch(`/api/projects/${id}`, {
@@ -1609,7 +1611,9 @@ const ProjectDetails = ({ user }) => {
                   <option value="">Select a Lead</option>
                   {availableUsers.map((u) => (
                     <option key={u._id} value={u._id}>
-                      {u.firstName} {u.lastName}
+                      {`${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+                        u.name ||
+                        "Unnamed User"}
                     </option>
                   ))}
                 </select>
@@ -1636,7 +1640,9 @@ const ProjectDetails = ({ user }) => {
                     .filter((u) => u._id !== leadForm)
                     .map((u) => (
                       <option key={u._id} value={u._id}>
-                        {u.firstName} {u.lastName}
+                        {`${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+                          u.name ||
+                          "Unnamed User"}
                       </option>
                     ))}
                 </select>

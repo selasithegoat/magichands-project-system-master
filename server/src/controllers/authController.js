@@ -7,6 +7,43 @@ const {
   resolveClearCookieOptions,
 } = require("../utils/cookieOptions");
 
+const normalizeDepartmentArray = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((department) => String(department || "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+
+  return [];
+};
+
+const parseDepartmentAllowlist = (rawValue, fallback) => {
+  const parsed = String(rawValue || "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (parsed.length > 0) return new Set(parsed);
+  return new Set(fallback.map((entry) => entry.toLowerCase()));
+};
+
+const GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST = parseDepartmentAllowlist(
+  process.env.AUTH_USERS_GLOBAL_DEPARTMENTS,
+  ["Administration", "Front Desk", "Stores"],
+);
+
+const getDisplayName = (user) => {
+  const firstName = String(user?.firstName || "").trim();
+  const lastName = String(user?.lastName || "").trim();
+  const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
+  const fallbackName = String(user?.name || "").trim();
+  return fullName || fallbackName || "Unnamed User";
+};
+
 // @desc    Register new user
 // @route   POST /api/auth/register
 // @access  Public
@@ -224,10 +261,43 @@ const uploadProfileAvatar = async (req, res) => {
 // @access  Private
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find({}).select(
-      "name firstName lastName employeeId email _id",
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
+    const requesterDepartments = normalizeDepartmentArray(req.user.department);
+    const requesterDepartmentKeys = requesterDepartments.map((department) =>
+      department.toLowerCase(),
     );
-    res.json(users);
+    const hasGlobalDirectoryAccess =
+      req.user.role === "admin" ||
+      requesterDepartmentKeys.some((department) =>
+        GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST.has(department),
+      );
+
+    const query = hasGlobalDirectoryAccess
+      ? {}
+      : requesterDepartments.length > 0
+        ? {
+            $or: [
+              { _id: req.user._id },
+              { department: { $in: requesterDepartments } },
+            ],
+          }
+        : { _id: req.user._id };
+
+    const users = await User.find(query).select("_id firstName lastName name").lean();
+
+    const sanitizedUsers = (Array.isArray(users) ? users : [])
+      .map((user) => ({
+        _id: user._id,
+        firstName: String(user.firstName || "").trim(),
+        lastName: String(user.lastName || "").trim(),
+        name: getDisplayName(user),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+    res.json(sanitizedUsers);
   } catch (error) {
     console.error("Error in getUsers:", error);
     res.status(500).json({ message: "Server Error" });

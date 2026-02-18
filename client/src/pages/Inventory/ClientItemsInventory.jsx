@@ -76,10 +76,7 @@ const buildEmployeeLabel = (employee) => {
   const fullName = `${employee?.firstName || ""} ${employee?.lastName || ""}`
     .trim()
     .replace(/\s+/g, " ");
-  const baseName = fullName || employee?.name || "Unnamed Employee";
-  return employee?.employeeId
-    ? `${baseName} (${employee.employeeId})`
-    : baseName;
+  return fullName || employee?.name || "Unnamed Employee";
 };
 
 const ClientItemsInventory = () => {

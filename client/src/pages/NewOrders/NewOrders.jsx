@@ -49,10 +49,9 @@ const NewOrders = () => {
           const data = await res.json();
           const formatted = data.map((u) => {
             const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim();
-            const identifier = u.employeeId || u.email;
             return {
               value: u._id,
-              label: identifier ? `${fullName} (${identifier})` : fullName,
+              label: fullName || u.name || "Unnamed User",
             };
           });
           setLeads(formatted);
