@@ -143,6 +143,20 @@ const isNotificationPollRequest = (req) =>
   req.originalUrl &&
   req.originalUrl.startsWith("/api/notifications");
 
+const SAFE_API_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+const shouldApplyApiLimiter = (req) => {
+  if (SAFE_API_METHODS.has(req.method)) return false;
+  if (isNotificationPollRequest(req)) return false;
+  return true;
+};
+
+const isAuthBruteforceTarget = (req) => {
+  if (req.method !== "POST") return false;
+  const authPath = String(req.path || "").toLowerCase();
+  return authPath === "/login" || authPath === "/register";
+};
+
 const getRequestHost = (req) => {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "";
   return host.split(":")[0].toLowerCase();
@@ -249,7 +263,7 @@ app.use(
   }),
 );
 app.use("/api", (req, res, next) => {
-  if (isNotificationPollRequest(req)) {
+  if (!shouldApplyApiLimiter(req)) {
     return next();
   }
   return apiLimiter(req, res, next);
@@ -300,7 +314,12 @@ app.use(
 );
 
 // Routes
-app.use("/api/auth", authLimiter, authRoutes);
+app.use(
+  "/api/auth",
+  (req, res, next) =>
+    isAuthBruteforceTarget(req) ? authLimiter(req, res, next) : next(),
+  authRoutes,
+);
 app.use("/api/projects", projectRoutes);
 app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
