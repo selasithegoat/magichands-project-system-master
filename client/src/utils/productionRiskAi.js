@@ -38,6 +38,51 @@ const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const normalizeLookupKey = (value) =>
   normalizeText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
+const RISK_STOP_WORDS = new Set([
+  "the",
+  "and",
+  "with",
+  "from",
+  "that",
+  "this",
+  "project",
+  "production",
+  "risk",
+  "risks",
+  "issue",
+  "issues",
+  "general",
+  "generic",
+]);
+
+const buildRiskDescriptionTokenSet = (value) =>
+  new Set(
+    normalizeLookupKey(value)
+      .split(" ")
+      .filter(
+        (token) =>
+          token && token.length >= 4 && !RISK_STOP_WORDS.has(token),
+      ),
+  );
+
+const hasNearDuplicateDescription = (
+  description,
+  existingTokenSets = [],
+  threshold = 0.78,
+) => {
+  const candidateSet = buildRiskDescriptionTokenSet(description);
+  if (candidateSet.size === 0) return false;
+
+  return existingTokenSets.some((tokenSet) => {
+    if (!tokenSet || tokenSet.size === 0) return false;
+    let overlap = 0;
+    candidateSet.forEach((token) => {
+      if (tokenSet.has(token)) overlap += 1;
+    });
+    return overlap / Math.min(candidateSet.size, tokenSet.size) >= threshold;
+  });
+};
+
 const buildDepartmentLookup = () => {
   const lookup = new Map();
 
@@ -226,8 +271,17 @@ const buildProjectPayload = (formData = {}) => {
         formData?.briefOverview || nestedDetails?.briefOverview,
       ),
       client: normalizeText(formData?.client || nestedDetails?.client),
+      contactType: normalizeText(
+        formData?.contactType || nestedDetails?.contactType,
+      ),
+      supplySource: normalizeText(
+        formData?.supplySource || nestedDetails?.supplySource,
+      ),
       deliveryDate: normalizeText(
         formData?.deliveryDate || nestedDetails?.deliveryDate,
+      ),
+      deliveryTime: normalizeText(
+        formData?.deliveryTime || nestedDetails?.deliveryTime,
       ),
       deliveryLocation: normalizeText(
         formData?.deliveryLocation || nestedDetails?.deliveryLocation,
@@ -283,6 +337,9 @@ export const mergeProductionRiskSuggestions = (
       .map((item) => normalizeText(item?.description).toLowerCase())
       .filter(Boolean),
   );
+  const existingDescriptionTokenSets = existing
+    .map((item) => buildRiskDescriptionTokenSet(item?.description))
+    .filter((tokenSet) => tokenSet.size > 0);
 
   const timestampSeed = Date.now();
   const mergedRisks = [...existing];
@@ -292,7 +349,13 @@ export const mergeProductionRiskSuggestions = (
   normalizeSuggestions(suggestions).forEach((item) => {
     const key = item.description.toLowerCase();
     if (existingDescriptions.has(key)) return;
+    if (hasNearDuplicateDescription(item.description, existingDescriptionTokenSets))
+      return;
     existingDescriptions.add(key);
+    const tokenSet = buildRiskDescriptionTokenSet(item.description);
+    if (tokenSet.size > 0) {
+      existingDescriptionTokenSets.push(tokenSet);
+    }
 
     mergedRisks.push({
       id: `ai-risk-${timestampSeed}-${addedCount}`,

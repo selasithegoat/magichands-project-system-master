@@ -241,7 +241,7 @@ const getPaymentVerificationTypes = (project) =>
 
 const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
 const AI_RISK_TIMEOUT_MS = 12000;
-const AI_RISK_TEMPERATURE = 0.9;
+const AI_RISK_TEMPERATURE = 0.55;
 const OLLAMA_RISK_URL =
   process.env.OLLAMA_RISK_URL || "http://localhost:11434/api/generate";
 const OLLAMA_RISK_MODEL = process.env.OLLAMA_RISK_MODEL || "llama3.1:8b";
@@ -345,6 +345,83 @@ const normalizeTextToken = (value) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const RISK_TEXT_STOP_WORDS = new Set([
+  "the",
+  "and",
+  "with",
+  "from",
+  "that",
+  "this",
+  "into",
+  "for",
+  "than",
+  "then",
+  "before",
+  "after",
+  "during",
+  "while",
+  "when",
+  "where",
+  "which",
+  "who",
+  "what",
+  "may",
+  "can",
+  "could",
+  "will",
+  "should",
+  "must",
+  "each",
+  "across",
+  "between",
+  "through",
+  "about",
+  "around",
+  "over",
+  "under",
+  "inside",
+  "outside",
+  "project",
+  "production",
+  "risk",
+  "risks",
+  "issue",
+  "issues",
+  "work",
+  "workflow",
+  "task",
+  "tasks",
+  "process",
+  "processes",
+  "team",
+  "details",
+  "detail",
+  "general",
+  "generic",
+]);
+
+const tokenizeMeaningfulRiskText = (value, minLength = 3) =>
+  normalizeTextToken(value)
+    .split(" ")
+    .filter(
+      (token) =>
+        token &&
+        token.length >= minLength &&
+        !RISK_TEXT_STOP_WORDS.has(token),
+    );
+
+const buildRiskTokenSet = (value, minLength = 3) =>
+  new Set(tokenizeMeaningfulRiskText(value, minLength));
+
+const computeTokenOverlapRatio = (setA, setB) => {
+  if (!setA?.size || !setB?.size) return 0;
+  let overlap = 0;
+  setA.forEach((token) => {
+    if (setB.has(token)) overlap += 1;
+  });
+  return overlap / Math.min(setA.size, setB.size);
+};
+
 const toOptionValue = (value) => {
   if (typeof value === "string") return value.trim();
   if (value && typeof value === "object") {
@@ -382,18 +459,62 @@ const normalizeProductionDepartment = (value) => {
   return "";
 };
 
+const inferPreventiveMeasureFromDescription = (description = "") => {
+  const text = description.toLowerCase();
+
+  if (/color|icc|profile|proof|shade/.test(text)) {
+    return "Run a calibrated color proof and sign-off before full production.";
+  }
+  if (/artwork|file|mockup|font|version|approval/.test(text)) {
+    return "Lock an approved artwork revision and run preflight checks before release.";
+  }
+  if (/alignment|registration|fit|dimension|tolerance|trim/.test(text)) {
+    return "Validate dimensions on a first-piece sample and approve before scaling up.";
+  }
+  if (/adhesion|lamination|delaminate|peel|cure|curing/.test(text)) {
+    return "Perform adhesion and cure tests on actual substrate before full run.";
+  }
+  if (/temperature|pressure|heat|humidity|moisture/.test(text)) {
+    return "Calibrate machine settings at startup and re-check settings before batch run.";
+  }
+  if (/delay|late|lead time|timeline|shipment|dispatch/.test(text)) {
+    return "Set milestone checkpoints with a buffer plan and escalation triggers.";
+  }
+  if (/installation|onsite|site|mount|surface/.test(text)) {
+    return "Confirm site measurements and run a pre-installation checklist before dispatch.";
+  }
+  if (/material|substrate|batch|stock|supplier/.test(text)) {
+    return "Run incoming material QA and a small pilot batch before full production.";
+  }
+
+  return DEFAULT_AI_PREVENTIVE_MEASURE;
+};
+
 const sanitizeRiskSuggestions = (value, limit = Number.POSITIVE_INFINITY) => {
   const uniqueDescriptions = new Set();
+  const acceptedDescriptionTokenSets = [];
   const cleaned = [];
 
   toSafeArray(value).forEach((item) => {
     const description = toText(item?.description);
-    const preventive = toText(item?.preventive);
+    const preventive =
+      toText(item?.preventive) ||
+      inferPreventiveMeasureFromDescription(description);
     if (!description || !preventive) return;
 
     const descriptionKey = description.toLowerCase();
     if (uniqueDescriptions.has(descriptionKey)) return;
+
+    const descriptionTokens = buildRiskTokenSet(description, 4);
+    const isNearDuplicate = acceptedDescriptionTokenSets.some(
+      (tokenSet) => computeTokenOverlapRatio(descriptionTokens, tokenSet) >= 0.78,
+    );
+    if (isNearDuplicate) return;
+
     uniqueDescriptions.add(descriptionKey);
+    if (descriptionTokens.size > 0) {
+      acceptedDescriptionTokenSets.push(descriptionTokens);
+    }
 
     cleaned.push({
       description: description.slice(0, 160),
@@ -480,7 +601,10 @@ const buildRiskSuggestionContext = (projectData = {}) => {
     projectName: toText(details?.projectName || projectData?.projectName),
     briefOverview: toText(details?.briefOverview || projectData?.briefOverview),
     client: toText(details?.client || projectData?.client),
+    contactType: toText(details?.contactType || projectData?.contactType),
+    supplySource: toText(details?.supplySource || projectData?.supplySource),
     deliveryDate: toText(details?.deliveryDate || projectData?.deliveryDate),
+    deliveryTime: toText(details?.deliveryTime || projectData?.deliveryTime),
     deliveryLocation: toText(
       details?.deliveryLocation || projectData?.deliveryLocation,
     ),
@@ -538,6 +662,97 @@ const mergeRiskSuggestions = (...collections) => {
   });
 
   return merged;
+};
+
+const buildRiskContextKeywordSet = (context = {}) => {
+  const keywords = new Set();
+  const addTokens = (value, minLength = 4) => {
+    tokenizeMeaningfulRiskText(value, minLength).forEach((token) =>
+      keywords.add(token),
+    );
+  };
+
+  addTokens(context.projectName, 3);
+  addTokens(context.briefOverview, 4);
+  addTokens(context.client, 4);
+  addTokens(context.deliveryLocation, 4);
+  addTokens(context.priority, 3);
+  addTokens(context.contactType, 3);
+  addTokens(context.supplySource, 3);
+
+  toSafeArray(context.productionDepartmentLabels).forEach((entry) =>
+    addTokens(entry, 3),
+  );
+
+  toSafeArray(context.items).forEach((item) => {
+    addTokens(item?.description, 4);
+    addTokens(item?.breakdown, 4);
+    addTokens(item?.department, 3);
+    addTokens(item?.departmentRaw, 3);
+  });
+
+  toSafeArray(context.uncontrollableFactors).forEach((factor) => {
+    addTokens(factor?.description, 4);
+    addTokens(factor?.responsible, 3);
+  });
+
+  return keywords;
+};
+
+const scoreRiskSuggestionAgainstContext = (
+  suggestion = {},
+  contextKeywordSet = new Set(),
+) => {
+  const description = toText(suggestion.description);
+  const preventive = toText(suggestion.preventive);
+  if (!description) return Number.NEGATIVE_INFINITY;
+
+  let score = 0;
+  buildRiskTokenSet(description, 3).forEach((token) => {
+    if (contextKeywordSet.has(token)) score += 2;
+  });
+  buildRiskTokenSet(preventive, 3).forEach((token) => {
+    if (contextKeywordSet.has(token)) score += 1;
+  });
+
+  if (/^\[[^\]]+\]/.test(description)) score += 1;
+  if (description.length >= 48) score += 0.5;
+  if (
+    /\b(generic|general|quality issue|unexpected delay|communication gap)\b/i.test(
+      description,
+    )
+  ) {
+    score -= 2;
+  }
+
+  return score;
+};
+
+const prioritizeRiskSuggestions = (
+  suggestions = [],
+  context = {},
+  limit = MAX_RISK_SUGGESTIONS,
+) => {
+  const sanitized = sanitizeRiskSuggestions(suggestions, Number.POSITIVE_INFINITY);
+  if (sanitized.length <= 1) return sanitized.slice(0, limit);
+
+  const contextKeywordSet = buildRiskContextKeywordSet(context);
+  if (contextKeywordSet.size === 0) {
+    return sanitized.slice(0, limit);
+  }
+
+  return sanitized
+    .map((suggestion, index) => ({
+      suggestion,
+      index,
+      score: scoreRiskSuggestionAgainstContext(suggestion, contextKeywordSet),
+    }))
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.index - right.index;
+    })
+    .map((entry) => entry.suggestion)
+    .slice(0, limit);
 };
 
 const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
@@ -1040,49 +1255,147 @@ const getFetchClient = async () => {
 };
 
 const buildAiRiskPrompt = (context = {}) => {
-  const itemHighlights = buildGlobalItemSubjects(context.items);
-
-  const projectName = context.projectName || "N/A";
-  const projectDescription =
-    context.briefOverview ||
-    (itemHighlights.length ? itemHighlights.join("; ") : "N/A");
-
-  const timelineParts = [];
-  if (context.deliveryDate) {
-    timelineParts.push(`Delivery date: ${context.deliveryDate}`);
-  }
-  if (context.priority) {
-    timelineParts.push(`Priority: ${context.priority}`);
-  }
-  const timeline = timelineParts.length
-    ? timelineParts.join(" | ")
-    : "Not specified";
-
-  const productionDepartments = context.productionDepartmentLabels.length
-    ? context.productionDepartmentLabels.join(", ")
-    : "N/A";
-
-  const existingRisks = context.existingRiskDescriptions.length
-    ? context.existingRiskDescriptions.join("; ")
-    : "None";
+  const projectSnapshot = {
+    projectType: context.projectType || "Standard",
+    priority: context.priority || "Normal",
+    projectName: context.projectName || "",
+    client: context.client || "",
+    briefOverview: context.briefOverview || "",
+    timeline: {
+      deliveryDate: context.deliveryDate || "",
+      deliveryTime: context.deliveryTime || "",
+      deliveryLocation: context.deliveryLocation || "",
+    },
+    execution: {
+      contactType: context.contactType || "",
+      supplySource: context.supplySource || "",
+    },
+    productionDepartments: toSafeArray(context.productionDepartmentLabels).slice(
+      0,
+      12,
+    ),
+    items: toSafeArray(context.items)
+      .slice(0, 12)
+      .map((item) => ({
+        description: toText(item?.description),
+        breakdown: toText(item?.breakdown),
+        quantity:
+          typeof item?.quantity === "number" && Number.isFinite(item.quantity)
+            ? item.quantity
+            : null,
+        department: toText(item?.departmentRaw || item?.department),
+      })),
+    uncontrollableFactors: toSafeArray(context.uncontrollableFactors)
+      .slice(0, 8)
+      .map((factor) => ({
+        description: toText(factor?.description),
+        responsible: toText(factor?.responsible),
+        status: toText(factor?.status),
+      })),
+    existingRisks: toSafeArray(context.existingRiskDescriptions).slice(0, 15),
+  };
 
   return [
-    "Use the following to suggest 3-5 realistic production risks.",
-    "",
-    `Project Name: ${projectName}`,
-    `Project Description: ${projectDescription}`,
-    `Timeline: ${timeline}`,
-    `production department: ${productionDepartments}`,
+    "Analyze the project snapshot and suggest production execution risks.",
+    "Return STRICT JSON only. Do not wrap in markdown.",
+    "Required format:",
+    '{"suggestions":[{"description":"...","preventive":"..."}]}',
     "",
     "Rules:",
-    "- Make each risk specific to the project details above.",
-    "- Cover production execution risks only.",
-    `- Do not repeat or paraphrase these existing risks: ${existingRisks}`,
-    "- Keep each bullet unique and non-recurring.",
-    "- Avoid generic boilerplate risks.",
+    "- Return 3 to 5 suggestions.",
+    "- Each description must be specific to this project (items, departments, timeline, or constraints).",
+    "- Each preventive measure must be actionable and directly mitigate its paired risk.",
+    "- Keep description <= 160 chars and preventive <= 220 chars.",
+    "- Avoid generic wording and avoid repeating/paraphrasing any existing risk.",
+    "- Cover different failure points (artwork/specs, production setup, material/process, and schedule/hand-off).",
     "",
-    "Respond as a bullet list only.",
+    "Project snapshot JSON:",
+    JSON.stringify(projectSnapshot, null, 2),
   ].join("\n");
+};
+
+const parseJsonSafely = (value) => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const extractJsonPayload = (value = "") => {
+  const content = toText(value);
+  if (!content) return null;
+
+  const fencedMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    const parsedFenced = parseJsonSafely(fencedMatch[1].trim());
+    if (parsedFenced) return parsedFenced;
+  }
+
+  const directParsed = parseJsonSafely(content);
+  if (directParsed) return directParsed;
+
+  const arrayStart = content.indexOf("[");
+  const arrayEnd = content.lastIndexOf("]");
+  if (arrayStart !== -1 && arrayEnd > arrayStart) {
+    const parsedArray = parseJsonSafely(content.slice(arrayStart, arrayEnd + 1));
+    if (parsedArray) return parsedArray;
+  }
+
+  const objectStart = content.indexOf("{");
+  const objectEnd = content.lastIndexOf("}");
+  if (objectStart !== -1 && objectEnd > objectStart) {
+    const parsedObject = parseJsonSafely(
+      content.slice(objectStart, objectEnd + 1),
+    );
+    if (parsedObject) return parsedObject;
+  }
+
+  return null;
+};
+
+const parseAiRiskJsonSuggestions = (value = "") => {
+  const payload = extractJsonPayload(value);
+  if (!payload) return [];
+
+  const rawSuggestions = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.suggestions)
+      ? payload.suggestions
+      : [];
+
+  return sanitizeRiskSuggestions(rawSuggestions, Number.POSITIVE_INFINITY);
+};
+
+const parseRiskLineWithPreventive = (line = "") => {
+  const normalized = toText(line).replace(/\s+/g, " ");
+  if (!normalized) return null;
+
+  const doublePipe = normalized
+    .split("||")
+    .map((part) => toText(part))
+    .filter(Boolean);
+  if (doublePipe.length >= 2) {
+    return {
+      description: doublePipe[0],
+      preventive: doublePipe.slice(1).join(" | "),
+    };
+  }
+
+  const labeledMatch = normalized.match(
+    /^(.*?)(?:\s+(?:\||-)?\s*(?:preventive|mitigation|action)\s*:\s*)(.+)$/i,
+  );
+  if (labeledMatch) {
+    return {
+      description: toText(labeledMatch[1]),
+      preventive: toText(labeledMatch[2]),
+    };
+  }
+
+  return {
+    description: normalized,
+    preventive: inferPreventiveMeasureFromDescription(normalized),
+  };
 };
 
 const parseAiRiskBulletSuggestions = (value = "") => {
@@ -1113,16 +1426,15 @@ const parseAiRiskBulletSuggestions = (value = "") => {
       .filter(
         (line) =>
           line &&
-          !/^(project name|project description|timeline|production department|rules|respond as)/i.test(
+          !/^(project name|project description|timeline|production department|project snapshot|rules|respond as|required format)/i.test(
             line,
           ),
       );
   }
 
-  return candidates.map((description) => ({
-    description,
-    preventive: DEFAULT_AI_PREVENTIVE_MEASURE,
-  }));
+  return candidates
+    .map(parseRiskLineWithPreventive)
+    .filter((entry) => entry?.description && entry?.preventive);
 };
 
 const requestAiRiskSuggestions = async (context) => {
@@ -1151,13 +1463,14 @@ const requestAiRiskSuggestions = async (context) => {
             {
               role: "system",
               content:
-                "You are a production-risk assistant for print/fabrication workflows. Follow the user format exactly and return only bullet points.",
+                "You are a senior production planner for print and fabrication workflows. Return only valid JSON with concrete, project-specific risk + preventive pairs.",
             },
             {
               role: "user",
               content: prompt,
             },
           ],
+          max_tokens: 700,
         }),
       },
     );
@@ -1180,8 +1493,13 @@ const requestAiRiskSuggestions = async (context) => {
 
     if (!contentText) return [];
 
-    const parsed = parseAiRiskBulletSuggestions(contentText);
-    return sanitizeRiskSuggestions(parsed, MAX_RISK_SUGGESTIONS);
+    const parsedJson = parseAiRiskJsonSuggestions(contentText);
+    if (parsedJson.length > 0) {
+      return sanitizeRiskSuggestions(parsedJson, MAX_RISK_SUGGESTIONS);
+    }
+
+    const parsedBullets = parseAiRiskBulletSuggestions(contentText);
+    return sanitizeRiskSuggestions(parsedBullets, MAX_RISK_SUGGESTIONS);
   } finally {
     clearTimeout(timeout);
   }
@@ -1227,8 +1545,13 @@ const requestOllamaRiskSuggestions = async (context) => {
     const contentText = toText(data?.response);
     if (!contentText) return [];
 
-    const parsed = parseAiRiskBulletSuggestions(contentText);
-    return sanitizeRiskSuggestions(parsed, MAX_RISK_SUGGESTIONS);
+    const parsedJson = parseAiRiskJsonSuggestions(contentText);
+    if (parsedJson.length > 0) {
+      return sanitizeRiskSuggestions(parsedJson, MAX_RISK_SUGGESTIONS);
+    }
+
+    const parsedBullets = parseAiRiskBulletSuggestions(contentText);
+    return sanitizeRiskSuggestions(parsedBullets, MAX_RISK_SUGGESTIONS);
   } finally {
     clearTimeout(timeout);
   }
@@ -2998,7 +3321,11 @@ const suggestProductionRisks = async (req, res) => {
         suggestions,
         context.existingRiskDescriptions,
       );
-      suggestions = shuffleArray(suggestions).slice(0, MAX_RISK_SUGGESTIONS);
+      suggestions = prioritizeRiskSuggestions(
+        suggestions,
+        context,
+        MAX_RISK_SUGGESTIONS,
+      );
 
       if (suggestions.length > preFallbackCount) {
         if (usedOpenAi && source !== "openai+fallback") {
@@ -3014,7 +3341,11 @@ const suggestProductionRisks = async (req, res) => {
         else source = "fallback";
       }
     } else {
-      suggestions = shuffleArray(suggestions).slice(0, MAX_RISK_SUGGESTIONS);
+      suggestions = prioritizeRiskSuggestions(
+        suggestions,
+        context,
+        MAX_RISK_SUGGESTIONS,
+      );
       if (usedOpenAi) source = "openai";
       else if (usedOllama) source = "ollama";
     }
