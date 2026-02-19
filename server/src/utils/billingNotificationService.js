@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const { createNotification } = require("./notificationService");
+const FRONT_DESK_DEPARTMENT = "Front Desk";
 
 const toIdString = (value) => {
   if (!value) return "";
@@ -14,14 +15,22 @@ const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const getBillingRecipients = async (project = {}) => {
   const recipients = new Set();
 
-  [project.projectLeadId, project.assistantLeadId].forEach((candidate) => {
+  [
+    project.createdBy,
+    project.projectLeadId,
+    project.assistantLeadId,
+  ].forEach((candidate) => {
     const id = toIdString(candidate);
     if (id) recipients.add(id);
   });
 
-  const admins = await User.find({ role: "admin" }).select("_id").lean();
-  admins.forEach((admin) => {
-    const id = toIdString(admin?._id);
+  const adminsAndFrontDesk = await User.find({
+    $or: [{ role: "admin" }, { department: FRONT_DESK_DEPARTMENT }],
+  })
+    .select("_id")
+    .lean();
+  adminsAndFrontDesk.forEach((user) => {
+    const id = toIdString(user?._id);
     if (id) recipients.add(id);
   });
 
@@ -50,10 +59,14 @@ const notifyBillingOptionChange = async ({
     }
 
     const recipients = await getBillingRecipients(project);
-    if (!recipients.length) return;
+    recipients.push(actorId);
+    const uniqueRecipients = Array.from(
+      new Set(recipients.map((recipientId) => toIdString(recipientId)).filter(Boolean)),
+    );
+    if (!uniqueRecipients.length) return;
 
     await Promise.all(
-      recipients.map((recipientId) =>
+      uniqueRecipients.map((recipientId) =>
         createNotification(
           recipientId,
           actorId,
@@ -70,4 +83,3 @@ const notifyBillingOptionChange = async ({
 };
 
 module.exports = { notifyBillingOptionChange };
-
