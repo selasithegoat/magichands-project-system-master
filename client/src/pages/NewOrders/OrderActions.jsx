@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import FolderIcon from "../../components/icons/FolderIcon";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -67,6 +68,16 @@ const normalizeUpdateCategory = (category) => {
   return category || "General";
 };
 
+const getReferenceFileName = (path) => {
+  if (!path) return "File";
+  const cleanPath = String(path).split("?")[0];
+  const parts = cleanPath.split("/");
+  return parts[parts.length - 1] || cleanPath;
+};
+
+const isImagePath = (path) =>
+  /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(String(path || ""));
+
 const OrderActions = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -124,6 +135,13 @@ const OrderActions = () => {
   });
   const [paymentUndoInput, setPaymentUndoInput] = useState("");
   const [paymentUndoSubmitting, setPaymentUndoSubmitting] = useState(false);
+
+  const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
+  const [sampleImageDraft, setSampleImageDraft] = useState("");
+  const [newSampleImageFile, setNewSampleImageFile] = useState(null);
+  const [referenceMaterialsDraft, setReferenceMaterialsDraft] = useState([]);
+  const [newReferenceFiles, setNewReferenceFiles] = useState([]);
+  const [referenceSaving, setReferenceSaving] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -207,6 +225,33 @@ const OrderActions = () => {
       }
     }
   }, [project, feedbackModal.open, feedbackModal.project]);
+
+  useEffect(() => {
+    const projectId = project?._id;
+    const briefOverview = project?.details?.briefOverview || "";
+    const sampleImage = project?.details?.sampleImage || "";
+    const referenceMaterials = project?.details?.attachments || [];
+
+    if (!projectId) {
+      setBriefOverviewDraft("");
+      setSampleImageDraft("");
+      setNewSampleImageFile(null);
+      setReferenceMaterialsDraft([]);
+      setNewReferenceFiles([]);
+      return;
+    }
+
+    setBriefOverviewDraft(briefOverview);
+    setSampleImageDraft(sampleImage);
+    setNewSampleImageFile(null);
+    setReferenceMaterialsDraft(referenceMaterials);
+    setNewReferenceFiles([]);
+  }, [
+    project?._id,
+    project?.details?.briefOverview,
+    project?.details?.sampleImage,
+    project?.details?.attachments,
+  ]);
 
   const canManageBilling =
     currentUser?.role === "admin" ||
@@ -686,6 +731,142 @@ const OrderActions = () => {
     }
   };
 
+  const canManageOrderRevision = canManageBilling;
+  const orderRevisionDirty = useMemo(() => {
+    if (!project) return false;
+    const originalBriefOverview = project.details?.briefOverview || "";
+    const originalSampleImage = project.details?.sampleImage || "";
+    const originalReferenceMaterials = project.details?.attachments || [];
+
+    if (briefOverviewDraft !== originalBriefOverview) {
+      return true;
+    }
+    if (sampleImageDraft !== originalSampleImage) {
+      return true;
+    }
+    if (newSampleImageFile) {
+      return true;
+    }
+    if (newReferenceFiles.length > 0) {
+      return true;
+    }
+    if (referenceMaterialsDraft.length !== originalReferenceMaterials.length) {
+      return true;
+    }
+    return referenceMaterialsDraft.some(
+      (path, index) => path !== originalReferenceMaterials[index],
+    );
+  }, [
+    project,
+    briefOverviewDraft,
+    sampleImageDraft,
+    newSampleImageFile,
+    newReferenceFiles.length,
+    referenceMaterialsDraft,
+  ]);
+
+  const openReferenceFilePicker = () => {
+    if (!canManageOrderRevision || referenceSaving) return;
+    const input = document.getElementById("order-actions-reference-materials");
+    input?.click();
+  };
+
+  const openSampleImagePicker = () => {
+    if (!canManageOrderRevision || referenceSaving) return;
+    const input = document.getElementById("order-actions-sample-image");
+    input?.click();
+  };
+
+  const handleSampleImageSelection = (event) => {
+    const file = event.target.files?.[0] || null;
+    setNewSampleImageFile(file);
+    event.target.value = null;
+  };
+
+  const removeSampleImage = () => {
+    if (newSampleImageFile) {
+      setNewSampleImageFile(null);
+      return;
+    }
+    setSampleImageDraft("");
+  };
+
+  const handleReferenceFileSelection = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    setNewReferenceFiles((prev) => [...prev, ...files]);
+    event.target.value = null;
+  };
+
+  const removeExistingReference = (index) => {
+    setReferenceMaterialsDraft((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeNewReference = (index) => {
+    setNewReferenceFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resetOrderRevisionChanges = () => {
+    if (!project || referenceSaving) return;
+    setBriefOverviewDraft(project.details?.briefOverview || "");
+    setSampleImageDraft(project.details?.sampleImage || "");
+    setNewSampleImageFile(null);
+    setReferenceMaterialsDraft(project.details?.attachments || []);
+    setNewReferenceFiles([]);
+  };
+
+  const handleSaveOrderRevision = async () => {
+    if (!project || !canManageOrderRevision) return;
+    if (!orderRevisionDirty) {
+      showToast("No order changes to save.", "error");
+      return;
+    }
+
+    setReferenceSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("briefOverview", briefOverviewDraft);
+      formData.append("existingSampleImage", sampleImageDraft || "");
+      formData.append(
+        "existingAttachments",
+        JSON.stringify(referenceMaterialsDraft),
+      );
+      if (newSampleImageFile) {
+        formData.append("sampleImage", newSampleImageFile);
+      }
+      newReferenceFiles.forEach((file) => {
+        formData.append("attachments", file);
+      });
+
+      const res = await fetch(`/api/projects/${project._id}`, {
+        method: "PUT",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        setBriefOverviewDraft(updated.details?.briefOverview || "");
+        setSampleImageDraft(updated.details?.sampleImage || "");
+        setNewSampleImageFile(null);
+        setReferenceMaterialsDraft(updated.details?.attachments || []);
+        setNewReferenceFiles([]);
+        showToast("Order brief and reference materials updated.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to update order details.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Order details update error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setReferenceSaving(false);
+    }
+  };
+
   const showPaymentWarning =
     project &&
     !isQuoteProject &&
@@ -693,6 +874,10 @@ const OrderActions = () => {
     ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
       project.status,
     );
+  const lastOrderRevisionUpdatedAt = project?.sectionUpdates?.details || null;
+  const lastOrderRevisionLabel = currentUser?.department?.includes("Front Desk")
+    ? "Last updated by Front Desk"
+    : "Last updated";
 
   if (loading) {
     return (
@@ -854,6 +1039,7 @@ const OrderActions = () => {
             </div>
         </div>
 
+
         <section className="updates-standalone-section">
           <div className="updates-standalone-header">
             <div>
@@ -1013,6 +1199,207 @@ const OrderActions = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+        <section className="order-revision-section">
+          <div className="updates-standalone-header">
+            <div>
+              <h3>Order Revision</h3>
+              <p>Update the brief overview and reference materials for this order.</p>
+              {lastOrderRevisionUpdatedAt && (
+                <p className="order-revision-last-updated">
+                  {lastOrderRevisionLabel}: {formatDateTime(lastOrderRevisionUpdatedAt)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="order-revision-body">
+            <div className="order-revision-field">
+              <label htmlFor="order-revision-brief">Brief Overview</label>
+              <textarea
+                id="order-revision-brief"
+                rows="4"
+                className="form-input order-revision-textarea"
+                value={briefOverviewDraft}
+                onChange={(e) => setBriefOverviewDraft(e.target.value)}
+                placeholder="Add or update a high-level order summary..."
+                disabled={!canManageOrderRevision || referenceSaving}
+              />
+            </div>
+
+            <div className="order-revision-field">
+              <label>Reference Materials</label>
+
+              <div className="order-revision-sample-actions">
+                <button
+                  type="button"
+                  className="action-btn"
+                  onClick={openSampleImagePicker}
+                  disabled={!canManageOrderRevision || referenceSaving}
+                >
+                  {sampleImageDraft || newSampleImageFile
+                    ? "Replace Primary Image"
+                    : "Add Primary Image"}
+                </button>
+                {(sampleImageDraft || newSampleImageFile) && (
+                  <button
+                    type="button"
+                    className="action-btn undo-btn"
+                    onClick={removeSampleImage}
+                    disabled={!canManageOrderRevision || referenceSaving}
+                  >
+                    {newSampleImageFile ? "Discard New Image" : "Remove Primary Image"}
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="file"
+                accept="image/*"
+                id="order-actions-sample-image"
+                style={{ display: "none" }}
+                onChange={handleSampleImageSelection}
+                disabled={!canManageOrderRevision || referenceSaving}
+              />
+
+              {sampleImageDraft &&
+                !newSampleImageFile &&
+                (referenceMaterialsDraft.length > 0 || newReferenceFiles.length > 0) && (
+                  <p className="order-revision-note">Primary image is included below.</p>
+                )}
+
+              {!sampleImageDraft &&
+                !newSampleImageFile &&
+                referenceMaterialsDraft.length === 0 &&
+                newReferenceFiles.length === 0 && (
+                <div
+                  className={`minimal-quote-file-dropzone order-revision-dropzone ${
+                    !canManageOrderRevision ? "is-disabled" : ""
+                  }`}
+                  onClick={openReferenceFilePicker}
+                >
+                  <FolderIcon />
+                  <p>Click to upload reference files</p>
+                  <span>Images, PDFs, Documents</span>
+                </div>
+              )}
+
+              <input
+                type="file"
+                multiple
+                id="order-actions-reference-materials"
+                style={{ display: "none" }}
+                onChange={handleReferenceFileSelection}
+                disabled={!canManageOrderRevision || referenceSaving}
+              />
+
+              {(sampleImageDraft ||
+                newSampleImageFile ||
+                referenceMaterialsDraft.length > 0 ||
+                newReferenceFiles.length > 0) && (
+                <div className="minimal-quote-files-grid">
+                  {sampleImageDraft && !newSampleImageFile && (
+                    <div className="minimal-quote-file-tile existing">
+                      <div className="file-icon">
+                        <img src={sampleImageDraft} alt="Primary reference" />
+                      </div>
+                      <div className="file-info" title="Primary Image">
+                        Primary Image
+                      </div>
+                    </div>
+                  )}
+
+                  {newSampleImageFile && (
+                    <div className="minimal-quote-file-tile">
+                      <div className="file-icon">
+                        <FolderIcon />
+                      </div>
+                      <div className="file-info" title={newSampleImageFile.name}>
+                        {newSampleImageFile.name}
+                      </div>
+                    </div>
+                  )}
+
+                  {referenceMaterialsDraft.map((path, idx) => (
+                    <div
+                      key={`existing-${idx}`}
+                      className="minimal-quote-file-tile existing"
+                    >
+                      <div className="file-icon">
+                        {isImagePath(path) ? (
+                          <img src={path} alt={getReferenceFileName(path)} />
+                        ) : (
+                          <FolderIcon />
+                        )}
+                      </div>
+                      <div className="file-info" title={getReferenceFileName(path)}>
+                        {getReferenceFileName(path)}
+                      </div>
+                      {canManageOrderRevision && (
+                        <button
+                          type="button"
+                          onClick={() => removeExistingReference(idx)}
+                          className="file-remove-btn"
+                          disabled={referenceSaving}
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {newReferenceFiles.map((file, idx) => (
+                    <div key={`new-${idx}`} className="minimal-quote-file-tile">
+                      <div className="file-icon">
+                        <FolderIcon />
+                      </div>
+                      <div className="file-info" title={file.name}>
+                        {file.name}
+                      </div>
+                      {canManageOrderRevision && (
+                        <button
+                          type="button"
+                          onClick={() => removeNewReference(idx)}
+                          className="file-remove-btn"
+                          disabled={referenceSaving}
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {canManageOrderRevision && (
+                    <div
+                      className={`minimal-quote-file-add-tile ${
+                        referenceSaving ? "is-disabled" : ""
+                      }`}
+                      onClick={openReferenceFilePicker}
+                    >
+                      <span>+</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="order-revision-actions">
+              <button
+                className="action-btn"
+                onClick={resetOrderRevisionChanges}
+                disabled={!canManageOrderRevision || referenceSaving || !orderRevisionDirty}
+              >
+                Reset
+              </button>
+              <button
+                className="action-btn update-submit-btn"
+                onClick={handleSaveOrderRevision}
+                disabled={!canManageOrderRevision || referenceSaving || !orderRevisionDirty}
+              >
+                {referenceSaving ? "Saving..." : "Save Order Changes"}
+              </button>
             </div>
           </div>
         </section>

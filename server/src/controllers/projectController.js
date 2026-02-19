@@ -3431,6 +3431,7 @@ const updateProject = async (req, res) => {
       clientEmail, // [NEW]
       clientPhone, // [NEW]
       projectName,
+      briefOverview,
       deliveryDate,
       deliveryTime,
       deliveryLocation,
@@ -3447,6 +3448,8 @@ const updateProject = async (req, res) => {
       description,
       details,
       attachments, // Existing attachments (urls)
+      existingAttachments, // Backward-compatible alias for attachments
+      existingSampleImage, // Preserve or clear sample image when no new upload
       quoteDetails, // [NEW]
       projectType, // [NEW]
       priority, // [NEW]
@@ -3461,12 +3464,20 @@ const updateProject = async (req, res) => {
       productionRisks = JSON.parse(productionRisks);
     if (typeof details === "string") details = JSON.parse(details);
     if (typeof attachments === "string") attachments = JSON.parse(attachments);
+    if (typeof existingAttachments === "string")
+      existingAttachments = JSON.parse(existingAttachments);
     if (typeof quoteDetails === "string")
       quoteDetails = JSON.parse(quoteDetails);
     if (typeof lead === "string" && lead.startsWith("{"))
       lead = JSON.parse(lead);
     if (typeof assistantLeadId === "string" && assistantLeadId.startsWith("{"))
       assistantLeadId = JSON.parse(assistantLeadId);
+
+    const normalizedAttachments = Array.isArray(attachments)
+      ? attachments
+      : Array.isArray(existingAttachments)
+        ? existingAttachments
+        : null;
 
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
@@ -3479,6 +3490,11 @@ const updateProject = async (req, res) => {
       client: project.details?.client,
       clientEmail: project.details?.clientEmail,
       clientPhone: project.details?.clientPhone,
+      briefOverview: project.details?.briefOverview || "",
+      sampleImage: project.details?.sampleImage || "",
+      attachments: Array.isArray(project.details?.attachments)
+        ? [...project.details.attachments]
+        : [],
       orderDate: project.orderDate,
       receivedTime: project.receivedTime,
       deliveryDate: project.details?.deliveryDate,
@@ -3535,6 +3551,10 @@ const updateProject = async (req, res) => {
       project.details.projectName = projectName;
       detailsChanged = true;
     }
+    if (briefOverview !== undefined) {
+      project.details.briefOverview = getValue(briefOverview) || "";
+      detailsChanged = true;
+    }
     if (deliveryDate) {
       project.details.deliveryDate = deliveryDate;
       detailsChanged = true;
@@ -3561,6 +3581,9 @@ const updateProject = async (req, res) => {
       if (req.files.sampleImage && req.files.sampleImage[0]) {
         project.details.sampleImage = `/uploads/${req.files.sampleImage[0].filename}`;
         detailsChanged = true;
+      } else if (existingSampleImage !== undefined) {
+        project.details.sampleImage = existingSampleImage || "";
+        detailsChanged = true;
       }
 
       const newAttachments = req.files.attachments
@@ -3570,8 +3593,8 @@ const updateProject = async (req, res) => {
       // Combine existing and new attachments
       // If 'attachments' is sent in body, use it as the base (allows deletion)
       // If not sent, keep existing
-      if (attachments && Array.isArray(attachments)) {
-        project.details.attachments = [...attachments, ...newAttachments];
+      if (normalizedAttachments && Array.isArray(normalizedAttachments)) {
+        project.details.attachments = [...normalizedAttachments, ...newAttachments];
         detailsChanged = true;
       } else if (newAttachments.length > 0) {
         // If only new files sent and no body list, just append?
@@ -3582,9 +3605,9 @@ const updateProject = async (req, res) => {
         ];
         detailsChanged = true;
       }
-    } else if (attachments && Array.isArray(attachments)) {
+    } else if (normalizedAttachments && Array.isArray(normalizedAttachments)) {
       // Case: No new files, but attachments list updated (e.g. deletion)
-      project.details.attachments = attachments;
+      project.details.attachments = normalizedAttachments;
       detailsChanged = true;
     }
 
@@ -3654,6 +3677,36 @@ const updateProject = async (req, res) => {
     if (oldValues.status !== updatedProject.status)
       changes.push(`Status: ${updatedProject.status}`);
 
+    const previousBriefOverview = String(oldValues.briefOverview || "").trim();
+    const nextBriefOverview = String(updatedProject.details?.briefOverview || "").trim();
+    const briefOverviewChanged = previousBriefOverview !== nextBriefOverview;
+
+    const previousSampleImage = String(oldValues.sampleImage || "").trim();
+    const nextSampleImage = String(updatedProject.details?.sampleImage || "").trim();
+    const sampleImageChanged = previousSampleImage !== nextSampleImage;
+
+    const previousAttachments = Array.isArray(oldValues.attachments)
+      ? oldValues.attachments
+      : [];
+    const nextAttachments = Array.isArray(updatedProject.details?.attachments)
+      ? updatedProject.details.attachments
+      : [];
+    const attachmentsChanged =
+      previousAttachments.length !== nextAttachments.length ||
+      previousAttachments.some((item, index) => item !== nextAttachments[index]);
+
+    if (briefOverviewChanged) {
+      changes.push("Brief Overview updated");
+    }
+    if (sampleImageChanged) {
+      changes.push("Primary Reference Image updated");
+    }
+    if (attachmentsChanged) {
+      changes.push(`Reference Materials updated (${nextAttachments.length} file(s))`);
+    }
+    const orderRevisionChanged =
+      briefOverviewChanged || sampleImageChanged || attachmentsChanged;
+
     const prevLeadId = oldValues.lead ? oldValues.lead.toString() : null;
     const nextLeadId = updatedProject.projectLeadId
       ? updatedProject.projectLeadId.toString()
@@ -3715,6 +3768,8 @@ const updateProject = async (req, res) => {
       );
     }
 
+    const directlyNotifiedUserIds = new Set();
+
     // Notify Lead / Assistant Lead assignments
     if (leadChanged && nextLeadId) {
       const leadAssignmentTitle = prevLeadId
@@ -3731,6 +3786,7 @@ const updateProject = async (req, res) => {
         leadAssignmentTitle,
         leadAssignmentMessage,
       );
+      directlyNotifiedUserIds.add(nextLeadId);
     }
 
     if (leadChanged && prevLeadId) {
@@ -3745,6 +3801,7 @@ const updateProject = async (req, res) => {
         "Project Lead Assignment Updated",
         previousLeadMessage,
       );
+      directlyNotifiedUserIds.add(prevLeadId);
     }
 
     if (
@@ -3760,6 +3817,34 @@ const updateProject = async (req, res) => {
         "Assistant Lead Assigned",
         `Project #${updatedProject.orderId || updatedProject._id}: You have been added as an assistant lead for project: ${updatedProject.details?.projectName || "Unnamed Project"}`,
       );
+      directlyNotifiedUserIds.add(nextAssistantId);
+    }
+
+    // Notify current lead(s) when front desk/admin revises client brief/reference files.
+    if (orderRevisionChanged) {
+      const revisionParts = [];
+      if (briefOverviewChanged) revisionParts.push("Brief Overview");
+      if (sampleImageChanged) revisionParts.push("Primary Reference Image");
+      if (attachmentsChanged) revisionParts.push("Reference Materials");
+      const revisionSummary = revisionParts.join(", ");
+      const revisionRecipientIds = [
+        updatedProject.projectLeadId,
+        updatedProject.assistantLeadId,
+      ]
+        .map((value) => toObjectIdString(value))
+        .filter(Boolean);
+
+      for (const recipientId of new Set(revisionRecipientIds)) {
+        await createNotification(
+          recipientId,
+          req.user._id,
+          updatedProject._id,
+          "UPDATE",
+          "Order Revision Updated",
+          `Project #${getProjectDisplayRef(updatedProject)}: ${req.user.firstName} ${req.user.lastName} updated ${revisionSummary} for "${getProjectDisplayName(updatedProject)}".`,
+        );
+        directlyNotifiedUserIds.add(recipientId);
+      }
     }
 
     // Notify Admins of significant updates (if changes > 0)
@@ -3770,6 +3855,7 @@ const updateProject = async (req, res) => {
         "UPDATE",
         "Project Details Updated",
         `${req.user.firstName} updated details for project #${updatedProject.orderId || updatedProject._id}: ${changes.join(", ")}`,
+        { excludeUserIds: Array.from(directlyNotifiedUserIds) },
       );
     }
 

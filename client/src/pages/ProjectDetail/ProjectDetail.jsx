@@ -193,7 +193,7 @@ const getStatusColor = (status) => {
   }
 };
 
-const ProjectDetail = ({ onProjectChange, user }) => {
+const ProjectDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -608,6 +608,8 @@ const ProjectDetail = ({ onProjectChange, user }) => {
 const ProjectInfoCard = ({ project }) => {
   const details = project.details || {};
   const lead = getLeadDisplay(project, "Unassigned");
+  const briefOverview = String(details.briefOverview || "").trim();
+  const lastUpdatedAt = project.sectionUpdates?.details;
 
   // Format Date
   const formatDate = (d) => {
@@ -619,12 +621,28 @@ const ProjectInfoCard = ({ project }) => {
     });
   };
 
+  const formatLastUpdated = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   return (
     <div className="detail-card">
-      <div className="card-header">
+      <div className="card-header project-info-header">
         <h3 className="card-title">
           <span style={{ color: "#94a3b8" }}>ⓘ</span> Project Info
         </h3>
+        {lastUpdatedAt && (
+          <span className="project-info-last-updated">
+            Last Updated: {formatLastUpdated(lastUpdatedAt)}
+          </span>
+        )}
       </div>
       <div className="info-grid">
         <div className="info-item">
@@ -683,6 +701,10 @@ const ProjectInfoCard = ({ project }) => {
             <div className="info-subtext"></div>
           </div>
         )}
+      </div>
+      <div className="project-brief-section">
+        <h4>BRIEF OVERVIEW</h4>
+        <p>{briefOverview || "No brief overview provided."}</p>
       </div>
     </div>
   );

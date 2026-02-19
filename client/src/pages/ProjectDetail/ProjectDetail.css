@@ -244,6 +244,16 @@
   .detail-card {
     padding: 1rem;
   }
+
+  .project-info-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-info-last-updated {
+    margin-left: 0;
+    white-space: normal;
+  }
 }
 
 /* Cards */
@@ -319,6 +329,41 @@
   color: var(--text-secondary);
   margin-top: 0.25rem;
   margin-left: 1.5rem; /* Indent under icon */
+}
+
+.project-info-header {
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.project-info-last-updated {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #0f766e;
+  white-space: nowrap;
+}
+
+.project-brief-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.project-brief-section h4 {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.project-brief-section p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 /* Departments */
