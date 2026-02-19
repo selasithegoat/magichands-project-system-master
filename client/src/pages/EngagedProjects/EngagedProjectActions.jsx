@@ -840,6 +840,50 @@ const EngagedProjectActions = ({ user }) => {
                       </div>
                     );
                   })()}
+
+                  {section.key === "Production" && (
+                    <div className="engaged-action-card">
+                      <h3>Approved Mockup Reference</h3>
+                      <p>
+                        Use the approved mockup from Graphics as your production
+                        reference.
+                      </p>
+
+                      {mockupUrl ? (
+                        <>
+                          <div className="mockup-preview">
+                            {isImageMockup ? (
+                              <img src={mockupUrl} alt={mockupName} loading="lazy" />
+                            ) : isPdfMockup ? (
+                              <iframe
+                                src={mockupUrl}
+                                title={`Preview of ${mockupName}`}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="mockup-preview-fallback">
+                                Preview not available for this file type.
+                              </div>
+                            )}
+                          </div>
+                          <Link
+                            className="mockup-link download"
+                            to={mockupUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            download
+                            reloadDocument
+                          >
+                            Download {mockupName}
+                          </Link>
+                        </>
+                      ) : (
+                        <div className="engaged-action-meta">
+                          Approved mockup is not available yet.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </section>
             );
