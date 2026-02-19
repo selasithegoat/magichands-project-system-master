@@ -2,7 +2,7 @@ const Project = require("../models/Project");
 const User = require("../models/User");
 
 const PROJECT_ACCESS_FIELDS =
-  "createdBy projectLeadId assistantLeadId departments orderId";
+  "createdBy projectLeadId assistantLeadId departments orderId details.projectName";
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 const PROJECT_BOUND_CATEGORIES = new Set([
   "project-updates",
@@ -148,23 +148,84 @@ const normalizeUploadPath = (rawPath) => {
   return parts.join("/");
 };
 
-const extractProjectToken = (relativePath) => {
-  const parts = relativePath.split("/");
-  if (parts.length < 5) return "";
-  const projectFolder = String(parts[3] || "");
-  const token = projectFolder.split("_")[0];
-  return token.trim();
+const sanitizeSegment = (value, fallback = "") => {
+  if (!value || typeof value !== "string") return fallback;
+  const cleaned = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return cleaned || fallback;
 };
 
-const findProjectForToken = async (token) => {
+const extractProjectLocator = (relativePath) => {
+  const parts = relativePath.split("/");
+  if (parts.length < 5) {
+    return { token: "", projectSlug: "" };
+  }
+
+  const projectFolder = String(parts[3] || "");
+  const [token = "", ...slugParts] = projectFolder.split("_");
+  return {
+    token: token.trim(),
+    projectSlug: slugParts.join("_").trim().toLowerCase(),
+  };
+};
+
+const escapeRegex = (value) =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildLooseOrderIdRegex = (token) => {
+  const parts = String(token || "")
+    .split("-")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map(escapeRegex);
+
+  if (parts.length === 0) return null;
+  if (parts.length === 1) {
+    return new RegExp(`^${parts[0]}$`, "i");
+  }
+
+  const separator = "[-_\\s/]*";
+  return new RegExp(`^${parts.join(separator)}$`, "i");
+};
+
+const findProjectForToken = async ({ token, projectSlug }) => {
   if (!token) return null;
   if (OBJECT_ID_REGEX.test(token)) {
     return Project.findById(token).select(PROJECT_ACCESS_FIELDS).lean();
   }
-  return Project.findOne({ orderId: token })
+
+  const exactInsensitive = new RegExp(`^${escapeRegex(token)}$`, "i");
+  let project = await Project.findOne({ orderId: { $regex: exactInsensitive } })
     .sort({ createdAt: -1 })
     .select(PROJECT_ACCESS_FIELDS)
     .lean();
+
+  if (project) {
+    if (!projectSlug) return project;
+    const slug = sanitizeSegment(project?.details?.projectName || "");
+    if (!slug || slug === projectSlug) return project;
+  }
+
+  const looseRegex = buildLooseOrderIdRegex(token);
+  if (!looseRegex) return null;
+
+  const candidates = await Project.find({ orderId: { $regex: looseRegex } })
+    .sort({ createdAt: -1 })
+    .select(PROJECT_ACCESS_FIELDS)
+    .lean();
+
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  if (!projectSlug) return candidates[0];
+
+  const slugMatch = candidates.find((candidate) => {
+    const slug = sanitizeSegment(candidate?.details?.projectName || "");
+    return Boolean(slug) && slug === projectSlug;
+  });
+
+  return slugMatch || candidates[0];
 };
 
 const hasGlobalDirectoryAccess = (requesterDepartments) =>
@@ -205,8 +266,8 @@ const enforceUploadAccess = async (req, res, next) => {
     const category = parts[0];
 
     if (PROJECT_BOUND_CATEGORIES.has(category)) {
-      const projectToken = extractProjectToken(relativePath);
-      const project = await findProjectForToken(projectToken);
+      const locator = extractProjectLocator(relativePath);
+      const project = await findProjectForToken(locator);
 
       if (!project || !canAccessProjectUpload(req.user, project)) {
         return res
