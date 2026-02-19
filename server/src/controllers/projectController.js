@@ -3654,6 +3654,49 @@ const updateProject = async (req, res) => {
     if (oldValues.status !== updatedProject.status)
       changes.push(`Status: ${updatedProject.status}`);
 
+    const prevLeadId = oldValues.lead ? oldValues.lead.toString() : null;
+    const nextLeadId = updatedProject.projectLeadId
+      ? updatedProject.projectLeadId.toString()
+      : null;
+    const prevAssistantId = oldValues.assistantLead
+      ? oldValues.assistantLead.toString()
+      : null;
+    const nextAssistantId = updatedProject.assistantLeadId
+      ? updatedProject.assistantLeadId.toString()
+      : null;
+    const leadId = nextLeadId;
+    const leadChanged = prevLeadId !== nextLeadId;
+
+    let previousLeadName = "Unassigned";
+    let nextLeadName = "Unassigned";
+
+    if (leadChanged) {
+      const [previousLead, nextLead] = await Promise.all([
+        prevLeadId
+          ? User.findById(prevLeadId)
+              .select("firstName lastName name employeeId")
+              .lean()
+          : Promise.resolve(null),
+        nextLeadId
+          ? User.findById(nextLeadId)
+              .select("firstName lastName name employeeId")
+              .lean()
+          : Promise.resolve(null),
+      ]);
+
+      const getUserDisplayName = (user) => {
+        if (!user) return "Unassigned";
+        const firstName = String(user.firstName || "").trim();
+        const lastName = String(user.lastName || "").trim();
+        const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
+        return fullName || user.name || user.employeeId || "Unknown User";
+      };
+
+      previousLeadName = getUserDisplayName(previousLead);
+      nextLeadName = getUserDisplayName(nextLead);
+      changes.push(`Project Lead: ${nextLeadName}`);
+    }
+
     if (changes.length > 0) {
       await logActivity(
         updatedProject._id,
@@ -3672,27 +3715,35 @@ const updateProject = async (req, res) => {
       );
     }
 
-    // Notify Lead / Assistant Lead if newly assigned
-    const prevLeadId = oldValues.lead ? oldValues.lead.toString() : null;
-    const nextLeadId = updatedProject.projectLeadId
-      ? updatedProject.projectLeadId.toString()
-      : null;
-    const prevAssistantId = oldValues.assistantLead
-      ? oldValues.assistantLead.toString()
-      : null;
-    const nextAssistantId = updatedProject.assistantLeadId
-      ? updatedProject.assistantLeadId.toString()
-      : null;
-    const leadId = nextLeadId;
-
-    if (nextLeadId && nextLeadId !== prevLeadId) {
+    // Notify Lead / Assistant Lead assignments
+    if (leadChanged && nextLeadId) {
+      const leadAssignmentTitle = prevLeadId
+        ? "Project Lead Reassigned"
+        : "New Project Assigned";
+      const leadAssignmentMessage = prevLeadId
+        ? `Project #${getProjectDisplayRef(updatedProject)}: You have been assigned as the new lead for project "${getProjectDisplayName(updatedProject)}" (reassigned from ${previousLeadName}).`
+        : `Project #${getProjectDisplayRef(updatedProject)}: You have been assigned as the lead for project "${getProjectDisplayName(updatedProject)}".`;
       await createNotification(
-        updatedProject.projectLeadId,
+        nextLeadId,
         req.user._id,
         updatedProject._id,
         "ASSIGNMENT",
-        "New Project Assigned",
-        `Project #${updatedProject.orderId || updatedProject._id}: You have been assigned as the lead for project: ${updatedProject.details?.projectName || "Unnamed Project"}`,
+        leadAssignmentTitle,
+        leadAssignmentMessage,
+      );
+    }
+
+    if (leadChanged && prevLeadId) {
+      const previousLeadMessage = nextLeadId
+        ? `Project #${getProjectDisplayRef(updatedProject)}: You are no longer the lead for project "${getProjectDisplayName(updatedProject)}". New lead: ${nextLeadName}.`
+        : `Project #${getProjectDisplayRef(updatedProject)}: Your lead assignment for project "${getProjectDisplayName(updatedProject)}" has been removed.`;
+      await createNotification(
+        prevLeadId,
+        req.user._id,
+        updatedProject._id,
+        "ASSIGNMENT",
+        "Project Lead Assignment Updated",
+        previousLeadMessage,
       );
     }
 
