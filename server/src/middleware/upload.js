@@ -3,8 +3,10 @@ const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
+const Project = require("../models/Project");
 
 const execFileAsync = promisify(execFile);
+const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 // Configurable upload directory - default to a folder outside the project root
 const uploadDir =
@@ -213,6 +215,66 @@ const cleanupRequestFiles = async (req) => {
   );
 };
 
+const getProjectLookupId = (req) => {
+  const candidates = [
+    req.params?.projectId,
+    req.params?.id,
+    req.body?.projectId,
+    req.body?.id,
+    req.body?._id,
+  ];
+
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (OBJECT_ID_REGEX.test(value)) {
+      return value;
+    }
+  }
+
+  return "";
+};
+
+const hydrateProjectMetadata = async (req) => {
+  if (req._uploadMetadataHydrated) return;
+  if (req._uploadMetadataPromise) {
+    await req._uploadMetadataPromise;
+    return;
+  }
+
+  req._uploadMetadataPromise = (async () => {
+    const projectId = getProjectLookupId(req);
+    if (!projectId) {
+      req._uploadMetadataHydrated = true;
+      return;
+    }
+
+    try {
+      const project = await Project.findById(projectId)
+        .select("orderId details.projectName")
+        .lean();
+
+      if (project?.orderId && !req._resolvedOrderId) {
+        req._resolvedOrderId = project.orderId;
+      }
+
+      const resolvedProjectName = project?.details?.projectName;
+      if (resolvedProjectName && !req._resolvedProjectName) {
+        req._resolvedProjectName = resolvedProjectName;
+      }
+    } catch (error) {
+      console.error("Failed to resolve project metadata for upload path:", error);
+    } finally {
+      req._uploadMetadataHydrated = true;
+    }
+  })();
+
+  try {
+    await req._uploadMetadataPromise;
+  } finally {
+    req._uploadMetadataPromise = null;
+  }
+};
+
 const sanitizeSegment = (value, fallback) => {
   if (!value || typeof value !== "string") return fallback;
   const cleaned = value
@@ -271,7 +333,9 @@ const getCategory = (file) => {
   return "misc";
 };
 
-const getRelativeDir = (req, file) => {
+const getRelativeDir = async (req, file) => {
+  await hydrateProjectMetadata(req);
+
   const now = new Date();
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -303,25 +367,31 @@ const getRelativeDir = (req, file) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const { relativeDirFs } = getRelativeDir(req, file);
-    const fullDir = path.join(uploadDir, relativeDirFs);
-    if (!fs.existsSync(fullDir)) {
-      fs.mkdirSync(fullDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    getRelativeDir(req, file)
+      .then(({ relativeDirFs }) => {
+        const fullDir = path.join(uploadDir, relativeDirFs);
+        if (!fs.existsSync(fullDir)) {
+          fs.mkdirSync(fullDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+      })
+      .catch((error) => cb(error));
   },
   filename: (req, file, cb) => {
-    // Unique filename: fieldname-timestamp-random.ext
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    // Sanitize original name to remove special chars but keep extension
-    const cleanName = file.originalname
-      .split(".")[0]
-      .replace(/[^a-z0-9]/gi, "_")
-      .toLowerCase();
-    const { relativeDirUrl } = getRelativeDir(req, file);
-    const baseName = `${cleanName}-${uniqueSuffix}${path.extname(file.originalname)}`;
-    const finalName = path.posix.join(relativeDirUrl, baseName);
-    cb(null, finalName);
+    getRelativeDir(req, file)
+      .then(({ relativeDirUrl }) => {
+        // Unique filename: fieldname-timestamp-random.ext
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        // Sanitize original name to remove special chars but keep extension
+        const cleanName = file.originalname
+          .split(".")[0]
+          .replace(/[^a-z0-9]/gi, "_")
+          .toLowerCase();
+        const baseName = `${cleanName}-${uniqueSuffix}${path.extname(file.originalname)}`;
+        const finalName = path.posix.join(relativeDirUrl, baseName);
+        cb(null, finalName);
+      })
+      .catch((error) => cb(error));
   },
 });
 
