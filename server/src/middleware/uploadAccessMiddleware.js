@@ -1,4 +1,5 @@
 const Project = require("../models/Project");
+const ProjectUpdate = require("../models/ProjectUpdate");
 const User = require("../models/User");
 
 const PROJECT_ACCESS_FIELDS =
@@ -191,41 +192,110 @@ const buildLooseOrderIdRegex = (token) => {
   return new RegExp(`^${parts.join(separator)}$`, "i");
 };
 
-const findProjectForToken = async ({ token, projectSlug }) => {
+const dedupeProjectsById = (projects = []) => {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const project of projects) {
+    const id = toObjectIdString(project?._id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    deduped.push(project);
+  }
+
+  return deduped;
+};
+
+const buildCandidateFileUrls = (relativePath) => {
+  const normalized = String(relativePath || "").replace(/\\/g, "/");
+  if (!normalized) return [];
+
+  const fileName = normalized.split("/").filter(Boolean).pop();
+  const urls = [`/uploads/${normalized}`];
+  if (fileName) {
+    urls.push(`/uploads/${fileName}`);
+  }
+  return Array.from(new Set(urls));
+};
+
+const findProjectForFileUrl = async (relativePath) => {
+  const candidateUrls = buildCandidateFileUrls(relativePath);
+  if (candidateUrls.length === 0) return null;
+
+  const update = await ProjectUpdate.findOne({
+    "attachments.url": { $in: candidateUrls },
+  })
+    .sort({ createdAt: -1 })
+    .select("project")
+    .lean();
+
+  const updateProjectId = toObjectIdString(update?.project);
+  if (updateProjectId) {
+    const projectFromUpdate = await Project.findById(updateProjectId)
+      .select(PROJECT_ACCESS_FIELDS)
+      .lean();
+    if (projectFromUpdate) return projectFromUpdate;
+  }
+
+  const project = await Project.findOne({
+    $or: [
+      { "details.sampleImage": { $in: candidateUrls } },
+      { "details.attachments": { $in: candidateUrls } },
+      { "mockup.fileUrl": { $in: candidateUrls } },
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .select(PROJECT_ACCESS_FIELDS)
+    .lean();
+
+  return project || null;
+};
+
+const findProjectForToken = async ({ token, projectSlug, requester }) => {
   if (!token) return null;
   if (OBJECT_ID_REGEX.test(token)) {
     return Project.findById(token).select(PROJECT_ACCESS_FIELDS).lean();
   }
 
   const exactInsensitive = new RegExp(`^${escapeRegex(token)}$`, "i");
-  let project = await Project.findOne({ orderId: { $regex: exactInsensitive } })
+  const exactCandidates = await Project.find({ orderId: { $regex: exactInsensitive } })
     .sort({ createdAt: -1 })
     .select(PROJECT_ACCESS_FIELDS)
     .lean();
 
-  if (project) {
-    if (!projectSlug) return project;
-    const slug = sanitizeSegment(project?.details?.projectName || "");
-    if (!slug || slug === projectSlug) return project;
+  let candidates = Array.isArray(exactCandidates) ? exactCandidates : [];
+
+  if (candidates.length === 0) {
+    const looseRegex = buildLooseOrderIdRegex(token);
+    if (!looseRegex) return null;
+
+    const looseCandidates = await Project.find({ orderId: { $regex: looseRegex } })
+      .sort({ createdAt: -1 })
+      .select(PROJECT_ACCESS_FIELDS)
+      .lean();
+    candidates = Array.isArray(looseCandidates) ? looseCandidates : [];
   }
 
-  const looseRegex = buildLooseOrderIdRegex(token);
-  if (!looseRegex) return null;
-
-  const candidates = await Project.find({ orderId: { $regex: looseRegex } })
-    .sort({ createdAt: -1 })
-    .select(PROJECT_ACCESS_FIELDS)
-    .lean();
+  candidates = dedupeProjectsById(candidates);
 
   if (!Array.isArray(candidates) || candidates.length === 0) return null;
-  if (!projectSlug) return candidates[0];
 
-  const slugMatch = candidates.find((candidate) => {
-    const slug = sanitizeSegment(candidate?.details?.projectName || "");
-    return Boolean(slug) && slug === projectSlug;
-  });
+  if (projectSlug) {
+    const slugMatch = candidates.find((candidate) => {
+      const slug = sanitizeSegment(candidate?.details?.projectName || "");
+      return Boolean(slug) && slug === projectSlug;
+    });
+    if (slugMatch) return slugMatch;
+  }
 
-  return slugMatch || candidates[0];
+  if (requester) {
+    const accessibleCandidate = candidates.find((candidate) =>
+      canAccessProjectUpload(requester, candidate),
+    );
+    if (accessibleCandidate) return accessibleCandidate;
+  }
+
+  return candidates[0];
 };
 
 const hasGlobalDirectoryAccess = (requesterDepartments) =>
@@ -267,7 +337,18 @@ const enforceUploadAccess = async (req, res, next) => {
 
     if (PROJECT_BOUND_CATEGORIES.has(category)) {
       const locator = extractProjectLocator(relativePath);
-      const project = await findProjectForToken(locator);
+      let project = await findProjectForToken({
+        ...locator,
+        requester: req.user,
+      });
+
+      if (!project) {
+        project = await findProjectForFileUrl(relativePath);
+      }
+
+      if (!project && req.user?.role === "admin") {
+        return next();
+      }
 
       if (!project || !canAccessProjectUpload(req.user, project)) {
         return res
@@ -294,6 +375,11 @@ const enforceUploadAccess = async (req, res, next) => {
     }
 
     if (req.user?.role === "admin") {
+      return next();
+    }
+
+    const project = await findProjectForFileUrl(relativePath);
+    if (project && canAccessProjectUpload(req.user, project)) {
       return next();
     }
 
