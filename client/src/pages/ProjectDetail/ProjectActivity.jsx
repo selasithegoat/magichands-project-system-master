@@ -26,7 +26,9 @@ const ProjectActivity = ({ project }) => {
     if (project?._id) {
       fetchActivities();
     }
-  }, { enabled: Boolean(project?._id) });
+  }, {
+    enabled: Boolean(project?._id),
+  });
 
   const fetchActivities = async () => {
     try {

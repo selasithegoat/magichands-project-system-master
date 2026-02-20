@@ -269,7 +269,20 @@ const Projects = ({ user }) => {
         if (!key) return;
         next[key] = prev[key] || false;
       });
-      return next;
+
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length !== nextKeys.length) {
+        return next;
+      }
+
+      for (const key of nextKeys) {
+        if (prev[key] !== next[key]) {
+          return next;
+        }
+      }
+
+      return prev;
     });
   }, [filteredOrderGroups]);
 
@@ -281,7 +294,20 @@ const Projects = ({ user }) => {
         if (!key) return;
         if (prev[key]) next[key] = true;
       });
-      return next;
+
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length !== nextKeys.length) {
+        return next;
+      }
+
+      for (const key of nextKeys) {
+        if (prev[key] !== next[key]) {
+          return next;
+        }
+      }
+
+      return prev;
     });
   }, [filteredOrderGroups]);
 

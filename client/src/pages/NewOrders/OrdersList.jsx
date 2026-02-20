@@ -536,7 +536,20 @@ const OrdersList = () => {
         if (!groupKey) return;
         if (prev[groupKey]) next[groupKey] = true;
       });
-      return next;
+
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length !== nextKeys.length) {
+        return next;
+      }
+
+      for (const key of nextKeys) {
+        if (prev[key] !== next[key]) {
+          return next;
+        }
+      }
+
+      return prev;
     });
   }, [allOrderGroupsFiltered]);
 

@@ -111,7 +111,9 @@ const ProjectUpdates = ({ project, currentUser }) => {
     if (project?._id) {
       fetchUpdates();
     }
-  }, { enabled: Boolean(project?._id) });
+  }, {
+    enabled: Boolean(project?._id),
+  });
 
   const fetchUpdates = async () => {
     try {

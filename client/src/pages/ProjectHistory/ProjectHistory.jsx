@@ -78,9 +78,12 @@ const ProjectHistory = ({ onBack }) => {
     const details = project.details || {};
     const orderId = (project.orderId || "").toLowerCase();
     const projectName = (details.projectName || "").toLowerCase();
-    const client =
-      (details.client || details.clientName || details.department || "")
-        .toLowerCase();
+    const client = (
+      details.client ||
+      details.clientName ||
+      details.department ||
+      ""
+    ).toLowerCase();
 
     return (
       orderId.includes(query) ||
