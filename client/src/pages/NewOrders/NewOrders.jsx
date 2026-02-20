@@ -30,6 +30,7 @@ const NewOrders = () => {
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
   const [leads, setLeads] = useState([]);
+  const [existingOrderNumbers, setExistingOrderNumbers] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [toast, setToast] = useState({
     show: false,
@@ -39,9 +40,21 @@ const NewOrders = () => {
   const [isToastFading, setIsToastFading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Fetch users for project lead
   useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setCurrentUser(data || null);
+      } catch (e) {
+        console.error("Failed to fetch current user", e);
+      }
+    };
+
     const fetchUsers = async () => {
       try {
         const res = await fetch("/api/auth/users");
@@ -60,7 +73,28 @@ const NewOrders = () => {
         console.error("Failed to fetch users", e);
       }
     };
+
+    const fetchExistingOrders = async () => {
+      try {
+        const res = await fetch("/api/projects/orders?collapseRevisions=true");
+        if (!res.ok) return;
+        const data = await res.json();
+        const orderNumbers = Array.from(
+          new Set(
+            (Array.isArray(data) ? data : [])
+              .map((entry) => String(entry?.orderNumber || "").trim())
+              .filter(Boolean),
+          ),
+        ).sort((a, b) => a.localeCompare(b));
+        setExistingOrderNumbers(orderNumbers);
+      } catch (e) {
+        console.error("Failed to fetch grouped orders", e);
+      }
+    };
+
+    fetchCurrentUser();
     fetchUsers();
+    fetchExistingOrders();
   }, []);
 
   const showToast = (message, type = "success") => {
@@ -327,6 +361,14 @@ const NewOrders = () => {
     formData.projectType === "Emergency" || formData.priority === "Urgent";
 
   const isCorporate = formData.projectType === "Corporate Job";
+  const currentUserDepartments = Array.isArray(currentUser?.department)
+    ? currentUser.department
+    : currentUser?.department
+      ? [currentUser.department]
+      : [];
+  const canEditOrderNumber =
+    currentUser?.role === "admin" ||
+    currentUserDepartments.includes("Front Desk");
 
   return (
     <div className="new-orders-page">
@@ -393,10 +435,22 @@ const NewOrders = () => {
                       value={formData.orderNumber}
                       onChange={handleChange}
                       className="form-input"
+                      list="existingOrderNumbers"
+                      disabled={!canEditOrderNumber}
                       required
                     />
                     <span className="input-icon">#</span>
                   </div>
+                  <datalist id="existingOrderNumbers">
+                    {existingOrderNumbers.map((orderNumber) => (
+                      <option key={orderNumber} value={orderNumber} />
+                    ))}
+                  </datalist>
+                  <small className="field-help-text">
+                    {canEditOrderNumber
+                      ? "Use an existing order number to create another project under the same order."
+                      : "Only Front Desk and Admin can change order numbers."}
+                  </small>
                 </div>
                 <div className="form-group">
                   <label htmlFor="orderDate">Date/Time Placed</label>

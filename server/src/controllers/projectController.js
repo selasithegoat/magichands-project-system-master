@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const Project = require("../models/Project");
+const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
 const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
@@ -92,6 +94,8 @@ const canManageBilling = (user) => {
   return departments.includes("Front Desk");
 };
 
+const canEditOrderNumber = (user) => canManageBilling(user);
+
 const PROJECT_MUTATION_ACCESS_FIELDS =
   "createdBy projectLeadId assistantLeadId departments";
 
@@ -99,6 +103,111 @@ const toObjectIdString = (value) => {
   if (!value) return "";
   if (typeof value === "object" && value._id) return String(value._id);
   return String(value);
+};
+
+const normalizeOrderNumber = (value) => String(value || "").trim();
+
+const normalizeOptionalText = (value) => {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+
+const toDateOrNull = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isValidObjectId = (value) =>
+  Boolean(value) && mongoose.Types.ObjectId.isValid(String(value));
+
+const ensureOrderRecord = async ({
+  orderNumber,
+  orderDate,
+  client,
+  clientEmail,
+  clientPhone,
+  createdBy,
+  requestedOrderRefId,
+}) => {
+  const normalizedOrderNumber = normalizeOrderNumber(orderNumber);
+  const normalizedRequestedOrderRef = isValidObjectId(requestedOrderRefId)
+    ? String(requestedOrderRefId)
+    : "";
+
+  let order = null;
+  if (normalizedRequestedOrderRef) {
+    order = await Order.findById(normalizedRequestedOrderRef);
+  }
+
+  if (!order && normalizedOrderNumber) {
+    order = await Order.findOne({ orderNumber: normalizedOrderNumber });
+  }
+
+  const normalizedClient = normalizeOptionalText(client);
+  const normalizedClientEmail = normalizeOptionalText(clientEmail);
+  const normalizedClientPhone = normalizeOptionalText(clientPhone);
+  const parsedOrderDate = toDateOrNull(orderDate);
+
+  if (!order) {
+    if (!normalizedOrderNumber || !createdBy) return null;
+    try {
+      order = await Order.create({
+        orderNumber: normalizedOrderNumber,
+        orderDate: parsedOrderDate || new Date(),
+        client: normalizedClient,
+        clientEmail: normalizedClientEmail,
+        clientPhone: normalizedClientPhone,
+        createdBy,
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        order = await Order.findOne({ orderNumber: normalizedOrderNumber });
+      } else {
+        throw error;
+      }
+    }
+    return order;
+  }
+
+  let changed = false;
+  if (normalizedOrderNumber && order.orderNumber !== normalizedOrderNumber) {
+    const existingByOrderNumber = await Order.findOne({
+      orderNumber: normalizedOrderNumber,
+    });
+    if (
+      existingByOrderNumber &&
+      toObjectIdString(existingByOrderNumber._id) !== toObjectIdString(order._id)
+    ) {
+      order = existingByOrderNumber;
+    } else {
+      order.orderNumber = normalizedOrderNumber;
+      changed = true;
+    }
+  }
+
+  if (normalizedClient && order.client !== normalizedClient) {
+    order.client = normalizedClient;
+    changed = true;
+  }
+  if (normalizedClientEmail && order.clientEmail !== normalizedClientEmail) {
+    order.clientEmail = normalizedClientEmail;
+    changed = true;
+  }
+  if (normalizedClientPhone && order.clientPhone !== normalizedClientPhone) {
+    order.clientPhone = normalizedClientPhone;
+    changed = true;
+  }
+  if (parsedOrderDate && String(order.orderDate) !== String(parsedOrderDate)) {
+    order.orderDate = parsedOrderDate;
+    changed = true;
+  }
+
+  if (changed) {
+    await order.save();
+  }
+
+  return order;
 };
 
 const toDepartmentArray = (value) => {
@@ -223,6 +332,217 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
     return false;
   }
   return true;
+};
+
+const buildProjectAccessQuery = (req) => {
+  let query = {};
+  const isReportMode = req.query.mode === "report";
+  const isEngagedMode = req.query.mode === "engaged";
+  const isAdminPortal = req.query.source === "admin";
+  const isFrontDesk = req.user.department?.includes("Front Desk");
+  const userDepartments = Array.isArray(req.user.department)
+    ? req.user.department
+    : req.user.department
+      ? [req.user.department]
+      : [];
+  const isEngagedDept = userDepartments.some(
+    (dept) =>
+      ENGAGED_PARENT_DEPARTMENTS.has(dept) ||
+      ENGAGED_SUB_DEPARTMENTS.has(dept),
+  );
+
+  const canSeeAll =
+    (req.user.role === "admin" && isAdminPortal) ||
+    (isReportMode && isFrontDesk) ||
+    (isEngagedMode && isEngagedDept);
+
+  if (!canSeeAll) {
+    query = {
+      $or: [{ projectLeadId: req.user._id }, { assistantLeadId: req.user._id }],
+    };
+
+    if (isReportMode) {
+      query = {
+        $or: [
+          { projectLeadId: req.user._id },
+          { assistantLeadId: req.user._id },
+          { endOfDayUpdateBy: req.user._id },
+          { createdBy: req.user._id },
+        ],
+      };
+    }
+  }
+
+  return {
+    query,
+    isAdminPortal,
+  };
+};
+
+const CLOSED_ORDER_STATUSES = new Set([
+  "Completed",
+  "Delivered",
+  "Feedback Completed",
+  "Finished",
+  "Response Sent",
+  "Quote Request Completed",
+]);
+
+const getLineageKey = (project = {}) => {
+  const rawLineageId = project?.lineageId;
+  if (!rawLineageId) return project?._id ? String(project._id) : "";
+  if (typeof rawLineageId === "string") return rawLineageId;
+  if (typeof rawLineageId === "object") {
+    const rawId = rawLineageId._id || rawLineageId.id;
+    return rawId ? String(rawId) : project?._id ? String(project._id) : "";
+  }
+  return project?._id ? String(project._id) : "";
+};
+
+const getProjectVersionNumber = (project = {}) => {
+  const value = Number(project?.versionNumber);
+  return Number.isFinite(value) && value > 0 ? value : 1;
+};
+
+const collapseToLatestLineageProjects = (projects = []) => {
+  const latestByLineage = new Map();
+
+  projects.forEach((project) => {
+    if (!project?._id) return;
+    const lineageKey = getLineageKey(project);
+    if (!lineageKey) return;
+
+    const existing = latestByLineage.get(lineageKey);
+    if (!existing) {
+      latestByLineage.set(lineageKey, project);
+      return;
+    }
+
+    const incomingVersion = getProjectVersionNumber(project);
+    const existingVersion = getProjectVersionNumber(existing);
+
+    if (incomingVersion > existingVersion) {
+      latestByLineage.set(lineageKey, project);
+      return;
+    }
+
+    if (incomingVersion === existingVersion) {
+      const incomingCreatedAt = project.createdAt
+        ? new Date(project.createdAt).getTime()
+        : 0;
+      const existingCreatedAt = existing.createdAt
+        ? new Date(existing.createdAt).getTime()
+        : 0;
+      if (incomingCreatedAt > existingCreatedAt) {
+        latestByLineage.set(lineageKey, project);
+      }
+    }
+  });
+
+  return Array.from(latestByLineage.values());
+};
+
+const toUserDisplayName = (user) => {
+  if (!user) return "";
+  const firstName = String(user.firstName || "").trim();
+  const lastName = String(user.lastName || "").trim();
+  return `${firstName} ${lastName}`.trim() || String(user.employeeId || "").trim();
+};
+
+const buildOrderGroups = (projects = [], { collapseRevisions = true } = {}) => {
+  const sourceProjects = collapseRevisions
+    ? collapseToLatestLineageProjects(projects)
+    : projects;
+  const groups = new Map();
+
+  sourceProjects.forEach((project) => {
+    const orderRefId = toObjectIdString(project?.orderRef);
+    const orderNumber =
+      normalizeOrderNumber(project?.orderRef?.orderNumber) ||
+      normalizeOrderNumber(project?.orderId) ||
+      "UNASSIGNED";
+    // Always group by order number first so all projects under the same
+    // orderNumber are in one bucket even if orderRef is inconsistent.
+    const groupKey = orderNumber || orderRefId || toObjectIdString(project?._id);
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        id: groupKey,
+        orderRef: orderRefId || null,
+        orderNumber,
+        orderDate: project?.orderRef?.orderDate || project?.orderDate || null,
+        client:
+          normalizeOptionalText(project?.orderRef?.client) ||
+          normalizeOptionalText(project?.details?.client) ||
+          "",
+        clientEmail:
+          normalizeOptionalText(project?.orderRef?.clientEmail) ||
+          normalizeOptionalText(project?.details?.clientEmail) ||
+          "",
+        clientPhone:
+          normalizeOptionalText(project?.orderRef?.clientPhone) ||
+          normalizeOptionalText(project?.details?.clientPhone) ||
+          "",
+        totalProjects: 0,
+        openProjects: 0,
+        leads: [],
+        projects: [],
+      });
+    }
+
+    const group = groups.get(groupKey);
+    if (!group.orderRef && orderRefId) {
+      group.orderRef = orderRefId;
+    }
+    if (group.orderNumber === "UNASSIGNED" && orderNumber !== "UNASSIGNED") {
+      group.orderNumber = orderNumber;
+    }
+    if (!group.orderDate && (project?.orderRef?.orderDate || project?.orderDate)) {
+      group.orderDate = project?.orderRef?.orderDate || project?.orderDate || null;
+    }
+    if (!group.client) {
+      group.client =
+        normalizeOptionalText(project?.orderRef?.client) ||
+        normalizeOptionalText(project?.details?.client) ||
+        "";
+    }
+    if (!group.clientEmail) {
+      group.clientEmail =
+        normalizeOptionalText(project?.orderRef?.clientEmail) ||
+        normalizeOptionalText(project?.details?.clientEmail) ||
+        "";
+    }
+    if (!group.clientPhone) {
+      group.clientPhone =
+        normalizeOptionalText(project?.orderRef?.clientPhone) ||
+        normalizeOptionalText(project?.details?.clientPhone) ||
+        "";
+    }
+
+    group.totalProjects += 1;
+    if (!CLOSED_ORDER_STATUSES.has(project?.status)) {
+      group.openProjects += 1;
+    }
+
+    const leadName = toUserDisplayName(project?.projectLeadId);
+    if (leadName && !group.leads.includes(leadName)) {
+      group.leads.push(leadName);
+    }
+
+    group.projects.push(project);
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      projects: group.projects.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime(),
+    );
 };
 
 const hasPaymentVerification = (project) =>
@@ -1575,6 +1895,7 @@ const createProject = async (req, res) => {
   try {
     const {
       orderId, // Optional, can be auto-generated
+      orderRef,
       orderDate,
       receivedTime,
       lead,
@@ -1596,6 +1917,7 @@ const createProject = async (req, res) => {
       status, // [NEW] Allow explicit status setting (e.g. "Pending Scope Approval")
       description, // [NEW]
       details, // [NEW]
+      workstreamCode,
     } = req.body;
 
     // Basic validation
@@ -1610,8 +1932,8 @@ const createProject = async (req, res) => {
         .json({ message: "User not found or not authorized" });
     }
 
-    // Auto-generate orderId if not provided (Format: ORD-[Timestamp])
-    const finalOrderId = orderId || `ORD-${Date.now().toString().slice(-6)}`;
+    // Auto-generate orderId if not provided and we are not attaching to an existing orderRef.
+    const generatedOrderId = `ORD-${Date.now().toString().slice(-6)}`;
 
     // Helper to extract value if object
     const getValue = (field) => (field && field.value ? field.value : field);
@@ -1705,10 +2027,26 @@ const createProject = async (req, res) => {
     const finalReceivedTime = getValue(receivedTime) || currentTime;
 
     const normalizedAssistantLeadId = getValue(parseMaybeJson(assistantLeadId));
+    const normalizedOrderRefId = getValue(parseMaybeJson(orderRef));
+    const finalOrderId =
+      normalizeOrderNumber(orderId) || (normalizedOrderRefId ? "" : generatedOrderId);
+
+    const linkedOrder = await ensureOrderRecord({
+      orderNumber: finalOrderId,
+      orderDate: orderDate || now,
+      client,
+      clientEmail,
+      clientPhone,
+      createdBy: req.user._id,
+      requestedOrderRefId: normalizedOrderRefId,
+    });
+
+    const resolvedOrderId = linkedOrder?.orderNumber || finalOrderId || generatedOrderId;
 
     // Create project
     const project = new Project({
-      orderId: finalOrderId,
+      orderId: resolvedOrderId,
+      orderRef: linkedOrder?._id || null,
       orderDate: orderDate || now,
       receivedTime: finalReceivedTime,
       details: {
@@ -1735,6 +2073,7 @@ const createProject = async (req, res) => {
       createdBy: req.user._id,
       projectLeadId: projectLeadId || null,
       assistantLeadId: normalizedAssistantLeadId || null,
+      workstreamCode: normalizeOptionalText(workstreamCode),
       // [NEW] Project Type System
       projectType: req.body.projectType || "Standard",
       priority:
@@ -1825,72 +2164,22 @@ const createProject = async (req, res) => {
 // @access  Private
 const getProjects = async (req, res) => {
   try {
-    let query = {};
-
-    // If user is not an admin, they only see projects where they are the assigned Lead (or Assistant Lead)
-    // Unless they are Front Desk, who need to see everything for End of Day updates
-    // Access Control Logic:
-    // 1. Admins see everything ONLY IF using Admin Portal (source=admin).
-    // 2. Front Desk trying to view "End of Day Updates" (report mode) sees everything.
-    // 3. Production users trying to view "Engaged Projects" (engaged mode) sees all projects with production sub-depts.
-    // 4. Otherwise (Client Portal), EVERYONE (including Admins) sees only their own projects.
-
-    const isReportMode = req.query.mode === "report";
-    const isEngagedMode = req.query.mode === "engaged"; // [NEW] Production Engaged Mode
-    const isAdminPortal = req.query.source === "admin";
-    const isFrontDesk = req.user.department?.includes("Front Desk");
-    const userDepartments = Array.isArray(req.user.department)
-      ? req.user.department
-      : req.user.department
-        ? [req.user.department]
-        : [];
-    const isEngagedDept = userDepartments.some(
-      (dept) =>
-        ENGAGED_PARENT_DEPARTMENTS.has(dept) ||
-        ENGAGED_SUB_DEPARTMENTS.has(dept),
-    );
-
-    // Access Control:
-    // - Admins (non-Front Desk) can see all projects in Admin Portal
-    // - Front Desk users can see all projects ONLY in report mode (End of Day updates)
-    // - Engaged Department users can see all projects in engaged mode (Engaged Projects)
-    // - Front Desk users in Admin Portal see only their own projects
-    const canSeeAll =
-      (req.user.role === "admin" && isAdminPortal) ||
-      (isReportMode && isFrontDesk) ||
-      (isEngagedMode && isEngagedDept); // Engaged Projects Mode
-
-    if (!canSeeAll) {
-      // [STRICT] Default View: ONLY projects where user is the Lead or Assistant
-      query = {
-        $or: [
-          { projectLeadId: req.user._id },
-          { assistantLeadId: req.user._id },
-        ],
-      };
-
-      // [Mode: Report / All Orders]
-      // Include projects they created OR are assigned to update
-      if (isReportMode) {
-        query = {
-          $or: [
-            { projectLeadId: req.user._id },
-            { assistantLeadId: req.user._id },
-            { endOfDayUpdateBy: req.user._id },
-            { createdBy: req.user._id },
-          ],
-        };
-      }
-    }
+    const { query } = buildProjectAccessQuery(req);
+    const groupByOrder =
+      String(req.query.groupBy || "").toLowerCase() === "order";
+    const collapseRevisions =
+      String(req.query.collapseRevisions || "true").toLowerCase() !== "false";
 
     const projects = await Project.find(query)
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName")
       .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
       .sort({ createdAt: -1 });
 
-    if (isAdminPortal) {
-      // Optional: Logic specific to admin portal if needed later
+    if (groupByOrder) {
+      const groups = buildOrderGroups(projects, { collapseRevisions });
+      return res.json(groups);
     }
 
     res.json(projects);
@@ -1904,6 +2193,77 @@ const getProjects = async (req, res) => {
       logPath,
       `${new Date().toISOString()} - Error fetching projects: ${error.stack}\n`,
     );
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Get grouped orders for accessible projects
+// @route   GET /api/projects/orders
+// @access  Private
+const getOrderGroups = async (req, res) => {
+  try {
+    const { query } = buildProjectAccessQuery(req);
+    const collapseRevisions =
+      String(req.query.collapseRevisions || "true").toLowerCase() !== "false";
+
+    const projects = await Project.find(query)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName")
+      .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+      .sort({ createdAt: -1 });
+
+    const groups = buildOrderGroups(projects, { collapseRevisions });
+    res.json(groups);
+  } catch (error) {
+    console.error("Error fetching grouped orders:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Get one grouped order by order number
+// @route   GET /api/projects/orders/:orderNumber
+// @access  Private
+const getOrderGroupByNumber = async (req, res) => {
+  try {
+    const orderNumber = normalizeOrderNumber(
+      decodeURIComponent(req.params.orderNumber || ""),
+    );
+    if (!orderNumber) {
+      return res.status(400).json({ message: "orderNumber is required." });
+    }
+
+    const { query } = buildProjectAccessQuery(req);
+    const conditions = [{ orderId: orderNumber }];
+    if (query && Object.keys(query).length > 0) {
+      conditions.push(query);
+    }
+    const scopedQuery = conditions.length === 1 ? conditions[0] : { $and: conditions };
+
+    const projects = await Project.find(scopedQuery)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName")
+      .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+      .sort({ createdAt: -1 });
+
+    if (projects.length === 0) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const groups = buildOrderGroups(projects, {
+      collapseRevisions:
+        String(req.query.collapseRevisions || "true").toLowerCase() !== "false",
+    });
+    const group = groups.find((entry) => entry.orderNumber === orderNumber);
+
+    if (!group) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    res.json(group);
+  } catch (error) {
+    console.error("Error fetching grouped order:", error);
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
@@ -1948,7 +2308,8 @@ const getProjectById = async (req, res) => {
     const project = await Project.findById(req.params.id)
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName employeeId email")
-      .populate("assistantLeadId", "firstName lastName employeeId email");
+      .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone");
 
     if (project) {
       // Access Check: Admin OR Project Lead
@@ -3755,6 +4116,7 @@ const updateProject = async (req, res) => {
     const { id } = req.params;
     let {
       orderId,
+      orderRef,
       orderDate,
       receivedTime,
       lead,
@@ -3784,7 +4146,11 @@ const updateProject = async (req, res) => {
       quoteDetails, // [NEW]
       projectType, // [NEW]
       priority, // [NEW]
+      workstreamCode,
     } = req.body;
+    const requestedOrderNumber = normalizeOrderNumber(orderId);
+    const hasOrderNumberUpdate = Boolean(requestedOrderNumber);
+    const hasOrderRefUpdate = orderRef !== undefined;
 
     // Parse JSON fields if they are strings (Multipart/form-data behavior)
     if (typeof items === "string") items = JSON.parse(items);
@@ -3803,6 +4169,8 @@ const updateProject = async (req, res) => {
       lead = JSON.parse(lead);
     if (typeof assistantLeadId === "string" && assistantLeadId.startsWith("{"))
       assistantLeadId = JSON.parse(assistantLeadId);
+    if (typeof orderRef === "string" && orderRef.startsWith("{"))
+      orderRef = JSON.parse(orderRef);
 
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
@@ -3815,6 +4183,30 @@ const updateProject = async (req, res) => {
 
     // Helper
     const getValue = (field) => (field && field.value ? field.value : field);
+
+    const currentOrderNumber = normalizeOrderNumber(project.orderId);
+    const currentOrderRefId = toObjectIdString(project.orderRef);
+    const requestedOrderRefValue = hasOrderRefUpdate
+      ? normalizeOptionalText(getValue(orderRef))
+      : "";
+    const canApplyRequestedOrderRef =
+      !requestedOrderRefValue || isValidObjectId(requestedOrderRefValue);
+    const orderNumberChangeRequested =
+      hasOrderNumberUpdate && requestedOrderNumber !== currentOrderNumber;
+    const orderRefChangeRequested =
+      hasOrderRefUpdate &&
+      canApplyRequestedOrderRef &&
+      requestedOrderRefValue !== currentOrderRefId;
+
+    if (
+      (orderNumberChangeRequested || orderRefChangeRequested) &&
+      !canEditOrderNumber(req.user)
+    ) {
+      return res.status(403).json({
+        message:
+          "Only Front Desk and Admin users can edit the order number or order link.",
+      });
+    }
 
     // Capture old values for logging
     const oldValues = {
@@ -3835,6 +4227,7 @@ const updateProject = async (req, res) => {
       supplySource: project.details?.supplySource,
       lead: project.projectLeadId,
       assistantLead: project.assistantLeadId,
+      orderRef: project.orderRef,
       status: project.status,
     };
 
@@ -3842,7 +4235,17 @@ const updateProject = async (req, res) => {
     let detailsChanged = false;
 
     // Update Top Level
-    if (orderId) project.orderId = orderId;
+    if (hasOrderNumberUpdate) {
+      project.orderId = requestedOrderNumber;
+      detailsChanged = true;
+    }
+    if (orderRef !== undefined) {
+      const normalizedOrderRef = getValue(orderRef);
+      if (!normalizedOrderRef || isValidObjectId(normalizedOrderRef)) {
+        project.orderRef = normalizedOrderRef || null;
+        detailsChanged = true;
+      }
+    }
     if (orderDate) {
       project.orderDate = orderDate;
       detailsChanged = true;
@@ -3972,6 +4375,28 @@ const updateProject = async (req, res) => {
     if (projectType) project.projectType = projectType;
     if (priority) project.priority = priority;
     if (quoteDetails) project.quoteDetails = quoteDetails;
+    if (workstreamCode !== undefined) {
+      project.workstreamCode = normalizeOptionalText(workstreamCode);
+      detailsChanged = true;
+    }
+
+    const linkedOrder = await ensureOrderRecord({
+      orderNumber: hasOrderNumberUpdate
+        ? project.orderId
+        : hasOrderRefUpdate
+          ? ""
+          : project.orderId,
+      orderDate: project.orderDate,
+      client: project.details?.client,
+      clientEmail: project.details?.clientEmail,
+      clientPhone: project.details?.clientPhone,
+      createdBy: project.createdBy || req.user._id,
+      requestedOrderRefId: project.orderRef,
+    });
+    if (linkedOrder) {
+      project.orderRef = linkedOrder._id;
+      project.orderId = linkedOrder.orderNumber;
+    }
 
     const updatedProject = await project.save();
 
@@ -4208,7 +4633,8 @@ const updateProject = async (req, res) => {
     const populatedProject = await Project.findById(updatedProject._id)
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName employeeId email")
-      .populate("assistantLeadId", "firstName lastName employeeId email");
+      .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone");
 
     res.json(populatedProject);
   } catch (error) {
@@ -4688,6 +5114,8 @@ const undoAcknowledgeProject = async (req, res) => {
 module.exports = {
   createProject,
   getProjects,
+  getOrderGroups,
+  getOrderGroupByNumber,
   getUserStats,
   getProjectById,
   addItemToProject,

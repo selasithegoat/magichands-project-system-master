@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useLocation, Link } from "react-router-dom";
 
 import "./ProjectDetails.css";
 import {
@@ -63,6 +63,7 @@ const FolderIcon = ({ width = 24, height = 24, color = "currentColor" }) => (
 
 const ProjectDetails = ({ user }) => {
   const { id } = useParams();
+  const location = useLocation();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updates, setUpdates] = useState([]); // New state for updates
@@ -161,41 +162,52 @@ const ProjectDetails = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
 
-  const fetchProject = async () => {
+  const applyProjectToState = (data) => {
+    if (!data) return;
+    setProject(data);
+    setEditForm({
+      orderId: data.orderId || "",
+      client: data.details?.client || "",
+      clientEmail: data.details?.clientEmail || "", // [NEW]
+      clientPhone: data.details?.clientPhone || "", // [NEW]
+      briefOverview: data.details?.briefOverview || "", // [New]
+      orderDate: data.orderDate
+        ? data.orderDate.split("T")[0]
+        : data.createdAt
+          ? data.createdAt.split("T")[0]
+          : "",
+      receivedTime: data.receivedTime || "",
+      deliveryDate: data.details?.deliveryDate
+        ? data.details.deliveryDate.split("T")[0]
+        : "",
+      deliveryTime: data.details?.deliveryTime || "",
+      deliveryLocation: data.details?.deliveryLocation || "",
+      contactType: data.details?.contactType || "",
+      supplySource: data.details?.supplySource || "",
+    });
+  };
+
+  const fetchProject = async ({ showLoading = true, retries = 1 } = {}) => {
+    if (showLoading) setLoading(true);
+
     try {
       const res = await fetch(`/api/projects/${id}`, {
         credentials: "include",
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProject(data);
-        // Initialize edit form with flat structure for general info
-        setEditForm({
-          client: data.details?.client || "",
-          clientEmail: data.details?.clientEmail || "", // [NEW]
-          clientPhone: data.details?.clientPhone || "", // [NEW]
-          briefOverview: data.details?.briefOverview || "", // [New]
-          orderDate: data.orderDate
-            ? data.orderDate.split("T")[0]
-            : data.createdAt
-              ? data.createdAt.split("T")[0]
-              : "",
-          receivedTime: data.receivedTime || "",
-          deliveryDate: data.details?.deliveryDate
-            ? data.details.deliveryDate.split("T")[0]
-            : "",
-          deliveryTime: data.details?.deliveryTime || "",
-          deliveryLocation: data.details?.deliveryLocation || "",
-          contactType: data.details?.contactType || "",
-          supplySource: data.details?.supplySource || "",
-        });
-      } else {
-        console.error("Failed to fetch project");
+      if (!res.ok) {
+        throw new Error("Failed to fetch project");
       }
+
+      const data = await res.json();
+      applyProjectToState(data);
     } catch (err) {
       console.error("Error fetching project:", err);
+      if (retries > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        return fetchProject({ showLoading: false, retries: retries - 1 });
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -214,7 +226,18 @@ const ProjectDetails = ({ user }) => {
   };
 
   useEffect(() => {
-    fetchProject();
+    const stateProject = location.state?.project;
+    if (
+      stateProject &&
+      String(stateProject._id || "") === String(id || "")
+    ) {
+      applyProjectToState(stateProject);
+      setLoading(false);
+      fetchProject({ showLoading: false, retries: 1 });
+    } else {
+      fetchProject({ showLoading: true, retries: 1 });
+    }
+
     fetchUpdates();
 
     // Fetch users for Lead Edit
@@ -232,7 +255,7 @@ const ProjectDetails = ({ user }) => {
       }
     };
     fetchUsers();
-  }, [id]);
+  }, [id, location.state]);
 
   useRealtimeRefresh(
     () => {
@@ -299,6 +322,7 @@ const ProjectDetails = ({ user }) => {
     // Reset form to current project state when opening edit
     if (!isEditing) {
       setEditForm({
+        orderId: project.orderId || "",
         client: project.details?.client || "",
         clientEmail: project.details?.clientEmail || "", // [NEW]
         clientPhone: project.details?.clientPhone || "", // [NEW]
@@ -330,6 +354,7 @@ const ProjectDetails = ({ user }) => {
     try {
       // Construct payload with flattened fields as expected by the controller
       const payload = {
+        orderId: editForm.orderId,
         client: editForm.client,
         clientEmail: editForm.clientEmail, // [NEW]
         clientPhone: editForm.clientPhone, // [NEW]
@@ -800,6 +825,19 @@ const ProjectDetails = ({ user }) => {
               )}
             </h3>
             <div className="info-grid">
+              <div className="info-item">
+                <label>Order Number</label>
+                {isEditing ? (
+                  <input
+                    className="edit-input"
+                    name="orderId"
+                    value={editForm.orderId || ""}
+                    onChange={handleChange}
+                  />
+                ) : (
+                  <p>{project.orderId || "N/A"}</p>
+                )}
+              </div>
               <div className="info-item">
                 <label>Client</label>
                 {isEditing ? (

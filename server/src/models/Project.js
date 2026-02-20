@@ -6,6 +6,11 @@ const ProjectSchema = new mongoose.Schema(
       type: String,
       required: false, // Can be generated or optional for now
     },
+    orderRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
+    },
     orderDate: {
       type: Date,
       default: Date.now,
@@ -214,6 +219,11 @@ const ProjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    workstreamCode: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     // Track last update time for specific sections
     sectionUpdates: {
       details: Date,
@@ -350,6 +360,8 @@ ProjectSchema.index({ priority: 1 });
 ProjectSchema.index({ projectLeadId: 1 });
 ProjectSchema.index({ assistantLeadId: 1 });
 ProjectSchema.index({ createdBy: 1 });
+ProjectSchema.index({ orderRef: 1, createdAt: -1 });
+ProjectSchema.index({ orderId: 1, createdAt: -1 });
 ProjectSchema.index({ "details.client": 1 });
 ProjectSchema.index({ "details.deliveryDate": 1 });
 ProjectSchema.index({ lineageId: 1, versionNumber: -1 });

@@ -54,6 +54,118 @@
   background-color: rgba(255, 255, 255, 0.03);
 }
 
+.project-group-header-row td {
+  background-color: rgba(30, 41, 59, 0.35);
+  font-weight: 600;
+}
+
+.project-group-order-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.project-group-toggle-btn {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-dark);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.project-group-toggle-btn:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.project-group-toggle-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+
+.project-group-order-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.project-group-order-id {
+  font-weight: 700;
+}
+
+.project-group-order-count {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.project-group-project-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.project-group-title {
+  font-size: 0.82rem;
+}
+
+.project-group-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.project-group-child-row td {
+  background-color: rgba(15, 23, 42, 0.12);
+}
+
+.project-group-child-row-expanding td {
+  animation: projectGroupRowEnter 0.22s ease both;
+}
+
+.project-group-child-row-collapsing td {
+  animation: projectGroupRowExit 0.22s ease both;
+  pointer-events: none;
+}
+
+@keyframes projectGroupRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes projectGroupRowExit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.project-group-child-order-id {
+  display: inline-block;
+  padding-left: 1.55rem;
+}
+
 .status-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;

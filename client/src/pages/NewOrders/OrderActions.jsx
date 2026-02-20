@@ -137,6 +137,7 @@ const OrderActions = () => {
   const [paymentUndoSubmitting, setPaymentUndoSubmitting] = useState(false);
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
+  const [orderNumberDraft, setOrderNumberDraft] = useState("");
   const [sampleImageDraft, setSampleImageDraft] = useState("");
   const [newSampleImageFile, setNewSampleImageFile] = useState(null);
   const [referenceMaterialsDraft, setReferenceMaterialsDraft] = useState([]);
@@ -233,6 +234,7 @@ const OrderActions = () => {
     const referenceMaterials = project?.details?.attachments || [];
 
     if (!projectId) {
+      setOrderNumberDraft("");
       setBriefOverviewDraft("");
       setSampleImageDraft("");
       setNewSampleImageFile(null);
@@ -241,6 +243,7 @@ const OrderActions = () => {
       return;
     }
 
+    setOrderNumberDraft(project.orderId || "");
     setBriefOverviewDraft(briefOverview);
     setSampleImageDraft(sampleImage);
     setNewSampleImageFile(null);
@@ -248,6 +251,7 @@ const OrderActions = () => {
     setNewReferenceFiles([]);
   }, [
     project?._id,
+    project?.orderId,
     project?.details?.briefOverview,
     project?.details?.sampleImage,
     project?.details?.attachments,
@@ -734,10 +738,14 @@ const OrderActions = () => {
   const canManageOrderRevision = canManageBilling;
   const orderRevisionDirty = useMemo(() => {
     if (!project) return false;
+    const originalOrderNumber = (project.orderId || "").trim();
     const originalBriefOverview = project.details?.briefOverview || "";
     const originalSampleImage = project.details?.sampleImage || "";
     const originalReferenceMaterials = project.details?.attachments || [];
 
+    if ((orderNumberDraft || "").trim() !== originalOrderNumber) {
+      return true;
+    }
     if (briefOverviewDraft !== originalBriefOverview) {
       return true;
     }
@@ -758,6 +766,7 @@ const OrderActions = () => {
     );
   }, [
     project,
+    orderNumberDraft,
     briefOverviewDraft,
     sampleImageDraft,
     newSampleImageFile,
@@ -808,6 +817,7 @@ const OrderActions = () => {
 
   const resetOrderRevisionChanges = () => {
     if (!project || referenceSaving) return;
+    setOrderNumberDraft(project.orderId || "");
     setBriefOverviewDraft(project.details?.briefOverview || "");
     setSampleImageDraft(project.details?.sampleImage || "");
     setNewSampleImageFile(null);
@@ -821,10 +831,16 @@ const OrderActions = () => {
       showToast("No order changes to save.", "error");
       return;
     }
+    const normalizedOrderNumber = (orderNumberDraft || "").trim();
+    if (!normalizedOrderNumber) {
+      showToast("Order number cannot be empty.", "error");
+      return;
+    }
 
     setReferenceSaving(true);
     try {
       const formData = new FormData();
+      formData.append("orderId", normalizedOrderNumber);
       formData.append("briefOverview", briefOverviewDraft);
       formData.append("existingSampleImage", sampleImageDraft || "");
       formData.append(
@@ -846,12 +862,13 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
+        setOrderNumberDraft(updated.orderId || "");
         setBriefOverviewDraft(updated.details?.briefOverview || "");
         setSampleImageDraft(updated.details?.sampleImage || "");
         setNewSampleImageFile(null);
         setReferenceMaterialsDraft(updated.details?.attachments || []);
         setNewReferenceFiles([]);
-        showToast("Order brief and reference materials updated.", "success");
+        showToast("Order details updated.", "success");
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(
@@ -1216,6 +1233,22 @@ const OrderActions = () => {
           </div>
 
           <div className="order-revision-body">
+            <div className="order-revision-field">
+              <label htmlFor="order-revision-order-number">Order Number</label>
+              <input
+                id="order-revision-order-number"
+                type="text"
+                className="form-input"
+                value={orderNumberDraft}
+                onChange={(e) => setOrderNumberDraft(e.target.value)}
+                placeholder="Enter order number"
+                disabled={!canManageOrderRevision || referenceSaving}
+              />
+              <small className="field-help-text">
+                Front Desk and Admin can update order number for grouped orders.
+              </small>
+            </div>
+
             <div className="order-revision-field">
               <label htmlFor="order-revision-brief">Brief Overview</label>
               <textarea

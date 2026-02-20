@@ -3,6 +3,8 @@ const router = express.Router();
 const {
   createProject,
   getProjects,
+  getOrderGroups,
+  getOrderGroupByNumber,
   getUserStats,
   getProjectById,
   addItemToProject,
@@ -103,6 +105,8 @@ const handleMockupUpload = (req, res, next) => {
 router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
 router.get("/clients", protect, getClients); // [NEW] - Get all clients with their projects
+router.get("/orders", protect, getOrderGroups);
+router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
 router.post(
   "/ai/production-risk-suggestions",

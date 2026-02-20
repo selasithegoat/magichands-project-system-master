@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
 
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
@@ -7,9 +6,14 @@ import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationMo
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 
+const GROUP_ROW_TRANSITION_MS = 220;
+
 const Projects = ({ user }) => {
-  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
+  const [groupedOrders, setGroupedOrders] = useState([]);
+  const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
+  const [collapsingOrderGroups, setCollapsingOrderGroups] = useState({});
+  const collapseTimersRef = useRef({});
   const [loading, setLoading] = useState(true);
 
   const [deleteModal, setDeleteModal] = useState({
@@ -26,19 +30,42 @@ const Projects = ({ user }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
+  const openProjectDetails = (project) => {
+    const projectId = project?._id;
+    if (!projectId) return;
+    window.location.assign(`/projects/${projectId}`);
+  };
+
   const fetchProjects = async () => {
     try {
-      const res = await fetch("/api/projects?source=admin", {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data);
+      const [projectsRes, groupedRes] = await Promise.all([
+        fetch("/api/projects?source=admin", {
+          credentials: "include",
+        }),
+        fetch("/api/projects/orders?source=admin&collapseRevisions=true", {
+          credentials: "include",
+        }),
+      ]);
+
+      if (projectsRes.ok) {
+        const data = await projectsRes.json();
+        setProjects(Array.isArray(data) ? data : []);
       } else {
+        setProjects([]);
         console.error("Failed to fetch projects");
+      }
+
+      if (groupedRes.ok) {
+        const groupedData = await groupedRes.json();
+        setGroupedOrders(Array.isArray(groupedData) ? groupedData : []);
+      } else {
+        setGroupedOrders([]);
+        console.error("Failed to fetch grouped orders");
       }
     } catch (err) {
       console.error("Error fetching projects:", err);
+      setProjects([]);
+      setGroupedOrders([]);
     } finally {
       setLoading(false);
     }
@@ -47,6 +74,16 @@ const Projects = ({ user }) => {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  useEffect(
+    () => () => {
+      Object.values(collapseTimersRef.current).forEach((timerId) => {
+        clearTimeout(timerId);
+      });
+      collapseTimersRef.current = {};
+    },
+    [],
+  );
 
   useRealtimeRefresh(() => fetchProjects());
 
@@ -94,7 +131,7 @@ const Projects = ({ user }) => {
         credentials: "include",
       });
       if (res.ok) {
-        setProjects(projects.filter((p) => p._id !== projectId));
+        await fetchProjects();
       } else {
         alert("Failed to delete project");
       }
@@ -118,56 +155,99 @@ const Projects = ({ user }) => {
     return "draft";
   };
 
+  const getGroupProjects = (group) =>
+    Array.isArray(group?.projects) ? group.projects : [];
+
+  const getGroupClient = (group, projects = []) =>
+    group?.client ||
+    projects.find((project) => project?.details?.client)?.details?.client ||
+    "-";
+
+  const getGroupLeadText = (projects = []) => {
+    const leads = Array.from(
+      new Set(
+        projects
+          .map((project) => getLeadDisplay(project, "Unassigned"))
+          .filter(Boolean),
+      ),
+    );
+    return leads.length > 0 ? leads.join(", ") : "Unassigned";
+  };
+
+  const getGroupStatusSummary = (projects = []) => {
+    const statuses = Array.from(
+      new Set(projects.map((project) => project?.status).filter(Boolean)),
+    );
+    if (statuses.length === 0) {
+      return { label: "Draft", className: getStatusClass("Draft") };
+    }
+    const primary = statuses[0];
+    return {
+      label:
+        statuses.length === 1 ? primary : `${primary} +${statuses.length - 1} more`,
+      className: getStatusClass(primary),
+    };
+  };
+
+  const matchesStatusFilter = (projectStatus) => {
+    if (filterStatus === "All") return true;
+    if (filterStatus === "Completed") {
+      return projectStatus === "Completed" || projectStatus === "Finished";
+    }
+    return projectStatus === filterStatus;
+  };
+
   // Derived Lists
   const uniqueClients = [
     ...new Set(
-      projects
-        .map((p) => p.details?.client)
+      groupedOrders
+        .map((group) => getGroupClient(group, getGroupProjects(group)))
         .filter((c) => c && c.trim() !== ""),
     ),
   ].sort();
 
   const uniqueLeads = [
     ...new Set(
-      projects.map((p) => {
-        return getLeadDisplay(p, "");
-      }),
+      groupedOrders.flatMap((group) =>
+        getGroupProjects(group).map((project) => getLeadDisplay(project, "")),
+      ),
     ),
   ]
     .filter((l) => l && l !== "" && l !== "Unassigned")
     .sort();
 
   // Filter Logic
-  const filteredProjects = projects.filter((project) => {
-    // 1. Status
-    if (filterStatus !== "All") {
-      if (filterStatus === "Completed") {
-        // Show both Completed and Finished projects when filtering by Completed
-        if (project.status !== "Completed" && project.status !== "Finished")
-          return false;
-      } else if (project.status !== filterStatus) {
-        return false;
-      }
-    }
+  const filteredOrderGroups = groupedOrders.filter((group) => {
+    const projectsInGroup = getGroupProjects(group);
+    if (projectsInGroup.length === 0) return false;
 
-    // 2. Search Query (Order ID)
     if (
       searchQuery &&
-      !project.orderId?.toLowerCase().includes(searchQuery.toLowerCase())
+      !String(group?.orderNumber || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
     ) {
       return false;
     }
 
-    // 3. Client
-    if (clientFilter !== "All" && project.details?.client !== clientFilter) {
+    if (
+      clientFilter !== "All" &&
+      getGroupClient(group, projectsInGroup) !== clientFilter
+    ) {
       return false;
     }
 
-    // 4. Lead
     if (leadFilter !== "All") {
-      const leadName = getLeadDisplay(project, "");
-      if (leadName !== leadFilter) return false;
+      const hasLead = projectsInGroup.some(
+        (project) => getLeadDisplay(project, "") === leadFilter,
+      );
+      if (!hasLead) return false;
     }
+
+    const hasStatus = projectsInGroup.some((project) =>
+      matchesStatusFilter(project?.status),
+    );
+    if (!hasStatus) return false;
 
     return true;
   });
@@ -175,11 +255,133 @@ const Projects = ({ user }) => {
   // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const paginatedProjects = filteredProjects.slice(
+  const paginatedOrderGroups = filteredOrderGroups.slice(
     indexOfFirstItem,
     indexOfLastItem,
   );
-  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredOrderGroups.length / itemsPerPage);
+
+  useEffect(() => {
+    setExpandedOrderGroups((prev) => {
+      const next = {};
+      filteredOrderGroups.forEach((group) => {
+        const key = group?.id || group?.orderNumber;
+        if (!key) return;
+        next[key] = prev[key] || false;
+      });
+      return next;
+    });
+  }, [filteredOrderGroups]);
+
+  useEffect(() => {
+    setCollapsingOrderGroups((prev) => {
+      const next = {};
+      filteredOrderGroups.forEach((group) => {
+        const key = group?.id || group?.orderNumber;
+        if (!key) return;
+        if (prev[key]) next[key] = true;
+      });
+      return next;
+    });
+  }, [filteredOrderGroups]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const toggleOrderGroup = (groupKey) => {
+    if (!groupKey) return;
+    const isExpanded = Boolean(expandedOrderGroups[groupKey]);
+
+    if (isExpanded) {
+      setCollapsingOrderGroups((prev) => ({
+        ...prev,
+        [groupKey]: true,
+      }));
+
+      if (collapseTimersRef.current[groupKey]) {
+        clearTimeout(collapseTimersRef.current[groupKey]);
+      }
+
+      collapseTimersRef.current[groupKey] = window.setTimeout(() => {
+        setExpandedOrderGroups((prev) => ({
+          ...prev,
+          [groupKey]: false,
+        }));
+        setCollapsingOrderGroups((prev) => {
+          const next = { ...prev };
+          delete next[groupKey];
+          return next;
+        });
+        delete collapseTimersRef.current[groupKey];
+      }, GROUP_ROW_TRANSITION_MS);
+      return;
+    }
+
+    if (collapseTimersRef.current[groupKey]) {
+      clearTimeout(collapseTimersRef.current[groupKey]);
+      delete collapseTimersRef.current[groupKey];
+    }
+
+    setCollapsingOrderGroups((prev) => {
+      if (!prev[groupKey]) return prev;
+      const next = { ...prev };
+      delete next[groupKey];
+      return next;
+    });
+    setExpandedOrderGroups((prev) => ({
+      ...prev,
+      [groupKey]: true,
+    }));
+  };
+
+  const renderTypeBadge = (projectType) => {
+    const typeLabel = projectType || "Standard";
+    const isEmergency = typeLabel === "Emergency";
+    const isCorporate = typeLabel === "Corporate Job";
+    const isQuote = typeLabel === "Quote";
+
+    const backgroundColor = isEmergency
+      ? "#fef2f2"
+      : isCorporate
+        ? "#f0fdf4"
+        : isQuote
+          ? "#fffbeb"
+          : "#eff6ff";
+    const textColor = isEmergency
+      ? "#e74c3c"
+      : isCorporate
+        ? "#42a165"
+        : isQuote
+          ? "#f39c12"
+          : "#3498db";
+    const borderColor = isEmergency
+      ? "#e74c3c40"
+      : isCorporate
+        ? "#42a16540"
+        : isQuote
+          ? "#f39c1240"
+          : "#3498db40";
+
+    return (
+      <span
+        style={{
+          display: "inline-block",
+          padding: "2px 8px",
+          borderRadius: "4px",
+          fontSize: "11px",
+          fontWeight: "700",
+          backgroundColor,
+          color: textColor,
+          border: `1px solid ${borderColor}`,
+        }}
+      >
+        {typeLabel}
+      </span>
+    );
+  };
 
   return (
     <div className="projects-page">
@@ -289,15 +491,15 @@ const Projects = ({ user }) => {
             </select>
           </div>
           <div className="result-count">
-            Showing {paginatedProjects.length} of {filteredProjects.length}{" "}
+            Showing {paginatedOrderGroups.length} of {filteredOrderGroups.length}{" "}
             results
           </div>
         </div>
 
         {loading ? (
-          <div className="loading-state">Loading projects...</div>
-        ) : filteredProjects.length === 0 ? (
-          <div className="empty-state">No projects found matching filter.</div>
+          <div className="loading-state">Loading orders...</div>
+        ) : filteredOrderGroups.length === 0 ? (
+          <div className="empty-state">No orders found matching filter.</div>
         ) : (
           <>
             <table className="projects-table">
@@ -315,98 +517,209 @@ const Projects = ({ user }) => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedProjects.map((project) => (
-                  <tr key={project._id}>
-                    <td>
-                      <span style={{ fontWeight: 600 }}>
-                        {project.orderId || "N/A"}
-                      </span>
-                    </td>
-                    <td>{project.details?.projectName || "Untitled"}</td>
-                    <td>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: "700",
-                          backgroundColor:
-                            project.projectType === "Emergency"
-                              ? "#fef2f2"
-                              : project.projectType === "Corporate Job"
-                                ? "#f0fdf4"
-                                : project.projectType === "Quote"
-                                  ? "#fffbeb"
-                                  : "#eff6ff",
-                          color:
-                            project.projectType === "Emergency"
-                              ? "#e74c3c"
-                              : project.projectType === "Corporate Job"
-                                ? "#42a165"
-                                : project.projectType === "Quote"
-                                  ? "#f39c12"
-                                  : "#3498db",
-                          border: `1px solid ${
-                            project.projectType === "Emergency"
-                              ? "#e74c3c40"
-                              : project.projectType === "Corporate Job"
-                                ? "#42a16540"
-                                : project.projectType === "Quote"
-                                  ? "#f39c1240"
-                                  : "#3498db40"
-                          }`,
-                        }}
-                      >
-                        {project.projectType || "Standard"}
-                      </span>
-                    </td>
-                    <td>
-                      {getLeadDisplay(project, "Unassigned")}
-                    </td>
-                    <td>{project.details?.client || "-"}</td>
-                    <td>
-                      {formatDate(project.orderDate || project.createdAt)}
-                    </td>
-                    <td>{formatTime(project.receivedTime)}</td>
-                    <td>
-                      <span
-                        className={`status-badge ${getStatusClass(
-                          project.status,
-                        )}`}
-                      >
-                        {project.status}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="action-btn"
-                        onClick={() => navigate(`/projects/${project._id}`)}
-                      >
-                        View
-                      </button>
-                      {!(
-                        user &&
-                        (project.projectLeadId?._id === user._id ||
-                          project.projectLeadId === user._id)
-                      ) && (
-                        <button
-                          className="action-btn delete-btn"
-                          onClick={(e) => handleDeleteClick(e, project._id)}
-                          style={{
-                            marginLeft: "0.5rem",
-                            background: "rgba(239, 68, 68, 0.1)",
-                            color: "#ef4444",
-                            border: "1px solid rgba(239, 68, 68, 0.2)",
-                          }}
-                          title="Delete Project"
-                        >
-                          <TrashIcon width="16" height="16" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {paginatedOrderGroups.map((group) => {
+                  const groupKey = group?.id || group?.orderNumber || "order";
+                  const projectsInGroup = getGroupProjects(group);
+                  const isGrouped = projectsInGroup.length > 1;
+                  const primaryProject = projectsInGroup[0] || null;
+
+                  if (!primaryProject) return null;
+
+                  const groupClient = getGroupClient(group, projectsInGroup);
+                  const groupStatus = getGroupStatusSummary(projectsInGroup);
+                  const expanded = Boolean(expandedOrderGroups[groupKey]);
+                  const isCollapsing = Boolean(collapsingOrderGroups[groupKey]);
+                  const showGroupChildren = expanded || isCollapsing;
+                  const groupTypes = Array.from(
+                    new Set(
+                      projectsInGroup
+                        .map((project) => project?.projectType || "Standard")
+                        .filter(Boolean),
+                    ),
+                  );
+
+                  if (!isGrouped) {
+                    const project = primaryProject;
+                    return (
+                      <tr key={project._id}>
+                        <td>
+                          <span style={{ fontWeight: 600 }}>
+                            {project.orderId || group?.orderNumber || "N/A"}
+                          </span>
+                        </td>
+                        <td>{project.details?.projectName || "Untitled"}</td>
+                        <td>{renderTypeBadge(project.projectType)}</td>
+                        <td>{getLeadDisplay(project, "Unassigned")}</td>
+                        <td>{groupClient}</td>
+                        <td>{formatDate(project.orderDate || project.createdAt)}</td>
+                        <td>{formatTime(project.receivedTime)}</td>
+                        <td>
+                          <span className={`status-badge ${getStatusClass(project.status)}`}>
+                            {project.status}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="action-btn"
+                            onClick={() => openProjectDetails(project)}
+                          >
+                            View
+                          </button>
+                          {!(
+                            user &&
+                            (project.projectLeadId?._id === user._id ||
+                              project.projectLeadId === user._id)
+                          ) && (
+                            <button
+                              className="action-btn delete-btn"
+                              onClick={(e) => handleDeleteClick(e, project._id)}
+                              style={{
+                                marginLeft: "0.5rem",
+                                background: "rgba(239, 68, 68, 0.1)",
+                                color: "#ef4444",
+                                border: "1px solid rgba(239, 68, 68, 0.2)",
+                              }}
+                              title="Delete Project"
+                            >
+                              <TrashIcon width="16" height="16" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <React.Fragment key={groupKey}>
+                      <tr className="project-group-header-row">
+                        <td>
+                          <div className="project-group-order-cell">
+                            <button
+                              type="button"
+                              className="project-group-toggle-btn"
+                              onClick={() => toggleOrderGroup(groupKey)}
+                              aria-expanded={expanded}
+                            >
+                              {expanded ? (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  version="1.1"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  aria-hidden="true"
+                                  focusable="false"
+                                >
+                                  <polygon points="8 5 8 19 16 12" />
+                                </svg>
+                              ) : (
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  version="1.1"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  aria-hidden="true"
+                                  focusable="false"
+                                >
+                                  <polygon points="5 8 12 16 19 8" />
+                                </svg>
+                              )}
+                            </button>
+                            <div className="project-group-order-text">
+                              <span className="project-group-order-id">
+                                {group?.orderNumber || "N/A"}
+                              </span>
+                              <span className="project-group-order-count">
+                                {projectsInGroup.length} projects
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="project-group-project-cell">
+                            <span className="project-group-title">Grouped Order</span>
+                            <span className="project-group-subtitle">
+                              Expand to view all projects under this order
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          {groupTypes.length === 1
+                            ? renderTypeBadge(groupTypes[0])
+                            : `Mixed (${groupTypes.length})`}
+                        </td>
+                        <td>Multiple Leads</td>
+                        <td>{groupClient}</td>
+                        <td>{formatDate(group?.orderDate || primaryProject?.orderDate || primaryProject?.createdAt)}</td>
+                        <td>-</td>
+                        <td>
+                          <span className={`status-badge ${groupStatus.className}`}>
+                            {groupStatus.label}
+                          </span>
+                        </td>
+                        <td>-</td>
+                      </tr>
+
+                      {showGroupChildren &&
+                        projectsInGroup.map((project) => (
+                          <tr
+                            key={project._id}
+                            className={`project-group-child-row ${
+                              isCollapsing
+                                ? "project-group-child-row-collapsing"
+                                : "project-group-child-row-expanding"
+                            }`}
+                          >
+                            <td>
+                              <span
+                                style={{ fontWeight: 600 }}
+                                className="project-group-child-order-id"
+                              >
+                                -
+                              </span>
+                            </td>
+                            <td>{project.details?.projectName || "Untitled"}</td>
+                            <td>{renderTypeBadge(project.projectType)}</td>
+                            <td>{getLeadDisplay(project, "Unassigned")}</td>
+                            <td>{project.details?.client || groupClient}</td>
+                            <td>{formatDate(project.orderDate || project.createdAt)}</td>
+                            <td>{formatTime(project.receivedTime)}</td>
+                            <td>
+                              <span
+                                className={`status-badge ${getStatusClass(project.status)}`}
+                              >
+                                {project.status}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="action-btn"
+                                onClick={() => openProjectDetails(project)}
+                              >
+                                View
+                              </button>
+                              {!(
+                                user &&
+                                (project.projectLeadId?._id === user._id ||
+                                  project.projectLeadId === user._id)
+                              ) && (
+                                <button
+                                  className="action-btn delete-btn"
+                                  onClick={(e) => handleDeleteClick(e, project._id)}
+                                  style={{
+                                    marginLeft: "0.5rem",
+                                    background: "rgba(239, 68, 68, 0.1)",
+                                    color: "#ef4444",
+                                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                                  }}
+                                  title="Delete Project"
+                                >
+                                  <TrashIcon width="16" height="16" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
 

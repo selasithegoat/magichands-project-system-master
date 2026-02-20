@@ -137,6 +137,108 @@
   gap: 0.15rem;
 }
 
+.group-order-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.group-toggle-btn {
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  line-height: 1;
+  margin-top: 0.1rem;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.group-toggle-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--primary-blue);
+}
+
+.group-toggle-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+
+.group-header-row {
+  background-color: #f8fafc;
+}
+
+.group-header-row td {
+  font-weight: 600;
+}
+
+.group-project-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.group-project-title {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.group-project-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.2;
+  font-weight: 500;
+}
+
+.group-child-row td {
+  background-color: #ffffff;
+}
+
+.group-child-row-expanding td {
+  animation: groupChildRowEnter 0.22s ease both;
+}
+
+.group-child-row-collapsing td {
+  animation: groupChildRowExit 0.22s ease both;
+  pointer-events: none;
+}
+
+@keyframes groupChildRowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes groupChildRowExit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.child-order-id-value {
+  padding-left: 1.65rem;
+}
+
 .order-id-value {
   font-weight: 600;
   color: var(--text-primary);
@@ -802,6 +904,12 @@
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 0.5rem;
+}
+
+.field-help-text {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
 }
 
 .form-input,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -6,11 +6,16 @@ import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
+const GROUP_ROW_TRANSITION_MS = 220;
 
 const OrdersList = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
   const [allOrders, setAllOrders] = useState([]);
+  const [groupedOrders, setGroupedOrders] = useState([]);
+  const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
+  const [collapsingOrderGroups, setCollapsingOrderGroups] = useState({});
+  const collapseTimersRef = useRef({});
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [allFilters, setAllFilters] = useState({
@@ -82,6 +87,16 @@ const OrdersList = () => {
     allFilters.assignment,
   ]);
 
+  useEffect(
+    () => () => {
+      Object.values(collapseTimersRef.current).forEach((timerId) => {
+        clearTimeout(timerId);
+      });
+      collapseTimersRef.current = {};
+    },
+    [],
+  );
+
   useRealtimeRefresh(() => fetchOrders());
 
   const fetchCurrentUser = async () => {
@@ -99,13 +114,28 @@ const OrdersList = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/projects?mode=report");
-      if (res.ok) {
-        const data = await res.json();
-        setAllOrders(data);
+      const [projectsRes, groupedRes] = await Promise.all([
+        fetch("/api/projects?mode=report"),
+        fetch("/api/projects/orders?mode=report&collapseRevisions=true"),
+      ]);
+
+      if (projectsRes.ok) {
+        const data = await projectsRes.json();
+        setAllOrders(Array.isArray(data) ? data : []);
+      } else {
+        setAllOrders([]);
+      }
+
+      if (groupedRes.ok) {
+        const data = await groupedRes.json();
+        setGroupedOrders(Array.isArray(data) ? data : []);
+      } else {
+        setGroupedOrders([]);
       }
     } catch (err) {
       console.error("Error fetching orders:", err);
+      setAllOrders([]);
+      setGroupedOrders([]);
     } finally {
       setLoading(false);
     }
@@ -189,6 +219,117 @@ const OrdersList = () => {
     return "draft";
   };
 
+  const getProjectDisplayStatus = (project) =>
+    project?.projectLeadId ? project.status : "New Order";
+
+  const getActiveGroupProjects = (group) =>
+    (group?.projects || []).filter((project) => !isHistoryEligible(project));
+
+  const getGroupClient = (group, projects = []) =>
+    group?.client || projects.find((project) => project?.details?.client)?.details?.client || "-";
+
+  const getGroupLeadText = (group, projects = []) => {
+    const groupedLeads = Array.isArray(group?.leads) ? group.leads.filter(Boolean) : [];
+    if (groupedLeads.length > 0) return groupedLeads.join(", ");
+
+    const derivedLeads = Array.from(
+      new Set(
+        projects
+          .map((project) => getLeadDisplay(project, "Unassigned"))
+          .filter(Boolean),
+      ),
+    );
+
+    return derivedLeads.length > 0 ? derivedLeads.join(", ") : "Unassigned";
+  };
+
+  const getGroupStatusMeta = (projects = []) => {
+    const statuses = Array.from(
+      new Set(projects.map((project) => getProjectDisplayStatus(project)).filter(Boolean)),
+    );
+
+    if (statuses.length === 0) {
+      return {
+        label: "No Active Projects",
+        className: getStatusClass("Draft"),
+      };
+    }
+
+    const primary = statuses[0];
+    return {
+      label:
+        statuses.length === 1 ? primary : `${primary} +${statuses.length - 1} more`,
+      className: getStatusClass(primary),
+    };
+  };
+
+  const updateProjectInGroups = (groups = [], updatedProject) =>
+    groups.map((group) => {
+      let changed = false;
+      const nextProjects = (group?.projects || []).map((project) => {
+        if (project?._id !== updatedProject?._id) return project;
+        changed = true;
+        return {
+          ...project,
+          ...updatedProject,
+        };
+      });
+
+      if (!changed) return group;
+
+      return {
+        ...group,
+        client: group?.client || updatedProject?.details?.client || "",
+        projects: nextProjects,
+      };
+    });
+
+  const toggleOrderGroup = (groupId) => {
+    if (!groupId) return;
+    const isExpanded = Boolean(expandedOrderGroups[groupId]);
+
+    if (isExpanded) {
+      setCollapsingOrderGroups((prev) => ({
+        ...prev,
+        [groupId]: true,
+      }));
+
+      if (collapseTimersRef.current[groupId]) {
+        clearTimeout(collapseTimersRef.current[groupId]);
+      }
+
+      collapseTimersRef.current[groupId] = window.setTimeout(() => {
+        setExpandedOrderGroups((prev) => ({
+          ...prev,
+          [groupId]: false,
+        }));
+        setCollapsingOrderGroups((prev) => {
+          const next = { ...prev };
+          delete next[groupId];
+          return next;
+        });
+        delete collapseTimersRef.current[groupId];
+      }, GROUP_ROW_TRANSITION_MS);
+      return;
+    }
+
+    if (collapseTimersRef.current[groupId]) {
+      clearTimeout(collapseTimersRef.current[groupId]);
+      delete collapseTimersRef.current[groupId];
+    }
+
+    setCollapsingOrderGroups((prev) => {
+      if (!prev[groupId]) return prev;
+      const next = { ...prev };
+      delete next[groupId];
+      return next;
+    });
+    setExpandedOrderGroups((prev) => ({
+      ...prev,
+      [groupId]: true,
+    }));
+  };
+
   const getLineageKey = (order) => {
     const rawLineageId = order?.lineageId;
     if (!rawLineageId) return order?._id ? String(order._id) : "";
@@ -268,29 +409,55 @@ const OrdersList = () => {
     );
   };
 
-  const allOrdersFiltered = allOrders.filter((order) => {
-    if (isHistoryEligible(order)) return false;
-    if (
-      allFilters.orderId &&
-      !order.orderId?.toLowerCase().includes(allFilters.orderId.toLowerCase())
-    )
-      return false;
-    if (
-      allFilters.client &&
-      !order.details?.client
-        ?.toLowerCase()
-        .includes(allFilters.client.toLowerCase())
-    )
-      return false;
-    const displayStatus = order.projectLeadId ? order.status : "New Order";
-    if (allFilters.status !== "All" && displayStatus !== allFilters.status)
-      return false;
-    if (allFilters.assignment === "Assigned" && !order.projectLeadId)
-      return false;
-    if (allFilters.assignment === "Unassigned" && order.projectLeadId)
-      return false;
-    return true;
-  });
+  const allOrderGroupsFiltered = groupedOrders
+    .map((group) => ({
+      ...group,
+      activeProjects: getActiveGroupProjects(group),
+    }))
+    .filter((group) => group.activeProjects.length > 0)
+    .filter((group) => {
+      const orderNumber = String(group?.orderNumber || "").toLowerCase();
+      const clientText = String(
+        getGroupClient(group, group.activeProjects) || "",
+      ).toLowerCase();
+
+      if (
+        allFilters.orderId &&
+        !orderNumber.includes(allFilters.orderId.toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (
+        allFilters.client &&
+        !clientText.includes(allFilters.client.toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (allFilters.status !== "All") {
+        const hasStatusMatch = group.activeProjects.some(
+          (project) => getProjectDisplayStatus(project) === allFilters.status,
+        );
+        if (!hasStatusMatch) return false;
+      }
+
+      if (allFilters.assignment === "Assigned") {
+        const hasAssigned = group.activeProjects.some(
+          (project) => Boolean(project?.projectLeadId),
+        );
+        if (!hasAssigned) return false;
+      }
+
+      if (allFilters.assignment === "Unassigned") {
+        const hasUnassigned = group.activeProjects.some(
+          (project) => !project?.projectLeadId,
+        );
+        if (!hasUnassigned) return false;
+      }
+
+      return true;
+    });
 
   const historyOrdersFiltered = allOrders.filter((order) => {
     if (!isHistoryEligible(order)) return false;
@@ -317,15 +484,15 @@ const OrdersList = () => {
 
   const allOrdersTotalPages = Math.max(
     1,
-    Math.ceil(allOrdersFiltered.length / ALL_ORDERS_PAGE_SIZE),
+    Math.ceil(allOrderGroupsFiltered.length / ALL_ORDERS_PAGE_SIZE),
   );
   const safeAllOrdersPage = Math.min(allOrdersPage, allOrdersTotalPages);
   const allOrdersPageStart = (safeAllOrdersPage - 1) * ALL_ORDERS_PAGE_SIZE;
   const allOrdersPageEnd = Math.min(
     allOrdersPageStart + ALL_ORDERS_PAGE_SIZE,
-    allOrdersFiltered.length,
+    allOrderGroupsFiltered.length,
   );
-  const paginatedAllOrders = allOrdersFiltered.slice(
+  const paginatedAllOrderGroups = allOrderGroupsFiltered.slice(
     allOrdersPageStart,
     allOrdersPageEnd,
   );
@@ -335,6 +502,43 @@ const OrdersList = () => {
       setAllOrdersPage(allOrdersTotalPages);
     }
   }, [allOrdersPage, allOrdersTotalPages]);
+
+  useEffect(() => {
+    setExpandedOrderGroups((prev) => {
+      const next = {};
+      allOrderGroupsFiltered.forEach((group) => {
+        const groupKey = group?.id || group?.orderNumber;
+        if (!groupKey) return;
+        next[groupKey] = prev[groupKey] || false;
+      });
+
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length !== nextKeys.length) {
+        return next;
+      }
+
+      for (const key of nextKeys) {
+        if (prev[key] !== next[key]) {
+          return next;
+        }
+      }
+
+      return prev;
+    });
+  }, [allOrderGroupsFiltered]);
+
+  useEffect(() => {
+    setCollapsingOrderGroups((prev) => {
+      const next = {};
+      allOrderGroupsFiltered.forEach((group) => {
+        const groupKey = group?.id || group?.orderNumber;
+        if (!groupKey) return;
+        if (prev[groupKey]) next[groupKey] = true;
+      });
+      return next;
+    });
+  }, [allOrderGroupsFiltered]);
 
   const canMarkDelivered =
     currentUser?.role === "admin" ||
@@ -429,6 +633,7 @@ const OrdersList = () => {
         setAllOrders((prev) =>
           prev.map((p) => (p._id === updatedProject._id ? updatedProject : p)),
         );
+        setGroupedOrders((prev) => updateProjectInGroups(prev, updatedProject));
         setFeedbackModal({ open: true, project: updatedProject });
         setFeedbackNotes("");
         showToast("Feedback added successfully.", "success");
@@ -462,6 +667,7 @@ const OrdersList = () => {
         setAllOrders((prev) =>
           prev.map((p) => (p._id === updatedProject._id ? updatedProject : p)),
         );
+        setGroupedOrders((prev) => updateProjectInGroups(prev, updatedProject));
         setFeedbackModal({ open: true, project: updatedProject });
         showToast("Feedback deleted.", "success");
       } else {
@@ -556,7 +762,7 @@ const OrdersList = () => {
 
           {loading ? (
             <div className="loading-state">Loading orders...</div>
-          ) : allOrdersFiltered.length === 0 ? (
+          ) : allOrderGroupsFiltered.length === 0 ? (
             <div className="empty-state">No ongoing orders found.</div>
           ) : (
             <>
@@ -565,80 +771,225 @@ const OrdersList = () => {
                   <tr>
                     <th>Order ID</th>
                     <th>Client</th>
-                    <th>Project Name</th>
+                    <th>Project</th>
                     <th>Status</th>
-                    <th>Assignment Status</th>
+                    <th>Lead(s)</th>
                     <th>Created Date</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedAllOrders.map((order) => (
-                    <tr
-                      key={order._id}
-                      className="clickable-row"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(`/new-orders/actions/${order._id}`)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate(`/new-orders/actions/${order._id}`);
-                        }
-                      }}
-                    >
-                      <td>
-                        <div className="order-id-cell">
-                          <span className="order-id-value">
-                            {order.orderId || "N/A"}
-                          </span>
-                          {getVersionNumber(order) > 1 && (
-                            <span className="order-id-version">
-                              Version v{getVersionNumber(order)}
-                            </span>
-                          )}
-                          <span className="order-id-lead">
-                            {getLeadDisplay(order, "Unassigned")}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{order.details?.client || "-"}</td>
-                      <td>{order.details?.projectName || "Untitled"}</td>
-                      <td>
-                        <span
-                          className={`status-badge ${getStatusClass(order.projectLeadId ? order.status : "New Order")}`}
-                        >
-                          {order.projectLeadId ? order.status : "New Order"}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className={`assignment-badge ${order.projectLeadId ? "assigned" : "unassigned"}`}
-                        >
-                          {getAssignmentStatus(order)}
-                        </span>
-                      </td>
-                      <td>{formatDate(order.createdAt)}</td>
-                      <td>
-                        <button
-                          className="action-btn view-btn"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            navigate(`/new-orders/actions/${order._id}`);
+                  {paginatedAllOrderGroups.map((group) => {
+                    const groupKey = group?.id || group?.orderNumber || "order-group";
+                    const activeProjects = group?.activeProjects || [];
+                    const allProjects = Array.isArray(group?.projects)
+                      ? group.projects
+                      : activeProjects;
+                    const shouldGroup = allProjects.length > 1;
+                    const primaryProject = allProjects[0] || activeProjects[0] || null;
+                    const statusMeta = getGroupStatusMeta(
+                      activeProjects.length > 0 ? activeProjects : allProjects,
+                    );
+                    const createdDate =
+                      group?.orderDate || primaryProject?.createdAt || null;
+                    const expanded = Boolean(expandedOrderGroups[groupKey]);
+                    const isCollapsing = Boolean(collapsingOrderGroups[groupKey]);
+                    const showGroupChildren = expanded || isCollapsing;
+
+                    if (!shouldGroup && primaryProject) {
+                      return (
+                        <tr
+                          key={primaryProject._id || groupKey}
+                          className="clickable-row"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() =>
+                            navigate(`/new-orders/actions/${primaryProject._id}`)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              navigate(`/new-orders/actions/${primaryProject._id}`);
+                            }
                           }}
                         >
-                          View Actions
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          <td>
+                            <div className="order-id-cell">
+                              <span className="order-id-value">
+                                {primaryProject.orderId || group?.orderNumber || "N/A"}
+                              </span>
+                              {getVersionNumber(primaryProject) > 1 && (
+                                <span className="order-id-version">
+                                  Version v{getVersionNumber(primaryProject)}
+                                </span>
+                              )}
+                              <span className="order-id-lead">
+                                {getLeadDisplay(primaryProject, "Unassigned")}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{getGroupClient(group, [primaryProject])}</td>
+                          <td>{primaryProject.details?.projectName || "Untitled"}</td>
+                          <td>
+                            <span
+                              className={`status-badge ${getStatusClass(getProjectDisplayStatus(primaryProject))}`}
+                            >
+                              {getProjectDisplayStatus(primaryProject)}
+                            </span>
+                          </td>
+                          <td>{getLeadDisplay(primaryProject, "Unassigned")}</td>
+                          <td>{formatDate(primaryProject.createdAt || createdDate)}</td>
+                          <td>
+                            <button
+                              className="action-btn view-btn"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate(`/new-orders/actions/${primaryProject._id}`);
+                              }}
+                            >
+                              View Actions
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <React.Fragment key={groupKey}>
+                        <tr className="group-header-row">
+                          <td>
+                            <div className="group-order-cell">
+                              <button
+                                type="button"
+                                className="group-toggle-btn"
+                                onClick={() => toggleOrderGroup(groupKey)}
+                                aria-expanded={expanded}
+                                aria-label={
+                                  expanded
+                                    ? `Collapse ${group?.orderNumber || "order"}`
+                                    : `Expand ${group?.orderNumber || "order"}`
+                                }
+                              >
+                                {expanded ? (
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    version="1.1"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                  >
+                                    <polygon points="8 5 8 19 16 12" />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    version="1.1"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                  >
+                                    <polygon points="5 8 12 16 19 8" />
+                                  </svg>
+                                )}
+                              </button>
+                              <div className="order-id-cell">
+                                <span className="order-id-value">
+                                  {group?.orderNumber || "N/A"}
+                                </span>
+                                <span className="order-id-version">
+                                  {allProjects.length} project
+                                  {allProjects.length === 1 ? "" : "s"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>{getGroupClient(group, allProjects)}</td>
+                          <td>
+                            <div className="group-project-cell">
+                              <span className="group-project-title">Grouped Order</span>
+                              <span className="group-project-subtitle">
+                                {allProjects.length} total
+                                project{allProjects.length === 1 ? "" : "s"}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`status-badge ${statusMeta.className}`}>
+                              {statusMeta.label}
+                            </span>
+                          </td>
+                          <td>Multiple Leads</td>
+                          <td>{formatDate(createdDate)}</td>
+                          <td>-</td>
+                        </tr>
+
+                        {showGroupChildren &&
+                          allProjects.map((order) => (
+                            <tr
+                              key={order._id}
+                              className={`group-child-row clickable-row ${
+                                isCollapsing
+                                  ? "group-child-row-collapsing"
+                                  : "group-child-row-expanding"
+                              }`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() =>
+                                navigate(`/new-orders/actions/${order._id}`)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  navigate(`/new-orders/actions/${order._id}`);
+                                }
+                              }}
+                            >
+                              <td>
+                                <div className="order-id-cell">
+                                  <span className="order-id-value child-order-id-value">
+                                    -
+                                  </span>
+                                  {getVersionNumber(order) > 1 && (
+                                    <span className="order-id-version">
+                                      Version v{getVersionNumber(order)}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>{getGroupClient(group, allProjects)}</td>
+                              <td>{order.details?.projectName || "Untitled"}</td>
+                              <td>
+                                <span
+                                  className={`status-badge ${getStatusClass(getProjectDisplayStatus(order))}`}
+                                >
+                                  {getProjectDisplayStatus(order)}
+                                </span>
+                              </td>
+                              <td>{getLeadDisplay(order, "Unassigned")}</td>
+                              <td>{formatDate(order.createdAt)}</td>
+                              <td>
+                                <button
+                                  className="action-btn view-btn"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(`/new-orders/actions/${order._id}`);
+                                  }}
+                                >
+                                  View Actions
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
               {allOrdersTotalPages > 1 && (
                 <div className="orders-pagination">
                   <span className="orders-pagination-summary">
                     Showing {allOrdersPageStart + 1}-{allOrdersPageEnd} of{" "}
-                    {allOrdersFiltered.length} orders
+                    {allOrderGroupsFiltered.length} orders
                   </span>
                   <div className="orders-pagination-controls">
                     <button

@@ -271,7 +271,9 @@ const Clients = ({ user }) => {
                               <button
                                 className="action-btn"
                                 onClick={() =>
-                                  navigate(`/projects/${project._id}`)
+                                  window.location.assign(
+                                    `/projects/${project._id}`,
+                                  )
                                 }
                               >
                                 View
