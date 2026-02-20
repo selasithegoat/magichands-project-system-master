@@ -6,6 +6,7 @@ const {
   resolveCookieOptions,
   resolveClearCookieOptions,
 } = require("../utils/cookieOptions");
+const { validatePasswordStrength } = require("../utils/passwordPolicy");
 
 const normalizeDepartmentArray = (value) => {
   if (Array.isArray(value)) {
@@ -50,6 +51,9 @@ const toNonEmptyString = (value) => {
   return trimmed;
 };
 
+const getPasswordValue = (value) =>
+  typeof value === "string" ? value : "";
+
 // @desc    Register new user
 // @route   POST /api/auth/register
 // @access  Public (when AUTH_ALLOW_SELF_REGISTRATION=true) / Private Admin
@@ -65,6 +69,11 @@ const registerUser = async (req, res) => {
 
   if (userExists) {
     return res.status(400).json({ message: "User already exists" });
+  }
+
+  const passwordValidation = validatePasswordStrength(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ message: passwordValidation.message });
   }
 
   // Create user
@@ -237,6 +246,58 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Change current user's password
+// @route   PUT /api/auth/profile/password
+// @access  Private
+const changePassword = async (req, res) => {
+  try {
+    const currentPassword = getPasswordValue(req.body?.currentPassword);
+    const newPassword = getPasswordValue(req.body?.newPassword);
+    const confirmPassword = getPasswordValue(req.body?.confirmPassword);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        message: "Current password, new password, and confirmation are required.",
+      });
+    }
+
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        message: "New password and confirmation do not match.",
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({
+        message: "New password must be different from current password.",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isCurrentPasswordValid = await user.matchPassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ message: "Current password is incorrect." });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    return res.json({ message: "Password changed successfully." });
+  } catch (error) {
+    console.error("Error in changePassword:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Upload profile avatar
 // @route   POST /api/auth/profile/avatar
 // @access  Private
@@ -324,6 +385,7 @@ module.exports = {
   logoutUser,
   getMe,
   updateProfile,
+  changePassword,
   uploadProfileAvatar,
   getUsers, // [NEW]
 };

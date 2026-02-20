@@ -6,6 +6,7 @@ const {
   logoutUser,
   getMe,
   updateProfile,
+  changePassword,
   uploadProfileAvatar,
   getUsers, // [NEW]
 } = require("../controllers/authController");
@@ -48,6 +49,7 @@ router.post(
 router.post("/login", loginUser);
 router.get("/me", checkAuth, getMe);
 router.put("/profile", protect, updateProfile);
+router.put("/profile/password", protect, changePassword);
 router.post("/profile/avatar", protect, avatarUploadHandler, uploadProfileAvatar);
 router.get("/users", protect, getUsers); // [NEW]
 router.post("/logout", logoutUser);

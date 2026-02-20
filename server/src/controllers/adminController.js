@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const { validatePasswordStrength } = require("../utils/passwordPolicy");
 
 // @desc    Register a new employee (Admin)
 // @route   POST /api/admin/employees
@@ -29,6 +30,11 @@ const registerEmployee = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Please provide all required fields" });
+    }
+
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
     }
 
     const userExists = await User.findOne({ employeeId });
@@ -182,6 +188,11 @@ const updateEmployeePassword = async (req, res) => {
     }
 
     if (req.body.password) {
+      const passwordValidation = validatePasswordStrength(req.body.password);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ message: passwordValidation.message });
+      }
+
       user.password = req.body.password; // Hook will hash
       await user.save();
       res.json({ message: "Password updated successfully" });

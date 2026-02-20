@@ -386,6 +386,80 @@
   cursor: not-allowed;
 }
 
+.password-strength-disclaimer {
+  margin: -0.3rem 0 0.55rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.password-strength-meter {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.password-strength-fill {
+  height: 100%;
+  width: 0;
+  background: #ef4444;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.password-strength-fill.medium {
+  background: #eab308;
+}
+
+.password-strength-fill.strong {
+  background: #22c55e;
+}
+
+.password-strength-label {
+  margin: 0.45rem 0 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.password-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .password-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.password-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.password-message {
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.password-message.success {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.password-message.error {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
 /* SETTINGS */
 .settings-section h4 {
   font-size: 0.875rem;

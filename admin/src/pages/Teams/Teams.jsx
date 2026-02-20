@@ -347,13 +347,14 @@ const Teams = ({ user }) => {
           body: JSON.stringify({ password: passwordData.newPassword }),
         },
       );
+      const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
         alert("Password updated successfully");
         setShowPasswordModal(false);
         setPasswordData({ newPassword: "", confirmNewPassword: "" });
       } else {
-        alert("Failed to update password");
+        alert(data.message || "Failed to update password");
       }
     } catch (err) {
       alert("Error updating password");

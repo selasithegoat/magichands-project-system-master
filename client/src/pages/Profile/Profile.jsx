@@ -8,6 +8,12 @@ import ClockIcon from "../../components/icons/ClockIcon";
 import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import {
+  PASSWORD_STRENGTH_MESSAGE,
+  getPasswordStrengthLabel,
+  getPasswordStrengthScore,
+  isPasswordStrongEnough,
+} from "../../utils/passwordPolicy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONTACT_PATTERN = /^\+?[0-9()\-\s]{7,20}$/;
@@ -74,6 +80,36 @@ const validateProfile = (formData) => {
   return errors;
 };
 
+const validatePasswordForm = (passwordForm) => {
+  const errors = {};
+
+  if (!passwordForm.currentPassword) {
+    errors.currentPassword = "Current password is required.";
+  }
+
+  if (!passwordForm.newPassword) {
+    errors.newPassword = "New password is required.";
+  } else if (!isPasswordStrongEnough(passwordForm.newPassword)) {
+    errors.newPassword = PASSWORD_STRENGTH_MESSAGE;
+  }
+
+  if (!passwordForm.confirmPassword) {
+    errors.confirmPassword = "Please confirm your new password.";
+  } else if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  if (
+    passwordForm.currentPassword &&
+    passwordForm.newPassword &&
+    passwordForm.currentPassword === passwordForm.newPassword
+  ) {
+    errors.newPassword = "New password must be different from current password.";
+  }
+
+  return errors;
+};
+
 const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [emailNotif, setEmailNotif] = useState(
     user?.notificationSettings?.email ?? false,
@@ -105,6 +141,15 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [avatarError, setAvatarError] = useState("");
   const avatarInputRef = useRef(null);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordTouched, setPasswordTouched] = useState({});
+  const [passwordSubmitAttempted, setPasswordSubmitAttempted] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState(null);
 
   useEffect(() => {
     if (!avatarPreviewUrl) return undefined;
@@ -178,6 +223,12 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     };
   }, [message]);
 
+  useEffect(() => {
+    if (!passwordMessage) return undefined;
+    const timer = setTimeout(() => setPasswordMessage(null), 5000);
+    return () => clearTimeout(timer);
+  }, [passwordMessage]);
+
   const fetchActivities = async () => {
     try {
       const res = await fetch("/api/projects/activities/me?limit=5", {
@@ -206,6 +257,27 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   });
 
   const validationErrors = useMemo(() => validateProfile(formData), [formData]);
+  const passwordErrors = useMemo(
+    () => validatePasswordForm(passwordForm),
+    [passwordForm],
+  );
+  const passwordStrengthScore = useMemo(
+    () => getPasswordStrengthScore(passwordForm.newPassword),
+    [passwordForm.newPassword],
+  );
+  const passwordStrengthLabel = useMemo(
+    () =>
+      passwordForm.newPassword
+        ? getPasswordStrengthLabel(passwordStrengthScore)
+        : "Not set",
+    [passwordForm.newPassword, passwordStrengthScore],
+  );
+  const passwordStrengthClass =
+    passwordStrengthScore < 40
+      ? "weak"
+      : passwordStrengthScore < 80
+        ? "medium"
+        : "strong";
 
   const currentComparableState = useMemo(
     () => buildComparableProfileState(formData, emailNotif, pushNotif),
@@ -222,6 +294,8 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     !saving &&
     !avatarUploading &&
     Object.keys(validationErrors).length === 0;
+  const canChangePassword =
+    !passwordSaving && Object.keys(passwordErrors).length === 0;
 
   const formatTimeAgo = (dateString) => {
     const date = new Date(dateString);
@@ -264,6 +338,22 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const getFieldError = (name) => {
     if (!submitAttempted && !fieldTouched[name]) return "";
     return validationErrors[name] || "";
+  };
+
+  const handlePasswordInputChange = (event) => {
+    const { name, value } = event.target;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
+    setPasswordTouched((prev) => ({ ...prev, [name]: true }));
+  };
+
+  const handlePasswordInputBlur = (event) => {
+    const { name } = event.target;
+    setPasswordTouched((prev) => ({ ...prev, [name]: true }));
+  };
+
+  const getPasswordFieldError = (name) => {
+    if (!passwordSubmitAttempted && !passwordTouched[name]) return "";
+    return passwordErrors[name] || "";
   };
 
   const handleToggleEmailNotif = () => {
@@ -409,6 +499,60 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
       setMessage({ type: "error", text: "An error occurred." });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordSubmitAttempted(true);
+    setPasswordMessage(null);
+
+    if (Object.keys(passwordErrors).length > 0) {
+      setPasswordMessage({
+        type: "error",
+        text: "Please fix the password form errors before submitting.",
+      });
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+      const res = await fetch("/api/auth/profile/password", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(passwordForm),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPasswordMessage({
+          type: "error",
+          text: data.message || "Failed to change password.",
+        });
+        return;
+      }
+
+      setPasswordMessage({
+        type: "success",
+        text: data.message || "Password changed successfully.",
+      });
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setPasswordTouched({});
+      setPasswordSubmitAttempted(false);
+    } catch (error) {
+      console.error("Error changing password", error);
+      setPasswordMessage({
+        type: "error",
+        text: "An error occurred while changing password.",
+      });
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -638,6 +782,86 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   {notificationHint}
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="content-card">
+            <div className="card-header">
+              <h3>Security</h3>
+            </div>
+            <p className="password-strength-disclaimer">{PASSWORD_STRENGTH_MESSAGE}</p>
+            <div className="password-strength-meter" aria-hidden="true">
+              <div
+                className={`password-strength-fill ${passwordStrengthClass}`}
+                style={{ width: `${passwordStrengthScore}%` }}
+              ></div>
+            </div>
+            <p className="password-strength-label">Strength: {passwordStrengthLabel}</p>
+            {passwordMessage && (
+              <div className={`password-message ${passwordMessage.type}`}>
+                {passwordMessage.text}
+              </div>
+            )}
+            <div className="password-grid">
+              <div className="form-group full-width">
+                <label>Current Password</label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  value={passwordForm.currentPassword}
+                  onChange={handlePasswordInputChange}
+                  onBlur={handlePasswordInputBlur}
+                  className={getPasswordFieldError("currentPassword") ? "has-error" : ""}
+                  autoComplete="current-password"
+                />
+                {getPasswordFieldError("currentPassword") && (
+                  <p className="field-error">
+                    {getPasswordFieldError("currentPassword")}
+                  </p>
+                )}
+              </div>
+              <div className="form-group">
+                <label>New Password</label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={passwordForm.newPassword}
+                  onChange={handlePasswordInputChange}
+                  onBlur={handlePasswordInputBlur}
+                  className={getPasswordFieldError("newPassword") ? "has-error" : ""}
+                  autoComplete="new-password"
+                />
+                {getPasswordFieldError("newPassword") && (
+                  <p className="field-error">{getPasswordFieldError("newPassword")}</p>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Confirm New Password</label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={passwordForm.confirmPassword}
+                  onChange={handlePasswordInputChange}
+                  onBlur={handlePasswordInputBlur}
+                  className={getPasswordFieldError("confirmPassword") ? "has-error" : ""}
+                  autoComplete="new-password"
+                />
+                {getPasswordFieldError("confirmPassword") && (
+                  <p className="field-error">
+                    {getPasswordFieldError("confirmPassword")}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="password-actions">
+              <button
+                className="save-btn"
+                type="button"
+                onClick={handleChangePassword}
+                disabled={!canChangePassword}
+              >
+                {passwordSaving ? "Updating..." : "Change Password"}
+              </button>
             </div>
           </div>
 
