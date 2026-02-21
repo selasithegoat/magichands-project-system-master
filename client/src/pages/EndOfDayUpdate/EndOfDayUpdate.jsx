@@ -38,7 +38,7 @@ const EndOfDayUpdate = ({ user }) => {
         const activeProjects = data.filter((project) =>
           shouldShowProjectInEndOfDay(project, nowMs),
         );
-        setProjects(activeProjects);
+        setProjects(sortProjectsByLeadName(activeProjects));
         setCurrentPage(1); // Reset to page 1 on new fetch
       }
     } catch (err) {
@@ -103,6 +103,28 @@ const EndOfDayUpdate = ({ user }) => {
     return elapsedHours < 24;
   };
 
+  const sortProjectsByLeadName = (list) =>
+    [...list].sort((a, b) => {
+      const aLead = getLeadDisplay(a, "Unassigned").trim();
+      const bLead = getLeadDisplay(b, "Unassigned").trim();
+      const aIsUnassigned = aLead.toLowerCase() === "unassigned";
+      const bIsUnassigned = bLead.toLowerCase() === "unassigned";
+
+      if (aIsUnassigned && !bIsUnassigned) return 1;
+      if (!aIsUnassigned && bIsUnassigned) return -1;
+
+      const leadCompare = aLead.localeCompare(bLead, "en", {
+        sensitivity: "base",
+      });
+      if (leadCompare !== 0) return leadCompare;
+
+      const aProjectName = a?.details?.projectName || "";
+      const bProjectName = b?.details?.projectName || "";
+      return aProjectName.localeCompare(bProjectName, "en", {
+        sensitivity: "base",
+      });
+    });
+
   const handleDownload = async () => {
     if (!projects.length) return;
 
@@ -138,7 +160,7 @@ const EndOfDayUpdate = ({ user }) => {
             "Order Name",
             "Delivery Date & Time",
             "Status",
-            "Final Update",
+            "Lead Update",
           ].map(
             (text) =>
               new TableCell({
@@ -177,7 +199,7 @@ const EndOfDayUpdate = ({ user }) => {
 
         const updateContent = project.endOfDayUpdate
           ? project.endOfDayUpdate
-          : "No final update yet";
+          : "No lead update yet";
 
         // Urgency Check
         let isUrgent = false;
@@ -435,7 +457,7 @@ const EndOfDayUpdate = ({ user }) => {
       >
         <div>
           <h1>End of Day Update</h1>
-          <p>Final updates on all active projects</p>
+          <p>Latest updates from project leads on active projects</p>
         </div>
         <button
           className="download-btn"
@@ -455,7 +477,7 @@ const EndOfDayUpdate = ({ user }) => {
               <th>Order Name</th>
               <th>Delivery Date & Time</th>
               <th>Status</th>
-              <th>Final Update</th>
+              <th>Lead Update</th>
             </tr>
           </thead>
           <tbody>
@@ -535,7 +557,7 @@ const EndOfDayUpdate = ({ user }) => {
                           </span>
                         </div>
                       ) : (
-                        <span className="no-update">No final update yet</span>
+                        <span className="no-update">No lead update yet</span>
                       )}
                     </td>
                   </tr>

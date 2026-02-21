@@ -146,19 +146,14 @@ exports.createProjectUpdate = async (req, res) => {
 
     await newUpdate.save();
 
-    // If marked as End of Day Update, update the Project document
-
-    const isEOD =
-      req.body.isEndOfDayUpdate === "true" ||
-      req.body.isEndOfDayUpdate === true ||
-      req.body.isEndOfDayUpdate === "on";
+    // Keep Front Desk End-of-Day row in sync with latest project-lead update.
+    const isEOD = isUserAssignedProjectLead(req.user, project);
 
     if (isEOD) {
       project.endOfDayUpdate = content;
       project.endOfDayUpdateDate = new Date();
       project.endOfDayUpdateBy = req.user._id;
       await project.save();
-    } else {
     }
 
     // Populate author for immediate return
@@ -176,7 +171,7 @@ exports.createProjectUpdate = async (req, res) => {
       );
     }
 
-    // [New] Notify Front Desk if this is a Final (End of Day) update
+    // Notify Front Desk if this is a project-lead End of Day update
     if (isEOD) {
       const User = require("../models/User"); // Import if not already at top
       const frontDeskUsers = await User.find({ department: "Front Desk" });
@@ -186,18 +181,18 @@ exports.createProjectUpdate = async (req, res) => {
           req.user._id,
           project._id,
           "UPDATE",
-          "Final Update Posted",
-          `Project #${project.orderId}: ${req.user.firstName} ${req.user.lastName} has posted a final (End of Day) update for project: ${project.details.projectName}`,
+          "Lead End of Day Update Posted",
+          `Project #${project.orderId}: ${req.user.firstName} ${req.user.lastName} has posted an End of Day update for project: ${project.details.projectName}`,
         );
       }
 
-      // [New] Notify Admins of EOD Update
+      // Notify Admins of EOD Update
       await notifyAdmins(
         req.user._id,
         project._id,
         "UPDATE",
         "End of Day Update Posted",
-        `${req.user.firstName} ${req.user.lastName} posted a final (End of Day) update for project #${project.orderId || project._id}: ${project.details.projectName}`,
+        `${req.user.firstName} ${req.user.lastName} posted an End of Day update for project #${project.orderId || project._id}: ${project.details.projectName}`,
       );
     } else {
       // [New] Notify Admins of Regular Update
