@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = rateLimit;
 const connectDB = require("./config/db");
 const createCsrfProtection = require("./middleware/csrfProtection");
 const { protect } = require("./middleware/authMiddleware");
@@ -118,6 +119,33 @@ const AUTH_RATE_LIMIT_MAX_REQUESTS = toPositiveInt(
   20,
 );
 
+const normalizeAuthIdentifier = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const readAuthIdentifierFromBody = (req) => {
+  const body = req?.body;
+  if (!body || typeof body !== "object") return "";
+
+  return normalizeAuthIdentifier(
+    body.employeeId || body.email || body.username || "",
+  );
+};
+
+const getAuthRateLimitKey = (req) => {
+  const ipKey = `ip:${ipKeyGenerator(req.ip || "")}`;
+  const authPath = String(req.path || "").toLowerCase();
+
+  if (req.method !== "POST") return ipKey;
+  if (authPath !== "/login" && authPath !== "/register") return ipKey;
+
+  const identifier = readAuthIdentifierFromBody(req);
+  if (!identifier) return ipKey;
+
+  return `${ipKey}|id:${identifier}`;
+};
+
 const apiLimiter = rateLimit({
   windowMs: API_RATE_LIMIT_WINDOW_MS,
   max: API_RATE_LIMIT_MAX_REQUESTS,
@@ -133,6 +161,8 @@ const authLimiter = rateLimit({
   max: AUTH_RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: "draft-8",
   legacyHeaders: false,
+  keyGenerator: getAuthRateLimitKey,
+  skipSuccessfulRequests: true,
   message: {
     message: "Too many authentication attempts. Please try again later.",
   },

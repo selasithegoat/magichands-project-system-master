@@ -51,6 +51,9 @@ const toNonEmptyString = (value) => {
   return trimmed;
 };
 
+const normalizeEmail = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
 const getPasswordValue = (value) =>
   typeof value === "string" ? value : "";
 
@@ -116,18 +119,25 @@ const registerUser = async (req, res) => {
 // @access  Public
 const loginUser = async (req, res) => {
   try {
-    const employeeId = toNonEmptyString(req.body?.employeeId);
+    const loginIdentifier = toNonEmptyString(
+      req.body?.employeeId || req.body?.email || req.body?.username,
+    );
     const password =
       typeof req.body?.password === "string" ? req.body.password : "";
 
-    if (!employeeId || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
-        message: "Employee ID and password are required",
+        message: "Employee ID or email and password are required",
       });
     }
 
-    // Check for user email via employeeId
-    const user = await User.findOne({ employeeId: { $eq: employeeId } });
+    const normalizedEmail = normalizeEmail(loginIdentifier);
+    const user = await User.findOne({
+      $or: [
+        { employeeId: { $eq: loginIdentifier } },
+        { email: { $eq: normalizedEmail } },
+      ],
+    });
 
     if (user && (await user.matchPassword(password))) {
       const token = generateToken(user._id);
@@ -149,6 +159,7 @@ const loginUser = async (req, res) => {
         name: user.name,
         employeeId: user.employeeId,
         role: user.role,
+        department: user.department,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,

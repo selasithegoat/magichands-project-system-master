@@ -456,9 +456,7 @@ const Dashboard = ({ user }) => {
               <div
                 key={project._id}
                 className="project-row"
-                onClick={() =>
-                  window.location.assign(`/projects/${project._id}`)
-                }
+                onClick={() => navigate(`/projects/${project._id}`)}
               >
                 <div className="project-info">
                   <h4>{project.details?.projectName}</h4>

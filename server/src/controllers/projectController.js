@@ -6,6 +6,7 @@ const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
+const { hasAdminPortalAccess } = require("../middleware/authMiddleware");
 const {
   notifyBillingOptionChange,
 } = require("../utils/billingNotificationService");
@@ -352,7 +353,7 @@ const buildProjectAccessQuery = (req) => {
   );
 
   const canSeeAll =
-    (req.user.role === "admin" && isAdminPortal) ||
+    (hasAdminPortalAccess(req.user) && isAdminPortal) ||
     (isReportMode && isFrontDesk) ||
     (isEngagedMode && isEngagedDept);
 

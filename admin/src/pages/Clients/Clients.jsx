@@ -270,11 +270,7 @@ const Clients = ({ user }) => {
                             <td>
                               <button
                                 className="action-btn"
-                                onClick={() =>
-                                  window.location.assign(
-                                    `/projects/${project._id}`,
-                                  )
-                                }
+                                onClick={() => navigate(`/projects/${project._id}`)}
                               >
                                 View
                               </button>

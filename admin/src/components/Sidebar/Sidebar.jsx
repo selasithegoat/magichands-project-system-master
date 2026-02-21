@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import "./Sidebar.css";
 import {
   DashboardIcon,
@@ -12,6 +12,7 @@ import {
 import ConfirmationModal from "../ConfirmationModal/ConfirmationModal";
 
 const Sidebar = ({ isOpen, onClose, user }) => {
+  const navigate = useNavigate();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -21,7 +22,7 @@ const Sidebar = ({ isOpen, onClose, user }) => {
         credentials: "include",
       });
       if (res.ok) {
-        window.location.href = "/login"; // Redirect to login
+        navigate("/login", { replace: true });
       }
     } catch (err) {
       console.error("Logout failed", err);

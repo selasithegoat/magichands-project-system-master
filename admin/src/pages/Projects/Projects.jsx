@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
@@ -9,6 +10,7 @@ import { getLeadDisplay } from "../../utils/leadDisplay";
 const GROUP_ROW_TRANSITION_MS = 220;
 
 const Projects = ({ user }) => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [groupedOrders, setGroupedOrders] = useState([]);
   const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
@@ -33,7 +35,7 @@ const Projects = ({ user }) => {
   const openProjectDetails = (project) => {
     const projectId = project?._id;
     if (!projectId) return;
-    window.location.assign(`/projects/${projectId}`);
+    navigate(`/projects/${projectId}`, { state: { project } });
   };
 
   const fetchProjects = async () => {

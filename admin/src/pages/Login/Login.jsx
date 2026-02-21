@@ -11,6 +11,21 @@ import {
   HelpIcon,
   SupportIcon,
 } from "../../icons/Icons";
+
+const normalizeDepartments = (value) => {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return list
+    .map((entry) => String(entry || "").trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const hasAdminPortalAccess = (user) =>
+  Boolean(
+    user &&
+      user.role === "admin" &&
+      normalizeDepartments(user.department).includes("administration"),
+  );
+
 const Login = ({ onLoginSuccess }) => {
   const [loginData, setLoginData] = useState({
     username: "",
@@ -47,12 +62,18 @@ const Login = ({ onLoginSuccess }) => {
         throw new Error(data.message || "Login failed");
       }
 
-      if (data.role === "admin") {
+      if (hasAdminPortalAccess(data)) {
         if (onLoginSuccess) {
           onLoginSuccess(data);
         }
       } else {
-        throw new Error("Unauthorized: Access restricted to Administrators.");
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => {});
+        throw new Error(
+          "Unauthorized: Access is restricted to Administration department admins.",
+        );
       }
     } catch (err) {
       console.error("Login error:", err);

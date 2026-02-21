@@ -25,6 +25,20 @@ import {
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 
+const normalizeDepartments = (value) => {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return list
+    .map((entry) => String(entry || "").trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const hasAdminPortalAccess = (user) =>
+  Boolean(
+    user &&
+      user.role === "admin" &&
+      normalizeDepartments(user.department).includes("administration"),
+  );
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +52,7 @@ function App() {
         });
         if (res.ok) {
           const data = await res.json();
-          setUser(data); // data will be null if not logged in, which is correct
+          setUser(hasAdminPortalAccess(data) ? data : null);
         }
       } catch (error) {
         console.error("Session verification failed", error);
@@ -50,7 +64,7 @@ function App() {
   }, []);
 
   const handleLoginSuccess = (userData) => {
-    setUser(userData);
+    setUser(hasAdminPortalAccess(userData) ? userData : null);
   };
 
   const handleLogout = async () => {
@@ -90,7 +104,7 @@ function App() {
   }
 
   const ProtectedRoute = ({ children }) => {
-    if (!user || user.role !== "admin") {
+    if (!hasAdminPortalAccess(user)) {
       return <Navigate to="/login" replace />;
     }
     return <DashboardLayout user={user}>{children}</DashboardLayout>;
