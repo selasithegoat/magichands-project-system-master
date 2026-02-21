@@ -9,6 +9,7 @@ const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
 const {
   hasAdminPortalAccess,
   isAdminPortalRequest,
+  isEngagedPortalRequest,
 } = require("../middleware/authMiddleware");
 const {
   notifyBillingOptionChange,
@@ -392,6 +393,19 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
     res.status(403).json({
       message:
         "You cannot modify this project from the admin portal while you are the assigned Project Lead. Ask another admin to make this change.",
+    });
+    return false;
+  }
+  const engagedActionTypes = new Set(["acknowledge", "status", "mockup"]);
+  const isEngagedPortalMutation = isEngagedPortalRequest(req);
+  if (
+    isUserAssignedProjectLead(req.user, project) &&
+    isEngagedPortalMutation &&
+    engagedActionTypes.has(action)
+  ) {
+    res.status(403).json({
+      message:
+        "Project Leads cannot perform engagement actions on their own projects from the engaged departments page.",
     });
     return false;
   }

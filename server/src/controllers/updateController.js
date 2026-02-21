@@ -7,6 +7,7 @@ const {
   isProjectOnHold,
   sendProjectOnHoldResponse,
 } = require("../middleware/projectHoldMiddleware");
+const { isEngagedPortalRequest } = require("../middleware/authMiddleware");
 
 const normalizeObjectId = (value) => {
   if (!value) return "";
@@ -56,6 +57,13 @@ const canAccessProjectUpdates = (user, project) => {
   return projectDepartments.some((dept) => userDepartments.has(dept));
 };
 
+const isUserAssignedProjectLead = (user, project) => {
+  if (!user || !project) return false;
+  const userId = normalizeObjectId(user._id || user.id);
+  const leadId = normalizeObjectId(project.projectLeadId);
+  return Boolean(userId && leadId && userId === leadId);
+};
+
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
   try {
@@ -103,6 +111,16 @@ exports.createProjectUpdate = async (req, res) => {
       return res
         .status(403)
         .json({ message: "Not authorized to post updates for this project" });
+    }
+
+    if (
+      isEngagedPortalRequest(req) &&
+      isUserAssignedProjectLead(req.user, project)
+    ) {
+      return res.status(403).json({
+        message:
+          "Project Leads cannot perform engagement actions on their own projects from the engaged departments page.",
+      });
     }
 
     if (isProjectOnHold(project)) {

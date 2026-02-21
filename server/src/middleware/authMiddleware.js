@@ -70,6 +70,17 @@ const isOpsPortalRequest = (req) => {
   );
 };
 
+const isEngagedPortalRequest = (req) => {
+  const refererPath = readRefererPath(req);
+  const source = toLowerTrimmed(req?.query?.source);
+
+  return (
+    source === "engaged" ||
+    refererPath === "/engaged-projects" ||
+    refererPath.startsWith("/engaged-projects/")
+  );
+};
+
 const isPrivilegedPortalRequest = (req) =>
   isAdminPortalRequest(req) || isOpsPortalRequest(req);
 
@@ -187,4 +198,5 @@ module.exports = {
   requireRole,
   hasAdminPortalAccess,
   isAdminPortalRequest,
+  isEngagedPortalRequest,
 };

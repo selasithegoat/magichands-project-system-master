@@ -77,6 +77,12 @@ const getReferenceFileExtension = (path) => {
 const isImageReference = (path) =>
   /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(path || ""));
 
+const normalizeObjectId = (value) => {
+  if (!value) return "";
+  if (typeof value === "object" && value._id) return String(value._id);
+  return String(value);
+};
+
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -208,6 +214,12 @@ const EngagedProjectActions = ({ user }) => {
       "Pending Mockup",
       "Pending Production",
     ].includes(project.status);
+
+  const isProjectLeadForProject = useMemo(() => {
+    const currentUserId = normalizeObjectId(user?._id || user?.id);
+    const projectLeadId = normalizeObjectId(project?.projectLeadId);
+    return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
+  }, [user, project?.projectLeadId]);
 
   const mockupUrl = project?.mockup?.fileUrl;
   const mockupName = project?.mockup?.fileName || "Approved Mockup";
@@ -351,14 +363,25 @@ const EngagedProjectActions = ({ user }) => {
   });
 
   const handleCompleteStatus = async (targetProject, action) => {
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return false;
+    }
     const actionKey = `${targetProject._id}:${action.complete}`;
     setStatusUpdating(actionKey);
     try {
-      const res = await fetch(`/api/projects/${targetProject._id}/status`, {
+      const res = await fetch(
+        `/api/projects/${targetProject._id}/status?source=engaged`,
+        {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: action.complete }),
-      });
+        },
+      );
 
       if (res.ok) {
         setToast({
@@ -394,6 +417,14 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleOpenUpdateModal = (departments = projectEngagedSubDepts) => {
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
     if (!project) return;
     const availableDepts = departments?.length
       ? departments
@@ -417,6 +448,14 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleSubmitUpdate = async (e) => {
     e.preventDefault();
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
     if (!updateForm.content || !updateForm.department) {
       setToast({
         type: "error",
@@ -435,10 +474,13 @@ const EngagedProjectActions = ({ user }) => {
       data.append("category", updateForm.category);
       data.append("isEndOfDayUpdate", false);
 
-      const res = await fetch(`/api/updates/project/${project._id}`, {
+      const res = await fetch(
+        `/api/updates/project/${project._id}?source=engaged`,
+        {
         method: "POST",
         body: data,
-      });
+        },
+      );
 
       if (res.ok) {
         setToast({ type: "success", message: "Update posted successfully!" });
@@ -461,12 +503,23 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleAcknowledge = async (targetProject, department) => {
-    try {
-      const res = await fetch(`/api/projects/${targetProject._id}/acknowledge`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ department }),
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
       });
+      return false;
+    }
+    try {
+      const res = await fetch(
+        `/api/projects/${targetProject._id}/acknowledge?source=engaged`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ department }),
+        },
+      );
 
       if (res.ok) {
         setToast({
@@ -490,6 +543,14 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openAcknowledgeModal = (targetProject, department) => {
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
     if (!isScopeApprovalComplete(targetProject.status)) {
       setToast({
         type: "error",
@@ -527,12 +588,28 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openCompleteModal = (targetProject, action) => {
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
     setCompleteTarget({ project: targetProject, action });
     setCompleteInput("");
     setShowCompleteModal(true);
   };
 
   const openMockupModal = (targetProject, action) => {
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
     setMockupTarget({ project: targetProject, action });
     setMockupFile(null);
     setMockupNote("");
@@ -573,6 +650,14 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleUploadMockup = async (e) => {
     e.preventDefault();
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
     if (!mockupTarget) return;
     if (!mockupFile) {
       setToast({ type: "error", message: "Please select a mockup file." });
@@ -586,10 +671,13 @@ const EngagedProjectActions = ({ user }) => {
       data.append("mockup", mockupFile);
       if (mockupNote.trim()) data.append("note", mockupNote.trim());
 
-      const res = await fetch(`/api/projects/${target.project._id}/mockup`, {
-        method: "POST",
-        body: data,
-      });
+      const res = await fetch(
+        `/api/projects/${target.project._id}/mockup?source=engaged`,
+        {
+          method: "POST",
+          body: data,
+        },
+      );
 
       if (res.ok) {
         const updatedProject = await res.json();
@@ -784,6 +872,13 @@ const EngagedProjectActions = ({ user }) => {
         </section>
       )}
 
+      {isProjectLeadForProject && (
+        <div className="engaged-warning-banner">
+          You are the assigned Project Lead for this project. Engagement actions
+          are disabled on this page for your account.
+        </div>
+      )}
+
       <div className="engaged-sections">
         {departmentSections.length === 0 ? (
           <div className="empty-state">No engaged departments available.</div>
@@ -827,7 +922,14 @@ const EngagedProjectActions = ({ user }) => {
                     <button
                       className="update-btn"
                       onClick={() => handleOpenUpdateModal(section.subDepts)}
-                      disabled={section.subDepts.length === 0}
+                      disabled={
+                        section.subDepts.length === 0 || isProjectLeadForProject
+                      }
+                      title={
+                        isProjectLeadForProject
+                          ? "Project leads cannot take engagement actions on their own projects here."
+                          : "Post department update"
+                      }
                     >
                       Post Update
                     </button>
@@ -841,6 +943,7 @@ const EngagedProjectActions = ({ user }) => {
                         const isAcknowledged = acknowledgedDepts.has(dept);
                         const canAcknowledge =
                           !isAcknowledged &&
+                          !isProjectLeadForProject &&
                           isScopeApprovalComplete(project.status);
                         return (
                           <div key={dept} className="engaged-ack-row">
@@ -859,6 +962,8 @@ const EngagedProjectActions = ({ user }) => {
                               title={
                                 isAcknowledged
                                   ? "Already acknowledged"
+                                  : isProjectLeadForProject
+                                    ? "Project leads cannot take engagement actions on their own projects here."
                                   : isScopeApprovalComplete(project.status)
                                     ? "Confirm engagement"
                                     : "Scope approval must be completed"
@@ -889,6 +994,9 @@ const EngagedProjectActions = ({ user }) => {
                     let disabledReason = "";
                     if (!isPending) {
                       disabledReason = `Waiting for ${action.pending}.`;
+                    } else if (isProjectLeadForProject) {
+                      disabledReason =
+                        "Project leads cannot take engagement actions on their own projects here.";
                     } else if (blockedByPayment) {
                       disabledReason =
                         "Payment verification is required before production can be completed.";
@@ -908,11 +1016,16 @@ const EngagedProjectActions = ({ user }) => {
                               className="complete-btn"
                               onClick={() => openMockupModal(project, action)}
                               disabled={
-                                !isPending || isUpdating || mockupAlreadySubmitted
+                                !isPending ||
+                                isUpdating ||
+                                mockupAlreadySubmitted ||
+                                isProjectLeadForProject
                               }
                               title={
                                 !isPending
                                   ? `Waiting for ${action.pending}.`
+                                  : isProjectLeadForProject
+                                    ? "Project leads cannot take engagement actions on their own projects here."
                                   : mockupAlreadySubmitted
                                     ? "Mockup already submitted."
                                     : "Upload approved mockup"
@@ -925,10 +1038,17 @@ const EngagedProjectActions = ({ user }) => {
                             <button
                               className="complete-btn confirm-btn"
                               onClick={() => openCompleteModal(project, action)}
-                              disabled={!isPending || isUpdating || !mockupAlreadySubmitted}
+                              disabled={
+                                !isPending ||
+                                isUpdating ||
+                                !mockupAlreadySubmitted ||
+                                isProjectLeadForProject
+                              }
                               title={
                                 !isPending
                                   ? `Waiting for ${action.pending}.`
+                                  : isProjectLeadForProject
+                                    ? "Project leads cannot take engagement actions on their own projects here."
                                   : mockupAlreadySubmitted
                                     ? "Confirm mockup completion"
                                     : "Upload mockup before confirming"
@@ -941,7 +1061,12 @@ const EngagedProjectActions = ({ user }) => {
                           <button
                             className="complete-btn"
                             onClick={() => openCompleteModal(project, action)}
-                            disabled={!isPending || blockedByPayment || isUpdating}
+                            disabled={
+                              !isPending ||
+                              blockedByPayment ||
+                              isUpdating ||
+                              isProjectLeadForProject
+                            }
                             title={disabledReason || "Confirm stage completion"}
                           >
                             {isUpdating ? "Updating..." : action.label}
