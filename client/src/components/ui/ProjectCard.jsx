@@ -1,10 +1,17 @@
 import "./ProjectCard.css";
 import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
-import ThreeDotsIcon from "../icons/ThreeDotsIcon";
-import ClockIcon from "../icons/ClockIcon";
 import FolderIcon from "../icons/FolderIcon";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+
+const resolveProjectTypeKey = (project) => {
+  if (project?.projectType === "Emergency" || project?.priority === "Urgent") {
+    return "emergency";
+  }
+  if (project?.projectType === "Corporate Job") return "corporate";
+  if (project?.projectType === "Quote") return "quote";
+  return "standard";
+};
 
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Helpers
@@ -83,20 +90,21 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     project.status === "Completed" || project.status === "Finished";
   const statusInfo = getStatusColor(project.status);
 
-  const getProjectTypeInfo = (type) => {
-    switch (type) {
-      case "Emergency":
+  const getProjectTypeInfo = (typeKey) => {
+    switch (typeKey) {
+      case "emergency":
         return { label: "EMERGENCY", color: "#e74c3c", bg: "#fef2f2" };
-      case "Corporate Job":
+      case "corporate":
         return { label: "CORPORATE", color: "#42a165", bg: "#f0fdf4" };
-      case "Quote":
+      case "quote":
         return { label: "QUOTE", color: "#f39c12", bg: "#fffbeb" };
       default:
         return { label: "STANDARD", color: "#3498db", bg: "#eff6ff" };
     }
   };
 
-  const projectTypeInfo = getProjectTypeInfo(project.projectType);
+  const projectTypeKey = resolveProjectTypeKey(project);
+  const projectTypeInfo = getProjectTypeInfo(projectTypeKey);
 
   const standardProgressMap = {
     "Order Confirmed": 5,
@@ -146,7 +154,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const showVersionTag = projectVersion > 1;
 
   return (
-    <div className="project-card-new">
+    <div
+      className={`project-card-new project-type-${projectTypeKey}`}
+    >
       <div className="card-header">
         {/* Project Thumbnail / Avatar */}
         <div className="project-thumbnail-wrapper">
@@ -195,15 +205,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           )}
         </div>
         {project.details?.client && (
-          <span
-            className="project-client"
-            style={{
-              display: "block",
-              fontSize: "0.85rem",
-              color: "#64748b",
-              marginTop: "4px",
-            }}
-          >
+          <span className="project-client">
             {project.details.client}
           </span>
         )}

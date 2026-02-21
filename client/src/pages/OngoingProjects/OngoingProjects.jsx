@@ -206,8 +206,10 @@ const OngoingProjects = ({
     }
   }, [viewMode]);
 
+  const isEmergencyView = viewMode === "emergencies";
+
   return (
-    <div className="ongoing-container">
+    <div className={`ongoing-container ${isEmergencyView ? "emergency-theme" : ""}`}>
       {/* Header */}
       <div className="ongoing-header">
         <button className="ongoing-back-btn" onClick={onBack}>

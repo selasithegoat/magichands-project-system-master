@@ -6,8 +6,32 @@ import CalendarIcon from "../icons/CalendarIcon";
 import CheckCircleIcon from "../icons/CheckCircleIcon";
 import EyeIcon from "../icons/EyeIcon";
 
+const resolveProjectTypeKey = (project) => {
+  if (project?.projectType === "Emergency" || project?.priority === "Urgent") {
+    return "emergency";
+  }
+  if (project?.projectType === "Corporate Job") return "corporate";
+  if (project?.projectType === "Quote") return "quote";
+  return "standard";
+};
+
+const getProjectTypeLabel = (typeKey) => {
+  switch (typeKey) {
+    case "emergency":
+      return "EMERGENCY";
+    case "corporate":
+      return "CORPORATE";
+    case "quote":
+      return "QUOTE";
+    default:
+      return "STANDARD";
+  }
+};
+
 const HistoryProjectCard = ({ project, onViewDetails }) => {
   const details = project.details || {};
+  const projectTypeKey = resolveProjectTypeKey(project);
+  const projectTypeLabel = getProjectTypeLabel(projectTypeKey);
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
@@ -24,9 +48,12 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
   };
 
   return (
-    <div className="history-card">
+    <div className={`history-card history-card-${projectTypeKey}`}>
       <div className="card-top-row">
         <div className="order-meta-tags">
+          <span className={`project-type-tag ${projectTypeKey}`}>
+            {projectTypeLabel}
+          </span>
           <span className="order-id-tag">{project.orderId || "NO-ID"}</span>
           {showVersionTag && <span className="version-tag">v{projectVersion}</span>}
         </div>
