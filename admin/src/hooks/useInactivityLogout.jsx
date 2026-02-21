@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
-const useInactivityLogout = (timeout = 1800000) => {
-  // Default: 30 minutes
+const useInactivityLogout = (timeout = 5 * 60 * 1000, onLoggedOut) => {
+  // Default: 5 minutes
   const navigate = useNavigate();
   const timeoutRef = useRef(null);
 
@@ -12,18 +12,17 @@ const useInactivityLogout = (timeout = 1800000) => {
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
+        keepalive: true,
       });
-
-      // Clear local storage if used
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-
-      // Redirect to login
-      navigate("/login");
     } catch (error) {
       console.error("Logout failed", error);
-      // Force redirect even if API fails
-      navigate("/login");
+    } finally {
+      if (typeof onLoggedOut === "function") {
+        onLoggedOut();
+      }
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/login", { replace: true });
     }
   };
 

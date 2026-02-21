@@ -180,6 +180,7 @@ const loginUser = async (req, res) => {
 const getMe = async (req, res) => {
   // req.user is set in authMiddleware by verifying token
   // If checkAuth is used and no token, req.user will be undefined. Return null safely.
+  res.set("Cache-Control", "no-store");
   res.status(200).json(req.user || null);
 };
 
@@ -188,16 +189,14 @@ const getMe = async (req, res) => {
 // @access  Public
 const logoutUser = (req, res) => {
   const clearOptions = resolveClearCookieOptions();
+  const cookiesToClear = ["token_admin", "token_client", "token"];
 
-  // Clear all auth cookies to avoid cross-portal residue
-  res.cookie("token_admin", "", clearOptions);
-  res.cookie("token_client", "", clearOptions);
-
-  // Clear legacy token just in case
-  res.cookie("token", "", {
-    httpOnly: true,
-    expires: new Date(0),
+  cookiesToClear.forEach((cookieName) => {
+    res.clearCookie(cookieName, clearOptions);
+    res.cookie(cookieName, "", clearOptions);
   });
+
+  res.set("Cache-Control", "no-store");
   res.status(200).json({ message: "Logged out successfully" });
 };
 

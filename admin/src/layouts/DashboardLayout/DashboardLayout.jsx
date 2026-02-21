@@ -3,7 +3,7 @@ import "./DashboardLayout.css";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import Header from "../../components/Header/Header";
 
-const DashboardLayout = ({ children, user }) => {
+const DashboardLayout = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -16,7 +16,12 @@ const DashboardLayout = ({ children, user }) => {
         <div className="sidebar-overlay" onClick={closeSidebar}></div>
       )}
 
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} user={user} />
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={closeSidebar}
+        user={user}
+        onLogout={onLogout}
+      />
 
       <div className="dashboard-main">
         <Header onMenuClick={toggleSidebar} />

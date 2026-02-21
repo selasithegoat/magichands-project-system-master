@@ -11,21 +11,26 @@ import {
 } from "../../icons/Icons";
 import ConfirmationModal from "../ConfirmationModal/ConfirmationModal";
 
-const Sidebar = ({ isOpen, onClose, user }) => {
+const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
   const navigate = useNavigate();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (res.ok) {
-        navigate("/login", { replace: true });
+      if (typeof onLogout === "function") {
+        await onLogout();
+      } else {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+        });
       }
+      setIsLogoutModalOpen(false);
+      navigate("/login", { replace: true });
     } catch (err) {
       console.error("Logout failed", err);
+      navigate("/login", { replace: true });
     }
   };
 

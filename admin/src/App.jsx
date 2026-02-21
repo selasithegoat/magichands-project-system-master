@@ -49,6 +49,7 @@ function App() {
       try {
         const res = await fetch("/api/auth/me", {
           credentials: "include",
+          cache: "no-store",
         });
         if (res.ok) {
           const data = await res.json();
@@ -68,20 +69,20 @@ function App() {
   };
 
   const handleLogout = async () => {
+    setUser(null);
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
+        keepalive: true,
       });
-      setUser(null);
     } catch (err) {
       console.error("Logout failed", err);
-      setUser(null);
     }
   };
 
-  // Inactivity Timeout (30 minutes)
-  useInactivityLogout(30 * 60 * 1000);
+  // Inactivity Timeout (5 minutes)
+  useInactivityLogout(5 * 60 * 1000, () => setUser(null));
   useRealtimeClient(Boolean(user));
 
   const LoadingScreen = () => (
@@ -107,7 +108,11 @@ function App() {
     if (!hasAdminPortalAccess(user)) {
       return <Navigate to="/login" replace />;
     }
-    return <DashboardLayout user={user}>{children}</DashboardLayout>;
+    return (
+      <DashboardLayout user={user} onLogout={handleLogout}>
+        {children}
+      </DashboardLayout>
+    );
   };
 
   return (

@@ -70,8 +70,8 @@ function App() {
   const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
 
-  // Initialize auto-logout (30 minutes)
-  useInactivityLogout();
+  // Initialize auto-logout (5 minutes)
+  useInactivityLogout(5 * 60 * 1000, () => setUser(null));
   useRealtimeClient(Boolean(user));
 
   // Fetch project count
@@ -165,6 +165,7 @@ function App() {
     try {
       const res = await fetch("/api/auth/me", {
         credentials: "include",
+        cache: "no-store",
       });
 
       if (res.ok) {
@@ -210,16 +211,17 @@ function App() {
   }, [user]);
 
   const performLogout = async () => {
+    setUser(null);
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
+        keepalive: true,
       });
-      setUser(null); // Clear user state
-      navigate("/login");
     } catch (error) {
       console.error("Logout failed", error);
-      navigate("/login");
+    } finally {
+      navigate("/login", { replace: true });
     }
   };
 
