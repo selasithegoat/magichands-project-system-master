@@ -54,6 +54,27 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
 const isScopeApprovalComplete = (status) =>
   Boolean(status && SCOPE_APPROVAL_READY_STATUSES.has(status));
 
+const getReferenceFileName = (path) => {
+  if (!path) return "Reference File";
+  const withoutQuery = String(path).split("?")[0];
+  const rawName = withoutQuery.split("/").pop() || withoutQuery;
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+};
+
+const getReferenceFileExtension = (path) => {
+  const fileName = getReferenceFileName(path);
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === fileName.length - 1) return "FILE";
+  return fileName.slice(dotIndex + 1).toUpperCase().slice(0, 6);
+};
+
+const isImageReference = (path) =>
+  /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(path || ""));
+
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -225,6 +246,45 @@ const EngagedProjectActions = ({ user }) => {
 
     return sections;
   }, [project, projectEngagedSubDepts, userEngagedDepts, productionSubDepts]);
+
+  const shouldShowScopeReferenceSection = useMemo(
+    () =>
+      departmentSections.some(
+        (section) => section.key === "Graphics" || section.key === "Production",
+      ),
+    [departmentSections],
+  );
+
+  const briefOverview = useMemo(
+    () => String(project?.details?.briefOverview || "").trim(),
+    [project?.details?.briefOverview],
+  );
+
+  const scopeReferenceItems = useMemo(() => {
+    const sampleImage = String(project?.details?.sampleImage || "").trim();
+    const attachments = Array.isArray(project?.details?.attachments)
+      ? project.details.attachments
+      : [];
+
+    const seen = new Set();
+    const items = [];
+    const addItem = (path, label) => {
+      const normalized = String(path || "").trim();
+      if (!normalized || seen.has(normalized)) return;
+      seen.add(normalized);
+      items.push({ path: normalized, label });
+    };
+
+    addItem(sampleImage, "Primary Reference");
+
+    let attachmentCounter = 0;
+    attachments.forEach((path) => {
+      attachmentCounter += 1;
+      addItem(path, `Reference Material ${attachmentCounter}`);
+    });
+
+    return items;
+  }, [project?.details?.sampleImage, project?.details?.attachments]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "TBD";
@@ -635,6 +695,88 @@ const EngagedProjectActions = ({ user }) => {
           </span>
         </div>
       </div>
+
+      {shouldShowScopeReferenceSection && (
+        <section className="engaged-scope-section">
+          <div className="engaged-scope-header">
+            <div>
+              <h2>Brief Overview &amp; Reference Materials</h2>
+              <p>
+                Review the project scope and source files before starting design
+                and production work.
+              </p>
+            </div>
+            <div className="engaged-scope-stats">
+              <span className="engaged-scope-pill">
+                {scopeReferenceItems.length}{" "}
+                {scopeReferenceItems.length === 1 ? "file" : "files"}
+              </span>
+              <span className="engaged-scope-pill muted">
+                {briefOverview ? "Brief ready" : "Brief pending"}
+              </span>
+            </div>
+          </div>
+
+          <div className="engaged-scope-grid">
+            <article className="engaged-scope-card">
+              <h3>Brief Overview</h3>
+              {briefOverview ? (
+                <p className="engaged-scope-brief-text">{briefOverview}</p>
+              ) : (
+                <p className="engaged-scope-empty">
+                  No brief overview has been added yet.
+                </p>
+              )}
+            </article>
+
+            <article className="engaged-scope-card">
+              <h3>Reference Materials</h3>
+              {scopeReferenceItems.length === 0 ? (
+                <p className="engaged-scope-empty">
+                  No reference materials uploaded yet.
+                </p>
+              ) : (
+                <div className="engaged-reference-grid">
+                  {scopeReferenceItems.map((item) => {
+                    const fileName = getReferenceFileName(item.path);
+                    const fileExtension = getReferenceFileExtension(item.path);
+                    const isImage = isImageReference(item.path);
+
+                    return (
+                      <a
+                        key={item.path}
+                        className="engaged-reference-item"
+                        href={item.path}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                      >
+                        <div
+                          className={`engaged-reference-preview ${
+                            isImage ? "is-image" : "is-file"
+                          }`}
+                        >
+                          {isImage ? (
+                            <img src={item.path} alt={fileName} loading="lazy" />
+                          ) : (
+                            <span>{fileExtension}</span>
+                          )}
+                        </div>
+                        <div className="engaged-reference-meta">
+                          <span className="engaged-reference-tag">
+                            {item.label}
+                          </span>
+                          <span className="engaged-reference-name">{fileName}</span>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </article>
+          </div>
+        </section>
+      )}
 
       <div className="engaged-sections">
         {departmentSections.length === 0 ? (
