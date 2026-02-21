@@ -151,6 +151,41 @@
   color: #d1d5db;
 }
 
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-wrapper .form-input {
+  padding-right: 40px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.password-toggle-btn:hover {
+  color: #10b981;
+}
+
+.password-toggle-btn:focus-visible {
+  outline: 2px solid rgba(16, 185, 129, 0.45);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+
 /* Sign In Button */
 .login-submit-btn {
   margin-top: 16px;
@@ -187,4 +222,3 @@
   margin-left: 4px;
   cursor: pointer;
 }
-
