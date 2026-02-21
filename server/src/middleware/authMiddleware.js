@@ -186,4 +186,5 @@ module.exports = {
   checkAuth,
   requireRole,
   hasAdminPortalAccess,
+  isAdminPortalRequest,
 };

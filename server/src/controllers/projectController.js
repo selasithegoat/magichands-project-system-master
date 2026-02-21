@@ -6,7 +6,10 @@ const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
-const { hasAdminPortalAccess } = require("../middleware/authMiddleware");
+const {
+  hasAdminPortalAccess,
+  isAdminPortalRequest,
+} = require("../middleware/authMiddleware");
 const {
   notifyBillingOptionChange,
 } = require("../utils/billingNotificationService");
@@ -102,8 +105,26 @@ const PROJECT_MUTATION_ACCESS_FIELDS =
 
 const toObjectIdString = (value) => {
   if (!value) return "";
-  if (typeof value === "object" && value._id) return String(value._id);
-  return String(value);
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+
+  if (typeof value === "object") {
+    if (typeof value.toHexString === "function") return value.toHexString();
+    if (value.$oid) return String(value.$oid);
+    if (value._id && value._id !== value) return toObjectIdString(value._id);
+    if (typeof value.id === "string" || typeof value.id === "number") {
+      return String(value.id);
+    }
+    if (typeof value.toString === "function") {
+      const stringified = value.toString();
+      if (stringified && stringified !== "[object Object]") {
+        return stringified;
+      }
+    }
+  }
+
+  return "";
 };
 
 const normalizeOrderNumber = (value) => String(value || "").trim();
@@ -287,6 +308,13 @@ const projectHasDepartment = (projectDepartments, targetDepartment) => {
     .some((dept) => dept === targetCanonical);
 };
 
+const isUserAssignedProjectLead = (user, project) => {
+  if (!user || !project) return false;
+  const userId = toObjectIdString(user._id || user.id);
+  const projectLeadId = toObjectIdString(project.projectLeadId);
+  return Boolean(userId && projectLeadId && userId === projectLeadId);
+};
+
 const canMutateProject = (user, project, action = "default") => {
   if (!user || !project) return false;
   if (user.role === "admin") return true;
@@ -326,6 +354,18 @@ const canMutateProject = (user, project, action = "default") => {
 const ensureProjectMutationAccess = (req, res, project, action = "default") => {
   if (!project) {
     res.status(404).json({ message: "Project not found" });
+    return false;
+  }
+  const isAdminPortalMutation = isAdminPortalRequest(req);
+  if (
+    req.user?.role === "admin" &&
+    isUserAssignedProjectLead(req.user, project) &&
+    isAdminPortalMutation
+  ) {
+    res.status(403).json({
+      message:
+        "You cannot modify this project from the admin portal while you are the assigned Project Lead. Ask another admin to make this change.",
+    });
     return false;
   }
   if (!canMutateProject(req.user, project, action)) {

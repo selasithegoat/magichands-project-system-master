@@ -229,7 +229,7 @@ const MinimalQuoteForm = () => {
       const formPayload = new FormData();
       formPayload.append("projectType", "Quote");
       if (!editingId) {
-        formPayload.append("status", "Pending Scope Approval");
+        formPayload.append("status", "Order Confirmed");
       }
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);

@@ -38,6 +38,44 @@ const Projects = ({ user }) => {
     navigate(`/projects/${projectId}`, { state: { project } });
   };
 
+  const buildFallbackOrderGroups = (projectList = []) => {
+    const groups = new Map();
+
+    projectList.forEach((project, index) => {
+      const orderNumber = String(
+        project?.orderRef?.orderNumber || project?.orderId || "UNASSIGNED",
+      ).trim();
+      const groupKey = orderNumber || project?._id || `fallback-${index}`;
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          id: groupKey,
+          orderRef: project?.orderRef?._id || project?.orderRef || null,
+          orderNumber: orderNumber || "UNASSIGNED",
+          orderDate: project?.orderRef?.orderDate || project?.orderDate || null,
+          client: project?.orderRef?.client || project?.details?.client || "",
+          clientEmail:
+            project?.orderRef?.clientEmail || project?.details?.clientEmail || "",
+          clientPhone:
+            project?.orderRef?.clientPhone || project?.details?.clientPhone || "",
+          projects: [],
+        });
+      }
+
+      groups.get(groupKey).projects.push(project);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => {
+      const aTime = new Date(
+        a.orderDate || a.projects?.[0]?.createdAt || 0,
+      ).getTime();
+      const bTime = new Date(
+        b.orderDate || b.projects?.[0]?.createdAt || 0,
+      ).getTime();
+      return bTime - aTime;
+    });
+  };
+
   const fetchProjects = async () => {
     try {
       const [projectsRes, groupedRes] = await Promise.all([
@@ -49,9 +87,12 @@ const Projects = ({ user }) => {
         }),
       ]);
 
+      let projectsData = [];
+
       if (projectsRes.ok) {
         const data = await projectsRes.json();
-        setProjects(Array.isArray(data) ? data : []);
+        projectsData = Array.isArray(data) ? data : [];
+        setProjects(projectsData);
       } else {
         setProjects([]);
         console.error("Failed to fetch projects");
@@ -61,7 +102,7 @@ const Projects = ({ user }) => {
         const groupedData = await groupedRes.json();
         setGroupedOrders(Array.isArray(groupedData) ? groupedData : []);
       } else {
-        setGroupedOrders([]);
+        setGroupedOrders(buildFallbackOrderGroups(projectsData));
         console.error("Failed to fetch grouped orders");
       }
     } catch (err) {

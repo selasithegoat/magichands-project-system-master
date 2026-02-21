@@ -158,7 +158,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             {projectTypeInfo.label}
           </span>
           <span className={`status-badge ${statusInfo.class}`}>
-            {project.status === "Pending Scope Approval"
+            {project.status === "Order Confirmed"
               ? "WAITING ACCEPTANCE"
               : project.status || "Draft"}
           </span>

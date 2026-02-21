@@ -220,8 +220,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             ),
             productionRisks: normalizeRisks(data.productionRisks || []),
 
-            // If status was Pending Scope Approval, we usually want to change it on submit?
-            // Keep track of current status
+            // Keep current workflow status so submit can detect lead acceptance transition.
             status: data.status,
           };
 
@@ -296,18 +295,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         }
       });
 
-      if (editingId && formData.status === "Pending Scope Approval") {
+      if (editingId && formData.status === "Order Confirmed") {
         payload.delete("status"); // Remove old status
-        const nextStatus =
-          formData.projectType === "Quote"
-            ? "Pending Quote Request"
-            : "Order Confirmed";
-        payload.append("status", nextStatus);
-      }
-
-      // Set status to Pending Scope Approval if we have a lead and it's a NEW project
-      if (!editingId && formData.lead) {
-        payload.delete("status");
         payload.append("status", "Pending Scope Approval");
       }
 

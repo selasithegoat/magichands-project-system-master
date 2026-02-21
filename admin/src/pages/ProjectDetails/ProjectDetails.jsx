@@ -11,6 +11,18 @@ import {
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal";
 
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    if (value._id) return toEntityId(value._id);
+    if (value.id) return String(value.id);
+  }
+  return "";
+};
+
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
   <svg
@@ -72,7 +84,21 @@ const ProjectDetails = ({ user }) => {
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
   const [holdReasonDraft, setHoldReasonDraft] = useState("");
 
+  const currentUserId = toEntityId(user?._id || user?.id);
+  const projectLeadUserId = toEntityId(project?.projectLeadId);
+  const isLeadUser = Boolean(
+    currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
+  );
+
   const ensureProjectIsEditable = () => {
+    const isAdminLeadOnProject = Boolean(user?.role === "admin" && isLeadUser);
+    if (isAdminLeadOnProject) {
+      alert(
+        "You cannot modify a project where you are the assigned Project Lead. Ask another admin to make this change.",
+      );
+      return false;
+    }
+
     const currentlyOnHold =
       project?.hold?.isOnHold || project?.status === "On Hold";
     if (currentlyOnHold) {
@@ -475,11 +501,6 @@ const ProjectDetails = ({ user }) => {
   const isProjectOnHold = Boolean(
     project.hold?.isOnHold || project.status === "On Hold",
   );
-  const isLeadUser = Boolean(
-    user &&
-      (project.projectLeadId?._id === user._id ||
-        project.projectLeadId === user._id),
-  );
 
   // Helpers
   const formatDate = (dateString) => {
@@ -710,7 +731,7 @@ const ProjectDetails = ({ user }) => {
                   </option>
                 ))}
               </select>
-              {user?.role === "admin" && (
+              {user?.role === "admin" && !isLeadUser && (
                 <button
                   type="button"
                   className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
@@ -1732,7 +1753,7 @@ const ProjectDetails = ({ user }) => {
                             ✓
                           </span>
                         )}
-                        {isAcknowledged && user?.role === "admin" && (
+                        {isAcknowledged && user?.role === "admin" && !isLeadUser && (
                           <button
                             type="button"
                             className="dept-undo-btn"

@@ -273,7 +273,7 @@ const NewOrders = () => {
       formPayload.append("assistantLeadId", formData.assistantLeadId);
     }
     if (!editingId) {
-      formPayload.append("status", "Pending Scope Approval");
+      formPayload.append("status", "Order Confirmed");
     }
     formPayload.append("briefOverview", formData.briefOverview);
     formPayload.append("projectType", formData.projectType);

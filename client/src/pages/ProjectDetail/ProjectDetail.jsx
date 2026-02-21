@@ -391,14 +391,14 @@ const ProjectDetail = ({ user }) => {
               {showVersionTag && (
                 <span className="project-version-badge">v{projectVersion}</span>
               )}
-              <span className="status-badge">
-                <ClockIcon width="14" height="14" />{" "}
-                {project.status === "Pending Scope Approval"
-                  ? "WAITING ACCEPTANCE"
-                  : project.status.startsWith("Pending ")
-                    ? project.status.replace("Pending ", "")
-                    : project.status}
-              </span>
+                <span className="status-badge">
+                  <ClockIcon width="14" height="14" />{" "}
+                  {project.status === "Order Confirmed"
+                    ? "WAITING ACCEPTANCE"
+                    : project.status.startsWith("Pending ")
+                      ? project.status.replace("Pending ", "")
+                      : project.status}
+                </span>
               {project.status === "Completed" && (
                 <button
                   className="btn-primary"
@@ -453,7 +453,7 @@ const ProjectDetail = ({ user }) => {
         )}
 
         {/* Acceptance Banner */}
-        {project.status === "Pending Scope Approval" && (
+        {project.status === "Order Confirmed" && (
           <div
             className="acceptance-banner"
             style={{
@@ -544,7 +544,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Pending Scope Approval"
+                  project.status === "Order Confirmed"
                 }
               />
               <OrderItemsCard
@@ -553,7 +553,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Pending Scope Approval"
+                  project.status === "Order Confirmed"
                 }
               />
               <ReferenceMaterialsCard project={project} />
@@ -564,7 +564,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Pending Scope Approval"
+                  project.status === "Order Confirmed"
                 }
               />
               <ProductionRisksCard
@@ -574,7 +574,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Pending Scope Approval"
+                  project.status === "Order Confirmed"
                 }
               />
             </div>
