@@ -756,6 +756,9 @@ const OrdersList = () => {
               <option value="All">All Status</option>
               <option value="New Order">New Order</option>
               <option value="Order Confirmed">Order Confirmed</option>
+              <option value="Pending Departmental Engagement">
+                Pending Departmental Engagement
+              </option>
               <option value="In Progress">In Progress</option>
               <option value="Pending Feedback">Pending Feedback</option>
               <option value="Feedback Completed">Feedback Completed</option>

@@ -16,6 +16,7 @@ const CLOSED_STATUS_SET = new Set(CLOSED_STATUS_LIST);
 const PENDING_APPROVAL_STATUSES = new Set([
   "Pending Approval",
   "Pending Scope Approval",
+  "Pending Departmental Engagement",
   "Pending Quote Request",
   "Pending Send Response",
 ]);
@@ -31,6 +32,8 @@ const PIPELINE_GROUPS = [
       "Pending Approval",
       "Pending Scope Approval",
       "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
       "Pending Quote Request",
       "Quote Request Completed",
       "Pending Send Response",

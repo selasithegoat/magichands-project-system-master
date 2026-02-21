@@ -308,6 +308,33 @@ const projectHasDepartment = (projectDepartments, targetDepartment) => {
     .some((dept) => dept === targetCanonical);
 };
 
+const getMissingDepartmentAcknowledgements = (project) => {
+  const engagedDepartments = toDepartmentArray(project?.departments);
+  if (engagedDepartments.length === 0) return [];
+
+  const engagedByCanonical = new Map();
+  engagedDepartments.forEach((dept) => {
+    const canonical = canonicalizeDepartment(dept);
+    if (!canonical || engagedByCanonical.has(canonical)) return;
+    engagedByCanonical.set(canonical, String(dept));
+  });
+
+  const acknowledgedCanonical = new Set(
+    (project?.acknowledgements || [])
+      .map((ack) => canonicalizeDepartment(ack?.department))
+      .filter(Boolean),
+  );
+
+  const missing = [];
+  engagedByCanonical.forEach((displayName, canonical) => {
+    if (!acknowledgedCanonical.has(canonical)) {
+      missing.push(displayName);
+    }
+  });
+
+  return missing;
+};
+
 const isUserAssignedProjectLead = (user, project) => {
   if (!user || !project) return false;
   const userId = toObjectIdString(user._id || user.id);
@@ -2902,10 +2929,19 @@ const updateProjectStatus = async (req, res) => {
       });
     }
 
+    if (newStatus === "Departmental Engagement Completed") {
+      const missingAcknowledgements = getMissingDepartmentAcknowledgements(project);
+      if (missingAcknowledgements.length > 0) {
+        return res.status(400).json({
+          message: `All engaged departments must acknowledge before completing Departmental Engagement. Pending: ${missingAcknowledgements.join(", ")}.`,
+        });
+      }
+    }
+
     // Status progression map: when a stage is marked complete, auto-advance to next pending
     const statusProgression = {
       // Standard workflow
-      "Scope Approval Completed": "Pending Mockup",
+      "Scope Approval Completed": "Pending Departmental Engagement",
       "Mockup Completed": "Pending Production",
       "Production Completed": "Pending Packaging",
       "Packaging Completed": "Pending Delivery/Pickup",
@@ -4992,6 +5028,8 @@ const deleteProject = async (req, res) => {
 
 const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Production",
@@ -5060,6 +5098,18 @@ const acknowledgeProject = async (req, res) => {
       date: new Date(),
     });
 
+    const previousStatus = project.status;
+    const missingAcknowledgements = getMissingDepartmentAcknowledgements(project);
+    const shouldMarkDepartmentalEngagementComplete =
+      missingAcknowledgements.length === 0 &&
+      ["Pending Departmental Engagement", "Scope Approval Completed"].includes(
+        project.status,
+      );
+
+    if (shouldMarkDepartmentalEngagementComplete) {
+      project.status = "Departmental Engagement Completed";
+    }
+
     await project.save();
 
     // Log Activity
@@ -5070,6 +5120,18 @@ const acknowledgeProject = async (req, res) => {
       `${department} department has acknowledged the project engagement.`,
       { department },
     );
+
+    if (previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: { from: previousStatus, to: project.status },
+        },
+      );
+    }
 
     // Notify Project Lead
     if (project.projectLeadId) {
@@ -5123,7 +5185,11 @@ const undoAcknowledgeProject = async (req, res) => {
         .json({ message: "Acknowledgement not found for department" });
     }
 
+    const previousStatus = project.status;
     project.acknowledgements.splice(ackIndex, 1);
+    if (project.status === "Departmental Engagement Completed") {
+      project.status = "Pending Departmental Engagement";
+    }
     await project.save();
 
     await logActivity(
@@ -5133,6 +5199,18 @@ const undoAcknowledgeProject = async (req, res) => {
       `${department} acknowledgement was removed by ${req.user.firstName} ${req.user.lastName}.`,
       { department },
     );
+
+    if (previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: { from: previousStatus, to: project.status },
+        },
+      );
+    }
 
     if (project.projectLeadId) {
       await createNotification(

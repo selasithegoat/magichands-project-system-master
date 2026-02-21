@@ -35,6 +35,8 @@ const ACKNOWLEDGE_PHRASE = "I agree to be engaged in this project";
 const COMPLETE_PHRASE = "I confirm this engagement is complete";
 const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Production",
@@ -199,9 +201,13 @@ const EngagedProjectActions = ({ user }) => {
     project &&
     paymentChecksEnabled &&
     !hasPaymentVerification &&
-    ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
-      project.status,
-    );
+    [
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+      "Pending Mockup",
+      "Pending Production",
+    ].includes(project.status);
 
   const mockupUrl = project?.mockup?.fileUrl;
   const mockupName = project?.mockup?.fileName || "Approved Mockup";

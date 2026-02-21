@@ -24,6 +24,18 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#f97316",
           textClass: "orange",
         };
+      case "Pending Departmental Engagement":
+        return {
+          class: "pending-approval",
+          color: "#f59e0b",
+          textClass: "orange",
+        };
+      case "Departmental Engagement Completed":
+        return {
+          class: "in-progress",
+          color: "#d97706",
+          textClass: "orange",
+        };
       case "Pending Mockup":
         return {
           class: "pending-mockup",
@@ -90,13 +102,15 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Order Confirmed": 5,
     "Pending Scope Approval": 15,
     "Scope Approval Completed": 22,
-    "Pending Mockup": 30,
-    "Mockup Completed": 40,
-    "Pending Production": 50,
-    "Production Completed": 65,
-    "Pending Packaging": 75,
-    "Packaging Completed": 82,
-    "Pending Delivery/Pickup": 90,
+    "Pending Departmental Engagement": 27,
+    "Departmental Engagement Completed": 32,
+    "Pending Mockup": 38,
+    "Mockup Completed": 46,
+    "Pending Production": 56,
+    "Production Completed": 68,
+    "Pending Packaging": 78,
+    "Packaging Completed": 85,
+    "Pending Delivery/Pickup": 92,
     Delivered: 95,
     "Pending Feedback": 97,
     "Feedback Completed": 99,
@@ -108,6 +122,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Order Confirmed": 5,
     "Pending Scope Approval": 25,
     "Scope Approval Completed": 35,
+    "Pending Departmental Engagement": 42,
+    "Departmental Engagement Completed": 48,
     "Pending Quote Request": 50,
     "Quote Request Completed": 60,
     "Pending Send Response": 75,

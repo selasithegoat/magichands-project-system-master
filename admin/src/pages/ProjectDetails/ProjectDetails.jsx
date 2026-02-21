@@ -610,9 +610,13 @@ const ProjectDetails = ({ user }) => {
   const showPaymentWarning =
     !isQuoteProject &&
     !hasPaymentVerification &&
-    ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
-      project.status,
-    );
+    [
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+      "Pending Mockup",
+      "Pending Production",
+    ].includes(project.status);
   const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
     const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -695,6 +699,8 @@ const ProjectDetails = ({ user }) => {
                       "Order Confirmed",
                       "Pending Scope Approval",
                       "Scope Approval Completed",
+                      "Pending Departmental Engagement",
+                      "Departmental Engagement Completed",
                       "Pending Quote Request",
                       "Quote Request Completed",
                       "Pending Send Response",
@@ -708,6 +714,8 @@ const ProjectDetails = ({ user }) => {
                       "Order Confirmed",
                       "Pending Scope Approval",
                       "Scope Approval Completed",
+                      "Pending Departmental Engagement",
+                      "Departmental Engagement Completed",
                       "Pending Mockup",
                       "Mockup Completed",
                       "Pending Production",

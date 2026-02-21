@@ -510,6 +510,12 @@ const Projects = ({ user }) => {
               <option value="Pending Scope Approval">
                 Pending Scope Approval
               </option>
+              <option value="Pending Departmental Engagement">
+                Pending Departmental Engagement
+              </option>
+              <option value="Departmental Engagement Completed">
+                Departmental Engagement Completed
+              </option>
               <option value="On Hold">On Hold</option>
               <option value="In Progress">In Progress</option>
               <option value="Pending Feedback">Pending Feedback</option>

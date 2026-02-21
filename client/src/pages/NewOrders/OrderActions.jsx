@@ -888,9 +888,13 @@ const OrderActions = () => {
     project &&
     !isQuoteProject &&
     !hasPaymentVerification &&
-    ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
-      project.status,
-    );
+    [
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+      "Pending Mockup",
+      "Pending Production",
+    ].includes(project.status);
   const lastOrderRevisionUpdatedAt = project?.sectionUpdates?.details || null;
   const lastOrderRevisionLabel = currentUser?.department?.includes("Front Desk")
     ? "Last updated by Front Desk"

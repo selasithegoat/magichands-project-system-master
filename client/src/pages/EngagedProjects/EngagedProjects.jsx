@@ -15,6 +15,7 @@ import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
   "All",
+  "Pending Departmental Engagement",
   "Pending Production",
   "Pending Mockup",
   "Pending Packaging",
@@ -46,6 +47,8 @@ const ACKNOWLEDGE_PHRASE = "I agree to be engaged in this project";
 const COMPLETE_PHRASE = "I confirm this engagement is complete";
 const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Production",

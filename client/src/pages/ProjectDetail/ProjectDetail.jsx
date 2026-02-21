@@ -51,6 +51,13 @@ const STATUS_STEPS = [
     label: "Scope Approval",
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
   },
+  {
+    label: "Departmental Engagement",
+    statuses: [
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+    ],
+  },
   { label: "Mockup", statuses: ["Pending Mockup", "Mockup Completed"] },
   {
     label: "Production",
@@ -77,6 +84,13 @@ const QUOTE_STEPS = [
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
   },
   {
+    label: "Departmental Engagement",
+    statuses: [
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+    ],
+  },
+  {
     label: "Quote Request",
     statuses: ["Pending Quote Request", "Quote Request Completed"],
   },
@@ -92,6 +106,8 @@ const STANDARD_WORKFLOW_STATUSES = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Production",
@@ -110,6 +126,8 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
   "Pending Quote Request",
   "Quote Request Completed",
   "Pending Send Response",
@@ -157,6 +175,10 @@ const getStatusColor = (status) => {
     case "Scope Approval Completed":
     case "Scope Approval":
       return "#f97316"; // Orange
+    case "Pending Departmental Engagement":
+    case "Departmental Engagement Completed":
+    case "Departmental Engagement":
+      return "#f59e0b"; // Amber
     case "Pending Mockup":
     case "Mockup Completed":
     case "Mockup":
@@ -327,9 +349,13 @@ const ProjectDetail = ({ user }) => {
   const showPaymentWarning =
     !isQuote &&
     !hasPaymentVerification &&
-    ["Pending Mockup", "Pending Production", "Scope Approval Completed"].includes(
-      project.status,
-    );
+    [
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+      "Pending Mockup",
+      "Pending Production",
+    ].includes(project.status);
 
   let themeClass = "";
   if (isEmergency) themeClass = "emergency-theme";
@@ -2245,6 +2271,10 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
           return 25;
         case "Scope Approval Completed":
           return 35;
+        case "Pending Departmental Engagement":
+          return 42;
+        case "Departmental Engagement Completed":
+          return 48;
         case "Pending Quote Request":
           return 50;
         case "Quote Request Completed":
@@ -2275,20 +2305,24 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
         return 15;
       case "Scope Approval Completed":
         return 22;
+      case "Pending Departmental Engagement":
+        return 27;
+      case "Departmental Engagement Completed":
+        return 32;
       case "Pending Mockup":
-        return 30;
+        return 38;
       case "Mockup Completed":
-        return 40;
+        return 46;
       case "Pending Production":
-        return 50;
+        return 56;
       case "Production Completed":
-        return 65;
+        return 68;
       case "Pending Packaging":
-        return 75;
+        return 78;
       case "Packaging Completed":
-        return 82;
+        return 85;
       case "Pending Delivery/Pickup":
-        return 90;
+        return 92;
       case "Delivered":
         return 95;
       case "Pending Feedback":
@@ -2373,6 +2407,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
   const statusIcons = {
     "Order Confirmed": ClipboardListIcon,
     "Scope Approval": EyeIcon,
+    "Departmental Engagement": CheckCircleIcon,
     Mockup: PaintbrushIcon,
     Production: FactoryIcon,
     Packaging: PackageIcon,
