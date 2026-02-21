@@ -310,7 +310,6 @@ function App() {
                 user={user} // Pass user to Dashboard
                 onNavigateProject={(id) => navigate(`/detail/${id}`)}
                 onCreateProject={() => navigate("/create")}
-                onSeeAllProjects={() => navigate("/projects")}
                 onProjectChange={fetchProjectCount} // Refresh count on change
               />
             </ProtectedLayout>

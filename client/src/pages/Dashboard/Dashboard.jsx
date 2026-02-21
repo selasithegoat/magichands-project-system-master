@@ -1,29 +1,43 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import "./Dashboard.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ProjectCard from "../../components/ui/ProjectCard";
 import { getDepartmentLabel } from "../../constants/departments";
+import { useNavigate } from "react-router-dom";
 // Icons
 import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
-import ThreeDotsIcon from "../../components/icons/ThreeDotsIcon";
-import PlusIcon from "../../components/icons/PlusIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
+const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
+
+const OVERDUE_EXCLUDED_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Pending Delivery/Pickup",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+
+const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
+
+const isEmergencyProject = (project) =>
+  project?.projectType === "Emergency" || project?.priority === "Urgent";
+
 const Dashboard = ({
   onNavigateProject,
   onCreateProject,
-  onSeeAllProjects,
   user,
   onProjectChange, // New prop
 }) => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
-  const [completedCount, setCompletedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [digest, setDigest] = useState(null);
   const [digestLoading, setDigestLoading] = useState(true);
@@ -44,16 +58,8 @@ const Dashboard = ({
       });
       if (res.ok) {
         const data = await res.json();
-        // Calculate completed count
-        const completed = data.filter(
-          (p) => p.status === "Completed" || p.status === "Finished",
-        ).length;
-        setCompletedCount(completed);
-
-        // Filter out history status
-        const activeProjects = data.filter((p) => p.status !== "Finished");
         // Sort by createdAt desc (newest first)
-        const sortedProjects = activeProjects.sort(
+        const sortedProjects = data.sort(
           (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
         );
         setProjects(sortedProjects);
@@ -139,6 +145,58 @@ const Dashboard = ({
     return time ? `${dateLabel} (${time})` : dateLabel;
   };
 
+  const pendingAcceptanceProjects = useMemo(
+    () => projects.filter((project) => isPendingAcceptanceProject(project)),
+    [projects],
+  );
+
+  const activeProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          !isPendingAcceptanceProject(project) &&
+          !HISTORY_PROJECT_STATUSES.has(project.status),
+      ),
+    [projects],
+  );
+
+  const completedProjects = useMemo(
+    () =>
+      projects.filter((project) =>
+        HISTORY_PROJECT_STATUSES.has(project.status || ""),
+      ),
+    [projects],
+  );
+
+  const overdueProjects = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return projects.filter((project) => {
+      if (!project?.details?.deliveryDate) return false;
+      const deliveryDate = new Date(project.details.deliveryDate);
+      return (
+        deliveryDate < today &&
+        !OVERDUE_EXCLUDED_STATUSES.has(project.status || "")
+      );
+    });
+  }, [projects]);
+
+  const emergencyProjects = useMemo(
+    () => projects.filter((project) => isEmergencyProject(project)),
+    [projects],
+  );
+
+  const handleStatsNavigate = (targetPath) => {
+    navigate(targetPath);
+  };
+
+  const handleStatsCardKeyDown = (event, targetPath) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleStatsNavigate(targetPath);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       {/* Page Content Header */}
@@ -159,67 +217,99 @@ const Dashboard = ({
 
       {/* Stats Grid */}
       <div className="stats-grid">
-        <div className="stats-card">
+        <div
+          className="stats-card clickable emergency-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/projects?view=emergencies")}
+          onKeyDown={(event) =>
+            handleStatsCardKeyDown(event, "/projects?view=emergencies")
+          }
+          aria-label="View emergency projects"
+        >
+          <div className="stats-header">
+            <div className="stats-icon-wrapper emergency">
+              <AlertTriangleIcon />
+            </div>
+            <div className="more-dots"></div>
+          </div>
+          <div className="stats-count">{emergencyProjects.length}</div>
+          <div className="stats-label">Emergencies</div>
+        </div>
+
+        <div
+          className="stats-card clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/projects?view=active")}
+          onKeyDown={(event) =>
+            handleStatsCardKeyDown(event, "/projects?view=active")
+          }
+          aria-label="View active projects"
+        >
           <div className="stats-header">
             <div className="stats-icon-wrapper blue">
               <FolderIcon />
             </div>
             <div className="more-dots"></div>
           </div>
-          <div className="stats-count">{projects.length}</div>
+          <div className="stats-count">{activeProjects.length}</div>
           <div className="stats-label">Active Projects</div>
         </div>
-        <div className="stats-card">
+
+        <div
+          className="stats-card clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/create")}
+          onKeyDown={(event) => handleStatsCardKeyDown(event, "/create")}
+          aria-label="View pending acceptance projects"
+        >
           <div className="stats-header">
             <div className="stats-icon-wrapper orange">
               <ClockIcon />
             </div>
             <div className="more-dots"></div>
           </div>
-          <div className="stats-count">
-            {
-              projects.filter((p) => p.status === "Pending Scope Approval")
-                .length
-            }
-          </div>
+          <div className="stats-count">{pendingAcceptanceProjects.length}</div>
           <div className="stats-label">Pending Acceptance</div>
         </div>
-        {/* ... keep other stats or make dynamic later ... */}
-        <div className="stats-card">
-          <div className="stats-header">
-            <div className="stats-icon-wrapper green">
-              <CheckCircleIcon />
-            </div>
-          </div>
-          <div className="stats-count">{completedCount}</div>
-          <div className="stats-label">Completed</div>
-        </div>
-        <div className="stats-card">
+
+        <div
+          className="stats-card clickable overdue-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/projects?view=overdue")}
+          onKeyDown={(event) =>
+            handleStatsCardKeyDown(event, "/projects?view=overdue")
+          }
+          aria-label="View overdue projects"
+        >
           <div className="stats-header">
             <div className="stats-icon-wrapper red">
               <AlertTriangleIcon />
             </div>
             <div className="more-dots"></div>
           </div>
-          <div className="stats-count">
-            {
-              projects.filter((p) => {
-                if (!p.details?.deliveryDate) return false;
-                const dDate = new Date(p.details.deliveryDate);
-                const now = new Date();
-                now.setHours(0, 0, 0, 0); // Start of today
-                const deliveredStatuses = new Set([
-                  "Delivered",
-                  "Pending Feedback",
-                  "Feedback Completed",
-                  "Completed",
-                  "Finished",
-                ]);
-                return dDate < now && !deliveredStatuses.has(p.status);
-              }).length
-            }
+          <div className="stats-count">{overdueProjects.length}</div>
+          <div className="stats-label">Overdue Projects</div>
+        </div>
+
+        <div
+          className="stats-card clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/history")}
+          onKeyDown={(event) => handleStatsCardKeyDown(event, "/history")}
+          aria-label="View finished projects in history"
+        >
+          <div className="stats-header">
+            <div className="stats-icon-wrapper green">
+              <CheckCircleIcon />
+            </div>
           </div>
-          <div className="stats-label">Overdue Items</div>
+          <div className="stats-count">{completedProjects.length}</div>
+          <div className="stats-label">Completed</div>
         </div>
       </div>
 
@@ -230,7 +320,10 @@ const Dashboard = ({
           {/* Recent Projects */}
           <div className="section-header">
             <h3 className="section-title">Recent Projects</h3>
-            <button className="see-all-btn" onClick={onSeeAllProjects}>
+            <button
+              className="see-all-btn"
+              onClick={() => handleStatsNavigate("/projects?view=active")}
+            >
               See All
             </button>
           </div>
@@ -245,8 +338,8 @@ const Dashboard = ({
           >
             {isLoading ? (
               <LoadingSpinner />
-            ) : projects.length > 0 ? (
-              projects
+            ) : activeProjects.length > 0 ? (
+              activeProjects
                 .slice(0, 4)
                 .map((project) => (
                   <ProjectCard
@@ -278,6 +371,11 @@ const Dashboard = ({
               now.setHours(0, 0, 0, 0); // Start of today
 
               const upcomingDeadlines = projects
+                .filter(
+                  (project) =>
+                    !isPendingAcceptanceProject(project) &&
+                    !HISTORY_PROJECT_STATUSES.has(project.status),
+                )
                 .filter((p) => {
                   if (!p.details?.deliveryDate) return false;
                   const dDate = new Date(p.details.deliveryDate);
@@ -401,9 +499,10 @@ const Dashboard = ({
             {(() => {
               // Calculate stats
               const deptCounts = {};
+              const workloadProjects = activeProjects;
               let totalProjectsWithDepts = 0;
 
-              projects.forEach((p) => {
+              workloadProjects.forEach((p) => {
                 if (p.departments && p.departments.length > 0) {
                   totalProjectsWithDepts++;
                   p.departments.forEach((deptId) => {
@@ -435,7 +534,7 @@ const Dashboard = ({
 
               return topDepts.map(([deptId, count]) => {
                 const percentage = Math.round(
-                  (count / projects.length) * 100, // % of TOTAL active projects
+                  (count / workloadProjects.length) * 100, // % of TOTAL active projects
                 );
                 // Color palette for bars
                 const colors = [

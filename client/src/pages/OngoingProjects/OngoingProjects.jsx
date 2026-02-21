@@ -9,6 +9,22 @@ import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadSearchText } from "../../utils/leadDisplay";
+import { useLocation } from "react-router-dom";
+
+const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
+
+const OVERDUE_EXCLUDED_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Pending Delivery/Pickup",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+
+const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
+const isEmergencyProject = (project) =>
+  project?.projectType === "Emergency" || project?.priority === "Urgent";
 
 const OngoingProjects = ({
   onNavigateDetail,
@@ -16,9 +32,24 @@ const OngoingProjects = ({
   onCreateProject,
   onProjectChange, // New prop
 }) => {
+  const location = useLocation();
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
+
+  const viewMode = React.useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    const requested = String(params.get("view") || "active").toLowerCase();
+    if (
+      requested === "active" ||
+      requested === "overdue" ||
+      requested === "emergencies" ||
+      requested === "completed"
+    ) {
+      return requested;
+    }
+    return "active";
+  }, [location.search]);
 
   React.useEffect(() => {
     const fetchProjects = async () => {
@@ -26,9 +57,7 @@ const OngoingProjects = ({
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          // Filter out history status
-          const activeProjects = data.filter((p) => p.status !== "Finished");
-          setProjects(activeProjects);
+          setProjects(Array.isArray(data) ? data : []);
         }
       } catch (error) {
         console.error("Error loading projects:", error);
@@ -48,11 +77,7 @@ const OngoingProjects = ({
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        // Remember to filter here too if not filtered in backend, although the use effect logic above was better.
-        // The original clean fetchProjects function inside useEffect was good, but this one (line 37) was just fetching all without filtering.
-        // We should probably filter here too to match.
-        const activeProjects = data.filter((p) => p.status !== "Finished");
-        setProjects(activeProjects);
+        setProjects(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error("Error loading projects:", error);
@@ -112,11 +137,41 @@ const OngoingProjects = ({
     });
   };
 
+  const projectsForSelectedView = React.useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    switch (viewMode) {
+      case "completed":
+        return projects.filter((project) =>
+          HISTORY_PROJECT_STATUSES.has(project.status || ""),
+        );
+      case "overdue":
+        return projects.filter((project) => {
+          if (!project?.details?.deliveryDate) return false;
+          const deliveryDate = new Date(project.details.deliveryDate);
+          return (
+            deliveryDate < today &&
+            !OVERDUE_EXCLUDED_STATUSES.has(project.status || "")
+          );
+        });
+      case "emergencies":
+        return projects.filter((project) => isEmergencyProject(project));
+      case "active":
+      default:
+        return projects.filter(
+          (project) =>
+            !isPendingAcceptanceProject(project) &&
+            !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+        );
+    }
+  }, [projects, viewMode]);
+
   const filteredProjects = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return projects;
+    if (!query) return projectsForSelectedView;
 
-    return projects.filter((project) => {
+    return projectsForSelectedView.filter((project) => {
       const orderId = (project.orderId || project._id || "")
         .toString()
         .toLowerCase();
@@ -131,11 +186,25 @@ const OngoingProjects = ({
         leadText.includes(query)
       );
     });
-  }, [projects, searchQuery]);
+  }, [projectsForSelectedView, searchQuery]);
 
-  const totalActive = projects.length;
+  const totalActive = projectsForSelectedView.length;
   const visibleCount = filteredProjects.length;
   const isFiltering = searchQuery.trim().length > 0;
+
+  const pageTitle = React.useMemo(() => {
+    switch (viewMode) {
+      case "overdue":
+        return "Overdue Projects";
+      case "emergencies":
+        return "Emergency Projects";
+      case "completed":
+        return "Finished Projects";
+      case "active":
+      default:
+        return "Active Projects";
+    }
+  }, [viewMode]);
 
   return (
     <div className="ongoing-container">
@@ -144,7 +213,7 @@ const OngoingProjects = ({
         <button className="ongoing-back-btn" onClick={onBack}>
           <ArrowLeftIcon />
         </button>
-        <span className="ongoing-title">Ongoing Projects</span>
+        <span className="ongoing-title">{pageTitle}</span>
       </div>
 
       {/* Stats */}
@@ -152,8 +221,8 @@ const OngoingProjects = ({
         <div>
           <h1 className="stats-main-text">
             {isFiltering
-              ? `${visibleCount} of ${totalActive} Active Orders`
-              : `${totalActive} Active Orders`}
+              ? `${visibleCount} of ${totalActive} ${pageTitle}`
+              : `${totalActive} ${pageTitle}`}
           </h1>
           <span className="stats-sub-text">Updates synced just now</span>
         </div>
@@ -176,7 +245,7 @@ const OngoingProjects = ({
         {loading ? (
           <LoadingSpinner />
         ) : filteredProjects.length === 0 ? (
-          <p>No ongoing projects found.</p>
+          <p>No projects found for this view.</p>
         ) : (
           filteredProjects.map((p) => (
             <ProjectCard
