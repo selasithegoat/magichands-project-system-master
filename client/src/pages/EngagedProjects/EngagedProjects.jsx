@@ -433,7 +433,6 @@ const EngagedProjects = ({ user }) => {
         `[${getDepartmentLabel(updateForm.department)}] ${updateForm.content}`,
       );
       data.append("category", updateForm.category);
-      data.append("isEndOfDayUpdate", false);
 
       const res = await fetch(`/api/updates/project/${selectedProject._id}`, {
         method: "POST",
@@ -442,6 +441,7 @@ const EngagedProjects = ({ user }) => {
 
       if (res.ok) {
         setToast({ type: "success", message: "Update posted successfully!" });
+        await fetchEngagedProjects();
         setShowUpdateModal(false);
         setSelectedProject(null);
         setUpdateForm({ content: "", category: "Production", department: "" });
@@ -631,6 +631,17 @@ const EngagedProjects = ({ user }) => {
   const formatTime = (timeStr) => {
     if (!timeStr) return "";
     return timeStr;
+  };
+
+  const formatUpdateDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
   const getProjectVersion = (project) => {
@@ -1055,6 +1066,26 @@ const EngagedProjects = ({ user }) => {
                     </span>
                   ))}
               </div>
+            </div>
+
+            <div className="latest-update-snapshot">
+              <p className="latest-update-snapshot-label">Latest Shared Update</p>
+              {String(selectedProject?.endOfDayUpdate || "").trim() ? (
+                <>
+                  <p className="latest-update-snapshot-content">
+                    {selectedProject.endOfDayUpdate}
+                  </p>
+                  <p className="latest-update-snapshot-meta">
+                    Last updated:{" "}
+                    {formatUpdateDateTime(selectedProject.endOfDayUpdateDate)}
+                  </p>
+                </>
+              ) : (
+                <p className="latest-update-snapshot-empty">
+                  No updates yet. Share what changed so others avoid duplicate
+                  updates.
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleSubmitUpdate}>

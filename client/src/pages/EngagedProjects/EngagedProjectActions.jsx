@@ -318,6 +318,17 @@ const EngagedProjectActions = ({ user }) => {
     return timeStr;
   };
 
+  const formatUpdateDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
   const fetchProject = async () => {
     if (!id) return;
     setLoading(true);
@@ -472,7 +483,6 @@ const EngagedProjectActions = ({ user }) => {
         `[${getDepartmentLabel(updateForm.department)}] ${updateForm.content}`,
       );
       data.append("category", updateForm.category);
-      data.append("isEndOfDayUpdate", false);
 
       const res = await fetch(
         `/api/updates/project/${project._id}?source=engaged`,
@@ -484,6 +494,7 @@ const EngagedProjectActions = ({ user }) => {
 
       if (res.ok) {
         setToast({ type: "success", message: "Update posted successfully!" });
+        await fetchProject();
         setShowUpdateModal(false);
         setUpdateScopeDepts([]);
         setUpdateForm({ content: "", category: "Production", department: "" });
@@ -734,6 +745,8 @@ const EngagedProjectActions = ({ user }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
+  const latestSharedUpdate = String(project?.endOfDayUpdate || "").trim();
+  const latestSharedUpdateDate = project?.endOfDayUpdateDate;
 
   return (
     <div className="engaged-projects-container engaged-actions-page">
@@ -1193,6 +1206,25 @@ const EngagedProjectActions = ({ user }) => {
                   </span>
                 ))}
               </div>
+            </div>
+
+            <div className="latest-update-snapshot">
+              <p className="latest-update-snapshot-label">Latest Shared Update</p>
+              {latestSharedUpdate ? (
+                <>
+                  <p className="latest-update-snapshot-content">
+                    {latestSharedUpdate}
+                  </p>
+                  <p className="latest-update-snapshot-meta">
+                    Last updated: {formatUpdateDateTime(latestSharedUpdateDate)}
+                  </p>
+                </>
+              ) : (
+                <p className="latest-update-snapshot-empty">
+                  No updates yet. Share what changed so others avoid duplicate
+                  updates.
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleSubmitUpdate}>

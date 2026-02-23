@@ -68,6 +68,16 @@ const EndOfDayUpdate = ({ user }) => {
     });
   };
 
+  const stripDepartmentNudge = (content) =>
+    String(content || "").replace(/^\[[^\]]+\]\s*/, "").trim();
+
+  const getUpdateSourceName = (project) => {
+    const source = project?.endOfDayUpdateBy;
+    if (!source || typeof source === "string") return "";
+
+    return `${source.firstName || ""} ${source.lastName || ""}`.trim();
+  };
+
   const formatTime = (timeString) => {
     if (!timeString) return "";
     return timeString;
@@ -160,7 +170,7 @@ const EndOfDayUpdate = ({ user }) => {
             "Order Name",
             "Delivery Date & Time",
             "Status",
-            "Lead Update",
+            "Latest Update",
           ].map(
             (text) =>
               new TableCell({
@@ -198,8 +208,8 @@ const EndOfDayUpdate = ({ user }) => {
         )} ${formatTime(project.details?.deliveryTime)}`;
 
         const updateContent = project.endOfDayUpdate
-          ? project.endOfDayUpdate
-          : "No lead update yet";
+          ? stripDepartmentNudge(project.endOfDayUpdate)
+          : "No updates yet";
 
         // Urgency Check
         let isUrgent = false;
@@ -457,7 +467,7 @@ const EndOfDayUpdate = ({ user }) => {
       >
         <div>
           <h1>End of Day Update</h1>
-          <p>Latest updates from project leads on active projects</p>
+          <p>Latest updates on all active projects</p>
         </div>
         <button
           className="download-btn"
@@ -477,7 +487,7 @@ const EndOfDayUpdate = ({ user }) => {
               <th>Order Name</th>
               <th>Delivery Date & Time</th>
               <th>Status</th>
-              <th>Lead Update</th>
+              <th>Latest Update</th>
             </tr>
           </thead>
           <tbody>
@@ -502,6 +512,7 @@ const EndOfDayUpdate = ({ user }) => {
                     new Date(),
                   ) <= 72;
                 const projectVersion = getProjectVersion(project);
+                const updateSourceName = getUpdateSourceName(project);
 
                 return (
                   <tr
@@ -542,7 +553,10 @@ const EndOfDayUpdate = ({ user }) => {
                     <td className="update-cell">
                       {project.endOfDayUpdate ? (
                         <div className="update-content">
-                          <p>{project.endOfDayUpdate}</p>
+                          <p>{stripDepartmentNudge(project.endOfDayUpdate)}</p>
+                          {updateSourceName && (
+                            <span className="update-source">{updateSourceName}</span>
+                          )}
                           <span
                             className="update-date"
                             style={{
@@ -557,7 +571,7 @@ const EndOfDayUpdate = ({ user }) => {
                           </span>
                         </div>
                       ) : (
-                        <span className="no-update">No lead update yet</span>
+                        <span className="no-update">No updates yet</span>
                       )}
                     </td>
                   </tr>
@@ -607,3 +621,4 @@ const EndOfDayUpdate = ({ user }) => {
 };
 
 export default EndOfDayUpdate;
+

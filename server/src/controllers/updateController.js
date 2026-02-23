@@ -30,9 +30,47 @@ const normalizeDepartmentToken = (value) => {
   return String(value).trim().toLowerCase();
 };
 
+const isUserFrontDesk = (user) => {
+  if (!user) return false;
+  const userDepartments = normalizeDepartments(user.department)
+    .map(normalizeDepartmentToken)
+    .filter(Boolean);
+  return userDepartments.includes("front desk");
+};
+
+const syncProjectLatestUpdateSnapshot = async (projectId) => {
+  if (!projectId) return null;
+
+  const latestUpdate = await ProjectUpdate.findOne({ project: projectId })
+    .sort({ createdAt: -1, _id: -1 })
+    .select("content createdAt author");
+
+  if (!latestUpdate) {
+    await Project.findByIdAndUpdate(projectId, {
+      $set: {
+        endOfDayUpdate: "",
+        endOfDayUpdateDate: null,
+        endOfDayUpdateBy: null,
+      },
+    });
+    return null;
+  }
+
+  await Project.findByIdAndUpdate(projectId, {
+    $set: {
+      endOfDayUpdate: latestUpdate.content || "",
+      endOfDayUpdateDate: latestUpdate.createdAt || new Date(),
+      endOfDayUpdateBy: latestUpdate.author || null,
+    },
+  });
+
+  return latestUpdate;
+};
+
 const canAccessProjectUpdates = (user, project) => {
   if (!user || !project) return false;
   if (user.role === "admin") return true;
+  if (isUserFrontDesk(user)) return true;
 
   const userId = normalizeObjectId(user._id || user.id);
   const leadId = normalizeObjectId(project.projectLeadId);
@@ -146,15 +184,9 @@ exports.createProjectUpdate = async (req, res) => {
 
     await newUpdate.save();
 
-    // Keep Front Desk End-of-Day row in sync with latest project-lead update.
-    const isEOD = isUserAssignedProjectLead(req.user, project);
-
-    if (isEOD) {
-      project.endOfDayUpdate = content;
-      project.endOfDayUpdateDate = new Date();
-      project.endOfDayUpdateBy = req.user._id;
-      await project.save();
-    }
+    // Keep Front Desk End-of-Day table snapshot synced to latest project update.
+    await syncProjectLatestUpdateSnapshot(project._id);
+    const isLeadUpdate = isUserAssignedProjectLead(req.user, project);
 
     // Populate author for immediate return
     await newUpdate.populate("author", "firstName lastName email role");
@@ -171,8 +203,8 @@ exports.createProjectUpdate = async (req, res) => {
       );
     }
 
-    // Notify Front Desk if this is a project-lead End of Day update
-    if (isEOD) {
+    // Notify Front Desk if this update is from the assigned lead
+    if (isLeadUpdate) {
       const User = require("../models/User"); // Import if not already at top
       const frontDeskUsers = await User.find({ department: "Front Desk" });
       for (const fdUser of frontDeskUsers) {
@@ -186,7 +218,7 @@ exports.createProjectUpdate = async (req, res) => {
         );
       }
 
-      // Notify Admins of EOD Update
+      // Notify Admins of lead EOD update
       await notifyAdmins(
         req.user._id,
         project._id,
@@ -211,7 +243,7 @@ exports.createProjectUpdate = async (req, res) => {
       req.user.id,
       "update_post",
       `Posted a new update in ${category} category`,
-      { category, updateId: newUpdate._id, isEndOfDay: isEOD },
+      { category, updateId: newUpdate._id, syncsToEndOfDay: true, isLeadUpdate },
     );
 
     res.status(201).json(newUpdate);
@@ -271,6 +303,7 @@ exports.updateProjectUpdate = async (req, res) => {
     }
 
     await update.save();
+    await syncProjectLatestUpdateSnapshot(update.project);
     await update.populate("author", "firstName lastName email role");
 
     if (project?._id) {
@@ -332,6 +365,7 @@ exports.deleteProjectUpdate = async (req, res) => {
     }
 
     await update.deleteOne();
+    await syncProjectLatestUpdateSnapshot(update.project);
 
     res.status(200).json({ message: "Update deleted successfully" });
   } catch (error) {

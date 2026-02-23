@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -216,6 +217,21 @@ const OrderActions = () => {
     }
   }, [project?._id]);
 
+  useRealtimeRefresh(
+    (detail) => {
+      if (!project?._id) return;
+
+      const changedPath = String(detail?.path || "");
+      const updatesChanged = changedPath.startsWith("/api/updates");
+      const thisProjectChanged = changedPath.includes(`/api/projects/${project._id}`);
+
+      if (updatesChanged || thisProjectChanged) {
+        fetchProjectUpdates(project._id);
+      }
+    },
+    { enabled: Boolean(project?._id) },
+  );
+
   useEffect(() => {
     if (feedbackModal.open && feedbackModal.project && project?._id) {
       if (
@@ -409,6 +425,10 @@ const OrderActions = () => {
     });
 
   const recentUpdates = useMemo(() => projectUpdates || [], [projectUpdates]);
+  const latestUpdatePreview = useMemo(
+    () => (recentUpdates.length > 0 ? recentUpdates[0] : null),
+    [recentUpdates],
+  );
 
   const getUpdateAuthorName = (update) => {
     if (!update?.author || typeof update.author === "string") {
@@ -451,7 +471,6 @@ const OrderActions = () => {
       const data = new FormData();
       data.append("content", trimmedContent);
       data.append("category", updateCategory);
-      data.append("isEndOfDayUpdate", false);
 
       const res = await fetch(`/api/updates/project/${project._id}`, {
         method: "POST",
@@ -1115,109 +1134,108 @@ const OrderActions = () => {
             </div>
 
             <div className="updates-preview">
-              <h4>Updates</h4>
+              <h4>Latest Update Preview</h4>
               {updatesLoading ? (
                 <div className="updates-preview-empty">Loading updates...</div>
-              ) : recentUpdates.length === 0 ? (
+              ) : !latestUpdatePreview ? (
                 <div className="updates-preview-empty">No updates yet.</div>
               ) : (
-                <div className="updates-preview-list">
-                  {recentUpdates.map((update) => (
-                    <div className="updates-preview-item" key={update._id}>
-                      <div className="updates-preview-meta">
-                        <span>{getUpdateAuthorName(update)}</span>
-                        <span>{formatDateTime(update.createdAt)}</span>
-                      </div>
-                      <div className="updates-preview-category-row">
-                        <div className="updates-preview-category">
-                          {normalizeUpdateCategory(update.category)}
-                        </div>
-                        {canManageUpdate(update) && (
-                          <div className="updates-preview-actions">
-                            {editingUpdateId === update._id ? (
-                              <button
-                                className="action-btn updates-preview-action"
-                                onClick={handleCancelEditUpdate}
-                                disabled={updateEditSubmitting}
-                              >
-                                Cancel
-                              </button>
-                            ) : (
-                              <button
-                                className="action-btn updates-preview-action"
-                                onClick={() => handleStartEditUpdate(update)}
-                                disabled={updateDeleteSubmittingId === update._id}
-                              >
-                                Edit
-                              </button>
-                            )}
-                            <button
-                              className="action-btn undo-btn updates-preview-action"
-                              onClick={() => handleDeleteUpdate(update)}
-                              disabled={updateDeleteSubmittingId === update._id}
-                            >
-                              {updateDeleteSubmittingId === update._id
-                                ? "Deleting..."
-                                : "Delete"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {editingUpdateId === update._id ? (
-                        <div className="updates-preview-edit-form">
-                          <label htmlFor={`update-edit-category-${update._id}`}>
-                            Category
-                          </label>
-                          <select
-                            id={`update-edit-category-${update._id}`}
-                            value={editUpdateCategory}
-                            onChange={(e) => setEditUpdateCategory(e.target.value)}
+                <div className="updates-preview-item" key={latestUpdatePreview._id}>
+                  <div className="updates-preview-meta">
+                    <span>{getUpdateAuthorName(latestUpdatePreview)}</span>
+                    <span>{formatDateTime(latestUpdatePreview.createdAt)}</span>
+                  </div>
+                  <div className="updates-preview-category-row">
+                    <div className="updates-preview-category">
+                      {normalizeUpdateCategory(latestUpdatePreview.category)}
+                    </div>
+                    {canManageUpdate(latestUpdatePreview) && (
+                      <div className="updates-preview-actions">
+                        {editingUpdateId === latestUpdatePreview._id ? (
+                          <button
+                            className="action-btn updates-preview-action"
+                            onClick={handleCancelEditUpdate}
                             disabled={updateEditSubmitting}
                           >
-                            {UPDATE_CATEGORY_OPTIONS.map((category) => (
-                              <option key={category} value={category}>
-                                {category}
-                              </option>
-                            ))}
-                          </select>
+                            Cancel
+                          </button>
+                        ) : (
+                          <button
+                            className="action-btn updates-preview-action"
+                            onClick={() => handleStartEditUpdate(latestUpdatePreview)}
+                            disabled={
+                              updateDeleteSubmittingId === latestUpdatePreview._id
+                            }
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button
+                          className="action-btn undo-btn updates-preview-action"
+                          onClick={() => handleDeleteUpdate(latestUpdatePreview)}
+                          disabled={updateDeleteSubmittingId === latestUpdatePreview._id}
+                        >
+                          {updateDeleteSubmittingId === latestUpdatePreview._id
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
-                          <label htmlFor={`update-edit-content-${update._id}`}>
-                            Content
-                          </label>
-                          <textarea
-                            id={`update-edit-content-${update._id}`}
-                            rows="3"
-                            value={editUpdateContent}
-                            onChange={(e) => setEditUpdateContent(e.target.value)}
-                            disabled={updateEditSubmitting}
-                          />
+                  {editingUpdateId === latestUpdatePreview._id ? (
+                    <div className="updates-preview-edit-form">
+                      <label
+                        htmlFor={`update-edit-category-${latestUpdatePreview._id}`}
+                      >
+                        Category
+                      </label>
+                      <select
+                        id={`update-edit-category-${latestUpdatePreview._id}`}
+                        value={editUpdateCategory}
+                        onChange={(e) => setEditUpdateCategory(e.target.value)}
+                        disabled={updateEditSubmitting}
+                      >
+                        {UPDATE_CATEGORY_OPTIONS.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
 
-                          <div className="updates-preview-edit-actions">
-                            <button
-                              className="action-btn"
-                              onClick={handleCancelEditUpdate}
-                              disabled={updateEditSubmitting}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              className="action-btn update-submit-btn"
-                              onClick={() => handleSaveEditUpdate(update._id)}
-                              disabled={
-                                updateEditSubmitting ||
-                                editUpdateContent.trim().length === 0
-                              }
-                            >
-                              {updateEditSubmitting ? "Saving..." : "Save Changes"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="updates-preview-content">{update.content}</p>
-                      )}
+                      <label htmlFor={`update-edit-content-${latestUpdatePreview._id}`}>
+                        Content
+                      </label>
+                      <textarea
+                        id={`update-edit-content-${latestUpdatePreview._id}`}
+                        rows="3"
+                        value={editUpdateContent}
+                        onChange={(e) => setEditUpdateContent(e.target.value)}
+                        disabled={updateEditSubmitting}
+                      />
+
+                      <div className="updates-preview-edit-actions">
+                        <button
+                          className="action-btn"
+                          onClick={handleCancelEditUpdate}
+                          disabled={updateEditSubmitting}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="action-btn update-submit-btn"
+                          onClick={() => handleSaveEditUpdate(latestUpdatePreview._id)}
+                          disabled={
+                            updateEditSubmitting || editUpdateContent.trim().length === 0
+                          }
+                        >
+                          {updateEditSubmitting ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
                     </div>
-                  ))}
+                  ) : (
+                    <p className="updates-preview-content">{latestUpdatePreview.content}</p>
+                  )}
                 </div>
               )}
             </div>

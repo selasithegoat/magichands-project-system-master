@@ -2256,6 +2256,7 @@ const getProjects = async (req, res) => {
       .populate("createdBy", "firstName lastName")
       .populate("projectLeadId", "firstName lastName")
       .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("endOfDayUpdateBy", "firstName lastName department")
       .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
       .sort({ createdAt: -1 });
 

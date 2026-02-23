@@ -107,6 +107,7 @@
 
 .is-urgent .time-sub,
 .is-urgent .update-date,
+.is-urgent .update-source,
 .is-urgent .update-content p {
   color: #ef4444 !important;
 }
@@ -184,6 +185,14 @@
   font-size: 0.75rem;
   color: #94a3b8;
   margin-top: 4px;
+}
+
+.update-source {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 4px;
+  line-height: 1.25;
 }
 
 .no-update {

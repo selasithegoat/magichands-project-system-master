@@ -224,6 +224,17 @@ const ProjectUpdates = ({ project, currentUser }) => {
     });
   };
 
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
   const getDownloadUrl = (path) => {
     return `${path}`;
   };
@@ -244,6 +255,16 @@ const ProjectUpdates = ({ project, currentUser }) => {
       .replaceAll("/", "-")
       .replaceAll(" ", "-");
   };
+
+  const getUpdateAuthorName = (update) => {
+    if (!update?.author) return "System";
+    if (typeof update.author === "string") return "System";
+    const fullName =
+      `${update.author.firstName || ""} ${update.author.lastName || ""}`.trim();
+    return fullName || update.author.email || "System";
+  };
+
+  const latestSharedUpdate = updates.length > 0 ? updates[0] : null;
 
   const handleEditClick = (update) => {
     setEditingUpdateId(update._id);
@@ -482,6 +503,27 @@ const ProjectUpdates = ({ project, currentUser }) => {
         <div className="modal-overlay">
           <div className="modal-content" style={{ width: "500px" }}>
             <h3 className="modal-title">Add Project Update</h3>
+
+            <div className="latest-update-snapshot">
+              <p className="latest-update-snapshot-label">Latest Shared Update</p>
+              {latestSharedUpdate ? (
+                <>
+                  <p className="latest-update-snapshot-content">
+                    {latestSharedUpdate.content}
+                  </p>
+                  <p className="latest-update-snapshot-meta">
+                    {getUpdateAuthorName(latestSharedUpdate)} •{" "}
+                    {formatDateTime(latestSharedUpdate.createdAt)}
+                  </p>
+                </>
+              ) : (
+                <p className="latest-update-snapshot-empty">
+                  No updates yet. Share what changed so others avoid duplicate
+                  updates.
+                </p>
+              )}
+            </div>
+
             <form onSubmit={handleSave}>
               <div className="form-group">
                 <label>Update Content</label>
