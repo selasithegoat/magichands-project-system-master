@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   createProject,
   getProjects,
+  getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,
   getUserStats,
@@ -108,6 +109,7 @@ router.get("/clients", protect, getClients); // [NEW] - Get all clients with the
 router.get("/orders", protect, getOrderGroups);
 router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
+router.get("/bottlenecks/stage", protect, getStageBottlenecks);
 router.post(
   "/ai/production-risk-suggestions",
   protect,

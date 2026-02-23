@@ -472,6 +472,15 @@ const CLOSED_ORDER_STATUSES = new Set([
   "Response Sent",
   "Quote Request Completed",
 ]);
+const BOTTLENECK_EXCLUDED_STATUSES = new Set([
+  "Completed",
+  "Finished",
+  "On Hold",
+]);
+const BOTTLENECK_DEFAULT_DAYS = 14;
+const BOTTLENECK_MIN_DAYS = 1;
+const BOTTLENECK_MAX_DAYS = 90;
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const getLineageKey = (project = {}) => {
   const rawLineageId = project?.lineageId;
@@ -2153,6 +2162,11 @@ const getProjectDisplayRef = (project) =>
 const getProjectDisplayName = (project) =>
   project?.details?.projectName || "Unnamed Project";
 const formatPaymentTypeLabel = (type = "") => toText(type).replace(/_/g, " ");
+const parseBottleneckThresholdDays = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return BOTTLENECK_DEFAULT_DAYS;
+  return Math.min(BOTTLENECK_MAX_DAYS, Math.max(BOTTLENECK_MIN_DAYS, parsed));
+};
 
 // @desc    Create a new project (Step 1)
 // @route   POST /api/projects
@@ -2464,6 +2478,111 @@ const getProjects = async (req, res) => {
       `${new Date().toISOString()} - Error fetching projects: ${error.stack}\n`,
     );
     res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Get projects currently bottlenecked in a stage
+// @route   GET /api/projects/bottlenecks/stage
+// @access  Private (Admin portal)
+const getStageBottlenecks = async (req, res) => {
+  try {
+    if (!hasAdminPortalAccess(req.user)) {
+      return res.status(403).json({
+        message:
+          "Access denied: this bottleneck feed is restricted to admin portal users.",
+      });
+    }
+
+    const thresholdDays = parseBottleneckThresholdDays(req.query?.days);
+    const thresholdMs = thresholdDays * DAY_IN_MS;
+    const nowMs = Date.now();
+
+    const projects = await Project.find({
+      status: { $nin: Array.from(BOTTLENECK_EXCLUDED_STATUSES) },
+      $or: [{ "hold.isOnHold": { $exists: false } }, { "hold.isOnHold": false }],
+    })
+      .select("_id orderId details.projectName status hold createdAt")
+      .lean();
+
+    if (!projects.length) {
+      return res.json({
+        thresholdDays,
+        total: 0,
+        bottlenecks: [],
+      });
+    }
+
+    const projectIds = projects.map((project) => project?._id).filter(Boolean);
+    const stageEntries = await ActivityLog.aggregate([
+      {
+        $match: {
+          project: { $in: projectIds },
+          action: "status_change",
+        },
+      },
+      {
+        $group: {
+          _id: {
+            project: "$project",
+            to: "$details.statusChange.to",
+          },
+          latestAt: { $max: "$createdAt" },
+        },
+      },
+    ]);
+
+    const stageEntryMap = new Map();
+    stageEntries.forEach((entry) => {
+      const projectId = entry?._id?.project ? String(entry._id.project) : "";
+      const statusKey = toText(entry?._id?.to);
+      const latestAt = entry?.latestAt;
+      if (!projectId || !statusKey || !latestAt) return;
+      stageEntryMap.set(`${projectId}|${statusKey}`, new Date(latestAt));
+    });
+
+    const bottlenecks = [];
+
+    projects.forEach((project) => {
+      if (project?.hold?.isOnHold || project?.status === HOLD_STATUS) return;
+
+      const projectId = project?._id ? String(project._id) : "";
+      const status = toText(project?.status);
+      if (!projectId || !status) return;
+
+      const stageEnteredAtValue =
+        stageEntryMap.get(`${projectId}|${status}`) || project?.createdAt;
+      if (!stageEnteredAtValue) return;
+
+      const stageEnteredAt = new Date(stageEnteredAtValue);
+      const stageEnteredMs = stageEnteredAt.getTime();
+      if (!Number.isFinite(stageEnteredMs)) return;
+
+      const elapsedMs = nowMs - stageEnteredMs;
+      if (elapsedMs < thresholdMs) return;
+
+      bottlenecks.push({
+        projectId,
+        orderId: toText(project?.orderId) || "N/A",
+        projectName: toText(project?.details?.projectName) || "Unnamed Project",
+        status,
+        stageEnteredAt,
+        daysInStage: Math.floor(elapsedMs / DAY_IN_MS),
+      });
+    });
+
+    bottlenecks.sort((a, b) => {
+      if (b.daysInStage !== a.daysInStage) return b.daysInStage - a.daysInStage;
+      return new Date(a.stageEnteredAt).getTime() - new Date(b.stageEnteredAt).getTime();
+    });
+
+    return res.json({
+      thresholdDays,
+      total: bottlenecks.length,
+      bottlenecks,
+    });
+  } catch (error) {
+    console.error("Error fetching stage bottlenecks:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -5581,6 +5700,7 @@ const undoAcknowledgeProject = async (req, res) => {
 module.exports = {
   createProject,
   getProjects,
+  getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,
   getUserStats,
