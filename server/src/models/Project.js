@@ -50,10 +50,12 @@ const ProjectSchema = new mongoose.Schema(
       contactType: {
         type: String,
         enum: ["MH", "None", "3rd Party"],
+        default: "None",
       },
       supplySource: {
-        type: String,
+        type: [String],
         enum: ["in-house", "purchase", "client-supply"],
+        default: [],
       },
       sampleImage: {
         type: String, // Path to the uploaded image

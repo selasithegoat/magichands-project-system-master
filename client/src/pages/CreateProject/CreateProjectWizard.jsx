@@ -8,6 +8,68 @@ import Step5 from "./Step5";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import "./WizardLayout.css";
 
+const normalizeSupplySourceSelection = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => typeof entry === "string" && entry.trim());
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed)
+          ? parsed.filter((entry) => typeof entry === "string" && entry.trim())
+          : [];
+      } catch {
+        return [trimmed];
+      }
+    }
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+    return [trimmed];
+  }
+  return [];
+};
+
+const normalizeContactType = (value) => {
+  const rawValue =
+    value && typeof value === "object"
+      ? value.value || value.label || ""
+      : value;
+  const normalized = String(rawValue || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return "None";
+  if (
+    normalized === "mh" ||
+    normalized === "magic hands" ||
+    normalized === "magichands"
+  ) {
+    return "MH";
+  }
+  if (normalized === "none" || normalized === "n/a" || normalized === "na") {
+    return "None";
+  }
+  if (
+    normalized === "3rd party" ||
+    normalized === "3rd-party" ||
+    normalized === "3rdparty" ||
+    normalized === "third party" ||
+    normalized === "third-party" ||
+    normalized === "thirdparty"
+  ) {
+    return "3rd Party";
+  }
+
+  return String(rawValue || "").trim();
+};
+
 const CreateProjectWizard = ({ onProjectCreate }) => {
   const navigate = useNavigate();
   const location = useLocation(); // Get location for query params
@@ -79,8 +141,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       deliveryDate: new Date().toISOString().split("T")[0],
       deliveryTime: "14:00",
       deliveryLocation: "",
-      contactType: "MH",
-      supplySource: "in-house",
+      contactType: "None",
+      supplySource: ["in-house"],
       departments: [], // Step 2
       items: [], // Step 3
       uncontrollableFactors: [], // Step 4
@@ -205,9 +267,15 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
               : "",
             deliveryTime: data.details?.deliveryTime || "",
             deliveryLocation: data.details?.deliveryLocation || "", // [NEW] Map delivery location
+            contactType: normalizeContactType(
+              data.details?.contactType || data.contactType || "",
+            ),
             briefOverview: data.details?.briefOverview || "", // [NEW] Map brief overview
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             attachments: data.details?.attachments || [], // [NEW] Map attachments
+            supplySource: normalizeSupplySourceSelection(
+              data.details?.supplySource,
+            ),
             // Step 2 & 3 & 4
             departments: data.departments || [],
             items:
@@ -284,7 +352,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
       // Append all JSON fields
       Object.keys(formData).forEach((key) => {
-        if (key === "files") return; // Handle files separately
+        if (key === "files" || key === "contactType") return; // Front Desk owns contact type.
         // attachments sent as JSON string if present (existing files)
 
         const value = formData[key];

@@ -30,8 +30,16 @@ const PRODUCTION_CHECKLIST_MAP = {
   overseasOutsourcing: "overseas",
 };
 
-const normalizeText = (value) =>
-  typeof value === "string" ? value.trim() : "";
+const normalizeText = (value) => {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry) => typeof entry === "string" && entry.trim())
+      .map((entry) => entry.trim())
+      .join(", ");
+  }
+  return "";
+};
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 

@@ -125,6 +125,38 @@ const styles = StyleSheet.create({
   },
 });
 
+const SUPPLY_SOURCE_LABELS = {
+  "in-house": "In-house",
+  purchase: "Purchase",
+  "client-supply": "Client Supply",
+};
+
+const formatSupplySource = (value) => {
+  const list = Array.isArray(value)
+    ? value.filter(Boolean)
+    : typeof value === "string" && value.trim()
+      ? value.trim().startsWith("[") && value.trim().endsWith("]")
+        ? (() => {
+            try {
+              const parsed = JSON.parse(value.trim());
+              return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+            } catch {
+              return value
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean);
+            }
+          })()
+        : value
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean)
+      : [];
+
+  if (!list.length) return "N/A";
+  return list.map((entry) => SUPPLY_SOURCE_LABELS[entry] || entry).join(", ");
+};
+
 const ProjectSummaryPDF = ({
   formData,
   imageUrls = {},
@@ -176,11 +208,15 @@ const ProjectSummaryPDF = ({
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Contact Type:</Text>
-            <Text style={styles.value}>{formData.contactType}</Text>
+            <Text style={styles.value}>
+              {formData.contactType || "None"}
+            </Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Supply Source:</Text>
-            <Text style={styles.value}>{formData.supplySource}</Text>
+            <Text style={styles.value}>
+              {formatSupplySource(formData.supplySource)}
+            </Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Brief Overview:</Text>

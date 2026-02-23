@@ -135,6 +135,22 @@
   border-color: var(--primary-blue);
 }
 
+.contact-type-options.read-only .contact-pill {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.contact-type-options.read-only .contact-pill.active {
+  opacity: 1;
+}
+
+.contact-type-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
 /* Supply Source */
 .supply-source-section {
   margin-top: 4px;

@@ -10,6 +10,63 @@ import ConfirmationModal from "../../components/ui/ConfirmationModal";
 
 import "./Step5.css";
 
+const SUPPLY_SOURCE_LABELS = {
+  "in-house": "In-house",
+  purchase: "Purchase",
+  "client-supply": "Client Supply",
+};
+
+const normalizeSupplySources = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value.trim()) {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+      } catch {
+        // Fall through to scalar parsing.
+      }
+    }
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+    return [trimmed];
+  }
+  return [];
+};
+
+const formatContactType = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return "None";
+  if (
+    normalized === "mh" ||
+    normalized === "magic hands" ||
+    normalized === "magichands"
+  ) {
+    return "MH";
+  }
+  if (normalized === "none" || normalized === "n/a" || normalized === "na") {
+    return "None";
+  }
+  if (
+    normalized === "3rd party" ||
+    normalized === "3rd-party" ||
+    normalized === "3rdparty" ||
+    normalized === "third party" ||
+    normalized === "third-party" ||
+    normalized === "thirdparty"
+  ) {
+    return "3rd Party";
+  }
+  return String(value || "").trim();
+};
+
 const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -21,6 +78,7 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   });
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [imageUrls, setImageUrls] = useState({});
+  const selectedSupplySources = normalizeSupplySources(formData.supplySource);
 
   // [New] Pre-fetch images for PDF to avoid "invalid extension" and CORS issues in react-pdf
   React.useEffect(() => {
@@ -240,18 +298,27 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
               </div>
             </div>
             <div className="review-item">
-              <label>Contact Type</label>
-              <div className="review-value">{formData.contactType}</div>
+              <label>Contact Type (Front Desk)</label>
+              <div className="review-value">
+                {formatContactType(formData.contactType) || "None"}
+              </div>
             </div>
             <div className="review-item">
               <label>Supply Source</label>
               <div>
-                <span
-                  className="badge-yellow"
-                  style={{ textTransform: "capitalize" }}
-                >
-                  {formData.supplySource}
-                </span>
+                {selectedSupplySources.length > 0 ? (
+                  selectedSupplySources.map((source) => (
+                    <span
+                      key={source}
+                      className="badge-yellow"
+                      style={{ textTransform: "capitalize", marginRight: 6 }}
+                    >
+                      {SUPPLY_SOURCE_LABELS[source] || source}
+                    </span>
+                  ))
+                ) : (
+                  <span className="review-value">N/A</span>
+                )}
               </div>
             </div>
             <div className="review-item">

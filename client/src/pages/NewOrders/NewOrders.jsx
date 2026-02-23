@@ -14,6 +14,7 @@ const NewOrders = () => {
     clientName: "",
     clientEmail: "",
     clientPhone: "",
+    contactType: "None",
     deliveryLocation: "",
     projectName: "",
     briefOverview: "",
@@ -124,6 +125,7 @@ const NewOrders = () => {
       clientName: project.details?.client || "",
       clientEmail: project.details?.clientEmail || "",
       clientPhone: project.details?.clientPhone || "",
+      contactType: project.details?.contactType || "None",
       deliveryLocation: project.details?.deliveryLocation || "",
       projectName: project.details?.projectName || "",
       briefOverview: project.details?.briefOverview || "",
@@ -265,6 +267,7 @@ const NewOrders = () => {
     formPayload.append("client", formData.clientName);
     formPayload.append("clientEmail", formData.clientEmail);
     formPayload.append("clientPhone", formData.clientPhone);
+    formPayload.append("contactType", formData.contactType);
     formPayload.append("projectName", formData.projectName);
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
@@ -327,6 +330,7 @@ const NewOrders = () => {
             clientName: "",
             clientEmail: "",
             clientPhone: "",
+            contactType: "None",
             deliveryLocation: "",
             projectName: "",
             briefOverview: "",
@@ -554,6 +558,21 @@ const NewOrders = () => {
                     className="form-input"
                     placeholder="e.g. +1234567890"
                   />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="contactType">Contact Type</label>
+                  <select
+                    id="contactType"
+                    name="contactType"
+                    value={formData.contactType}
+                    onChange={handleChange}
+                    className="form-input"
+                    required
+                  >
+                    <option value="None">None</option>
+                    <option value="MH">MH</option>
+                    <option value="3rd Party">3rd Party</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label htmlFor="deliveryLocation">Delivery Location</label>

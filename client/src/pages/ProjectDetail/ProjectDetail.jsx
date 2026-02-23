@@ -689,6 +689,38 @@ const ProjectInfoCard = ({ project }) => {
     });
   };
 
+  const formatContactType = (value) => {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (!normalized) return "None";
+    if (
+      normalized === "mh" ||
+      normalized === "magic hands" ||
+      normalized === "magichands"
+    ) {
+      return "MH";
+    }
+    if (normalized === "none" || normalized === "n/a" || normalized === "na") {
+      return "None";
+    }
+    if (
+      normalized === "3rd party" ||
+      normalized === "3rd-party" ||
+      normalized === "3rdparty" ||
+      normalized === "third party" ||
+      normalized === "third-party" ||
+      normalized === "thirdparty"
+    ) {
+      return "3rd Party";
+    }
+    return String(value || "").trim();
+  };
+
+  const contactTypeLabel = formatContactType(
+    details.contactType || project.contactType || "",
+  );
+
   return (
     <div className="detail-card">
       <div className="card-header project-info-header">
@@ -730,10 +762,13 @@ const ProjectInfoCard = ({ project }) => {
         </div>
         {project.projectType !== "Quote" && (
           <div className="info-item">
-            <h4>CONTACT</h4>
+            <h4>CONTACT TYPE</h4>
             <span className="info-text-bold">
-              {details.contactType || "N/A"}
+              {contactTypeLabel || "None"}
             </span>
+            <div className="info-subtext" style={{ marginLeft: 0 }}>
+              Front Desk selection
+            </div>
           </div>
         )}
         <div className="info-item">

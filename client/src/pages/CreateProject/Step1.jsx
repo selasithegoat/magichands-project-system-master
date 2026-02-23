@@ -15,10 +15,79 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
+const normalizeSupplySourceSelection = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+      } catch {
+        // Fall through to scalar parsing.
+      }
+    }
+
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+
+    return [trimmed];
+  }
+
+  return [];
+};
+
+const CONTACT_TYPE_OPTIONS = ["MH", "None", "3rd Party"];
+
+const normalizeContactTypeSelection = (value) => {
+  const rawValue =
+    value && typeof value === "object"
+      ? value.value || value.label || ""
+      : value;
+  const normalized = String(rawValue || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return "None";
+  if (
+    normalized === "mh" ||
+    normalized === "magic hands" ||
+    normalized === "magichands"
+  ) {
+    return "MH";
+  }
+  if (normalized === "none" || normalized === "n/a" || normalized === "na") {
+    return "None";
+  }
+  if (
+    normalized === "3rd party" ||
+    normalized === "3rd-party" ||
+    normalized === "3rdparty" ||
+    normalized === "third party" ||
+    normalized === "third-party" ||
+    normalized === "thirdparty"
+  ) {
+    return "3rd Party";
+  }
+
+  return String(rawValue || "").trim();
+};
+
 const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const fileInputRef = useRef(null);
   const [leads, setLeads] = useState([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+  const selectedSupplySources = normalizeSupplySourceSelection(
+    formData.supplySource,
+  );
+  const selectedContactType = normalizeContactTypeSelection(formData.contactType);
 
   // Fetch users for generic dropdown
   React.useEffect(() => {
@@ -48,6 +117,14 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
 
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
+  };
+
+  const toggleSupplySource = (source) => {
+    const exists = selectedSupplySources.includes(source);
+    const nextSources = exists
+      ? selectedSupplySources.filter((entry) => entry !== source)
+      : [...selectedSupplySources, source];
+    handleChange("supplySource", nextSources);
   };
 
   const selectedLeadValue =
@@ -236,44 +313,54 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
              readOnly={isEditing}
           />
 
-          {/* Contact Type - Tabs/Pills */}
+          {/* Contact Type */}
           <div className="contact-type-section">
-            <label className="section-label">Contact Type</label>
-            <div className="contact-type-options">
-              {["MH", "None", "3rd Party"].map((type) => (
+            <label className="section-label">Contact Type (Front Desk)</label>
+            <div className="contact-type-options read-only">
+              {CONTACT_TYPE_OPTIONS.map((type) => (
                 <button
                   key={type}
+                  type="button"
                   className={`contact-pill ${
-                    formData.contactType === type ? "active" : ""
+                    selectedContactType === type ? "active" : ""
                   }`}
-                  onClick={() => handleChange("contactType", type)}
+                  disabled
                 >
                   {type}
                 </button>
               ))}
+              {selectedContactType &&
+                !CONTACT_TYPE_OPTIONS.includes(selectedContactType) && (
+                  <button type="button" className="contact-pill active" disabled>
+                    {selectedContactType}
+                  </button>
+                )}
             </div>
+            <small className="contact-type-note">
+              Set by Front Desk during order creation.
+            </small>
           </div>
 
           {/* Supply Source */}
           <div className="supply-source-section">
-            <label className="section-label">Supply Source</label>
+            <label className="section-label">Supply Source (Select one or more)</label>
             <CardOption
               icon={<HomeIcon />}
               label="In-house"
-              checked={formData.supplySource === "in-house"}
-              onChange={() => handleChange("supplySource", "in-house")}
+              checked={selectedSupplySources.includes("in-house")}
+              onChange={() => toggleSupplySource("in-house")}
             />
             <CardOption
               icon={<CartIcon />}
               label="Purchase"
-              checked={formData.supplySource === "purchase"}
-              onChange={() => handleChange("supplySource", "purchase")}
+              checked={selectedSupplySources.includes("purchase")}
+              onChange={() => toggleSupplySource("purchase")}
             />
             <CardOption
               icon={<PersonIcon />}
               label="Client Supply"
-              checked={formData.supplySource === "client-supply"}
-              onChange={() => handleChange("supplySource", "client-supply")}
+              checked={selectedSupplySources.includes("client-supply")}
+              onChange={() => toggleSupplySource("client-supply")}
             />
           </div>
 

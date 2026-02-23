@@ -23,6 +23,23 @@ const toEntityId = (value) => {
   return "";
 };
 
+const normalizeSupplySourceList = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const formatSupplySource = (value) => {
+  const list = normalizeSupplySourceList(value);
+  if (!list.length) return "N/A";
+  return list.join(", ");
+};
+
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
   <svg
@@ -208,8 +225,8 @@ const ProjectDetails = ({ user }) => {
         : "",
       deliveryTime: data.details?.deliveryTime || "",
       deliveryLocation: data.details?.deliveryLocation || "",
-      contactType: data.details?.contactType || "",
-      supplySource: data.details?.supplySource || "",
+      contactType: data.details?.contactType || "None",
+      supplySource: formatSupplySource(data.details?.supplySource),
     });
   };
 
@@ -363,7 +380,7 @@ const ProjectDetails = ({ user }) => {
           : "",
         deliveryTime: project.details?.deliveryTime || "",
         deliveryLocation: project.details?.deliveryLocation || "",
-        contactType: project.details?.contactType || "",
+        contactType: project.details?.contactType || "None",
         supplySource: project.details?.supplySource || "",
       });
     }
@@ -995,7 +1012,7 @@ const ProjectDetails = ({ user }) => {
                         onChange={handleChange}
                       />
                     ) : (
-                      <p>{details.contactType || "N/A"}</p>
+                      <p>{details.contactType || "None"}</p>
                     )}
                   </div>
                   <div className="info-item">
@@ -1008,7 +1025,7 @@ const ProjectDetails = ({ user }) => {
                         onChange={handleChange}
                       />
                     ) : (
-                      <p>{details.supplySource || "N/A"}</p>
+                      <p>{formatSupplySource(details.supplySource)}</p>
                     )}
                   </div>
                 </>

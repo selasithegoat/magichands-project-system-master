@@ -741,6 +741,65 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const SUPPLY_SOURCE_VALUES = new Set([
+  "in-house",
+  "purchase",
+  "client-supply",
+]);
+const normalizeSupplySourceValue = (value) => {
+  const token = toText(value).toLowerCase();
+  if (!token) return "";
+  if (SUPPLY_SOURCE_VALUES.has(token)) return token;
+  if (token === "in house" || token === "inhouse") return "in-house";
+  if (token === "client supply" || token === "clientsupply")
+    return "client-supply";
+  return "";
+};
+const normalizeSupplySourceSelection = (value) => {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(value.map(normalizeSupplySourceValue).filter(Boolean)),
+    );
+  }
+
+  if (value && typeof value === "object") {
+    if (typeof value.value === "string") {
+      return normalizeSupplySourceSelection(value.value);
+    }
+    return [];
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        return normalizeSupplySourceSelection(JSON.parse(trimmed));
+      } catch {
+        // Fall through to scalar parsing.
+      }
+    }
+
+    if (trimmed.includes(",")) {
+      return Array.from(
+        new Set(
+          trimmed
+            .split(",")
+            .map((entry) => normalizeSupplySourceValue(entry))
+            .filter(Boolean),
+        ),
+      );
+    }
+
+    const normalized = normalizeSupplySourceValue(trimmed);
+    return normalized ? [normalized] : [];
+  }
+
+  return [];
+};
+const toSupplySourceText = (value) =>
+  normalizeSupplySourceSelection(value).join(", ");
 const normalizeTextToken = (value) =>
   toText(value)
     .toLowerCase()
@@ -996,6 +1055,10 @@ const buildRiskSuggestionContext = (projectData = {}) => {
   const existingRiskDescriptions = toSafeArray(projectData?.productionRisks)
     .map((risk) => toText(risk?.description))
     .filter(Boolean);
+  const supplySourceRaw =
+    details && Object.prototype.hasOwnProperty.call(details, "supplySource")
+      ? details.supplySource
+      : projectData?.supplySource;
 
   return {
     projectType: toText(projectData?.projectType) || "Standard",
@@ -1004,7 +1067,7 @@ const buildRiskSuggestionContext = (projectData = {}) => {
     briefOverview: toText(details?.briefOverview || projectData?.briefOverview),
     client: toText(details?.client || projectData?.client),
     contactType: toText(details?.contactType || projectData?.contactType),
-    supplySource: toText(details?.supplySource || projectData?.supplySource),
+    supplySource: toSupplySourceText(supplySourceRaw),
     deliveryDate: toText(details?.deliveryDate || projectData?.deliveryDate),
     deliveryTime: toText(details?.deliveryTime || projectData?.deliveryTime),
     deliveryLocation: toText(
@@ -2110,6 +2173,9 @@ const createProject = async (req, res) => {
 
     const normalizedAssistantLeadId = getValue(parseMaybeJson(assistantLeadId));
     const normalizedOrderRefId = getValue(parseMaybeJson(orderRef));
+    const normalizedSupplySource = normalizeSupplySourceSelection(
+      supplySource !== undefined ? supplySource : details?.supplySource,
+    );
     const finalOrderId =
       normalizeOrderNumber(orderId) || (normalizedOrderRefId ? "" : generatedOrderId);
 
@@ -2141,8 +2207,8 @@ const createProject = async (req, res) => {
         deliveryDate,
         deliveryTime: finalDeliveryTime, // [NEW]
         deliveryLocation,
-        contactType: getValue(contactType),
-        supplySource: getValue(supplySource),
+        contactType: getValue(contactType) || "None",
+        supplySource: normalizedSupplySource,
         sampleImage: sampleImagePath, // [NEW]
         attachments: attachmentPaths, // [NEW]
       },
@@ -4435,8 +4501,10 @@ const updateProject = async (req, res) => {
       project.details.contactType = getValue(contactType);
       detailsChanged = true;
     }
-    if (supplySource) {
-      project.details.supplySource = getValue(supplySource);
+    if (supplySource !== undefined) {
+      project.details.supplySource = normalizeSupplySourceSelection(
+        getValue(supplySource),
+      );
       detailsChanged = true;
     }
 
