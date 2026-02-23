@@ -9,7 +9,11 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 1.5rem;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(15, 23, 42, 0.9));
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.12),
+    rgba(15, 23, 42, 0.9)
+  );
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 1.5rem;
@@ -67,7 +71,10 @@
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .export-button--secondary {
@@ -95,7 +102,7 @@
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 2fr));
   gap: 1rem;
 }
 
@@ -292,14 +299,20 @@
   background-image:
     linear-gradient(to top, rgba(148, 163, 184, 0.15) 1px, transparent 1px),
     linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 100% 20%, 20% 100%;
+  background-size:
+    100% 20%,
+    20% 100%;
   background-position: bottom, left;
   position: relative;
 }
 
 .distribution-bar {
   flex: 1;
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.9));
+  background: linear-gradient(
+    180deg,
+    rgba(34, 197, 94, 0.8),
+    rgba(22, 163, 74, 0.9)
+  );
   border-radius: 6px 6px 2px 2px;
   min-width: 6px;
   transition: opacity 0.2s ease;
@@ -500,7 +513,10 @@
   padding: 0.35rem 0.8rem;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .pagination-btn:hover:not(:disabled) {
