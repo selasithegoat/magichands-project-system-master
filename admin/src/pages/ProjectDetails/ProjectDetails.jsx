@@ -118,7 +118,7 @@ const ProjectDetails = ({ user }) => {
     setProject({ ...project, status: newStatus });
 
     try {
-      const res = await fetch(`/api/projects/${id}/status`, {
+      const res = await fetch(`/api/projects/${id}/status?source=admin`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -615,6 +615,7 @@ const ProjectDetails = ({ user }) => {
       "Pending Departmental Engagement",
       "Departmental Engagement Completed",
       "Pending Mockup",
+      "Pending Proof Reading",
       "Pending Production",
     ].includes(project.status);
   const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
@@ -718,8 +719,14 @@ const ProjectDetails = ({ user }) => {
                       "Departmental Engagement Completed",
                       "Pending Mockup",
                       "Mockup Completed",
+                      "Pending Proof Reading",
+                      "Proof Reading Completed",
                       "Pending Production",
                       "Production Completed",
+                      "Pending Quality Control",
+                      "Quality Control Completed",
+                      "Pending Photography",
+                      "Photography Completed",
                       "Pending Packaging",
                       "Packaging Completed",
                       "Pending Delivery/Pickup",

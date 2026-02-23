@@ -24,6 +24,11 @@ const STATUS_ACTIONS = {
     pending: "Pending Production",
     complete: "Production Completed",
   },
+  Photography: {
+    label: "Photography Complete",
+    pending: "Pending Photography",
+    complete: "Photography Completed",
+  },
   Stores: {
     label: "Stocks & Packaging Complete",
     pending: "Pending Packaging",
@@ -39,8 +44,14 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
+  "Pending Proof Reading",
+  "Proof Reading Completed",
   "Pending Production",
   "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
   "Pending Packaging",
   "Packaging Completed",
   "Pending Delivery/Pickup",
@@ -212,6 +223,7 @@ const EngagedProjectActions = ({ user }) => {
       "Pending Departmental Engagement",
       "Departmental Engagement Completed",
       "Pending Mockup",
+      "Pending Proof Reading",
       "Pending Production",
     ].includes(project.status);
 

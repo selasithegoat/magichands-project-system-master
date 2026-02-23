@@ -516,6 +516,19 @@ const Projects = ({ user }) => {
               <option value="Departmental Engagement Completed">
                 Departmental Engagement Completed
               </option>
+              <option value="Pending Mockup">Pending Mockup</option>
+              <option value="Pending Proof Reading">
+                Pending Proof Reading
+              </option>
+              <option value="Pending Production">Pending Production</option>
+              <option value="Pending Quality Control">
+                Pending Quality Control
+              </option>
+              <option value="Pending Photography">Pending Photography</option>
+              <option value="Pending Packaging">Pending Packaging</option>
+              <option value="Pending Delivery/Pickup">
+                Pending Delivery/Pickup
+              </option>
               <option value="On Hold">On Hold</option>
               <option value="In Progress">In Progress</option>
               <option value="Pending Feedback">Pending Feedback</option>

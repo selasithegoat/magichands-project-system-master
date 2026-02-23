@@ -912,6 +912,7 @@ const OrderActions = () => {
       "Pending Departmental Engagement",
       "Departmental Engagement Completed",
       "Pending Mockup",
+      "Pending Proof Reading",
       "Pending Production",
     ].includes(project.status);
   const lastOrderRevisionUpdatedAt = project?.sectionUpdates?.details || null;

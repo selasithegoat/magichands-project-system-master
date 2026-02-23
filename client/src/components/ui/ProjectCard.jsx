@@ -49,9 +49,20 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#a855f7",
           textClass: "purple",
         }; // Custom class needed?
+      case "Pending Proof Reading":
+      case "Proof Reading Completed":
+        return { class: "in-progress", color: "#ec4899", textClass: "purple" };
       case "Pending Production":
+      case "Production Completed":
         return { class: "in-progress", color: "#3b82f6", textClass: "blue" };
+      case "Pending Quality Control":
+      case "Quality Control Completed":
+        return { class: "in-progress", color: "#10b981", textClass: "green" };
+      case "Pending Photography":
+      case "Photography Completed":
+        return { class: "in-progress", color: "#0ea5e9", textClass: "blue" };
       case "Pending Packaging":
+      case "Packaging Completed":
         return {
           class: "pending-packaging",
           color: "#6366f1",
@@ -113,14 +124,20 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Pending Departmental Engagement": 27,
     "Departmental Engagement Completed": 32,
     "Pending Mockup": 38,
-    "Mockup Completed": 46,
-    "Pending Production": 56,
-    "Production Completed": 68,
-    "Pending Packaging": 78,
-    "Packaging Completed": 85,
-    "Pending Delivery/Pickup": 92,
-    Delivered: 95,
-    "Pending Feedback": 97,
+    "Mockup Completed": 44,
+    "Pending Proof Reading": 48,
+    "Proof Reading Completed": 52,
+    "Pending Production": 58,
+    "Production Completed": 66,
+    "Pending Quality Control": 72,
+    "Quality Control Completed": 76,
+    "Pending Photography": 80,
+    "Photography Completed": 84,
+    "Pending Packaging": 88,
+    "Packaging Completed": 92,
+    "Pending Delivery/Pickup": 95,
+    Delivered: 97,
+    "Pending Feedback": 98,
     "Feedback Completed": 99,
     Completed: 100,
     Finished: 100,

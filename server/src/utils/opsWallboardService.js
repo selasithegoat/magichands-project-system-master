@@ -17,6 +17,8 @@ const PENDING_APPROVAL_STATUSES = new Set([
   "Pending Approval",
   "Pending Scope Approval",
   "Pending Departmental Engagement",
+  "Pending Proof Reading",
+  "Pending Quality Control",
   "Pending Quote Request",
   "Pending Send Response",
 ]);
@@ -42,17 +44,32 @@ const PIPELINE_GROUPS = [
   {
     key: "design",
     label: "Design + Mockup",
-    statuses: new Set(["Pending Mockup", "Mockup Completed"]),
+    statuses: new Set([
+      "Pending Mockup",
+      "Mockup Completed",
+      "Pending Proof Reading",
+      "Proof Reading Completed",
+    ]),
   },
   {
     key: "production",
     label: "Production",
-    statuses: new Set(["Pending Production", "Production Completed"]),
+    statuses: new Set([
+      "Pending Production",
+      "Production Completed",
+      "Pending Quality Control",
+      "Quality Control Completed",
+    ]),
   },
   {
     key: "finishing",
     label: "Packaging",
-    statuses: new Set(["Pending Packaging", "Packaging Completed"]),
+    statuses: new Set([
+      "Pending Photography",
+      "Photography Completed",
+      "Pending Packaging",
+      "Packaging Completed",
+    ]),
   },
   {
     key: "delivery",

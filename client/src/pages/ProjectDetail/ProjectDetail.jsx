@@ -60,8 +60,20 @@ const STATUS_STEPS = [
   },
   { label: "Mockup", statuses: ["Pending Mockup", "Mockup Completed"] },
   {
+    label: "Proof Reading",
+    statuses: ["Pending Proof Reading", "Proof Reading Completed"],
+  },
+  {
     label: "Production",
     statuses: ["Pending Production", "Production Completed"],
+  },
+  {
+    label: "Quality Control",
+    statuses: ["Pending Quality Control", "Quality Control Completed"],
+  },
+  {
+    label: "Photography",
+    statuses: ["Pending Photography", "Photography Completed"],
   },
   {
     label: "Packaging",
@@ -110,8 +122,14 @@ const STANDARD_WORKFLOW_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
+  "Pending Proof Reading",
+  "Proof Reading Completed",
   "Pending Production",
   "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
   "Pending Packaging",
   "Packaging Completed",
   "Pending Delivery/Pickup",
@@ -183,10 +201,22 @@ const getStatusColor = (status) => {
     case "Mockup Completed":
     case "Mockup":
       return "#a855f7"; // Purple
+    case "Pending Proof Reading":
+    case "Proof Reading Completed":
+    case "Proof Reading":
+      return "#ec4899"; // Pink
     case "Pending Production":
     case "Production Completed":
     case "Production":
       return "#3b82f6"; // Blue
+    case "Pending Quality Control":
+    case "Quality Control Completed":
+    case "Quality Control":
+      return "#10b981"; // Emerald
+    case "Pending Photography":
+    case "Photography Completed":
+    case "Photography":
+      return "#0ea5e9"; // Sky
     case "Pending Packaging":
     case "Packaging Completed":
     case "Packaging":
@@ -354,6 +384,7 @@ const ProjectDetail = ({ user }) => {
       "Pending Departmental Engagement",
       "Departmental Engagement Completed",
       "Pending Mockup",
+      "Pending Proof Reading",
       "Pending Production",
     ].includes(project.status);
 
@@ -2312,21 +2343,33 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
       case "Pending Mockup":
         return 38;
       case "Mockup Completed":
-        return 46;
+        return 44;
+      case "Pending Proof Reading":
+        return 48;
+      case "Proof Reading Completed":
+        return 52;
       case "Pending Production":
-        return 56;
+        return 58;
       case "Production Completed":
-        return 68;
+        return 66;
+      case "Pending Quality Control":
+        return 72;
+      case "Quality Control Completed":
+        return 76;
+      case "Pending Photography":
+        return 80;
+      case "Photography Completed":
+        return 84;
       case "Pending Packaging":
-        return 78;
+        return 88;
       case "Packaging Completed":
-        return 85;
-      case "Pending Delivery/Pickup":
         return 92;
-      case "Delivered":
+      case "Pending Delivery/Pickup":
         return 95;
-      case "Pending Feedback":
+      case "Delivered":
         return 97;
+      case "Pending Feedback":
+        return 98;
       case "Feedback Completed":
         return 99;
       case "Completed":
@@ -2409,7 +2452,10 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
     "Scope Approval": EyeIcon,
     "Departmental Engagement": CheckCircleIcon,
     Mockup: PaintbrushIcon,
+    "Proof Reading": EyeIcon,
     Production: FactoryIcon,
+    "Quality Control": CheckCircleIcon,
+    Photography: FolderIcon,
     Packaging: PackageIcon,
     "Delivery/Pickup": TruckIcon,
     Feedback: CheckCircleIcon,

@@ -16,8 +16,11 @@ import "./EngagedProjects.css";
 const STATUS_OPTIONS = [
   "All",
   "Pending Departmental Engagement",
-  "Pending Production",
   "Pending Mockup",
+  "Pending Proof Reading",
+  "Pending Production",
+  "Pending Quality Control",
+  "Pending Photography",
   "Pending Packaging",
   "Pending Delivery/Pickup",
   "Order Confirmed",
@@ -35,6 +38,11 @@ const STATUS_ACTIONS = {
     pending: "Pending Production",
     complete: "Production Completed",
   },
+  Photography: {
+    label: "Photography Complete",
+    pending: "Pending Photography",
+    complete: "Photography Completed",
+  },
   Stores: {
     label: "Stocks & Packaging Complete",
     pending: "Pending Packaging",
@@ -51,8 +59,14 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
+  "Pending Proof Reading",
+  "Proof Reading Completed",
   "Pending Production",
   "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
   "Pending Packaging",
   "Packaging Completed",
   "Pending Delivery/Pickup",
@@ -344,6 +358,8 @@ const EngagedProjects = ({ user }) => {
       return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
     if (dept === "Production")
       return projDepts.some((d) => productionSubDepts.includes(d));
+    if (dept === "Photography")
+      return projDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
     if (dept === "Stores")
       return projDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
     return false;

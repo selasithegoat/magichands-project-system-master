@@ -2887,6 +2887,36 @@ const updateProjectStatus = async (req, res) => {
       project.projectLeadId.toString() === req.user.id.toString();
     const isFinishing =
       project.status === "Completed" && newStatus === "Finished";
+    const adminOnlyStageCompletions = new Set([
+      "Proof Reading Completed",
+      "Quality Control Completed",
+    ]);
+    const adminOnlyStagePrerequisites = {
+      "Proof Reading Completed": "Pending Proof Reading",
+      "Quality Control Completed": "Pending Quality Control",
+    };
+
+    if (adminOnlyStageCompletions.has(newStatus)) {
+      if (!isAdmin) {
+        return res.status(403).json({
+          message:
+            "Only admins can validate this stage in the admin portal.",
+        });
+      }
+      if (!isAdminPortalRequest(req)) {
+        return res.status(403).json({
+          message:
+            "This stage can only be validated from the admin portal.",
+        });
+      }
+
+      const requiredStatus = adminOnlyStagePrerequisites[newStatus];
+      if (requiredStatus && project.status !== requiredStatus) {
+        return res.status(400).json({
+          message: `Status must be '${requiredStatus}' before completing this stage.`,
+        });
+      }
+    }
 
     // Department-based allowed completions
     const deptActions = [
@@ -2899,6 +2929,11 @@ const updateProjectStatus = async (req, res) => {
         dept: "Production",
         from: "Pending Production",
         to: "Production Completed",
+      },
+      {
+        dept: "Photography",
+        from: "Pending Photography",
+        to: "Photography Completed",
       },
       {
         dept: "Stores",
@@ -2957,8 +2992,11 @@ const updateProjectStatus = async (req, res) => {
     const statusProgression = {
       // Standard workflow
       "Scope Approval Completed": "Pending Departmental Engagement",
-      "Mockup Completed": "Pending Production",
-      "Production Completed": "Pending Packaging",
+      "Mockup Completed": "Pending Proof Reading",
+      "Proof Reading Completed": "Pending Production",
+      "Production Completed": "Pending Quality Control",
+      "Quality Control Completed": "Pending Photography",
+      "Photography Completed": "Pending Packaging",
       "Packaging Completed": "Pending Delivery/Pickup",
       Delivered: "Pending Feedback",
       // Quote workflow
@@ -3024,7 +3062,7 @@ const updateProjectStatus = async (req, res) => {
         project._id,
         "UPDATE",
         "Mockup Completed",
-        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Mockup has been completed and is ready for production.`,
+        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Mockup has been completed and is ready for proof reading.`,
       );
     }
 
@@ -5047,8 +5085,14 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
+  "Pending Proof Reading",
+  "Proof Reading Completed",
   "Pending Production",
   "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
   "Pending Packaging",
   "Packaging Completed",
   "Pending Delivery/Pickup",
