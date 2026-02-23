@@ -173,6 +173,31 @@ const ProjectSchema = new mongoose.Schema(
         ref: "User",
       },
     },
+    cancellation: {
+      isCancelled: {
+        type: Boolean,
+        default: false,
+      },
+      reason: {
+        type: String,
+        default: "",
+      },
+      cancelledAt: Date,
+      cancelledBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      resumedStatus: String,
+      resumedHoldState: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+      },
+      reactivatedAt: Date,
+      reactivatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
     currentStep: {
       type: Number,
       default: 1,
@@ -374,6 +399,7 @@ ProjectSchema.index({ orderRef: 1, createdAt: -1 });
 ProjectSchema.index({ orderId: 1, createdAt: -1 });
 ProjectSchema.index({ "details.client": 1 });
 ProjectSchema.index({ "details.deliveryDate": 1 });
+ProjectSchema.index({ "cancellation.isCancelled": 1, createdAt: -1 });
 ProjectSchema.index({ lineageId: 1, versionNumber: -1 });
 ProjectSchema.index({ isLatestVersion: 1, status: 1, createdAt: -1 });
 

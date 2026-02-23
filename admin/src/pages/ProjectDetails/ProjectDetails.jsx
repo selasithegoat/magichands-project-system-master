@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useLocation, Link } from "react-router-dom";
+import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
 
 import "./ProjectDetails.css";
 import {
@@ -11,6 +11,8 @@ import {
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal";
 import BillingGuardModal from "../../components/BillingGuardModal/BillingGuardModal";
+import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCancelModal";
+import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -139,6 +141,7 @@ const FolderIcon = ({ width = 24, height = 24, color = "currentColor" }) => (
 const ProjectDetails = ({ user }) => {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updates, setUpdates] = useState([]); // New state for updates
@@ -146,6 +149,13 @@ const ProjectDetails = ({ user }) => {
   const [isTogglingHold, setIsTogglingHold] = useState(false);
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
   const [holdReasonDraft, setHoldReasonDraft] = useState("");
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReasonDraft, setCancelReasonDraft] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isReactivating, setIsReactivating] = useState(false);
+  const [isReactivateModalOpen, setIsReactivateModalOpen] = useState(false);
+  const [reactivateError, setReactivateError] = useState("");
   const [billingGuardModal, setBillingGuardModal] = useState({
     open: false,
     message: "",
@@ -166,6 +176,14 @@ const ProjectDetails = ({ user }) => {
     if (isAdminLeadOnProject) {
       alert(
         "You cannot modify a project where you are the assigned Project Lead. Ask another admin to make this change.",
+      );
+      return false;
+    }
+
+    const currentlyCancelled = Boolean(project?.cancellation?.isCancelled);
+    if (currentlyCancelled) {
+      alert(
+        "This project is cancelled and frozen. Reactivate it before making changes.",
       );
       return false;
     }
@@ -311,6 +329,97 @@ const ProjectDetails = ({ user }) => {
     setIsHoldModalOpen(true);
   };
 
+  const closeCancelModal = () => {
+    if (isCancelling) return;
+    setIsCancelModalOpen(false);
+    setCancelError("");
+  };
+
+  const closeReactivateModal = () => {
+    if (isReactivating) return;
+    setIsReactivateModalOpen(false);
+    setReactivateError("");
+  };
+
+  const handleCancelActionClick = () => {
+    if (!project || isCancelling || isReactivating) return;
+    if (!ensureProjectIsEditable()) return;
+    setCancelReasonDraft(project.cancellation?.reason || "");
+    setCancelError("");
+    setIsCancelModalOpen(true);
+  };
+
+  const handleReactivateActionClick = () => {
+    if (!project || isReactivating || isCancelling) return;
+    setReactivateError("");
+    setIsReactivateModalOpen(true);
+  };
+
+  const handleCancelProject = async (reason = "") => {
+    if (!project || isCancelling) return;
+    setIsCancelling(true);
+    setCancelError("");
+    try {
+      const res = await fetch(`/api/projects/${id}/cancel?source=admin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to cancel project.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+      setIsEditing(false);
+      setIsEditingLead(false);
+      setIsHoldModalOpen(false);
+      setIsCancelModalOpen(false);
+      setCancelError("");
+      navigate("/cancelled-orders");
+    } catch (error) {
+      console.error("Error cancelling project:", error);
+      setCancelError(error.message || "Failed to cancel project.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleReactivateProject = async () => {
+    if (!project || isReactivating || isCancelling) return;
+
+    setIsReactivating(true);
+    setReactivateError("");
+    try {
+      const res = await fetch(`/api/projects/${id}/reactivate?source=admin`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to reactivate project.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+      setIsEditing(false);
+      setIsEditingLead(false);
+      setIsHoldModalOpen(false);
+      setIsCancelModalOpen(false);
+      setIsReactivateModalOpen(false);
+      setReactivateError("");
+    } catch (error) {
+      console.error("Error reactivating project:", error);
+      setReactivateError(error.message || "Failed to reactivate project.");
+    } finally {
+      setIsReactivating(false);
+    }
+  };
+
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
@@ -318,6 +427,7 @@ const ProjectDetails = ({ user }) => {
   const applyProjectToState = (data) => {
     if (!data) return;
     setProject(data);
+    setCancelReasonDraft(data.cancellation?.reason || "");
     setEditForm({
       orderId: data.orderId || "",
       client: data.details?.client || "",
@@ -628,6 +738,7 @@ const ProjectDetails = ({ user }) => {
   const isProjectOnHold = Boolean(
     project.hold?.isOnHold || project.status === "On Hold",
   );
+  const isCancelledProject = Boolean(project.cancellation?.isCancelled);
 
   // Helpers
   const formatDate = (dateString) => {
@@ -814,7 +925,10 @@ const ProjectDetails = ({ user }) => {
                   loading ||
                   isLeadUser ||
                   isProjectOnHold ||
-                  isTogglingHold
+                  isCancelledProject ||
+                  isTogglingHold ||
+                  isCancelling ||
+                  isReactivating
                 }
                 style={{
                   marginLeft: 0,
@@ -879,22 +993,43 @@ const ProjectDetails = ({ user }) => {
                   </option>
                 ))}
               </select>
-              {user?.role === "admin" && !isLeadUser && (
-                <button
-                  type="button"
-                  className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
-                  onClick={handleHoldActionClick}
-                  disabled={isTogglingHold}
-                >
-                  {isTogglingHold
-                    ? isProjectOnHold
-                      ? "Releasing..."
-                      : "Holding..."
-                    : isProjectOnHold
-                      ? "Release Hold"
-                      : "Put On Hold"}
-                </button>
-              )}
+              {user?.role === "admin" &&
+                !isLeadUser &&
+                (isCancelledProject ? (
+                  <button
+                    type="button"
+                    className="hold-toggle-btn reactivate"
+                    onClick={handleReactivateActionClick}
+                    disabled={isReactivating || isCancelling}
+                  >
+                    {isReactivating ? "Reactivating..." : "Reactivate Project"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
+                      onClick={handleHoldActionClick}
+                      disabled={isTogglingHold || isCancelling}
+                    >
+                      {isTogglingHold
+                        ? isProjectOnHold
+                          ? "Releasing..."
+                          : "Holding..."
+                        : isProjectOnHold
+                          ? "Release Hold"
+                          : "Put On Hold"}
+                    </button>
+                    <button
+                      type="button"
+                      className="hold-toggle-btn cancel-project"
+                      onClick={handleCancelActionClick}
+                      disabled={isTogglingHold || isCancelling || isReactivating}
+                    >
+                      {isCancelling ? "Cancelling..." : "Cancel Project"}
+                    </button>
+                  </>
+                ))}
             </div>
             <div className="billing-tags">
               {invoiceSent && (
@@ -930,6 +1065,21 @@ const ProjectDetails = ({ user }) => {
               <div className="payment-warning critical">
                 Caution: before moving to Pending Delivery/Pickup, confirm{" "}
                 {pendingDeliveryMissingLabels.join(", ")}.
+              </div>
+            )}
+            {isCancelledProject && (
+              <div className="cancelled-alert">
+                This project is cancelled and frozen at{" "}
+                <strong>
+                  {project.cancellation?.resumedStatus || project.status || "N/A"}
+                </strong>
+                {project.cancellation?.cancelledAt
+                  ? ` since ${formatLastUpdated(project.cancellation.cancelledAt)}`
+                  : ""}
+                .
+                {project.cancellation?.reason
+                  ? ` Reason: ${project.cancellation.reason}`
+                  : ""}
               </div>
             )}
             {isProjectOnHold && (
@@ -968,7 +1118,7 @@ const ProjectDetails = ({ user }) => {
                 )}
               </span>
               {!isEditing ? (
-                !isLeadUser && !isProjectOnHold && (
+                !isLeadUser && !isProjectOnHold && !isCancelledProject && (
                   <button
                     onClick={handleEditToggle}
                     style={{
@@ -2060,6 +2210,27 @@ const ProjectDetails = ({ user }) => {
         }}
         defaultReason={holdReasonDraft}
         isSubmitting={isTogglingHold}
+      />
+
+      <ProjectCancelModal
+        isOpen={isCancelModalOpen}
+        onClose={closeCancelModal}
+        onConfirm={handleCancelProject}
+        reason={cancelReasonDraft}
+        onReasonChange={setCancelReasonDraft}
+        isSubmitting={isCancelling}
+        errorMessage={cancelError}
+      />
+
+      <ProjectReactivateModal
+        isOpen={isReactivateModalOpen}
+        onClose={closeReactivateModal}
+        onConfirm={handleReactivateProject}
+        isSubmitting={isReactivating}
+        orderId={project?.orderId}
+        projectName={project?.details?.projectName}
+        frozenStage={project?.cancellation?.resumedStatus || project?.status}
+        errorMessage={reactivateError}
       />
     </div>
   );

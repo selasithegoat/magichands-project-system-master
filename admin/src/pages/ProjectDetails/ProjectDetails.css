@@ -85,6 +85,18 @@
   color: #047857;
 }
 
+.hold-toggle-btn.cancel-project {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.hold-toggle-btn.reactivate {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
 .hold-toggle-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
@@ -150,6 +162,17 @@
   border-radius: 8px;
   font-size: 0.78rem;
   font-weight: 600;
+}
+
+.cancelled-alert {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(252, 165, 165, 0.6);
+  color: #fecaca;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  max-width: 780px;
 }
 
 .header-left-vertical .header-project-name {

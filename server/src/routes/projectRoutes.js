@@ -11,6 +11,8 @@ const {
   addItemToProject,
   deleteItemFromProject,
   setProjectHold,
+  cancelProject,
+  reactivateProject,
   updateProjectStatus,
   uploadProjectMockup,
   addFeedbackToProject,
@@ -200,6 +202,8 @@ router.delete(
 );
 
 router.patch("/:id/hold", protect, setProjectHold);
+router.patch("/:id/cancel", protect, cancelProject);
+router.patch("/:id/reactivate", protect, reactivateProject);
 router.post(
   "/:id/mockup",
   protect,

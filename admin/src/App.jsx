@@ -3,6 +3,9 @@ import React, { useState, useEffect, Suspense, lazy } from "react";
 const Login = lazy(() => import("./pages/Login/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const Projects = lazy(() => import("./pages/Projects/Projects"));
+const CancelledOrders = lazy(
+  () => import("./pages/CancelledOrders/CancelledOrders"),
+);
 const ProjectDetails = lazy(
   () => import("./pages/ProjectDetails/ProjectDetails"),
 );
@@ -145,6 +148,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Projects user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cancelled-orders"
+            element={
+              <ProtectedRoute>
+                <CancelledOrders user={user} />
               </ProtectedRoute>
             }
           />

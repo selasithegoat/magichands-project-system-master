@@ -1,0 +1,72 @@
+.cancel-project-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.cancel-project-modal-description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.cancel-project-modal-label {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cancel-project-modal-textarea {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--text-primary);
+  padding: 0.65rem 0.75rem;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.cancel-project-modal-error {
+  margin: 0;
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.84rem;
+}
+
+.cancel-project-modal-actions {
+  margin-top: 0.2rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.cancel-project-modal-btn {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cancel-project-modal-btn.back {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.cancel-project-modal-btn.confirm {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.cancel-project-modal-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

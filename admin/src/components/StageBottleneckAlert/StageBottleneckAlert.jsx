@@ -21,6 +21,10 @@ const formatStageDate = (value) => {
 };
 
 const toSafeList = (value) => (Array.isArray(value) ? value : []);
+const toStageLabel = (value) => {
+  const label = String(value || "").trim();
+  return label || "Unknown Stage";
+};
 
 const buildAlertSignature = (items = []) =>
   toSafeList(items)
@@ -153,6 +157,7 @@ const StageBottleneckAlert = () => {
 
   const primary = bottlenecks[0];
   const totalLabel = bottlenecks.length === 1 ? "project is" : "projects are";
+  const primaryStage = toStageLabel(primary?.status);
 
   return (
     <>
@@ -160,8 +165,8 @@ const StageBottleneckAlert = () => {
         <div className="stage-bottleneck-banner-main">
           <h4>Stage Bottleneck Caution</h4>
           <p>
-            {bottlenecks.length} {totalLabel} at one stage for {thresholdDays}+
-            {" "}days.
+            {bottlenecks.length} {totalLabel} bottlenecked for {thresholdDays}+
+            {" "}days. Most urgent stage: <strong>{primaryStage}</strong>.
             {" "}Should this be cancelled, or placed on hold?
           </p>
           <p className="stage-bottleneck-banner-note">
@@ -176,7 +181,7 @@ const StageBottleneckAlert = () => {
             <strong>{primary.orderId || "N/A"}</strong>
             <span>{primary.projectName || "Unnamed Project"}</span>
             <span>
-              {primary.status} ({primary.daysInStage} days)
+              Bottlenecked at {primaryStage} ({primary.daysInStage} days)
             </span>
           </div>
           <button
@@ -205,9 +210,10 @@ const StageBottleneckAlert = () => {
           >
             <h3 id="stage-bottleneck-title">Stage Bottleneck Caution</h3>
             <p>
-              These projects have stayed in one stage for at least{" "}
-              {thresholdDays} days. Should they be cancelled?
-              {" "}If not, place them on hold to suspend the cancellation alert.
+              These projects are bottlenecked for at least {thresholdDays} days.
+              {" "}Most urgent stage right now: <strong>{primaryStage}</strong>.
+              {" "}Should they be cancelled? If not, place them on hold to suspend
+              the cancellation alert.
             </p>
             <p>
               Reminder: this caution popup will return every 24 hours until action is taken.
@@ -224,7 +230,7 @@ const StageBottleneckAlert = () => {
                     {item.projectName || "Unnamed Project"}
                   </p>
                   <p>
-                    <strong>Stage:</strong> {item.status}
+                    <strong>Bottleneck stage:</strong> {toStageLabel(item.status)}
                   </p>
                   <p>
                     <strong>Days in stage:</strong> {item.daysInStage}

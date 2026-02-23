@@ -85,6 +85,7 @@ const PAYMENT_TYPES = new Set([
 ]);
 const DEFAULT_RELEASE_STATUS = "In Progress";
 const HOLD_STATUS = "On Hold";
+const CANCELLED_MUTATION_ACTIONS = new Set(["cancel", "reactivate"]);
 const HOLDABLE_STATUSES = new Set(
   (Project.schema.path("status")?.enumValues || []).filter(
     (status) => status !== HOLD_STATUS,
@@ -412,11 +413,27 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
     });
     return false;
   }
+  if (
+    project?.cancellation?.isCancelled &&
+    !CANCELLED_MUTATION_ACTIONS.has(action)
+  ) {
+    res.status(400).json({
+      message:
+        "This project is cancelled and frozen. Reactivate it before making changes.",
+    });
+    return false;
+  }
   if (!canMutateProject(req.user, project, action)) {
     res.status(403).json({ message: "Not authorized to modify this project." });
     return false;
   }
   return true;
+};
+
+const mergeQueryWithCondition = (baseQuery = {}, condition = {}) => {
+  if (!condition || Object.keys(condition).length === 0) return baseQuery || {};
+  if (!baseQuery || Object.keys(baseQuery).length === 0) return { ...condition };
+  return { $and: [baseQuery, condition] };
 };
 
 const buildProjectAccessQuery = (req) => {
@@ -456,6 +473,20 @@ const buildProjectAccessQuery = (req) => {
         ],
       };
     }
+  }
+
+  const cancelledOnly = String(req.query.cancelled || "").toLowerCase() === "true";
+  const includeCancelled =
+    String(req.query.includeCancelled || "").toLowerCase() === "true";
+
+  if (cancelledOnly) {
+    query = mergeQueryWithCondition(query, {
+      "cancellation.isCancelled": true,
+    });
+  } else if (!includeCancelled) {
+    query = mergeQueryWithCondition(query, {
+      "cancellation.isCancelled": { $ne: true },
+    });
   }
 
   return {
@@ -2499,6 +2530,7 @@ const getStageBottlenecks = async (req, res) => {
 
     const projects = await Project.find({
       status: { $nin: Array.from(BOTTLENECK_EXCLUDED_STATUSES) },
+      "cancellation.isCancelled": { $ne: true },
       $or: [{ "hold.isOnHold": { $exists: false } }, { "hold.isOnHold": false }],
     })
       .select("_id orderId details.projectName status hold createdAt")
@@ -3161,6 +3193,233 @@ const setProjectHold = async (req, res) => {
     return res.json(populatedProject);
   } catch (error) {
     console.error("Error updating project hold state:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Cancel and freeze a project
+// @route   PATCH /api/projects/:id/cancel
+// @access  Private (Admin portal only)
+const cancelProject = async (req, res) => {
+  try {
+    if (!hasAdminPortalAccess(req.user) || !isAdminPortalRequest(req)) {
+      return res.status(403).json({
+        message:
+          "Only Administration admins can cancel projects from the admin portal.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "cancel")) return;
+
+    if (project.cancellation?.isCancelled) {
+      return res.status(400).json({
+        message: "Project is already cancelled.",
+      });
+    }
+
+    const reason =
+      typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    const now = new Date();
+    const resumedStatus = project.status || DEFAULT_RELEASE_STATUS;
+    const resumedHoldState = project.hold?.toObject
+      ? project.hold.toObject()
+      : project.hold || null;
+
+    project.cancellation = {
+      ...(project.cancellation?.toObject?.() || {}),
+      isCancelled: true,
+      reason,
+      cancelledAt: now,
+      cancelledBy: req.user._id,
+      resumedStatus,
+      resumedHoldState,
+      reactivatedAt: null,
+      reactivatedBy: null,
+    };
+
+    const savedProject = await project.save();
+
+    await logActivity(
+      savedProject._id,
+      req.user._id,
+      "status_change",
+      "Project was cancelled and frozen.",
+      {
+        cancellation: {
+          isCancelled: true,
+          reason: reason || null,
+          resumedStatus,
+        },
+      },
+    );
+
+    const notifiedUsers = new Set();
+
+    if (savedProject.projectLeadId) {
+      await createNotification(
+        savedProject.projectLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Cancelled",
+        `Project #${savedProject.orderId || savedProject._id} has been cancelled${reason ? `: ${reason}` : "."}`,
+      );
+      notifiedUsers.add(savedProject.projectLeadId.toString());
+    }
+
+    if (
+      savedProject.assistantLeadId &&
+      savedProject.assistantLeadId.toString() !==
+        savedProject.projectLeadId?.toString()
+    ) {
+      await createNotification(
+        savedProject.assistantLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Cancelled",
+        `Project #${savedProject.orderId || savedProject._id} has been cancelled${reason ? `: ${reason}` : "."}`,
+      );
+      notifiedUsers.add(savedProject.assistantLeadId.toString());
+    }
+
+    await notifyAdmins(
+      req.user._id,
+      savedProject._id,
+      "SYSTEM",
+      "Project Cancelled",
+      `${req.user.firstName} ${req.user.lastName} cancelled project #${savedProject.orderId || savedProject._id}${reason ? `: ${reason}` : "."}`,
+      { excludeUserIds: Array.from(notifiedUsers) },
+    );
+
+    const populatedProject = await Project.findById(savedProject._id)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
+
+    return res.json(populatedProject);
+  } catch (error) {
+    console.error("Error cancelling project:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Reactivate a cancelled project and resume previous stage
+// @route   PATCH /api/projects/:id/reactivate
+// @access  Private (Admin portal only)
+const reactivateProject = async (req, res) => {
+  try {
+    if (!hasAdminPortalAccess(req.user) || !isAdminPortalRequest(req)) {
+      return res.status(403).json({
+        message:
+          "Only Administration admins can reactivate projects from the admin portal.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "reactivate")) return;
+
+    if (!project.cancellation?.isCancelled) {
+      return res.status(400).json({
+        message: "Project is not cancelled.",
+      });
+    }
+
+    const now = new Date();
+    const resumedStatus =
+      typeof project.cancellation?.resumedStatus === "string" &&
+      project.cancellation.resumedStatus.trim()
+        ? project.cancellation.resumedStatus.trim()
+        : project.status || DEFAULT_RELEASE_STATUS;
+    const resumedHoldState =
+      project.cancellation?.resumedHoldState &&
+      typeof project.cancellation.resumedHoldState === "object"
+        ? project.cancellation.resumedHoldState
+        : null;
+
+    project.status = resumedStatus;
+    if (resumedHoldState) {
+      project.hold = {
+        ...(project.hold?.toObject?.() || {}),
+        ...resumedHoldState,
+      };
+    }
+
+    project.cancellation = {
+      ...(project.cancellation?.toObject?.() || {}),
+      isCancelled: false,
+      reason: "",
+      cancelledAt: null,
+      cancelledBy: null,
+      resumedStatus: resumedStatus,
+      resumedHoldState: resumedHoldState,
+      reactivatedAt: now,
+      reactivatedBy: req.user._id,
+    };
+
+    const savedProject = await project.save();
+
+    await logActivity(
+      savedProject._id,
+      req.user._id,
+      "status_change",
+      `Project reactivated and resumed at ${resumedStatus}.`,
+      {
+        cancellation: {
+          isCancelled: false,
+          resumedStatus,
+        },
+      },
+    );
+
+    const notifiedUsers = new Set();
+
+    if (savedProject.projectLeadId) {
+      await createNotification(
+        savedProject.projectLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Reactivated",
+        `Project #${savedProject.orderId || savedProject._id} has been reactivated and resumed at ${resumedStatus}.`,
+      );
+      notifiedUsers.add(savedProject.projectLeadId.toString());
+    }
+
+    if (
+      savedProject.assistantLeadId &&
+      savedProject.assistantLeadId.toString() !==
+        savedProject.projectLeadId?.toString()
+    ) {
+      await createNotification(
+        savedProject.assistantLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        "Project Reactivated",
+        `Project #${savedProject.orderId || savedProject._id} has been reactivated and resumed at ${resumedStatus}.`,
+      );
+      notifiedUsers.add(savedProject.assistantLeadId.toString());
+    }
+
+    await notifyAdmins(
+      req.user._id,
+      savedProject._id,
+      "SYSTEM",
+      "Project Reactivated",
+      `${req.user.firstName} ${req.user.lastName} reactivated project #${savedProject.orderId || savedProject._id}. Resumed at ${resumedStatus}.`,
+      { excludeUserIds: Array.from(notifiedUsers) },
+    );
+
+    const populatedProject = await Project.findById(savedProject._id)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
+
+    return res.json(populatedProject);
+  } catch (error) {
+    console.error("Error reactivating project:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -5708,6 +5967,8 @@ module.exports = {
   addItemToProject,
   deleteItemFromProject,
   setProjectHold,
+  cancelProject,
+  reactivateProject,
   updateProjectStatus,
   markInvoiceSent,
   verifyPayment,
