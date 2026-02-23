@@ -13,6 +13,9 @@ const {
 } = require("../middleware/authMiddleware");
 const {
   notifyBillingOptionChange,
+  notifyBillingPrerequisiteBlocked,
+  notifyBillingOverrideUsed,
+  notifyBillingPrerequisiteResolved,
 } = require("../utils/billingNotificationService");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
@@ -627,10 +630,6 @@ const buildOrderGroups = (projects = [], { collapseRevisions = true } = {}) => {
     );
 };
 
-const hasPaymentVerification = (project) =>
-  Array.isArray(project?.paymentVerifications) &&
-  project.paymentVerifications.length > 0;
-
 const getPaymentVerificationTypes = (project) =>
   new Set(
     (Array.isArray(project?.paymentVerifications)
@@ -640,6 +639,128 @@ const getPaymentVerificationTypes = (project) =>
       .map((entry) => toText(entry?.type))
       .filter(Boolean),
   );
+
+const BILLING_REQUIREMENT_LABELS = {
+  invoice: "Invoice confirmation",
+  payment_verification_any: "Payment method verification",
+  full_payment_or_authorized:
+    "Full payment or authorization verification",
+};
+
+const getPendingProductionBillingMissing = (project) => {
+  const missing = [];
+  const paymentTypes = getPaymentVerificationTypes(project);
+
+  if (!project?.invoice?.sent) {
+    missing.push("invoice");
+  }
+  if (paymentTypes.size === 0) {
+    missing.push("payment_verification_any");
+  }
+
+  return missing;
+};
+
+const getPendingDeliveryBillingMissing = (project) => {
+  const missing = [];
+  const paymentTypes = getPaymentVerificationTypes(project);
+
+  if (!paymentTypes.has("full_payment") && !paymentTypes.has("authorized")) {
+    missing.push("full_payment_or_authorized");
+  }
+
+  return missing;
+};
+
+const formatBillingRequirementLabels = (missing = []) =>
+  (Array.isArray(missing) ? missing : [])
+    .map((key) => BILLING_REQUIREMENT_LABELS[key] || key)
+    .filter(Boolean);
+
+const buildBillingRequirementMessage = (targetStatus, missing = []) => {
+  const labels = formatBillingRequirementLabels(missing);
+  const missingLabelText = labels.length ? ` Missing: ${labels.join(", ")}.` : "";
+
+  if (targetStatus === "Pending Production") {
+    return `Invoice confirmation and at least one payment method verification are required before moving to Pending Production.${missingLabelText}`;
+  }
+
+  if (targetStatus === "Pending Delivery/Pickup") {
+    return `Full payment or authorization verification is required before moving to Pending Delivery/Pickup.${missingLabelText}`;
+  }
+
+  return `Billing prerequisites are missing for ${targetStatus}.${missingLabelText}`;
+};
+
+const getBillingGuardMissingByTarget = (project) => {
+  if (project?.projectType === "Quote") {
+    return {
+      pendingProduction: [],
+      pendingDelivery: [],
+    };
+  }
+
+  return {
+    pendingProduction: getPendingProductionBillingMissing(project),
+    pendingDelivery: getPendingDeliveryBillingMissing(project),
+  };
+};
+
+const getClearedBillingGuardTargets = (beforeState = {}, afterState = {}) => {
+  const beforeProduction = Array.isArray(beforeState.pendingProduction)
+    ? beforeState.pendingProduction
+    : [];
+  const afterProduction = Array.isArray(afterState.pendingProduction)
+    ? afterState.pendingProduction
+    : [];
+  const beforeDelivery = Array.isArray(beforeState.pendingDelivery)
+    ? beforeState.pendingDelivery
+    : [];
+  const afterDelivery = Array.isArray(afterState.pendingDelivery)
+    ? afterState.pendingDelivery
+    : [];
+
+  const cleared = [];
+
+  if (beforeProduction.length > 0 && afterProduction.length === 0) {
+    cleared.push({
+      targetStatus: "Pending Production",
+      resolved: beforeProduction,
+    });
+  }
+
+  if (beforeDelivery.length > 0 && afterDelivery.length === 0) {
+    cleared.push({
+      targetStatus: "Pending Delivery/Pickup",
+      resolved: beforeDelivery,
+    });
+  }
+
+  return cleared;
+};
+
+const notifyClearedBillingGuardTargets = async ({
+  project,
+  senderId,
+  beforeState,
+  afterState,
+  resolutionNote = "",
+}) => {
+  const clearedTargets = getClearedBillingGuardTargets(beforeState, afterState);
+  if (!clearedTargets.length) return;
+
+  await Promise.all(
+    clearedTargets.map((entry) =>
+      notifyBillingPrerequisiteResolved({
+        project,
+        senderId,
+        targetStatus: entry.targetStatus,
+        resolved: entry.resolved,
+        resolutionNote,
+      }),
+    ),
+  );
+};
 
 const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
 const AI_RISK_TIMEOUT_MS = 12000;
@@ -2946,6 +3067,8 @@ const updateProjectStatus = async (req, res) => {
 
     const oldStatus = project.status;
     const isAdmin = req.user.role === "admin";
+    const allowBillingOverride =
+      Boolean(req.body?.allowBillingOverride) && isAdmin;
 
     // Project Lead can transition from "Completed" to "Finished".
     const isLead =
@@ -3072,27 +3195,104 @@ const updateProjectStatus = async (req, res) => {
     // If the selected status has an auto-advancement, use it
     const finalStatus = statusProgression[newStatus] || newStatus;
 
-    const requiresPayment =
-      newStatus === "Production Completed" && !isQuoteProject(project);
+    const isStandardProject = !isQuoteProject(project);
 
-    if (requiresPayment && !hasPaymentVerification(project)) {
-      return res.status(400).json({
-        message:
-          "Payment verification is required before production can begin.",
-      });
+    const requiresPendingProductionBillingGuard =
+      isStandardProject && finalStatus === "Pending Production";
+
+    if (requiresPendingProductionBillingGuard) {
+      const missing = getPendingProductionBillingMissing(project);
+      if (missing.length > 0) {
+        const message = buildBillingRequirementMessage(
+          "Pending Production",
+          missing,
+        );
+
+        if (!allowBillingOverride) {
+          await notifyBillingPrerequisiteBlocked({
+            project,
+            senderId: req.user._id || req.user.id,
+            targetStatus: "Pending Production",
+            missing,
+          });
+
+          return res.status(400).json({
+            code: "BILLING_PREREQUISITE_MISSING",
+            targetStatus: "Pending Production",
+            missing,
+            message,
+          });
+        }
+
+        await logActivity(
+          project._id,
+          req.user.id,
+          "update",
+          `Billing override used while moving project toward Pending Production.`,
+          {
+            billingOverride: {
+              targetStatus: "Pending Production",
+              missing,
+            },
+          },
+        );
+
+        await notifyBillingOverrideUsed({
+          project,
+          senderId: req.user._id || req.user.id,
+          targetStatus: "Pending Production",
+          missing,
+        });
+      }
     }
 
-    const paymentTypes = getPaymentVerificationTypes(project);
-    const isPartPaymentOnly =
-      paymentTypes.size === 1 && paymentTypes.has("part_payment");
-    const requiresFullPaymentBeforeDelivery =
-      newStatus === "Delivered" && !isQuoteProject(project);
+    const requiresPendingDeliveryBillingGuard =
+      isStandardProject && finalStatus === "Pending Delivery/Pickup";
 
-    if (requiresFullPaymentBeforeDelivery && isPartPaymentOnly) {
-      return res.status(400).json({
-        message:
-          "Full payment must be verified before confirming delivery. Current verification only confirms part payment.",
-      });
+    if (requiresPendingDeliveryBillingGuard) {
+      const missing = getPendingDeliveryBillingMissing(project);
+      if (missing.length > 0) {
+        const message = buildBillingRequirementMessage(
+          "Pending Delivery/Pickup",
+          missing,
+        );
+
+        if (!allowBillingOverride) {
+          await notifyBillingPrerequisiteBlocked({
+            project,
+            senderId: req.user._id || req.user.id,
+            targetStatus: "Pending Delivery/Pickup",
+            missing,
+          });
+
+          return res.status(400).json({
+            code: "BILLING_PREREQUISITE_MISSING",
+            targetStatus: "Pending Delivery/Pickup",
+            missing,
+            message,
+          });
+        }
+
+        await logActivity(
+          project._id,
+          req.user.id,
+          "update",
+          `Billing override used while moving project toward Pending Delivery/Pickup.`,
+          {
+            billingOverride: {
+              targetStatus: "Pending Delivery/Pickup",
+              missing,
+            },
+          },
+        );
+
+        await notifyBillingOverrideUsed({
+          project,
+          senderId: req.user._id || req.user.id,
+          targetStatus: "Pending Delivery/Pickup",
+          missing,
+        });
+      }
     }
 
     project.status = finalStatus;
@@ -3169,6 +3369,7 @@ const markInvoiceSent = async (req, res) => {
     if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
 
     const billingDocumentLabel = getBillingDocumentLabel(project);
+    const billingGuardBefore = getBillingGuardMissingByTarget(project);
 
     if (project.invoice?.sent) {
       return res.status(400).json({
@@ -3181,6 +3382,7 @@ const markInvoiceSent = async (req, res) => {
       sentAt: new Date(),
       sentBy: req.user._id,
     };
+    const billingGuardAfter = getBillingGuardMissingByTarget(project);
 
     await project.save();
 
@@ -3197,6 +3399,14 @@ const markInvoiceSent = async (req, res) => {
       senderId: req.user._id,
       title: `${billingDocumentLabel} Sent`,
       message: `${billingDocumentLabel} sent for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
+
+    await notifyClearedBillingGuardTargets({
+      project,
+      senderId: req.user._id,
+      beforeState: billingGuardBefore,
+      afterState: billingGuardAfter,
+      resolutionNote: `Resolved by ${billingDocumentLabel.toLowerCase()} confirmation.`,
     });
 
     res.json(project);
@@ -3231,6 +3441,8 @@ const verifyPayment = async (req, res) => {
       });
     }
 
+    const billingGuardBefore = getBillingGuardMissingByTarget(project);
+
     const existing = (project.paymentVerifications || []).find(
       (entry) => entry.type === type,
     );
@@ -3245,6 +3457,7 @@ const verifyPayment = async (req, res) => {
       verifiedAt: new Date(),
       verifiedBy: req.user._id,
     });
+    const billingGuardAfter = getBillingGuardMissingByTarget(project);
 
     await project.save();
 
@@ -3261,6 +3474,14 @@ const verifyPayment = async (req, res) => {
       senderId: req.user._id,
       title: "Payment Verified",
       message: `Payment verified (${formatPaymentTypeLabel(type)}) for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
+
+    await notifyClearedBillingGuardTargets({
+      project,
+      senderId: req.user._id,
+      beforeState: billingGuardBefore,
+      afterState: billingGuardAfter,
+      resolutionNote: `Resolved by payment verification (${formatPaymentTypeLabel(type)}).`,
     });
 
     res.json(project);

@@ -10,6 +10,7 @@ import {
 } from "../../icons/Icons";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal";
+import BillingGuardModal from "../../components/BillingGuardModal/BillingGuardModal";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -39,6 +40,51 @@ const formatSupplySource = (value) => {
   if (!list.length) return "N/A";
   return list.join(", ");
 };
+
+const STATUS_AUTO_ADVANCE_TARGETS = {
+  "Proof Reading Completed": "Pending Production",
+  "Packaging Completed": "Pending Delivery/Pickup",
+};
+
+const BILLING_REQUIREMENT_LABELS = {
+  invoice: "Invoice confirmation",
+  payment_verification_any: "Payment method verification",
+  full_payment_or_authorized:
+    "Full payment or authorization verification",
+};
+
+const getPaymentTypeSet = (project) =>
+  new Set(
+    (project?.paymentVerifications || [])
+      .map((entry) => String(entry?.type || "").trim())
+      .filter(Boolean),
+  );
+
+const getPendingProductionBillingMissing = (project) => {
+  const missing = [];
+  const paymentTypes = getPaymentTypeSet(project);
+
+  if (!project?.invoice?.sent) missing.push("invoice");
+  if (paymentTypes.size === 0) missing.push("payment_verification_any");
+
+  return missing;
+};
+
+const getPendingDeliveryBillingMissing = (project) => {
+  const missing = [];
+  const paymentTypes = getPaymentTypeSet(project);
+
+  if (!paymentTypes.has("full_payment") && !paymentTypes.has("authorized")) {
+    missing.push("full_payment_or_authorized");
+  }
+
+  return missing;
+};
+
+const formatBillingMissingLabels = (missing = []) =>
+  (Array.isArray(missing) ? missing : [])
+    .map((key) => BILLING_REQUIREMENT_LABELS[key] || key)
+    .filter(Boolean);
 
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
@@ -100,6 +146,14 @@ const ProjectDetails = ({ user }) => {
   const [isTogglingHold, setIsTogglingHold] = useState(false);
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
   const [holdReasonDraft, setHoldReasonDraft] = useState("");
+  const [billingGuardModal, setBillingGuardModal] = useState({
+    open: false,
+    message: "",
+    missingLabels: [],
+    nextStatus: "",
+    canOverride: false,
+  });
+  const [billingGuardSubmitting, setBillingGuardSubmitting] = useState(false);
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -125,10 +179,34 @@ const ProjectDetails = ({ user }) => {
     return true;
   };
 
-  // Status handling
-  const handleStatusChange = async (newStatus) => {
-    if (!project) return;
-    if (!ensureProjectIsEditable()) return;
+  const closeBillingGuardModal = () => {
+    if (billingGuardSubmitting) return;
+    setBillingGuardModal({
+      open: false,
+      message: "",
+      missingLabels: [],
+      nextStatus: "",
+      canOverride: false,
+    });
+  };
+
+  const openBillingGuardModal = (guard, nextStatus) => {
+    const missingLabels = formatBillingMissingLabels(guard?.missing || []);
+    setBillingGuardModal({
+      open: true,
+      message:
+        guard?.message || "Billing prerequisites are required for this step.",
+      missingLabels,
+      nextStatus: nextStatus || "",
+      canOverride: Boolean(user?.role === "admin"),
+    });
+  };
+
+  const submitStatusChange = async (
+    newStatus,
+    { allowBillingOverride = false } = {},
+  ) => {
+    if (!project) return false;
     const oldStatus = project.status;
 
     // Optimistic update
@@ -139,20 +217,52 @@ const ProjectDetails = ({ user }) => {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({
+          status: newStatus,
+          allowBillingOverride: allowBillingOverride && user?.role === "admin",
+        }),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
+        setProject({ ...project, status: oldStatus });
+
+        if (errorData?.code === "BILLING_PREREQUISITE_MISSING") {
+          openBillingGuardModal(errorData, newStatus);
+          return false;
+        }
+
         throw new Error(errorData.message || "Failed to update status");
       }
 
       await fetchProject();
+      return true;
     } catch (err) {
       console.error("Error updating status:", err);
       // Revert on error
       setProject({ ...project, status: oldStatus });
       alert(err.message || "Failed to update status");
+      return false;
+    }
+  };
+
+  // Status handling
+  const handleStatusChange = async (newStatus) => {
+    if (!project) return;
+    if (!ensureProjectIsEditable()) return;
+
+    await submitStatusChange(newStatus);
+  };
+
+  const handleBillingGuardOverride = async () => {
+    if (!billingGuardModal.nextStatus || user?.role !== "admin") return;
+    setBillingGuardSubmitting(true);
+    const changed = await submitStatusChange(billingGuardModal.nextStatus, {
+      allowBillingOverride: true,
+    });
+    setBillingGuardSubmitting(false);
+    if (changed) {
+      closeBillingGuardModal();
     }
   };
 
@@ -614,27 +724,33 @@ const ProjectDetails = ({ user }) => {
     po: "P.O",
     authorized: "Authorized",
   };
-  const paymentTypes = (project.paymentVerifications || []).map(
-    (entry) => entry.type,
-  );
+  const paymentTypes = (project.paymentVerifications || []).map((entry) => entry.type);
   const isQuoteProject = project.projectType === "Quote";
-  const hasPaymentVerification = paymentTypes.length > 0;
   const invoiceSent = Boolean(project.invoice?.sent);
+  const pendingProductionMissing = isQuoteProject
+    ? []
+    : getPendingProductionBillingMissing(project);
+  const pendingDeliveryMissing = isQuoteProject
+    ? []
+    : getPendingDeliveryBillingMissing(project);
+  const showPendingProductionWarning =
+    !isQuoteProject &&
+    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    pendingProductionMissing.length > 0;
+  const showPendingDeliveryWarning =
+    !isQuoteProject &&
+    ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
+    pendingDeliveryMissing.length > 0;
+  const pendingProductionMissingLabels = formatBillingMissingLabels(
+    pendingProductionMissing,
+  );
+  const pendingDeliveryMissingLabels = formatBillingMissingLabels(
+    pendingDeliveryMissing,
+  );
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
-  const showPaymentWarning =
-    !isQuoteProject &&
-    !hasPaymentVerification &&
-    [
-      "Scope Approval Completed",
-      "Pending Departmental Engagement",
-      "Departmental Engagement Completed",
-      "Pending Mockup",
-      "Pending Proof Reading",
-      "Pending Production",
-    ].includes(project.status);
   const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
     const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -792,10 +908,28 @@ const ProjectDetails = ({ user }) => {
                     {paymentLabels[type] || type}
                   </span>
                 ))}
+              {showPendingProductionWarning && (
+                <span className="billing-tag caution">
+                  Pending Production Blocked:{" "}
+                  {pendingProductionMissingLabels.join(", ")}
+                </span>
+              )}
+              {showPendingDeliveryWarning && (
+                <span className="billing-tag caution">
+                  Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
+                </span>
+              )}
             </div>
-            {showPaymentWarning && (
-              <div className="payment-warning">
-                Payment verification is required before production can begin.
+            {showPendingProductionWarning && (
+              <div className="payment-warning critical">
+                Caution: before moving to Pending Production, confirm{" "}
+                {pendingProductionMissingLabels.join(", ")}.
+              </div>
+            )}
+            {showPendingDeliveryWarning && (
+              <div className="payment-warning critical">
+                Caution: before moving to Pending Delivery/Pickup, confirm{" "}
+                {pendingDeliveryMissingLabels.join(", ")}.
               </div>
             )}
             {isProjectOnHold && (
@@ -1034,8 +1168,7 @@ const ProjectDetails = ({ user }) => {
           </div>
 
           {/* Brief Overview Section (Moved from General Info) */}
-          {true && (
-            <div className="detail-card">
+          <div className="detail-card">
               <h3 className="card-title">Brief Overview</h3>
               <div style={{ marginTop: "1rem" }}>
                 {isEditing ? (
@@ -1070,7 +1203,6 @@ const ProjectDetails = ({ user }) => {
                 )}
               </div>
             </div>
-          )}
 
           {/* Feedback */}
           {showFeedbackSection && (
@@ -1902,6 +2034,18 @@ const ProjectDetails = ({ user }) => {
           )}
         </div>
       </div>
+
+      <BillingGuardModal
+        isOpen={billingGuardModal.open}
+        onClose={closeBillingGuardModal}
+        onOverride={handleBillingGuardOverride}
+        canOverride={billingGuardModal.canOverride}
+        isSubmitting={billingGuardSubmitting}
+        message={billingGuardModal.message}
+        missingLabels={billingGuardModal.missingLabels}
+        orderId={project?.orderId}
+        projectName={details?.projectName}
+      />
 
       <ProjectHoldModal
         isOpen={isHoldModalOpen}

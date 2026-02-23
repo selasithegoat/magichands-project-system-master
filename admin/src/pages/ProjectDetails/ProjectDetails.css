@@ -120,6 +120,12 @@
   border-color: rgba(14, 165, 233, 0.25);
 }
 
+.billing-tag.caution {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
 .payment-warning {
   background: #fff7ed;
   border: 1px solid #fdba74;
@@ -127,6 +133,13 @@
   padding: 0.4rem 0.75rem;
   border-radius: 8px;
   font-size: 0.75rem;
+}
+
+.payment-warning.critical {
+  background: #fff1f2;
+  border-color: #fda4af;
+  color: #9f1239;
+  font-weight: 600;
 }
 
 .hold-alert {

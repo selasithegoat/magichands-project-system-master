@@ -245,6 +245,35 @@ const getStatusColor = (status) => {
   }
 };
 
+const BILLING_REQUIREMENT_LABELS = {
+  invoice: "Invoice confirmation",
+  payment_verification_any: "Payment method verification",
+  full_payment_or_authorized:
+    "Full payment or authorization verification",
+};
+
+const formatBillingRequirementLabels = (missing = []) =>
+  (Array.isArray(missing) ? missing : [])
+    .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
+    .filter(Boolean);
+
+const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
+  const missing = [];
+  if (!invoiceSent) missing.push("invoice");
+  if (!paymentTypes || paymentTypes.size === 0) {
+    missing.push("payment_verification_any");
+  }
+  return missing;
+};
+
+const getPendingDeliveryBillingMissing = ({ paymentTypes }) => {
+  const missing = [];
+  if (!paymentTypes?.has("full_payment") && !paymentTypes?.has("authorized")) {
+    missing.push("full_payment_or_authorized");
+  }
+  return missing;
+};
+
 const ProjectDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -370,23 +399,35 @@ const ProjectDetail = ({ user }) => {
   const paymentTypes = (project.paymentVerifications || []).map(
     (entry) => entry.type,
   );
-  const hasPaymentVerification = paymentTypes.length > 0;
+  const paymentTypeSet = new Set(paymentTypes);
   const invoiceSent = Boolean(project.invoice?.sent);
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
-  const showPaymentWarning =
+  const pendingProductionMissing = !isQuote
+    ? getPendingProductionBillingMissing({
+        invoiceSent,
+        paymentTypes: paymentTypeSet,
+      })
+    : [];
+  const pendingDeliveryMissing = !isQuote
+    ? getPendingDeliveryBillingMissing({ paymentTypes: paymentTypeSet })
+    : [];
+  const pendingProductionMissingLabels = formatBillingRequirementLabels(
+    pendingProductionMissing,
+  );
+  const pendingDeliveryMissingLabels = formatBillingRequirementLabels(
+    pendingDeliveryMissing,
+  );
+  const showPendingProductionWarning =
     !isQuote &&
-    !hasPaymentVerification &&
-    [
-      "Scope Approval Completed",
-      "Pending Departmental Engagement",
-      "Departmental Engagement Completed",
-      "Pending Mockup",
-      "Pending Proof Reading",
-      "Pending Production",
-    ].includes(project.status);
+    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    pendingProductionMissing.length > 0;
+  const showPendingDeliveryWarning =
+    !isQuote &&
+    ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
+    pendingDeliveryMissing.length > 0;
 
   let themeClass = "";
   if (isEmergency) themeClass = "emergency-theme";
@@ -502,10 +543,27 @@ const ProjectDetail = ({ user }) => {
                 {paymentLabels[type] || type}
               </span>
             ))}
+          {showPendingProductionWarning && (
+            <span className="billing-tag caution">
+              Pending Production Blocked: {pendingProductionMissingLabels.join(", ")}
+            </span>
+          )}
+          {showPendingDeliveryWarning && (
+            <span className="billing-tag caution">
+              Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
+            </span>
+          )}
         </div>
-        {showPaymentWarning && (
-          <div className="payment-warning">
-            Payment verification is required before production can begin.
+        {showPendingProductionWarning && (
+          <div className="payment-warning critical">
+            Caution: before moving to Pending Production, confirm{" "}
+            {pendingProductionMissingLabels.join(", ")}.
+          </div>
+        )}
+        {showPendingDeliveryWarning && (
+          <div className="payment-warning critical">
+            Caution: before moving to Pending Delivery/Pickup, confirm{" "}
+            {pendingDeliveryMissingLabels.join(", ")}.
           </div>
         )}
 

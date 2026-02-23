@@ -67,6 +67,42 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
 const isScopeApprovalComplete = (status) =>
   Boolean(status && SCOPE_APPROVAL_READY_STATUSES.has(status));
 
+const paymentLabels = {
+  part_payment: "Part Payment",
+  full_payment: "Full Payment",
+  po: "P.O",
+  authorized: "Authorized",
+};
+
+const BILLING_REQUIREMENT_LABELS = {
+  invoice: "Invoice confirmation",
+  payment_verification_any: "Payment method verification",
+  full_payment_or_authorized:
+    "Full payment or authorization verification",
+};
+
+const formatBillingRequirementLabels = (missing = []) =>
+  (Array.isArray(missing) ? missing : [])
+    .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
+    .filter(Boolean);
+
+const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
+  const missing = [];
+  if (!invoiceSent) missing.push("invoice");
+  if (!paymentTypes || paymentTypes.size === 0) {
+    missing.push("payment_verification_any");
+  }
+  return missing;
+};
+
+const getPendingDeliveryBillingMissing = ({ paymentTypes }) => {
+  const missing = [];
+  if (!paymentTypes?.has("full_payment") && !paymentTypes?.has("authorized")) {
+    missing.push("full_payment_or_authorized");
+  }
+  return missing;
+};
+
 const getReferenceFileName = (path) => {
   if (!path) return "Reference File";
   const withoutQuery = String(path).split("?")[0];
@@ -122,6 +158,13 @@ const EngagedProjectActions = ({ user }) => {
   const [completeTarget, setCompleteTarget] = useState(null);
   const [completeInput, setCompleteInput] = useState("");
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [billingGuardModal, setBillingGuardModal] = useState({
+    open: false,
+    target: null,
+    message: "",
+    missingLabels: [],
+  });
+  const [billingGuardSubmitting, _setBillingGuardSubmitting] = useState(false);
 
   const [showMockupModal, setShowMockupModal] = useState(false);
   const [mockupTarget, setMockupTarget] = useState(null);
@@ -210,22 +253,32 @@ const EngagedProjectActions = ({ user }) => {
       ),
     [project],
   );
-
   const paymentChecksEnabled = project?.projectType !== "Quote";
-  const hasPaymentVerification = paymentTypes.size > 0;
-
-  const showPaymentWarning =
+  const invoiceSent = Boolean(project?.invoice?.sent);
+  const pendingProductionMissing =
+    project && paymentChecksEnabled
+      ? getPendingProductionBillingMissing({ invoiceSent, paymentTypes })
+      : [];
+  const pendingDeliveryMissing =
+    project && paymentChecksEnabled
+      ? getPendingDeliveryBillingMissing({ paymentTypes })
+      : [];
+  const pendingProductionMissingLabels = formatBillingRequirementLabels(
+    pendingProductionMissing,
+  );
+  const pendingDeliveryMissingLabels = formatBillingRequirementLabels(
+    pendingDeliveryMissing,
+  );
+  const showPendingProductionWarning =
     project &&
     paymentChecksEnabled &&
-    !hasPaymentVerification &&
-    [
-      "Scope Approval Completed",
-      "Pending Departmental Engagement",
-      "Departmental Engagement Completed",
-      "Pending Mockup",
-      "Pending Proof Reading",
-      "Pending Production",
-    ].includes(project.status);
+    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    pendingProductionMissing.length > 0;
+  const showPendingDeliveryWarning =
+    project &&
+    paymentChecksEnabled &&
+    ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
+    pendingDeliveryMissing.length > 0;
 
   const isProjectLeadForProject = useMemo(() => {
     const currentUserId = normalizeObjectId(user?._id || user?.id);
@@ -400,9 +453,11 @@ const EngagedProjectActions = ({ user }) => {
       const res = await fetch(
         `/api/projects/${targetProject._id}/status?source=engaged`,
         {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: action.complete }),
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: action.complete,
+          }),
         },
       );
 
@@ -415,6 +470,19 @@ const EngagedProjectActions = ({ user }) => {
         return true;
       }
       const errorData = await res.json().catch(() => ({}));
+      if (errorData?.code === "BILLING_PREREQUISITE_MISSING") {
+        setShowCompleteModal(false);
+        setCompleteSubmitting(false);
+        setCompleteInput("");
+        setBillingGuardModal({
+          open: true,
+          target: { project: targetProject, action },
+          message:
+            errorData.message || "Billing prerequisites are required for this step.",
+          missingLabels: formatBillingRequirementLabels(errorData.missing || []),
+        });
+        return false;
+      }
       setToast({
         type: "error",
         message: errorData.message || "Failed to update status.",
@@ -610,6 +678,16 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const closeBillingGuardModal = () => {
+    if (billingGuardSubmitting) return;
+    setBillingGuardModal({
+      open: false,
+      target: null,
+      message: "",
+      missingLabels: [],
+    });
+  };
+
   const openCompleteModal = (targetProject, action) => {
     if (isProjectLeadForProject) {
       setToast({
@@ -619,6 +697,7 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
+
     setCompleteTarget({ project: targetProject, action });
     setCompleteInput("");
     setShowCompleteModal(true);
@@ -812,6 +891,25 @@ const EngagedProjectActions = ({ user }) => {
           >
             {project.status}
           </span>
+          {invoiceSent && (
+            <span className="engaged-tag invoice">Invoice Sent</span>
+          )}
+          {Array.from(paymentTypes).map((type) => (
+            <span key={type} className="engaged-tag payment">
+              {paymentLabels[type] || type}
+            </span>
+          ))}
+          {showPendingProductionWarning && (
+            <span className="engaged-tag caution">
+              Pending Production Blocked:{" "}
+              {pendingProductionMissingLabels.join(", ")}
+            </span>
+          )}
+          {showPendingDeliveryWarning && (
+            <span className="engaged-tag caution">
+              Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
+            </span>
+          )}
         </div>
       </div>
 
@@ -911,6 +1009,7 @@ const EngagedProjectActions = ({ user }) => {
           departmentSections.map((section) => {
             const action = section.action;
             const isProductionSection = section.key === "Production";
+            const isStoresSection = section.key === "Stores";
 
             return (
               <section key={section.key} className="engaged-section">
@@ -932,9 +1031,17 @@ const EngagedProjectActions = ({ user }) => {
                   </div>
                 </div>
 
-                {isProductionSection && showPaymentWarning && (
+                {isProductionSection && showPendingProductionWarning && (
                   <div className="engaged-warning-banner">
-                    Payment verification is required before production can be completed.
+                    Caution: before moving to Pending Production, confirm{" "}
+                    {pendingProductionMissingLabels.join(", ")}.
+                  </div>
+                )}
+
+                {isStoresSection && showPendingDeliveryWarning && (
+                  <div className="engaged-warning-banner">
+                    Caution: before moving to Pending Delivery/Pickup, confirm{" "}
+                    {pendingDeliveryMissingLabels.join(", ")}.
                   </div>
                 )}
 
@@ -1004,12 +1111,11 @@ const EngagedProjectActions = ({ user }) => {
 
                   {action && (() => {
                     const isPending = project.status === action.pending;
-                    const isProductionAction =
-                      action.complete === "Production Completed";
-                    const blockedByPayment =
-                      isProductionAction &&
+                    const isStoresAction = action.complete === "Packaging Completed";
+                    const blockedByBilling =
                       paymentChecksEnabled &&
-                      !hasPaymentVerification;
+                      isStoresAction &&
+                      pendingDeliveryMissing.length > 0;
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
@@ -1022,9 +1128,8 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (isProjectLeadForProject) {
                       disabledReason =
                         "Project leads cannot take engagement actions on their own projects here.";
-                    } else if (blockedByPayment) {
-                      disabledReason =
-                        "Payment verification is required before production can be completed.";
+                    } else if (blockedByBilling) {
+                      disabledReason = `Before Pending Delivery/Pickup, confirm ${pendingDeliveryMissingLabels.join(", ")}.`;
                     }
 
                     return (
@@ -1088,7 +1193,6 @@ const EngagedProjectActions = ({ user }) => {
                             onClick={() => openCompleteModal(project, action)}
                             disabled={
                               !isPending ||
-                              blockedByPayment ||
                               isUpdating ||
                               isProjectLeadForProject
                             }
@@ -1097,9 +1201,10 @@ const EngagedProjectActions = ({ user }) => {
                             {isUpdating ? "Updating..." : action.label}
                           </button>
                         )}
-                        {blockedByPayment && (
+                        {blockedByBilling && (
                           <div className="engaged-action-meta">
-                            Payment verification must be recorded first.
+                            Full payment or authorization is required before
+                            Pending Delivery/Pickup.
                           </div>
                         )}
                         {isMockupAction && mockupUrl && (
@@ -1336,6 +1441,34 @@ const EngagedProjectActions = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {billingGuardModal.open && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3 className="modal-title">Billing Caution</h3>
+            <p className="acknowledge-confirm-text">
+              <strong>Project:</strong> {projectId} - {projectName}
+            </p>
+            <p className="acknowledge-confirm-text">{billingGuardModal.message}</p>
+            {billingGuardModal.missingLabels.length > 0 && (
+              <p className="acknowledge-confirm-text">
+                <strong>Missing:</strong>{" "}
+                {billingGuardModal.missingLabels.join(", ")}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeBillingGuardModal}
+                disabled={billingGuardSubmitting}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

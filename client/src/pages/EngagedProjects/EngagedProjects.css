@@ -540,6 +540,12 @@
   border-color: rgba(14, 165, 233, 0.25);
 }
 
+.engaged-tag.caution {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
 .engaged-scope-section {
   position: relative;
   overflow: hidden;
