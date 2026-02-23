@@ -337,9 +337,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   };
 
   const confirmCancel = () => {
-    localStorage.removeItem("projectWizardData"); // Clear draft
     setShowCancelModal(false);
-    navigate("/client"); // Go back to dashboard
+    navigate("/client"); // Draft stays in localStorage for resume
   };
 
   const handleCreateProject = async () => {
@@ -493,8 +492,10 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
       <ConfirmationModal
         isOpen={showCancelModal}
-        title="Cancel Project?"
-        message="Are you sure you want to cancel? All progress will be lost."
+        title="Exit Wizard?"
+        message="Your current inputs are saved as draft. You can resume when you reopen Create Project."
+        confirmText="Save Draft & Exit"
+        cancelText="Continue Editing"
         onConfirm={confirmCancel}
         onCancel={() => setShowCancelModal(false)}
       />
