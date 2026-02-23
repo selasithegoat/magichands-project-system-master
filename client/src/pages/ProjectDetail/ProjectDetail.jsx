@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Link,
@@ -252,6 +252,97 @@ const BILLING_REQUIREMENT_LABELS = {
     "Full payment or authorization verification",
 };
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const HOUR_IN_MS = 60 * 60 * 1000;
+const MINUTE_IN_MS = 60 * 1000;
+const SECOND_IN_MS = 1000;
+
+const padTwo = (value) => String(value).padStart(2, "0");
+
+const formatCountdownDuration = (durationMs) => {
+  const safeDuration = Math.max(0, Number(durationMs) || 0);
+  const totalSeconds = Math.floor(safeDuration / SECOND_IN_MS);
+  const days = Math.floor(totalSeconds / (24 * 60 * 60));
+  const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
+  const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${padTwo(hours)}h ${padTwo(minutes)}m ${padTwo(seconds)}s`;
+  }
+  return `${padTwo(hours)}h ${padTwo(minutes)}m ${padTwo(seconds)}s`;
+};
+
+const parseDeliveryTimeParts = (value) => {
+  if (!value) return { hours: 23, minutes: 59, seconds: 59 };
+  const raw = String(value).trim();
+  if (!raw) return { hours: 23, minutes: 59, seconds: 59 };
+
+  if (raw.includes("T")) {
+    const parsedIso = new Date(raw);
+    if (!Number.isNaN(parsedIso.getTime())) {
+      return {
+        hours: parsedIso.getHours(),
+        minutes: parsedIso.getMinutes(),
+        seconds: parsedIso.getSeconds(),
+      };
+    }
+  }
+
+  const match12h = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (match12h) {
+    let hours = Number.parseInt(match12h[1], 10);
+    const minutes = Number.parseInt(match12h[2], 10);
+    const seconds = Number.parseInt(match12h[3] || "0", 10);
+    const period = match12h[4].toUpperCase();
+    if (period === "PM" && hours < 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+    return { hours, minutes, seconds };
+  }
+
+  const match24h = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (match24h) {
+    const hours = Number.parseInt(match24h[1], 10);
+    const minutes = Number.parseInt(match24h[2], 10);
+    const seconds = Number.parseInt(match24h[3] || "0", 10);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return { hours, minutes, seconds };
+    }
+  }
+
+  return null;
+};
+
+const buildDeliveryDeadline = (deliveryDate, deliveryTime) => {
+  if (!deliveryDate) return null;
+  const parsedDate = new Date(deliveryDate);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+
+  const timeParts = parseDeliveryTimeParts(deliveryTime);
+  if (!timeParts) return null;
+
+  return new Date(
+    parsedDate.getFullYear(),
+    parsedDate.getMonth(),
+    parsedDate.getDate(),
+    timeParts.hours,
+    timeParts.minutes,
+    timeParts.seconds,
+    0,
+  );
+};
+
+const formatDeadlineDateTime = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
@@ -284,6 +375,7 @@ const ProjectDetail = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
+  const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
 
   // PDF Image Processing & Form Data removed - moved to ProjectPdfDownload component
 
@@ -322,6 +414,15 @@ const ProjectDetail = ({ user }) => {
     if (id) fetchUpdatesCount();
   }, [id]);
 
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCountdownNowMs(Date.now());
+    }, 1000);
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, []);
+
   useRealtimeRefresh(
     () => {
       if (id) {
@@ -356,6 +457,47 @@ const ProjectDetail = ({ user }) => {
 
   // Status update logic removed - Admin only feature now.
   // const [advancing, setAdvancing] = useState(false);
+
+  const deliveryDateValue = project?.details?.deliveryDate;
+  const deliveryTimeValue = project?.details?.deliveryTime;
+  const deliveryDeadline = useMemo(
+    () => buildDeliveryDeadline(deliveryDateValue, deliveryTimeValue),
+    [deliveryDateValue, deliveryTimeValue],
+  );
+  const deliveryCountdown = useMemo(() => {
+    if (!deliveryDateValue) {
+      return {
+        state: "unavailable",
+        valueText: "No delivery date set",
+        deadlineText: "",
+      };
+    }
+
+    if (!deliveryDeadline || Number.isNaN(deliveryDeadline.getTime())) {
+      return {
+        state: "invalid",
+        valueText: "Invalid delivery date/time",
+        deadlineText: "",
+      };
+    }
+
+    const deltaMs = deliveryDeadline.getTime() - countdownNowMs;
+    const deadlineText = formatDeadlineDateTime(deliveryDeadline);
+
+    if (deltaMs < 0) {
+      return {
+        state: "overdue",
+        valueText: `Overdue by ${formatCountdownDuration(Math.abs(deltaMs))}`,
+        deadlineText,
+      };
+    }
+
+    return {
+      state: deltaMs <= DAY_IN_MS ? "due-soon" : "on-track",
+      valueText: `${formatCountdownDuration(deltaMs)} left`,
+      deadlineText,
+    };
+  }, [countdownNowMs, deliveryDateValue, deliveryDeadline]);
 
   if (loading)
     return (
@@ -529,6 +671,22 @@ const ProjectDetail = ({ user }) => {
 
             {/* Only show Edit if NOT pending acceptance and NOT completed */}
           </div>
+        </div>
+
+        <div
+          className={`delivery-countdown-badge ${deliveryCountdown.state}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="delivery-countdown-title">Delivery Countdown</span>
+          <strong className="delivery-countdown-value">
+            {deliveryCountdown.valueText}
+          </strong>
+          {deliveryCountdown.deadlineText ? (
+            <span className="delivery-countdown-deadline">
+              Deadline: {deliveryCountdown.deadlineText}
+            </span>
+          ) : null}
         </div>
 
         <div className="billing-tags">

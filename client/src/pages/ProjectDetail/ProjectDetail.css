@@ -26,6 +26,61 @@
   justify-content: space-between;
 }
 
+.delivery-countdown-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 0.75rem 0.95rem;
+  width: fit-content;
+  min-width: 340px;
+}
+
+.delivery-countdown-badge .delivery-countdown-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.delivery-countdown-badge .delivery-countdown-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.delivery-countdown-badge .delivery-countdown-deadline {
+  font-size: 0.85rem;
+  color: inherit;
+  opacity: 0.92;
+}
+
+.delivery-countdown-badge.on-track {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #065f46;
+}
+
+.delivery-countdown-badge.due-soon {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #92400e;
+}
+
+.delivery-countdown-badge.overdue {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.38);
+  color: #991b1b;
+}
+
+.delivery-countdown-badge.unavailable,
+.delivery-countdown-badge.invalid {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: #334155;
+}
+
 .billing-tags {
   display: flex;
   flex-wrap: wrap;
@@ -221,6 +276,11 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+  }
+
+  .delivery-countdown-badge {
+    width: 100%;
+    min-width: 0;
   }
 
   .edit-link {
