@@ -392,17 +392,53 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
               <label>
                 Items Breakdown ({formData.items ? formData.items.length : 0})
               </label>
-              <div
-                className="review-value"
-                style={{ fontSize: "0.9rem", color: "#64748B" }}
-              >
-                {formData.items &&
-                  formData.items.map((item, idx) => (
-                    <div key={idx} style={{ marginBottom: 4 }}>
-                      • {item.qty}x {item.description} ({item.breakdown})
-                    </div>
-                  ))}
-              </div>
+              {formData.items && formData.items.length > 0 ? (
+                <div
+                  className="items-breakdown-table"
+                  role="table"
+                  aria-label="Items breakdown"
+                >
+                  <div className="items-breakdown-row items-breakdown-header" role="row">
+                    <span className="items-cell items-col-qty" role="columnheader">
+                      Qty
+                    </span>
+                    <span className="items-cell items-col-item" role="columnheader">
+                      Item
+                    </span>
+                    <span className="items-cell items-col-detail" role="columnheader">
+                      Details
+                    </span>
+                  </div>
+                  {formData.items.map((item, idx) => {
+                    const parsedQty = Number(item?.qty);
+                    const quantity =
+                      Number.isFinite(parsedQty) && parsedQty > 0
+                        ? parsedQty.toLocaleString()
+                        : "-";
+                    const itemName =
+                      String(item?.description || "").trim() || "Unnamed item";
+                    const itemDetails =
+                      String(item?.breakdown || "").trim() ||
+                      "No additional details";
+
+                    return (
+                      <div className="items-breakdown-row" role="row" key={idx}>
+                        <span className="items-cell items-col-qty" role="cell">
+                          {quantity}
+                        </span>
+                        <span className="items-cell items-col-item" role="cell">
+                          {itemName}
+                        </span>
+                        <span className="items-cell items-col-detail" role="cell">
+                          {itemDetails}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="review-value items-empty">No items added.</div>
+              )}
             </div>
           </div>
         </div>
