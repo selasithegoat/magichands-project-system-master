@@ -9,6 +9,7 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
+import TruckIcon from "../../components/icons/TruckIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
@@ -26,6 +27,9 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
 ]);
 
 const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
+const isPendingDeliveryProject = (project) =>
+  project?.status === "Pending Delivery/Pickup";
+const isQuoteProject = (project) => project?.projectType === "Quote";
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
@@ -186,6 +190,21 @@ const Dashboard = ({
     [projects],
   );
 
+  const pendingDeliveryProjects = useMemo(
+    () => projects.filter((project) => isPendingDeliveryProject(project)),
+    [projects],
+  );
+
+  const quoteProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          isQuoteProject(project) &&
+          !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+      ),
+    [projects],
+  );
+
   const handleStatsNavigate = (targetPath) => {
     navigate(targetPath);
   };
@@ -273,6 +292,46 @@ const Dashboard = ({
           </div>
           <div className="stats-count">{pendingAcceptanceProjects.length}</div>
           <div className="stats-label">Pending Acceptance</div>
+        </div>
+
+        <div
+          className="stats-card clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/projects?view=pending-delivery")}
+          onKeyDown={(event) =>
+            handleStatsCardKeyDown(event, "/projects?view=pending-delivery")
+          }
+          aria-label="View pending delivery projects"
+        >
+          <div className="stats-header">
+            <div className="stats-icon-wrapper teal">
+              <TruckIcon />
+            </div>
+            <div className="more-dots"></div>
+          </div>
+          <div className="stats-count">{pendingDeliveryProjects.length}</div>
+          <div className="stats-label">Pending Delivery</div>
+        </div>
+
+        <div
+          className="stats-card clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/projects?view=quotes")}
+          onKeyDown={(event) =>
+            handleStatsCardKeyDown(event, "/projects?view=quotes")
+          }
+          aria-label="View quote projects"
+        >
+          <div className="stats-header">
+            <div className="stats-icon-wrapper quote">
+              <FolderIcon />
+            </div>
+            <div className="more-dots"></div>
+          </div>
+          <div className="stats-count">{quoteProjects.length}</div>
+          <div className="stats-label">Quotes</div>
         </div>
 
         <div

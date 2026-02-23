@@ -110,6 +110,14 @@
   background-color: #fef2f2;
   color: #dc2626;
 }
+.stats-icon-wrapper.teal {
+  background-color: #ecfeff;
+  color: #0f766e;
+}
+.stats-icon-wrapper.quote {
+  background-color: #fffbeb;
+  color: #b45309;
+}
 .stats-icon-wrapper.emergency {
   background-color: #fff1f2;
   color: #e11d48;

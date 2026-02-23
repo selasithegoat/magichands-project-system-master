@@ -7,6 +7,9 @@ import "./EndOfDayUpdate.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 
+const isEmergencyProject = (project) =>
+  project?.projectType === "Emergency" || project?.priority === "Urgent";
+
 const EndOfDayUpdate = ({ user }) => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -212,6 +215,7 @@ const EndOfDayUpdate = ({ user }) => {
           : "No updates yet";
 
         // Urgency Check
+        const isEmergency = isEmergencyProject(project);
         let isUrgent = false;
         if (project.details?.deliveryDate) {
           const deliveryDate = new Date(project.details.deliveryDate);
@@ -221,7 +225,7 @@ const EndOfDayUpdate = ({ user }) => {
           }
         }
 
-        const textColor = isUrgent ? "FF0000" : "000000";
+        const textColor = isUrgent || isEmergency ? "FF0000" : "000000";
 
         const getRowColor = (type) => {
           switch (type) {
@@ -511,13 +515,14 @@ const EndOfDayUpdate = ({ user }) => {
                     new Date(project.details.deliveryDate),
                     new Date(),
                   ) <= 72;
+                const isEmergency = isEmergencyProject(project);
                 const projectVersion = getProjectVersion(project);
                 const updateSourceName = getUpdateSourceName(project);
 
                 return (
                   <tr
                     key={project._id}
-                    className={`${getRowClass(project.projectType)} ${isUrgent ? "is-urgent" : ""}`}
+                    className={`${getRowClass(project.projectType)} ${isUrgent ? "is-urgent" : ""} ${isEmergency ? "is-emergency" : ""}`}
                   >
                     <td>
                       {getLeadDisplay(project, "Unassigned")}
@@ -542,13 +547,18 @@ const EndOfDayUpdate = ({ user }) => {
                       </div>
                     </td>
                     <td>
-                      <span
-                        className={`status-badge ${project.status
-                          ?.toLowerCase()
-                          .replace(/\s+/g, "-")}`}
-                      >
-                        {project.status}
-                      </span>
+                      <div className="status-cell">
+                        <span
+                          className={`status-badge ${project.status
+                            ?.toLowerCase()
+                            .replace(/\s+/g, "-")}`}
+                        >
+                          {project.status}
+                        </span>
+                        {isEmergency && (
+                          <span className="emergency-marker">Emergency</span>
+                        )}
+                      </div>
                     </td>
                     <td className="update-cell">
                       {project.endOfDayUpdate ? (

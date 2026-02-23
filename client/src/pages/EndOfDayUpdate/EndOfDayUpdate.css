@@ -105,11 +105,28 @@
   color: #ef4444 !important;
 }
 
+.is-emergency td {
+  color: #dc2626 !important;
+}
+
 .is-urgent .time-sub,
 .is-urgent .update-date,
 .is-urgent .update-source,
 .is-urgent .update-content p {
   color: #ef4444 !important;
+}
+
+.is-emergency .time-sub,
+.is-emergency .update-date,
+.is-emergency .update-source,
+.is-emergency .update-content p {
+  color: #dc2626 !important;
+}
+
+.is-emergency .status-badge {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
 }
 
 .delivery-cell {
@@ -143,6 +160,27 @@
   font-weight: 500;
   background-color: #f1f5f9;
   color: #475569;
+}
+
+.status-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.emergency-marker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #b91c1c;
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
 }
 
 /* Status Colors */

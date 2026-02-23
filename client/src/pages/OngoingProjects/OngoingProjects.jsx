@@ -23,6 +23,7 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
 ]);
 
 const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
+const isQuoteProject = (project) => project?.projectType === "Quote";
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
 
@@ -44,6 +45,8 @@ const OngoingProjects = ({
       requested === "active" ||
       requested === "overdue" ||
       requested === "emergencies" ||
+      requested === "pending-delivery" ||
+      requested === "quotes" ||
       requested === "completed"
     ) {
       return requested;
@@ -157,6 +160,16 @@ const OngoingProjects = ({
         });
       case "emergencies":
         return projects.filter((project) => isEmergencyProject(project));
+      case "pending-delivery":
+        return projects.filter(
+          (project) => project?.status === "Pending Delivery/Pickup",
+        );
+      case "quotes":
+        return projects.filter(
+          (project) =>
+            isQuoteProject(project) &&
+            !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+        );
       case "active":
       default:
         return projects.filter(
@@ -200,6 +213,10 @@ const OngoingProjects = ({
         return "Emergency Projects";
       case "completed":
         return "Finished Projects";
+      case "pending-delivery":
+        return "Pending Delivery Projects";
+      case "quotes":
+        return "Quote Projects";
       case "active":
       default:
         return "Active Projects";
