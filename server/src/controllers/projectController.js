@@ -921,6 +921,70 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const PROJECT_TYPE_VALUES = new Set([
+  "Standard",
+  "Emergency",
+  "Quote",
+  "Corporate Job",
+]);
+const PRIORITY_VALUES = new Set(["Normal", "Urgent"]);
+const QUOTE_ONLY_STATUSES = new Set([
+  "Pending Quote Request",
+  "Quote Request Completed",
+  "Pending Send Response",
+  "Response Sent",
+]);
+const NON_QUOTE_ONLY_STATUSES = new Set([
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Proof Reading",
+  "Proof Reading Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+]);
+const DEFAULT_STATUS_BY_PROJECT_TYPE = {
+  Quote: "Pending Quote Request",
+  Standard: "Pending Departmental Engagement",
+  Emergency: "Pending Departmental Engagement",
+  "Corporate Job": "Pending Departmental Engagement",
+};
+const normalizeProjectType = (value, fallback = "Standard") => {
+  const candidate = toText(value);
+  if (PROJECT_TYPE_VALUES.has(candidate)) return candidate;
+  return fallback;
+};
+const normalizePriority = (value, fallback = "Normal") => {
+  const candidate = toText(value);
+  if (PRIORITY_VALUES.has(candidate)) return candidate;
+  return fallback;
+};
+const isStatusCompatibleWithProjectType = (status, projectType) => {
+  const normalizedStatus = toText(status);
+  if (!normalizedStatus) return false;
+  if (projectType === "Quote") {
+    return !NON_QUOTE_ONLY_STATUSES.has(normalizedStatus);
+  }
+  return !QUOTE_ONLY_STATUSES.has(normalizedStatus);
+};
+const getDefaultStatusForProjectType = (projectType) =>
+  DEFAULT_STATUS_BY_PROJECT_TYPE[projectType] ||
+  DEFAULT_STATUS_BY_PROJECT_TYPE.Standard;
+const getAllowedStatusesForProjectType = (projectType) => {
+  const allStatuses = toSafeArray(Project.schema.path("status")?.enumValues).filter(
+    Boolean,
+  );
+  return allStatuses.filter((status) =>
+    isStatusCompatibleWithProjectType(status, projectType),
+  );
+};
 const SUPPLY_SOURCE_VALUES = new Set([
   "in-house",
   "purchase",
@@ -4973,6 +5037,244 @@ const updateCorporateEmergency = async (req, res) => {
   }
 };
 
+// @desc    Change project type / convert quote to project workflow
+// @route   PATCH /api/projects/:id/project-type
+// @access  Private (Admin portal only)
+const updateProjectType = async (req, res) => {
+  try {
+    if (!hasAdminPortalAccess(req.user) || !isAdminPortalRequest(req)) {
+      return res.status(403).json({
+        message:
+          "Only Administration admins can change project types from the admin portal.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+
+    if (project?.cancellation?.isCancelled) {
+      return res.status(400).json({
+        message:
+          "Cancelled projects are frozen. Reactivate the project before changing type.",
+      });
+    }
+
+    const previousType = normalizeProjectType(project.projectType, "Standard");
+    const rawTargetType = toText(req.body?.targetType);
+    if (rawTargetType && !PROJECT_TYPE_VALUES.has(rawTargetType)) {
+      return res.status(400).json({
+        message: "Invalid project type selected.",
+      });
+    }
+    const requestedType = normalizeProjectType(rawTargetType, previousType);
+    const requestedStatus = toText(req.body?.targetStatus || req.body?.status);
+    const previousStatus = toText(project.status);
+
+    let nextStatus = "";
+    if (requestedStatus) {
+      if (!isStatusCompatibleWithProjectType(requestedStatus, requestedType)) {
+        return res.status(400).json({
+          code: "PROJECT_TYPE_STATUS_MISMATCH",
+          message: `Status '${requestedStatus}' is not valid for project type '${requestedType}'.`,
+          allowedStatuses: getAllowedStatusesForProjectType(requestedType),
+        });
+      }
+      nextStatus = requestedStatus;
+    } else if (isStatusCompatibleWithProjectType(previousStatus, requestedType)) {
+      nextStatus = previousStatus;
+    } else {
+      nextStatus = getDefaultStatusForProjectType(requestedType);
+    }
+
+    const requestedPriority = normalizePriority(
+      req.body?.priority,
+      normalizePriority(project.priority, "Normal"),
+    );
+    const nextPriority =
+      requestedType === "Emergency" ? "Urgent" : requestedPriority;
+
+    const previousPriority = normalizePriority(project.priority, "Normal");
+    const previousSampleRequired = Boolean(project?.sampleRequirement?.isRequired);
+    const previousCorporateEmergency = Boolean(project?.corporateEmergency?.isEnabled);
+
+    const requestedSampleRequired = parseBooleanFlag(
+      req.body?.sampleRequired,
+      previousSampleRequired,
+    );
+    const nextSampleRequired =
+      requestedType === "Quote" ? false : requestedSampleRequired;
+
+    const requestedCorporateEmergency = parseCorporateEmergencyFlag(
+      req.body?.corporateEmergency,
+      previousCorporateEmergency,
+    );
+    const nextCorporateEmergency =
+      requestedType === "Corporate Job" ? requestedCorporateEmergency : false;
+
+    const reason = toText(req.body?.reason);
+    const now = new Date();
+    const hadTypeChange = previousType !== requestedType;
+    const hadStatusChange = previousStatus !== nextStatus;
+    const hadPriorityChange = previousPriority !== nextPriority;
+    const hadSampleRequirementChange =
+      previousSampleRequired !== nextSampleRequired;
+    const hadCorporateEmergencyChange =
+      previousCorporateEmergency !== nextCorporateEmergency;
+
+    if (
+      !hadTypeChange &&
+      !hadStatusChange &&
+      !hadPriorityChange &&
+      !hadSampleRequirementChange &&
+      !hadCorporateEmergencyChange
+    ) {
+      const populatedProject = await Project.findById(project._id)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName employeeId email")
+        .populate("assistantLeadId", "firstName lastName employeeId email");
+      return res.json(populatedProject);
+    }
+
+    project.projectType = requestedType;
+    project.status = nextStatus;
+    project.priority = nextPriority;
+    project.sampleRequirement = {
+      ...(project.sampleRequirement?.toObject?.() || project.sampleRequirement || {}),
+      isRequired: nextSampleRequired,
+      updatedAt: now,
+      updatedBy: req.user._id,
+    };
+    project.corporateEmergency = {
+      ...(project.corporateEmergency?.toObject?.() || project.corporateEmergency || {}),
+      isEnabled: nextCorporateEmergency,
+      updatedAt: now,
+      updatedBy: req.user._id,
+    };
+
+    if (nextSampleRequired) {
+      const currentSampleStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+      if (currentSampleStatus !== "approved") {
+        project.sampleApproval = {
+          ...(project.sampleApproval?.toObject?.() || project.sampleApproval || {}),
+          status: "pending",
+          approvedAt: null,
+          approvedBy: null,
+          note: toText(project?.sampleApproval?.note),
+        };
+      }
+    }
+
+    const savedProject = await project.save();
+
+    await logActivity(
+      savedProject._id,
+      req.user._id,
+      "update",
+      hadTypeChange
+        ? `Project type changed from ${previousType} to ${requestedType}.`
+        : "Project type settings updated.",
+      {
+        projectTypeChange: {
+          fromType: previousType,
+          toType: requestedType,
+          fromStatus: previousStatus,
+          toStatus: nextStatus,
+          fromPriority: previousPriority,
+          toPriority: nextPriority,
+          sampleRequired: {
+            from: previousSampleRequired,
+            to: nextSampleRequired,
+          },
+          corporateEmergency: {
+            from: previousCorporateEmergency,
+            to: nextCorporateEmergency,
+          },
+          reason: reason || null,
+        },
+      },
+    );
+
+    if (hadStatusChange) {
+      await logActivity(
+        savedProject._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${nextStatus} after type ${hadTypeChange ? "conversion" : "update"}.`,
+        {
+          statusChange: {
+            from: previousStatus,
+            to: nextStatus,
+            causedByTypeChange: hadTypeChange,
+          },
+        },
+      );
+    }
+
+    const summaryBits = [
+      hadTypeChange ? `${previousType} -> ${requestedType}` : null,
+      hadStatusChange ? `Status: ${previousStatus} -> ${nextStatus}` : null,
+      hadSampleRequirementChange
+        ? `Sample Required: ${nextSampleRequired ? "ON" : "OFF"}`
+        : null,
+      hadCorporateEmergencyChange
+        ? `Corporate Emergency: ${nextCorporateEmergency ? "ON" : "OFF"}`
+        : null,
+    ].filter(Boolean);
+    const summaryText = summaryBits.length
+      ? summaryBits.join(" | ")
+      : "Project type settings updated.";
+
+    const notifiedUserIds = new Set();
+
+    if (savedProject.projectLeadId) {
+      await createNotification(
+        savedProject.projectLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        hadTypeChange ? "Project Type Changed" : "Project Type Settings Updated",
+        `Project #${savedProject.orderId || savedProject._id}: ${summaryText}`,
+      );
+      notifiedUserIds.add(savedProject.projectLeadId.toString());
+    }
+
+    if (
+      savedProject.assistantLeadId &&
+      savedProject.assistantLeadId.toString() !==
+        savedProject.projectLeadId?.toString()
+    ) {
+      await createNotification(
+        savedProject.assistantLeadId,
+        req.user._id,
+        savedProject._id,
+        "SYSTEM",
+        hadTypeChange ? "Project Type Changed" : "Project Type Settings Updated",
+        `Project #${savedProject.orderId || savedProject._id}: ${summaryText}`,
+      );
+      notifiedUserIds.add(savedProject.assistantLeadId.toString());
+    }
+
+    await notifyAdmins(
+      req.user._id,
+      savedProject._id,
+      "SYSTEM",
+      hadTypeChange ? "Project Type Changed" : "Project Type Settings Updated",
+      `${req.user.firstName} ${req.user.lastName} updated project #${savedProject.orderId || savedProject._id}: ${summaryText}`,
+      { excludeUserIds: Array.from(notifiedUserIds) },
+    );
+
+    const populatedProject = await Project.findById(savedProject._id)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email");
+
+    res.json(populatedProject);
+  } catch (error) {
+    console.error("Error changing project type:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Upload approved mockup file for a project
 // @route   POST /api/projects/:id/mockup
 // @access  Private (Graphics/Design or Admin)
@@ -7374,6 +7676,7 @@ module.exports = {
   undoPaymentVerification,
   updateSampleRequirement,
   updateCorporateEmergency,
+  updateProjectType,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
   uploadProjectMockup,

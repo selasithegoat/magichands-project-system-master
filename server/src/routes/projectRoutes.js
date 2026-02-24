@@ -46,6 +46,7 @@ const {
   undoPaymentVerification,
   updateSampleRequirement,
   updateCorporateEmergency,
+  updateProjectType,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
 } = require("../controllers/projectController");
@@ -273,6 +274,12 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   updateCorporateEmergency,
+);
+router.patch(
+  "/:id/project-type",
+  protect,
+  enforceProjectNotOnHold,
+  updateProjectType,
 );
 router.post(
   "/:id/sample-approval/confirm",

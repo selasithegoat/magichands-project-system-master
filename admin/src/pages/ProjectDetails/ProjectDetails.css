@@ -196,6 +196,12 @@
   color: #334155;
 }
 
+.hold-toggle-btn.type-change {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(147, 197, 253, 0.45);
+  color: #bfdbfe;
+}
+
 .hold-toggle-btn.corporate {
   background: #fff7ed;
   border-color: #fdba74;

@@ -13,6 +13,7 @@ import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal
 import BillingGuardModal from "../../components/BillingGuardModal/BillingGuardModal";
 import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCancelModal";
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
+import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/ProjectTypeChangeModal";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -291,6 +292,9 @@ const ProjectDetails = ({ user }) => {
     useState(false);
   const [isTogglingCorporateEmergency, setIsTogglingCorporateEmergency] =
     useState(false);
+  const [isProjectTypeModalOpen, setIsProjectTypeModalOpen] = useState(false);
+  const [isChangingProjectType, setIsChangingProjectType] = useState(false);
+  const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -584,6 +588,53 @@ const ProjectDetails = ({ user }) => {
       );
     } finally {
       setIsTogglingCorporateEmergency(false);
+    }
+  };
+
+  const openProjectTypeModal = () => {
+    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (!ensureProjectIsEditable()) return;
+    setProjectTypeChangeError("");
+    setIsProjectTypeModalOpen(true);
+  };
+
+  const closeProjectTypeModal = () => {
+    if (isChangingProjectType) return;
+    setIsProjectTypeModalOpen(false);
+    setProjectTypeChangeError("");
+  };
+
+  const handleProjectTypeChange = async (payload) => {
+    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (isChangingProjectType) return;
+
+    setIsChangingProjectType(true);
+    setProjectTypeChangeError("");
+
+    try {
+      const res = await fetch(`/api/projects/${id}/project-type?source=admin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload || {}),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to change project type.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+      setIsProjectTypeModalOpen(false);
+      setProjectTypeChangeError("");
+    } catch (error) {
+      console.error("Error changing project type:", error);
+      setProjectTypeChangeError(
+        error.message || "Failed to change project type.",
+      );
+    } finally {
+      setIsChangingProjectType(false);
     }
   };
 
@@ -1518,6 +1569,19 @@ const ProjectDetails = ({ user }) => {
                         : sampleRequirementEnabled
                           ? "Sample Required: ON"
                           : "Sample Required: OFF"}
+                    </button>
+                    <button
+                      type="button"
+                      className="hold-toggle-btn type-change"
+                      onClick={openProjectTypeModal}
+                      disabled={
+                        isChangingProjectType ||
+                        isTogglingHold ||
+                        isCancelling ||
+                        isReactivating
+                      }
+                    >
+                      {isChangingProjectType ? "Changing Type..." : "Change Type"}
                     </button>
                     {isCorporateProject && (
                       <button
@@ -2873,6 +2937,21 @@ const ProjectDetails = ({ user }) => {
         projectName={project?.details?.projectName}
         frozenStage={project?.cancellation?.resumedStatus || project?.status}
         errorMessage={reactivateError}
+      />
+
+      <ProjectTypeChangeModal
+        isOpen={isProjectTypeModalOpen}
+        onClose={closeProjectTypeModal}
+        onConfirm={handleProjectTypeChange}
+        isSubmitting={isChangingProjectType}
+        errorMessage={projectTypeChangeError}
+        orderId={project?.orderId}
+        projectName={project?.details?.projectName}
+        currentType={project?.projectType}
+        currentStatus={project?.status}
+        currentPriority={project?.priority}
+        currentSampleRequired={Boolean(project?.sampleRequirement?.isRequired)}
+        currentCorporateEmergency={Boolean(project?.corporateEmergency?.isEnabled)}
       />
     </div>
   );
