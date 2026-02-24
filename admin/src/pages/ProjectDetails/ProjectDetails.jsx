@@ -295,6 +295,7 @@ const ProjectDetails = ({ user }) => {
   const [isProjectTypeModalOpen, setIsProjectTypeModalOpen] = useState(false);
   const [isChangingProjectType, setIsChangingProjectType] = useState(false);
   const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
+  const [activeContentTab, setActiveContentTab] = useState("overview");
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -1417,6 +1418,22 @@ const ProjectDetails = ({ user }) => {
     "Completed",
     "Finished",
   ].includes(project.status);
+  const contentTabs = [
+    { key: "overview", label: "Overview" },
+    { key: "order", label: "Order & Files" },
+    { key: "updates", label: "Updates" },
+  ];
+  const hasHeaderAlerts = Boolean(
+    (isCorporateProject && corporateEmergencyEnabled) ||
+      invoiceSent ||
+      (!isQuoteProject && paymentTypes.length > 0) ||
+      sampleRequirementEnabled ||
+      showPendingProductionWarning ||
+      showPendingProductionSampleWarning ||
+      showPendingDeliveryWarning ||
+      isCancelledProject ||
+      isProjectOnHold,
+  );
 
   const normalizeAttachment = (value) => {
     if (!value) return null;
@@ -1454,283 +1471,318 @@ const ProjectDetails = ({ user }) => {
           </div>
         )}
 
-        <div className="details-header">
-          <div className="header-left header-left-vertical">
-            <h1 className="header-order">
-              {project.orderId || "Order #..."}
-              {showVersionTag && (
-                <span className="project-version-badge">v{projectVersion}</span>
-              )}
-            </h1>
-            <div className="header-status header-status-actions">
-              <select
-                className={`status-badge-select ${project.status
-                  ?.toLowerCase()
-                  .replace(" ", "-")}`}
-                value={project.status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                disabled={
-                  loading ||
-                  isLeadUser ||
-                  isProjectOnHold ||
-                  isCancelledProject ||
-                  isTogglingHold ||
-                  isCancelling ||
-                  isReactivating
-                }
-                style={{
-                  marginLeft: 0,
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "999px",
-                  border: "1px solid transparent",
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  backgroundColor: "rgba(255, 255, 255, 0.2)", // Translucent background
-                  color: "inherit",
-                }}
-              >
-                {(project.projectType === "Quote"
-                  ? [
-                      "Order Confirmed",
-                      "Pending Scope Approval",
-                      "Scope Approval Completed",
-                      "Pending Departmental Engagement",
-                      "Departmental Engagement Completed",
-                      "Pending Quote Request",
-                      "Quote Request Completed",
-                      "Pending Send Response",
-                      "Response Sent",
-                      "Pending Feedback",
-                      "Feedback Completed",
-                      "Completed",
-                      ...(isProjectOnHold ? ["On Hold"] : []),
-                    ]
-                  : [
-                      "Order Confirmed",
-                      "Pending Scope Approval",
-                      "Scope Approval Completed",
-                      "Pending Departmental Engagement",
-                      "Departmental Engagement Completed",
-                      "Pending Mockup",
-                      "Mockup Completed",
-                      "Pending Proof Reading",
-                      "Proof Reading Completed",
-                      "Pending Production",
-                      "Production Completed",
-                      "Pending Quality Control",
-                      "Quality Control Completed",
-                      "Pending Photography",
-                      "Photography Completed",
-                      "Pending Packaging",
-                      "Packaging Completed",
-                      "Pending Delivery/Pickup",
-                      "Delivered",
-                      "Pending Feedback",
-                      "Feedback Completed",
-                      "Completed",
-                      ...(isProjectOnHold ? ["On Hold"] : []),
-                    ]
-                ).map((status) => (
-                  <option
-                    key={status}
-                    value={status}
-                    style={{ color: "#1e293b" }}
-                  >
-                    {status}
-                  </option>
-                ))}
-              </select>
-              {user?.role === "admin" &&
-                !isLeadUser &&
-                (isCancelledProject ? (
+      <div className="details-header">
+        <div className="header-left header-left-vertical">
+          <h1 className="header-order">
+            {project.orderId || "Order #..."}
+            {showVersionTag && (
+              <span className="project-version-badge">v{projectVersion}</span>
+            )}
+          </h1>
+          <p className="header-project-name">{details.projectName}</p>
+        </div>
+
+        <div className="header-right-panel">
+          <div className="header-status-row">
+            <select
+              className={`status-badge-select ${project.status
+                ?.toLowerCase()
+                .replace(" ", "-")}`}
+              value={project.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={
+                loading ||
+                isLeadUser ||
+                isProjectOnHold ||
+                isCancelledProject ||
+                isTogglingHold ||
+                isCancelling ||
+                isReactivating
+              }
+              style={{
+                marginLeft: 0,
+                padding: "0.25rem 0.5rem",
+                borderRadius: "999px",
+                border: "1px solid transparent",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                color: "inherit",
+              }}
+            >
+              {(project.projectType === "Quote"
+                ? [
+                    "Order Confirmed",
+                    "Pending Scope Approval",
+                    "Scope Approval Completed",
+                    "Pending Departmental Engagement",
+                    "Departmental Engagement Completed",
+                    "Pending Quote Request",
+                    "Quote Request Completed",
+                    "Pending Send Response",
+                    "Response Sent",
+                    "Pending Feedback",
+                    "Feedback Completed",
+                    "Completed",
+                    ...(isProjectOnHold ? ["On Hold"] : []),
+                  ]
+                : [
+                    "Order Confirmed",
+                    "Pending Scope Approval",
+                    "Scope Approval Completed",
+                    "Pending Departmental Engagement",
+                    "Departmental Engagement Completed",
+                    "Pending Mockup",
+                    "Mockup Completed",
+                    "Pending Proof Reading",
+                    "Proof Reading Completed",
+                    "Pending Production",
+                    "Production Completed",
+                    "Pending Quality Control",
+                    "Quality Control Completed",
+                    "Pending Photography",
+                    "Photography Completed",
+                    "Pending Packaging",
+                    "Packaging Completed",
+                    "Pending Delivery/Pickup",
+                    "Delivered",
+                    "Pending Feedback",
+                    "Feedback Completed",
+                    "Completed",
+                    ...(isProjectOnHold ? ["On Hold"] : []),
+                  ]
+              ).map((status) => (
+                <option
+                  key={status}
+                  value={status}
+                  style={{ color: "#1e293b" }}
+                >
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="header-actions-row">
+            {user?.role === "admin" &&
+              !isLeadUser &&
+              (isCancelledProject ? (
+                <button
+                  type="button"
+                  className="hold-toggle-btn reactivate"
+                  onClick={handleReactivateActionClick}
+                  disabled={isReactivating || isCancelling}
+                >
+                  {isReactivating ? "Reactivating..." : "Reactivate Project"}
+                </button>
+              ) : (
+                <>
                   <button
                     type="button"
-                    className="hold-toggle-btn reactivate"
-                    onClick={handleReactivateActionClick}
-                    disabled={isReactivating || isCancelling}
+                    className={`hold-toggle-btn sample ${
+                      sampleRequirementEnabled ? "sample-on" : "sample-off"
+                    }`}
+                    onClick={() =>
+                      handleToggleSampleRequirement(!sampleRequirementEnabled)
+                    }
+                    disabled={isTogglingSampleRequirement || isTogglingHold}
                   >
-                    {isReactivating ? "Reactivating..." : "Reactivate Project"}
+                    {isTogglingSampleRequirement
+                      ? "Updating Sample..."
+                      : sampleRequirementEnabled
+                        ? "Sample Required: ON"
+                        : "Sample Required: OFF"}
                   </button>
-                ) : (
-                  <>
+                  <button
+                    type="button"
+                    className="hold-toggle-btn type-change"
+                    onClick={openProjectTypeModal}
+                    disabled={
+                      isChangingProjectType ||
+                      isTogglingHold ||
+                      isCancelling ||
+                      isReactivating
+                    }
+                  >
+                    {isChangingProjectType ? "Changing Type..." : "Change Type"}
+                  </button>
+                  {isCorporateProject && (
                     <button
                       type="button"
-                      className={`hold-toggle-btn sample ${
-                        sampleRequirementEnabled ? "sample-on" : "sample-off"
+                      className={`hold-toggle-btn corporate ${
+                        corporateEmergencyEnabled
+                          ? "corporate-on"
+                          : "corporate-off"
                       }`}
                       onClick={() =>
-                        handleToggleSampleRequirement(!sampleRequirementEnabled)
+                        handleToggleCorporateEmergency(!corporateEmergencyEnabled)
                       }
-                      disabled={isTogglingSampleRequirement || isTogglingHold}
-                    >
-                      {isTogglingSampleRequirement
-                        ? "Updating Sample..."
-                        : sampleRequirementEnabled
-                          ? "Sample Required: ON"
-                          : "Sample Required: OFF"}
-                    </button>
-                    <button
-                      type="button"
-                      className="hold-toggle-btn type-change"
-                      onClick={openProjectTypeModal}
                       disabled={
-                        isChangingProjectType ||
-                        isTogglingHold ||
-                        isCancelling ||
-                        isReactivating
+                        isTogglingCorporateEmergency || isTogglingHold
                       }
                     >
-                      {isChangingProjectType ? "Changing Type..." : "Change Type"}
+                      {isTogglingCorporateEmergency
+                        ? "Updating Emergency..."
+                        : corporateEmergencyEnabled
+                          ? "Corporate Emergency: ON"
+                          : "Corporate Emergency: OFF"}
                     </button>
-                    {isCorporateProject && (
-                      <button
-                        type="button"
-                        className={`hold-toggle-btn corporate ${
-                          corporateEmergencyEnabled
-                            ? "corporate-on"
-                            : "corporate-off"
-                        }`}
-                        onClick={() =>
-                          handleToggleCorporateEmergency(!corporateEmergencyEnabled)
-                        }
-                        disabled={
-                          isTogglingCorporateEmergency || isTogglingHold
-                        }
-                      >
-                        {isTogglingCorporateEmergency
-                          ? "Updating Emergency..."
-                          : corporateEmergencyEnabled
-                            ? "Corporate Emergency: ON"
-                            : "Corporate Emergency: OFF"}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
-                      onClick={handleHoldActionClick}
-                      disabled={isTogglingHold || isCancelling}
-                    >
-                      {isTogglingHold
-                        ? isProjectOnHold
-                          ? "Releasing..."
-                          : "Holding..."
-                        : isProjectOnHold
-                          ? "Release Hold"
-                          : "Put On Hold"}
-                    </button>
-                    <button
-                      type="button"
-                      className="hold-toggle-btn cancel-project"
-                      onClick={handleCancelActionClick}
-                      disabled={isTogglingHold || isCancelling || isReactivating}
-                    >
-                      {isCancelling ? "Cancelling..." : "Cancel Project"}
-                    </button>
-                  </>
-                ))}
-            </div>
-            <div
-              className={`delivery-countdown-badge ${deliveryCountdown.state}`}
-              role="status"
-              aria-live="polite"
-            >
-              <span className="delivery-countdown-title">Delivery Countdown</span>
-              <strong className="delivery-countdown-value">
-                {deliveryCountdown.valueText}
-              </strong>
-              {deliveryCountdown.deadlineText ? (
-                <span className="delivery-countdown-deadline">
-                  Deadline: {deliveryCountdown.deadlineText}
-                </span>
-              ) : null}
-            </div>
-            <div className="billing-tags">
-              {isCorporateProject && corporateEmergencyEnabled && (
-                <span className="billing-tag corporate-emergency">
-                  Corporate Emergency
-                </span>
-              )}
-              {invoiceSent && (
-                <span className="billing-tag invoice">
-                  {isQuoteProject ? "Quote Sent" : "Invoice Sent"}
-                </span>
-              )}
-              {!isQuoteProject &&
-                paymentTypes.map((type) => (
-                  <span key={type} className="billing-tag payment">
-                    {paymentLabels[type] || type}
-                  </span>
-                ))}
-              {sampleRequirementEnabled && (
-                <span
-                  className={`billing-tag sample-requirement ${
-                    showPendingProductionSampleWarning ? "caution" : "invoice"
-                  }`}
-                >
-                  {sampleApprovalStatus === "approved"
-                    ? "Sample Approval Required (Approved)"
-                    : "Sample Approval Required"}
-                </span>
-              )}
-              {showPendingProductionWarning && (
-                <span className="billing-tag caution">
-                  Pending Production Blocked:{" "}
-                  {pendingProductionMissingLabels.join(", ")}
-                </span>
-              )}
-              {showPendingDeliveryWarning && (
-                <span className="billing-tag caution">
-                  Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
-                </span>
-              )}
-            </div>
-            {showPendingProductionWarning && (
-              <div className="payment-warning critical">
-                Caution: before moving to Pending Production, confirm{" "}
-                {pendingProductionMissingLabels.join(", ")}.
-              </div>
-            )}
-            {showPendingProductionSampleWarning && (
-              <div className="payment-warning critical">
-                Caution: client sample approval is pending. Confirm approval
-                before Production can be completed.
-              </div>
-            )}
-            {showPendingDeliveryWarning && (
-              <div className="payment-warning critical">
-                Caution: before moving to Pending Delivery/Pickup, confirm{" "}
-                {pendingDeliveryMissingLabels.join(", ")}.
-              </div>
-            )}
-            {isCancelledProject && (
-              <div className="cancelled-alert">
-                This project is cancelled and frozen at{" "}
-                <strong>
-                  {project.cancellation?.resumedStatus || project.status || "N/A"}
-                </strong>
-                {project.cancellation?.cancelledAt
-                  ? ` since ${formatLastUpdated(project.cancellation.cancelledAt)}`
-                  : ""}
-                .
-                {project.cancellation?.reason
-                  ? ` Reason: ${project.cancellation.reason}`
-                  : ""}
-              </div>
-            )}
-            {isProjectOnHold && (
-              <div className="hold-alert">
-                This project is on hold
-                {project.hold?.reason ? `: ${project.hold.reason}` : "."}
-              </div>
-            )}
-            <p className="header-project-name">{details.projectName}</p>
+                  )}
+                  <button
+                    type="button"
+                    className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
+                    onClick={handleHoldActionClick}
+                    disabled={isTogglingHold || isCancelling}
+                  >
+                    {isTogglingHold
+                      ? isProjectOnHold
+                        ? "Releasing..."
+                        : "Holding..."
+                      : isProjectOnHold
+                        ? "Release Hold"
+                        : "Put On Hold"}
+                  </button>
+                  <button
+                    type="button"
+                    className="hold-toggle-btn cancel-project"
+                    onClick={handleCancelActionClick}
+                    disabled={isTogglingHold || isCancelling || isReactivating}
+                  >
+                    {isCancelling ? "Cancelling..." : "Cancel Project"}
+                  </button>
+                </>
+              ))}
+          </div>
+
+          <div
+            className={`delivery-countdown-badge ${deliveryCountdown.state}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="delivery-countdown-title">Delivery Countdown</span>
+            <strong className="delivery-countdown-value">
+              {deliveryCountdown.valueText}
+            </strong>
+            {deliveryCountdown.deadlineText ? (
+              <span className="delivery-countdown-deadline">
+                Deadline: {deliveryCountdown.deadlineText}
+              </span>
+            ) : null}
           </div>
         </div>
+      </div>
+
+      {hasHeaderAlerts && (
+        <div className="details-alert-strip">
+          <div className="billing-tags">
+            {isCorporateProject && corporateEmergencyEnabled && (
+              <span className="billing-tag corporate-emergency">
+                Corporate Emergency
+              </span>
+            )}
+            {invoiceSent && (
+              <span className="billing-tag invoice">
+                {isQuoteProject ? "Quote Sent" : "Invoice Sent"}
+              </span>
+            )}
+            {!isQuoteProject &&
+              paymentTypes.map((type) => (
+                <span key={type} className="billing-tag payment">
+                  {paymentLabels[type] || type}
+                </span>
+              ))}
+            {sampleRequirementEnabled && (
+              <span
+                className={`billing-tag sample-requirement ${
+                  showPendingProductionSampleWarning ? "caution" : "invoice"
+                }`}
+              >
+                {sampleApprovalStatus === "approved"
+                  ? "Sample Approval Required (Approved)"
+                  : "Sample Approval Required"}
+              </span>
+            )}
+            {showPendingProductionWarning && (
+              <span className="billing-tag caution">
+                Pending Production Blocked:{" "}
+                {pendingProductionMissingLabels.join(", ")}
+              </span>
+            )}
+            {showPendingDeliveryWarning && (
+              <span className="billing-tag caution">
+                Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
+              </span>
+            )}
+          </div>
+          {showPendingProductionWarning && (
+            <div className="payment-warning critical">
+              Caution: before moving to Pending Production, confirm{" "}
+              {pendingProductionMissingLabels.join(", ")}.
+            </div>
+          )}
+          {showPendingProductionSampleWarning && (
+            <div className="payment-warning critical">
+              Caution: client sample approval is pending. Confirm approval before
+              Production can be completed.
+            </div>
+          )}
+          {showPendingDeliveryWarning && (
+            <div className="payment-warning critical">
+              Caution: before moving to Pending Delivery/Pickup, confirm{" "}
+              {pendingDeliveryMissingLabels.join(", ")}.
+            </div>
+          )}
+          {isCancelledProject && (
+            <div className="cancelled-alert">
+              This project is cancelled and frozen at{" "}
+              <strong>
+                {project.cancellation?.resumedStatus || project.status || "N/A"}
+              </strong>
+              {project.cancellation?.cancelledAt
+                ? ` since ${formatLastUpdated(project.cancellation.cancelledAt)}`
+                : ""}
+              .
+              {project.cancellation?.reason
+                ? ` Reason: ${project.cancellation.reason}`
+                : ""}
+            </div>
+          )}
+          {isProjectOnHold && (
+            <div className="hold-alert">
+              This project is on hold
+              {project.hold?.reason ? `: ${project.hold.reason}` : "."}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="details-grid">
         {/* Left Column */}
         <div className="main-info">
+          <div
+            className="detail-content-tabs"
+            role="tablist"
+            aria-label="Project detail sections"
+          >
+            {contentTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={activeContentTab === tab.key}
+                className={`detail-content-tab ${
+                  activeContentTab === tab.key ? "active" : ""
+                }`}
+                onClick={() => setActiveContentTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeContentTab === "overview" && (
+            <>
           {/* General Info */}
           <div className="detail-card">
             <h3
@@ -2097,7 +2149,11 @@ const ProjectDetails = ({ user }) => {
               </div>
             </div>
           )}
+            </>
+          )}
 
+          {activeContentTab === "order" && (
+            <>
           {/* Reference Material / Image */}
           {(project.sampleImage ||
             details.sampleImage ||
@@ -2426,7 +2482,11 @@ const ProjectDetails = ({ user }) => {
               )}
             </div>
           </div>
+            </>
+          )}
 
+          {activeContentTab === "updates" && (
+            <>
           {/* Project Updates */}
           <div className="detail-card">
             <h3 className="card-title">Project Updates</h3>
@@ -2609,6 +2669,8 @@ const ProjectDetails = ({ user }) => {
                 ))}
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
 
