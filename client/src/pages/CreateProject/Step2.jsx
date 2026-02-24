@@ -35,7 +35,7 @@ const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   const allDepartments = [
     { id: "graphics", label: "Graphics", icon: <GraphicsIcon /> },
-    { id: "stock", label: "Stock", icon: <StockIcon /> },
+    { id: "stock", label: "Stores", icon: <StockIcon /> },
     { id: "packaging", label: "Packaging", icon: <PackagingIcon /> },
     { id: "photography", label: "Photography", icon: <CameraIcon /> },
     { id: "dtf", label: "DTF Printing", icon: <PrinterIcon /> },

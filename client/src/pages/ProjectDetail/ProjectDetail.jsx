@@ -824,10 +824,7 @@ const ProjectDetail = ({ user }) => {
                 items={project.items}
                 projectId={project._id}
                 onUpdate={fetchProject}
-                readOnly={
-                  project.status === "Finished" ||
-                  project.status === "Order Confirmed"
-                }
+                readOnly={true}
               />
               <ReferenceMaterialsCard project={project} />
               <ApprovedMockupCard project={project} />
