@@ -88,6 +88,20 @@ const formatBillingMissingLabels = (missing = []) =>
     .map((key) => BILLING_REQUIREMENT_LABELS[key] || key)
     .filter(Boolean);
 
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicit = String(approval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
+    return explicit;
+  }
+  if (approval?.isApproved) return "approved";
+  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+    return "rejected";
+  }
+  return "pending";
+};
+
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const HOUR_IN_MS = 60 * 60 * 1000;
 const MINUTE_IN_MS = 60 * 1000;
@@ -249,10 +263,12 @@ const ProjectDetails = ({ user }) => {
   const [reactivateError, setReactivateError] = useState("");
   const [billingGuardModal, setBillingGuardModal] = useState({
     open: false,
+    title: "Billing Caution",
     message: "",
     missingLabels: [],
     nextStatus: "",
     canOverride: false,
+    overrideButtonText: "Continue with Override",
   });
   const [billingGuardSubmitting, setBillingGuardSubmitting] = useState(false);
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
@@ -302,22 +318,36 @@ const ProjectDetails = ({ user }) => {
     if (billingGuardSubmitting) return;
     setBillingGuardModal({
       open: false,
+      title: "Billing Caution",
       message: "",
       missingLabels: [],
       nextStatus: "",
       canOverride: false,
+      overrideButtonText: "Continue with Override",
     });
   };
 
-  const openBillingGuardModal = (guard, nextStatus) => {
-    const missingLabels = formatBillingMissingLabels(guard?.missing || []);
+  const openBillingGuardModal = (guard, nextStatus, options = {}) => {
+    const missingLabels = Array.isArray(options.missingLabels)
+      ? options.missingLabels
+      : formatBillingMissingLabels(guard?.missing || []);
+    const allowOverride =
+      options.canOverride !== undefined
+        ? Boolean(options.canOverride)
+        : Boolean(user?.role === "admin");
+
     setBillingGuardModal({
       open: true,
+      title: options.title || "Billing Caution",
       message:
-        guard?.message || "Billing prerequisites are required for this step.",
+        guard?.message ||
+        options.fallbackMessage ||
+        "Billing prerequisites are required for this step.",
       missingLabels,
       nextStatus: nextStatus || "",
-      canOverride: Boolean(user?.role === "admin"),
+      canOverride: allowOverride,
+      overrideButtonText:
+        options.overrideButtonText || "Continue with Override",
     });
   };
 
@@ -348,6 +378,49 @@ const ProjectDetails = ({ user }) => {
 
         if (errorData?.code === "BILLING_PREREQUISITE_MISSING") {
           openBillingGuardModal(errorData, newStatus);
+          return false;
+        }
+
+        if (
+          errorData?.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED" ||
+          errorData?.code === "MOCKUP_FILE_REQUIRED" ||
+          errorData?.code === "MOCKUP_CLIENT_REJECTED"
+        ) {
+          const latestVersionNumber = Number.parseInt(
+            errorData?.latestVersion?.version,
+            10,
+          );
+          const hasVersion =
+            Number.isFinite(latestVersionNumber) && latestVersionNumber > 0;
+
+          openBillingGuardModal(
+            {
+              message:
+                errorData?.message ||
+                "Mockup requirements must be satisfied before this stage can be completed.",
+            },
+            "",
+            {
+              title: "Mockup Caution",
+              canOverride: false,
+              missingLabels:
+                errorData?.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+                  ? [
+                      hasVersion
+                        ? `Client approval for mockup v${latestVersionNumber}`
+                        : "Client approval for latest mockup",
+                    ]
+                  : errorData?.code === "MOCKUP_CLIENT_REJECTED"
+                    ? [
+                        hasVersion
+                          ? `Client rejected mockup v${latestVersionNumber}`
+                          : "Latest mockup was rejected",
+                      ]
+                  : ["Uploaded mockup file"],
+              fallbackMessage:
+                "Mockup requirements must be satisfied before this stage can be completed.",
+            },
+          );
           return false;
         }
 
@@ -971,6 +1044,28 @@ const ProjectDetails = ({ user }) => {
   const mockupUrl = mockup.fileUrl;
   const mockupName =
     mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
+  const parsedMockupVersion = Number.parseInt(mockup.version, 10);
+  const mockupVersion =
+    Number.isFinite(parsedMockupVersion) && parsedMockupVersion > 0
+      ? parsedMockupVersion
+      : null;
+  const mockupVersionLabel = mockupVersion ? `v${mockupVersion}` : "";
+  const mockupApprovalStatus = getMockupApprovalStatus(
+    mockup?.clientApproval || {},
+  );
+  const isMockupClientApproved = mockupApprovalStatus === "approved";
+  const isMockupClientRejected = mockupApprovalStatus === "rejected";
+  const mockupApprovedAtLabel = mockup?.clientApproval?.approvedAt
+    ? formatLastUpdated(mockup.clientApproval.approvedAt)
+    : null;
+  const mockupRejectedAtLabel = mockup?.clientApproval?.rejectedAt
+    ? formatLastUpdated(mockup.clientApproval.rejectedAt)
+    : null;
+  const mockupRejectionReason = String(
+    mockup?.clientApproval?.rejectionReason ||
+      mockup?.clientApproval?.note ||
+      "",
+  ).trim();
   const paymentLabels = {
     part_payment: "Part Payment",
     full_payment: "Full Payment",
@@ -1767,7 +1862,20 @@ const ProjectDetails = ({ user }) => {
 
           {mockupUrl && (
             <div className="detail-card">
-              <h3 className="card-title">Approved Mockup</h3>
+              <h3 className="card-title">
+                Approved Mockup{" "}
+                {mockupVersionLabel && (
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#7c3aed",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {mockupVersionLabel}
+                  </span>
+                )}
+              </h3>
               <div
                 style={{
                   display: "flex",
@@ -1776,6 +1884,61 @@ const ProjectDetails = ({ user }) => {
                   marginTop: "1rem",
                 }}
               >
+                {mockupApprovalStatus === "pending" && (
+                  <div
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "#9f1239",
+                      background: "#fff1f2",
+                      border: "1px solid #fda4af",
+                      borderRadius: "8px",
+                      padding: "0.45rem 0.6rem",
+                    }}
+                  >
+                    Pending client approval.
+                  </div>
+                )}
+                {isMockupClientApproved && mockupApprovedAtLabel && (
+                  <div
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "#166534",
+                      background: "#f0fdf4",
+                      border: "1px solid #86efac",
+                      borderRadius: "8px",
+                      padding: "0.45rem 0.6rem",
+                    }}
+                  >
+                    Client approved: {mockupApprovedAtLabel}
+                  </div>
+                )}
+                {isMockupClientRejected && (
+                  <div
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "#991b1b",
+                      background: "#fef2f2",
+                      border: "1px solid #fca5a5",
+                      borderRadius: "8px",
+                      padding: "0.45rem 0.6rem",
+                    }}
+                  >
+                    Client rejected
+                    {mockupRejectedAtLabel
+                      ? `: ${mockupRejectedAtLabel}`
+                      : " this mockup version."}
+                  </div>
+                )}
+                {isMockupClientRejected && mockupRejectionReason && (
+                  <div
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#fca5a5",
+                    }}
+                  >
+                    Reason: {mockupRejectionReason}
+                  </div>
+                )}
                 <div
                   style={{
                     borderRadius: "10px",
@@ -2348,6 +2511,8 @@ const ProjectDetails = ({ user }) => {
         onOverride={handleBillingGuardOverride}
         canOverride={billingGuardModal.canOverride}
         isSubmitting={billingGuardSubmitting}
+        title={billingGuardModal.title}
+        overrideButtonText={billingGuardModal.overrideButtonText}
         message={billingGuardModal.message}
         missingLabels={billingGuardModal.missingLabels}
         orderId={project?.orderId}

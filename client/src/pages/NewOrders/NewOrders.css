@@ -474,10 +474,22 @@
   border-color: rgba(14, 165, 233, 0.25);
 }
 
+.status-tag.mockup {
+  background: rgba(168, 85, 247, 0.12);
+  color: #7e22ce;
+  border-color: rgba(168, 85, 247, 0.28);
+}
+
 .status-tag.caution {
   background: #fef2f2;
   color: #b91c1c;
   border-color: #fecaca;
+}
+
+.status-tag.rejection {
+  background: #fff1f2;
+  color: #be123c;
+  border-color: #fda4af;
 }
 
 .warning-banner {
@@ -501,6 +513,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
+  align-items: start;
 }
 
 .action-card {
@@ -512,6 +525,19 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  height: fit-content;
+  max-height: 31rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mockup-standalone-section {
+  margin-top: 1.25rem;
+}
+
+.mockup-standalone-card {
+  width: 100%;
+  max-height: 36rem;
 }
 
 .action-card h3 {
@@ -542,6 +568,104 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.mockup-empty-state {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.mockup-approval-status {
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.mockup-approval-status.pending {
+  border-color: #fda4af;
+  color: #9f1239;
+  background: #fff1f2;
+}
+
+.mockup-approval-status.approved {
+  border-color: #86efac;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.mockup-approval-status.rejected {
+  border-color: #fda4af;
+  color: #9f1239;
+  background: #fff1f2;
+}
+
+.mockup-approval-meta {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.mockup-approval-meta.rejection {
+  color: #9f1239;
+}
+
+.mockup-decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.mockup-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.mockup-version-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.mockup-version-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.mockup-version-links {
+  display: flex;
+  gap: 0.7rem;
+}
+
+.mockup-version-links a {
+  font-size: 0.78rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.mockup-version-links a:hover {
+  text-decoration: underline;
+}
+
+.mockup-version-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.72rem;
+  color: #64748b;
 }
 
 .order-revision-section {
@@ -1239,6 +1363,14 @@
 
   .order-revision-sample-actions {
     flex-direction: column;
+  }
+
+  .action-card {
+    max-height: 26rem;
+  }
+
+  .mockup-standalone-card {
+    max-height: 30rem;
   }
 }
 

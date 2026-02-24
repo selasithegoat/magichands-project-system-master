@@ -13,6 +13,20 @@ const resolveProjectTypeKey = (project) => {
   return "standard";
 };
 
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicit = String(approval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
+    return explicit;
+  }
+  if (approval?.isApproved) return "approved";
+  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+    return "rejected";
+  }
+  return "pending";
+};
+
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Helpers
   const formatDate = (dateString) => {
@@ -169,6 +183,19 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
+  const mockupVersionRaw = Number.parseInt(project?.mockup?.version, 10);
+  const mockupVersionLabel =
+    Number.isFinite(mockupVersionRaw) && mockupVersionRaw > 0
+      ? `v${mockupVersionRaw}`
+      : "";
+  const hasUploadedMockup = Boolean(project?.mockup?.fileUrl);
+  const mockupApprovalStatus = getMockupApprovalStatus(
+    project?.mockup?.clientApproval || {},
+  );
+  const showPendingClientApprovalTag =
+    project?.status === "Pending Mockup" &&
+    hasUploadedMockup &&
+    mockupApprovalStatus === "pending";
 
   return (
     <div
@@ -205,6 +232,13 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               ? "WAITING ACCEPTANCE"
               : project.status || "Draft"}
           </span>
+          {showPendingClientApprovalTag && (
+            <span className="status-badge mockup-client-pending">
+              {mockupVersionLabel
+                ? `Mockup ${mockupVersionLabel} client approval pending`
+                : "Mockup client approval pending"}
+            </span>
+          )}
         </div>
         {/* <button className="card-menu-btn">
           <ThreeDotsIcon />

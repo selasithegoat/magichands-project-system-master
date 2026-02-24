@@ -83,6 +83,7 @@ const PAYMENT_TYPES = new Set([
   "po",
   "authorized",
 ]);
+const FRONT_DESK_DEPARTMENT = "Front Desk";
 const DEFAULT_RELEASE_STATUS = "In Progress";
 const HOLD_STATUS = "On Hold";
 const CANCELLED_MUTATION_ACTIONS = new Set(["cancel", "reactivate"]);
@@ -102,6 +103,8 @@ const canManageBilling = (user) => {
       : [];
   return departments.includes("Front Desk");
 };
+
+const canManageMockupApproval = (user) => canManageBilling(user);
 
 const canEditOrderNumber = (user) => canManageBilling(user);
 
@@ -2193,6 +2196,338 @@ const getProjectDisplayRef = (project) =>
 const getProjectDisplayName = (project) =>
   project?.details?.projectName || "Unnamed Project";
 const formatPaymentTypeLabel = (type = "") => toText(type).replace(/_/g, " ");
+
+const buildMockupVersionLabel = (version) => {
+  const parsed = Number.parseInt(version, 10);
+  const safeVersion = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  return `v${safeVersion}`;
+};
+
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicitStatus = toText(approval?.status).toLowerCase();
+  if (
+    explicitStatus === "pending" ||
+    explicitStatus === "approved" ||
+    explicitStatus === "rejected"
+  ) {
+    return explicitStatus;
+  }
+  if (Boolean(approval?.isApproved)) {
+    return "approved";
+  }
+  if (
+    approval?.rejectedAt ||
+    approval?.rejectedBy ||
+    toText(approval?.rejectionReason)
+  ) {
+    return "rejected";
+  }
+  return "pending";
+};
+
+const getNormalizedMockupVersions = (project = {}) => {
+  const mockup = project?.mockup || {};
+  const rawVersions = Array.isArray(mockup.versions) ? mockup.versions : [];
+
+  const versions = rawVersions
+    .map((entry, index) => {
+      const parsedVersion = Number.parseInt(entry?.version, 10);
+      const version =
+        Number.isFinite(parsedVersion) && parsedVersion > 0
+          ? parsedVersion
+          : index + 1;
+      const approvalStatus = getMockupApprovalStatus(entry?.clientApproval || {});
+
+      return {
+        version,
+        fileUrl: toText(entry?.fileUrl),
+        fileName: toText(entry?.fileName),
+        fileType: toText(entry?.fileType),
+        note: toText(entry?.note),
+        uploadedBy: entry?.uploadedBy || null,
+        uploadedAt: entry?.uploadedAt ? new Date(entry.uploadedAt) : null,
+        clientApproval: {
+          status: approvalStatus,
+          isApproved: approvalStatus === "approved",
+          approvedAt: entry?.clientApproval?.approvedAt || null,
+          approvedBy: entry?.clientApproval?.approvedBy || null,
+          rejectedAt: entry?.clientApproval?.rejectedAt || null,
+          rejectedBy: entry?.clientApproval?.rejectedBy || null,
+          rejectionReason: toText(entry?.clientApproval?.rejectionReason),
+          note: toText(entry?.clientApproval?.note),
+        },
+      };
+    })
+    .filter((entry) => entry.fileUrl);
+
+  if (versions.length === 0 && toText(mockup.fileUrl)) {
+    const parsedVersion = Number.parseInt(mockup.version, 10);
+    const fallbackVersion =
+      Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+
+    versions.push({
+      version: fallbackVersion,
+      fileUrl: toText(mockup.fileUrl),
+      fileName: toText(mockup.fileName),
+      fileType: toText(mockup.fileType),
+      note: toText(mockup.note),
+      uploadedBy: mockup.uploadedBy || null,
+      uploadedAt: mockup.uploadedAt ? new Date(mockup.uploadedAt) : null,
+      clientApproval: {
+        status: getMockupApprovalStatus(mockup?.clientApproval || {}),
+        isApproved: getMockupApprovalStatus(mockup?.clientApproval || {}) === "approved",
+        approvedAt: mockup?.clientApproval?.approvedAt || null,
+        approvedBy: mockup?.clientApproval?.approvedBy || null,
+        rejectedAt: mockup?.clientApproval?.rejectedAt || null,
+        rejectedBy: mockup?.clientApproval?.rejectedBy || null,
+        rejectionReason: toText(mockup?.clientApproval?.rejectionReason),
+        note: toText(mockup?.clientApproval?.note),
+      },
+    });
+  }
+
+  return versions.sort((left, right) => {
+    if (left.version !== right.version) return left.version - right.version;
+    const leftTime = left.uploadedAt ? left.uploadedAt.getTime() : 0;
+    const rightTime = right.uploadedAt ? right.uploadedAt.getTime() : 0;
+    return leftTime - rightTime;
+  });
+};
+
+const getLatestMockupVersion = (project = {}) => {
+  const versions = getNormalizedMockupVersions(project);
+  return versions.length ? versions[versions.length - 1] : null;
+};
+
+const getMockupCompletionGuard = (project = {}) => {
+  const latestVersion = getLatestMockupVersion(project);
+
+  if (!latestVersion?.fileUrl) {
+    return {
+      code: "MOCKUP_FILE_REQUIRED",
+      message: "Please upload the mockup before completing this stage.",
+      latestVersion: null,
+    };
+  }
+
+  const approvalStatus = getMockupApprovalStatus(
+    latestVersion.clientApproval || {},
+  );
+  if (approvalStatus === "approved") {
+    return null;
+  }
+
+  const versionLabel = buildMockupVersionLabel(latestVersion.version);
+  if (approvalStatus === "rejected") {
+    const rejectionReason = toText(
+      latestVersion?.clientApproval?.rejectionReason ||
+        latestVersion?.clientApproval?.note,
+    );
+    const reasonSuffix = rejectionReason ? ` Reason: ${rejectionReason}.` : "";
+    return {
+      code: "MOCKUP_CLIENT_REJECTED",
+      message: `Client rejected mockup ${versionLabel}. Upload a revised version before completing this stage.${reasonSuffix}`,
+      latestVersion,
+    };
+  }
+
+  return {
+    code: "MOCKUP_CLIENT_APPROVAL_REQUIRED",
+    message: `Client approval is required for mockup ${versionLabel} before completing this stage.`,
+    latestVersion,
+  };
+};
+
+const getMockupNotificationRecipients = async (project = {}) => {
+  const recipients = new Set();
+  const leadId = toObjectIdString(project?.projectLeadId);
+  if (leadId) {
+    recipients.add(leadId);
+  }
+
+  const adminsAndFrontDesk = await User.find({
+    $or: [{ role: "admin" }, { department: FRONT_DESK_DEPARTMENT }],
+  })
+    .select("_id")
+    .lean();
+
+  adminsAndFrontDesk.forEach((entry) => {
+    const userId = toObjectIdString(entry?._id);
+    if (userId) {
+      recipients.add(userId);
+    }
+  });
+
+  return Array.from(recipients);
+};
+
+const notifyMockupVersionUploaded = async ({ project, senderId, version }) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(senderId);
+    if (!projectId || !actorId) return;
+
+    const recipients = await getMockupNotificationRecipients(project);
+    const uniqueRecipients = Array.from(
+      new Set(
+        recipients
+          .map((recipientId) => toObjectIdString(recipientId))
+          .filter(Boolean)
+          .filter((recipientId) => recipientId !== actorId),
+      ),
+    );
+
+    if (!uniqueRecipients.length) return;
+
+    const versionLabel = buildMockupVersionLabel(version);
+    const message = `Mockup ${versionLabel} uploaded for project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Client approval is required before Mockup stage can be completed.`;
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        createNotification(
+          recipientId,
+          actorId,
+          projectId,
+          "SYSTEM",
+          "Mockup Uploaded",
+          message,
+        ),
+      ),
+    );
+  } catch (error) {
+    console.error("Error notifying mockup upload:", error);
+  }
+};
+
+const notifyMockupCompletionBlocked = async ({
+  project,
+  senderId,
+  version,
+  reason = "",
+}) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(senderId);
+    if (!projectId || !actorId) return;
+
+    const recipients = await getMockupNotificationRecipients(project);
+    const uniqueRecipients = Array.from(
+      new Set(
+        recipients
+          .map((recipientId) => toObjectIdString(recipientId))
+          .filter(Boolean)
+          .filter((recipientId) => recipientId !== actorId),
+      ),
+    );
+
+    if (!uniqueRecipients.length) return;
+
+    const versionLabel = buildMockupVersionLabel(version);
+    const reasonText = toText(reason);
+    const message = reasonText
+      ? `Caution: project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}) is blocked at Mockup completion. Client rejected ${versionLabel}. Reason: ${reasonText}.`
+      : `Caution: project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}) is blocked at Mockup completion. Client approval is required for ${versionLabel}.`;
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        createNotification(
+          recipientId,
+          actorId,
+          projectId,
+          "SYSTEM",
+          "Mockup Approval Required",
+          message,
+        ),
+      ),
+    );
+  } catch (error) {
+    console.error("Error notifying mockup completion block:", error);
+  }
+};
+
+const notifyMockupApprovalConfirmed = async ({ project, senderId, version }) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(senderId);
+    if (!projectId || !actorId) return;
+
+    const recipients = await getMockupNotificationRecipients(project);
+    const uniqueRecipients = Array.from(
+      new Set(
+        recipients
+          .map((recipientId) => toObjectIdString(recipientId))
+          .filter(Boolean)
+          .filter((recipientId) => recipientId !== actorId),
+      ),
+    );
+
+    if (!uniqueRecipients.length) return;
+
+    const versionLabel = buildMockupVersionLabel(version);
+    const message = `Client approval confirmed for ${versionLabel} on project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Mockup stage can now proceed.`;
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        createNotification(
+          recipientId,
+          actorId,
+          projectId,
+          "SYSTEM",
+          "Mockup Approval Confirmed",
+          message,
+        ),
+      ),
+    );
+  } catch (error) {
+    console.error("Error notifying mockup approval confirmation:", error);
+  }
+};
+
+const notifyMockupRejected = async ({
+  project,
+  senderId,
+  version,
+  rejectionReason = "",
+}) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(senderId);
+    if (!projectId || !actorId) return;
+
+    const recipients = await getMockupNotificationRecipients(project);
+    const uniqueRecipients = Array.from(
+      new Set(
+        recipients
+          .map((recipientId) => toObjectIdString(recipientId))
+          .filter(Boolean)
+          .filter((recipientId) => recipientId !== actorId),
+      ),
+    );
+
+    if (!uniqueRecipients.length) return;
+
+    const versionLabel = buildMockupVersionLabel(version);
+    const safeReason = toText(rejectionReason);
+    const reasonSuffix = safeReason ? ` Reason: ${safeReason}.` : "";
+    const message = `Client rejected ${versionLabel} for project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Graphics should upload a revised mockup.${reasonSuffix}`;
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        createNotification(
+          recipientId,
+          actorId,
+          projectId,
+          "SYSTEM",
+          "Mockup Rejected",
+          message,
+        ),
+      ),
+    );
+  } catch (error) {
+    console.error("Error notifying mockup rejection:", error);
+  }
+};
+
 const parseBottleneckThresholdDays = (value) => {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return BOTTLENECK_DEFAULT_DAYS;
@@ -3539,11 +3874,42 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
-    if (newStatus === "Mockup Completed" && !project.mockup?.fileUrl) {
-      return res.status(400).json({
-        message:
-          "Please upload the approved mockup before completing this stage.",
-      });
+    if (newStatus === "Mockup Completed") {
+      const mockupGuard = getMockupCompletionGuard(project);
+      if (mockupGuard) {
+        if (
+          mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED" ||
+          mockupGuard.code === "MOCKUP_CLIENT_REJECTED"
+        ) {
+          await notifyMockupCompletionBlocked({
+            project,
+            senderId: req.user._id || req.user.id,
+            version: mockupGuard.latestVersion?.version,
+            reason: mockupGuard.latestVersion?.clientApproval?.rejectionReason,
+          });
+        }
+
+        return res.status(400).json({
+          code: mockupGuard.code,
+          targetStatus: "Mockup Completed",
+          latestVersion: mockupGuard.latestVersion
+            ? {
+                version: mockupGuard.latestVersion.version,
+                fileUrl: mockupGuard.latestVersion.fileUrl,
+                fileName: mockupGuard.latestVersion.fileName,
+                clientApproval: {
+                  status: getMockupApprovalStatus(
+                    mockupGuard.latestVersion?.clientApproval || {},
+                  ),
+                  rejectionReason: toText(
+                    mockupGuard.latestVersion?.clientApproval?.rejectionReason,
+                  ),
+                },
+              }
+            : null,
+          message: mockupGuard.message,
+        });
+      }
     }
 
     if (newStatus === "Departmental Engagement Completed") {
@@ -4017,13 +4383,94 @@ const uploadProjectMockup = async (req, res) => {
       });
     }
 
-    project.mockup = {
+    const existingVersions = Array.isArray(project?.mockup?.versions)
+      ? [...project.mockup.versions]
+      : [];
+    if (existingVersions.length === 0 && project?.mockup?.fileUrl) {
+      const legacyVersionRaw = Number.parseInt(project.mockup.version, 10);
+      const legacyVersion =
+        Number.isFinite(legacyVersionRaw) && legacyVersionRaw > 0
+          ? legacyVersionRaw
+          : 1;
+      existingVersions.push({
+        version: legacyVersion,
+        fileUrl: project.mockup.fileUrl,
+        fileName: project.mockup.fileName,
+        fileType: project.mockup.fileType,
+        note: project.mockup.note || "",
+        uploadedBy: project.mockup.uploadedBy || null,
+        uploadedAt: project.mockup.uploadedAt || null,
+        clientApproval: {
+          status: getMockupApprovalStatus(project.mockup?.clientApproval || {}),
+          isApproved: Boolean(project.mockup?.clientApproval?.isApproved),
+          approvedAt: project.mockup?.clientApproval?.approvedAt || null,
+          approvedBy: project.mockup?.clientApproval?.approvedBy || null,
+          rejectedAt: project.mockup?.clientApproval?.rejectedAt || null,
+          rejectedBy: project.mockup?.clientApproval?.rejectedBy || null,
+          rejectionReason: project.mockup?.clientApproval?.rejectionReason || "",
+          note: project.mockup?.clientApproval?.note || "",
+        },
+      });
+    }
+
+    const highestVersion = existingVersions.reduce((maxVersion, entry) => {
+      const parsedVersion = Number.parseInt(entry?.version, 10);
+      if (!Number.isFinite(parsedVersion) || parsedVersion <= 0) {
+        return maxVersion;
+      }
+      return Math.max(maxVersion, parsedVersion);
+    }, 0);
+
+    const nextVersion = highestVersion + 1;
+    const uploadedAt = new Date();
+    const versionEntry = {
+      version: nextVersion,
       fileUrl: `/uploads/${req.file.filename}`,
       fileName: req.file.originalname,
       fileType: req.file.mimetype,
       note: (note || "").trim(),
       uploadedBy: req.user._id,
-      uploadedAt: new Date(),
+      uploadedAt,
+      clientApproval: {
+        status: "pending",
+        isApproved: false,
+        approvedAt: null,
+        approvedBy: null,
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectionReason: "",
+        note: "",
+      },
+    };
+
+    const mergedVersions = [...existingVersions, versionEntry].sort(
+      (left, right) => {
+        const leftVersion = Number.parseInt(left?.version, 10) || 0;
+        const rightVersion = Number.parseInt(right?.version, 10) || 0;
+        return leftVersion - rightVersion;
+      },
+    );
+
+    project.mockup = {
+      fileUrl: versionEntry.fileUrl,
+      fileName: versionEntry.fileName,
+      fileType: versionEntry.fileType,
+      note: versionEntry.note,
+      uploadedBy: versionEntry.uploadedBy,
+      uploadedAt: versionEntry.uploadedAt,
+      version: nextVersion,
+      clientApproval: {
+        status: "pending",
+        isApproved: false,
+        approvedAt: null,
+        approvedBy: null,
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectionReason: "",
+        note: "",
+        approvedVersion: null,
+      },
+      versions: mergedVersions,
     };
 
     await project.save();
@@ -4032,24 +4479,295 @@ const uploadProjectMockup = async (req, res) => {
       project._id,
       req.user._id,
       "mockup_upload",
-      `Approved mockup uploaded`,
-      { fileUrl: project.mockup.fileUrl, note: project.mockup.note },
+      `Mockup ${buildMockupVersionLabel(nextVersion)} uploaded.`,
+      {
+        mockup: {
+          version: nextVersion,
+          fileUrl: project.mockup.fileUrl,
+          note: project.mockup.note,
+        },
+      },
     );
 
-    if (project.projectLeadId) {
-      await createNotification(
-        project.projectLeadId,
-        req.user._id,
-        project._id,
-        "UPDATE",
-        "Mockup Uploaded",
-        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Approved mockup has been uploaded for review.`,
-      );
-    }
+    await notifyMockupVersionUploaded({
+      project,
+      senderId: req.user._id,
+      version: nextVersion,
+    });
 
     res.json(project);
   } catch (error) {
     console.error("Error uploading mockup:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Confirm client approval for latest mockup version
+// @route   POST /api/projects/:id/mockup/approve
+// @access  Private (Front Desk or Admin)
+const approveProjectMockup = async (req, res) => {
+  try {
+    if (!canManageMockupApproval(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to approve mockups.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+
+    const normalizedVersions = getNormalizedMockupVersions(project);
+    if (!normalizedVersions.length) {
+      return res.status(400).json({
+        message: "No mockup has been uploaded yet.",
+      });
+    }
+
+    const latestVersion = normalizedVersions[normalizedVersions.length - 1];
+    const requestedVersionRaw = Number.parseInt(req.body?.version, 10);
+    const requestedVersion =
+      Number.isFinite(requestedVersionRaw) && requestedVersionRaw > 0
+        ? requestedVersionRaw
+        : latestVersion.version;
+
+    if (requestedVersion !== latestVersion.version) {
+      return res.status(400).json({
+        message: `Only the latest mockup version (${buildMockupVersionLabel(latestVersion.version)}) can be approved.`,
+      });
+    }
+
+    const requestedVersionLabel = buildMockupVersionLabel(requestedVersion);
+    const approvalNote = toText(req.body?.note);
+
+    project.mockup = project.mockup || {};
+    if (!Array.isArray(project.mockup.versions)) {
+      project.mockup.versions = [];
+    }
+
+    if (project.mockup.versions.length === 0 && project.mockup.fileUrl) {
+      project.mockup.versions.push({
+        version: latestVersion.version,
+        fileUrl: project.mockup.fileUrl,
+        fileName: project.mockup.fileName,
+        fileType: project.mockup.fileType,
+        note: project.mockup.note || "",
+        uploadedBy: project.mockup.uploadedBy || null,
+        uploadedAt: project.mockup.uploadedAt || null,
+        clientApproval: {
+          status: getMockupApprovalStatus(project.mockup?.clientApproval || {}),
+          isApproved: Boolean(project.mockup?.clientApproval?.isApproved),
+          approvedAt: project.mockup?.clientApproval?.approvedAt || null,
+          approvedBy: project.mockup?.clientApproval?.approvedBy || null,
+          rejectedAt: project.mockup?.clientApproval?.rejectedAt || null,
+          rejectedBy: project.mockup?.clientApproval?.rejectedBy || null,
+          rejectionReason: project.mockup?.clientApproval?.rejectionReason || "",
+          note: project.mockup?.clientApproval?.note || "",
+        },
+      });
+    }
+
+    const versionEntry = project.mockup.versions.find((entry) => {
+      const parsed = Number.parseInt(entry?.version, 10);
+      return Number.isFinite(parsed) && parsed === requestedVersion;
+    });
+
+    if (!versionEntry?.fileUrl) {
+      return res.status(400).json({
+        message: "Selected mockup version is not available.",
+      });
+    }
+
+    if (versionEntry?.clientApproval?.isApproved) {
+      return res.status(400).json({
+        message: `Mockup ${requestedVersionLabel} is already approved.`,
+      });
+    }
+
+    const approvedAt = new Date();
+    const approvalState = {
+      status: "approved",
+      isApproved: true,
+      approvedAt,
+      approvedBy: req.user._id,
+      rejectedAt: null,
+      rejectedBy: null,
+      rejectionReason: "",
+      note: approvalNote,
+    };
+
+    versionEntry.clientApproval = approvalState;
+
+    project.mockup.fileUrl = versionEntry.fileUrl;
+    project.mockup.fileName = versionEntry.fileName;
+    project.mockup.fileType = versionEntry.fileType;
+    project.mockup.note = versionEntry.note || "";
+    project.mockup.uploadedBy = versionEntry.uploadedBy || null;
+    project.mockup.uploadedAt = versionEntry.uploadedAt || null;
+    project.mockup.version = requestedVersion;
+    project.mockup.clientApproval = {
+      ...approvalState,
+      approvedVersion: requestedVersion,
+    };
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_approval",
+      `Client approval confirmed for mockup ${requestedVersionLabel}.`,
+      {
+        mockupApproval: {
+          version: requestedVersion,
+          note: approvalNote,
+        },
+      },
+    );
+
+    await notifyMockupApprovalConfirmed({
+      project,
+      senderId: req.user._id,
+      version: requestedVersion,
+    });
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error approving mockup:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Record client rejection for latest mockup version
+// @route   POST /api/projects/:id/mockup/reject
+// @access  Private (Front Desk or Admin)
+const rejectProjectMockup = async (req, res) => {
+  try {
+    if (!canManageMockupApproval(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to reject mockups.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+
+    if (project.status !== "Pending Mockup") {
+      return res.status(400).json({
+        message: "Mockup rejection is only allowed while status is Pending Mockup.",
+      });
+    }
+
+    const normalizedVersions = getNormalizedMockupVersions(project);
+    if (!normalizedVersions.length) {
+      return res.status(400).json({
+        message: "No mockup has been uploaded yet.",
+      });
+    }
+
+    const latestVersion = normalizedVersions[normalizedVersions.length - 1];
+    const requestedVersionRaw = Number.parseInt(req.body?.version, 10);
+    const requestedVersion =
+      Number.isFinite(requestedVersionRaw) && requestedVersionRaw > 0
+        ? requestedVersionRaw
+        : latestVersion.version;
+
+    if (requestedVersion !== latestVersion.version) {
+      return res.status(400).json({
+        message: `Only the latest mockup version (${buildMockupVersionLabel(latestVersion.version)}) can be rejected.`,
+      });
+    }
+
+    const rejectionReason = toText(req.body?.reason);
+
+    project.mockup = project.mockup || {};
+    if (!Array.isArray(project.mockup.versions)) {
+      project.mockup.versions = [];
+    }
+
+    if (project.mockup.versions.length === 0 && project.mockup.fileUrl) {
+      project.mockup.versions.push({
+        version: latestVersion.version,
+        fileUrl: project.mockup.fileUrl,
+        fileName: project.mockup.fileName,
+        fileType: project.mockup.fileType,
+        note: project.mockup.note || "",
+        uploadedBy: project.mockup.uploadedBy || null,
+        uploadedAt: project.mockup.uploadedAt || null,
+        clientApproval: {
+          status: getMockupApprovalStatus(project.mockup?.clientApproval || {}),
+          isApproved: Boolean(project.mockup?.clientApproval?.isApproved),
+          approvedAt: project.mockup?.clientApproval?.approvedAt || null,
+          approvedBy: project.mockup?.clientApproval?.approvedBy || null,
+          rejectedAt: project.mockup?.clientApproval?.rejectedAt || null,
+          rejectedBy: project.mockup?.clientApproval?.rejectedBy || null,
+          rejectionReason: project.mockup?.clientApproval?.rejectionReason || "",
+          note: project.mockup?.clientApproval?.note || "",
+        },
+      });
+    }
+
+    const versionEntry = project.mockup.versions.find((entry) => {
+      const parsed = Number.parseInt(entry?.version, 10);
+      return Number.isFinite(parsed) && parsed === requestedVersion;
+    });
+
+    if (!versionEntry?.fileUrl) {
+      return res.status(400).json({
+        message: "Selected mockup version is not available.",
+      });
+    }
+
+    const rejectionAt = new Date();
+    const decisionState = {
+      status: "rejected",
+      isApproved: false,
+      approvedAt: null,
+      approvedBy: null,
+      rejectedAt: rejectionAt,
+      rejectedBy: req.user._id,
+      rejectionReason,
+      note: rejectionReason,
+    };
+
+    versionEntry.clientApproval = decisionState;
+    project.mockup.fileUrl = versionEntry.fileUrl;
+    project.mockup.fileName = versionEntry.fileName;
+    project.mockup.fileType = versionEntry.fileType;
+    project.mockup.note = versionEntry.note || "";
+    project.mockup.uploadedBy = versionEntry.uploadedBy || null;
+    project.mockup.uploadedAt = versionEntry.uploadedAt || null;
+    project.mockup.version = requestedVersion;
+    project.mockup.clientApproval = {
+      ...decisionState,
+      approvedVersion: null,
+    };
+
+    await project.save();
+
+    const versionLabel = buildMockupVersionLabel(requestedVersion);
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_rejection",
+      `Client rejected mockup ${versionLabel}.`,
+      {
+        mockupRejection: {
+          version: requestedVersion,
+          reason: rejectionReason,
+        },
+      },
+    );
+
+    await notifyMockupRejected({
+      project,
+      senderId: req.user._id,
+      version: requestedVersion,
+      rejectionReason,
+    });
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error rejecting mockup:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -5975,6 +6693,8 @@ module.exports = {
   undoInvoiceSent,
   undoPaymentVerification,
   uploadProjectMockup,
+  approveProjectMockup,
+  rejectProjectMockup,
   addFeedbackToProject,
   deleteFeedbackFromProject,
   addChallengeToProject,

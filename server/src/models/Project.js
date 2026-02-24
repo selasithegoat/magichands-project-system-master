@@ -373,6 +373,59 @@ const ProjectSchema = new mongoose.Schema(
       note: String,
       uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       uploadedAt: Date,
+      version: {
+        type: Number,
+        default: 1,
+      },
+      clientApproval: {
+        status: {
+          type: String,
+          enum: ["pending", "approved", "rejected"],
+          default: "pending",
+        },
+        isApproved: {
+          type: Boolean,
+          default: false,
+        },
+        approvedAt: Date,
+        approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        rejectedAt: Date,
+        rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        rejectionReason: String,
+        note: String,
+        approvedVersion: Number,
+      },
+      versions: [
+        {
+          version: {
+            type: Number,
+            required: true,
+          },
+          fileUrl: String,
+          fileName: String,
+          fileType: String,
+          note: String,
+          uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          uploadedAt: Date,
+          clientApproval: {
+            status: {
+              type: String,
+              enum: ["pending", "approved", "rejected"],
+              default: "pending",
+            },
+            isApproved: {
+              type: Boolean,
+              default: false,
+            },
+            approvedAt: Date,
+            approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            rejectedAt: Date,
+            rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            rejectionReason: String,
+            note: String,
+          },
+        },
+      ],
     },
     updates: [
       {

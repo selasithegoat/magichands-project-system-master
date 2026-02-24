@@ -217,6 +217,16 @@
   color: #ea580c;
 }
 
+.status-badge.mockup-client-pending {
+  background: #faf5ff;
+  color: #7e22ce;
+  border: 1px solid #d8b4fe;
+  font-size: 11px;
+  line-height: 1.2;
+  max-width: 220px;
+  text-align: right;
+}
+
 .card-menu-btn {
   color: #94a3b8;
   cursor: pointer;

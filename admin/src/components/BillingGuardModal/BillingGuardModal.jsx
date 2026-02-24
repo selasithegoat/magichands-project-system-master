@@ -7,6 +7,8 @@ const BillingGuardModal = ({
   onOverride,
   canOverride = false,
   isSubmitting = false,
+  title = "Billing Caution",
+  overrideButtonText = "Continue with Override",
   message = "",
   missingLabels = [],
   orderId = "",
@@ -29,7 +31,7 @@ const BillingGuardModal = ({
   return (
     <div className="billing-guard-modal-overlay">
       <div className="billing-guard-modal" role="dialog" aria-modal="true">
-        <h3>Billing Caution</h3>
+        <h3>{title}</h3>
         {(orderId || projectName) && (
           <p className="billing-guard-project">
             <strong>Project:</strong> {orderId || "N/A"}
@@ -58,7 +60,7 @@ const BillingGuardModal = ({
               onClick={onOverride}
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Applying..." : "Continue with Override"}
+              {isSubmitting ? "Applying..." : overrideButtonText}
             </button>
           )}
         </div>

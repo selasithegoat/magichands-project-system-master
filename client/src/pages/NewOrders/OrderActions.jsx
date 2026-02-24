@@ -9,6 +9,10 @@ const INVOICE_CONFIRM_PHRASE = "I confirm the invoice has been sent";
 const INVOICE_UNDO_PHRASE = "I confirm the invoice status should be reset";
 const QUOTE_CONFIRM_PHRASE = "I confirm the quote has been sent";
 const QUOTE_UNDO_PHRASE = "I confirm the quote status should be reset";
+const MOCKUP_APPROVAL_CONFIRM_PHRASE =
+  "I confirm the client approved this mockup";
+const MOCKUP_REJECTION_CONFIRM_PHRASE =
+  "I confirm the client rejected this mockup";
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -108,6 +112,80 @@ const getReferenceFileName = (path) => {
 const isImagePath = (path) =>
   /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(String(path || ""));
 
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicit = String(approval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
+    return explicit;
+  }
+  if (approval?.isApproved) return "approved";
+  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+    return "rejected";
+  }
+  return "pending";
+};
+
+const getMockupVersions = (mockup = {}) => {
+  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
+  const normalized = rawVersions
+    .map((entry, index) => {
+      const parsedVersion = Number.parseInt(entry?.version, 10);
+      const version =
+        Number.isFinite(parsedVersion) && parsedVersion > 0
+          ? parsedVersion
+          : index + 1;
+      const decisionStatus = getMockupApprovalStatus(entry?.clientApproval || {});
+      return {
+        version,
+        fileUrl: String(entry?.fileUrl || "").trim(),
+        fileName: String(entry?.fileName || "").trim(),
+        fileType: String(entry?.fileType || "").trim(),
+        note: String(entry?.note || "").trim(),
+        uploadedAt: entry?.uploadedAt || null,
+        clientApproval: {
+          status: decisionStatus,
+          isApproved: decisionStatus === "approved",
+          approvedAt: entry?.clientApproval?.approvedAt || null,
+          rejectedAt: entry?.clientApproval?.rejectedAt || null,
+          rejectionReason: String(entry?.clientApproval?.rejectionReason || "").trim(),
+          note: String(entry?.clientApproval?.note || "").trim(),
+        },
+      };
+    })
+    .filter((entry) => entry.fileUrl);
+
+  if (normalized.length === 0 && mockup?.fileUrl) {
+    const parsedVersion = Number.parseInt(mockup?.version, 10);
+    const version =
+      Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+    const decisionStatus = getMockupApprovalStatus(mockup?.clientApproval || {});
+    normalized.push({
+      version,
+      fileUrl: String(mockup.fileUrl || "").trim(),
+      fileName: String(mockup.fileName || "").trim(),
+      fileType: String(mockup.fileType || "").trim(),
+      note: String(mockup.note || "").trim(),
+      uploadedAt: mockup.uploadedAt || null,
+      clientApproval: {
+        status: decisionStatus,
+        isApproved: decisionStatus === "approved",
+        approvedAt: mockup?.clientApproval?.approvedAt || null,
+        rejectedAt: mockup?.clientApproval?.rejectedAt || null,
+        rejectionReason: String(mockup?.clientApproval?.rejectionReason || "").trim(),
+        note: String(mockup?.clientApproval?.note || "").trim(),
+      },
+    });
+  }
+
+  return normalized.sort((left, right) => {
+    if (left.version !== right.version) return left.version - right.version;
+    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
+    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
+    return leftTime - rightTime;
+  });
+};
+
 const OrderActions = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -147,6 +225,7 @@ const OrderActions = () => {
   const [deliverySubmitting, setDeliverySubmitting] = useState(false);
   const [billingGuardModal, setBillingGuardModal] = useState({
     open: false,
+    title: "Billing Caution",
     message: "",
     missingLabels: [],
   });
@@ -171,6 +250,21 @@ const OrderActions = () => {
   });
   const [paymentUndoInput, setPaymentUndoInput] = useState("");
   const [paymentUndoSubmitting, setPaymentUndoSubmitting] = useState(false);
+  const [mockupApprovalModal, setMockupApprovalModal] = useState({
+    open: false,
+    version: null,
+  });
+  const [mockupApprovalInput, setMockupApprovalInput] = useState("");
+  const [mockupApprovalSubmitting, setMockupApprovalSubmitting] =
+    useState(false);
+  const [mockupRejectionModal, setMockupRejectionModal] = useState({
+    open: false,
+    version: null,
+  });
+  const [mockupRejectionInput, setMockupRejectionInput] = useState("");
+  const [mockupRejectionReason, setMockupRejectionReason] = useState("");
+  const [mockupRejectionSubmitting, setMockupRejectionSubmitting] =
+    useState(false);
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
   const [orderNumberDraft, setOrderNumberDraft] = useState("");
@@ -260,7 +354,13 @@ const OrderActions = () => {
       const updatesChanged = changedPath.startsWith("/api/updates");
       const thisProjectChanged = changedPath.includes(`/api/projects/${project._id}`);
 
-      if (updatesChanged || thisProjectChanged) {
+      if (thisProjectChanged) {
+        fetchProject();
+        fetchProjectUpdates(project._id);
+        return;
+      }
+
+      if (updatesChanged) {
         fetchProjectUpdates(project._id);
       }
     },
@@ -323,6 +423,27 @@ const OrderActions = () => {
     () => new Set((project?.paymentVerifications || []).map((p) => p.type)),
     [project],
   );
+  const mockupVersions = useMemo(
+    () => getMockupVersions(project?.mockup || {}),
+    [project?.mockup],
+  );
+  const latestMockupVersion =
+    mockupVersions.length > 0 ? mockupVersions[mockupVersions.length - 1] : null;
+  const latestMockupVersionLabel = latestMockupVersion
+    ? `v${latestMockupVersion.version}`
+    : "";
+  const latestMockupDecisionStatus = latestMockupVersion
+    ? getMockupApprovalStatus(latestMockupVersion?.clientApproval || {})
+    : "pending";
+  const mockupApprovalPending = Boolean(
+    latestMockupVersion?.fileUrl && latestMockupDecisionStatus === "pending",
+  );
+  const mockupApprovalRejected = Boolean(
+    latestMockupVersion?.fileUrl && latestMockupDecisionStatus === "rejected",
+  );
+  const mockupApprovalConfirmed = Boolean(
+    latestMockupVersion?.fileUrl && latestMockupDecisionStatus === "approved",
+  );
   const isQuoteProject = project?.projectType === "Quote";
   const invoiceSent = Boolean(project?.invoice?.sent);
   const isFrontDeskUser = Boolean(
@@ -336,8 +457,15 @@ const OrderActions = () => {
   const billingUndoPhrase = isQuoteProject
     ? QUOTE_UNDO_PHRASE
     : INVOICE_UNDO_PHRASE;
+  const canManageMockupApproval = canManageBilling && !isQuoteProject;
 
   const getFrontDeskCommandMessage = (targetStatus) => {
+    if (targetStatus === "Mockup Completed") {
+      return "Confirm client approval now before mockup completion can proceed.";
+    }
+    if (targetStatus === "Mockup Rejected") {
+      return "Client rejected the mockup. Request Graphics to upload a revised version now.";
+    }
     if (targetStatus === "Pending Production") {
       return "Confirm invoice and payment now before production can proceed.";
     }
@@ -357,9 +485,14 @@ const OrderActions = () => {
       forceCommandTone || isFrontDeskUser
         ? getFrontDeskCommandMessage(targetStatus)
         : message || "Billing prerequisites are required before this action.";
+    const resolvedTitle =
+      targetStatus === "Mockup Completed"
+        ? "Mockup Caution"
+        : "Billing Caution";
 
     setBillingGuardModal({
       open: true,
+      title: resolvedTitle,
       message: resolvedMessage,
       missingLabels: formatBillingRequirementLabels(missing),
     });
@@ -374,6 +507,7 @@ const OrderActions = () => {
     }
     setBillingGuardModal({
       open: false,
+      title: "Billing Caution",
       message: "",
       missingLabels: [],
     });
@@ -844,6 +978,123 @@ const OrderActions = () => {
     }
   };
 
+  const openMockupApprovalModal = (version) => {
+    if (!version || !canManageMockupApproval) return;
+    setMockupApprovalModal({
+      open: true,
+      version,
+    });
+    setMockupApprovalInput("");
+  };
+
+  const closeMockupApprovalModal = () => {
+    if (mockupApprovalSubmitting) return;
+    setMockupApprovalModal({
+      open: false,
+      version: null,
+    });
+    setMockupApprovalInput("");
+  };
+
+  const openMockupRejectionModal = (version) => {
+    if (!version || !canManageMockupApproval) return;
+    setMockupRejectionModal({
+      open: true,
+      version,
+    });
+    setMockupRejectionInput("");
+    setMockupRejectionReason("");
+  };
+
+  const closeMockupRejectionModal = () => {
+    if (mockupRejectionSubmitting) return;
+    setMockupRejectionModal({
+      open: false,
+      version: null,
+    });
+    setMockupRejectionInput("");
+    setMockupRejectionReason("");
+  };
+
+  const handleConfirmMockupApproval = async () => {
+    if (!project || !mockupApprovalModal.version || !canManageMockupApproval) {
+      return;
+    }
+    if (mockupApprovalInput.trim() !== MOCKUP_APPROVAL_CONFIRM_PHRASE) return;
+
+    setMockupApprovalSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${project._id}/mockup/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version: mockupApprovalModal.version.version,
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          `Mockup v${mockupApprovalModal.version.version} approved by client.`,
+          "success",
+        );
+        closeMockupApprovalModal();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to confirm mockup approval.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Mockup approval error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setMockupApprovalSubmitting(false);
+    }
+  };
+
+  const handleConfirmMockupRejection = async () => {
+    if (!project || !mockupRejectionModal.version || !canManageMockupApproval) {
+      return;
+    }
+    if (mockupRejectionInput.trim() !== MOCKUP_REJECTION_CONFIRM_PHRASE) return;
+
+    setMockupRejectionSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${project._id}/mockup/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version: mockupRejectionModal.version.version,
+          reason: mockupRejectionReason.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          `Mockup v${mockupRejectionModal.version.version} marked as rejected.`,
+          "success",
+        );
+        closeMockupRejectionModal();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to record mockup rejection.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Mockup rejection error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setMockupRejectionSubmitting(false);
+    }
+  };
+
   const canManageOrderRevision = canManageBilling;
   const orderRevisionDirty = useMemo(() => {
     if (!project) return false;
@@ -1016,13 +1267,35 @@ const OrderActions = () => {
     !isQuoteProject &&
     ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
     pendingDeliveryMissing.length > 0;
+  const showMockupApprovalWarning =
+    project &&
+    !isQuoteProject &&
+    project.status === "Pending Mockup" &&
+    mockupApprovalPending;
+  const showMockupRejectionWarning =
+    project &&
+    !isQuoteProject &&
+    project.status === "Pending Mockup" &&
+    mockupApprovalRejected;
+  const mockupApprovalMissingLabels =
+    showMockupApprovalWarning && latestMockupVersion
+      ? [`Client approval for mockup ${latestMockupVersionLabel}`]
+      : [];
+  const mockupRejectionMissingLabels =
+    showMockupRejectionWarning && latestMockupVersion
+      ? [`Rejected mockup ${latestMockupVersionLabel}`]
+      : [];
   const currentBillingGuardKey = project?._id
     ? `${project._id}|${project.status}|${
         showPendingProductionWarning
           ? pendingProductionMissingLabels.join("|")
           : showPendingDeliveryWarning
             ? pendingDeliveryMissingLabels.join("|")
-            : ""
+            : showMockupApprovalWarning
+              ? mockupApprovalMissingLabels.join("|")
+              : showMockupRejectionWarning
+                ? mockupRejectionMissingLabels.join("|")
+              : ""
       }`
     : "";
 
@@ -1054,6 +1327,34 @@ const OrderActions = () => {
         targetStatus: "Pending Delivery/Pickup",
         forceCommandTone: true,
       });
+      return;
+    }
+
+    if (
+      showMockupApprovalWarning &&
+      currentBillingGuardKey !== dismissedBillingGuardKey
+    ) {
+      openBillingGuardModal({
+        message:
+          "Caution: confirm client approval for the latest mockup before mockup completion.",
+        missing: mockupApprovalMissingLabels,
+        targetStatus: "Mockup Completed",
+        forceCommandTone: true,
+      });
+      return;
+    }
+
+    if (
+      showMockupRejectionWarning &&
+      currentBillingGuardKey !== dismissedBillingGuardKey
+    ) {
+      openBillingGuardModal({
+        message:
+          "Client rejected the latest mockup. Ask Graphics to upload a revised version now.",
+        missing: mockupRejectionMissingLabels,
+        targetStatus: "Mockup Rejected",
+        forceCommandTone: true,
+      });
     }
   }, [
     project?._id,
@@ -1062,10 +1363,14 @@ const OrderActions = () => {
     billingGuardModal.open,
     showPendingProductionWarning,
     showPendingDeliveryWarning,
+    showMockupApprovalWarning,
+    showMockupRejectionWarning,
     currentBillingGuardKey,
     dismissedBillingGuardKey,
     pendingProductionMissing,
     pendingDeliveryMissing,
+    mockupApprovalMissingLabels,
+    mockupRejectionMissingLabels,
   ]);
 
   const lastOrderRevisionUpdatedAt = project?.sectionUpdates?.details || null;
@@ -1121,6 +1426,26 @@ const OrderActions = () => {
             </p>
           </div>
           <div className="status-tags">
+            {latestMockupVersion && (
+              <span className="status-tag mockup">
+                Mockup {latestMockupVersionLabel}
+              </span>
+            )}
+            {mockupApprovalConfirmed && latestMockupVersion && (
+              <span className="status-tag invoice">
+                {latestMockupVersionLabel} Client Approved
+              </span>
+            )}
+            {mockupApprovalPending && latestMockupVersion && (
+              <span className="status-tag caution">
+                {latestMockupVersionLabel} Pending Client Approval
+              </span>
+            )}
+            {mockupApprovalRejected && latestMockupVersion && (
+              <span className="status-tag rejection">
+                {latestMockupVersionLabel} Rejected by Client
+              </span>
+            )}
             {invoiceSent && (
               <span className="status-tag invoice">{billingDocumentLabel} Sent</span>
             )}
@@ -1152,6 +1477,18 @@ const OrderActions = () => {
         {showPendingDeliveryWarning && (
           <div className="warning-banner critical">
             Confirm full payment or authorization now before delivery can proceed.
+          </div>
+        )}
+        {mockupApprovalPending && latestMockupVersion && (
+          <div className="warning-banner critical">
+            Confirm client approval for mockup {latestMockupVersionLabel} now
+            before mockup completion can proceed.
+          </div>
+        )}
+        {mockupApprovalRejected && latestMockupVersion && (
+          <div className="warning-banner critical">
+            Client rejected mockup {latestMockupVersionLabel}. Request Graphics
+            to upload a revised version before mockup completion.
           </div>
         )}
 
@@ -1248,6 +1585,169 @@ const OrderActions = () => {
               </div>
             </div>
         </div>
+
+        {!isQuoteProject && (
+          <section className="mockup-standalone-section">
+            <div className="action-card mockup-standalone-card">
+              <h3>Mockup Approval</h3>
+              <p>
+                Confirm client approval before Mockup stage can be marked
+                complete.
+              </p>
+
+              {!latestMockupVersion ? (
+                <div className="mockup-empty-state">
+                  No mockup has been uploaded yet.
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={`mockup-approval-status ${
+                      mockupApprovalConfirmed
+                        ? "approved"
+                        : mockupApprovalRejected
+                          ? "rejected"
+                          : "pending"
+                    }`}
+                  >
+                    Latest: {latestMockupVersionLabel}{" "}
+                    {mockupApprovalConfirmed
+                      ? "Client Approved"
+                      : mockupApprovalRejected
+                        ? "Client Rejected"
+                        : "Pending Client Approval"}
+                  </div>
+
+                  {mockupApprovalConfirmed &&
+                    latestMockupVersion.clientApproval?.approvedAt && (
+                      <p className="mockup-approval-meta">
+                        Approved:{" "}
+                        {formatDateTime(
+                          latestMockupVersion.clientApproval.approvedAt,
+                        )}
+                      </p>
+                    )}
+                  {mockupApprovalRejected &&
+                    latestMockupVersion.clientApproval?.rejectedAt && (
+                      <p className="mockup-approval-meta rejection">
+                        Rejected:{" "}
+                        {formatDateTime(
+                          latestMockupVersion.clientApproval.rejectedAt,
+                        )}
+                      </p>
+                    )}
+                  {mockupApprovalRejected &&
+                    latestMockupVersion.clientApproval?.rejectionReason && (
+                      <p className="mockup-approval-meta rejection">
+                        Reason:{" "}
+                        {latestMockupVersion.clientApproval.rejectionReason}
+                      </p>
+                    )}
+
+                  <div className="mockup-version-list">
+                    {mockupVersions
+                      .slice()
+                      .reverse()
+                      .map((version) => {
+                        const fileName =
+                          version.fileName ||
+                          version.fileUrl.split("/").pop() ||
+                          `Mockup v${version.version}`;
+                        const decision = getMockupApprovalStatus(
+                          version.clientApproval || {},
+                        );
+                        return (
+                          <div
+                            key={`mockup-version-${version.version}`}
+                            className="mockup-version-item"
+                          >
+                            <div className="mockup-version-main">
+                              <strong>v{version.version}</strong>
+                              <span>
+                                {decision === "approved"
+                                  ? "Approved"
+                                  : decision === "rejected"
+                                    ? "Rejected"
+                                    : "Pending Approval"}
+                              </span>
+                            </div>
+                            <div className="mockup-version-links">
+                              <a
+                                href={version.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                View
+                              </a>
+                              <a href={version.fileUrl} download>
+                                Download
+                              </a>
+                            </div>
+                            <div className="mockup-version-meta">
+                              <span>{fileName}</span>
+                              {version.uploadedAt && (
+                                <span>
+                                  Uploaded: {formatDateTime(version.uploadedAt)}
+                                </span>
+                              )}
+                              {decision === "rejected" &&
+                                version.clientApproval?.rejectedAt && (
+                                  <span>
+                                    Rejected:{" "}
+                                    {formatDateTime(
+                                      version.clientApproval.rejectedAt,
+                                    )}
+                                  </span>
+                                )}
+                              {decision === "rejected" &&
+                                version.clientApproval?.rejectionReason && (
+                                  <span>
+                                    Reason:{" "}
+                                    {version.clientApproval.rejectionReason}
+                                  </span>
+                                )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {canManageMockupApproval && (
+                    <div className="mockup-decision-actions">
+                      {project.status === "Pending Mockup" && (
+                        <>
+                          {!mockupApprovalConfirmed && (
+                            <button
+                              className="action-btn complete-btn"
+                              onClick={() =>
+                                openMockupApprovalModal(latestMockupVersion)
+                              }
+                            >
+                              Confirm Client Approval ({latestMockupVersionLabel})
+                            </button>
+                          )}
+                          <button
+                            className="action-btn undo-btn"
+                            onClick={() =>
+                              openMockupRejectionModal(latestMockupVersion)
+                            }
+                          >
+                            Mark Rejected ({latestMockupVersionLabel})
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {!canManageMockupApproval && (
+                    <p className="mockup-approval-meta">
+                      Front Desk or Admin must confirm client decision.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        )}
 
 
         <section className="updates-standalone-section">
@@ -1634,7 +2134,7 @@ const OrderActions = () => {
         <div className="confirm-modal-overlay">
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-modal-header">
-              <h3>Billing Caution</h3>
+              <h3>{billingGuardModal.title || "Billing Caution"}</h3>
               <p>{project.orderId || project._id || "Project"}</p>
             </div>
             <p className="confirm-modal-text">
@@ -1654,6 +2154,112 @@ const OrderActions = () => {
                 onClick={closeBillingGuardModal}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mockupApprovalModal.open && (
+        <div className="confirm-modal-overlay" onClick={closeMockupApprovalModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Confirm Client Mockup Approval</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              <strong>Project:</strong>{" "}
+              {project.orderId || project._id || "N/A"} -{" "}
+              {project.details?.projectName || "Untitled"}
+            </p>
+            <p className="confirm-modal-text">
+              Confirm that client approved mockup version{" "}
+              <strong>
+                v{mockupApprovalModal.version?.version || "N/A"}
+              </strong>
+              .
+            </p>
+            <div className="confirm-phrase">{MOCKUP_APPROVAL_CONFIRM_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={mockupApprovalInput}
+                onChange={(e) => setMockupApprovalInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeMockupApprovalModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn complete-btn"
+                onClick={handleConfirmMockupApproval}
+                disabled={
+                  mockupApprovalSubmitting ||
+                  mockupApprovalInput.trim() !== MOCKUP_APPROVAL_CONFIRM_PHRASE
+                }
+              >
+                {mockupApprovalSubmitting ? "Confirming..." : "Confirm Approval"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mockupRejectionModal.open && (
+        <div className="confirm-modal-overlay" onClick={closeMockupRejectionModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Confirm Client Mockup Rejection</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              <strong>Project:</strong>{" "}
+              {project.orderId || project._id || "N/A"} -{" "}
+              {project.details?.projectName || "Untitled"}
+            </p>
+            <p className="confirm-modal-text">
+              Confirm that client rejected mockup version{" "}
+              <strong>
+                v{mockupRejectionModal.version?.version || "N/A"}
+              </strong>
+              .
+            </p>
+            <div className="confirm-phrase">{MOCKUP_REJECTION_CONFIRM_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={mockupRejectionInput}
+                onChange={(e) => setMockupRejectionInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-input-group">
+              <label>Rejection Reason (Optional)</label>
+              <textarea
+                rows="3"
+                value={mockupRejectionReason}
+                onChange={(e) => setMockupRejectionReason(e.target.value)}
+                placeholder="Why did client reject this mockup? (optional)"
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeMockupRejectionModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn undo-btn"
+                onClick={handleConfirmMockupRejection}
+                disabled={
+                  mockupRejectionSubmitting ||
+                  mockupRejectionInput.trim() !==
+                    MOCKUP_REJECTION_CONFIRM_PHRASE
+                }
+              >
+                {mockupRejectionSubmitting ? "Saving..." : "Confirm Rejection"}
               </button>
             </div>
           </div>

@@ -130,6 +130,20 @@ const normalizeObjectId = (value) => {
   return String(value);
 };
 
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicit = String(approval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
+    return explicit;
+  }
+  if (approval?.isApproved) return "approved";
+  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+    return "rejected";
+  }
+  return "pending";
+};
+
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -289,6 +303,19 @@ const EngagedProjectActions = ({ user }) => {
   const mockupUrl = project?.mockup?.fileUrl;
   const mockupName = project?.mockup?.fileName || "Approved Mockup";
   const mockupType = project?.mockup?.fileType || "";
+  const mockupVersionRaw = Number.parseInt(project?.mockup?.version, 10);
+  const mockupVersionLabel =
+    Number.isFinite(mockupVersionRaw) && mockupVersionRaw > 0
+      ? `v${mockupVersionRaw}`
+      : "Latest";
+  const mockupApprovalStatus = getMockupApprovalStatus(
+    project?.mockup?.clientApproval || {},
+  );
+  const mockupRejectionReason = String(
+    project?.mockup?.clientApproval?.rejectionReason ||
+      project?.mockup?.clientApproval?.note ||
+      "",
+  ).trim();
   const isImageMockup =
     mockupType.startsWith("image/") ||
     /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(mockupUrl || "");
@@ -480,6 +507,31 @@ const EngagedProjectActions = ({ user }) => {
           message:
             errorData.message || "Billing prerequisites are required for this step.",
           missingLabels: formatBillingRequirementLabels(errorData.missing || []),
+        });
+        return false;
+      }
+      if (
+        errorData?.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED" ||
+        errorData?.code === "MOCKUP_CLIENT_REJECTED" ||
+        errorData?.code === "MOCKUP_FILE_REQUIRED"
+      ) {
+        const latestVersion = Number.parseInt(errorData?.latestVersion?.version, 10);
+        const versionLabel =
+          Number.isFinite(latestVersion) && latestVersion > 0
+            ? `v${latestVersion}`
+            : "latest mockup";
+        const reasonText = String(
+          errorData?.latestVersion?.clientApproval?.rejectionReason || "",
+        ).trim();
+        const fallbackMessage =
+          errorData?.code === "MOCKUP_CLIENT_REJECTED"
+            ? `Client rejected ${versionLabel}. Upload a revised mockup${reasonText ? ` (Reason: ${reasonText})` : ""}.`
+            : errorData?.code === "MOCKUP_FILE_REQUIRED"
+              ? "Upload a mockup file first."
+              : `Client approval is pending for ${versionLabel}.`;
+        setToast({
+          type: "error",
+          message: errorData.message || fallbackMessage,
         });
         return false;
       }
@@ -785,7 +837,8 @@ const EngagedProjectActions = ({ user }) => {
         const updatedProject = await res.json();
         setToast({
           type: "success",
-          message: "Mockup uploaded. Please confirm completion.",
+          message:
+            "Mockup uploaded. Wait for Front Desk/Admin client decision before confirming completion.",
         });
         setProject(updatedProject);
         closeMockupModal();
@@ -838,6 +891,17 @@ const EngagedProjectActions = ({ user }) => {
   const showVersionTag = projectVersion > 1;
   const latestSharedUpdate = String(project?.endOfDayUpdate || "").trim();
   const latestSharedUpdateDate = project?.endOfDayUpdateDate;
+  const hasMockupOnProject = Boolean(mockupUrl);
+  const mockupModalTitle = hasMockupOnProject
+    ? mockupApprovalStatus === "rejected"
+      ? "Upload Revised Mockup"
+      : "Upload Mockup Revision"
+    : "Upload Approved Mockup";
+  const mockupModalHint = hasMockupOnProject
+    ? mockupApprovalStatus === "rejected"
+      ? `Latest ${mockupVersionLabel} was rejected. Upload a revised mockup.`
+      : "Upload a new revision if updates were requested."
+    : "Upload the approved mockup file for review.";
 
   return (
     <div className="engaged-projects-container engaged-actions-page">
@@ -1119,8 +1183,17 @@ const EngagedProjectActions = ({ user }) => {
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
-                    const mockupAlreadySubmitted =
-                      isMockupAction && Boolean(mockupUrl);
+                    const mockupAlreadySubmitted = Boolean(mockupUrl);
+                    const mockupApprovalPending =
+                      isMockupAction && mockupApprovalStatus === "pending";
+                    const mockupApprovalRejected =
+                      isMockupAction && mockupApprovalStatus === "rejected";
+                    const mockupApprovalConfirmed =
+                      isMockupAction && mockupApprovalStatus === "approved";
+                    const canConfirmMockupCompletion =
+                      isMockupAction &&
+                      mockupAlreadySubmitted &&
+                      mockupApprovalConfirmed;
 
                     let disabledReason = "";
                     if (!isPending) {
@@ -1148,7 +1221,6 @@ const EngagedProjectActions = ({ user }) => {
                               disabled={
                                 !isPending ||
                                 isUpdating ||
-                                mockupAlreadySubmitted ||
                                 isProjectLeadForProject
                               }
                               title={
@@ -1156,14 +1228,18 @@ const EngagedProjectActions = ({ user }) => {
                                   ? `Waiting for ${action.pending}.`
                                   : isProjectLeadForProject
                                     ? "Project leads cannot take engagement actions on their own projects here."
+                                  : mockupApprovalRejected
+                                    ? "Client rejected latest mockup. Upload a revised version."
                                   : mockupAlreadySubmitted
-                                    ? "Mockup already submitted."
+                                    ? "Upload a new revision if changes are needed."
                                     : "Upload approved mockup"
                               }
                             >
-                              {mockupAlreadySubmitted
-                                ? "Mockup Already submitted"
-                                : "Upload Mockup"}
+                              {mockupApprovalRejected
+                                ? `Upload Revision (${mockupVersionLabel})`
+                                : mockupAlreadySubmitted
+                                  ? "Upload New Revision"
+                                  : "Upload Mockup"}
                             </button>
                             <button
                               className="complete-btn confirm-btn"
@@ -1171,7 +1247,7 @@ const EngagedProjectActions = ({ user }) => {
                               disabled={
                                 !isPending ||
                                 isUpdating ||
-                                !mockupAlreadySubmitted ||
+                                !canConfirmMockupCompletion ||
                                 isProjectLeadForProject
                               }
                               title={
@@ -1179,9 +1255,13 @@ const EngagedProjectActions = ({ user }) => {
                                   ? `Waiting for ${action.pending}.`
                                   : isProjectLeadForProject
                                     ? "Project leads cannot take engagement actions on their own projects here."
-                                  : mockupAlreadySubmitted
-                                    ? "Confirm mockup completion"
-                                    : "Upload mockup before confirming"
+                                  : !mockupAlreadySubmitted
+                                    ? "Upload mockup before confirming"
+                                  : mockupApprovalRejected
+                                    ? "Client rejected latest mockup. Upload revision first."
+                                  : mockupApprovalPending
+                                    ? "Waiting for Front Desk/Admin client decision."
+                                  : "Confirm mockup completion"
                               }
                             >
                               Confirm Mockup Completion
@@ -1200,6 +1280,19 @@ const EngagedProjectActions = ({ user }) => {
                           >
                             {isUpdating ? "Updating..." : action.label}
                           </button>
+                        )}
+                        {isMockupAction && mockupAlreadySubmitted && (
+                          <div className="engaged-action-meta">
+                            Latest mockup {mockupVersionLabel}:{" "}
+                            {mockupApprovalConfirmed
+                              ? "Client Approved."
+                              : mockupApprovalRejected
+                                ? "Client Rejected."
+                                : "Pending Client Decision."}
+                            {mockupApprovalRejected && mockupRejectionReason
+                              ? ` Reason: ${mockupRejectionReason}`
+                              : ""}
+                          </div>
                         )}
                         {blockedByBilling && (
                           <div className="engaged-action-meta">
@@ -1236,7 +1329,7 @@ const EngagedProjectActions = ({ user }) => {
                               download
                               reloadDocument
                             >
-                              Download {mockupName}
+                              Download {mockupVersionLabel} - {mockupName}
                             </Link>
                           </>
                         )}
@@ -1252,7 +1345,7 @@ const EngagedProjectActions = ({ user }) => {
                         reference.
                       </p>
 
-                      {mockupUrl ? (
+                      {mockupUrl && mockupApprovalStatus === "approved" ? (
                         <>
                           <div className="mockup-preview">
                             {isImageMockup ? (
@@ -1282,7 +1375,11 @@ const EngagedProjectActions = ({ user }) => {
                         </>
                       ) : (
                         <div className="engaged-action-meta">
-                          Approved mockup is not available yet.
+                          {mockupUrl
+                            ? mockupApprovalStatus === "rejected"
+                              ? `Latest mockup ${mockupVersionLabel} was rejected. Await revised upload from Graphics.`
+                              : "Latest mockup is pending client approval."
+                            : "Approved mockup is not available yet."}
                         </div>
                       )}
                     </div>
@@ -1391,13 +1488,13 @@ const EngagedProjectActions = ({ user }) => {
       {showMockupModal && mockupTarget && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 className="modal-title">Upload Approved Mockup</h3>
+            <h3 className="modal-title">{mockupModalTitle}</h3>
             <p className="acknowledge-confirm-text">
-              Upload the approved mockup for project <strong>{projectId}</strong>.
+              {mockupModalHint} Project <strong>{projectId}</strong>.
             </p>
             <form onSubmit={handleUploadMockup}>
               <div className="form-group">
-                <label>Approved Mockup File</label>
+                <label>Mockup File</label>
                 <input
                   type="file"
                   className="input-field"

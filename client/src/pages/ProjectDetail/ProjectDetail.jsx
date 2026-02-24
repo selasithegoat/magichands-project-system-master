@@ -252,6 +252,20 @@ const BILLING_REQUIREMENT_LABELS = {
     "Full payment or authorization verification",
 };
 
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicit = String(approval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
+    return explicit;
+  }
+  if (approval?.isApproved) return "approved";
+  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+    return "rejected";
+  }
+  return "pending";
+};
+
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const HOUR_IN_MS = 60 * 60 * 1000;
 const MINUTE_IN_MS = 60 * 1000;
@@ -1814,15 +1828,113 @@ const ApprovedMockupCard = ({ project }) => {
   const mockupUrl = mockup.fileUrl;
   const mockupName =
     mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
+  const parsedVersion = Number.parseInt(mockup.version, 10);
+  const mockupVersion =
+    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : null;
+  const mockupVersionLabel = mockupVersion ? `v${mockupVersion}` : "";
+  const mockupApprovalStatus = getMockupApprovalStatus(
+    mockup?.clientApproval || {},
+  );
+  const isClientApproved = mockupApprovalStatus === "approved";
+  const isClientRejected = mockupApprovalStatus === "rejected";
+  const approvedAtLabel = mockup?.clientApproval?.approvedAt
+    ? new Date(mockup.clientApproval.approvedAt).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+  const rejectedAtLabel = mockup?.clientApproval?.rejectedAt
+    ? new Date(mockup.clientApproval.rejectedAt).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+  const rejectionReason = String(
+    mockup?.clientApproval?.rejectionReason ||
+      mockup?.clientApproval?.note ||
+      "",
+  ).trim();
 
   if (!mockupUrl) return null;
 
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">Approved Mockup</h3>
+        <h3 className="card-title">
+          Approved Mockup{" "}
+          {mockupVersionLabel && (
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "#7c3aed",
+                fontWeight: 700,
+              }}
+            >
+              {mockupVersionLabel}
+            </span>
+          )}
+        </h3>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {mockupApprovalStatus === "pending" && (
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "#9f1239",
+              background: "#fff1f2",
+              border: "1px solid #fda4af",
+              borderRadius: "8px",
+              padding: "0.45rem 0.6rem",
+            }}
+          >
+            Pending client approval.
+          </div>
+        )}
+        {isClientApproved && approvedAtLabel && (
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "#166534",
+              background: "#f0fdf4",
+              border: "1px solid #86efac",
+              borderRadius: "8px",
+              padding: "0.45rem 0.6rem",
+            }}
+          >
+            Client approved: {approvedAtLabel}
+          </div>
+        )}
+        {isClientRejected && (
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "#991b1b",
+              background: "#fef2f2",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              padding: "0.45rem 0.6rem",
+            }}
+          >
+            Client rejected
+            {rejectedAtLabel ? `: ${rejectedAtLabel}` : " this mockup version."}
+          </div>
+        )}
+        {isClientRejected && rejectionReason && (
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "#991b1b",
+            }}
+          >
+            Reason: {rejectionReason}
+          </div>
+        )}
         <div
           style={{
             borderRadius: "8px",

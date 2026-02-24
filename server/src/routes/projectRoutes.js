@@ -15,6 +15,8 @@ const {
   reactivateProject,
   updateProjectStatus,
   uploadProjectMockup,
+  approveProjectMockup,
+  rejectProjectMockup,
   addFeedbackToProject,
   deleteFeedbackFromProject,
   addChallengeToProject,
@@ -210,6 +212,18 @@ router.post(
   enforceProjectNotOnHold,
   handleMockupUpload,
   uploadProjectMockup,
+);
+router.post(
+  "/:id/mockup/approve",
+  protect,
+  enforceProjectNotOnHold,
+  approveProjectMockup,
+);
+router.post(
+  "/:id/mockup/reject",
+  protect,
+  enforceProjectNotOnHold,
+  rejectProjectMockup,
 );
 router.patch("/:id/status", protect, enforceProjectNotOnHold, updateProjectStatus);
 router.patch("/:id/reopen", protect, enforceProjectNotOnHold, reopenProject); // [NEW] - Reopen completed project
