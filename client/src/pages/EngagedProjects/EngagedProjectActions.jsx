@@ -11,6 +11,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import "./EngagedProjects.css";
 
 const STATUS_ACTIONS = {
@@ -980,7 +981,7 @@ const EngagedProjectActions = ({ user }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
-  const latestSharedUpdate = String(project?.endOfDayUpdate || "").trim();
+  const latestSharedUpdate = normalizeProjectUpdateText(project?.endOfDayUpdate);
   const latestSharedUpdateDate = project?.endOfDayUpdateDate;
   const hasMockupOnProject = Boolean(mockupUrl);
   const mockupModalTitle = hasMockupOnProject

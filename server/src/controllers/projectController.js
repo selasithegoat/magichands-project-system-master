@@ -18,6 +18,13 @@ const {
   notifyBillingOverrideUsed,
   notifyBillingPrerequisiteResolved,
 } = require("../utils/billingNotificationService");
+const {
+  MOCKUP_PENDING_CLIENT_APPROVAL_UPDATE_TEXT,
+  MOCKUP_APPROVED_BY_CLIENT_UPDATE_TEXT,
+  SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT,
+  SAMPLE_APPROVED_BY_CLIENT_UPDATE_TEXT,
+  normalizeProjectUpdateContent,
+} = require("../utils/projectUpdateText");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -2278,13 +2285,6 @@ const getProjectDisplayName = (project) =>
 const formatPaymentTypeLabel = (type = "") => toText(type).replace(/_/g, " ");
 const SAMPLE_APPROVAL_BLOCK_CODE = "PRODUCTION_SAMPLE_CLIENT_APPROVAL_REQUIRED";
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
-const MOCKUP_PENDING_CLIENT_APPROVAL_UPDATE_TEXT =
-  "Pending Mockup Approval from client";
-const MOCKUP_APPROVED_BY_CLIENT_UPDATE_TEXT = "Mockup Approved by client";
-const SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT =
-  "Pending Sample Approval from client";
-const SAMPLE_APPROVED_BY_CLIENT_UPDATE_TEXT = "Sample Approved by client";
-
 const getSampleApprovalStatus = (sampleApproval = {}) => {
   const explicitStatus = toText(sampleApproval?.status).toLowerCase();
   if (explicitStatus === "pending" || explicitStatus === "approved") {
@@ -2465,7 +2465,7 @@ const createProjectSystemUpdateAndSnapshot = async ({
   content = "",
 }) => {
   const projectId = toObjectIdString(project?._id);
-  const normalizedContent = toText(content);
+  const normalizedContent = normalizeProjectUpdateContent(content);
   if (!projectId || !normalizedContent) return null;
 
   const resolvedAuthorId = resolveProjectUpdateAuthorId({ authorId, project });
@@ -4763,15 +4763,13 @@ const updateSampleRequirement = async (req, res) => {
 
     const nextGuard = getSampleApprovalGuard(project);
     const requirementActionLabel = nextRequired ? "enabled" : "disabled";
-    const isPendingSampleAtProductionStage =
-      nextRequired &&
-      project.status === "Pending Production" &&
-      getSampleApprovalStatus(project?.sampleApproval || {}) !== "approved";
-    const updateText = isPendingSampleAtProductionStage
-      ? SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT
-      : nextRequired
-        ? `Sample requirement enabled for project #${getProjectDisplayRef(project)}. Client sample approval is now required before Production can be completed.`
-        : `Sample requirement disabled for project #${getProjectDisplayRef(project)}. Production can proceed without client sample approval.`;
+    const sampleApprovalStatus = getSampleApprovalStatus(
+      project?.sampleApproval || {},
+    );
+    const updateText =
+      !nextRequired || sampleApprovalStatus === "approved"
+        ? SAMPLE_APPROVED_BY_CLIENT_UPDATE_TEXT
+        : SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT;
 
     await logActivity(
       project._id,

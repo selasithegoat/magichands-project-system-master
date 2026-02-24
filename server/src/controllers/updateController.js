@@ -8,6 +8,7 @@ const {
   sendProjectOnHoldResponse,
 } = require("../middleware/projectHoldMiddleware");
 const { isEngagedPortalRequest } = require("../middleware/authMiddleware");
+const { normalizeProjectUpdateContent } = require("../utils/projectUpdateText");
 
 const normalizeObjectId = (value) => {
   if (!value) return "";
@@ -56,14 +57,25 @@ const syncProjectLatestUpdateSnapshot = async (projectId) => {
     return null;
   }
 
+  const normalizedContent = normalizeProjectUpdateContent(
+    latestUpdate.content || "",
+  );
+
+  if (normalizedContent && normalizedContent !== (latestUpdate.content || "")) {
+    await ProjectUpdate.findByIdAndUpdate(latestUpdate._id, {
+      $set: { content: normalizedContent },
+    });
+  }
+
   await Project.findByIdAndUpdate(projectId, {
     $set: {
-      endOfDayUpdate: latestUpdate.content || "",
+      endOfDayUpdate: normalizedContent,
       endOfDayUpdateDate: latestUpdate.createdAt || new Date(),
       endOfDayUpdateBy: latestUpdate.author || null,
     },
   });
 
+  latestUpdate.content = normalizedContent;
   return latestUpdate;
 };
 
@@ -124,7 +136,30 @@ exports.getProjectUpdates = async (req, res) => {
       .populate("author", "firstName lastName email role") // Populate author details
       .sort({ createdAt: -1 }); // Newest first
 
-    res.status(200).json(updates);
+    const normalizationOps = [];
+    const normalizedUpdates = updates.map((update) => {
+      const normalizedContent = normalizeProjectUpdateContent(update.content || "");
+
+      if (normalizedContent && normalizedContent !== (update.content || "")) {
+        normalizationOps.push({
+          updateOne: {
+            filter: { _id: update._id },
+            update: { $set: { content: normalizedContent } },
+          },
+        });
+      }
+
+      const payload = update.toObject({ depopulate: false });
+      payload.content = normalizedContent;
+      return payload;
+    });
+
+    if (normalizationOps.length > 0) {
+      await ProjectUpdate.bulkWrite(normalizationOps, { ordered: false });
+      await syncProjectLatestUpdateSnapshot(projectId);
+    }
+
+    res.status(200).json(normalizedUpdates);
   } catch (error) {
     console.error("Error fetching project updates:", error);
     res.status(500).json({ message: "Server error fetching updates" });

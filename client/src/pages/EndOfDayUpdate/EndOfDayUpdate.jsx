@@ -6,6 +6,7 @@ import { DownloadIcon } from "../../components/icons/DownloadIcon"; // Assuming 
 import "./EndOfDayUpdate.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
@@ -73,6 +74,8 @@ const EndOfDayUpdate = ({ user }) => {
 
   const stripDepartmentNudge = (content) =>
     String(content || "").replace(/^\[[^\]]+\]\s*/, "").trim();
+  const getDisplayUpdateContent = (content) =>
+    stripDepartmentNudge(normalizeProjectUpdateText(content));
 
   const getUpdateSourceName = (project) => {
     const source = project?.endOfDayUpdateBy;
@@ -211,7 +214,7 @@ const EndOfDayUpdate = ({ user }) => {
         )} ${formatTime(project.details?.deliveryTime)}`;
 
         const updateContent = project.endOfDayUpdate
-          ? stripDepartmentNudge(project.endOfDayUpdate)
+          ? getDisplayUpdateContent(project.endOfDayUpdate)
           : "No updates yet";
 
         // Urgency Check
@@ -563,7 +566,7 @@ const EndOfDayUpdate = ({ user }) => {
                     <td className="update-cell">
                       {project.endOfDayUpdate ? (
                         <div className="update-content">
-                          <p>{stripDepartmentNudge(project.endOfDayUpdate)}</p>
+                          <p>{getDisplayUpdateContent(project.endOfDayUpdate)}</p>
                           {updateSourceName && (
                             <span className="update-source">{updateSourceName}</span>
                           )}

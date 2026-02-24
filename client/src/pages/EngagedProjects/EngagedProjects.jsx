@@ -11,6 +11,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
+import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -1089,7 +1090,7 @@ const EngagedProjects = ({ user }) => {
               {String(selectedProject?.endOfDayUpdate || "").trim() ? (
                 <>
                   <p className="latest-update-snapshot-content">
-                    {selectedProject.endOfDayUpdate}
+                    {normalizeProjectUpdateText(selectedProject.endOfDayUpdate)}
                   </p>
                   <p className="latest-update-snapshot-meta">
                     Last updated:{" "}
