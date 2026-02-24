@@ -75,9 +75,6 @@ const PRODUCTION_DEPARTMENTS = new Set([
   "signage",
 ]);
 
-const getProductionUsers = async () =>
-  User.find({ department: { $in: Array.from(PRODUCTION_DEPARTMENTS) } });
-
 const PAYMENT_TYPES = new Set([
   "part_payment",
   "full_payment",
@@ -106,6 +103,7 @@ const canManageBilling = (user) => {
 };
 
 const canManageMockupApproval = (user) => canManageBilling(user);
+const canManageSampleApproval = (user) => canManageBilling(user);
 
 const canEditOrderNumber = (user) => canManageBilling(user);
 
@@ -141,6 +139,16 @@ const normalizeOrderNumber = (value) => String(value || "").trim();
 const normalizeOptionalText = (value) => {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+};
+
+const parseBooleanFlag = (value, fallback = false) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  return fallback;
 };
 
 const toDateOrNull = (value) => {
@@ -2197,6 +2205,167 @@ const getProjectDisplayRef = (project) =>
 const getProjectDisplayName = (project) =>
   project?.details?.projectName || "Unnamed Project";
 const formatPaymentTypeLabel = (type = "") => toText(type).replace(/_/g, " ");
+const SAMPLE_APPROVAL_BLOCK_CODE = "PRODUCTION_SAMPLE_CLIENT_APPROVAL_REQUIRED";
+const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
+const MOCKUP_PENDING_CLIENT_APPROVAL_UPDATE_TEXT =
+  "Pending Mockup Approval from client";
+const MOCKUP_APPROVED_BY_CLIENT_UPDATE_TEXT = "Mockup Approved by client";
+const SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT =
+  "Pending Sample Approval from client";
+const SAMPLE_APPROVED_BY_CLIENT_UPDATE_TEXT = "Sample Approved by client";
+
+const getSampleApprovalStatus = (sampleApproval = {}) => {
+  const explicitStatus = toText(sampleApproval?.status).toLowerCase();
+  if (explicitStatus === "pending" || explicitStatus === "approved") {
+    return explicitStatus;
+  }
+  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) {
+    return "approved";
+  }
+  return "pending";
+};
+
+const isSampleApprovalRequired = (project = {}) =>
+  !isQuoteProject(project) && Boolean(project?.sampleRequirement?.isRequired);
+
+const isSampleApprovalSatisfied = (project = {}) => {
+  if (!isSampleApprovalRequired(project)) return true;
+  return getSampleApprovalStatus(project?.sampleApproval || {}) === "approved";
+};
+
+const getSampleApprovalGuard = (project = {}) => {
+  if (!isSampleApprovalRequired(project)) return null;
+  if (isSampleApprovalSatisfied(project)) return null;
+
+  return {
+    code: SAMPLE_APPROVAL_BLOCK_CODE,
+    missing: ["client_sample_approval"],
+    message:
+      "Client sample approval is required before completing Production stage.",
+  };
+};
+
+const getProjectProductionDepartmentFilters = (project = {}) => {
+  const projectDepartments = toDepartmentArray(project?.departments);
+  const productionDepartments = projectDepartments.filter((dept) => {
+    const canonical = canonicalizeDepartment(dept);
+    return canonical === "production";
+  });
+
+  if (productionDepartments.length === 0) {
+    return ["Production"];
+  }
+
+  return Array.from(new Set(["Production", ...productionDepartments]));
+};
+
+const getSampleNotificationRecipients = async (project = {}) => {
+  const recipients = new Set();
+
+  const leadId = toObjectIdString(project?.projectLeadId);
+  if (leadId) recipients.add(leadId);
+
+  const productionUsers = await User.find({
+    department: { $in: getProjectProductionDepartmentFilters(project) },
+  })
+    .select("_id")
+    .lean();
+  productionUsers.forEach((entry) => {
+    const userId = toObjectIdString(entry?._id);
+    if (userId) recipients.add(userId);
+  });
+
+  const adminsAndFrontDesk = await User.find({
+    $or: [{ role: "admin" }, { department: FRONT_DESK_DEPARTMENT }],
+  })
+    .select("_id")
+    .lean();
+  adminsAndFrontDesk.forEach((entry) => {
+    const userId = toObjectIdString(entry?._id);
+    if (userId) recipients.add(userId);
+  });
+
+  return Array.from(recipients);
+};
+
+const notifySampleApprovalBlocked = async ({ project, senderId }) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(senderId);
+    if (!projectId || !actorId) return;
+
+    const recipients = await getSampleNotificationRecipients(project);
+    const uniqueRecipients = Array.from(
+      new Set(
+        recipients
+          .map((recipientId) => toObjectIdString(recipientId))
+          .filter(Boolean)
+          .filter((recipientId) => recipientId !== actorId),
+      ),
+    );
+    if (!uniqueRecipients.length) return;
+
+    const message = `Caution: project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}) is blocked at Production completion. Client sample approval is still pending.`;
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        createNotification(
+          recipientId,
+          actorId,
+          projectId,
+          "SYSTEM",
+          "Production Sample Approval Required",
+          message,
+        ),
+      ),
+    );
+  } catch (error) {
+    console.error("Error notifying sample approval block:", error);
+  }
+};
+
+const notifySampleApprovalResolved = async ({
+  project,
+  senderId,
+  resolutionNote = "",
+}) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(senderId);
+    if (!projectId || !actorId) return;
+
+    const recipients = await getSampleNotificationRecipients(project);
+    const uniqueRecipients = Array.from(
+      new Set(
+        recipients
+          .map((recipientId) => toObjectIdString(recipientId))
+          .filter(Boolean)
+          .filter((recipientId) => recipientId !== actorId),
+      ),
+    );
+    if (!uniqueRecipients.length) return;
+
+    const noteText = toText(resolutionNote);
+    const message = noteText
+      ? `Client sample approval cleared for project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Production can proceed. ${noteText}`
+      : `Client sample approval cleared for project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Production can proceed.`;
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        createNotification(
+          recipientId,
+          actorId,
+          projectId,
+          "SYSTEM",
+          "Production Sample Approval Cleared",
+          message,
+        ),
+      ),
+    );
+  } catch (error) {
+    console.error("Error notifying sample approval resolution:", error);
+  }
+};
 
 const buildMockupVersionLabel = (version) => {
   const parsed = Number.parseInt(version, 10);
@@ -2204,8 +2373,8 @@ const buildMockupVersionLabel = (version) => {
   return `v${safeVersion}`;
 };
 
-const buildMockupPendingApprovalUpdateText = (version) =>
-  `Mockup ${buildMockupVersionLabel(version)} uploaded. Pending client approval.`;
+const buildMockupPendingApprovalUpdateText = () =>
+  MOCKUP_PENDING_CLIENT_APPROVAL_UPDATE_TEXT;
 
 const resolveProjectUpdateAuthorId = ({ authorId, project } = {}) => {
   const candidates = [authorId, project?.projectLeadId, project?.createdBy];
@@ -2619,6 +2788,7 @@ const createProject = async (req, res) => {
       description, // [NEW]
       details, // [NEW]
       workstreamCode,
+      sampleRequired,
     } = req.body;
 
     // Basic validation
@@ -2732,6 +2902,7 @@ const createProject = async (req, res) => {
     const normalizedSupplySource = normalizeSupplySourceSelection(
       supplySource !== undefined ? supplySource : details?.supplySource,
     );
+    const isSampleRequired = parseBooleanFlag(sampleRequired, false);
     const finalOrderId =
       normalizeOrderNumber(orderId) || (normalizedOrderRefId ? "" : generatedOrderId);
 
@@ -2785,6 +2956,17 @@ const createProject = async (req, res) => {
         (req.body.projectType === "Emergency" ? "Urgent" : "Normal"),
       quoteDetails: finalQuoteDetails,
       updates: req.body.updates || [],
+      sampleRequirement: {
+        isRequired: isSampleRequired,
+        updatedAt: new Date(),
+        updatedBy: req.user._id,
+      },
+      sampleApproval: {
+        status: "pending",
+        approvedAt: null,
+        approvedBy: null,
+        note: "",
+      },
     });
 
     // Root project in a lineage starts at version 1 and points to itself.
@@ -3967,6 +4149,23 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
+    if (newStatus === "Production Completed") {
+      const sampleGuard = getSampleApprovalGuard(project);
+      if (sampleGuard) {
+        await notifySampleApprovalBlocked({
+          project,
+          senderId: req.user._id || req.user.id,
+        });
+
+        return res.status(400).json({
+          code: sampleGuard.code,
+          targetStatus: "Production Completed",
+          missing: sampleGuard.missing,
+          message: sampleGuard.message,
+        });
+      }
+    }
+
     if (newStatus === "Departmental Engagement Completed") {
       const missingAcknowledgements = getMissingDepartmentAcknowledgements(project);
       if (missingAcknowledgements.length > 0) {
@@ -4133,15 +4332,31 @@ const updateProjectStatus = async (req, res) => {
 
     // Notify Production team when production becomes pending
     if (finalStatus === "Pending Production" && oldStatus !== finalStatus) {
-      const productionUsers = await getProductionUsers();
+      const sampleGuard = getSampleApprovalGuard(project);
+      if (sampleGuard) {
+        await createProjectSystemUpdateAndSnapshot({
+          project,
+          authorId: req.user._id || req.user.id,
+          category: "Client",
+          content: SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT,
+        });
+      }
+
+      const productionUsers = await User.find({
+        department: { $in: getProjectProductionDepartmentFilters(project) },
+      });
       for (const prodUser of productionUsers) {
         await createNotification(
           prodUser._id,
           req.user._id,
           project._id,
           "UPDATE",
-          "Production Ready",
-          `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Approved mockup is ready and production can begin.`,
+          sampleGuard
+            ? "Production Caution"
+            : "Production Ready",
+          sampleGuard
+            ? `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: client sample approval is pending. Complete sample approval before mass production.`
+            : `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Approved mockup is ready and production can begin.`,
         );
       }
     }
@@ -4398,6 +4613,282 @@ const undoPaymentVerification = async (req, res) => {
     res.json(project);
   } catch (error) {
     console.error("Error undoing payment verification:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Toggle sample requirement for a project
+// @route   PATCH /api/projects/:id/sample-requirement
+// @access  Private (Admin only)
+const updateSampleRequirement = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Only admins can toggle sample requirements.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Sample requirement is not available for quote projects.",
+      });
+    }
+
+    const nextRequired = parseBooleanFlag(
+      req.body?.isRequired,
+      Boolean(project?.sampleRequirement?.isRequired),
+    );
+    const previousRequired = Boolean(project?.sampleRequirement?.isRequired);
+    const previousGuard = getSampleApprovalGuard(project);
+
+    if (nextRequired === previousRequired) {
+      return res.json(project);
+    }
+
+    project.sampleRequirement = {
+      ...(project.sampleRequirement || {}),
+      isRequired: nextRequired,
+      updatedAt: new Date(),
+      updatedBy: req.user._id,
+    };
+
+    if (nextRequired) {
+      const currentStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+      if (currentStatus !== "approved") {
+        project.sampleApproval = {
+          status: "pending",
+          approvedAt: null,
+          approvedBy: null,
+          note: "",
+        };
+      }
+    }
+
+    const currentStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+    if (!nextRequired && currentStatus !== "approved") {
+      project.sampleApproval = {
+        ...(project.sampleApproval || {}),
+        status: "pending",
+        approvedAt: null,
+        approvedBy: null,
+        note: "",
+      };
+    }
+
+    await project.save();
+
+    const nextGuard = getSampleApprovalGuard(project);
+    const requirementActionLabel = nextRequired ? "enabled" : "disabled";
+    const isPendingSampleAtProductionStage =
+      nextRequired &&
+      project.status === "Pending Production" &&
+      getSampleApprovalStatus(project?.sampleApproval || {}) !== "approved";
+    const updateText = isPendingSampleAtProductionStage
+      ? SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT
+      : nextRequired
+        ? `Sample requirement enabled for project #${getProjectDisplayRef(project)}. Client sample approval is now required before Production can be completed.`
+        : `Sample requirement disabled for project #${getProjectDisplayRef(project)}. Production can proceed without client sample approval.`;
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      `Sample requirement ${requirementActionLabel}.`,
+      {
+        sampleRequirement: {
+          previousRequired,
+          nextRequired,
+          approvalStatus: getSampleApprovalStatus(project?.sampleApproval || {}),
+        },
+      },
+    );
+
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Client",
+      content: updateText,
+    });
+
+    if (!previousGuard && nextGuard) {
+      await notifySampleApprovalBlocked({
+        project,
+        senderId: req.user._id || req.user.id,
+      });
+    }
+
+    if (previousGuard && !nextGuard) {
+      await notifySampleApprovalResolved({
+        project,
+        senderId: req.user._id || req.user.id,
+        resolutionNote: "Sample requirement was turned off by admin.",
+      });
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error toggling sample requirement:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Confirm client sample approval for production
+// @route   POST /api/projects/:id/sample-approval/confirm
+// @access  Private (Front Desk or Admin)
+const confirmProjectSampleApproval = async (req, res) => {
+  try {
+    if (!canManageSampleApproval(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to confirm sample approval.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Sample approval is not required for quote projects.",
+      });
+    }
+
+    if (!isSampleApprovalRequired(project)) {
+      return res.status(400).json({
+        message: "Sample requirement is currently turned off for this project.",
+      });
+    }
+
+    const previousGuard = getSampleApprovalGuard(project);
+    const currentStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+    if (currentStatus === "approved") {
+      return res.status(400).json({
+        message: "Client sample approval has already been confirmed.",
+      });
+    }
+
+    project.sampleApproval = {
+      ...(project.sampleApproval || {}),
+      status: "approved",
+      approvedAt: new Date(),
+      approvedBy: req.user._id,
+      note: toText(req.body?.note),
+    };
+
+    await project.save();
+    const nextGuard = getSampleApprovalGuard(project);
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Client sample approval confirmed.",
+      {
+        sampleApproval: {
+          status: "approved",
+          approvedAt: project.sampleApproval?.approvedAt || null,
+        },
+      },
+    );
+
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Client",
+      content: SAMPLE_APPROVED_BY_CLIENT_UPDATE_TEXT,
+    });
+
+    if (previousGuard && !nextGuard) {
+      await notifySampleApprovalResolved({
+        project,
+        senderId: req.user._id || req.user.id,
+      });
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error confirming sample approval:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Reset client sample approval to pending
+// @route   POST /api/projects/:id/sample-approval/reset
+// @access  Private (Front Desk or Admin)
+const resetProjectSampleApproval = async (req, res) => {
+  try {
+    if (!canManageSampleApproval(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to reset sample approval.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Sample approval is not required for quote projects.",
+      });
+    }
+
+    if (!isSampleApprovalRequired(project)) {
+      return res.status(400).json({
+        message: "Sample requirement is currently turned off for this project.",
+      });
+    }
+
+    const previousGuard = getSampleApprovalGuard(project);
+    const currentStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+    if (currentStatus !== "approved") {
+      return res.status(400).json({
+        message: "Sample approval is already pending.",
+      });
+    }
+
+    project.sampleApproval = {
+      ...(project.sampleApproval || {}),
+      status: "pending",
+      approvedAt: null,
+      approvedBy: null,
+      note: "",
+    };
+
+    await project.save();
+    const nextGuard = getSampleApprovalGuard(project);
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Client sample approval reset to pending.",
+      {
+        sampleApproval: {
+          status: "pending",
+          resetBy: req.user._id,
+        },
+      },
+    );
+
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Client",
+      content: SAMPLE_PENDING_CLIENT_APPROVAL_UPDATE_TEXT,
+    });
+
+    if (!previousGuard && nextGuard) {
+      await notifySampleApprovalBlocked({
+        project,
+        senderId: req.user._id || req.user.id,
+      });
+    }
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error resetting sample approval:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -4685,6 +5176,13 @@ const approveProjectMockup = async (req, res) => {
         },
       },
     );
+
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Graphics",
+      content: MOCKUP_APPROVED_BY_CLIENT_UPDATE_TEXT,
+    });
 
     await notifyMockupApprovalConfirmed({
       project,
@@ -6194,7 +6692,9 @@ const updateProject = async (req, res) => {
 
     // [New] Notify Production Team on Acceptance
     if (updatedProject.status === "Pending Production") {
-      const productionUsers = await getProductionUsers();
+      const productionUsers = await User.find({
+        department: { $in: getProjectProductionDepartmentFilters(updatedProject) },
+      });
       for (const prodUser of productionUsers) {
         await createNotification(
           prodUser._id,
@@ -6348,6 +6848,18 @@ const reopenProject = async (req, res) => {
         sentBy: null,
       },
       paymentVerifications: [],
+      sampleRequirement: {
+        ...(sourceObject.sampleRequirement || {}),
+        isRequired: Boolean(sourceObject?.sampleRequirement?.isRequired),
+        updatedAt: now,
+        updatedBy: req.user._id,
+      },
+      sampleApproval: {
+        status: "pending",
+        approvedAt: null,
+        approvedBy: null,
+        note: "",
+      },
       mockup: {},
       endOfDayUpdate: "",
       endOfDayUpdateDate: null,
@@ -6754,6 +7266,9 @@ module.exports = {
   verifyPayment,
   undoInvoiceSent,
   undoPaymentVerification,
+  updateSampleRequirement,
+  confirmProjectSampleApproval,
+  resetProjectSampleApproval,
   uploadProjectMockup,
   approveProjectMockup,
   rejectProjectMockup,

@@ -156,6 +156,39 @@
   margin-top: 4px;
 }
 
+.sample-requirement-section {
+  margin-top: 1rem;
+}
+
+.sample-requirement-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.sample-requirement-toggle input {
+  margin-top: 0.1rem;
+}
+
+.sample-requirement-toggle.active {
+  border-color: rgba(190, 24, 93, 0.35);
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.sample-requirement-note {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
 /* Footer */
 .step-footer {
   padding: 16px 24px;

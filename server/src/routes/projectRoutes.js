@@ -44,6 +44,9 @@ const {
   verifyPayment,
   undoInvoiceSent,
   undoPaymentVerification,
+  updateSampleRequirement,
+  confirmProjectSampleApproval,
+  resetProjectSampleApproval,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -257,6 +260,24 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   undoPaymentVerification,
+);
+router.patch(
+  "/:id/sample-requirement",
+  protect,
+  enforceProjectNotOnHold,
+  updateSampleRequirement,
+);
+router.post(
+  "/:id/sample-approval/confirm",
+  protect,
+  enforceProjectNotOnHold,
+  confirmProjectSampleApproval,
+);
+router.post(
+  "/:id/sample-approval/reset",
+  protect,
+  enforceProjectNotOnHold,
+  resetProjectSampleApproval,
 );
 router.get("/:id", protect, getProjectById);
 router.delete("/:id", protect, enforceProjectNotOnHold, deleteProject); // Delete Project

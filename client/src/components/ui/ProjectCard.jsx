@@ -27,6 +27,19 @@ const getMockupApprovalStatus = (approval = {}) => {
   return "pending";
 };
 
+const getSampleApprovalStatus = (sampleApproval = {}) => {
+  const explicit = String(sampleApproval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved") {
+    return explicit;
+  }
+  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) {
+    return "approved";
+  }
+  return "pending";
+};
+
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   // Helpers
   const formatDate = (dateString) => {
@@ -192,10 +205,20 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const mockupApprovalStatus = getMockupApprovalStatus(
     project?.mockup?.clientApproval || {},
   );
+  const sampleRequirementEnabled =
+    project?.projectType !== "Quote" &&
+    Boolean(project?.sampleRequirement?.isRequired);
+  const sampleApprovalStatus = getSampleApprovalStatus(
+    project?.sampleApproval || {},
+  );
   const showPendingClientApprovalTag =
     project?.status === "Pending Mockup" &&
     hasUploadedMockup &&
     mockupApprovalStatus === "pending";
+  const showPendingSampleApprovalTag =
+    project?.status === "Pending Production" &&
+    sampleRequirementEnabled &&
+    sampleApprovalStatus !== "approved";
 
   return (
     <div
@@ -237,6 +260,11 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               {mockupVersionLabel
                 ? `Mockup ${mockupVersionLabel} client approval pending`
                 : "Mockup client approval pending"}
+            </span>
+          )}
+          {showPendingSampleApprovalTag && (
+            <span className="status-badge sample-client-pending">
+              Client sample approval pending
             </span>
           )}
         </div>

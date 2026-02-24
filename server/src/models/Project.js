@@ -366,6 +366,24 @@ const ProjectSchema = new mongoose.Schema(
         verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       },
     ],
+    sampleRequirement: {
+      isRequired: {
+        type: Boolean,
+        default: false,
+      },
+      updatedAt: Date,
+      updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
+    sampleApproval: {
+      status: {
+        type: String,
+        enum: ["pending", "approved"],
+        default: "pending",
+      },
+      approvedAt: Date,
+      approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      note: String,
+    },
     mockup: {
       fileUrl: String,
       fileName: String,

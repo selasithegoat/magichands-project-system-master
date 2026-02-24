@@ -80,6 +80,7 @@ const BILLING_REQUIREMENT_LABELS = {
   full_payment_or_authorized:
     "Full payment or authorization verification",
 };
+const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
 
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
@@ -144,6 +145,19 @@ const getMockupApprovalStatus = (approval = {}) => {
   return "pending";
 };
 
+const getSampleApprovalStatus = (sampleApproval = {}) => {
+  const explicit = String(sampleApproval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved") {
+    return explicit;
+  }
+  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) {
+    return "approved";
+  }
+  return "pending";
+};
+
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -174,11 +188,13 @@ const EngagedProjectActions = ({ user }) => {
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [billingGuardModal, setBillingGuardModal] = useState({
     open: false,
+    title: "Billing Caution",
     target: null,
     message: "",
     missingLabels: [],
   });
   const [billingGuardSubmitting, _setBillingGuardSubmitting] = useState(false);
+  const [dismissedGuardKey, setDismissedGuardKey] = useState("");
 
   const [showMockupModal, setShowMockupModal] = useState(false);
   const [mockupTarget, setMockupTarget] = useState(null);
@@ -293,6 +309,33 @@ const EngagedProjectActions = ({ user }) => {
     paymentChecksEnabled &&
     ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
     pendingDeliveryMissing.length > 0;
+  const sampleRequirementEnabled =
+    project &&
+    paymentChecksEnabled &&
+    Boolean(project?.sampleRequirement?.isRequired);
+  const sampleApprovalStatus = getSampleApprovalStatus(
+    project?.sampleApproval || {},
+  );
+  const sampleApprovalPending =
+    sampleRequirementEnabled && sampleApprovalStatus !== "approved";
+  const showPendingProductionSampleWarning =
+    project &&
+    sampleApprovalPending &&
+    project.status === "Pending Production";
+  const sampleMissingLabels = showPendingProductionSampleWarning
+    ? [SAMPLE_APPROVAL_MISSING_LABEL]
+    : [];
+  const currentGuardKey = project?._id
+    ? `${project._id}|${project.status}|${
+        showPendingProductionSampleWarning
+          ? sampleMissingLabels.join("|")
+          : showPendingProductionWarning
+            ? pendingProductionMissingLabels.join("|")
+            : showPendingDeliveryWarning
+              ? pendingDeliveryMissingLabels.join("|")
+              : ""
+      }`
+    : "";
 
   const isProjectLeadForProject = useMemo(() => {
     const currentUserId = normalizeObjectId(user?._id || user?.id);
@@ -503,10 +546,26 @@ const EngagedProjectActions = ({ user }) => {
         setCompleteInput("");
         setBillingGuardModal({
           open: true,
+          title: "Billing Caution",
           target: { project: targetProject, action },
           message:
             errorData.message || "Billing prerequisites are required for this step.",
           missingLabels: formatBillingRequirementLabels(errorData.missing || []),
+        });
+        return false;
+      }
+      if (errorData?.code === "PRODUCTION_SAMPLE_CLIENT_APPROVAL_REQUIRED") {
+        setShowCompleteModal(false);
+        setCompleteSubmitting(false);
+        setCompleteInput("");
+        setBillingGuardModal({
+          open: true,
+          title: "Sample Caution",
+          target: { project: targetProject, action },
+          message:
+            errorData.message ||
+            "Client sample approval is required before Production can be completed.",
+          missingLabels: [SAMPLE_APPROVAL_MISSING_LABEL],
         });
         return false;
       }
@@ -732,13 +791,45 @@ const EngagedProjectActions = ({ user }) => {
 
   const closeBillingGuardModal = () => {
     if (billingGuardSubmitting) return;
+    const missingKey = (billingGuardModal.missingLabels || []).join("|");
+    if (project?._id) {
+      setDismissedGuardKey(`${project._id}|${project.status}|${missingKey}`);
+    }
     setBillingGuardModal({
       open: false,
+      title: "Billing Caution",
       target: null,
       message: "",
       missingLabels: [],
     });
   };
+
+  useEffect(() => {
+    if (!project?._id || billingGuardModal.open) return;
+
+    if (
+      showPendingProductionSampleWarning &&
+      currentGuardKey !== dismissedGuardKey
+    ) {
+      setBillingGuardModal({
+        open: true,
+        title: "Sample Caution",
+        target: null,
+        message:
+          "Client sample approval is pending. Confirm approval before Production can be completed.",
+        missingLabels: sampleMissingLabels,
+      });
+      return;
+    }
+  }, [
+    project?._id,
+    project?.status,
+    billingGuardModal.open,
+    showPendingProductionSampleWarning,
+    currentGuardKey,
+    dismissedGuardKey,
+    sampleMissingLabels,
+  ]);
 
   const openCompleteModal = (targetProject, action) => {
     if (isProjectLeadForProject) {
@@ -963,6 +1054,17 @@ const EngagedProjectActions = ({ user }) => {
               {paymentLabels[type] || type}
             </span>
           ))}
+          {sampleRequirementEnabled && (
+            <span
+              className={`engaged-tag ${
+                sampleApprovalPending ? "caution" : "invoice"
+              }`}
+            >
+              {sampleApprovalPending
+                ? "Sample Approval Pending"
+                : "Sample Approved"}
+            </span>
+          )}
           {showPendingProductionWarning && (
             <span className="engaged-tag caution">
               Pending Production Blocked:{" "}
@@ -1102,6 +1204,13 @@ const EngagedProjectActions = ({ user }) => {
                   </div>
                 )}
 
+                {isProductionSection && showPendingProductionSampleWarning && (
+                  <div className="engaged-warning-banner">
+                    Caution: client sample approval is pending. Confirm approval
+                    before Production can be completed.
+                  </div>
+                )}
+
                 {isStoresSection && showPendingDeliveryWarning && (
                   <div className="engaged-warning-banner">
                     Caution: before moving to Pending Delivery/Pickup, confirm{" "}
@@ -1175,11 +1284,17 @@ const EngagedProjectActions = ({ user }) => {
 
                   {action && (() => {
                     const isPending = project.status === action.pending;
+                    const isProductionAction =
+                      action.complete === "Production Completed";
                     const isStoresAction = action.complete === "Packaging Completed";
                     const blockedByBilling =
                       paymentChecksEnabled &&
                       isStoresAction &&
                       pendingDeliveryMissing.length > 0;
+                    const blockedBySample =
+                      paymentChecksEnabled &&
+                      isProductionAction &&
+                      sampleApprovalPending;
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
@@ -1201,6 +1316,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (isProjectLeadForProject) {
                       disabledReason =
                         "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (blockedBySample) {
+                      disabledReason =
+                        "Client sample approval is required before Production can be completed.";
                     } else if (blockedByBilling) {
                       disabledReason = `Before Pending Delivery/Pickup, confirm ${pendingDeliveryMissingLabels.join(", ")}.`;
                     }
@@ -1274,7 +1392,8 @@ const EngagedProjectActions = ({ user }) => {
                             disabled={
                               !isPending ||
                               isUpdating ||
-                              isProjectLeadForProject
+                              isProjectLeadForProject ||
+                              blockedBySample
                             }
                             title={disabledReason || "Confirm stage completion"}
                           >
@@ -1298,6 +1417,12 @@ const EngagedProjectActions = ({ user }) => {
                           <div className="engaged-action-meta">
                             Full payment or authorization is required before
                             Pending Delivery/Pickup.
+                          </div>
+                        )}
+                        {blockedBySample && (
+                          <div className="engaged-action-meta">
+                            Client sample approval is required before
+                            Production can be completed.
                           </div>
                         )}
                         {isMockupAction && mockupUrl && (
@@ -1545,7 +1670,9 @@ const EngagedProjectActions = ({ user }) => {
       {billingGuardModal.open && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 className="modal-title">Billing Caution</h3>
+            <h3 className="modal-title">
+              {billingGuardModal.title || "Billing Caution"}
+            </h3>
             <p className="acknowledge-confirm-text">
               <strong>Project:</strong> {projectId} - {projectName}
             </p>

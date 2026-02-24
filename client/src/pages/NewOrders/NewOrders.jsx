@@ -25,6 +25,7 @@ const NewOrders = () => {
     priority: location.state?.priority || "Normal",
     projectLeadId: "",
     assistantLeadId: "",
+    sampleRequired: false,
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -144,6 +145,7 @@ const NewOrders = () => {
       projectLeadId: project.projectLeadId?._id || project.projectLeadId || "",
       assistantLeadId:
         project.assistantLeadId?._id || project.assistantLeadId || "",
+      sampleRequired: Boolean(project.sampleRequirement?.isRequired),
     });
     setExistingSampleImage(project.details?.sampleImage || "");
     setExistingAttachments(project.details?.attachments || []);
@@ -282,6 +284,9 @@ const NewOrders = () => {
     formPayload.append("projectType", formData.projectType);
     formPayload.append("priority", formData.priority);
     formPayload.append("items", JSON.stringify(formData.items));
+    if (!editingId) {
+      formPayload.append("sampleRequired", String(Boolean(formData.sampleRequired)));
+    }
 
     // Handle Existing Files
     if (existingSampleImage) {
@@ -341,6 +346,7 @@ const NewOrders = () => {
             priority: formData.priority,
             projectLeadId: "",
             assistantLeadId: "",
+            sampleRequired: false,
           });
           setSelectedFiles([]);
           setExistingSampleImage("");
@@ -627,6 +633,31 @@ const NewOrders = () => {
                   placeholder="High-level summary (e.g. '3 Large banners for stage background')"
                   rows="2"
                 ></textarea>
+              </div>
+
+              <div className="form-group sample-requirement-group">
+                <label className="sample-requirement-control">
+                  <input
+                    type="checkbox"
+                    name="sampleRequired"
+                    checked={Boolean(formData.sampleRequired)}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        sampleRequired: e.target.checked,
+                      }))
+                    }
+                    disabled={Boolean(editingId)}
+                  />
+                  <span>
+                    Require client sample approval before Production can be
+                    completed
+                  </span>
+                </label>
+                <small className="field-help-text">
+                  Enable when client must approve a production sample before mass
+                  production.
+                </small>
               </div>
 
               <div className="form-group">

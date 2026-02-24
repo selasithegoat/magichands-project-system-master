@@ -227,6 +227,16 @@
   text-align: right;
 }
 
+.status-badge.sample-client-pending {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+  font-size: 11px;
+  line-height: 1.2;
+  max-width: 220px;
+  text-align: right;
+}
+
 .card-menu-btn {
   color: #94a3b8;
   cursor: pointer;

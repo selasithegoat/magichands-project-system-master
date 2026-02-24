@@ -364,6 +364,28 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             />
           </div>
 
+          <div className="sample-requirement-section">
+            <label className="section-label">Production Sample Requirement</label>
+            <label
+              className={`sample-requirement-toggle ${
+                formData.sampleRequired ? "active" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(formData.sampleRequired)}
+                onChange={(e) => handleChange("sampleRequired", e.target.checked)}
+                disabled={isEditing}
+              />
+              <span>
+                Require client sample approval before Production can be completed
+              </span>
+            </label>
+            <small className="sample-requirement-note">
+              Enable this when client must approve a production sample first.
+            </small>
+          </div>
+
           {/* Reference Materials Section */}
           <div className="reference-section" style={{ marginTop: "1.5rem" }}>
             <label className="section-label">Reference Materials</label>

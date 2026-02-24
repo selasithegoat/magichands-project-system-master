@@ -149,6 +149,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       productionRisks: [], // Step 4
       status: "Order Confirmed", // Default for new, overwritten if editing
       assistantLeadId: "", // Optional assistant lead
+      sampleRequired: false,
     },
   };
 
@@ -290,6 +291,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
             // Keep current workflow status so submit can detect lead acceptance transition.
             status: data.status,
+            sampleRequired: Boolean(data.sampleRequirement?.isRequired),
           };
 
           // If we could map lead name to object, great. If not, simple string might fail Select.

@@ -54,6 +54,7 @@ const BILLING_REQUIREMENT_LABELS = {
   full_payment_or_authorized:
     "Full payment or authorization verification",
 };
+const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
 
 const getPaymentTypeSet = (project) =>
   new Set(
@@ -98,6 +99,19 @@ const getMockupApprovalStatus = (approval = {}) => {
   if (approval?.isApproved) return "approved";
   if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
     return "rejected";
+  }
+  return "pending";
+};
+
+const getSampleApprovalStatus = (sampleApproval = {}) => {
+  const explicit = String(sampleApproval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved") {
+    return explicit;
+  }
+  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) {
+    return "approved";
   }
   return "pending";
 };
@@ -271,7 +285,10 @@ const ProjectDetails = ({ user }) => {
     overrideButtonText: "Continue with Override",
   });
   const [billingGuardSubmitting, setBillingGuardSubmitting] = useState(false);
+  const [dismissedGuardKey, setDismissedGuardKey] = useState("");
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
+  const [isTogglingSampleRequirement, setIsTogglingSampleRequirement] =
+    useState(false);
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -316,6 +333,10 @@ const ProjectDetails = ({ user }) => {
 
   const closeBillingGuardModal = () => {
     if (billingGuardSubmitting) return;
+    const missingKey = (billingGuardModal.missingLabels || []).join("|");
+    if (project?._id) {
+      setDismissedGuardKey(`${project._id}|${project.status}|${missingKey}`);
+    }
     setBillingGuardModal({
       open: false,
       title: "Billing Caution",
@@ -424,6 +445,25 @@ const ProjectDetails = ({ user }) => {
           return false;
         }
 
+        if (errorData?.code === "PRODUCTION_SAMPLE_CLIENT_APPROVAL_REQUIRED") {
+          openBillingGuardModal(
+            {
+              message:
+                errorData?.message ||
+                "Client sample approval is required before Production can be completed.",
+            },
+            "",
+            {
+              title: "Sample Caution",
+              canOverride: false,
+              missingLabels: [SAMPLE_APPROVAL_MISSING_LABEL],
+              fallbackMessage:
+                "Client sample approval is required before Production can be completed.",
+            },
+          );
+          return false;
+        }
+
         throw new Error(errorData.message || "Failed to update status");
       }
 
@@ -455,6 +495,49 @@ const ProjectDetails = ({ user }) => {
     setBillingGuardSubmitting(false);
     if (changed) {
       closeBillingGuardModal();
+    }
+  };
+
+  const handleToggleSampleRequirement = async (nextRequired) => {
+    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (isTogglingSampleRequirement) return;
+    if (!ensureProjectIsEditable()) return;
+
+    setIsTogglingSampleRequirement(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${id}/sample-requirement?source=admin`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ isRequired: Boolean(nextRequired) }),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update sample requirement.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+    } catch (error) {
+      console.error("Error toggling sample requirement:", error);
+      openBillingGuardModal(
+        {
+          message: error.message || "Failed to update sample requirement.",
+        },
+        "",
+        {
+          title: "Sample Caution",
+          canOverride: false,
+          missingLabels: [],
+          fallbackMessage: "Failed to update sample requirement.",
+        },
+      );
+    } finally {
+      setIsTogglingSampleRequirement(false);
     }
   };
 
@@ -934,6 +1017,100 @@ const ProjectDetails = ({ user }) => {
     };
   }, [countdownNowMs, deliveryDateValue, deliveryDeadline]);
 
+  useEffect(() => {
+    if (!project?._id || billingGuardModal.open) return;
+
+    const quoteProject = project.projectType === "Quote";
+    const pendingProductionMissing = quoteProject
+      ? []
+      : getPendingProductionBillingMissing(project);
+    const pendingDeliveryMissing = quoteProject
+      ? []
+      : getPendingDeliveryBillingMissing(project);
+    const pendingProductionMissingLabels = formatBillingMissingLabels(
+      pendingProductionMissing,
+    );
+    const pendingDeliveryMissingLabels = formatBillingMissingLabels(
+      pendingDeliveryMissing,
+    );
+    const showPendingProductionWarning =
+      !quoteProject &&
+      ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+      pendingProductionMissing.length > 0;
+    const showPendingDeliveryWarning =
+      !quoteProject &&
+      ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
+      pendingDeliveryMissing.length > 0;
+
+    const sampleRequirementEnabled =
+      !quoteProject && Boolean(project?.sampleRequirement?.isRequired);
+    const sampleApprovalStatus = getSampleApprovalStatus(
+      project?.sampleApproval || {},
+    );
+    const showPendingProductionSampleWarning =
+      sampleRequirementEnabled &&
+      project.status === "Pending Production" &&
+      sampleApprovalStatus !== "approved";
+    const sampleMissingLabels = showPendingProductionSampleWarning
+      ? [SAMPLE_APPROVAL_MISSING_LABEL]
+      : [];
+
+    const guardKey = `${project._id}|${project.status}|${
+      showPendingProductionSampleWarning
+        ? sampleMissingLabels.join("|")
+        : showPendingProductionWarning
+          ? pendingProductionMissingLabels.join("|")
+          : showPendingDeliveryWarning
+            ? pendingDeliveryMissingLabels.join("|")
+            : ""
+    }`;
+
+    if (
+      showPendingProductionSampleWarning &&
+      guardKey !== dismissedGuardKey
+    ) {
+      openBillingGuardModal(
+        {
+          message:
+            "Client sample approval is pending. Confirm approval before Production can be completed.",
+          missing: ["client_sample_approval"],
+        },
+        "Production Completed",
+        {
+          title: "Sample Caution",
+          canOverride: false,
+          missingLabels: sampleMissingLabels,
+          fallbackMessage:
+            "Client sample approval is pending. Confirm approval before Production can be completed.",
+        },
+      );
+      return;
+    }
+
+    if (showPendingProductionWarning && guardKey !== dismissedGuardKey) {
+      openBillingGuardModal(
+        {
+          message:
+            "Billing prerequisites are required before moving to Pending Production.",
+          missing: pendingProductionMissing,
+        },
+        "Pending Production",
+      );
+      return;
+    }
+
+    if (showPendingDeliveryWarning && guardKey !== dismissedGuardKey) {
+      openBillingGuardModal(
+        {
+          message:
+            "Billing prerequisites are required before moving to Pending Delivery/Pickup.",
+          missing: pendingDeliveryMissing,
+        },
+        "Pending Delivery/Pickup",
+      );
+    }
+  }, [project, billingGuardModal.open, dismissedGuardKey]);
+
   if (loading) {
     return (
       <div style={{ padding: "2rem", color: "var(--text-secondary)" }}>
@@ -1095,6 +1272,27 @@ const ProjectDetails = ({ user }) => {
   const pendingDeliveryMissingLabels = formatBillingMissingLabels(
     pendingDeliveryMissing,
   );
+  const sampleRequirementEnabled =
+    !isQuoteProject && Boolean(project?.sampleRequirement?.isRequired);
+  const sampleApprovalStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+  const showPendingProductionSampleWarning =
+    sampleRequirementEnabled &&
+    project.status === "Pending Production" &&
+    sampleApprovalStatus !== "approved";
+  const sampleMissingLabels = showPendingProductionSampleWarning
+    ? [SAMPLE_APPROVAL_MISSING_LABEL]
+    : [];
+  const currentGuardKey = project?._id
+    ? `${project._id}|${project.status}|${
+        showPendingProductionSampleWarning
+          ? sampleMissingLabels.join("|")
+          : showPendingProductionWarning
+            ? pendingProductionMissingLabels.join("|")
+            : showPendingDeliveryWarning
+              ? pendingDeliveryMissingLabels.join("|")
+              : ""
+      }`
+    : "";
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
@@ -1245,6 +1443,22 @@ const ProjectDetails = ({ user }) => {
                   <>
                     <button
                       type="button"
+                      className={`hold-toggle-btn sample ${
+                        sampleRequirementEnabled ? "sample-on" : "sample-off"
+                      }`}
+                      onClick={() =>
+                        handleToggleSampleRequirement(!sampleRequirementEnabled)
+                      }
+                      disabled={isTogglingSampleRequirement || isTogglingHold}
+                    >
+                      {isTogglingSampleRequirement
+                        ? "Updating Sample..."
+                        : sampleRequirementEnabled
+                          ? "Sample Required: ON"
+                          : "Sample Required: OFF"}
+                    </button>
+                    <button
+                      type="button"
                       className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
                       onClick={handleHoldActionClick}
                       disabled={isTogglingHold || isCancelling}
@@ -1295,6 +1509,17 @@ const ProjectDetails = ({ user }) => {
                     {paymentLabels[type] || type}
                   </span>
                 ))}
+              {sampleRequirementEnabled && (
+                <span
+                  className={`billing-tag ${
+                    showPendingProductionSampleWarning ? "caution" : "invoice"
+                  }`}
+                >
+                  {sampleApprovalStatus === "approved"
+                    ? "Sample Approved"
+                    : "Sample Approval Pending"}
+                </span>
+              )}
               {showPendingProductionWarning && (
                 <span className="billing-tag caution">
                   Pending Production Blocked:{" "}
@@ -1311,6 +1536,12 @@ const ProjectDetails = ({ user }) => {
               <div className="payment-warning critical">
                 Caution: before moving to Pending Production, confirm{" "}
                 {pendingProductionMissingLabels.join(", ")}.
+              </div>
+            )}
+            {showPendingProductionSampleWarning && (
+              <div className="payment-warning critical">
+                Caution: client sample approval is pending. Confirm approval
+                before Production can be completed.
               </div>
             )}
             {showPendingDeliveryWarning && (

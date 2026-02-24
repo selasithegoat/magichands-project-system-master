@@ -150,6 +150,24 @@
   color: #166534;
 }
 
+.hold-toggle-btn.sample {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.hold-toggle-btn.sample.sample-on {
+  background: #fff1f2;
+  border-color: #fda4af;
+  color: #9f1239;
+}
+
+.hold-toggle-btn.sample.sample-off {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
 .hold-toggle-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;

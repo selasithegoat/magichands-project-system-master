@@ -13,6 +13,10 @@ const MOCKUP_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved this mockup";
 const MOCKUP_REJECTION_CONFIRM_PHRASE =
   "I confirm the client rejected this mockup";
+const SAMPLE_APPROVAL_CONFIRM_PHRASE =
+  "I confirm the client approved the production sample";
+const SAMPLE_APPROVAL_RESET_PHRASE =
+  "I confirm sample approval should be reset to pending";
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -122,6 +126,19 @@ const getMockupApprovalStatus = (approval = {}) => {
   if (approval?.isApproved) return "approved";
   if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
     return "rejected";
+  }
+  return "pending";
+};
+
+const getSampleApprovalStatus = (sampleApproval = {}) => {
+  const explicit = String(sampleApproval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved") {
+    return explicit;
+  }
+  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) {
+    return "approved";
   }
   return "pending";
 };
@@ -264,6 +281,13 @@ const OrderActions = () => {
   const [mockupRejectionInput, setMockupRejectionInput] = useState("");
   const [mockupRejectionReason, setMockupRejectionReason] = useState("");
   const [mockupRejectionSubmitting, setMockupRejectionSubmitting] =
+    useState(false);
+  const [sampleApprovalModal, setSampleApprovalModal] = useState(false);
+  const [sampleApprovalInput, setSampleApprovalInput] = useState("");
+  const [sampleApprovalSubmitting, setSampleApprovalSubmitting] = useState(false);
+  const [sampleApprovalResetModal, setSampleApprovalResetModal] = useState(false);
+  const [sampleApprovalResetInput, setSampleApprovalResetInput] = useState("");
+  const [sampleApprovalResetSubmitting, setSampleApprovalResetSubmitting] =
     useState(false);
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
@@ -458,6 +482,13 @@ const OrderActions = () => {
     ? QUOTE_UNDO_PHRASE
     : INVOICE_UNDO_PHRASE;
   const canManageMockupApproval = canManageBilling && !isQuoteProject;
+  const sampleRequirementEnabled =
+    !isQuoteProject && Boolean(project?.sampleRequirement?.isRequired);
+  const sampleApprovalStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+  const sampleApprovalConfirmed =
+    sampleRequirementEnabled && sampleApprovalStatus === "approved";
+  const sampleApprovalPending =
+    sampleRequirementEnabled && sampleApprovalStatus !== "approved";
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -468,6 +499,9 @@ const OrderActions = () => {
     }
     if (targetStatus === "Pending Production") {
       return "Confirm invoice and payment now before production can proceed.";
+    }
+    if (targetStatus === "Production Sample Approval") {
+      return "Confirm client sample approval now before production completion can proceed.";
     }
     if (targetStatus === "Pending Delivery/Pickup") {
       return "Confirm full payment or authorization now before delivery can proceed.";
@@ -488,6 +522,8 @@ const OrderActions = () => {
     const resolvedTitle =
       targetStatus === "Mockup Completed"
         ? "Mockup Caution"
+        : targetStatus === "Production Sample Approval"
+          ? "Sample Caution"
         : "Billing Caution";
 
     setBillingGuardModal({
@@ -1095,6 +1131,112 @@ const OrderActions = () => {
     }
   };
 
+  const openSampleApprovalModal = () => {
+    if (!project || !canManageBilling || !sampleRequirementEnabled) return;
+    setSampleApprovalInput("");
+    setSampleApprovalModal(true);
+  };
+
+  const closeSampleApprovalModal = () => {
+    if (sampleApprovalSubmitting) return;
+    setSampleApprovalModal(false);
+    setSampleApprovalInput("");
+  };
+
+  const openSampleApprovalResetModal = () => {
+    if (!project || !canManageBilling || !sampleRequirementEnabled) return;
+    setSampleApprovalResetInput("");
+    setSampleApprovalResetModal(true);
+  };
+
+  const closeSampleApprovalResetModal = () => {
+    if (sampleApprovalResetSubmitting) return;
+    setSampleApprovalResetModal(false);
+    setSampleApprovalResetInput("");
+  };
+
+  const handleConfirmSampleApproval = async () => {
+    if (
+      !project ||
+      !canManageBilling ||
+      !sampleRequirementEnabled ||
+      sampleApprovalInput.trim() !== SAMPLE_APPROVAL_CONFIRM_PHRASE
+    ) {
+      return;
+    }
+
+    setSampleApprovalSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/sample-approval/confirm`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Client sample approval confirmed.", "success");
+        closeSampleApprovalModal();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to confirm sample approval.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Sample approval confirm error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setSampleApprovalSubmitting(false);
+    }
+  };
+
+  const handleConfirmSampleApprovalReset = async () => {
+    if (
+      !project ||
+      !canManageBilling ||
+      !sampleRequirementEnabled ||
+      sampleApprovalResetInput.trim() !== SAMPLE_APPROVAL_RESET_PHRASE
+    ) {
+      return;
+    }
+
+    setSampleApprovalResetSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/sample-approval/reset`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Client sample approval reset to pending.", "success");
+        closeSampleApprovalResetModal();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to reset sample approval.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Sample approval reset error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setSampleApprovalResetSubmitting(false);
+    }
+  };
+
   const canManageOrderRevision = canManageBilling;
   const orderRevisionDirty = useMemo(() => {
     if (!project) return false;
@@ -1267,6 +1409,11 @@ const OrderActions = () => {
     !isQuoteProject &&
     ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
     pendingDeliveryMissing.length > 0;
+  const showSampleApprovalWarning =
+    project &&
+    !isQuoteProject &&
+    project.status === "Pending Production" &&
+    sampleApprovalPending;
   const showMockupApprovalWarning =
     project &&
     !isQuoteProject &&
@@ -1285,9 +1432,14 @@ const OrderActions = () => {
     showMockupRejectionWarning && latestMockupVersion
       ? [`Rejected mockup ${latestMockupVersionLabel}`]
       : [];
+  const sampleApprovalMissingLabels = showSampleApprovalWarning
+    ? ["Client sample approval"]
+    : [];
   const currentBillingGuardKey = project?._id
     ? `${project._id}|${project.status}|${
-        showPendingProductionWarning
+        showSampleApprovalWarning
+          ? sampleApprovalMissingLabels.join("|")
+          : showPendingProductionWarning
           ? pendingProductionMissingLabels.join("|")
           : showPendingDeliveryWarning
             ? pendingDeliveryMissingLabels.join("|")
@@ -1301,6 +1453,20 @@ const OrderActions = () => {
 
   useEffect(() => {
     if (!project || isQuoteProject || billingGuardModal.open) return;
+
+    if (
+      showSampleApprovalWarning &&
+      currentBillingGuardKey !== dismissedBillingGuardKey
+    ) {
+      openBillingGuardModal({
+        message:
+          "Confirm client sample approval now before production completion can proceed.",
+        missing: sampleApprovalMissingLabels,
+        targetStatus: "Production Sample Approval",
+        forceCommandTone: true,
+      });
+      return;
+    }
 
     if (
       showPendingProductionWarning &&
@@ -1361,12 +1527,14 @@ const OrderActions = () => {
     project?.status,
     isQuoteProject,
     billingGuardModal.open,
+    showSampleApprovalWarning,
     showPendingProductionWarning,
     showPendingDeliveryWarning,
     showMockupApprovalWarning,
     showMockupRejectionWarning,
     currentBillingGuardKey,
     dismissedBillingGuardKey,
+    sampleApprovalMissingLabels,
     pendingProductionMissing,
     pendingDeliveryMissing,
     mockupApprovalMissingLabels,
@@ -1449,6 +1617,17 @@ const OrderActions = () => {
             {invoiceSent && (
               <span className="status-tag invoice">{billingDocumentLabel} Sent</span>
             )}
+            {sampleRequirementEnabled && (
+              <span
+                className={`status-tag ${
+                  sampleApprovalConfirmed ? "invoice" : "caution"
+                }`}
+              >
+                {sampleApprovalConfirmed
+                  ? "Sample Approved"
+                  : "Sample Approval Pending"}
+              </span>
+            )}
             {!isQuoteProject &&
               Array.from(paymentTypes).map((type) => (
                 <span key={type} className="status-tag payment">
@@ -1471,6 +1650,12 @@ const OrderActions = () => {
         {showPendingProductionWarning && (
           <div className="warning-banner critical">
             Confirm invoice and payment now before production can proceed.
+          </div>
+        )}
+        {showSampleApprovalWarning && (
+          <div className="warning-banner critical">
+            Confirm client sample approval now before production completion can
+            proceed.
           </div>
         )}
 
@@ -1584,6 +1769,59 @@ const OrderActions = () => {
                 )}
               </div>
             </div>
+
+          {!isQuoteProject && (
+            <div className="action-card">
+              <h3>Production Sample Approval</h3>
+              <p>
+                Confirm client decision on production sample before completing
+                Production stage.
+              </p>
+              <div className="billing-actions">
+                {!sampleRequirementEnabled ? (
+                  <div className="mockup-empty-state">
+                    Sample approval requirement is currently off.
+                  </div>
+                ) : sampleApprovalConfirmed ? (
+                  <>
+                    <div className="mockup-approval-status approved">
+                      Client sample approval confirmed
+                    </div>
+                    {project?.sampleApproval?.approvedAt && (
+                      <p className="mockup-approval-meta">
+                        Approved: {formatDateTime(project.sampleApproval.approvedAt)}
+                      </p>
+                    )}
+                    <button
+                      className="action-btn undo-btn"
+                      onClick={openSampleApprovalResetModal}
+                      disabled={!canManageBilling}
+                    >
+                      Reset to Pending
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="mockup-approval-status pending">
+                      Client sample approval pending
+                    </div>
+                    <button
+                      className="action-btn complete-btn"
+                      onClick={openSampleApprovalModal}
+                      disabled={!canManageBilling}
+                    >
+                      Confirm Sample Approval
+                    </button>
+                  </>
+                )}
+                {!canManageBilling && (
+                  <p className="mockup-approval-meta">
+                    Front Desk or Admin must confirm client sample approval.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {!isQuoteProject && (
@@ -2181,6 +2419,100 @@ const OrderActions = () => {
                 onClick={closeBillingGuardModal}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sampleApprovalModal && (
+        <div className="confirm-modal-overlay" onClick={closeSampleApprovalModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Confirm Client Sample Approval</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              <strong>Project:</strong>{" "}
+              {project.orderId || project._id || "N/A"} -{" "}
+              {project.details?.projectName || "Untitled"}
+            </p>
+            <p className="confirm-modal-text">
+              Confirm that client approved the production sample.
+            </p>
+            <div className="confirm-phrase">{SAMPLE_APPROVAL_CONFIRM_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={sampleApprovalInput}
+                onChange={(e) => setSampleApprovalInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeSampleApprovalModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn complete-btn"
+                onClick={handleConfirmSampleApproval}
+                disabled={
+                  sampleApprovalSubmitting ||
+                  sampleApprovalInput.trim() !== SAMPLE_APPROVAL_CONFIRM_PHRASE
+                }
+              >
+                {sampleApprovalSubmitting ? "Confirming..." : "Confirm Approval"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sampleApprovalResetModal && (
+        <div
+          className="confirm-modal-overlay"
+          onClick={closeSampleApprovalResetModal}
+        >
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Reset Sample Approval</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              <strong>Project:</strong>{" "}
+              {project.orderId || project._id || "N/A"} -{" "}
+              {project.details?.projectName || "Untitled"}
+            </p>
+            <p className="confirm-modal-text">
+              Reset sample approval back to pending.
+            </p>
+            <div className="confirm-phrase">{SAMPLE_APPROVAL_RESET_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={sampleApprovalResetInput}
+                onChange={(e) => setSampleApprovalResetInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button
+                className="action-btn"
+                onClick={closeSampleApprovalResetModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="action-btn undo-btn"
+                onClick={handleConfirmSampleApprovalReset}
+                disabled={
+                  sampleApprovalResetSubmitting ||
+                  sampleApprovalResetInput.trim() !== SAMPLE_APPROVAL_RESET_PHRASE
+                }
+              >
+                {sampleApprovalResetSubmitting ? "Saving..." : "Reset Approval"}
               </button>
             </div>
           </div>

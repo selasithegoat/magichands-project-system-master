@@ -266,6 +266,19 @@ const getMockupApprovalStatus = (approval = {}) => {
   return "pending";
 };
 
+const getSampleApprovalStatus = (sampleApproval = {}) => {
+  const explicit = String(sampleApproval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (explicit === "pending" || explicit === "approved") {
+    return explicit;
+  }
+  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) {
+    return "approved";
+  }
+  return "pending";
+};
+
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const HOUR_IN_MS = 60 * 60 * 1000;
 const MINUTE_IN_MS = 60 * 1000;
@@ -584,6 +597,15 @@ const ProjectDetail = ({ user }) => {
     !isQuote &&
     ["Pending Packaging", "Pending Delivery/Pickup"].includes(project.status) &&
     pendingDeliveryMissing.length > 0;
+  const sampleRequirementEnabled =
+    !isQuote && Boolean(project?.sampleRequirement?.isRequired);
+  const sampleApprovalStatus = getSampleApprovalStatus(
+    project?.sampleApproval || {},
+  );
+  const showPendingSampleApprovalWarning =
+    sampleRequirementEnabled &&
+    project.status === "Pending Production" &&
+    sampleApprovalStatus !== "approved";
 
   let themeClass = "";
   if (isEmergency) themeClass = "emergency-theme";
@@ -715,6 +737,11 @@ const ProjectDetail = ({ user }) => {
                 {paymentLabels[type] || type}
               </span>
             ))}
+          {showPendingSampleApprovalWarning && (
+            <span className="billing-tag caution">
+              Sample Approval Pending
+            </span>
+          )}
           {showPendingProductionWarning && (
             <span className="billing-tag caution">
               Pending Production Blocked: {pendingProductionMissingLabels.join(", ")}
@@ -730,6 +757,11 @@ const ProjectDetail = ({ user }) => {
           <div className="payment-warning critical">
             Caution: before moving to Pending Production, confirm{" "}
             {pendingProductionMissingLabels.join(", ")}.
+          </div>
+        )}
+        {showPendingSampleApprovalWarning && (
+          <div className="payment-warning critical">
+            Caution: client sample approval is pending before Production can be completed.
           </div>
         )}
         {showPendingDeliveryWarning && (

@@ -1057,6 +1057,26 @@
   color: var(--text-tertiary);
 }
 
+.sample-requirement-group {
+  margin-top: -0.2rem;
+}
+
+.sample-requirement-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  background: #fff;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.sample-requirement-control input {
+  margin-top: 0.1rem;
+}
+
 .form-input,
 .file-input {
   width: 100%;
