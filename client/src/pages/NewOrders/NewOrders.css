@@ -613,12 +613,6 @@
   color: #9f1239;
 }
 
-.mockup-decision-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
 .mockup-version-list {
   display: flex;
   flex-direction: column;
@@ -666,6 +660,20 @@
   gap: 0.15rem;
   font-size: 0.72rem;
   color: #64748b;
+}
+
+.mockup-version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+}
+
+.mockup-version-actions-note {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .order-revision-section {

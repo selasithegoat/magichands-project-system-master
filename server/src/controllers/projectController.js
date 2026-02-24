@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Project = require("../models/Project");
 const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
+const ProjectUpdate = require("../models/ProjectUpdate");
 const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
@@ -2201,6 +2202,60 @@ const buildMockupVersionLabel = (version) => {
   const parsed = Number.parseInt(version, 10);
   const safeVersion = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
   return `v${safeVersion}`;
+};
+
+const buildMockupPendingApprovalUpdateText = (version) =>
+  `Mockup ${buildMockupVersionLabel(version)} uploaded. Pending client approval.`;
+
+const resolveProjectUpdateAuthorId = ({ authorId, project } = {}) => {
+  const candidates = [authorId, project?.projectLeadId, project?.createdBy];
+  for (const candidate of candidates) {
+    const candidateId = toObjectIdString(candidate);
+    if (isValidObjectId(candidateId)) {
+      return candidateId;
+    }
+  }
+  return "";
+};
+
+const createProjectSystemUpdateAndSnapshot = async ({
+  project,
+  authorId,
+  category = "General",
+  content = "",
+}) => {
+  const projectId = toObjectIdString(project?._id);
+  const normalizedContent = toText(content);
+  if (!projectId || !normalizedContent) return null;
+
+  const resolvedAuthorId = resolveProjectUpdateAuthorId({ authorId, project });
+  if (!resolvedAuthorId) return null;
+
+  const createdUpdate = await ProjectUpdate.create({
+    project: projectId,
+    author: resolvedAuthorId,
+    category,
+    content: normalizedContent,
+    attachments: [],
+  });
+
+  const snapshotDate = createdUpdate?.createdAt || new Date();
+  await Project.findByIdAndUpdate(projectId, {
+    $set: {
+      endOfDayUpdate: normalizedContent,
+      endOfDayUpdateDate: snapshotDate,
+      endOfDayUpdateBy: resolvedAuthorId,
+    },
+  });
+
+  // Keep current response payload in sync without a re-fetch.
+  if (project && typeof project === "object") {
+    project.endOfDayUpdate = normalizedContent;
+    project.endOfDayUpdateDate = snapshotDate;
+    project.endOfDayUpdateBy = resolvedAuthorId;
+  }
+
+  return createdUpdate;
 };
 
 const getMockupApprovalStatus = (approval = {}) => {
@@ -4474,6 +4529,13 @@ const uploadProjectMockup = async (req, res) => {
     };
 
     await project.save();
+
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Graphics",
+      content: buildMockupPendingApprovalUpdateText(nextVersion),
+    });
 
     await logActivity(
       project._id,

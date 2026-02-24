@@ -1656,6 +1656,17 @@ const OrderActions = () => {
                         const decision = getMockupApprovalStatus(
                           version.clientApproval || {},
                         );
+                        const isLatestVersion =
+                          Number(version.version) ===
+                          Number(latestMockupVersion?.version);
+                        const canDecideOnVersions =
+                          canManageMockupApproval &&
+                          project.status === "Pending Mockup";
+                        const approveHidden = decision === "rejected";
+                        const approveDisabled =
+                          !isLatestVersion || decision === "approved";
+                        const rejectDisabled =
+                          !isLatestVersion || decision === "rejected";
                         return (
                           <div
                             key={`mockup-version-${version.version}`}
@@ -1707,37 +1718,53 @@ const OrderActions = () => {
                                   </span>
                                 )}
                             </div>
+                            {canDecideOnVersions && (
+                              <div className="mockup-version-actions">
+                                {!approveHidden && (
+                                  <button
+                                    className="action-btn complete-btn"
+                                    onClick={() => openMockupApprovalModal(version)}
+                                    disabled={approveDisabled}
+                                    title={
+                                      !isLatestVersion
+                                        ? "Only latest version can be approved."
+                                        : decision === "approved"
+                                          ? "Already approved."
+                                          : `Confirm client approval for v${version.version}`
+                                    }
+                                  >
+                                    {decision === "approved"
+                                      ? `Approved (v${version.version})`
+                                      : `Confirm Approval (v${version.version})`}
+                                  </button>
+                                )}
+                                <button
+                                  className="action-btn undo-btn"
+                                  onClick={() => openMockupRejectionModal(version)}
+                                  disabled={rejectDisabled}
+                                  title={
+                                    !isLatestVersion
+                                      ? "Only latest version can be rejected."
+                                      : decision === "rejected"
+                                        ? "Already rejected."
+                                        : `Mark v${version.version} as rejected`
+                                  }
+                                >
+                                  {decision === "rejected"
+                                    ? `Rejected (v${version.version})`
+                                    : `Mark Rejected (v${version.version})`}
+                                </button>
+                                {!isLatestVersion && (
+                                  <span className="mockup-version-actions-note">
+                                    Latest version only
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                   </div>
-
-                  {canManageMockupApproval && (
-                    <div className="mockup-decision-actions">
-                      {project.status === "Pending Mockup" && (
-                        <>
-                          {!mockupApprovalConfirmed && (
-                            <button
-                              className="action-btn complete-btn"
-                              onClick={() =>
-                                openMockupApprovalModal(latestMockupVersion)
-                              }
-                            >
-                              Confirm Client Approval ({latestMockupVersionLabel})
-                            </button>
-                          )}
-                          <button
-                            className="action-btn undo-btn"
-                            onClick={() =>
-                              openMockupRejectionModal(latestMockupVersion)
-                            }
-                          >
-                            Mark Rejected ({latestMockupVersionLabel})
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
                   {!canManageMockupApproval && (
                     <p className="mockup-approval-meta">
                       Front Desk or Admin must confirm client decision.
