@@ -123,6 +123,37 @@ const styles = StyleSheet.create({
     borderTopColor: "#E2E8F0",
     paddingTop: 10,
   },
+  specialStampRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 10,
+  },
+  specialStamp: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    fontSize: 8,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  specialWatermark: {
+    position: "absolute",
+    top: "42%",
+    left: 35,
+    right: 35,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  specialWatermarkText: {
+    fontSize: 30,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    color: "rgba(127,29,29,0.12)",
+    textAlign: "center",
+  },
 });
 
 const SUPPLY_SOURCE_LABELS = {
@@ -165,6 +196,15 @@ const ProjectSummaryPDF = ({
   const acknowledgedDepartments = new Set(
     (formData.acknowledgements || []).map((ack) => ack.department),
   );
+  const sampleApprovalRequired = Boolean(formData.sampleRequired);
+  const corporateEmergencyEnabled = Boolean(formData.corporateEmergency);
+  const specialRequirements = [];
+  if (sampleApprovalRequired) {
+    specialRequirements.push("Sample Approval Required");
+  }
+  if (corporateEmergencyEnabled) {
+    specialRequirements.push("Corporate Emergency");
+  }
   // Theme Colors
   const THEME = {
     EMERGENCY: "#e74c3c", // Red
@@ -195,6 +235,34 @@ const ProjectSummaryPDF = ({
           </View>
         </View>
 
+        {specialRequirements.length > 0 && (
+          <View style={styles.specialStampRow}>
+            {specialRequirements.map((entry, index) => (
+              <Text
+                key={`${entry}-${index}`}
+                style={[
+                  styles.specialStamp,
+                  {
+                    borderColor: "#fda4af",
+                    color: "#9f1239",
+                    backgroundColor: "#fff1f2",
+                  },
+                ]}
+              >
+                {entry}
+              </Text>
+            ))}
+          </View>
+        )}
+
+        {specialRequirements.length > 0 && (
+          <View style={styles.specialWatermark} fixed>
+            <Text style={styles.specialWatermarkText}>
+              {specialRequirements.join(" • ")}
+            </Text>
+          </View>
+        )}
+
         {/* Basics */}
         <View style={styles.section}>
           <Text
@@ -222,6 +290,14 @@ const ProjectSummaryPDF = ({
             <Text style={styles.label}>Brief Overview:</Text>
             <Text style={styles.value}>{formData.briefOverview || "N/A"}</Text>
           </View>
+          {specialRequirements.length > 0 && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Special Requirements:</Text>
+              <Text style={styles.value}>
+                {specialRequirements.join(", ")}
+              </Text>
+            </View>
+          )}
           {/* Sample Image */}
           {(formData.sampleImage ||
             (formData.details && formData.details.sampleImage)) &&

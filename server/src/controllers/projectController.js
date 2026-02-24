@@ -151,6 +151,13 @@ const parseBooleanFlag = (value, fallback = false) => {
   return fallback;
 };
 
+const parseCorporateEmergencyFlag = (value, fallback = false) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return parseBooleanFlag(value.isEnabled, fallback);
+  }
+  return parseBooleanFlag(value, fallback);
+};
+
 const toDateOrNull = (value) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -2789,6 +2796,7 @@ const createProject = async (req, res) => {
       details, // [NEW]
       workstreamCode,
       sampleRequired,
+      corporateEmergency,
     } = req.body;
 
     // Basic validation
@@ -2902,6 +2910,10 @@ const createProject = async (req, res) => {
     const normalizedSupplySource = normalizeSupplySourceSelection(
       supplySource !== undefined ? supplySource : details?.supplySource,
     );
+    const normalizedProjectType = toText(req.body.projectType) || "Standard";
+    const isCorporateEmergency =
+      normalizedProjectType === "Corporate Job" &&
+      parseCorporateEmergencyFlag(corporateEmergency, false);
     const isSampleRequired = parseBooleanFlag(sampleRequired, false);
     const finalOrderId =
       normalizeOrderNumber(orderId) || (normalizedOrderRefId ? "" : generatedOrderId);
@@ -2950,10 +2962,15 @@ const createProject = async (req, res) => {
       assistantLeadId: normalizedAssistantLeadId || null,
       workstreamCode: normalizeOptionalText(workstreamCode),
       // [NEW] Project Type System
-      projectType: req.body.projectType || "Standard",
+      projectType: normalizedProjectType,
       priority:
         req.body.priority ||
-        (req.body.projectType === "Emergency" ? "Urgent" : "Normal"),
+        (normalizedProjectType === "Emergency" ? "Urgent" : "Normal"),
+      corporateEmergency: {
+        isEnabled: isCorporateEmergency,
+        updatedAt: isCorporateEmergency ? new Date() : null,
+        updatedBy: isCorporateEmergency ? req.user._id : null,
+      },
       quoteDetails: finalQuoteDetails,
       updates: req.body.updates || [],
       sampleRequirement: {
@@ -4893,6 +4910,69 @@ const resetProjectSampleApproval = async (req, res) => {
   }
 };
 
+// @desc    Toggle corporate emergency flag for a corporate project
+// @route   PATCH /api/projects/:id/corporate-emergency
+// @access  Private (Admin portal only)
+const updateCorporateEmergency = async (req, res) => {
+  try {
+    if (req.user.role !== "admin" || !isAdminPortalRequest(req)) {
+      return res.status(403).json({
+        message:
+          "Only admins in the admin portal can toggle Corporate Emergency.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+
+    if (project.projectType !== "Corporate Job") {
+      return res.status(400).json({
+        message:
+          "Corporate Emergency is only available for Corporate Job projects.",
+      });
+    }
+
+    const previousEnabled = Boolean(project?.corporateEmergency?.isEnabled);
+    const nextEnabled = parseCorporateEmergencyFlag(
+      req.body?.isEnabled,
+      previousEnabled,
+    );
+
+    if (previousEnabled === nextEnabled) {
+      return res.json(project);
+    }
+
+    project.corporateEmergency = {
+      ...(project.corporateEmergency || {}),
+      isEnabled: nextEnabled,
+      updatedAt: new Date(),
+      updatedBy: req.user._id,
+    };
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      nextEnabled
+        ? "Corporate Emergency enabled."
+        : "Corporate Emergency disabled.",
+      {
+        corporateEmergency: {
+          previousEnabled,
+          nextEnabled,
+        },
+      },
+    );
+
+    res.json(project);
+  } catch (error) {
+    console.error("Error toggling corporate emergency:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Upload approved mockup file for a project
 // @route   POST /api/projects/:id/mockup
 // @access  Private (Graphics/Design or Admin)
@@ -6219,6 +6299,7 @@ const updateProject = async (req, res) => {
       quoteDetails, // [NEW]
       projectType, // [NEW]
       priority, // [NEW]
+      corporateEmergency, // [NEW]
       workstreamCode,
     } = req.body;
     const requestedOrderNumber = normalizeOrderNumber(orderId);
@@ -6238,6 +6319,8 @@ const updateProject = async (req, res) => {
       existingAttachments = JSON.parse(existingAttachments);
     if (typeof quoteDetails === "string")
       quoteDetails = JSON.parse(quoteDetails);
+    if (typeof corporateEmergency === "string" && corporateEmergency.startsWith("{"))
+      corporateEmergency = JSON.parse(corporateEmergency);
     if (typeof lead === "string" && lead.startsWith("{"))
       lead = JSON.parse(lead);
     if (typeof assistantLeadId === "string" && assistantLeadId.startsWith("{"))
@@ -6449,6 +6532,29 @@ const updateProject = async (req, res) => {
     if (status) project.status = status;
     if (projectType) project.projectType = projectType;
     if (priority) project.priority = priority;
+    if (project.projectType !== "Corporate Job") {
+      project.corporateEmergency = {
+        ...(project.corporateEmergency || {}),
+        isEnabled: false,
+        updatedAt:
+          project.corporateEmergency?.updatedAt ||
+          project.updatedAt ||
+          new Date(),
+        updatedBy:
+          project.corporateEmergency?.updatedBy || req.user._id || req.user.id,
+      };
+    } else if (corporateEmergency !== undefined) {
+      const nextCorporateEmergency = parseCorporateEmergencyFlag(
+        corporateEmergency,
+        Boolean(project?.corporateEmergency?.isEnabled),
+      );
+      project.corporateEmergency = {
+        ...(project.corporateEmergency || {}),
+        isEnabled: nextCorporateEmergency,
+        updatedAt: new Date(),
+        updatedBy: req.user._id || req.user.id,
+      };
+    }
     if (quoteDetails) project.quoteDetails = quoteDetails;
     if (workstreamCode !== undefined) {
       project.workstreamCode = normalizeOptionalText(workstreamCode);
@@ -7267,6 +7373,7 @@ module.exports = {
   undoInvoiceSent,
   undoPaymentVerification,
   updateSampleRequirement,
+  updateCorporateEmergency,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
   uploadProjectMockup,

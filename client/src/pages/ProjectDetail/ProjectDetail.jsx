@@ -599,6 +599,8 @@ const ProjectDetail = ({ user }) => {
     pendingDeliveryMissing.length > 0;
   const sampleRequirementEnabled =
     !isQuote && Boolean(project?.sampleRequirement?.isRequired);
+  const corporateEmergencyEnabled =
+    isCorporate && Boolean(project?.corporateEmergency?.isEnabled);
   const sampleApprovalStatus = getSampleApprovalStatus(
     project?.sampleApproval || {},
   );
@@ -606,6 +608,14 @@ const ProjectDetail = ({ user }) => {
     sampleRequirementEnabled &&
     project.status === "Pending Production" &&
     sampleApprovalStatus !== "approved";
+  const hasSpecialRequirementAwareness =
+    sampleRequirementEnabled || corporateEmergencyEnabled;
+  const specialRequirementWatermarkText = [
+    corporateEmergencyEnabled ? "Corporate Emergency" : "",
+    sampleRequirementEnabled ? "Sample Approval Required" : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
   let themeClass = "";
   if (isEmergency) themeClass = "emergency-theme";
@@ -614,6 +624,11 @@ const ProjectDetail = ({ user }) => {
 
   return (
     <div className={`project-detail-container ${themeClass}`}>
+      {hasSpecialRequirementAwareness && (
+        <div className="project-special-watermark" aria-hidden="true">
+          {specialRequirementWatermarkText}
+        </div>
+      )}
       {isEmergency && (
         <div
           style={{
@@ -726,6 +741,22 @@ const ProjectDetail = ({ user }) => {
         </div>
 
         <div className="billing-tags">
+          {corporateEmergencyEnabled && (
+            <span className="billing-tag corporate-emergency">
+              Corporate Emergency
+            </span>
+          )}
+          {sampleRequirementEnabled && (
+            <span
+              className={`billing-tag ${
+                sampleApprovalStatus === "approved" ? "invoice" : "sample-required"
+              }`}
+            >
+              {sampleApprovalStatus === "approved"
+                ? "Sample Approval Required (Approved)"
+                : "Sample Approval Required"}
+            </span>
+          )}
           {invoiceSent && (
             <span className="billing-tag invoice">
               {isQuote ? "Quote Sent" : "Invoice Sent"}

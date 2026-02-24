@@ -386,6 +386,32 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             </small>
           </div>
 
+          {formData.projectType === "Corporate Job" && (
+            <div className="corporate-emergency-section">
+              <label className="section-label">Corporate Emergency</label>
+              <label
+                className={`corporate-emergency-toggle ${
+                  formData.corporateEmergency ? "active" : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(formData.corporateEmergency)}
+                  onChange={(e) =>
+                    handleChange("corporateEmergency", e.target.checked)
+                  }
+                  disabled={isEditing}
+                />
+                <span>
+                  Mark this Corporate Job as Corporate Emergency
+                </span>
+              </label>
+              <small className="corporate-emergency-note">
+                Use this for urgent corporate work that needs elevated visibility.
+              </small>
+            </div>
+          )}
+
           {/* Reference Materials Section */}
           <div className="reference-section" style={{ marginTop: "1.5rem" }}>
             <label className="section-label">Reference Materials</label>

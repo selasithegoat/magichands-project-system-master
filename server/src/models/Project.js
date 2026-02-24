@@ -305,6 +305,17 @@ const ProjectSchema = new mongoose.Schema(
       enum: ["Normal", "Urgent"],
       default: "Normal",
     },
+    corporateEmergency: {
+      isEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      updatedAt: Date,
+      updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
     // Quote Specific Details
     quoteDetails: {
       quoteNumber: String,

@@ -79,6 +79,12 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [imageUrls, setImageUrls] = useState({});
   const selectedSupplySources = normalizeSupplySources(formData.supplySource);
+  const sampleApprovalRequired = Boolean(formData.sampleRequired);
+  const corporateEmergencyEnabled =
+    formData.projectType === "Corporate Job" &&
+    Boolean(formData.corporateEmergency);
+  const showSpecialRequirements =
+    sampleApprovalRequired || corporateEmergencyEnabled;
 
   // [New] Pre-fetch images for PDF to avoid "invalid extension" and CORS issues in react-pdf
   React.useEffect(() => {
@@ -327,6 +333,23 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
                 <span className="badge-yellow">Draft</span>
               </div>
             </div>
+            {showSpecialRequirements && (
+              <div className="review-item" style={{ gridColumn: "1 / -1" }}>
+                <label>Special Requirements</label>
+                <div className="special-requirements-row">
+                  {sampleApprovalRequired && (
+                    <span className="badge-emphasis">
+                      Sample Approval Required
+                    </span>
+                  )}
+                  {corporateEmergencyEnabled && (
+                    <span className="badge-emphasis">
+                      Corporate Emergency
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

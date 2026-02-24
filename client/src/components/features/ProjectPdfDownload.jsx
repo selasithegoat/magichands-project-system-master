@@ -101,6 +101,10 @@ const ProjectPdfDownload = ({ project }) => {
     const imageAttachments = allAttachments.filter(
       (path) => typeof path === "string" && path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i),
     );
+    const sampleApprovalRequired = Boolean(project?.sampleRequirement?.isRequired);
+    const corporateEmergencyEnabled =
+      project?.projectType === "Corporate Job" &&
+      Boolean(project?.corporateEmergency?.isEnabled);
     return {
       projectName: details.projectName || project.projectName,
       contactType: details.contactType,
@@ -124,6 +128,8 @@ const ProjectPdfDownload = ({ project }) => {
       attachments: imageAttachments,
       sampleImage: project.sampleImage || details.sampleImage,
       details: details,
+      sampleRequired: sampleApprovalRequired,
+      corporateEmergency: corporateEmergencyEnabled,
     };
   };
 

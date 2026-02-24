@@ -23,6 +23,7 @@ const NewOrders = () => {
     deliveryDate: "",
     projectType: location.state?.projectType || "Standard",
     priority: location.state?.priority || "Normal",
+    corporateEmergency: false,
     projectLeadId: "",
     assistantLeadId: "",
     sampleRequired: false,
@@ -142,6 +143,7 @@ const NewOrders = () => {
         : "",
       projectType: project.projectType || "Standard",
       priority: project.priority || "Normal",
+      corporateEmergency: Boolean(project.corporateEmergency?.isEnabled),
       projectLeadId: project.projectLeadId?._id || project.projectLeadId || "",
       assistantLeadId:
         project.assistantLeadId?._id || project.assistantLeadId || "",
@@ -211,6 +213,9 @@ const NewOrders = () => {
     const { name, value } = e.target;
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
+      if (name === "projectType" && value !== "Corporate Job") {
+        next.corporateEmergency = false;
+      }
       if (name === "projectLeadId" && value === prev.assistantLeadId) {
         next.assistantLeadId = "";
       }
@@ -283,6 +288,13 @@ const NewOrders = () => {
     formPayload.append("briefOverview", formData.briefOverview);
     formPayload.append("projectType", formData.projectType);
     formPayload.append("priority", formData.priority);
+    formPayload.append(
+      "corporateEmergency",
+      String(
+        formData.projectType === "Corporate Job" &&
+          Boolean(formData.corporateEmergency),
+      ),
+    );
     formPayload.append("items", JSON.stringify(formData.items));
     if (!editingId) {
       formPayload.append("sampleRequired", String(Boolean(formData.sampleRequired)));
@@ -344,6 +356,7 @@ const NewOrders = () => {
             deliveryDate: "",
             projectType: formData.projectType,
             priority: formData.priority,
+            corporateEmergency: false,
             projectLeadId: "",
             assistantLeadId: "",
             sampleRequired: false,
@@ -634,6 +647,29 @@ const NewOrders = () => {
                   rows="2"
                 ></textarea>
               </div>
+
+              {formData.projectType === "Corporate Job" && (
+                <div className="form-group corporate-emergency-group">
+                  <label className="corporate-emergency-control">
+                    <input
+                      type="checkbox"
+                      name="corporateEmergency"
+                      checked={Boolean(formData.corporateEmergency)}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          corporateEmergency: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Mark this Corporate Job as Corporate Emergency</span>
+                  </label>
+                  <small className="field-help-text">
+                    Use this for urgent corporate projects that need emergency
+                    visibility.
+                  </small>
+                </div>
+              )}
 
               <div className="form-group sample-requirement-group">
                 <label className="sample-requirement-control">

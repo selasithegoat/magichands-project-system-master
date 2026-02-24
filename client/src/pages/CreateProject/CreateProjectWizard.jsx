@@ -135,6 +135,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
     formData: {
       orderDate: new Date().toISOString().split("T")[0],
       receivedTime: "10:00",
+      projectType: "Standard",
+      priority: "Normal",
       lead: null,
       projectName: "",
       briefOverview: "", // [New]
@@ -150,6 +152,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       status: "Order Confirmed", // Default for new, overwritten if editing
       assistantLeadId: "", // Optional assistant lead
       sampleRequired: false,
+      corporateEmergency: false,
     },
   };
 
@@ -207,6 +210,10 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         ...prev,
         projectType: location.state.projectType,
         priority: location.state.priority || prev.priority || "Normal",
+        corporateEmergency:
+          location.state.projectType === "Corporate Job"
+            ? Boolean(prev.corporateEmergency)
+            : false,
       }));
     }
 
@@ -291,6 +298,11 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
             // Keep current workflow status so submit can detect lead acceptance transition.
             status: data.status,
+            projectType: data.projectType || formData.projectType || "Standard",
+            priority: data.priority || formData.priority || "Normal",
+            corporateEmergency:
+              data.projectType === "Corporate Job" &&
+              Boolean(data.corporateEmergency?.isEnabled),
             sampleRequired: Boolean(data.sampleRequirement?.isRequired),
           };
 
@@ -323,7 +335,13 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   }, [currentStep, formData]);
 
   const handleUpdateFormData = (updates) => {
-    setFormData((prev) => ({ ...prev, ...updates }));
+    setFormData((prev) => {
+      const next = { ...prev, ...updates };
+      if (next.projectType !== "Corporate Job") {
+        next.corporateEmergency = false;
+      }
+      return next;
+    });
   };
 
   const handleNext = () => {
@@ -353,7 +371,12 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
       // Append all JSON fields
       Object.keys(formData).forEach((key) => {
-        if (key === "files" || key === "contactType") return; // Front Desk owns contact type.
+        if (
+          key === "files" ||
+          key === "contactType" ||
+          key === "corporateEmergency"
+        )
+          return; // Front Desk owns contact type.
         // attachments sent as JSON string if present (existing files)
 
         const value = formData[key];
@@ -368,6 +391,14 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         payload.delete("status"); // Remove old status
         payload.append("status", "Pending Scope Approval");
       }
+
+      payload.append(
+        "corporateEmergency",
+        String(
+          formData.projectType === "Corporate Job" &&
+            Boolean(formData.corporateEmergency),
+        ),
+      );
 
       // Append Files to 'sampleImage' and 'attachments' fields
       if (formData.files && formData.files.length > 0) {

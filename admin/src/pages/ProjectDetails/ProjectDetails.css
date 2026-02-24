@@ -4,6 +4,34 @@
   padding: 1.5rem;
   max-width: 1200px;
   margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.project-special-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: clamp(1.3rem, 2.2vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(248, 113, 113, 0.12);
+  transform: rotate(-18deg);
+  pointer-events: none;
+  z-index: 0;
+  padding: 1rem;
+}
+
+.back-link,
+.emergency-banner,
+.details-header,
+.details-grid {
+  position: relative;
+  z-index: 1;
 }
 
 .details-header {
@@ -168,6 +196,24 @@
   color: #334155;
 }
 
+.hold-toggle-btn.corporate {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.hold-toggle-btn.corporate.corporate-on {
+  background: #7f1d1d;
+  border-color: #fca5a5;
+  color: #fee2e2;
+}
+
+.hold-toggle-btn.corporate.corporate-off {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
 .hold-toggle-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
@@ -207,6 +253,18 @@
   background: #fef2f2;
   color: #b91c1c;
   border-color: #fecaca;
+}
+
+.billing-tag.corporate-emergency {
+  background: rgba(127, 29, 29, 0.15);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.billing-tag.sample-requirement {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fdba74;
 }
 
 .payment-warning {

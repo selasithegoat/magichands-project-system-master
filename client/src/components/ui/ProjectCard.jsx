@@ -208,6 +208,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const sampleRequirementEnabled =
     project?.projectType !== "Quote" &&
     Boolean(project?.sampleRequirement?.isRequired);
+  const corporateEmergencyEnabled =
+    project?.projectType === "Corporate Job" &&
+    Boolean(project?.corporateEmergency?.isEnabled);
   const sampleApprovalStatus = getSampleApprovalStatus(
     project?.sampleApproval || {},
   );
@@ -219,11 +222,30 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     project?.status === "Pending Production" &&
     sampleRequirementEnabled &&
     sampleApprovalStatus !== "approved";
+  const hasSpecialRequirementTag =
+    sampleRequirementEnabled || corporateEmergencyEnabled;
+  const specialRequirementWatermark = [
+    corporateEmergencyEnabled ? "Corporate Emergency" : "",
+    sampleRequirementEnabled ? "Sample Approval Required" : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  const sampleRequirementTagText =
+    sampleApprovalStatus === "approved"
+      ? "Sample Approval Required (Approved)"
+      : "Sample Approval Required";
 
   return (
     <div
-      className={`project-card-new project-type-${projectTypeKey}`}
+      className={`project-card-new project-type-${projectTypeKey} ${
+        hasSpecialRequirementTag ? "has-special-awareness" : ""
+      }`}
     >
+      {hasSpecialRequirementTag && (
+        <div className="special-requirement-watermark" aria-hidden="true">
+          {specialRequirementWatermark}
+        </div>
+      )}
       <div className="card-header">
         {/* Project Thumbnail / Avatar */}
         <div className="project-thumbnail-wrapper">
@@ -260,6 +282,16 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               {mockupVersionLabel
                 ? `Mockup ${mockupVersionLabel} client approval pending`
                 : "Mockup client approval pending"}
+            </span>
+          )}
+          {corporateEmergencyEnabled && (
+            <span className="status-badge corporate-emergency-awareness">
+              Corporate Emergency
+            </span>
+          )}
+          {sampleRequirementEnabled && (
+            <span className="status-badge sample-requirement-awareness">
+              {sampleRequirementTagText}
             </span>
           )}
           {showPendingSampleApprovalTag && (

@@ -289,6 +289,8 @@ const ProjectDetails = ({ user }) => {
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
   const [isTogglingSampleRequirement, setIsTogglingSampleRequirement] =
     useState(false);
+  const [isTogglingCorporateEmergency, setIsTogglingCorporateEmergency] =
+    useState(false);
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -538,6 +540,50 @@ const ProjectDetails = ({ user }) => {
       );
     } finally {
       setIsTogglingSampleRequirement(false);
+    }
+  };
+
+  const handleToggleCorporateEmergency = async (nextEnabled) => {
+    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (isTogglingCorporateEmergency) return;
+    if (!ensureProjectIsEditable()) return;
+    if (project.projectType !== "Corporate Job") return;
+
+    setIsTogglingCorporateEmergency(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${id}/corporate-emergency?source=admin`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ isEnabled: Boolean(nextEnabled) }),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update corporate emergency.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+    } catch (error) {
+      console.error("Error toggling corporate emergency:", error);
+      openBillingGuardModal(
+        {
+          message: error.message || "Failed to update corporate emergency.",
+        },
+        "",
+        {
+          title: "Corporate Emergency",
+          canOverride: false,
+          missingLabels: [],
+          fallbackMessage: "Failed to update corporate emergency.",
+        },
+      );
+    } finally {
+      setIsTogglingCorporateEmergency(false);
     }
   };
 
@@ -1251,6 +1297,9 @@ const ProjectDetails = ({ user }) => {
   };
   const paymentTypes = (project.paymentVerifications || []).map((entry) => entry.type);
   const isQuoteProject = project.projectType === "Quote";
+  const isCorporateProject = project.projectType === "Corporate Job";
+  const corporateEmergencyEnabled =
+    isCorporateProject && Boolean(project?.corporateEmergency?.isEnabled);
   const invoiceSent = Boolean(project.invoice?.sent);
   const pendingProductionMissing = isQuoteProject
     ? []
@@ -1275,6 +1324,14 @@ const ProjectDetails = ({ user }) => {
   const sampleRequirementEnabled =
     !isQuoteProject && Boolean(project?.sampleRequirement?.isRequired);
   const sampleApprovalStatus = getSampleApprovalStatus(project?.sampleApproval || {});
+  const hasSpecialRequirementAwareness =
+    sampleRequirementEnabled || corporateEmergencyEnabled;
+  const specialRequirementWatermarkText = [
+    corporateEmergencyEnabled ? "Corporate Emergency" : "",
+    sampleRequirementEnabled ? "Sample Approval Required" : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
   const showPendingProductionSampleWarning =
     sampleRequirementEnabled &&
     project.status === "Pending Production" &&
@@ -1328,6 +1385,11 @@ const ProjectDetails = ({ user }) => {
           : ""
       }`}
     >
+      {hasSpecialRequirementAwareness && (
+        <div className="project-special-watermark" aria-hidden="true">
+          {specialRequirementWatermarkText}
+        </div>
+      )}
       <Link to="/projects" className="back-link">
         ← Back to Projects
       </Link>
@@ -1457,6 +1519,28 @@ const ProjectDetails = ({ user }) => {
                           ? "Sample Required: ON"
                           : "Sample Required: OFF"}
                     </button>
+                    {isCorporateProject && (
+                      <button
+                        type="button"
+                        className={`hold-toggle-btn corporate ${
+                          corporateEmergencyEnabled
+                            ? "corporate-on"
+                            : "corporate-off"
+                        }`}
+                        onClick={() =>
+                          handleToggleCorporateEmergency(!corporateEmergencyEnabled)
+                        }
+                        disabled={
+                          isTogglingCorporateEmergency || isTogglingHold
+                        }
+                      >
+                        {isTogglingCorporateEmergency
+                          ? "Updating Emergency..."
+                          : corporateEmergencyEnabled
+                            ? "Corporate Emergency: ON"
+                            : "Corporate Emergency: OFF"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
@@ -1498,6 +1582,11 @@ const ProjectDetails = ({ user }) => {
               ) : null}
             </div>
             <div className="billing-tags">
+              {isCorporateProject && corporateEmergencyEnabled && (
+                <span className="billing-tag corporate-emergency">
+                  Corporate Emergency
+                </span>
+              )}
               {invoiceSent && (
                 <span className="billing-tag invoice">
                   {isQuoteProject ? "Quote Sent" : "Invoice Sent"}
@@ -1511,13 +1600,13 @@ const ProjectDetails = ({ user }) => {
                 ))}
               {sampleRequirementEnabled && (
                 <span
-                  className={`billing-tag ${
+                  className={`billing-tag sample-requirement ${
                     showPendingProductionSampleWarning ? "caution" : "invoice"
                   }`}
                 >
                   {sampleApprovalStatus === "approved"
-                    ? "Sample Approved"
-                    : "Sample Approval Pending"}
+                    ? "Sample Approval Required (Approved)"
+                    : "Sample Approval Required"}
                 </span>
               )}
               {showPendingProductionWarning && (

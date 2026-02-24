@@ -212,6 +212,22 @@
   font-weight: 600;
 }
 
+.badge-emphasis {
+  background-color: #fff1f2;
+  color: #9f1239;
+  border: 1px solid #fda4af;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.special-requirements-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 /* Attachments */
 .review-section-simple {
   margin-bottom: 24px;

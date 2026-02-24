@@ -36,6 +36,20 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
+  const sampleRequirementEnabled =
+    project?.projectType !== "Quote" &&
+    Boolean(project?.sampleRequirement?.isRequired);
+  const corporateEmergencyEnabled =
+    project?.projectType === "Corporate Job" &&
+    Boolean(project?.corporateEmergency?.isEnabled);
+  const hasSpecialRequirementTag =
+    sampleRequirementEnabled || corporateEmergencyEnabled;
+  const specialRequirementWatermark = [
+    corporateEmergencyEnabled ? "Corporate Emergency" : "",
+    sampleRequirementEnabled ? "Sample Approval Required" : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
   // Format Date
   const formatDate = (dateString) => {
@@ -48,7 +62,16 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
   };
 
   return (
-    <div className={`history-card history-card-${projectTypeKey}`}>
+    <div
+      className={`history-card history-card-${projectTypeKey} ${
+        hasSpecialRequirementTag ? "has-special-awareness" : ""
+      }`}
+    >
+      {hasSpecialRequirementTag && (
+        <div className="special-requirement-watermark" aria-hidden="true">
+          {specialRequirementWatermark}
+        </div>
+      )}
       <div className="card-top-row">
         <div className="order-meta-tags">
           <span className={`project-type-tag ${projectTypeKey}`}>
@@ -65,6 +88,21 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
       <h3 className="card-title">
         {details.projectName || "Untitled Project"}
       </h3>
+
+      {hasSpecialRequirementTag && (
+        <div className="special-requirements-row">
+          {corporateEmergencyEnabled && (
+            <span className="special-requirement-tag corporate">
+              Corporate Emergency
+            </span>
+          )}
+          {sampleRequirementEnabled && (
+            <span className="special-requirement-tag sample">
+              Sample Approval Required
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="card-info-grid">
         <div className="info-item">

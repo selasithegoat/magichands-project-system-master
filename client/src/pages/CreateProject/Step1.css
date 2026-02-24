@@ -189,6 +189,39 @@
   font-size: 0.8rem;
 }
 
+.corporate-emergency-section {
+  margin-top: 1rem;
+}
+
+.corporate-emergency-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.corporate-emergency-toggle input {
+  margin-top: 0.1rem;
+}
+
+.corporate-emergency-toggle.active {
+  border-color: rgba(251, 146, 60, 0.45);
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.corporate-emergency-note {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
 /* Footer */
 .step-footer {
   padding: 16px 24px;
