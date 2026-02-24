@@ -54,6 +54,19 @@ const IMAGE_MIME_TYPES = new Set([
   "image/webp",
   "image/gif",
 ]);
+const CORELDRAW_EXTENSIONS = new Set([".cdr"]);
+const CORELDRAW_MIME_TYPES = new Set([
+  "application/cdr",
+  "application/coreldraw",
+  "application/vnd.corel-draw",
+  "application/x-cdr",
+  "application/x-coreldraw",
+  "image/x-cdr",
+]);
+const GENERIC_BINARY_MIME_TYPES = new Set([
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
 const DOCUMENT_EXTENSIONS = new Set([
   ".pdf",
   ".doc",
@@ -67,6 +80,7 @@ const DOCUMENT_EXTENSIONS = new Set([
   ".zip",
   ".rar",
   ".7z",
+  ...CORELDRAW_EXTENSIONS,
 ]);
 const DOCUMENT_MIME_TYPES = new Set([
   "application/pdf",
@@ -82,6 +96,7 @@ const DOCUMENT_MIME_TYPES = new Set([
   "application/x-zip-compressed",
   "application/x-rar-compressed",
   "application/x-7z-compressed",
+  ...CORELDRAW_MIME_TYPES,
 ]);
 const MEDIA_EXTENSIONS = new Set([
   ".mp4",
@@ -123,8 +138,12 @@ const FILE_POLICY_BY_FIELD = {
     mimeTypes: IMAGE_MIME_TYPES,
   },
   mockup: {
-    extensions: new Set([...IMAGE_EXTENSIONS, ".pdf"]),
-    mimeTypes: new Set([...IMAGE_MIME_TYPES, "application/pdf"]),
+    extensions: new Set([...IMAGE_EXTENSIONS, ".pdf", ...CORELDRAW_EXTENSIONS]),
+    mimeTypes: new Set([
+      ...IMAGE_MIME_TYPES,
+      "application/pdf",
+      ...CORELDRAW_MIME_TYPES,
+    ]),
   },
   attachments: {
     extensions: GENERAL_SAFE_EXTENSIONS,
@@ -399,8 +418,12 @@ const fileFilter = (req, file, cb) => {
   const policy = getFilePolicy(file.fieldname);
   const extension = getNormalizedExtension(file.originalname);
   const mimeType = String(file.mimetype || "").toLowerCase();
+  const isCorelDraw = CORELDRAW_EXTENSIONS.has(extension);
   const extensionAllowed = policy.extensions.has(extension);
-  const mimeAllowed = policy.mimeTypes.has(mimeType);
+  const mimeAllowed =
+    policy.mimeTypes.has(mimeType) ||
+    (isCorelDraw &&
+      (GENERIC_BINARY_MIME_TYPES.has(mimeType) || mimeType.length === 0));
 
   if (extensionAllowed && mimeAllowed) {
     return cb(null, true);
