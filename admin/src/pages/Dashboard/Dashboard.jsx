@@ -3,8 +3,8 @@ import "./Dashboard.css";
 import {
   ProjectsIcon,
   CheckCircleIcon,
-  DashboardIcon,
-  BellIcon,
+  RocketIcon,
+  ReportsIcon,
 } from "../../icons/Icons";
 import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -44,6 +44,24 @@ const AlertTriangleIcon = () => (
   </svg>
 );
 
+const TruckIcon = () => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="1" y="3" width="15" height="13"></rect>
+    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+    <circle cx="5.5" cy="18.5" r="2.5"></circle>
+    <circle cx="18.5" cy="18.5" r="2.5"></circle>
+  </svg>
+);
+
 const ChevronRightIcon = () => (
   <svg
     width="20"
@@ -59,6 +77,22 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
+const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished"]);
+const OVERDUE_EXCLUDED_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+
+const isEmergencyProject = (project) =>
+  project?.projectType === "Emergency" || project?.priority === "Urgent";
+const isPendingDeliveryProject = (project) =>
+  project?.status === "Pending Delivery/Pickup";
+const isQuoteProject = (project) => project?.projectType === "Quote";
+const isCorporateProject = (project) => project?.projectType === "Corporate Job";
+
 // SVG Donut Chart Component
 const StatusDonut = ({ stats }) => {
   const size = 180;
@@ -70,7 +104,6 @@ const StatusDonut = ({ stats }) => {
   const total = stats.inProgress + stats.completed + stats.delayed || 1;
   const pIn = (stats.inProgress / total) * circumference;
   const pComp = (stats.completed / total) * circumference;
-  const pDel = (stats.delayed / total) * circumference;
 
   return (
     <div className="donut-wrapper">
@@ -230,7 +263,7 @@ const ProjectStatusOverview = ({ projects }) => {
               </option>
             ))}
           </select>
-          <span className="chevron-down">▾</span>
+          <span className="chevron-down">v</span>
         </div>
       </div>
 
@@ -285,6 +318,10 @@ const Dashboard = ({ user }) => {
     pending: 0,
     completed: 0,
     overdue: 0,
+    emergencies: 0,
+    pendingDelivery: 0,
+    quotes: 0,
+    corporate: 0,
   });
 
   useEffect(() => {
@@ -327,45 +364,147 @@ const Dashboard = ({ user }) => {
     let pending = 0;
     let completed = 0;
     let overdue = 0;
+    let emergencies = 0;
+    let pendingDelivery = 0;
+    let quotes = 0;
+    let corporate = 0;
 
     data.forEach((p) => {
-      if (p.status === "Completed" || p.status === "Finished") {
+      if (isEmergencyProject(p)) {
+        emergencies++;
+      }
+
+      if (isPendingDeliveryProject(p)) {
+        pendingDelivery++;
+      }
+
+      if (isQuoteProject(p) && !CLOSED_PROJECT_STATUSES.has(p.status)) {
+        quotes++;
+      }
+      if (isCorporateProject(p) && !CLOSED_PROJECT_STATUSES.has(p.status)) {
+        corporate++;
+      }
+
+      if (CLOSED_PROJECT_STATUSES.has(p.status)) {
         completed++;
       } else {
         active++;
-        if (
-          p.status === "Pending Scope Approval" ||
-          p.status === "Pending Acceptance"
-        ) {
+        if (p.status === "Order Confirmed") {
           pending++;
         }
         if (p.details?.deliveryDate) {
           const dDate = new Date(p.details.deliveryDate);
-          const postDeliveryStatuses = new Set([
-            "Delivered",
-            "Pending Feedback",
-            "Feedback Completed",
-            "Completed",
-            "Finished",
-          ]);
           // Count as overdue if already passed OR within 3 days (72 hours)
           const isUrgent = dDate - now <= 3 * 24 * 60 * 60 * 1000;
-          if (isUrgent && !postDeliveryStatuses.has(p.status)) {
+          if (isUrgent && !OVERDUE_EXCLUDED_STATUSES.has(p.status)) {
             overdue++;
           }
         }
       }
     });
 
-    setStats({ active, pending, completed, overdue });
+    setStats({
+      active,
+      pending,
+      completed,
+      overdue,
+      emergencies,
+      pendingDelivery,
+      quotes,
+      corporate,
+    });
   };
 
   const getStatusPillClass = (status) => {
     if (status === "Completed" || status === "Finished") return "completed";
-    if (status === "Pending Scope Approval" || status === "Pending Acceptance")
+    if (
+      status === "Order Confirmed" ||
+      status === "Pending Scope Approval" ||
+      status === "Pending Acceptance"
+    )
       return "pending";
     if (status === "Pending Feedback") return "pending";
     return "active";
+  };
+
+  const statCards = [
+    {
+      key: "emergencies",
+      value: stats.emergencies,
+      label: "Emergencies",
+      tone: "rose",
+      hint: "Urgent project queue",
+      icon: <RocketIcon />,
+      statusFilter: "emergency",
+    },
+    {
+      key: "active",
+      value: stats.active,
+      label: "Active Projects",
+      tone: "blue",
+      hint: "Open projects",
+      icon: <ProjectsIcon />,
+      statusFilter: "active",
+    },
+    {
+      key: "pending",
+      value: stats.pending,
+      label: "Pending Acceptance",
+      tone: "purple",
+      hint: "Order confirmed only",
+      icon: <ClockIcon />,
+      statusFilter: "pending",
+    },
+    {
+      key: "pending-delivery",
+      value: stats.pendingDelivery,
+      label: "Pending Delivery",
+      tone: "teal",
+      hint: "Ready to dispatch",
+      icon: <TruckIcon />,
+      statusFilter: "delivery",
+    },
+    {
+      key: "quotes",
+      value: stats.quotes,
+      label: "Quotes",
+      tone: "orange",
+      hint: "Quote pipeline",
+      icon: <ReportsIcon />,
+      statusFilter: "quote",
+    },
+    {
+      key: "corporate",
+      value: stats.corporate,
+      label: "Corporate Projects",
+      tone: "indigo",
+      hint: "Corporate job queue",
+      icon: <ProjectsIcon />,
+      statusFilter: "corporate",
+    },
+    {
+      key: "completed",
+      value: stats.completed,
+      label: "Total Completed",
+      tone: "green",
+      hint: "Finished projects",
+      icon: <CheckCircleIcon />,
+      statusFilter: "completed",
+    },
+    {
+      key: "critical",
+      value: stats.overdue,
+      label: "Critical / Overdue",
+      tone: "red",
+      hint: "Needs attention",
+      icon: <AlertTriangleIcon />,
+      statusFilter: "critical",
+    },
+  ];
+
+  const openProjectsWithFilter = (statusFilter) => {
+    const params = new URLSearchParams({ status: statusFilter });
+    navigate(`/projects?${params.toString()}`);
   };
 
   if (isLoading) {
@@ -395,9 +534,7 @@ const Dashboard = ({ user }) => {
               day: "numeric",
             })}
           </div>
-          <h1 className="admin-title">
-            Overview <span style={{ fontSize: "1.5rem" }}>⚡</span>
-          </h1>
+          <h1 className="admin-title">Overview</h1>
           <p className="admin-subtitle">
             Welcome back, {user?.firstName || user?.name || "Admin"}. All
             systems operational.
@@ -407,37 +544,23 @@ const Dashboard = ({ user }) => {
 
       {/* Stats Grid */}
       <div className="admin-stats-grid">
-        <div className="admin-stat-card">
-          <div className="stat-icon-wrapper blue">
-            <ProjectsIcon />
-          </div>
-          <div className="stat-value">{stats.active}</div>
-          <div className="stat-label">Active Projects</div>
-        </div>
-
-        <div className="admin-stat-card">
-          <div className="stat-icon-wrapper purple">
-            <ClockIcon />
-          </div>
-          <div className="stat-value">{stats.pending}</div>
-          <div className="stat-label">Pending Acceptance</div>
-        </div>
-
-        <div className="admin-stat-card">
-          <div className="stat-icon-wrapper green">
-            <CheckCircleIcon />
-          </div>
-          <div className="stat-value">{stats.completed}</div>
-          <div className="stat-label">Total Completed</div>
-        </div>
-
-        <div className="admin-stat-card">
-          <div className="stat-icon-wrapper red">
-            <AlertTriangleIcon />
-          </div>
-          <div className="stat-value">{stats.overdue}</div>
-          <div className="stat-label">Critical / Overdue</div>
-        </div>
+        {statCards.map((card) => (
+          <button
+            key={card.key}
+            type="button"
+            className="admin-stat-card stat-card-action"
+            onClick={() => openProjectsWithFilter(card.statusFilter)}
+            aria-label={`${card.label} - open filtered projects`}
+          >
+            <div className={`stat-icon-wrapper ${card.tone}`}>{card.icon}</div>
+            <div className="stat-value">{card.value}</div>
+            <div className="stat-label">{card.label}</div>
+            <div className="stat-card-meta">
+              <span>{card.hint}</span>
+              <ChevronRightIcon />
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* NEW: Project Status Overview Component */}
@@ -461,7 +584,7 @@ const Dashboard = ({ user }) => {
                 <div className="project-info">
                   <h4>{project.details?.projectName}</h4>
                   <div className="project-meta">
-                    {project.orderId} •{" "}
+                    {project.orderId} |{" "}
                     {getLeadDisplay(project, "No Lead")}
                   </div>
                 </div>

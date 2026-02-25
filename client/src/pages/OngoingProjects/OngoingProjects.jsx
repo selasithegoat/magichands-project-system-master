@@ -24,6 +24,7 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
 
 const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
 const isQuoteProject = (project) => project?.projectType === "Quote";
+const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
 
@@ -47,6 +48,7 @@ const OngoingProjects = ({
       requested === "emergencies" ||
       requested === "pending-delivery" ||
       requested === "quotes" ||
+      requested === "corporate" ||
       requested === "completed"
     ) {
       return requested;
@@ -170,6 +172,12 @@ const OngoingProjects = ({
             isQuoteProject(project) &&
             !HISTORY_PROJECT_STATUSES.has(project.status || ""),
         );
+      case "corporate":
+        return projects.filter(
+          (project) =>
+            isCorporateProject(project) &&
+            !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+        );
       case "active":
       default:
         return projects.filter(
@@ -217,6 +225,8 @@ const OngoingProjects = ({
         return "Pending Delivery Projects";
       case "quotes":
         return "Quote Projects";
+      case "corporate":
+        return "Corporate Projects";
       case "active":
       default:
         return "Active Projects";

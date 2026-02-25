@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
@@ -8,9 +8,44 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 
 const GROUP_ROW_TRANSITION_MS = 220;
+const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished"]);
+const PENDING_PROJECT_STATUSES = new Set(["Order Confirmed"]);
+const DELIVERY_PROJECT_STATUSES = new Set(["Pending Delivery/Pickup"]);
+const POST_DELIVERY_PROJECT_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+
+const isEmergencyProject = (project) =>
+  project?.projectType === "Emergency" || project?.priority === "Urgent";
+const isQuoteProject = (project) => project?.projectType === "Quote";
+const isCorporateProject = (project) => project?.projectType === "Corporate Job";
+const isPendingDeliveryProject = (project) =>
+  DELIVERY_PROJECT_STATUSES.has(project?.status);
+
+const isUrgentProject = (project) => {
+  const deliveryDateValue = project?.details?.deliveryDate;
+  if (!deliveryDateValue) return false;
+
+  const deliveryDate = new Date(deliveryDateValue);
+  if (Number.isNaN(deliveryDate.getTime())) return false;
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  return (
+    deliveryDate - now <= URGENT_WINDOW_MS &&
+    !POST_DELIVERY_PROJECT_STATUSES.has(project?.status)
+  );
+};
 
 const Projects = ({ user }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
   const [groupedOrders, setGroupedOrders] = useState([]);
   const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
@@ -117,6 +152,43 @@ const Projects = ({ user }) => {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  useEffect(() => {
+    const statusQuery = searchParams.get("status");
+
+    if (!statusQuery) {
+      setFilterStatus("All");
+      setCurrentPage(1);
+      return;
+    }
+
+    const normalized = statusQuery.trim().toLowerCase();
+    const mappedStatus =
+      normalized === "active"
+        ? "__ACTIVE__"
+        : normalized === "pending"
+          ? "__PENDING__"
+          : normalized === "delivery" || normalized === "pending-delivery"
+            ? "__DELIVERY__"
+            : normalized === "quote" || normalized === "quotes"
+              ? "__QUOTE__"
+              : normalized === "corporate" || normalized === "corporates"
+                ? "__CORPORATE__"
+              : normalized === "emergency" || normalized === "emergencies"
+                ? "__EMERGENCY__"
+          : normalized === "completed"
+            ? "Completed"
+            : normalized === "critical" ||
+                normalized === "urgent" ||
+                normalized === "overdue"
+              ? "__URGENT__"
+              : null;
+
+    if (!mappedStatus) return;
+
+    setFilterStatus(mappedStatus);
+    setCurrentPage(1);
+  }, [searchParams]);
 
   useEffect(
     () => () => {
@@ -232,10 +304,35 @@ const Projects = ({ user }) => {
     };
   };
 
-  const matchesStatusFilter = (projectStatus) => {
+  const matchesStatusFilter = (project) => {
+    const projectStatus = project?.status;
+
     if (filterStatus === "All") return true;
+    if (filterStatus === "__ACTIVE__") {
+      return !CLOSED_PROJECT_STATUSES.has(projectStatus);
+    }
+    if (filterStatus === "__PENDING__") {
+      return PENDING_PROJECT_STATUSES.has(projectStatus);
+    }
+    if (filterStatus === "__DELIVERY__") {
+      return isPendingDeliveryProject(project);
+    }
+    if (filterStatus === "__QUOTE__") {
+      return isQuoteProject(project) && !CLOSED_PROJECT_STATUSES.has(projectStatus);
+    }
+    if (filterStatus === "__CORPORATE__") {
+      return (
+        isCorporateProject(project) && !CLOSED_PROJECT_STATUSES.has(projectStatus)
+      );
+    }
+    if (filterStatus === "__EMERGENCY__") {
+      return isEmergencyProject(project);
+    }
+    if (filterStatus === "__URGENT__") {
+      return isUrgentProject(project);
+    }
     if (filterStatus === "Completed") {
-      return projectStatus === "Completed" || projectStatus === "Finished";
+      return CLOSED_PROJECT_STATUSES.has(projectStatus);
     }
     return projectStatus === filterStatus;
   };
@@ -288,7 +385,7 @@ const Projects = ({ user }) => {
     }
 
     const hasStatus = projectsInGroup.some((project) =>
-      matchesStatusFilter(project?.status),
+      matchesStatusFilter(project),
     );
     if (!hasStatus) return false;
 
@@ -503,6 +600,13 @@ const Projects = ({ user }) => {
               className="filter-pill"
             >
               <option value="All">All Status</option>
+              <option value="__ACTIVE__">Active Projects</option>
+              <option value="__PENDING__">Pending Acceptance</option>
+              <option value="__DELIVERY__">Pending Delivery</option>
+              <option value="__QUOTE__">Quotes</option>
+              <option value="__CORPORATE__">Corporate Projects</option>
+              <option value="__EMERGENCY__">Emergencies</option>
+              <option value="__URGENT__">Critical / Overdue</option>
               <option value="Draft">Draft</option>
               <option value="New Order">New Order</option>
               <option value="Order Confirmed">Order Confirmed</option>

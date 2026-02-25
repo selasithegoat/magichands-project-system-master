@@ -10,6 +10,7 @@ import ClockIcon from "../../components/icons/ClockIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import TruckIcon from "../../components/icons/TruckIcon";
+import BuildingIcon from "../../components/icons/BuildingIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
@@ -30,6 +31,7 @@ const isPendingAcceptanceProject = (project) => project.status === "Order Confir
 const isPendingDeliveryProject = (project) =>
   project?.status === "Pending Delivery/Pickup";
 const isQuoteProject = (project) => project?.projectType === "Quote";
+const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
@@ -205,6 +207,16 @@ const Dashboard = ({
     [projects],
   );
 
+  const corporateProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          isCorporateProject(project) &&
+          !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+      ),
+    [projects],
+  );
+
   const handleStatsNavigate = (targetPath) => {
     navigate(targetPath);
   };
@@ -332,6 +344,26 @@ const Dashboard = ({
           </div>
           <div className="stats-count">{quoteProjects.length}</div>
           <div className="stats-label">Quotes</div>
+        </div>
+
+        <div
+          className="stats-card clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleStatsNavigate("/projects?view=corporate")}
+          onKeyDown={(event) =>
+            handleStatsCardKeyDown(event, "/projects?view=corporate")
+          }
+          aria-label="View corporate projects"
+        >
+          <div className="stats-header">
+            <div className="stats-icon-wrapper corporate">
+              <BuildingIcon />
+            </div>
+            <div className="more-dots"></div>
+          </div>
+          <div className="stats-count">{corporateProjects.length}</div>
+          <div className="stats-label">Corporate Projects</div>
         </div>
 
         <div

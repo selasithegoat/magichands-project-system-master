@@ -118,6 +118,10 @@
   background-color: #fffbeb;
   color: #b45309;
 }
+.stats-icon-wrapper.corporate {
+  background-color: #eef2ff;
+  color: #4338ca;
+}
 .stats-icon-wrapper.emergency {
   background-color: #fff1f2;
   color: #e11d48;
