@@ -802,6 +802,7 @@ const ProjectDetails = ({ user }) => {
       deliveryLocation: data.details?.deliveryLocation || "",
       contactType: data.details?.contactType || "None",
       supplySource: formatSupplySource(data.details?.supplySource),
+      packagingType: data.details?.packagingType || "",
     });
   };
 
@@ -957,6 +958,7 @@ const ProjectDetails = ({ user }) => {
         deliveryLocation: project.details?.deliveryLocation || "",
         contactType: project.details?.contactType || "None",
         supplySource: project.details?.supplySource || "",
+        packagingType: project.details?.packagingType || "",
       });
     }
     setIsEditing(!isEditing);
@@ -984,6 +986,7 @@ const ProjectDetails = ({ user }) => {
         deliveryLocation: editForm.deliveryLocation,
         contactType: editForm.contactType,
         supplySource: editForm.supplySource,
+        packagingType: editForm.packagingType,
       };
 
       const res = await fetch(`/api/projects/${id}`, {
@@ -1998,6 +2001,20 @@ const ProjectDetails = ({ user }) => {
                       />
                     ) : (
                       <p>{formatSupplySource(details.supplySource)}</p>
+                    )}
+                  </div>
+                  <div className="info-item">
+                    <label>Packaging Type</label>
+                    {isEditing ? (
+                      <input
+                        className="edit-input"
+                        name="packagingType"
+                        value={editForm.packagingType || ""}
+                        onChange={handleChange}
+                        placeholder="e.g. Carton box with inserts"
+                      />
+                    ) : (
+                      <p>{details.packagingType || "N/A"}</p>
                     )}
                   </div>
                 </>

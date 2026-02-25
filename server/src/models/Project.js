@@ -57,6 +57,11 @@ const ProjectSchema = new mongoose.Schema(
         enum: ["in-house", "purchase", "client-supply"],
         default: [],
       },
+      packagingType: {
+        type: String,
+        trim: true,
+        default: "",
+      },
       sampleImage: {
         type: String, // Path to the uploaded image
       },

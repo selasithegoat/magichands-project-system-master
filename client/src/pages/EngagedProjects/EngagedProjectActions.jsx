@@ -1035,6 +1035,10 @@ const EngagedProjectActions = ({ user }) => {
             <strong>Client:</strong> {project.details?.client || "N/A"}
           </div>
           <div>
+            <strong>Packaging Type:</strong>{" "}
+            {project.details?.packagingType || "N/A"}
+          </div>
+          <div>
             <strong>Delivery:</strong> {deliveryDate}
             {deliveryTime && ` (${deliveryTime})`}
           </div>

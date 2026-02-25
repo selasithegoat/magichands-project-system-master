@@ -2875,6 +2875,7 @@ const createProject = async (req, res) => {
       deliveryLocation,
       contactType,
       supplySource,
+      packagingType,
       departments, // [NEW] Step 2
       items, // [NEW] Step 3
       uncontrollableFactors,
@@ -3000,6 +3001,11 @@ const createProject = async (req, res) => {
     const normalizedSupplySource = normalizeSupplySourceSelection(
       supplySource !== undefined ? supplySource : details?.supplySource,
     );
+    const normalizedPackagingType = normalizeOptionalText(
+      getValue(
+        packagingType !== undefined ? packagingType : details?.packagingType,
+      ),
+    );
     const normalizedProjectType = toText(req.body.projectType) || "Standard";
     const isCorporateEmergency =
       normalizedProjectType === "Corporate Job" &&
@@ -3038,6 +3044,7 @@ const createProject = async (req, res) => {
         deliveryLocation,
         contactType: getValue(contactType) || "None",
         supplySource: normalizedSupplySource,
+        packagingType: normalizedPackagingType,
         sampleImage: sampleImagePath, // [NEW]
         attachments: attachmentPaths, // [NEW]
       },
@@ -6625,6 +6632,7 @@ const updateProject = async (req, res) => {
       deliveryLocation,
       contactType,
       supplySource,
+      packagingType,
       departments,
       items,
       uncontrollableFactors,
@@ -6723,6 +6731,7 @@ const updateProject = async (req, res) => {
       deliveryLocation: project.details?.deliveryLocation,
       contactType: project.details?.contactType,
       supplySource: project.details?.supplySource,
+      packagingType: project.details?.packagingType || "",
       lead: project.projectLeadId,
       assistantLead: project.assistantLeadId,
       orderRef: project.orderRef,
@@ -6806,6 +6815,19 @@ const updateProject = async (req, res) => {
     if (supplySource !== undefined) {
       project.details.supplySource = normalizeSupplySourceSelection(
         getValue(supplySource),
+      );
+      detailsChanged = true;
+    }
+    const resolvedPackagingType =
+      packagingType !== undefined
+        ? packagingType
+        : details &&
+            Object.prototype.hasOwnProperty.call(details, "packagingType")
+          ? details.packagingType
+          : undefined;
+    if (resolvedPackagingType !== undefined) {
+      project.details.packagingType = normalizeOptionalText(
+        getValue(resolvedPackagingType),
       );
       detailsChanged = true;
     }
@@ -6953,6 +6975,14 @@ const updateProject = async (req, res) => {
       changes.push(`Delivery Time: ${updatedProject.details?.deliveryTime}`);
     if (oldValues.deliveryLocation !== updatedProject.details?.deliveryLocation)
       changes.push(`Location: ${updatedProject.details?.deliveryLocation}`);
+    if (
+      String(oldValues.packagingType || "") !==
+      String(updatedProject.details?.packagingType || "")
+    ) {
+      changes.push(
+        `Packaging Type: ${updatedProject.details?.packagingType || "Not specified"}`,
+      );
+    }
     if (oldValues.status !== updatedProject.status)
       changes.push(`Status: ${updatedProject.status}`);
 

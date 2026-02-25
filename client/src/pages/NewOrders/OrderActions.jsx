@@ -1672,6 +1672,10 @@ const OrderActions = () => {
               <strong>Client:</strong> {project.details?.client || "-"}
             </p>
             <p>
+              <strong>Packaging Type:</strong>{" "}
+              {project.details?.packagingType || "-"}
+            </p>
+            <p>
               <strong>Status:</strong> {project.status}
             </p>
             <p>

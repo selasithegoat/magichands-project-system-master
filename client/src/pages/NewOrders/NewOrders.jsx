@@ -15,6 +15,7 @@ const NewOrders = () => {
     clientEmail: "",
     clientPhone: "",
     contactType: "None",
+    packagingType: "",
     deliveryLocation: "",
     projectName: "",
     briefOverview: "",
@@ -128,6 +129,7 @@ const NewOrders = () => {
       clientEmail: project.details?.clientEmail || "",
       clientPhone: project.details?.clientPhone || "",
       contactType: project.details?.contactType || "None",
+      packagingType: project.details?.packagingType || "",
       deliveryLocation: project.details?.deliveryLocation || "",
       projectName: project.details?.projectName || "",
       briefOverview: project.details?.briefOverview || "",
@@ -275,6 +277,7 @@ const NewOrders = () => {
     formPayload.append("clientEmail", formData.clientEmail);
     formPayload.append("clientPhone", formData.clientPhone);
     formPayload.append("contactType", formData.contactType);
+    formPayload.append("packagingType", formData.packagingType);
     formPayload.append("projectName", formData.projectName);
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
@@ -348,6 +351,7 @@ const NewOrders = () => {
             clientEmail: "",
             clientPhone: "",
             contactType: "None",
+            packagingType: "",
             deliveryLocation: "",
             projectName: "",
             briefOverview: "",
@@ -592,6 +596,18 @@ const NewOrders = () => {
                     <option value="MH">MH</option>
                     <option value="3rd Party">3rd Party</option>
                   </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="packagingType">Type of Packaging</label>
+                  <input
+                    type="text"
+                    id="packagingType"
+                    name="packagingType"
+                    value={formData.packagingType}
+                    onChange={handleChange}
+                    className="form-input"
+                    placeholder="e.g. Carton box with bubble wrap"
+                  />
                 </div>
                 <div className="form-group">
                   <label htmlFor="deliveryLocation">Delivery Location</label>
