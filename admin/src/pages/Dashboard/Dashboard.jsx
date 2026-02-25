@@ -548,7 +548,7 @@ const Dashboard = ({ user }) => {
           <button
             key={card.key}
             type="button"
-            className="admin-stat-card stat-card-action"
+            className={`admin-stat-card stat-card-action stat-card-${card.key}`}
             onClick={() => openProjectsWithFilter(card.statusFilter)}
             aria-label={`${card.label} - open filtered projects`}
           >

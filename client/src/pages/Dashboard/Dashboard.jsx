@@ -269,7 +269,7 @@ const Dashboard = ({
         </div>
 
         <div
-          className="stats-card clickable"
+          className="stats-card clickable active-card"
           role="button"
           tabIndex={0}
           onClick={() => handleStatsNavigate("/projects?view=active")}
@@ -289,7 +289,7 @@ const Dashboard = ({
         </div>
 
         <div
-          className="stats-card clickable"
+          className="stats-card clickable pending-acceptance-card"
           role="button"
           tabIndex={0}
           onClick={() => handleStatsNavigate("/create")}
@@ -307,7 +307,7 @@ const Dashboard = ({
         </div>
 
         <div
-          className="stats-card clickable"
+          className="stats-card clickable pending-delivery-card"
           role="button"
           tabIndex={0}
           onClick={() => handleStatsNavigate("/projects?view=pending-delivery")}
@@ -327,7 +327,7 @@ const Dashboard = ({
         </div>
 
         <div
-          className="stats-card clickable"
+          className="stats-card clickable quote-card"
           role="button"
           tabIndex={0}
           onClick={() => handleStatsNavigate("/projects?view=quotes")}
@@ -387,7 +387,7 @@ const Dashboard = ({
         </div>
 
         <div
-          className="stats-card clickable"
+          className="stats-card clickable completed-card"
           role="button"
           tabIndex={0}
           onClick={() => handleStatsNavigate("/history")}
