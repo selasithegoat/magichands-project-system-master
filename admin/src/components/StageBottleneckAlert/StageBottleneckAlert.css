@@ -40,6 +40,40 @@
   gap: 0.5rem;
 }
 
+.stage-bottleneck-select,
+.stage-bottleneck-modal-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.stage-bottleneck-select span,
+.stage-bottleneck-modal-select span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fee2e2;
+}
+
+.stage-bottleneck-modal-select span {
+  color: var(--text-secondary);
+}
+
+.stage-bottleneck-select select,
+.stage-bottleneck-modal-select select {
+  border: 1px solid rgba(252, 165, 165, 0.45);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.25);
+  color: #fff;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+}
+
+.stage-bottleneck-modal-select select {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
 .stage-bottleneck-primary-project {
   display: flex;
   flex-direction: column;
@@ -116,11 +150,34 @@
   margin-top: 0.8rem;
 }
 
+.stage-bottleneck-modal-focus {
+  margin-top: 0.65rem;
+  border: 1px solid rgba(252, 165, 165, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+  border-radius: 10px;
+  padding: 0.65rem;
+}
+
 .stage-bottleneck-item {
   border: 1px solid rgba(252, 165, 165, 0.35);
   border-radius: 10px;
   background: rgba(127, 29, 29, 0.2);
   padding: 0.7rem;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.stage-bottleneck-item:hover {
+  border-color: rgba(254, 202, 202, 0.6);
+}
+
+.stage-bottleneck-item.selected {
+  border-color: #fca5a5;
+  background: rgba(127, 29, 29, 0.35);
+  box-shadow: 0 0 0 1px rgba(252, 165, 165, 0.35);
 }
 
 .stage-bottleneck-item p {

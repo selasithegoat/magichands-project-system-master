@@ -25,6 +25,21 @@ const toStageLabel = (value) => {
   const label = String(value || "").trim();
   return label || "Unknown Stage";
 };
+const toBottleneckKey = (item = {}) =>
+  [
+    String(item?.projectId || ""),
+    String(item?.status || ""),
+    String(item?.stageEnteredAt || ""),
+  ].join("|");
+const toBottleneckOptionLabel = (item = {}, index = 0) => {
+  const orderId = String(item?.orderId || "").trim() || `Project ${index + 1}`;
+  const projectName = String(item?.projectName || "").trim() || "Unnamed Project";
+  const stage = toStageLabel(item?.status);
+  const daysInStage = Number.isFinite(Number(item?.daysInStage))
+    ? `${item.daysInStage}d`
+    : "N/A";
+  return `${orderId} - ${projectName} (${stage}, ${daysInStage})`;
+};
 
 const buildAlertSignature = (items = []) =>
   toSafeList(items)
@@ -54,6 +69,7 @@ const StageBottleneckAlert = () => {
   const [bottlenecks, setBottlenecks] = useState([]);
   const [thresholdDays, setThresholdDays] = useState(DEFAULT_THRESHOLD_DAYS);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedBottleneckKey, setSelectedBottleneckKey] = useState("");
   const [dismissedAtMap, setDismissedAtMap] = useState(() =>
     loadDismissedAtMap(),
   );
@@ -142,6 +158,28 @@ const StageBottleneckAlert = () => {
     };
   }, [isModalOpen]);
 
+  useEffect(() => {
+    if (bottlenecks.length === 0) {
+      setSelectedBottleneckKey("");
+      return;
+    }
+
+    const selectedStillExists = bottlenecks.some(
+      (item) => toBottleneckKey(item) === selectedBottleneckKey,
+    );
+
+    if (!selectedStillExists) {
+      setSelectedBottleneckKey(toBottleneckKey(bottlenecks[0]));
+    }
+  }, [bottlenecks, selectedBottleneckKey]);
+
+  const selectedBottleneck = useMemo(() => {
+    const found = bottlenecks.find(
+      (item) => toBottleneckKey(item) === selectedBottleneckKey,
+    );
+    return found || bottlenecks[0] || null;
+  }, [bottlenecks, selectedBottleneckKey]);
+
   const closeModal = () => {
     if (alertSignature) {
       setDismissedAtMap((prev) => ({
@@ -155,9 +193,11 @@ const StageBottleneckAlert = () => {
   if (loading && bottlenecks.length === 0) return null;
   if (bottlenecks.length === 0) return null;
 
-  const primary = bottlenecks[0];
+  const mostUrgent = bottlenecks[0];
+  const primary = selectedBottleneck || mostUrgent;
   const totalLabel = bottlenecks.length === 1 ? "project is" : "projects are";
   const primaryStage = toStageLabel(primary?.status);
+  const mostUrgentStage = toStageLabel(mostUrgent?.status);
 
   return (
     <>
@@ -166,7 +206,7 @@ const StageBottleneckAlert = () => {
           <h4>Stage Bottleneck Caution</h4>
           <p>
             {bottlenecks.length} {totalLabel} bottlenecked for {thresholdDays}+
-            {" "}days. Most urgent stage: <strong>{primaryStage}</strong>.
+            {" "}days. Most urgent stage: <strong>{mostUrgentStage}</strong>.
             {" "}Should this be cancelled, or placed on hold?
           </p>
           <p className="stage-bottleneck-banner-note">
@@ -177,6 +217,24 @@ const StageBottleneckAlert = () => {
           </p>
         </div>
         <div className="stage-bottleneck-banner-actions">
+          {bottlenecks.length > 1 && (
+            <label className="stage-bottleneck-select">
+              <span>Choose bottleneck to review</span>
+              <select
+                value={selectedBottleneckKey}
+                onChange={(event) => setSelectedBottleneckKey(event.target.value)}
+              >
+                {bottlenecks.map((item, index) => (
+                  <option
+                    key={toBottleneckKey(item)}
+                    value={toBottleneckKey(item)}
+                  >
+                    {toBottleneckOptionLabel(item, index)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="stage-bottleneck-primary-project">
             <strong>{primary.orderId || "N/A"}</strong>
             <span>{primary.projectName || "Unnamed Project"}</span>
@@ -195,7 +253,7 @@ const StageBottleneckAlert = () => {
             className="stage-bottleneck-btn open"
             to={`/projects/${primary.projectId}`}
           >
-            Open Project
+            Open Selected Project
           </Link>
         </div>
       </section>
@@ -211,19 +269,66 @@ const StageBottleneckAlert = () => {
             <h3 id="stage-bottleneck-title">Stage Bottleneck Caution</h3>
             <p>
               These projects are bottlenecked for at least {thresholdDays} days.
-              {" "}Most urgent stage right now: <strong>{primaryStage}</strong>.
+              {" "}Most urgent stage right now: <strong>{mostUrgentStage}</strong>.
               {" "}Should they be cancelled? If not, place them on hold to suspend
               the cancellation alert.
             </p>
             <p>
               Reminder: this caution popup will return every 24 hours until action is taken.
             </p>
+            {bottlenecks.length > 1 && (
+              <label className="stage-bottleneck-modal-select">
+                <span>Choose project to focus</span>
+                <select
+                  value={selectedBottleneckKey}
+                  onChange={(event) => setSelectedBottleneckKey(event.target.value)}
+                >
+                  {bottlenecks.map((item, index) => (
+                    <option
+                      key={toBottleneckKey(item)}
+                      value={toBottleneckKey(item)}
+                    >
+                      {toBottleneckOptionLabel(item, index)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {primary?.projectId && (
+              <div className="stage-bottleneck-modal-focus">
+                <p>
+                  Viewing: <strong>{primary.orderId || "N/A"}</strong> -{" "}
+                  {primary.projectName || "Unnamed Project"} ({primaryStage},{" "}
+                  {primary.daysInStage} days)
+                </p>
+                <Link
+                  className="stage-bottleneck-item-link"
+                  to={`/projects/${primary.projectId}`}
+                >
+                  Review Selected Project
+                </Link>
+              </div>
+            )}
 
             <div className="stage-bottleneck-modal-list">
               {bottlenecks.map((item) => (
                 <article
                   key={`${item.projectId}|${item.status}|${item.stageEnteredAt}`}
-                  className="stage-bottleneck-item"
+                  className={`stage-bottleneck-item ${
+                    toBottleneckKey(item) === toBottleneckKey(primary)
+                      ? "selected"
+                      : ""
+                  }`}
+                  onClick={() => setSelectedBottleneckKey(toBottleneckKey(item))}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedBottleneckKey(toBottleneckKey(item));
+                    }
+                  }}
                 >
                   <p>
                     <strong>Project:</strong> {item.orderId || "N/A"} -{" "}

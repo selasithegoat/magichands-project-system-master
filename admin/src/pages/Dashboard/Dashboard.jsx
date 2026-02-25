@@ -451,7 +451,7 @@ const Dashboard = ({ user }) => {
       value: stats.pending,
       label: "Pending Acceptance",
       tone: "purple",
-      hint: "Order confirmed only",
+      hint: "Unaccepted orders from leads",
       icon: <ClockIcon />,
       statusFilter: "pending",
     },
