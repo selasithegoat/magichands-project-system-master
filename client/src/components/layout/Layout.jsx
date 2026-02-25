@@ -174,19 +174,20 @@ const Layout = ({
 
   useEffect(() => {
     const currentUserId = user?._id || "";
-    if (currentUserId) {
-      const shouldBootstrap = notificationBootstrapUserId !== currentUserId;
-      if (shouldBootstrap) {
-        notificationBootstrapUserId = currentUserId;
-        fetchNotifications(true);
-      }
+    if (!currentUserId) return;
 
-      const interval = setInterval(
-        () => fetchNotifications(false),
-        NOTIFICATION_POLL_INTERVAL_MS,
-      );
-      return () => clearInterval(interval);
+    if (notificationBootstrapUserId !== currentUserId) {
+      notificationBootstrapUserId = currentUserId;
     }
+
+    // Always fetch once on mount so the unread dot is in sync across route changes.
+    fetchNotifications(true);
+
+    const interval = setInterval(
+      () => fetchNotifications(false),
+      NOTIFICATION_POLL_INTERVAL_MS,
+    );
+    return () => clearInterval(interval);
   }, [user]);
 
   const handleMarkAllAsRead = async () => {
