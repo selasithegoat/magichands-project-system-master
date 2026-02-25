@@ -7,6 +7,28 @@ import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
 const GROUP_ROW_TRANSITION_MS = 220;
+const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
+const FEEDBACK_MEDIA_MAX_FILES = 6;
+const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
+  "Pending Feedback",
+  "Delivered",
+]);
+
+const isFeedbackMediaFile = (file) => {
+  const mimeType = String(file?.type || "").toLowerCase();
+  return (
+    mimeType.startsWith("image/") ||
+    mimeType.startsWith("audio/") ||
+    mimeType.startsWith("video/")
+  );
+};
+
+const getFeedbackAttachmentName = (attachment) => {
+  if (attachment?.fileName) return attachment.fileName;
+  const rawUrl = String(attachment?.fileUrl || "").split("?")[0];
+  const parts = rawUrl.split("/").filter(Boolean);
+  return parts[parts.length - 1] || "Attachment";
+};
 
 const OrdersList = () => {
   const navigate = useNavigate();
@@ -43,6 +65,7 @@ const OrdersList = () => {
   });
   const [feedbackType, setFeedbackType] = useState("Positive");
   const [feedbackNotes, setFeedbackNotes] = useState("");
+  const [feedbackFiles, setFeedbackFiles] = useState([]);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [deliveryModal, setDeliveryModal] = useState({
     open: false,
@@ -389,11 +412,7 @@ const OrdersList = () => {
   }, [allOrders]);
 
   const canReopenFromHistory = (order) => {
-    if (
-      order.status !== "Feedback Completed" &&
-      order.status !== "Completed" &&
-      order.status !== "Finished"
-    ) {
+    if (order.status !== "Finished") {
       return false;
     }
     const lineageKey = getLineageKey(order);
@@ -401,13 +420,7 @@ const OrdersList = () => {
     return latestProjectIdByLineage.get(lineageKey) === String(order._id);
   };
 
-  const isHistoryEligible = (order) => {
-    return (
-      order.status === "Feedback Completed" ||
-      order.status === "Completed" ||
-      order.status === "Finished"
-    );
-  };
+  const isHistoryEligible = (order) => order.status === "Finished";
 
   const allOrderGroupsFiltered = groupedOrders
     .map((group) => ({
@@ -616,6 +629,7 @@ const OrdersList = () => {
   const openFeedbackModal = (order) => {
     setFeedbackType("Positive");
     setFeedbackNotes("");
+    setFeedbackFiles([]);
     setFeedbackModal({ open: true, project: order });
   };
 
@@ -623,21 +637,74 @@ const OrdersList = () => {
     setFeedbackModal({ open: false, project: null });
     setFeedbackType("Positive");
     setFeedbackNotes("");
+    setFeedbackFiles([]);
+  };
+
+  const handleFeedbackFileChange = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const acceptedFiles = selectedFiles.filter((file) =>
+      isFeedbackMediaFile(file),
+    );
+    if (acceptedFiles.length !== selectedFiles.length) {
+      showToast(
+        "Only photos, audio, and video files can be attached to feedback.",
+        "error",
+      );
+    }
+
+    if (acceptedFiles.length > 0) {
+      setFeedbackFiles((prev) => {
+        const merged = [...prev, ...acceptedFiles];
+        if (merged.length > FEEDBACK_MEDIA_MAX_FILES) {
+          showToast(
+            `You can attach up to ${FEEDBACK_MEDIA_MAX_FILES} files per feedback.`,
+            "error",
+          );
+          return merged.slice(0, FEEDBACK_MEDIA_MAX_FILES);
+        }
+        return merged;
+      });
+    }
+
+    event.target.value = "";
+  };
+
+  const handleRemoveFeedbackFile = (indexToRemove) => {
+    setFeedbackFiles((prev) =>
+      prev.filter((_, fileIndex) => fileIndex !== indexToRemove),
+    );
   };
 
   const handleAddFeedback = async () => {
     if (!feedbackModal.project) return;
+
+    const requiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
+      feedbackModal.project?.status || "",
+    );
+    if (requiresMediaAttachment && feedbackFiles.length === 0) {
+      showToast(
+        "Attach at least one photo, audio, or video before completing feedback.",
+        "error",
+      );
+      return;
+    }
+
     setFeedbackSaving(true);
     try {
+      const payload = new FormData();
+      payload.append("type", feedbackType);
+      payload.append("notes", feedbackNotes);
+      feedbackFiles.forEach((file) => {
+        payload.append("feedbackAttachments", file);
+      });
+
       const res = await fetch(
         `/api/projects/${feedbackModal.project._id}/feedback`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: feedbackType,
-            notes: feedbackNotes,
-          }),
+          body: payload,
         },
       );
 
@@ -649,6 +716,7 @@ const OrdersList = () => {
         setGroupedOrders((prev) => updateProjectInGroups(prev, updatedProject));
         setFeedbackModal({ open: true, project: updatedProject });
         setFeedbackNotes("");
+        setFeedbackFiles([]);
         showToast("Feedback added successfully.", "success");
       } else {
         const errorData = await res.json();
@@ -703,6 +771,10 @@ const OrdersList = () => {
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
     return bTime - aTime;
   });
+
+  const feedbackRequiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
+    feedbackModal.project?.status || "",
+  );
 
   return (
     <div className="orders-management-section" style={{ marginTop: "3rem" }}>
@@ -1078,7 +1150,7 @@ const OrdersList = () => {
             <div className="loading-state">Loading orders...</div>
           ) : historyOrdersFiltered.length === 0 ? (
             <div className="empty-state">
-              No orders that passed Feedback Completed found matching filters.
+              No finished orders found matching filters.
             </div>
           ) : (
             <table className="orders-table">
@@ -1272,6 +1344,41 @@ const OrdersList = () => {
                 placeholder="Share brief notes about the delivery..."
               />
 
+              <label>
+                Client Media{" "}
+                {feedbackRequiresMediaAttachment
+                  ? "(Required to complete feedback)"
+                  : "(Optional)"}
+              </label>
+              <input
+                type="file"
+                accept={FEEDBACK_MEDIA_ACCEPT}
+                multiple
+                onChange={handleFeedbackFileChange}
+                className="feedback-media-input"
+              />
+              <div className="feedback-upload-hint">
+                Attach photos, voice notes, or videos shared by the client.
+              </div>
+              {feedbackFiles.length > 0 && (
+                <div className="feedback-selected-files">
+                  {feedbackFiles.map((file, index) => (
+                    <div
+                      className="feedback-selected-file"
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                    >
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFeedbackFile(index)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="feedback-actions">
                 <button className="action-btn" onClick={closeFeedbackModal}>
                   Cancel
@@ -1279,7 +1386,11 @@ const OrdersList = () => {
                 <button
                   className="action-btn feedback-submit"
                   onClick={handleAddFeedback}
-                  disabled={feedbackSaving}
+                  disabled={
+                    feedbackSaving ||
+                    (feedbackRequiresMediaAttachment &&
+                      feedbackFiles.length === 0)
+                  }
                 >
                   {feedbackSaving ? "Saving..." : "Submit Feedback"}
                 </button>
@@ -1318,6 +1429,25 @@ const OrdersList = () => {
                         </span>
                       </div>
                       <p>{entry.notes || "No notes provided."}</p>
+                      {Array.isArray(entry.attachments) &&
+                        entry.attachments.filter((file) => file?.fileUrl).length >
+                          0 && (
+                          <div className="feedback-history-attachments">
+                            {entry.attachments
+                              .filter((file) => file?.fileUrl)
+                              .map((file, index) => (
+                                <a
+                                  key={`${entry._id || "feedback"}-${index}`}
+                                  href={file.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="feedback-attachment-link"
+                                >
+                                  {getFeedbackAttachmentName(file)}
+                                </a>
+                              ))}
+                          </div>
+                        )}
                       <button
                         className="feedback-delete"
                         onClick={() => handleDeleteFeedback(entry._id)}

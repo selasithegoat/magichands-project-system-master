@@ -282,6 +282,15 @@ const ProjectSchema = new mongoose.Schema(
           ref: "User",
         },
         createdByName: String,
+        attachments: [
+          {
+            fileUrl: String,
+            fileName: String,
+            fileType: String,
+            uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            uploadedAt: Date,
+          },
+        ],
         createdAt: { type: Date, default: Date.now },
       },
     ],

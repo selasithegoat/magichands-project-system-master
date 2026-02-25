@@ -112,6 +112,30 @@ const handleMockupUpload = (req, res, next) => {
   });
 };
 
+const handleFeedbackUploads = (req, res, next) => {
+  upload.array("feedbackAttachments", 6)(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ message: `File too large. Max limit is ${maxFileSizeMb}MB.` });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please upload a different file.",
+        });
+      });
+  });
+};
+
 router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
 router.get("/clients", protect, getClients); // [NEW] - Get all clients with their projects
@@ -160,7 +184,13 @@ router.delete(
 );
 
 // Feedback
-router.post("/:id/feedback", protect, enforceProjectNotOnHold, addFeedbackToProject);
+router.post(
+  "/:id/feedback",
+  protect,
+  enforceProjectNotOnHold,
+  handleFeedbackUploads,
+  addFeedbackToProject,
+);
 router.delete(
   "/:id/feedback/:feedbackId",
   protect,

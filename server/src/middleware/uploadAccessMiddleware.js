@@ -9,6 +9,7 @@ const PROJECT_BOUND_CATEGORIES = new Set([
   "project-updates",
   "mockups",
   "scope-reference-materials",
+  "client-feedback",
 ]);
 const GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST = new Set(
   String(process.env.AUTH_USERS_GLOBAL_DEPARTMENTS || "")
@@ -242,6 +243,7 @@ const findProjectForFileUrl = async (relativePath) => {
       { "details.sampleImage": { $in: candidateUrls } },
       { "details.attachments": { $in: candidateUrls } },
       { "mockup.fileUrl": { $in: candidateUrls } },
+      { "feedbacks.attachments.fileUrl": { $in: candidateUrls } },
     ],
   })
     .sort({ createdAt: -1 })

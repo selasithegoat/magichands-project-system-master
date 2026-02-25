@@ -17,6 +17,12 @@ const SAMPLE_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved the production sample";
 const SAMPLE_APPROVAL_RESET_PHRASE =
   "I confirm sample approval should be reset to pending";
+const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
+const FEEDBACK_MEDIA_MAX_FILES = 6;
+const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
+  "Pending Feedback",
+  "Delivered",
+]);
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -111,6 +117,22 @@ const getReferenceFileName = (path) => {
   const cleanPath = String(path).split("?")[0];
   const parts = cleanPath.split("/");
   return parts[parts.length - 1] || cleanPath;
+};
+
+const isFeedbackMediaFile = (file) => {
+  const mimeType = String(file?.type || "").toLowerCase();
+  return (
+    mimeType.startsWith("image/") ||
+    mimeType.startsWith("audio/") ||
+    mimeType.startsWith("video/")
+  );
+};
+
+const getFeedbackAttachmentName = (attachment) => {
+  if (attachment?.fileName) return attachment.fileName;
+  const rawUrl = String(attachment?.fileUrl || "").split("?")[0];
+  const parts = rawUrl.split("/").filter(Boolean);
+  return parts[parts.length - 1] || "Attachment";
 };
 
 const isImagePath = (path) =>
@@ -223,6 +245,7 @@ const OrderActions = () => {
   });
   const [feedbackType, setFeedbackType] = useState("Positive");
   const [feedbackNotes, setFeedbackNotes] = useState("");
+  const [feedbackFiles, setFeedbackFiles] = useState([]);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [projectUpdates, setProjectUpdates] = useState([]);
   const [updatesLoading, setUpdatesLoading] = useState(false);
@@ -612,6 +635,7 @@ const OrderActions = () => {
   const openFeedbackModal = () => {
     setFeedbackType("Positive");
     setFeedbackNotes("");
+    setFeedbackFiles([]);
     setFeedbackModal({ open: true, project });
   };
 
@@ -619,22 +643,79 @@ const OrderActions = () => {
     setFeedbackModal({ open: false, project: null });
     setFeedbackType("Positive");
     setFeedbackNotes("");
+    setFeedbackFiles([]);
+  };
+
+  const handleFeedbackFileChange = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const acceptedFiles = selectedFiles.filter((file) =>
+      isFeedbackMediaFile(file),
+    );
+    if (acceptedFiles.length !== selectedFiles.length) {
+      showToast(
+        "Only photos, audio, and video files can be attached to feedback.",
+        "error",
+      );
+    }
+
+    if (acceptedFiles.length > 0) {
+      setFeedbackFiles((prev) => {
+        const merged = [...prev, ...acceptedFiles];
+        if (merged.length > FEEDBACK_MEDIA_MAX_FILES) {
+          showToast(
+            `You can attach up to ${FEEDBACK_MEDIA_MAX_FILES} files per feedback.`,
+            "error",
+          );
+          return merged.slice(0, FEEDBACK_MEDIA_MAX_FILES);
+        }
+        return merged;
+      });
+    }
+
+    event.target.value = "";
+  };
+
+  const handleRemoveFeedbackFile = (indexToRemove) => {
+    setFeedbackFiles((prev) =>
+      prev.filter((_, fileIndex) => fileIndex !== indexToRemove),
+    );
   };
 
   const handleAddFeedback = async () => {
     if (!project) return;
+
+    const requiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
+      project.status || "",
+    );
+    if (requiresMediaAttachment && feedbackFiles.length === 0) {
+      showToast(
+        "Attach at least one photo, audio, or video before completing feedback.",
+        "error",
+      );
+      return;
+    }
+
     setFeedbackSaving(true);
     try {
+      const payload = new FormData();
+      payload.append("type", feedbackType);
+      payload.append("notes", feedbackNotes);
+      feedbackFiles.forEach((file) => {
+        payload.append("feedbackAttachments", file);
+      });
+
       const res = await fetch(`/api/projects/${project._id}/feedback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: feedbackType, notes: feedbackNotes }),
+        body: payload,
       });
       if (res.ok) {
         const updatedProject = await res.json();
         setProject(updatedProject);
         setFeedbackModal({ open: true, project: updatedProject });
         setFeedbackNotes("");
+        setFeedbackFiles([]);
         showToast("Feedback added successfully.", "success");
       } else {
         const errorData = await res.json();
@@ -683,6 +764,10 @@ const OrderActions = () => {
       const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
       return bTime - aTime;
     });
+
+  const feedbackRequiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
+    project?.status || "",
+  );
 
   const recentUpdates = useMemo(() => projectUpdates || [], [projectUpdates]);
   const latestUpdatePreview = useMemo(
@@ -2874,6 +2959,41 @@ const OrderActions = () => {
                 placeholder="Share brief notes about the delivery..."
               />
 
+              <label>
+                Client Media{" "}
+                {feedbackRequiresMediaAttachment
+                  ? "(Required to complete feedback)"
+                  : "(Optional)"}
+              </label>
+              <input
+                type="file"
+                accept={FEEDBACK_MEDIA_ACCEPT}
+                multiple
+                onChange={handleFeedbackFileChange}
+                className="feedback-media-input"
+              />
+              <div className="feedback-upload-hint">
+                Attach photos, voice notes, or videos shared by the client.
+              </div>
+              {feedbackFiles.length > 0 && (
+                <div className="feedback-selected-files">
+                  {feedbackFiles.map((file, index) => (
+                    <div
+                      className="feedback-selected-file"
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                    >
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFeedbackFile(index)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="feedback-actions">
                 <button className="action-btn" onClick={closeFeedbackModal}>
                   Cancel
@@ -2881,7 +3001,11 @@ const OrderActions = () => {
                 <button
                   className="action-btn feedback-submit"
                   onClick={handleAddFeedback}
-                  disabled={feedbackSaving}
+                  disabled={
+                    feedbackSaving ||
+                    (feedbackRequiresMediaAttachment &&
+                      feedbackFiles.length === 0)
+                  }
                 >
                   {feedbackSaving ? "Saving..." : "Submit Feedback"}
                 </button>
@@ -2911,7 +3035,26 @@ const OrderActions = () => {
                           {formatDate(entry.createdAt)}
                         </span>
                       </div>
-                      <p>{entry.notes}</p>
+                      <p>{entry.notes || "No notes provided."}</p>
+                      {Array.isArray(entry.attachments) &&
+                        entry.attachments.filter((file) => file?.fileUrl).length >
+                          0 && (
+                          <div className="feedback-history-attachments">
+                            {entry.attachments
+                              .filter((file) => file?.fileUrl)
+                              .map((file, index) => (
+                                <a
+                                  key={`${entry._id || "feedback"}-${index}`}
+                                  href={file.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="feedback-attachment-link"
+                                >
+                                  {getFeedbackAttachmentName(file)}
+                                </a>
+                              ))}
+                          </div>
+                        )}
                       <button
                         className="feedback-delete"
                         onClick={() => handleDeleteFeedback(entry._id)}

@@ -1766,6 +1766,55 @@
   resize: vertical;
 }
 
+.feedback-media-input {
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.84rem;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.feedback-upload-hint {
+  margin-top: -0.4rem;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.feedback-selected-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.feedback-selected-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.feedback-selected-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-selected-file button {
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .feedback-actions {
   display: flex;
   justify-content: flex-end;
@@ -1843,6 +1892,30 @@
   margin: 0 0 0.5rem;
   color: #334155;
   font-size: 0.85rem;
+}
+
+.feedback-history-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.feedback-attachment-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+  border: 1px solid rgba(20, 184, 166, 0.24);
+}
+
+.feedback-attachment-link:hover {
+  background: rgba(20, 184, 166, 0.18);
 }
 
 .feedback-delete {

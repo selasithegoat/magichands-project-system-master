@@ -116,6 +116,11 @@ const MEDIA_MIME_TYPES = new Set([
   "audio/x-wav",
   "audio/webm",
 ]);
+const FEEDBACK_MEDIA_EXTENSIONS = new Set([
+  ...IMAGE_EXTENSIONS,
+  ...MEDIA_EXTENSIONS,
+]);
+const FEEDBACK_MEDIA_MIME_TYPES = new Set([...IMAGE_MIME_TYPES, ...MEDIA_MIME_TYPES]);
 
 const GENERAL_SAFE_EXTENSIONS = new Set([
   ...IMAGE_EXTENSIONS,
@@ -152,6 +157,10 @@ const FILE_POLICY_BY_FIELD = {
   attachment: {
     extensions: GENERAL_SAFE_EXTENSIONS,
     mimeTypes: GENERAL_SAFE_MIME_TYPES,
+  },
+  feedbackAttachments: {
+    extensions: FEEDBACK_MEDIA_EXTENSIONS,
+    mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
   },
   default: {
     extensions: GENERAL_SAFE_EXTENSIONS,
@@ -349,6 +358,7 @@ const getCategory = (file) => {
   if (file.fieldname === "sampleImage" || file.fieldname === "attachments")
     return "scope-reference-materials";
   if (file.fieldname === "attachment") return "project-updates";
+  if (file.fieldname === "feedbackAttachments") return "client-feedback";
   return "misc";
 };
 

@@ -12,6 +12,7 @@ const {
   isAdminPortalRequest,
   isEngagedPortalRequest,
 } = require("../middleware/authMiddleware");
+const upload = require("../middleware/upload");
 const {
   notifyBillingOptionChange,
   notifyBillingPrerequisiteBlocked,
@@ -97,6 +98,31 @@ const HOLDABLE_STATUSES = new Set(
     (status) => status !== HOLD_STATUS,
   ),
 );
+const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
+  "Pending Feedback",
+  "Delivered",
+]);
+
+const mapFeedbackAttachments = (req, userId) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+  return files
+    .filter((file) => file?.filename)
+    .map((file) => ({
+      fileUrl: `/uploads/${file.filename}`,
+      fileName: file.originalname || "",
+      fileType: file.mimetype || "",
+      uploadedBy: userId || undefined,
+      uploadedAt: new Date(),
+    }));
+};
+
+const cleanupUploadedFilesSafely = async (req) => {
+  try {
+    await upload.cleanupRequestFiles(req);
+  } catch (cleanupError) {
+    console.error("Failed to clean up uploaded files:", cleanupError);
+  }
+};
 
 const canManageBilling = (user) => {
   if (!user) return false;
@@ -5718,15 +5744,20 @@ const rejectProjectMockup = async (req, res) => {
 const addFeedbackToProject = async (req, res) => {
   try {
     const { type, notes } = req.body;
+    const feedbackAttachments = mapFeedbackAttachments(req, req.user?._id);
 
     if (!type || !["Positive", "Negative"].includes(type)) {
+      await cleanupUploadedFilesSafely(req);
       return res
         .status(400)
         .json({ message: "Feedback type must be Positive or Negative." });
     }
 
     const project = await Project.findById(req.params.id);
-    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) {
+      await cleanupUploadedFilesSafely(req);
+      return;
+    }
 
     const userDepts = Array.isArray(req.user.department)
       ? req.user.department
@@ -5737,14 +5768,27 @@ const addFeedbackToProject = async (req, res) => {
     const isAdmin = req.user.role === "admin";
 
     if (!isAdmin && !isFrontDesk) {
+      await cleanupUploadedFilesSafely(req);
       return res.status(403).json({
         message: "Not authorized to add feedback to this project.",
       });
     }
 
+    const willMarkFeedbackComplete = FEEDBACK_COMPLETION_GATE_STATUSES.has(
+      project.status,
+    );
+    if (willMarkFeedbackComplete && feedbackAttachments.length === 0) {
+      await cleanupUploadedFilesSafely(req);
+      return res.status(400).json({
+        message:
+          "Attach at least one photo, audio, or video before completing feedback.",
+      });
+    }
+
     const feedbackEntry = {
       type,
-      notes: notes || "",
+      notes: typeof notes === "string" ? notes.trim() : "",
+      attachments: feedbackAttachments,
       createdBy: req.user._id,
       createdByName:
         `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim(),
@@ -5756,10 +5800,7 @@ const addFeedbackToProject = async (req, res) => {
     project.sectionUpdates.feedbacks = new Date();
 
     const oldStatus = project.status;
-    if (
-      project.status === "Pending Feedback" ||
-      project.status === "Delivered"
-    ) {
+    if (willMarkFeedbackComplete) {
       project.status = "Feedback Completed";
     }
 
@@ -5789,6 +5830,7 @@ const addFeedbackToProject = async (req, res) => {
 
     res.json(updatedProject);
   } catch (error) {
+    await cleanupUploadedFilesSafely(req);
     console.error("Error adding feedback:", error);
     res.status(500).json({ message: "Server Error" });
   }
