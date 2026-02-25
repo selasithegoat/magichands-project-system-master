@@ -9,6 +9,7 @@ import {
   XMarkIcon,
 } from "../../icons/Icons";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getGroupedLeadDisplayRows } from "../../utils/leadDisplay";
 import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal";
 import BillingGuardModal from "../../components/BillingGuardModal/BillingGuardModal";
 import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCancelModal";
@@ -264,6 +265,7 @@ const ProjectDetails = ({ user }) => {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [orderGroupProjects, setOrderGroupProjects] = useState([]);
   const [updates, setUpdates] = useState([]); // New state for updates
   const [undoingDept, setUndoingDept] = useState(null);
   const [isTogglingHold, setIsTogglingHold] = useState(false);
@@ -301,6 +303,22 @@ const ProjectDetails = ({ user }) => {
   const projectLeadUserId = toEntityId(project?.projectLeadId);
   const isLeadUser = Boolean(
     currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
+  );
+  const groupedLeadRows = useMemo(
+    () =>
+      getGroupedLeadDisplayRows(
+        orderGroupProjects.length > 0
+          ? orderGroupProjects
+          : project
+            ? [project]
+            : [],
+        {
+          currentProject: project,
+          prioritizeViewer: false,
+          prioritizeCurrentLead: false,
+        },
+      ),
+    [orderGroupProjects, project],
   );
 
   useEffect(() => {
@@ -806,6 +824,33 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
+  const fetchOrderGroupProjects = async (orderNumber, fallbackProject = null) => {
+    const normalizedOrder = String(orderNumber || "").trim();
+    if (!normalizedOrder) {
+      setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `/api/projects/orders/${encodeURIComponent(normalizedOrder)}?source=admin&collapseRevisions=true`,
+        {
+          credentials: "include",
+        },
+      );
+      if (!res.ok) throw new Error("Failed to fetch grouped order projects");
+
+      const group = await res.json();
+      const projects = Array.isArray(group?.projects) ? group.projects : [];
+      setOrderGroupProjects(
+        projects.length > 0 ? projects : fallbackProject ? [fallbackProject] : [],
+      );
+    } catch (error) {
+      console.error("Failed to load grouped order projects:", error);
+      setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+    }
+  };
+
   const fetchProject = async ({ showLoading = true, retries = 1 } = {}) => {
     if (showLoading) setLoading(true);
 
@@ -819,6 +864,7 @@ const ProjectDetails = ({ user }) => {
 
       const data = await res.json();
       applyProjectToState(data);
+      await fetchOrderGroupProjects(data?.orderId, data);
     } catch (err) {
       console.error("Error fetching project:", err);
       if (retries > 0) {
@@ -2808,6 +2854,21 @@ const ProjectDetails = ({ user }) => {
                     ? `${project.assistantLeadId.firstName} ${project.assistantLeadId.lastName}`
                     : "None"}
                 </p>
+              )}
+            </div>
+
+            <div className="info-item" style={{ marginBottom: "1.5rem" }}>
+              <label>Order Group Leads</label>
+              {groupedLeadRows.length > 0 ? (
+                <div style={{ display: "grid", gap: "0.35rem", marginTop: "0.5rem" }}>
+                  {groupedLeadRows.map((entry) => (
+                    <p key={entry.key} style={{ margin: 0 }}>
+                      {entry.display}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p>Unassigned</p>
               )}
             </div>
 

@@ -544,6 +544,7 @@ const buildProjectAccessQuery = (req) => {
   return {
     query,
     isAdminPortal,
+    canSeeAll,
   };
 };
 
@@ -3340,22 +3341,69 @@ const getOrderGroupByNumber = async (req, res) => {
       return res.status(400).json({ message: "orderNumber is required." });
     }
 
-    const { query } = buildProjectAccessQuery(req);
+    const { query, canSeeAll } = buildProjectAccessQuery(req);
     const conditions = [{ orderId: orderNumber }];
     if (query && Object.keys(query).length > 0) {
       conditions.push(query);
     }
     const scopedQuery = conditions.length === 1 ? conditions[0] : { $and: conditions };
 
-    const projects = await Project.find(scopedQuery)
-      .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName")
-      .populate("assistantLeadId", "firstName lastName employeeId email")
-      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
-      .sort({ createdAt: -1 });
+    const findGroupedProjects = (criteria) =>
+      Project.find(criteria)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName")
+        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+        .sort({ createdAt: -1 });
 
-    if (projects.length === 0) {
+    const accessibleProjects = await findGroupedProjects(scopedQuery);
+
+    if (accessibleProjects.length === 0) {
       return res.status(404).json({ message: "Order not found." });
+    }
+
+    let projects = accessibleProjects;
+
+    // For client portal users, once they are authorized on at least one project in the
+    // order group, return the full group so cross-project lead assignments are visible.
+    if (!canSeeAll) {
+      const orderRefIds = Array.from(
+        new Set(
+          accessibleProjects
+            .map((project) => toObjectIdString(project?.orderRef))
+            .filter(Boolean),
+        ),
+      );
+      const orderScopeConditions = [{ orderId: orderNumber }];
+      if (orderRefIds.length > 0) {
+        orderScopeConditions.push({ orderRef: { $in: orderRefIds } });
+      }
+
+      const visibilityConditions = [];
+      const cancelledOnly =
+        String(req.query.cancelled || "").toLowerCase() === "true";
+      const includeCancelled =
+        String(req.query.includeCancelled || "").toLowerCase() === "true";
+
+      if (cancelledOnly) {
+        visibilityConditions.push({ "cancellation.isCancelled": true });
+      } else if (!includeCancelled) {
+        visibilityConditions.push({ "cancellation.isCancelled": { $ne: true } });
+      }
+
+      const expandedConditions = [
+        { $or: orderScopeConditions },
+        ...visibilityConditions,
+      ];
+      const expandedQuery =
+        expandedConditions.length === 1
+          ? expandedConditions[0]
+          : { $and: expandedConditions };
+
+      const expandedProjects = await findGroupedProjects(expandedQuery);
+      if (expandedProjects.length > 0) {
+        projects = expandedProjects;
+      }
     }
 
     const groups = buildOrderGroups(projects, {

@@ -407,9 +407,21 @@
 
 .lead-profile {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
   font-weight: 500;
+}
+
+.lead-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.lead-group-line {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  line-height: 1.35;
 }
 
 .lead-avatar {

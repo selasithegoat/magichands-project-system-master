@@ -29,7 +29,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { getLeadDisplay } from "../../utils/leadDisplay";
+import { getGroupedLeadDisplayRows, getLeadDisplay } from "../../utils/leadDisplay";
 import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
@@ -392,6 +392,18 @@ const getPendingDeliveryBillingMissing = ({ paymentTypes }) => {
   return missing;
 };
 
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    if (value._id) return String(value._id);
+    if (value.id) return String(value.id);
+  }
+  return "";
+};
+
 const ProjectDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -401,10 +413,38 @@ const ProjectDetail = ({ user }) => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [orderGroupProjects, setOrderGroupProjects] = useState([]);
   const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
+  const currentUserId = toEntityId(user?._id || user?.id);
 
   // PDF Image Processing & Form Data removed - moved to ProjectPdfDownload component
+  const fetchOrderGroupProjects = async (orderNumber, fallbackProject = null) => {
+    const normalizedOrder = String(orderNumber || "").trim();
+    if (!normalizedOrder) {
+      setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `/api/projects/orders/${encodeURIComponent(normalizedOrder)}?collapseRevisions=true`,
+        {
+          credentials: "include",
+        },
+      );
+      if (!res.ok) throw new Error("Failed to fetch grouped order projects");
+
+      const group = await res.json();
+      const projects = Array.isArray(group?.projects) ? group.projects : [];
+      setOrderGroupProjects(
+        projects.length > 0 ? projects : fallbackProject ? [fallbackProject] : [],
+      );
+    } catch (groupError) {
+      console.error("Failed to load grouped order projects", groupError);
+      setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+    }
+  };
 
   const fetchProject = async () => {
     try {
@@ -412,6 +452,7 @@ const ProjectDetail = ({ user }) => {
       if (!res.ok) throw new Error("Failed to fetch project");
       const data = await res.json();
       setProject(data);
+      await fetchOrderGroupProjects(data?.orderId, data);
     } catch (err) {
       console.error(err);
       setError("Could not load project details");
@@ -880,7 +921,11 @@ const ProjectDetail = ({ user }) => {
         {activeTab === "Overview" && (
           <>
             <div className="main-column">
-              <ProjectInfoCard project={project} />
+              <ProjectInfoCard
+                project={project}
+                orderGroupProjects={orderGroupProjects}
+                currentUserId={currentUserId}
+              />
               {project.projectType === "Quote" && (
                 <QuoteChecklistCard project={project} />
               )}
@@ -952,9 +997,29 @@ const ProjectDetail = ({ user }) => {
   );
 };
 
-const ProjectInfoCard = ({ project }) => {
+const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" }) => {
   const details = project.details || {};
   const lead = getLeadDisplay(project, "Unassigned");
+  const groupedLeadRows = useMemo(
+    () =>
+      getGroupedLeadDisplayRows(
+        orderGroupProjects.length > 0 ? orderGroupProjects : [project],
+        {
+          currentUserId,
+          currentProject: project,
+          prioritizeViewer: true,
+          prioritizeCurrentLead: true,
+        },
+      ),
+    [orderGroupProjects, project, currentUserId],
+  );
+  const leadRows =
+    groupedLeadRows.length > 0
+      ? groupedLeadRows
+      : [{ key: "fallback", name: lead, display: lead }];
+  const primaryLeadName = leadRows[0]?.name || lead;
+  const leadSectionTitle =
+    leadRows.length > 1 ? "ORDER GROUP LEADS" : "PROJECT LEAD";
   const briefOverview = String(details.briefOverview || "").trim();
   const lastUpdatedAt = project.sectionUpdates?.details;
 
@@ -1025,10 +1090,16 @@ const ProjectInfoCard = ({ project }) => {
       </div>
       <div className="info-grid">
         <div className="info-item">
-          <h4>PROJECT LEAD</h4>
+          <h4>{leadSectionTitle}</h4>
           <div className="lead-profile">
-            <UserAvatar name={lead} width="32px" height="32px" />
-            <span>{lead}</span>
+            <UserAvatar name={primaryLeadName} width="32px" height="32px" />
+            <div className="lead-group-list">
+              {leadRows.map((entry) => (
+                <span key={entry.key || entry.display} className="lead-group-line">
+                  {entry.display}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
         <div className="info-item">
