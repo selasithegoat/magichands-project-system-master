@@ -214,27 +214,23 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const sampleApprovalStatus = getSampleApprovalStatus(
     project?.sampleApproval || {},
   );
+  const sampleApprovalPending =
+    sampleRequirementEnabled && sampleApprovalStatus !== "approved";
   const showPendingClientApprovalTag =
     project?.status === "Pending Mockup" &&
     hasUploadedMockup &&
     mockupApprovalStatus === "pending";
   const showPendingSampleApprovalTag =
     project?.status === "Pending Production" &&
-    sampleRequirementEnabled &&
-    sampleApprovalStatus !== "approved";
+    sampleApprovalPending;
   const hasSpecialRequirementTag =
-    sampleRequirementEnabled || corporateEmergencyEnabled;
+    sampleApprovalPending || corporateEmergencyEnabled;
   const specialRequirementWatermark = [
     corporateEmergencyEnabled ? "Corporate Emergency" : "",
-    sampleRequirementEnabled ? "Sample Approval Required" : "",
+    sampleApprovalPending ? "Sample Approval Required" : "",
   ]
     .filter(Boolean)
     .join(" • ");
-  const sampleRequirementTagText =
-    sampleApprovalStatus === "approved"
-      ? "Sample Approval Required (Approved)"
-      : "Sample Approval Required";
-
   return (
     <div
       className={`project-card-new project-type-${projectTypeKey} ${
@@ -289,9 +285,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               Corporate Emergency
             </span>
           )}
-          {sampleRequirementEnabled && (
+          {sampleApprovalPending && (
             <span className="status-badge sample-requirement-awareness">
-              {sampleRequirementTagText}
+              Sample Approval Required
             </span>
           )}
           {showPendingSampleApprovalTag && (

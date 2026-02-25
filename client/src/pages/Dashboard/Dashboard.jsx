@@ -347,7 +347,7 @@ const Dashboard = ({
         </div>
 
         <div
-          className="stats-card clickable"
+          className="stats-card clickable corporate-card"
           role="button"
           tabIndex={0}
           onClick={() => handleStatsNavigate("/projects?view=corporate")}
