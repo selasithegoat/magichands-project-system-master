@@ -1,0 +1,114 @@
+.reminder-alert-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.reminder-alert-modal {
+  width: min(560px, 100%);
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 28px 72px rgba(15, 23, 42, 0.28);
+  padding: 1.25rem 1.2rem;
+}
+
+.reminder-alert-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ef4444;
+}
+
+.reminder-alert-title {
+  margin: 0.35rem 0 0;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.reminder-alert-message {
+  margin: 0.65rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.reminder-alert-meta {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.reminder-alert-note {
+  margin: 0.8rem 0 0;
+  font-size: 0.83rem;
+  color: #475569;
+}
+
+.reminder-alert-error {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.65rem;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.84rem;
+}
+
+.reminder-alert-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.reminder-alert-btn {
+  border: 1px solid #d0d7e4;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 0.86rem;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 0.58rem 0.82rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.reminder-alert-btn:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.reminder-alert-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.reminder-alert-btn.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.reminder-alert-btn.danger:hover:not(:disabled) {
+  background: #ffe4e6;
+  border-color: #fda4af;
+}
+
+.reminder-alert-btn.success {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.reminder-alert-btn.success:hover:not(:disabled) {
+  background: #dcfce7;
+  border-color: #86efac;
+}

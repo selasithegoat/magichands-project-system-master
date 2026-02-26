@@ -271,7 +271,14 @@ const ProjectReminderPanel = ({ project, user }) => {
   );
 
   const historicalReminders = useMemo(
-    () => reminders.filter((item) => !isReminderScheduled(item)),
+    () =>
+      reminders
+        .filter((item) => !isReminderScheduled(item))
+        .sort(
+          (a, b) =>
+            new Date(b?.createdAt || 0).getTime() -
+            new Date(a?.createdAt || 0).getTime(),
+        ),
     [reminders],
   );
 

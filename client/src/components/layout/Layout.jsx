@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
+import ReminderAlertModal from "../features/ReminderAlertModal";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -26,6 +27,18 @@ import {
 
 const NOTIFICATION_POLL_INTERVAL_MS = 5000;
 let notificationBootstrapUserId = "";
+
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    if (value._id) return toEntityId(value._id);
+    if (value.id) return String(value.id);
+  }
+  return "";
+};
 
 // --- Icons ---
 const MenuIcon = () => (
@@ -72,6 +85,12 @@ const Layout = ({
   const [toasts, setToasts] = useState([]);
   const lastIdsRef = useRef(new Set());
   const shownToastsRef = useRef(new Set()); // Track notification IDs already shown as toasts
+  const [reminderQueue, setReminderQueue] = useState([]);
+  const [activeReminderAlert, setActiveReminderAlert] = useState(null);
+  const [reminderActionLoading, setReminderActionLoading] = useState(false);
+  const [reminderActionError, setReminderActionError] = useState("");
+  const queuedReminderNotificationIdsRef = useRef(new Set());
+  const handledReminderNotificationIdsRef = useRef(new Set());
 
   // [New] Native Notification Permission Logic
   useEffect(() => {
@@ -143,6 +162,137 @@ const Layout = ({
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const syncReminderQueueFromNotifications = (notificationList = []) => {
+    const unreadReminderNotifications = notificationList
+      .filter((item) => !item?.isRead && item?.type === "REMINDER")
+      .map((item) => {
+        const notificationId = toEntityId(item?._id);
+        const reminderId = toEntityId(item?.reminder);
+        return {
+          notificationId,
+          reminderId,
+          title: String(item?.title || "Reminder").trim(),
+          message: String(item?.message || "").trim(),
+          createdAt: item?.createdAt || null,
+          projectId: toEntityId(item?.project?._id || item?.project),
+        };
+      })
+      .filter((item) => Boolean(item.notificationId && item.reminderId))
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+      );
+
+    const unreadIds = new Set(
+      unreadReminderNotifications.map((item) => item.notificationId),
+    );
+
+    setReminderQueue((prev) => {
+      const next = prev.filter((item) => unreadIds.has(item.notificationId));
+      const queueSet = new Set(next.map((item) => item.notificationId));
+
+      for (const item of unreadReminderNotifications) {
+        if (handledReminderNotificationIdsRef.current.has(item.notificationId)) {
+          continue;
+        }
+        if (queueSet.has(item.notificationId)) continue;
+        next.push(item);
+        queueSet.add(item.notificationId);
+      }
+
+      queuedReminderNotificationIdsRef.current = queueSet;
+      return next;
+    });
+  };
+
+  const markNotificationReadSilently = async (notificationId) => {
+    if (!notificationId) return;
+    try {
+      const res = await fetch(`/api/notifications/${notificationId}/read`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item._id === notificationId ? { ...item, isRead: true } : item,
+        ),
+      );
+      setNotificationCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Error marking reminder notification as read:", error);
+    }
+  };
+
+  const processReminderAlertAction = async (actionType) => {
+    if (!activeReminderAlert || reminderActionLoading) return;
+    const reminderId = toEntityId(activeReminderAlert.reminderId);
+    const notificationId = toEntityId(activeReminderAlert.notificationId);
+
+    if (!reminderId || !notificationId) {
+      setReminderActionError("This reminder cannot be managed anymore.");
+      return;
+    }
+
+    setReminderActionLoading(true);
+    setReminderActionError("");
+
+    try {
+      const request = async (endpoint, body = {}) =>
+        fetch(`/api/reminders/${reminderId}${endpoint}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(body),
+        });
+
+      if (actionType === "snooze") {
+        const snoozeRes = await request("/snooze", { minutes: 60 });
+        if (!snoozeRes.ok) {
+          const errorData = await snoozeRes.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to snooze reminder.");
+        }
+      } else if (actionType === "stop") {
+        const stopRes = await request("/cancel");
+        if (!stopRes.ok) {
+          if (stopRes.status === 403) {
+            const completeRes = await request("/complete");
+            if (!completeRes.ok) {
+              const errorData = await completeRes.json().catch(() => ({}));
+              throw new Error(
+                errorData.message || "Failed to stop reminder for this user.",
+              );
+            }
+          } else {
+            const errorData = await stopRes.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to stop reminder.");
+          }
+        }
+      } else {
+        const completeRes = await request("/complete");
+        if (!completeRes.ok) {
+          const errorData = await completeRes.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to complete reminder.");
+        }
+      }
+
+      await markNotificationReadSilently(notificationId);
+      handledReminderNotificationIdsRef.current.add(notificationId);
+      queuedReminderNotificationIdsRef.current.delete(notificationId);
+
+      setReminderQueue((prev) =>
+        prev.filter((item) => item.notificationId !== notificationId),
+      );
+      setActiveReminderAlert(null);
+      setReminderActionError("");
+    } catch (error) {
+      setReminderActionError(error.message || "Failed to update reminder.");
+    } finally {
+      setReminderActionLoading(false);
+    }
+  };
+
   const fetchNotifications = async (isInitial = false) => {
     try {
       const res = await fetch("/api/notifications");
@@ -151,6 +301,7 @@ const Layout = ({
         setNotifications(data);
         const unreadCount = data.filter((n) => !n.isRead).length;
         setNotificationCount(unreadCount);
+        syncReminderQueueFromNotifications(data);
 
         // On refresh/first load, do not popup existing unread notifications.
         if (isInitial) {
@@ -187,6 +338,13 @@ const Layout = ({
 
     if (notificationBootstrapUserId !== currentUserId) {
       notificationBootstrapUserId = currentUserId;
+      shownToastsRef.current = new Set();
+      lastIdsRef.current = new Set();
+      queuedReminderNotificationIdsRef.current = new Set();
+      handledReminderNotificationIdsRef.current = new Set();
+      setReminderQueue([]);
+      setActiveReminderAlert(null);
+      setReminderActionError("");
     }
 
     // Always fetch once on mount so the unread dot is in sync across route changes.
@@ -224,6 +382,25 @@ const Layout = ({
     };
   }, [user]);
 
+  useEffect(() => {
+    if (activeReminderAlert) return;
+    if (reminderQueue.length === 0) return;
+
+    setActiveReminderAlert(reminderQueue[0]);
+    setReminderActionError("");
+  }, [activeReminderAlert, reminderQueue]);
+
+  useEffect(() => {
+    if (!activeReminderAlert) return;
+    const exists = reminderQueue.some(
+      (item) => item.notificationId === activeReminderAlert.notificationId,
+    );
+    if (!exists) {
+      setActiveReminderAlert(null);
+      setReminderActionError("");
+    }
+  }, [activeReminderAlert, reminderQueue]);
+
   const handleMarkAllAsRead = async () => {
     try {
       const res = await fetch("/api/notifications/read-all", {
@@ -232,6 +409,10 @@ const Layout = ({
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
         setNotificationCount(0);
+        setReminderQueue([]);
+        setActiveReminderAlert(null);
+        setReminderActionError("");
+        queuedReminderNotificationIdsRef.current = new Set();
       }
     } catch (err) {
       console.error("Error marking all read:", err);
@@ -245,6 +426,10 @@ const Layout = ({
         setNotifications([]);
         lastIdsRef.current = new Set();
         setNotificationCount(0);
+        setReminderQueue([]);
+        setActiveReminderAlert(null);
+        setReminderActionError("");
+        queuedReminderNotificationIdsRef.current = new Set();
       }
     } catch (err) {
       console.error("Error clearing notifications:", err);
@@ -265,6 +450,14 @@ const Layout = ({
           prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
         );
         setNotificationCount((prev) => Math.max(0, prev - 1));
+        setReminderQueue((prev) =>
+          prev.filter((item) => item.notificationId !== String(id)),
+        );
+        queuedReminderNotificationIdsRef.current.delete(String(id));
+        if (activeReminderAlert?.notificationId === String(id)) {
+          setActiveReminderAlert(null);
+          setReminderActionError("");
+        }
 
         // Close modals
         setIsNotificationOpen(false);
@@ -368,6 +561,15 @@ const Layout = ({
         onMarkAllRead={handleMarkAllAsRead}
         onClearAll={handleClearNotifications}
         onMarkRead={handleMarkSingleRead}
+      />
+
+      <ReminderAlertModal
+        reminder={activeReminderAlert}
+        loading={reminderActionLoading}
+        error={reminderActionError}
+        onSnooze={() => processReminderAlertAction("snooze")}
+        onStop={() => processReminderAlertAction("stop")}
+        onComplete={() => processReminderAlertAction("complete")}
       />
 
       {/* Mobile Drawer */}

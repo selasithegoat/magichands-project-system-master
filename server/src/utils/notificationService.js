@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { sendEmail } = require("./emailService");
@@ -31,6 +32,7 @@ const createNotification = async (
     const recipientKey = recipientId?.toString?.() || "";
     const senderKey = senderId?.toString?.() || "";
     const projectKey = projectId?.toString?.() || null;
+    const reminderKey = deliveryOptions?.reminderId?.toString?.() || null;
     const allowSelf = Boolean(deliveryOptions?.allowSelf);
 
     if (!recipientKey || !senderKey) return null;
@@ -52,6 +54,11 @@ const createNotification = async (
     const pushOverride =
       typeof deliveryOptions?.push === "boolean" ? deliveryOptions.push : null;
 
+    const normalizedReminderKey =
+      reminderKey && mongoose.Types.ObjectId.isValid(reminderKey)
+        ? reminderKey
+        : null;
+
     let notification = null;
     let createdNewNotification = false;
     if (inAppEnabled) {
@@ -71,6 +78,7 @@ const createNotification = async (
           recipient: recipientKey,
           sender: senderKey,
           project: projectKey,
+          reminder: normalizedReminderKey,
           type,
           title,
           message,

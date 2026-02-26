@@ -1,0 +1,113 @@
+.admin-reminder-alert-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-reminder-alert-modal {
+  width: min(560px, 100%);
+  border-radius: 18px;
+  border: 1px solid #1e293b;
+  background: #0f172a;
+  box-shadow: 0 28px 72px rgba(2, 6, 23, 0.58);
+  padding: 1.25rem 1.2rem;
+}
+
+.admin-reminder-alert-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fda4af;
+}
+
+.admin-reminder-alert-title {
+  margin: 0.35rem 0 0;
+  font-size: 1.15rem;
+  color: #f8fafc;
+}
+
+.admin-reminder-alert-message {
+  margin: 0.65rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.admin-reminder-alert-meta {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.admin-reminder-alert-note {
+  margin: 0.8rem 0 0;
+  font-size: 0.83rem;
+  color: #e2e8f0;
+}
+
+.admin-reminder-alert-error {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(127, 29, 29, 0.5);
+  color: #fecaca;
+  font-size: 0.84rem;
+}
+
+.admin-reminder-alert-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.admin-reminder-alert-btn {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 0.86rem;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 0.58rem 0.82rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-reminder-alert-btn:hover:not(:disabled) {
+  background: #0f4c81;
+  border-color: #2563eb;
+}
+
+.admin-reminder-alert-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.admin-reminder-alert-btn.danger {
+  background: #3f101a;
+  border-color: #881337;
+  color: #fecdd3;
+}
+
+.admin-reminder-alert-btn.danger:hover:not(:disabled) {
+  background: #500724;
+  border-color: #9f1239;
+}
+
+.admin-reminder-alert-btn.success {
+  background: #103021;
+  border-color: #166534;
+  color: #bbf7d0;
+}
+
+.admin-reminder-alert-btn.success:hover:not(:disabled) {
+  background: #14532d;
+  border-color: #16a34a;
+}

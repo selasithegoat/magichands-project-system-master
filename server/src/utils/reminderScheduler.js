@@ -225,6 +225,7 @@ const processReminder = async (reminder) => {
               email: Boolean(lock.channels?.email),
               push: false,
               allowSelf: true,
+              reminderId: lock._id,
             },
           ),
         ),

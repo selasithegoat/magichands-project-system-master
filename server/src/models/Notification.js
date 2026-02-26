@@ -16,6 +16,11 @@ const NotificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
     },
+    reminder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reminder",
+      default: null,
+    },
     type: {
       type: String,
       required: true,

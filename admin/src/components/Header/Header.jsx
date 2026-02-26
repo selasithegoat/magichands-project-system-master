@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./Header.css";
 import { SearchIcon, BellIcon } from "../../icons/Icons";
 import NotificationDropdown from "./NotificationDropdown";
+import ReminderAlertModal from "./ReminderAlertModal";
 import useNotifications from "../../hooks/useNotifications";
 
 const Header = ({ onMenuClick, user }) => {
@@ -13,6 +14,10 @@ const Header = ({ onMenuClick, user }) => {
     markAsRead,
     markAllAsRead,
     clearNotifications,
+    activeReminderAlert,
+    reminderActionLoading,
+    reminderActionError,
+    handleReminderAlertAction,
   } = useNotifications({
     soundEnabled: user?.notificationSettings?.sound ?? true,
     userId: user?._id || "",
@@ -70,6 +75,15 @@ const Header = ({ onMenuClick, user }) => {
           )}
         </div>
       </div>
+
+      <ReminderAlertModal
+        reminder={activeReminderAlert}
+        loading={reminderActionLoading}
+        error={reminderActionError}
+        onSnooze={() => handleReminderAlertAction("snooze")}
+        onStop={() => handleReminderAlertAction("stop")}
+        onComplete={() => handleReminderAlertAction("complete")}
+      />
     </header>
   );
 };
