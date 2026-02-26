@@ -1,0 +1,231 @@
+.project-reminder-card-head {
+  margin-bottom: 1rem;
+}
+
+.project-reminder-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.project-reminder-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.project-reminder-btn:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.project-reminder-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.project-reminder-btn.primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.project-reminder-btn.primary:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+}
+
+.project-reminder-btn.success {
+  border-color: #10b981;
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.project-reminder-btn.success:hover:not(:disabled) {
+  border-color: #059669;
+  background: #d1fae5;
+}
+
+.project-reminder-btn.danger {
+  border-color: #fca5a5;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.project-reminder-btn.danger:hover:not(:disabled) {
+  border-color: #f87171;
+  background: #fee2e2;
+}
+
+.project-reminder-error {
+  margin: 0 0 0.8rem;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.project-reminder-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.project-reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.project-reminder-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: #f8fafc;
+}
+
+.project-reminder-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.project-reminder-item-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.project-reminder-status {
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.project-reminder-status.scheduled {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.project-reminder-status.completed {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.project-reminder-status.cancelled {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.project-reminder-item-message {
+  margin: 0.4rem 0 0;
+  color: #475569;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.project-reminder-meta {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.project-reminder-actions {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.project-reminder-history {
+  margin-top: 0.8rem;
+}
+
+.project-reminder-history summary {
+  cursor: pointer;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.project-reminder-history[open] .project-reminder-list {
+  margin-top: 0.7rem;
+}
+
+.project-reminder-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.project-reminder-modal {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+  padding: 1rem;
+}
+
+.project-reminder-modal-title {
+  margin: 0 0 1rem;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.project-reminder-channel-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.project-reminder-channel-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .project-reminder-head-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .project-reminder-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .project-reminder-modal {
+    padding: 0.85rem;
+  }
+}

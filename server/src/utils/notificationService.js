@@ -24,47 +24,68 @@ const createNotification = async (
   type,
   title,
   message,
+  deliveryOptions = {},
 ) => {
   try {
-    // Avoid notifying the same user who performed the action
-    if (recipientId.toString() === senderId.toString()) {
-      return null;
-    }
-
     const recipientKey = recipientId?.toString?.() || "";
     const senderKey = senderId?.toString?.() || "";
     const projectKey = projectId?.toString?.() || null;
+    const allowSelf = Boolean(deliveryOptions?.allowSelf);
+
+    if (!recipientKey || !senderKey) return null;
+
+    // Avoid notifying the same user who performed the action unless explicitly allowed
+    if (!allowSelf && recipientKey === senderKey) {
+      return null;
+    }
 
     // Fetch recipient to check notification preferences
     const recipient = await User.findById(recipientKey);
     if (!recipient) return null;
 
-    // Guard against duplicate notifications from overlapping triggers
-    const dedupeStart = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
-    const existing = await Notification.findOne({
-      recipient: recipientKey,
-      project: projectKey,
-      title,
-      message,
-      createdAt: { $gte: dedupeStart },
-    }).lean();
-    if (existing) {
-      return existing;
-    }
+    const inAppEnabled = deliveryOptions?.inApp !== false;
+    const emailOverride =
+      typeof deliveryOptions?.email === "boolean"
+        ? deliveryOptions.email
+        : null;
+    const pushOverride =
+      typeof deliveryOptions?.push === "boolean" ? deliveryOptions.push : null;
 
-    const notification = await Notification.create({
-      recipient: recipientKey,
-      sender: senderKey,
-      project: projectKey,
-      type,
-      title,
-      message,
-    });
+    let notification = null;
+    if (inAppEnabled) {
+      // Guard against duplicate notifications from overlapping triggers
+      const dedupeStart = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
+      const existing = await Notification.findOne({
+        recipient: recipientKey,
+        project: projectKey,
+        title,
+        message,
+        createdAt: { $gte: dedupeStart },
+      }).lean();
+      if (existing) {
+        notification = existing;
+      } else {
+        notification = await Notification.create({
+          recipient: recipientKey,
+          sender: senderKey,
+          project: projectKey,
+          type,
+          title,
+          message,
+        });
+      }
+    }
 
     // Check preferences and trigger delivery channels
     const settings = {
-      email: recipient.notificationSettings?.email ?? false,
-      push: recipient.notificationSettings?.push ?? true,
+      email:
+        emailOverride === null
+          ? (recipient.notificationSettings?.email ?? false)
+          : emailOverride,
+      push:
+        pushOverride === null
+          ? (recipient.notificationSettings?.push ?? true)
+          : pushOverride,
     };
 
     if (settings.email && recipient.email) {

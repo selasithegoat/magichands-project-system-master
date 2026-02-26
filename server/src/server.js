@@ -16,6 +16,7 @@ const projectRoutes = require("./routes/projectRoutes");
 const updateRoutes = require("./routes/updateRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const reminderRoutes = require("./routes/reminderRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
 const digestRoutes = require("./routes/digestRoutes");
 const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
@@ -23,6 +24,7 @@ const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
+const { startReminderScheduler } = require("./utils/reminderScheduler");
 
 // Load env vars
 dotenv.config();
@@ -304,6 +306,7 @@ const realtimePaths = [
   "/api/projects",
   "/api/updates",
   "/api/notifications",
+  "/api/reminders",
   "/api/admin",
   "/api/inventory",
 ];
@@ -354,6 +357,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/reminders", reminderRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api/digests", digestRoutes);
 app.use("/api/ops/wallboard", opsWallboardRoutes);
@@ -446,5 +450,6 @@ if (hasAdminBuild || hasClientBuild || hasOpsBuild) {
 app.listen(PORT, HOST, () => {
   console.log(`Server is running at http://${HOST}:${PORT}`);
   startWeeklyDigestScheduler();
+  startReminderScheduler();
 });
 // Trigger restart to rebuild indexes

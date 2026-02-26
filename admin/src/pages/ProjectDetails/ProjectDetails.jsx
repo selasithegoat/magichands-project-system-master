@@ -15,6 +15,7 @@ import BillingGuardModal from "../../components/BillingGuardModal/BillingGuardMo
 import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCancelModal";
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/ProjectTypeChangeModal";
+import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -2739,6 +2740,7 @@ const ProjectDetails = ({ user }) => {
 
         {/* Right Column */}
         <div className="side-info">
+          <ProjectRemindersCard project={project} user={user} />
           <div className="detail-card">
             <h3
               className="card-title"

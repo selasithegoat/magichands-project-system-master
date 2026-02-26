@@ -1,8 +1,6 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import "./NotificationDropdown.css";
-import axios from "axios";
 
-// Helper to format date
 const formatTime = (dateString) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -12,6 +10,23 @@ const formatTime = (dateString) => {
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
   return date.toLocaleDateString();
+};
+
+const getNotificationTypeLabel = (type) => {
+  switch (type) {
+    case "ASSIGNMENT":
+      return "Task";
+    case "ACTIVITY":
+      return "Alert";
+    case "UPDATE":
+      return "Update";
+    case "ACCEPTANCE":
+      return "Accept";
+    case "REMINDER":
+      return "Reminder";
+    default:
+      return "System";
+  }
 };
 
 const NotificationDropdown = ({
@@ -25,7 +40,6 @@ const NotificationDropdown = ({
   const dropdownRef = useRef(null);
 
   useEffect(() => {
-    // Click outside to close
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         onClose();
@@ -59,7 +73,6 @@ const NotificationDropdown = ({
           <div className="notification-empty">No notifications</div>
         ) : (
           <>
-            {/* Unread Section */}
             {notifications.some((n) => !n.isRead) && (
               <>
                 <div className="notification-section-header">New</div>
@@ -72,11 +85,7 @@ const NotificationDropdown = ({
                       onClick={() => markAsRead(notification._id)}
                     >
                       <div className="notification-icon">
-                        {notification.type === "ASSIGNMENT" && "📋"}
-                        {notification.type === "ACTIVITY" && "⚠️"}
-                        {notification.type === "UPDATE" && "📝"}
-                        {notification.type === "ACCEPTANCE" && "✅"}
-                        {notification.type === "SYSTEM" && "🖥️"}
+                        {getNotificationTypeLabel(notification.type)}
                       </div>
                       <div className="notification-content">
                         <p className="notification-title">
@@ -95,7 +104,6 @@ const NotificationDropdown = ({
               </>
             )}
 
-            {/* Read Section */}
             {notifications.some((n) => n.isRead) && (
               <>
                 <div className="notification-section-header">Earlier</div>
@@ -108,11 +116,7 @@ const NotificationDropdown = ({
                       onClick={() => markAsRead(notification._id)}
                     >
                       <div className="notification-icon">
-                        {notification.type === "ASSIGNMENT" && "📋"}
-                        {notification.type === "ACTIVITY" && "⚠️"}
-                        {notification.type === "UPDATE" && "📝"}
-                        {notification.type === "ACCEPTANCE" && "✅"}
-                        {notification.type === "SYSTEM" && "🖥️"}
+                        {getNotificationTypeLabel(notification.type)}
                       </div>
                       <div className="notification-content">
                         <p className="notification-title">

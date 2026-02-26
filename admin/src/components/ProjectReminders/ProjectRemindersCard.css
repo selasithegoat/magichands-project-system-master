@@ -1,0 +1,275 @@
+.admin-reminder-card-title {
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.admin-reminder-head-actions {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.admin-reminder-btn {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.45);
+  color: #cbd5e1;
+  border-radius: 8px;
+  padding: 0.4rem 0.72rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-reminder-btn:hover:not(:disabled) {
+  border-color: rgba(147, 197, 253, 0.7);
+  color: #dbeafe;
+}
+
+.admin-reminder-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.admin-reminder-btn.primary {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(147, 197, 253, 0.75);
+  color: #bfdbfe;
+}
+
+.admin-reminder-btn.primary:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.28);
+}
+
+.admin-reminder-btn.success {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(52, 211, 153, 0.6);
+  color: #6ee7b7;
+}
+
+.admin-reminder-btn.success:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.admin-reminder-btn.danger {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(252, 165, 165, 0.65);
+  color: #fecaca;
+}
+
+.admin-reminder-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.24);
+}
+
+.admin-reminder-error {
+  margin: 0 0 0.75rem;
+  color: #fecaca;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.admin-reminder-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.admin-reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-reminder-item {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.admin-reminder-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.admin-reminder-item-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.admin-reminder-status {
+  border-radius: 999px;
+  padding: 0.16rem 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-reminder-status.scheduled {
+  background: rgba(59, 130, 246, 0.2);
+  color: #bfdbfe;
+}
+
+.admin-reminder-status.completed {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.admin-reminder-status.cancelled {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fecaca;
+}
+
+.admin-reminder-message {
+  margin: 0.4rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.admin-reminder-meta {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.85rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.admin-reminder-actions {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.admin-reminder-history {
+  margin-top: 0.8rem;
+}
+
+.admin-reminder-history summary {
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.admin-reminder-history[open] .admin-reminder-list {
+  margin-top: 0.65rem;
+}
+
+.admin-reminder-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.7);
+}
+
+.admin-reminder-modal {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 12px;
+  background: #0f172a;
+  box-shadow: 0 24px 55px rgba(2, 6, 23, 0.5);
+  padding: 1rem;
+}
+
+.admin-reminder-modal-title {
+  margin: 0 0 1rem;
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.admin-reminder-field {
+  margin-bottom: 0.9rem;
+}
+
+.admin-reminder-field label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-reminder-input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  color: #f8fafc;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.86rem;
+  font-family: inherit;
+}
+
+.admin-reminder-input:focus {
+  outline: none;
+  border-color: rgba(147, 197, 253, 0.85);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.admin-reminder-input option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.admin-reminder-row {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.admin-reminder-channel-grid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-reminder-channel-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: #cbd5e1;
+  font-size: 0.84rem;
+}
+
+.admin-reminder-modal-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .admin-reminder-card-title {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-reminder-head-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .admin-reminder-row {
+    grid-template-columns: 1fr;
+  }
+}

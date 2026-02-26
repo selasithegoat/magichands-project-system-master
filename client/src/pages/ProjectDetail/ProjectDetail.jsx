@@ -35,6 +35,7 @@ import {
   requestProductionRiskSuggestions,
 } from "../../utils/productionRiskAi";
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
+import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -971,6 +972,7 @@ const ProjectDetail = ({ user }) => {
               />
             </div>
             <div className="side-column">
+              <ProjectReminderPanel project={project} user={user} />
               <ProgressCard
                 project={project}
                 workflowStatus={workflowStatus}

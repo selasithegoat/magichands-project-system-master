@@ -1,9 +1,23 @@
 import React from "react";
 import "./NotificationModal.css";
-// Icons
-import XIcon from "../icons/XIcon"; // Using Close icon
-import SearchIcon from "../icons/SearchIcon";
+import XIcon from "../icons/XIcon";
 
+const getNotificationTypeLabel = (type) => {
+  switch (type) {
+    case "ASSIGNMENT":
+      return "Task";
+    case "ACTIVITY":
+      return "Alert";
+    case "UPDATE":
+      return "Update";
+    case "ACCEPTANCE":
+      return "Accept";
+    case "REMINDER":
+      return "Reminder";
+    default:
+      return "System";
+  }
+};
 
 const NotificationModal = ({
   isOpen,
@@ -18,7 +32,6 @@ const NotificationModal = ({
   const unreadNotifications = notifications.filter((n) => !n.isRead);
   const readNotifications = notifications.filter((n) => n.isRead);
 
-  // Group by date or priority if needed, but for now let's just show list
   const formatTime = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -32,11 +45,7 @@ const NotificationModal = ({
 
   return (
     <div className="notif-modal-overlay" onClick={onClose}>
-      <div
-        className="notif-modal-content"
-        onClick={(e) => e.stopPropagation()} // Prevent close on click inside
-      >
-        {/* Header */}
+      <div className="notif-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="notif-header">
           <button className="notif-close-btn" onClick={onClose}>
             <XIcon width="20" height="20" />
@@ -47,9 +56,6 @@ const NotificationModal = ({
           </button>
         </div>
 
-        
-
-        {/* Scrollable List */}
         <div className="notif-list-container">
           {unreadNotifications.length > 0 && (
             <div className="notif-section">
@@ -66,16 +72,16 @@ const NotificationModal = ({
                   onClick={() => onMarkRead(n)}
                 >
                   <div
-                    className={`notif-icon-wrapper ${n.type === "ASSIGNMENT" ? "red-bg" : "blue-light-bg"}`}
+                    className={`notif-icon-wrapper ${
+                      n.type === "ASSIGNMENT" ? "red-bg" : "blue-light-bg"
+                    }`}
                   >
-                    {n.type === "ASSIGNMENT" ? "📌" : "🔔"}
+                    {getNotificationTypeLabel(n.type)}
                   </div>
                   <div className="notif-content">
                     <div className="notif-row-top">
                       <span className="notif-item-title">{n.title}</span>
-                      <span className="notif-time">
-                        {formatTime(n.createdAt)}
-                      </span>
+                      <span className="notif-time">{formatTime(n.createdAt)}</span>
                     </div>
                     <p className="notif-item-desc">{n.message}</p>
                   </div>
@@ -91,20 +97,14 @@ const NotificationModal = ({
                 <span className="section-label">EARLIER</span>
               </div>
               {readNotifications.map((n) => (
-                <div
-                  key={n._id}
-                  className="notif-item"
-                  onClick={() => onMarkRead(n)}
-                >
+                <div key={n._id} className="notif-item" onClick={() => onMarkRead(n)}>
                   <div className="notif-icon-wrapper gray-bg">
-                    {n.type === "ASSIGNMENT" ? "📌" : "🔔"}
+                    {getNotificationTypeLabel(n.type)}
                   </div>
                   <div className="notif-content">
                     <div className="notif-row-top">
                       <span className="notif-item-title">{n.title}</span>
-                      <span className="notif-time">
-                        {formatTime(n.createdAt)}
-                      </span>
+                      <span className="notif-time">{formatTime(n.createdAt)}</span>
                     </div>
                     <p className="notif-item-desc">{n.message}</p>
                   </div>
@@ -120,7 +120,6 @@ const NotificationModal = ({
           )}
         </div>
 
-        {/* Footer */}
         <div className="notif-footer">
           <button className="notif-clear-btn" onClick={onClearAll}>
             Clear all notifications
