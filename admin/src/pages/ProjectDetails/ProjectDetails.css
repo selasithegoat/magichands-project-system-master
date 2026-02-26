@@ -36,11 +36,10 @@
 
 .details-header {
   margin-bottom: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   gap: 1rem 1.5rem;
-  flex-wrap: wrap;
   padding: 1rem 1.1rem;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -81,8 +80,7 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0.35rem;
-  min-width: 260px;
-  flex: 1 1 280px;
+  min-width: 0;
 }
 
 .header-left-vertical .header-order {
@@ -100,56 +98,136 @@
 }
 
 .delivery-countdown-badge {
+  justify-self: center;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  padding: 0.75rem 0.9rem;
-  min-width: 340px;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0;
 }
 
 .delivery-countdown-badge .delivery-countdown-title {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: #86efac;
 }
 
-.delivery-countdown-badge .delivery-countdown-value {
-  font-size: 1.3rem;
+.delivery-countdown-flip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.delivery-countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 62px;
+}
+
+.delivery-countdown-card {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(64px, 5.2vw, 78px);
+  height: clamp(66px, 5.8vw, 82px);
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    #f0fdf4 0%,
+    #dcfce7 49.5%,
+    #bbf7d0 50%,
+    #f0fdf4 100%
+  );
+  box-shadow:
+    0 6px 16px rgba(22, 101, 52, 0.24),
+    inset 0 0 0 1px rgba(34, 197, 94, 0.45);
+  font-size: clamp(2rem, 3vw, 2.8rem);
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #14532d;
 }
 
-.delivery-countdown-badge .delivery-countdown-deadline {
-  font-size: 0.85rem;
-  opacity: 0.92;
+.delivery-countdown-card::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 50%;
+  border-top: 1px solid rgba(21, 128, 61, 0.34);
+  transform: translateY(-50%);
 }
 
-.delivery-countdown-badge.on-track {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(52, 211, 153, 0.45);
-  color: #6ee7b7;
+.delivery-countdown-card.is-flipping {
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  will-change: transform, filter;
+  animation: deliveryCountdownFlip 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.delivery-countdown-badge.due-soon {
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(251, 191, 36, 0.5);
-  color: #fcd34d;
+@keyframes deliveryCountdownFlip {
+  0% {
+    transform: perspective(520px) rotateX(0deg);
+    filter: brightness(1);
+  }
+  40% {
+    transform: perspective(520px) rotateX(-88deg);
+    filter: brightness(0.82);
+  }
+  41% {
+    transform: perspective(520px) rotateX(88deg);
+    filter: brightness(0.82);
+  }
+  100% {
+    transform: perspective(520px) rotateX(0deg);
+    filter: brightness(1);
+  }
 }
 
-.delivery-countdown-badge.overdue {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(252, 165, 165, 0.65);
-  color: #fecaca;
+.delivery-countdown-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #86efac;
 }
 
-.delivery-countdown-badge.unavailable,
-.delivery-countdown-badge.invalid {
-  background: rgba(148, 163, 184, 0.16);
-  border-color: rgba(148, 163, 184, 0.35);
-  color: #cbd5e1;
+.delivery-countdown-badge.is-overdue .delivery-countdown-title {
+  color: #fca5a5;
+}
+
+.delivery-countdown-badge.is-overdue .delivery-countdown-card {
+  background: linear-gradient(
+    180deg,
+    #fff8f8 0%,
+    #feecec 49.5%,
+    #fbd5d5 50%,
+    #fff8f8 100%
+  );
+  box-shadow:
+    0 6px 16px rgba(127, 29, 29, 0.22),
+    inset 0 0 0 1px rgba(248, 113, 113, 0.45);
+  color: #7f1d1d;
+}
+
+.delivery-countdown-badge.is-overdue .delivery-countdown-card::before {
+  border-top: 1px solid rgba(127, 29, 29, 0.34);
+}
+
+.delivery-countdown-badge.is-overdue .delivery-countdown-label {
+  color: #fca5a5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delivery-countdown-card.is-flipping {
+    animation: none;
+  }
 }
 
 .hold-toggle-btn {
@@ -326,12 +404,13 @@
 }
 
 .header-right-panel {
+  justify-self: end;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.65rem;
-  min-width: 330px;
-  flex: 1 1 430px;
+  min-width: 0;
+  width: min(100%, 560px);
 }
 
 .header-status-row {
@@ -548,22 +627,40 @@
   }
 
   .details-header {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
     padding: 0.9rem;
   }
 
+  .delivery-countdown-badge {
+    justify-self: start;
+    align-items: flex-start;
+  }
+
+  .delivery-countdown-flip {
+    gap: 0.55rem;
+  }
+
+  .delivery-countdown-unit {
+    min-width: 56px;
+  }
+
+  .delivery-countdown-card {
+    width: 64px;
+    height: 68px;
+    font-size: 2rem;
+  }
+
   .header-right-panel {
+    justify-self: stretch;
     align-items: stretch;
     min-width: 0;
+    width: 100%;
   }
 
   .header-status-row,
   .header-actions-row {
     justify-content: flex-start;
-  }
-
-  .delivery-countdown-badge {
-    min-width: 0;
-    width: 100%;
   }
 }
 

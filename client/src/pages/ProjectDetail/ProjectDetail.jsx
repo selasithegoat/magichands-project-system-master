@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Link,
@@ -280,26 +280,7 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const HOUR_IN_MS = 60 * 60 * 1000;
-const MINUTE_IN_MS = 60 * 1000;
 const SECOND_IN_MS = 1000;
-
-const padTwo = (value) => String(value).padStart(2, "0");
-
-const formatCountdownDuration = (durationMs) => {
-  const safeDuration = Math.max(0, Number(durationMs) || 0);
-  const totalSeconds = Math.floor(safeDuration / SECOND_IN_MS);
-  const days = Math.floor(totalSeconds / (24 * 60 * 60));
-  const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
-  const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (days > 0) {
-    return `${days}d ${padTwo(hours)}h ${padTwo(minutes)}m ${padTwo(seconds)}s`;
-  }
-  return `${padTwo(hours)}h ${padTwo(minutes)}m ${padTwo(seconds)}s`;
-};
 
 const parseDeliveryTimeParts = (value) => {
   if (!value) return { hours: 23, minutes: 59, seconds: 59 };
@@ -360,21 +341,45 @@ const buildDeliveryDeadline = (deliveryDate, deliveryTime) => {
   );
 };
 
-const formatDeadlineDateTime = (date) => {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
-
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
     .filter(Boolean);
+
+const FlipCountdownUnit = ({ value, label }) => {
+  const [flipNonce, setFlipNonce] = useState(0);
+  const hasMountedRef = useRef(false);
+  const previousValueRef = useRef(value);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      previousValueRef.current = value;
+      return;
+    }
+
+    if (value === previousValueRef.current) {
+      return;
+    }
+
+    previousValueRef.current = value;
+    setFlipNonce((current) => current + 1);
+  }, [value]);
+
+  return (
+    <div className="delivery-countdown-unit">
+      <span
+        key={`${label}-${flipNonce}`}
+        className={`delivery-countdown-card${
+          flipNonce > 0 ? " is-flipping" : ""
+        }`}
+      >
+        {value}
+      </span>
+      <span className="delivery-countdown-label">{label}</span>
+    </div>
+  );
+};
 
 const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
   const missing = [];
@@ -534,39 +539,32 @@ const ProjectDetail = ({ user }) => {
     [deliveryDateValue, deliveryTimeValue],
   );
   const deliveryCountdown = useMemo(() => {
-    if (!deliveryDateValue) {
-      return {
-        state: "unavailable",
-        valueText: "No delivery date set",
-        deadlineText: "",
-      };
-    }
-
     if (!deliveryDeadline || Number.isNaN(deliveryDeadline.getTime())) {
       return {
-        state: "invalid",
-        valueText: "Invalid delivery date/time",
-        deadlineText: "",
+        days: "--",
+        hours: "--",
+        minutes: "--",
+        seconds: "--",
+        isOverdue: false,
       };
     }
 
     const deltaMs = deliveryDeadline.getTime() - countdownNowMs;
-    const deadlineText = formatDeadlineDateTime(deliveryDeadline);
-
-    if (deltaMs < 0) {
-      return {
-        state: "overdue",
-        valueText: `Overdue by ${formatCountdownDuration(Math.abs(deltaMs))}`,
-        deadlineText,
-      };
-    }
+    const isOverdue = deltaMs < 0;
+    const totalSeconds = Math.floor(Math.abs(deltaMs) / SECOND_IN_MS);
+    const days = Math.floor(totalSeconds / (24 * 60 * 60));
+    const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
+    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+    const seconds = totalSeconds % 60;
 
     return {
-      state: deltaMs <= DAY_IN_MS ? "due-soon" : "on-track",
-      valueText: `${formatCountdownDuration(deltaMs)} left`,
-      deadlineText,
+      days: String(days).padStart(2, "0"),
+      hours: String(hours).padStart(2, "0"),
+      minutes: String(minutes).padStart(2, "0"),
+      seconds: String(seconds).padStart(2, "0"),
+      isOverdue,
     };
-  }, [countdownNowMs, deliveryDateValue, deliveryDeadline]);
+  }, [countdownNowMs, deliveryDeadline]);
 
   if (loading)
     return (
@@ -748,7 +746,24 @@ const ProjectDetail = ({ user }) => {
               )}
             </h1>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+
+          <div
+            className={`delivery-countdown-badge ${deliveryCountdown.isOverdue ? "is-overdue" : ""}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="delivery-countdown-title">
+              {deliveryCountdown.isOverdue ? "Delivery Overdue" : "Delivery Countdown"}
+            </span>
+            <div className="delivery-countdown-flip">
+              <FlipCountdownUnit value={deliveryCountdown.days} label="Days" />
+              <FlipCountdownUnit value={deliveryCountdown.hours} label="Hours" />
+              <FlipCountdownUnit value={deliveryCountdown.minutes} label="Minutes" />
+              <FlipCountdownUnit value={deliveryCountdown.seconds} label="Seconds" />
+            </div>
+          </div>
+
+          <div className="header-top-actions">
             {/* PDF Download Button - Lazy Loaded */}
             {project && (
               <React.Suspense
@@ -764,22 +779,6 @@ const ProjectDetail = ({ user }) => {
 
             {/* Only show Edit if NOT pending acceptance and NOT completed */}
           </div>
-        </div>
-
-        <div
-          className={`delivery-countdown-badge ${deliveryCountdown.state}`}
-          role="status"
-          aria-live="polite"
-        >
-          <span className="delivery-countdown-title">Delivery Countdown</span>
-          <strong className="delivery-countdown-value">
-            {deliveryCountdown.valueText}
-          </strong>
-          {deliveryCountdown.deadlineText ? (
-            <span className="delivery-countdown-deadline">
-              Deadline: {deliveryCountdown.deadlineText}
-            </span>
-          ) : null}
         </div>
 
         <div className="billing-tags">

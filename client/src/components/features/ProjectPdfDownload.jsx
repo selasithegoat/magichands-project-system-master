@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ProjectSummaryPDF from "../../pages/CreateProject/ProjectSummaryPDF";
 import { getLeadDisplay } from "../../utils/leadDisplay";
@@ -6,53 +6,66 @@ import { getLeadDisplay } from "../../utils/leadDisplay";
 const ProjectPdfDownload = ({ project }) => {
   const [imageUrls, setImageUrls] = useState({});
   const [isReady, setIsReady] = useState(false);
+  const details = project?.details || {};
+  const imagePaths = useMemo(() => {
+    if (!project) return [];
+
+    const nextPaths = [];
+    const sampleImg = project.sampleImage || details.sampleImage;
+    if (
+      sampleImg &&
+      typeof sampleImg === "string" &&
+      sampleImg.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
+    ) {
+      nextPaths.push(sampleImg);
+    }
+
+    const attachments = project.attachments || details.attachments;
+    if (Array.isArray(attachments)) {
+      attachments.forEach((path) => {
+        if (
+          typeof path === "string" &&
+          path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
+        ) {
+          nextPaths.push(path);
+        }
+      });
+    }
+
+    return [...new Set(nextPaths)];
+  }, [project, details]);
 
   // PDF Image Processing
   useEffect(() => {
-    if (!project) return;
+    if (!project) {
+      setImageUrls({});
+      setIsReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsReady(false);
 
     const fetchImages = async () => {
-      const urls = {};
-      const pathsToFetch = [];
-      const details = project.details || {};
-
-      // Add Sample Image
-      const sampleImg = project.sampleImage || details.sampleImage;
-      if (
-        sampleImg &&
-        typeof sampleImg === "string" &&
-        sampleImg.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-      ) {
-        pathsToFetch.push(sampleImg);
-      }
-
-      // Add Attachments
-      const attachments = project.attachments || details.attachments;
-      if (attachments && Array.isArray(attachments)) {
-        attachments.forEach((path) => {
-          if (
-            typeof path === "string" &&
-            path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-          ) {
-            pathsToFetch.push(path);
-          }
-        });
-      }
-
-      if (pathsToFetch.length === 0) {
-        setIsReady(true);
+      if (imagePaths.length === 0) {
+        if (!cancelled) {
+          setImageUrls((prev) => {
+            Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
+            return {};
+          });
+          setIsReady(true);
+        }
         return;
       }
 
+      const urls = {};
       await Promise.all(
-        pathsToFetch.map(async (path) => {
+        imagePaths.map(async (path) => {
           try {
-            // 1. Fetch Blob (from localhost:5000 proxied or direct)
             const res = await fetch(`${path}`);
             if (!res.ok) throw new Error(`Status ${res.status}`);
             const blob = await res.blob();
 
-            // 2. Load into Image to allow Canvas conversion
             const img = new Image();
             const blobUrl = URL.createObjectURL(blob);
             img.src = blobUrl;
@@ -62,23 +75,23 @@ const ProjectPdfDownload = ({ project }) => {
               img.onerror = (e) => reject(e);
             });
 
-            // 3. Draw to Canvas and Export as PNG
             const canvas = document.createElement("canvas");
             canvas.width = img.width;
             canvas.height = img.height;
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0);
 
-            // 4. Get PNG Blob
             const pngBlob = await new Promise((resolve) =>
               canvas.toBlob(resolve, "image/png"),
             );
+            if (!pngBlob) {
+              URL.revokeObjectURL(blobUrl);
+              return;
+            }
 
-            // 5. Create Object URL for the PNG
             const pngUrl = URL.createObjectURL(pngBlob);
             urls[path] = pngUrl;
 
-            // Cleanup temp url
             URL.revokeObjectURL(blobUrl);
           } catch (err) {
             console.error(`Error processing image ${path}:`, err);
@@ -86,25 +99,44 @@ const ProjectPdfDownload = ({ project }) => {
         }),
       );
 
-      setImageUrls(urls);
+      if (cancelled) {
+        Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      setImageUrls((prev) => {
+        Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
+        return urls;
+      });
       setIsReady(true);
     };
 
     fetchImages();
-  }, [project]);
+    return () => {
+      cancelled = true;
+    };
+  }, [imagePaths]);
 
-  // Helper to map project data to PDF formData structure
-  const getPdfFormData = () => {
+  useEffect(
+    () => () => {
+      Object.values(imageUrls).forEach((url) => URL.revokeObjectURL(url));
+    },
+    [imageUrls],
+  );
+
+  const pdfFormData = useMemo(() => {
     if (!project) return {};
-    const details = project.details || {};
+
     const allAttachments = project.attachments || details.attachments || [];
     const imageAttachments = allAttachments.filter(
-      (path) => typeof path === "string" && path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i),
+      (path) =>
+        typeof path === "string" && path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i),
     );
     const sampleApprovalRequired = Boolean(project?.sampleRequirement?.isRequired);
     const corporateEmergencyEnabled =
       project?.projectType === "Corporate Job" &&
       Boolean(project?.corporateEmergency?.isEnabled);
+
     return {
       projectName: details.projectName || project.projectName,
       contactType: details.contactType,
@@ -127,30 +159,41 @@ const ProjectPdfDownload = ({ project }) => {
       productionRisks: project.productionRisks,
       attachments: imageAttachments,
       sampleImage: project.sampleImage || details.sampleImage,
-      details: details,
+      details,
       sampleRequired: sampleApprovalRequired,
       corporateEmergency: corporateEmergencyEnabled,
     };
-  };
+  }, [details, project]);
+
+  const pdfType = useMemo(() => {
+    if (!project) return "STANDARD";
+    if (project.projectType === "Emergency" || project.priority === "Urgent") {
+      return "EMERGENCY";
+    }
+    if (project.projectType === "Quote") {
+      return "QUOTE";
+    }
+    if (project.projectType === "Corporate Job") {
+      return "CORPORATE";
+    }
+    return "STANDARD";
+  }, [project]);
+
+  const fileName = useMemo(
+    () => `Project_${project?.orderId || "Brief"}.pdf`,
+    [project?.orderId],
+  );
 
   return (
     <PDFDownloadLink
       document={
         <ProjectSummaryPDF
-          formData={getPdfFormData()}
+          formData={pdfFormData}
           imageUrls={imageUrls}
-          pdfType={
-            project.projectType === "Emergency" || project.priority === "Urgent"
-              ? "EMERGENCY"
-              : project.projectType === "Quote"
-                ? "QUOTE"
-                : project.projectType === "Corporate Job"
-                  ? "CORPORATE"
-                  : "STANDARD"
-          }
+          pdfType={pdfType}
         />
       }
-      fileName={`Project_${project.orderId || "Brief"}.pdf`}
+      fileName={fileName}
       style={{
         textDecoration: "none",
         padding: "0.5rem 1rem",
@@ -171,4 +214,4 @@ const ProjectPdfDownload = ({ project }) => {
   );
 };
 
-export default ProjectPdfDownload;
+export default React.memo(ProjectPdfDownload);
