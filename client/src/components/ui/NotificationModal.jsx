@@ -1,21 +1,51 @@
 import React from "react";
 import "./NotificationModal.css";
 import XIcon from "../icons/XIcon";
+import ClipboardListIcon from "../icons/ClipboardListIcon";
+import AlertTriangleIcon from "../icons/AlertTriangleIcon";
+import RefreshIcon from "../icons/RefreshIcon";
+import CheckCircleIcon from "../icons/CheckCircleIcon";
+import SystemIcon from "../icons/SystemIcon";
+import ReminderBellIcon from "../icons/ReminderBellIcon";
 
-const getNotificationTypeLabel = (type) => {
+const getNotificationTypeMeta = (type) => {
   switch (type) {
     case "ASSIGNMENT":
-      return "Task";
+      return {
+        label: "Task",
+        className: "assignment",
+        icon: <ClipboardListIcon width="16" height="16" color="currentColor" />,
+      };
     case "ACTIVITY":
-      return "Alert";
+      return {
+        label: "Alert",
+        className: "activity",
+        icon: <AlertTriangleIcon width="16" height="16" color="currentColor" />,
+      };
     case "UPDATE":
-      return "Update";
+      return {
+        label: "Update",
+        className: "update",
+        icon: <RefreshIcon width="16" height="16" />,
+      };
     case "ACCEPTANCE":
-      return "Accept";
+      return {
+        label: "Accept",
+        className: "acceptance",
+        icon: <CheckCircleIcon width="16" height="16" />,
+      };
     case "REMINDER":
-      return "Reminder";
+      return {
+        label: "Reminder",
+        className: "reminder",
+        icon: <ReminderBellIcon width="16" height="16" color="currentColor" />,
+      };
     default:
-      return "System";
+      return {
+        label: "System",
+        className: "system",
+        icon: <SystemIcon width="16" height="16" />,
+      };
   }
 };
 
@@ -65,28 +95,31 @@ const NotificationModal = ({
                   UNREAD ({unreadNotifications.length})
                 </span>
               </div>
-              {unreadNotifications.map((n) => (
-                <div
-                  key={n._id}
-                  className="notif-item unread"
-                  onClick={() => onMarkRead(n)}
-                >
+              {unreadNotifications.map((n) => {
+                const typeMeta = getNotificationTypeMeta(n.type);
+                return (
                   <div
-                    className={`notif-icon-wrapper ${
-                      n.type === "ASSIGNMENT" ? "red-bg" : "blue-light-bg"
-                    }`}
+                    key={n._id}
+                    className="notif-item unread"
+                    onClick={() => onMarkRead(n)}
                   >
-                    {getNotificationTypeLabel(n.type)}
-                  </div>
-                  <div className="notif-content">
-                    <div className="notif-row-top">
-                      <span className="notif-item-title">{n.title}</span>
-                      <span className="notif-time">{formatTime(n.createdAt)}</span>
+                    <div
+                      className={`notif-icon-wrapper ${typeMeta.className}`}
+                      title={typeMeta.label}
+                      aria-label={typeMeta.label}
+                    >
+                      {typeMeta.icon}
                     </div>
-                    <p className="notif-item-desc">{n.message}</p>
+                    <div className="notif-content">
+                      <div className="notif-row-top">
+                        <span className="notif-item-title">{n.title}</span>
+                        <span className="notif-time">{formatTime(n.createdAt)}</span>
+                      </div>
+                      <p className="notif-item-desc">{n.message}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -96,20 +129,27 @@ const NotificationModal = ({
                 <span className="section-dot gray"></span>
                 <span className="section-label">EARLIER</span>
               </div>
-              {readNotifications.map((n) => (
-                <div key={n._id} className="notif-item" onClick={() => onMarkRead(n)}>
-                  <div className="notif-icon-wrapper gray-bg">
-                    {getNotificationTypeLabel(n.type)}
-                  </div>
-                  <div className="notif-content">
-                    <div className="notif-row-top">
-                      <span className="notif-item-title">{n.title}</span>
-                      <span className="notif-time">{formatTime(n.createdAt)}</span>
+              {readNotifications.map((n) => {
+                const typeMeta = getNotificationTypeMeta(n.type);
+                return (
+                  <div key={n._id} className="notif-item" onClick={() => onMarkRead(n)}>
+                    <div
+                      className={`notif-icon-wrapper ${typeMeta.className}`}
+                      title={typeMeta.label}
+                      aria-label={typeMeta.label}
+                    >
+                      {typeMeta.icon}
                     </div>
-                    <p className="notif-item-desc">{n.message}</p>
+                    <div className="notif-content">
+                      <div className="notif-row-top">
+                        <span className="notif-item-title">{n.title}</span>
+                        <span className="notif-time">{formatTime(n.createdAt)}</span>
+                      </div>
+                      <p className="notif-item-desc">{n.message}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -1,5 +1,6 @@
 import React from "react";
 import "./ReminderAlertModal.css";
+import { BellIcon } from "../../icons/Icons";
 
 const formatTime = (value) => {
   if (!value) return "";
@@ -34,7 +35,12 @@ const ReminderAlertModal = ({
         aria-modal="true"
         aria-label="Reminder alert"
       >
-        <p className="admin-reminder-alert-eyebrow">Reminder Alert</p>
+        <p className="admin-reminder-alert-eyebrow">
+          <span className="admin-reminder-alert-eyebrow-icon" aria-hidden="true">
+            <BellIcon className="admin-reminder-alert-bell-icon" />
+          </span>
+          Reminder Alert
+        </p>
         <h3 className="admin-reminder-alert-title">{reminder.title || "Reminder"}</h3>
         {reminder.message ? (
           <p className="admin-reminder-alert-message">{reminder.message}</p>

@@ -19,12 +19,26 @@
 }
 
 .admin-reminder-alert-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin: 0;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #fda4af;
+}
+
+.admin-reminder-alert-eyebrow-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-reminder-alert-bell-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .admin-reminder-alert-title {

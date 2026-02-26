@@ -1,5 +1,13 @@
 import React, { useEffect, useRef } from "react";
 import "./NotificationDropdown.css";
+import {
+  AssignIcon,
+  SupportIcon,
+  ProjectsIcon,
+  CheckCircleIcon,
+  BellIcon,
+  ShieldIcon,
+} from "../../icons/Icons";
 
 const formatTime = (dateString) => {
   const date = new Date(dateString);
@@ -12,20 +20,44 @@ const formatTime = (dateString) => {
   return date.toLocaleDateString();
 };
 
-const getNotificationTypeLabel = (type) => {
+const getNotificationTypeMeta = (type) => {
   switch (type) {
     case "ASSIGNMENT":
-      return "Task";
+      return {
+        label: "Task",
+        className: "assignment",
+        icon: <AssignIcon className="notification-type-icon" />,
+      };
     case "ACTIVITY":
-      return "Alert";
+      return {
+        label: "Alert",
+        className: "activity",
+        icon: <SupportIcon className="notification-type-icon" />,
+      };
     case "UPDATE":
-      return "Update";
+      return {
+        label: "Update",
+        className: "update",
+        icon: <ProjectsIcon className="notification-type-icon" />,
+      };
     case "ACCEPTANCE":
-      return "Accept";
+      return {
+        label: "Accept",
+        className: "acceptance",
+        icon: <CheckCircleIcon className="notification-type-icon" />,
+      };
     case "REMINDER":
-      return "Reminder";
+      return {
+        label: "Reminder",
+        className: "reminder",
+        icon: <BellIcon className="notification-type-icon" />,
+      };
     default:
-      return "System";
+      return {
+        label: "System",
+        className: "system",
+        icon: <ShieldIcon className="notification-type-icon" />,
+      };
   }
 };
 
@@ -78,29 +110,36 @@ const NotificationDropdown = ({
                 <div className="notification-section-header">New</div>
                 {notifications
                   .filter((n) => !n.isRead)
-                  .map((notification) => (
-                    <div
-                      key={notification._id}
-                      className="notification-item unread"
-                      onClick={() => markAsRead(notification._id)}
-                    >
-                      <div className="notification-icon">
-                        {getNotificationTypeLabel(notification.type)}
+                  .map((notification) => {
+                    const typeMeta = getNotificationTypeMeta(notification.type);
+                    return (
+                      <div
+                        key={notification._id}
+                        className="notification-item unread"
+                        onClick={() => markAsRead(notification._id)}
+                      >
+                        <div
+                          className={`notification-icon ${typeMeta.className}`}
+                          title={typeMeta.label}
+                          aria-label={typeMeta.label}
+                        >
+                          {typeMeta.icon}
+                        </div>
+                        <div className="notification-content">
+                          <p className="notification-title">
+                            <span>{notification.title}</span>
+                          </p>
+                          <p className="notification-message">
+                            <span>{notification.message}</span>
+                          </p>
+                          <span className="notification-time">
+                            <span>{formatTime(notification.createdAt)}</span>
+                          </span>
+                        </div>
+                        <div className="unread-dot"></div>
                       </div>
-                      <div className="notification-content">
-                        <p className="notification-title">
-                          <span>{notification.title}</span>
-                        </p>
-                        <p className="notification-message">
-                          <span>{notification.message}</span>
-                        </p>
-                        <span className="notification-time">
-                          <span>{formatTime(notification.createdAt)}</span>
-                        </span>
-                      </div>
-                      <div className="unread-dot"></div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </>
             )}
 
@@ -109,28 +148,35 @@ const NotificationDropdown = ({
                 <div className="notification-section-header">Earlier</div>
                 {notifications
                   .filter((n) => n.isRead)
-                  .map((notification) => (
-                    <div
-                      key={notification._id}
-                      className="notification-item"
-                      onClick={() => markAsRead(notification._id)}
-                    >
-                      <div className="notification-icon">
-                        {getNotificationTypeLabel(notification.type)}
+                  .map((notification) => {
+                    const typeMeta = getNotificationTypeMeta(notification.type);
+                    return (
+                      <div
+                        key={notification._id}
+                        className="notification-item"
+                        onClick={() => markAsRead(notification._id)}
+                      >
+                        <div
+                          className={`notification-icon ${typeMeta.className}`}
+                          title={typeMeta.label}
+                          aria-label={typeMeta.label}
+                        >
+                          {typeMeta.icon}
+                        </div>
+                        <div className="notification-content">
+                          <p className="notification-title">
+                            <span>{notification.title}</span>
+                          </p>
+                          <p className="notification-message">
+                            <span>{notification.message}</span>
+                          </p>
+                          <span className="notification-time">
+                            <span>{formatTime(notification.createdAt)}</span>
+                          </span>
+                        </div>
                       </div>
-                      <div className="notification-content">
-                        <p className="notification-title">
-                          <span>{notification.title}</span>
-                        </p>
-                        <p className="notification-message">
-                          <span>{notification.message}</span>
-                        </p>
-                        <span className="notification-time">
-                          <span>{formatTime(notification.createdAt)}</span>
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </>
             )}
           </>
