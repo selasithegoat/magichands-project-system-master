@@ -1,6 +1,7 @@
 const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { sendEmail } = require("./emailService");
+const { broadcastNotificationChange } = require("./realtimeHub");
 
 const NOTIFICATION_DEDUPE_WINDOW_MS = Number.isFinite(
   Number.parseInt(process.env.NOTIFICATION_DEDUPE_WINDOW_MS, 10),
@@ -52,6 +53,7 @@ const createNotification = async (
       typeof deliveryOptions?.push === "boolean" ? deliveryOptions.push : null;
 
     let notification = null;
+    let createdNewNotification = false;
     if (inAppEnabled) {
       // Guard against duplicate notifications from overlapping triggers
       const dedupeStart = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
@@ -73,7 +75,19 @@ const createNotification = async (
           title,
           message,
         });
+        createdNewNotification = true;
       }
+    }
+
+    if (createdNewNotification && notification?._id) {
+      broadcastNotificationChange({
+        path: "/api/notifications",
+        method: "POST",
+        source: "notification_service",
+        notificationId: String(notification._id),
+        recipientId: recipientKey,
+        type,
+      });
     }
 
     // Check preferences and trigger delivery channels

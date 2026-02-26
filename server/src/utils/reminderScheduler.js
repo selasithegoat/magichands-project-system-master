@@ -6,7 +6,13 @@ const REMINDER_INTERVAL_MS = Number.isFinite(
   Number.parseInt(process.env.REMINDER_SCHEDULER_INTERVAL_MS, 10),
 )
   ? Number.parseInt(process.env.REMINDER_SCHEDULER_INTERVAL_MS, 10)
-  : 60 * 1000;
+  : 1000;
+
+const REMINDER_MIN_INTERVAL_MS = Number.isFinite(
+  Number.parseInt(process.env.REMINDER_SCHEDULER_MIN_INTERVAL_MS, 10),
+)
+  ? Number.parseInt(process.env.REMINDER_SCHEDULER_MIN_INTERVAL_MS, 10)
+  : 200;
 
 const REMINDER_BATCH_SIZE = Number.isFinite(
   Number.parseInt(process.env.REMINDER_SCHEDULER_BATCH_SIZE, 10),
@@ -24,6 +30,7 @@ const REMINDER_SYSTEM_SENDER_ID = process.env.REMINDER_SYSTEM_SENDER_ID || null;
 
 let schedulerTimer = null;
 let schedulerRunning = false;
+let schedulerEnabled = false;
 
 const addDays = (date, value) => {
   const next = new Date(date);
@@ -310,13 +317,63 @@ const runReminderSweep = async () => {
   }
 };
 
+const resolveNextSweepDelay = async () => {
+  const fallbackDelay = Math.max(REMINDER_MIN_INTERVAL_MS, REMINDER_INTERVAL_MS);
+
+  try {
+    const nextDueReminder = await Reminder.findOne({
+      status: "scheduled",
+      isActive: true,
+      processing: { $ne: true },
+      nextTriggerAt: { $ne: null },
+    })
+      .sort({ nextTriggerAt: 1 })
+      .select("nextTriggerAt")
+      .lean();
+
+    if (!nextDueReminder?.nextTriggerAt) {
+      return fallbackDelay;
+    }
+
+    const nextDueAt = new Date(nextDueReminder.nextTriggerAt).getTime();
+    if (!Number.isFinite(nextDueAt)) {
+      return fallbackDelay;
+    }
+
+    const deltaMs = nextDueAt - Date.now();
+    if (deltaMs <= REMINDER_MIN_INTERVAL_MS) {
+      return REMINDER_MIN_INTERVAL_MS;
+    }
+
+    return Math.max(
+      REMINDER_MIN_INTERVAL_MS,
+      Math.min(fallbackDelay, deltaMs),
+    );
+  } catch (error) {
+    console.error("Failed to resolve next reminder sweep delay:", error);
+    return fallbackDelay;
+  }
+};
+
+const runSchedulerLoop = async () => {
+  if (!schedulerEnabled) return;
+
+  await runReminderSweep();
+
+  if (!schedulerEnabled) return;
+  const nextDelay = await resolveNextSweepDelay();
+  if (!schedulerEnabled) return;
+
+  schedulerTimer = setTimeout(runSchedulerLoop, nextDelay);
+};
+
 const startReminderScheduler = () => {
   const enabled = process.env.REMINDER_SCHEDULER_ENABLED !== "false";
   if (!enabled) return;
   if (schedulerTimer) return;
+  schedulerEnabled = true;
 
-  runReminderSweep();
-  schedulerTimer = setInterval(runReminderSweep, REMINDER_INTERVAL_MS);
+  runSchedulerLoop();
 };
 
 module.exports = {

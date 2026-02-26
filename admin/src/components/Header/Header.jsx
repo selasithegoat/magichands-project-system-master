@@ -15,6 +15,7 @@ const Header = ({ onMenuClick, user }) => {
     clearNotifications,
   } = useNotifications({
     soundEnabled: user?.notificationSettings?.sound ?? true,
+    userId: user?._id || "",
   });
 
   return (

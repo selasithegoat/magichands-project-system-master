@@ -6,7 +6,7 @@ import {
   playNotificationSound,
 } from "../utils/notificationSound";
 
-const useNotifications = ({ soundEnabled = true } = {}) => {
+const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -68,6 +68,31 @@ const useNotifications = ({ soundEnabled = true } = {}) => {
     const interval = setInterval(fetchNotifications, 5000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
+
+  useEffect(() => {
+    const currentUserId = String(userId || "");
+    if (!currentUserId) return undefined;
+
+    const handleNotificationRealtime = (event) => {
+      const recipientId = String(event?.detail?.recipientId || "");
+      if (recipientId && recipientId !== currentUserId) {
+        return;
+      }
+      fetchNotifications();
+    };
+
+    window.addEventListener(
+      "mh:notifications-changed",
+      handleNotificationRealtime,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "mh:notifications-changed",
+        handleNotificationRealtime,
+      );
+    };
+  }, [fetchNotifications, userId]);
 
   const markAsRead = async (id) => {
     try {

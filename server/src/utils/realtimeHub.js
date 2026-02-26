@@ -39,4 +39,18 @@ const broadcastDataChange = (payload = {}) => {
   }
 };
 
-module.exports = { addClient, removeClient, broadcastDataChange };
+const broadcastNotificationChange = (payload = {}) => {
+  if (clients.size === 0) return;
+  const data = JSON.stringify({ ts: Date.now(), ...payload });
+  const message = `event: notification_changed\ndata: ${data}\n\n`;
+  for (const res of clients) {
+    res.write(message);
+  }
+};
+
+module.exports = {
+  addClient,
+  removeClient,
+  broadcastDataChange,
+  broadcastNotificationChange,
+};

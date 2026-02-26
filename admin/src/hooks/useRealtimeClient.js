@@ -31,10 +31,24 @@ const useRealtimeClient = (enabled = true) => {
       );
     };
 
+    const handleNotificationChange = (event) => {
+      let detail = {};
+      try {
+        detail = event?.data ? JSON.parse(event.data) : {};
+      } catch {
+        detail = {};
+      }
+      window.dispatchEvent(
+        new CustomEvent("mh:notifications-changed", { detail }),
+      );
+    };
+
     source.addEventListener("data_changed", handleChange);
+    source.addEventListener("notification_changed", handleNotificationChange);
 
     return () => {
       source.removeEventListener("data_changed", handleChange);
+      source.removeEventListener("notification_changed", handleNotificationChange);
       source.close();
       sourceRef.current = null;
     };

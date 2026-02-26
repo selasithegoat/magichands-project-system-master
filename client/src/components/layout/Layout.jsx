@@ -24,7 +24,7 @@ import {
   playNotificationSound,
 } from "../../utils/notificationSound";
 
-const NOTIFICATION_POLL_INTERVAL_MS = 15000;
+const NOTIFICATION_POLL_INTERVAL_MS = 5000;
 let notificationBootstrapUserId = "";
 
 // --- Icons ---
@@ -197,6 +197,31 @@ const Layout = ({
       NOTIFICATION_POLL_INTERVAL_MS,
     );
     return () => clearInterval(interval);
+  }, [user]);
+
+  useEffect(() => {
+    const currentUserId = String(user?._id || "");
+    if (!currentUserId) return undefined;
+
+    const handleNotificationRealtime = (event) => {
+      const recipientId = String(event?.detail?.recipientId || "");
+      if (recipientId && recipientId !== currentUserId) {
+        return;
+      }
+      fetchNotifications(false);
+    };
+
+    window.addEventListener(
+      "mh:notifications-changed",
+      handleNotificationRealtime,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "mh:notifications-changed",
+        handleNotificationRealtime,
+      );
+    };
   }, [user]);
 
   const handleMarkAllAsRead = async () => {
