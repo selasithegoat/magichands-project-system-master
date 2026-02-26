@@ -1,4 +1,5 @@
 import React, { useState, Suspense, lazy } from "react";
+import "./App.css";
 import Layout from "./components/layout/Layout";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth load
@@ -61,6 +62,19 @@ const PendingAssignments = lazy(
 );
 const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
+const APP_SPLASH_DURATION_MS = 3000;
+
+const StartupSplash = () => (
+  <div className="startup-splash" role="status" aria-live="polite">
+    <img
+      src="/mhlogo.png"
+      alt="Magic Hands"
+      className="startup-splash-logo"
+      draggable="false"
+    />
+  </div>
+);
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -69,6 +83,7 @@ function App() {
   const [projectCount, setProjectCount] = useState(0); // Global project count
   const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [showPostLoginSplash, setShowPostLoginSplash] = useState(false);
 
   // Initialize auto-logout (5 minutes)
   useInactivityLogout(5 * 60 * 1000, () => setUser(null));
@@ -161,7 +176,7 @@ function App() {
     }
   };
 
-  const fetchUser = async () => {
+  const fetchUser = async ({ showSplash = false } = {}) => {
     try {
       const res = await fetch("/api/auth/me", {
         credentials: "include",
@@ -173,6 +188,9 @@ function App() {
         if (userData) {
           setUser(userData);
           fetchProjectCount(); // Fetch count when user is loaded
+          if (showSplash) {
+            setShowPostLoginSplash(true);
+          }
           // If on login page and authorized, go to dashboard
           if (location.pathname === "/login") {
             navigate("/client");
@@ -209,6 +227,20 @@ function App() {
       fetchEngagedCount(user);
     }
   }, [user]);
+
+  React.useEffect(() => {
+    if (!showPostLoginSplash) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setShowPostLoginSplash(false);
+    }, APP_SPLASH_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [showPostLoginSplash]);
 
   const performLogout = async () => {
     setUser(null);
@@ -274,6 +306,10 @@ function App() {
     );
   };
 
+  if (showPostLoginSplash) {
+    return <StartupSplash />;
+  }
+
   if (isLoading) {
     return (
       <div
@@ -293,7 +329,10 @@ function App() {
     <>
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
-        <Route path="/login" element={<Login onLogin={fetchUser} />} />
+        <Route
+          path="/login"
+          element={<Login onLogin={() => fetchUser({ showSplash: true })} />}
+        />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route
           path="/client"

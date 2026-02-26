@@ -253,6 +253,7 @@
   border-color: #fda4af;
   color: #9f1239;
   font-weight: 600;
+  width: fit-content;
 }
 
 .header-left {

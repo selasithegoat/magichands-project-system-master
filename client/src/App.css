@@ -1,1 +1,36 @@
-/* Cleared to avoid conflicts with custom component styles */
+.startup-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.startup-splash-logo {
+  width: clamp(120px, 18vw, 220px);
+  height: auto;
+  opacity: 0;
+  filter: drop-shadow(0 14px 26px rgba(15, 23, 42, 0.2));
+  animation: startupLogoFadeIn 900ms ease-out forwards;
+}
+
+@keyframes startupLogoFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-splash-logo {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
