@@ -38,7 +38,12 @@ const normalizeDepartmentInput = (value) => {
     .join(", ");
 };
 
-const buildComparableProfileState = (formData, emailNotif, pushNotif) => ({
+const buildComparableProfileState = (
+  formData,
+  emailNotif,
+  pushNotif,
+  soundNotif,
+) => ({
   firstName: formData.firstName.trim(),
   lastName: formData.lastName.trim(),
   email: formData.email.trim().toLowerCase(),
@@ -49,6 +54,7 @@ const buildComparableProfileState = (formData, emailNotif, pushNotif) => ({
   notificationSettings: {
     email: Boolean(emailNotif),
     push: Boolean(pushNotif),
+    sound: Boolean(soundNotif),
   },
 });
 
@@ -117,6 +123,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [pushNotif, setPushNotif] = useState(
     user?.notificationSettings?.push ?? true,
   );
+  const [soundNotif, setSoundNotif] = useState(
+    user?.notificationSettings?.sound ?? true,
+  );
   const [notificationHint, setNotificationHint] = useState("");
 
   const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
@@ -175,16 +184,23 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
     const nextEmailNotif = user.notificationSettings?.email ?? false;
     const nextPushNotif = user.notificationSettings?.push ?? true;
+    const nextSoundNotif = user.notificationSettings?.sound ?? true;
 
     setFormData(nextFormData);
     setEmailNotif(nextEmailNotif);
     setPushNotif(nextPushNotif);
+    setSoundNotif(nextSoundNotif);
     setFieldTouched({});
     setSubmitAttempted(false);
     setAvatarError("");
     setNotificationHint("");
     setInitialSnapshot(
-      buildComparableProfileState(nextFormData, nextEmailNotif, nextPushNotif),
+      buildComparableProfileState(
+        nextFormData,
+        nextEmailNotif,
+        nextPushNotif,
+        nextSoundNotif,
+      ),
     );
     setLoading(false);
   }, [user]);
@@ -280,8 +296,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
         : "strong";
 
   const currentComparableState = useMemo(
-    () => buildComparableProfileState(formData, emailNotif, pushNotif),
-    [formData, emailNotif, pushNotif],
+    () =>
+      buildComparableProfileState(formData, emailNotif, pushNotif, soundNotif),
+    [formData, emailNotif, pushNotif, soundNotif],
   );
 
   const hasChanges = useMemo(() => {
@@ -374,6 +391,10 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     setPushNotif((prev) => !prev);
   };
 
+  const handleToggleSoundNotif = () => {
+    setSoundNotif((prev) => !prev);
+  };
+
   const openAvatarSelector = () => {
     if (avatarUploading) return;
     avatarInputRef.current?.click();
@@ -427,6 +448,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               { ...formData, avatarUrl: nextAvatarUrl },
               emailNotif,
               pushNotif,
+              soundNotif,
             ),
       );
       setAvatarPreviewUrl("");
@@ -476,6 +498,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
           notificationSettings: {
             email: emailNotif,
             push: pushNotif,
+            sound: soundNotif,
           },
         }),
       });
@@ -772,6 +795,24 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                     checked={pushNotif}
                     onChange={handleTogglePushNotif}
                     aria-label="Toggle push notifications"
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+
+              <div className="setting-row">
+                <div>
+                  <div className="setting-title">Notification Sounds</div>
+                  <div className="setting-desc">
+                    Play different sounds for reminders and other alerts
+                  </div>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={soundNotif}
+                    onChange={handleToggleSoundNotif}
+                    aria-label="Toggle notification sounds"
                   />
                   <span className="slider round"></span>
                 </label>

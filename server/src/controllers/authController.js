@@ -164,6 +164,7 @@ const loginUser = async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        notificationSettings: user.notificationSettings,
       });
     } else {
       res.status(401).json({ message: "Invalid credentials" });
@@ -223,6 +224,10 @@ const updateProfile = async (req, res) => {
         req.body.notificationSettings.push !== undefined
           ? req.body.notificationSettings.push
           : (user.notificationSettings?.push ?? true);
+      const sound =
+        req.body.notificationSettings.sound !== undefined
+          ? req.body.notificationSettings.sound
+          : (user.notificationSettings?.sound ?? true);
 
       // Enforce at least one channel active
       if (!email && !push) {
@@ -231,7 +236,7 @@ const updateProfile = async (req, res) => {
         });
       }
 
-      user.notificationSettings = { email, push };
+      user.notificationSettings = { email, push, sound };
       user.markModified("notificationSettings");
     }
 

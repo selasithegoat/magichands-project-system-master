@@ -19,6 +19,10 @@ import {
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
 } from "../../constants/departments";
+import {
+  initNotificationSound,
+  playNotificationSound,
+} from "../../utils/notificationSound";
 
 const NOTIFICATION_POLL_INTERVAL_MS = 15000;
 let notificationBootstrapUserId = "";
@@ -71,6 +75,8 @@ const Layout = ({
 
   // [New] Native Notification Permission Logic
   useEffect(() => {
+    initNotificationSound();
+
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
@@ -105,6 +111,9 @@ const Layout = ({
     // Check user preferences for Push/Toasts
     const allowPush = user?.notificationSettings?.push ?? true;
     if (!allowPush) return;
+    const allowSound = user?.notificationSettings?.sound ?? true;
+
+    playNotificationSound(notification.type, allowSound).catch(() => {});
 
     // Show Native Notification
     showNativeNotification(notification);

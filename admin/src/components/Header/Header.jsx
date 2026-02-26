@@ -4,7 +4,7 @@ import { SearchIcon, BellIcon } from "../../icons/Icons";
 import NotificationDropdown from "./NotificationDropdown";
 import useNotifications from "../../hooks/useNotifications";
 
-const Header = ({ onMenuClick }) => {
+const Header = ({ onMenuClick, user }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const {
     notifications,
@@ -13,7 +13,9 @@ const Header = ({ onMenuClick }) => {
     markAsRead,
     markAllAsRead,
     clearNotifications,
-  } = useNotifications();
+  } = useNotifications({
+    soundEnabled: user?.notificationSettings?.sound ?? true,
+  });
 
   return (
     <header className="header">

@@ -25,7 +25,7 @@ const DashboardLayout = ({ children, user, onLogout }) => {
       />
 
       <div className="dashboard-main">
-        <Header onMenuClick={toggleSidebar} />
+        <Header onMenuClick={toggleSidebar} user={user} />
         <StageBottleneckAlert />
         <main className="dashboard-page-content">{children}</main>
       </div>

@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import {
+  initNotificationSound,
+  playNotificationSound,
+} from "../utils/notificationSound";
 
-const useNotifications = () => {
+const useNotifications = ({ soundEnabled = true } = {}) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -25,14 +29,14 @@ const useNotifications = () => {
       setNotifications(currentNotifications);
       setUnreadCount(newUnreadCount);
 
-      // Trigger Toast logic
+      // Trigger toast logic
       if (!isFirstLoadRef.current) {
-        // Only check for toasts if this is NOT the first load
         if (newUnreadCount > previousUnreadCountRef.current) {
           const latestInfo = currentNotifications.find((n) => !n.isRead);
           if (latestInfo) {
+            playNotificationSound(latestInfo.type, soundEnabled).catch(() => {});
             toast(latestInfo.message, {
-              icon: "🔔",
+              icon: "\u{1F514}",
               style: {
                 borderRadius: "10px",
                 background: "#333",
@@ -42,23 +46,22 @@ const useNotifications = () => {
           }
         }
       } else {
-        // Mark first load as done
         isFirstLoadRef.current = false;
-        setLoading(false);
       }
 
       previousUnreadCountRef.current = newUnreadCount;
-
-      // We don't necessarily need to set loading to false every time, but it's fine.
-      if (loading) setLoading(false);
+      setLoading(false);
     } catch (error) {
       console.error("Error fetching notifications:", error);
       setLoading(false);
     }
-  }, []); // Empty dependency array as references are stable
+  }, [soundEnabled]);
 
   useEffect(() => {
-    // Initial fetch
+    initNotificationSound();
+  }, []);
+
+  useEffect(() => {
     fetchNotifications();
 
     // Poll every 5 seconds
@@ -76,11 +79,9 @@ const useNotifications = () => {
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
       );
-      // Update unread count manually to reflect immediate UI change
-      // Note: The next poll will align everything, but this gives instant feedback
       setUnreadCount((prev) => {
         const newCount = Math.max(0, prev - 1);
-        previousUnreadCountRef.current = newCount; // Update ref to avoid false positive toast on next poll if count drops
+        previousUnreadCountRef.current = newCount;
         return newCount;
       });
     } catch (error) {
@@ -96,7 +97,7 @@ const useNotifications = () => {
         { withCredentials: true },
       );
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      setUnreadCount((prev) => {
+      setUnreadCount(() => {
         previousUnreadCountRef.current = 0;
         return 0;
       });
@@ -111,7 +112,7 @@ const useNotifications = () => {
         withCredentials: true,
       });
       setNotifications([]);
-      setUnreadCount((prev) => {
+      setUnreadCount(() => {
         previousUnreadCountRef.current = 0;
         return 0;
       });

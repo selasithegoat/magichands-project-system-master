@@ -81,6 +81,7 @@ const UserSchema = new mongoose.Schema({
   notificationSettings: {
     email: { type: Boolean, default: false },
     push: { type: Boolean, default: true },
+    sound: { type: Boolean, default: true },
   },
 });
 
