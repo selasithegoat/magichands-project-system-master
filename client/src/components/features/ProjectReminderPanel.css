@@ -41,6 +41,21 @@
   background: #1d4ed8;
 }
 
+.project-reminder-btn.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.35rem;
+  line-height: 1;
+}
+
+.project-reminder-btn.icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
 .project-reminder-btn.success {
   border-color: #10b981;
   color: #047857;

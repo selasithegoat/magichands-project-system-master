@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import ConfirmationModal from "../ui/ConfirmationModal";
+import EditIcon from "../icons/EditIcon";
+import TrashIcon from "../icons/TrashIcon";
 import "./ProjectReminderPanel.css";
 
 const REMINDER_TEMPLATE_OPTIONS = [
@@ -19,7 +22,7 @@ const REMINDER_TEMPLATE_OPTIONS = [
     message: "Check if mockup is still pending and follow up with the team/client.",
     triggerMode: "stage_based",
     watchStatus: "Pending Mockup",
-    delayMinutes: 24 * 60,
+    delayMinutes: 0,
     offsetHours: 24,
   },
   {
@@ -29,7 +32,7 @@ const REMINDER_TEMPLATE_OPTIONS = [
     message: "Confirm production progress and update blockers if any.",
     triggerMode: "stage_based",
     watchStatus: "Pending Production",
-    delayMinutes: 24 * 60,
+    delayMinutes: 0,
     offsetHours: 24,
   },
   {
@@ -39,7 +42,7 @@ const REMINDER_TEMPLATE_OPTIONS = [
     message: "Verify packaging, logistics, and final readiness before delivery.",
     triggerMode: "stage_based",
     watchStatus: "Pending Delivery/Pickup",
-    delayMinutes: 12 * 60,
+    delayMinutes: 0,
     offsetHours: 12,
   },
 ];
@@ -159,6 +162,25 @@ const isReminderScheduled = (reminder) =>
   normalizeReminderStatus(reminder?.status) === "scheduled" &&
   reminder?.isActive !== false;
 
+const parseReminderTime = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.getTime();
+};
+
+const isReminderEditable = (reminder) => {
+  if (!isReminderScheduled(reminder)) return false;
+
+  const nextTriggerTime = parseReminderTime(reminder?.nextTriggerAt);
+  if (nextTriggerTime !== null) return nextTriggerTime > Date.now();
+
+  if (reminder?.triggerMode === "stage_based") return true;
+
+  const remindAtTime = parseReminderTime(reminder?.remindAt);
+  return remindAtTime !== null ? remindAtTime > Date.now() : false;
+};
+
 const isReminderActionAllowed = (reminder, userId, role) => {
   if (!userId || !reminder) return false;
   if (role === "admin") return true;
@@ -222,6 +244,9 @@ const ProjectReminderPanel = ({ project, user }) => {
   const [savingReminder, setSavingReminder] = useState(false);
   const [actionReminderId, setActionReminderId] = useState("");
   const [reminderError, setReminderError] = useState("");
+  const [editingReminderId, setEditingReminderId] = useState("");
+  const [showDeleteReminderModal, setShowDeleteReminderModal] = useState(false);
+  const [deleteReminderTarget, setDeleteReminderTarget] = useState(null);
   const [reminderForm, setReminderForm] = useState(() =>
     buildInitialReminderForm("custom"),
   );
@@ -316,6 +341,7 @@ const ProjectReminderPanel = ({ project, user }) => {
 
   const handleOpenReminderModal = () => {
     setReminderError("");
+    setEditingReminderId("");
     setReminderForm(buildInitialReminderForm("custom"));
     setShowReminderModal(true);
   };
@@ -324,6 +350,7 @@ const ProjectReminderPanel = ({ project, user }) => {
     if (savingReminder) return;
     setShowReminderModal(false);
     setReminderError("");
+    setEditingReminderId("");
   };
 
   const replaceReminder = (updatedReminder) => {
@@ -339,7 +366,45 @@ const ProjectReminderPanel = ({ project, user }) => {
     });
   };
 
-  const handleCreateReminder = async (event) => {
+  const removeReminder = (reminderId) => {
+    if (!reminderId) return;
+    setReminders((prev) => prev.filter((entry) => entry._id !== reminderId));
+  };
+
+  const handleEditReminder = (reminder) => {
+    if (!reminder?._id || !isReminderEditable(reminder)) return;
+    const reminderTemplate = getReminderTemplate(reminder.templateKey || "custom");
+    const triggerMode =
+      reminder.triggerMode === "stage_based" ? "stage_based" : "absolute_time";
+    const remindAtValue = reminder.nextTriggerAt || reminder.remindAt;
+
+    setReminderError("");
+    setEditingReminderId(reminder._id);
+    setReminderForm({
+      templateKey: reminderTemplate.key || "custom",
+      title: String(reminder.title || ""),
+      message: String(reminder.message || ""),
+      triggerMode,
+      watchStatus:
+        triggerMode === "stage_based"
+          ? String(reminder.watchStatus || reminder.conditionStatus || "")
+          : "",
+      delayMinutes:
+        triggerMode === "stage_based"
+          ? Math.max(0, Number.parseInt(reminder.delayMinutes, 10) || 0)
+          : 0,
+      remindAt:
+        triggerMode === "absolute_time"
+          ? toDateTimeLocalValue(remindAtValue) || buildReminderDefaultDateTimeValue(24)
+          : buildReminderDefaultDateTimeValue(reminderTemplate.offsetHours || 24),
+      repeat: String(reminder.repeat || "none"),
+      inApp: Boolean(reminder.channels?.inApp),
+      email: Boolean(reminder.channels?.email),
+    });
+    setShowReminderModal(true);
+  };
+
+  const handleSubmitReminder = async (event) => {
     event.preventDefault();
     setReminderError("");
 
@@ -374,7 +439,6 @@ const ProjectReminderPanel = ({ project, user }) => {
 
     try {
       const payload = {
-        projectId,
         title: trimmedTitle,
         message: String(reminderForm.message || "").trim(),
         triggerMode: normalizedTriggerMode,
@@ -396,27 +460,96 @@ const ProjectReminderPanel = ({ project, user }) => {
         },
       };
 
-      const res = await fetch("/api/reminders", {
-        method: "POST",
+      if (!editingReminderId) {
+        payload.projectId = projectId;
+      }
+
+      const res = await fetch(
+        editingReminderId ? `/api/reminders/${editingReminderId}` : "/api/reminders",
+        {
+          method: editingReminderId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message ||
+            (editingReminderId
+              ? "Failed to update reminder."
+              : "Failed to create reminder."),
+        );
+      }
+
+      const savedReminder = await res.json();
+      replaceReminder(savedReminder);
+      setShowReminderModal(false);
+      setEditingReminderId("");
+      setReminderForm(buildInitialReminderForm("custom"));
+    } catch (error) {
+      console.error(
+        editingReminderId ? "Failed to update reminder:" : "Failed to create reminder:",
+        error,
+      );
+      setReminderError(
+        error.message ||
+          (editingReminderId
+            ? "Failed to update reminder."
+            : "Failed to create reminder."),
+      );
+    } finally {
+      setSavingReminder(false);
+    }
+  };
+
+  const handleRequestDeleteReminder = (reminder) => {
+    if (!reminder?._id) return;
+    setDeleteReminderTarget(reminder);
+    setShowDeleteReminderModal(true);
+  };
+
+  const handleCloseDeleteReminderModal = () => {
+    if (actionReminderId && actionReminderId === deleteReminderTarget?._id) {
+      return;
+    }
+    setShowDeleteReminderModal(false);
+    setDeleteReminderTarget(null);
+  };
+
+  const handleDeleteReminder = async () => {
+    const reminderId = deleteReminderTarget?._id;
+    if (!reminderId) return;
+
+    setActionReminderId(reminderId);
+    setReminderError("");
+
+    try {
+      const res = await fetch(`/api/reminders/${reminderId}`, {
+        method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to create reminder.");
+        throw new Error(errorData.message || "Failed to delete reminder.");
       }
 
-      const createdReminder = await res.json();
-      replaceReminder(createdReminder);
-      setShowReminderModal(false);
-      setReminderForm(buildInitialReminderForm("custom"));
+      removeReminder(reminderId);
+      setShowDeleteReminderModal(false);
+      setDeleteReminderTarget(null);
+      if (editingReminderId === reminderId) {
+        setShowReminderModal(false);
+        setEditingReminderId("");
+      }
     } catch (error) {
-      console.error("Failed to create reminder:", error);
-      setReminderError(error.message || "Failed to create reminder.");
+      console.error("Failed to delete reminder:", error);
+      setReminderError(error.message || "Failed to delete reminder.");
     } finally {
-      setSavingReminder(false);
+      setActionReminderId("");
     }
   };
 
@@ -455,6 +588,7 @@ const ProjectReminderPanel = ({ project, user }) => {
     const isActionLoading = actionReminderId === item._id;
     const isStageBased = item.triggerMode === "stage_based";
     const hasConcreteTrigger = Boolean(item.nextTriggerAt || item.remindAt);
+    const canEditReminder = canManage && isReminderEditable(item);
 
     return (
       <div key={item._id} className="project-reminder-item">
@@ -500,6 +634,18 @@ const ProjectReminderPanel = ({ project, user }) => {
 
         {isScheduled && canAct ? (
           <div className="project-reminder-actions">
+            {canEditReminder ? (
+              <button
+                type="button"
+                className="project-reminder-btn icon primary"
+                onClick={() => handleEditReminder(item)}
+                disabled={isActionLoading || savingReminder}
+                aria-label="Edit reminder"
+                title="Edit reminder"
+              >
+                <EditIcon />
+              </button>
+            ) : null}
             <button
               type="button"
               className="project-reminder-btn"
@@ -528,6 +674,19 @@ const ProjectReminderPanel = ({ project, user }) => {
                 {isActionLoading ? "Saving..." : "Cancel"}
               </button>
             ) : null}
+          </div>
+        ) : !isScheduled && canManage ? (
+          <div className="project-reminder-actions">
+            <button
+              type="button"
+              className="project-reminder-btn icon danger"
+              onClick={() => handleRequestDeleteReminder(item)}
+              disabled={isActionLoading}
+              aria-label="Delete reminder"
+              title="Delete reminder"
+            >
+              <TrashIcon width={14} height={14} color="currentColor" />
+            </button>
           </div>
         ) : null}
       </div>
@@ -590,10 +749,12 @@ const ProjectReminderPanel = ({ project, user }) => {
             className="project-reminder-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Set reminder"
+            aria-label={editingReminderId ? "Edit reminder" : "Set reminder"}
           >
-            <h3 className="project-reminder-modal-title">Set Reminder</h3>
-            <form onSubmit={handleCreateReminder}>
+            <h3 className="project-reminder-modal-title">
+              {editingReminderId ? "Edit Reminder" : "Set Reminder"}
+            </h3>
+            <form onSubmit={handleSubmitReminder}>
               <div className="form-group">
                 <label htmlFor="project-reminder-template">Template</label>
                 <select
@@ -788,13 +949,29 @@ const ProjectReminderPanel = ({ project, user }) => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={savingReminder}>
-                  {savingReminder ? "Saving..." : "Save Reminder"}
+                  {savingReminder
+                    ? "Saving..."
+                    : editingReminderId
+                      ? "Save Changes"
+                      : "Save Reminder"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       ) : null}
+
+      <ConfirmationModal
+        isOpen={showDeleteReminderModal}
+        title="Delete Reminder"
+        message={`Delete "${
+          deleteReminderTarget?.title || "this reminder"
+        }" from history? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteReminder}
+        onCancel={handleCloseDeleteReminderModal}
+      />
     </div>
   );
 };

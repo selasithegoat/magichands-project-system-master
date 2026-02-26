@@ -127,6 +127,30 @@ const normalizeDelayMinutes = (value, fallback = 0) => {
   return toNonNegativeInt(value, fallback, 60 * 24 * 90);
 };
 
+const getReminderTimeMs = (value) => {
+  const parsed = normalizeReminderDate(value);
+  if (!parsed) return null;
+  return parsed.getTime();
+};
+
+const isScheduledReminderEditable = (reminder) => {
+  if (!reminder) return false;
+  if (String(reminder.status || "").trim().toLowerCase() !== "scheduled") return false;
+  if (reminder.isActive === false) return false;
+
+  const nextTriggerTime = getReminderTimeMs(reminder.nextTriggerAt);
+  if (nextTriggerTime !== null) {
+    return nextTriggerTime > Date.now();
+  }
+
+  if (String(reminder.triggerMode || "").trim().toLowerCase() === "stage_based") {
+    return true;
+  }
+
+  const remindAtTime = getReminderTimeMs(reminder.remindAt);
+  return remindAtTime !== null ? remindAtTime > Date.now() : false;
+};
+
 const createReminder = async (req, res) => {
   try {
     const {
@@ -328,6 +352,12 @@ const updateReminder = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Only scheduled reminders can be edited." });
+    }
+
+    if (!isScheduledReminderEditable(reminder)) {
+      return res.status(400).json({
+        message: "Only reminders that have not triggered yet can be edited.",
+      });
     }
 
     const {

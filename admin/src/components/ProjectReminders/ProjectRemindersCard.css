@@ -42,6 +42,21 @@
   background: rgba(59, 130, 246, 0.28);
 }
 
+.admin-reminder-btn.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.35rem;
+  line-height: 1;
+}
+
+.admin-reminder-btn.icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
 .admin-reminder-btn.success {
   background: rgba(16, 185, 129, 0.15);
   border-color: rgba(52, 211, 153, 0.6);
