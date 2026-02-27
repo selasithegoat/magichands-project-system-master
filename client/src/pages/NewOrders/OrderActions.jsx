@@ -1,14 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
+import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import {
+  GRAPHICS_SUB_DEPARTMENTS,
+  PHOTOGRAPHY_SUB_DEPARTMENTS,
+  PRODUCTION_SUB_DEPARTMENTS,
+  STORES_SUB_DEPARTMENTS,
+} from "../../constants/departments";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const INVOICE_CONFIRM_PHRASE = "I confirm the invoice has been sent";
 const INVOICE_UNDO_PHRASE = "I confirm the invoice status should be reset";
-const QUOTE_CONFIRM_PHRASE = "I confirm the quote has been sent";
-const QUOTE_UNDO_PHRASE = "I confirm the quote status should be reset";
+const QUOTE_CONFIRM_PHRASE = "I confirm the quote invoice has been sent";
+const QUOTE_UNDO_PHRASE =
+  "I confirm the quote invoice status should be reset";
 const MOCKUP_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved this mockup";
 const MOCKUP_REJECTION_CONFIRM_PHRASE =
@@ -70,6 +78,20 @@ const QUOTE_REQUIREMENT_STATUS_OPTIONS = [
   { value: "blocked", label: "Blocked" },
   { value: "waived", label: "Waived" },
 ];
+const QUOTE_REQUIREMENT_STATUS_TRANSITIONS = {
+  pending: new Set(["in_progress", "blocked", "waived"]),
+  in_progress: new Set(["pending", "completed", "blocked", "waived"]),
+  blocked: new Set(["pending", "in_progress", "waived"]),
+  completed: new Set(["in_progress", "waived"]),
+  waived: new Set(["pending", "in_progress"]),
+};
+const QUOTE_REQUIREMENT_PREREQUISITES = {
+  cost: [],
+  mockup: ["cost"],
+  previousSamples: ["cost"],
+  sampleProduction: ["mockup"],
+  bidSubmission: ["cost", "mockup", "previousSamples", "sampleProduction"],
+};
 const QUOTE_SUBMISSION_CHANNEL_OPTIONS = [
   "Email",
   "WhatsApp",
@@ -88,6 +110,131 @@ const QUOTE_DECISION_OPTIONS = [
   { value: "declined", label: "Declined" },
   { value: "cancelled", label: "Cancelled" },
 ];
+const toDepartmentArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === "") return [];
+  return [value];
+};
+
+const normalizeDepartmentValue = (value) => {
+  if (value && typeof value === "object") {
+    return String(value.value || value.label || "")
+      .trim()
+      .toLowerCase();
+  }
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const PRODUCTION_DEPARTMENT_TOKENS = new Set(
+  [...PRODUCTION_SUB_DEPARTMENTS, "production"]
+    .map(normalizeDepartmentValue)
+    .filter(Boolean),
+);
+const GRAPHICS_DEPARTMENT_TOKENS = new Set(
+  [...GRAPHICS_SUB_DEPARTMENTS, "graphics/design", "graphics", "design"]
+    .map(normalizeDepartmentValue)
+    .filter(Boolean),
+);
+const STORES_DEPARTMENT_TOKENS = new Set(
+  [...STORES_SUB_DEPARTMENTS, "stores", "stock", "packaging"]
+    .map(normalizeDepartmentValue)
+    .filter(Boolean),
+);
+const PHOTOGRAPHY_DEPARTMENT_TOKENS = new Set(
+  [...PHOTOGRAPHY_SUB_DEPARTMENTS, "photography"]
+    .map(normalizeDepartmentValue)
+    .filter(Boolean),
+);
+
+const canonicalizeDepartment = (value) => {
+  const token = normalizeDepartmentValue(value);
+  if (!token) return "";
+  if (PRODUCTION_DEPARTMENT_TOKENS.has(token)) return "production";
+  if (GRAPHICS_DEPARTMENT_TOKENS.has(token)) return "graphics";
+  if (STORES_DEPARTMENT_TOKENS.has(token)) return "stores";
+  if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) return "photography";
+  return token;
+};
+
+const isFrontDeskDepartment = (value) =>
+  normalizeDepartmentValue(value) === "front desk";
+
+const userHasCanonicalDepartment = (user, targetCanonical) => {
+  if (!user || !targetCanonical) return false;
+  return toDepartmentArray(user.department).some(
+    (dept) => canonicalizeDepartment(dept) === targetCanonical,
+  );
+};
+
+const isFrontDeskUser = (user) =>
+  toDepartmentArray(user?.department).some(isFrontDeskDepartment);
+const isAdminPortalContext = () => {
+  if (typeof window === "undefined") return false;
+  const pathname = String(window.location?.pathname || "")
+    .trim()
+    .toLowerCase();
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+};
+const isQuoteWorkflowAdmin = (user) =>
+  Boolean(
+    isAdminPortalContext() &&
+    user?.role === "admin" &&
+      toDepartmentArray(user?.department).some(
+        (dept) => normalizeDepartmentValue(dept) === "administration",
+      ),
+  );
+
+const getQuoteRequirementStatusActorLabel = (requirementKey, status) => {
+  if (status === "waived") return "Front Desk or Admin";
+  switch (requirementKey) {
+    case "mockup":
+      return "Graphics";
+    case "previousSamples":
+      return "Stores";
+    case "sampleProduction":
+      return "Production, Front Desk, or Admin";
+    case "bidSubmission":
+      return "Admin only";
+    case "cost":
+    default:
+      return "Front Desk or Admin";
+  }
+};
+
+const canTriggerQuoteRequirementStatus = (user, requirementRow = {}, status) => {
+  if (!user || !requirementRow?.required) return false;
+  const normalizedStatus = normalizeQuoteRequirementStatus(status, "");
+  if (!normalizedStatus) return false;
+
+  const isAdmin = isQuoteWorkflowAdmin(user);
+  const frontDesk = isFrontDeskUser(user);
+  if (normalizedStatus === "waived") return isAdmin || frontDesk;
+
+  switch (requirementRow.key) {
+    case "mockup":
+      return userHasCanonicalDepartment(user, "graphics");
+    case "previousSamples":
+      return userHasCanonicalDepartment(user, "stores");
+    case "sampleProduction":
+      return (
+        frontDesk ||
+        userHasCanonicalDepartment(user, "production") ||
+        isAdmin
+      );
+    case "bidSubmission":
+      return isAdmin;
+    case "cost":
+    default:
+      return frontDesk || isAdmin;
+  }
+};
+
+const canManageQuoteRequirementForUser = (user, requirementRow = {}) =>
+  QUOTE_REQUIREMENT_STATUS_OPTIONS.some((option) =>
+    canTriggerQuoteRequirementStatus(user, requirementRow, option.value),
+  );
 
 const formatDate = (dateString) => {
   if (!dateString) return "-";
@@ -147,6 +294,18 @@ const getQuoteRequirementStatusClass = (status) => {
   if (normalized === "in_progress") return "in-progress";
   return "pending";
 };
+const isQuoteRequirementSatisfiedStatus = (status) =>
+  ["completed", "waived"].includes(
+    normalizeQuoteRequirementStatus(status, "pending"),
+  );
+const canTransitionQuoteRequirementStatus = (currentStatus, nextStatus) => {
+  const current = normalizeQuoteRequirementStatus(currentStatus, "pending");
+  const next = normalizeQuoteRequirementStatus(nextStatus, "");
+  if (!next) return false;
+  if (current === next) return true;
+  const allowed = QUOTE_REQUIREMENT_STATUS_TRANSITIONS[current];
+  return Boolean(allowed && allowed.has(next));
+};
 
 const normalizeQuoteSubmissionChannels = (value) => {
   const source = Array.isArray(value) ? value : [];
@@ -167,14 +326,15 @@ const getQuoteRequirementProgress = (project) => {
     const required = Boolean(checklist?.[key]);
     const entry = progress?.[key] || {};
     const ownerDept =
-      String(entry?.ownerDept || "").trim() ||
-      (key === "mockup"
+      key === "mockup"
         ? "Graphics/Design"
         : key === "previousSamples"
           ? "Stores"
           : key === "sampleProduction"
             ? "Production"
-            : "Front Desk");
+            : key === "bidSubmission"
+              ? "Admin"
+              : "Front Desk";
 
     const status = required
       ? normalizeQuoteRequirementStatus(entry?.status, "pending")
@@ -190,6 +350,40 @@ const getQuoteRequirementProgress = (project) => {
       completedAt: entry?.completedAt || null,
     };
   });
+};
+const getQuoteRequirementStatusGuardMessage = ({
+  row,
+  nextStatus,
+  allRows = [],
+  hasMockupFile = false,
+}) => {
+  if (!row?.required) return "This requirement is not enabled.";
+  const current = normalizeQuoteRequirementStatus(row.status, "pending");
+  const next = normalizeQuoteRequirementStatus(nextStatus, current);
+  if (!canTransitionQuoteRequirementStatus(current, next)) {
+    return `Move '${row.label}' from ${getQuoteRequirementStatusLabel(current)} to ${getQuoteRequirementStatusLabel(next)} is not allowed.`;
+  }
+
+  if (next === "in_progress" || next === "completed") {
+    const prerequisites = QUOTE_REQUIREMENT_PREREQUISITES[row.key] || [];
+    const unmet = prerequisites.filter((key) => {
+      const dependencyRow = (allRows || []).find((entry) => entry.key === key);
+      if (!dependencyRow?.required) return false;
+      return !isQuoteRequirementSatisfiedStatus(dependencyRow.status);
+    });
+    if (unmet.length > 0) {
+      const labels = unmet.map((key) => QUOTE_REQUIREMENT_LABELS[key] || key);
+      return `Complete prerequisite requirements first: ${labels.join(", ")}.`;
+    }
+  }
+
+  if (row.key === "mockup" && next === "completed") {
+    if (!hasMockupFile) {
+      return "Upload a mockup before marking Mockup as Completed.";
+    }
+  }
+
+  return "";
 };
 
 const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
@@ -428,12 +622,19 @@ const OrderActions = () => {
     useState(false);
   const [quoteRequirementSavingKey, setQuoteRequirementSavingKey] = useState("");
   const [quoteStageSubmitting, setQuoteStageSubmitting] = useState(false);
-  const [quoteSubmissionSentBy, setQuoteSubmissionSentBy] = useState("");
   const [quoteSubmissionChannels, setQuoteSubmissionChannels] = useState([]);
   const [quoteResponseSubmitting, setQuoteResponseSubmitting] = useState(false);
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
+  const [quoteDecisionConfirm, setQuoteDecisionConfirm] = useState({
+    open: false,
+    decision: "",
+  });
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
+  const [updateDeleteConfirm, setUpdateDeleteConfirm] = useState({
+    open: false,
+    update: null,
+  });
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
   const [orderNumberDraft, setOrderNumberDraft] = useState("");
@@ -579,16 +780,12 @@ const OrderActions = () => {
 
   useEffect(() => {
     if (!project || project.projectType !== "Quote") {
-      setQuoteSubmissionSentBy("");
       setQuoteSubmissionChannels([]);
       setQuoteDecisionNote("");
       setQuoteConversionType("Standard");
       return;
     }
 
-    setQuoteSubmissionSentBy(
-      String(project?.quoteDetails?.submission?.sentBy || "").trim(),
-    );
     setQuoteSubmissionChannels(
       normalizeQuoteSubmissionChannels(project?.quoteDetails?.submission?.sentVia),
     );
@@ -597,9 +794,13 @@ const OrderActions = () => {
     );
   }, [project]);
 
+  const userDepartments = useMemo(
+    () => toDepartmentArray(currentUser?.department),
+    [currentUser?.department],
+  );
+  const isFrontDeskOperator = userDepartments.some(isFrontDeskDepartment);
   const canManageBilling =
-    currentUser?.role === "admin" ||
-    currentUser?.department?.includes("Front Desk");
+    isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
   const canMarkDelivered = canManageBilling;
   const canManageFeedback = canManageBilling;
   const canShareUpdates = canManageBilling;
@@ -635,9 +836,6 @@ const OrderActions = () => {
   );
   const isQuoteProject = project?.projectType === "Quote";
   const invoiceSent = Boolean(project?.invoice?.sent);
-  const isFrontDeskUser = Boolean(
-    currentUser?.department?.includes?.("Front Desk"),
-  );
   const billingDocumentLabel = isQuoteProject ? "Quote" : "Invoice";
   const billingDocumentLower = isQuoteProject ? "quote" : "invoice";
   const billingConfirmPhrase = isQuoteProject
@@ -661,7 +859,8 @@ const OrderActions = () => {
   const quoteIncompleteRequirementRows = useMemo(
     () =>
       quoteRequirementRows.filter(
-        (row) => row.required && row.status !== "completed",
+        (row) =>
+          row.required && row.status !== "completed" && row.status !== "waived",
       ),
     [quoteRequirementRows],
   );
@@ -672,25 +871,46 @@ const OrderActions = () => {
   const quoteDecisionLocked = ["accepted", "declined", "cancelled"].includes(
     quoteDecisionStatus,
   );
-  const canManageQuoteWorkflow = canManageBilling;
+  const canManageQuoteRequirementRow = (row) =>
+    canManageQuoteRequirementForUser(currentUser, row);
+  const quoteHasEditableRequirements = quoteRequirementRows.some(
+    (row) => row.required && canManageQuoteRequirementRow(row),
+  );
+  const canManageQuoteStages =
+    isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
+  const canManageQuoteDecision =
+    isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
   const canCompleteQuotePreparation =
     isQuoteProject &&
     project?.status === "Pending Quote Request" &&
-    canManageQuoteWorkflow;
+    canManageQuoteStages;
   const canMarkQuoteResponseSent =
     isQuoteProject &&
     project?.status === "Pending Send Response" &&
-    canManageQuoteWorkflow;
+    canManageQuoteStages;
   const normalizedQuoteSubmissionChannels = normalizeQuoteSubmissionChannels(
     quoteSubmissionChannels,
   );
+  const quoteSentByRecorded = String(
+    project?.quoteDetails?.submission?.sentBy || "",
+  ).trim();
+  const quoteSentByActorLabel = useMemo(() => {
+    const firstName = String(currentUser?.firstName || "").trim();
+    const lastName = String(currentUser?.lastName || "").trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    if (fullName) return fullName;
+    return (
+      String(currentUser?.employeeId || "").trim() ||
+      String(currentUser?.email || "").trim() ||
+      "Current user"
+    );
+  }, [currentUser?.firstName, currentUser?.lastName, currentUser?.employeeId, currentUser?.email]);
   const quoteSubmissionMissing = useMemo(() => {
     const missing = [];
     if (!invoiceSent) missing.push("Quote sent confirmation");
-    if (!quoteSubmissionSentBy.trim()) missing.push("Sent by");
     if (normalizedQuoteSubmissionChannels.length === 0) missing.push("Sent via");
     return missing;
-  }, [invoiceSent, quoteSubmissionSentBy, normalizedQuoteSubmissionChannels]);
+  }, [invoiceSent, normalizedQuoteSubmissionChannels]);
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -718,7 +938,7 @@ const OrderActions = () => {
     forceCommandTone = false,
   }) => {
     const resolvedMessage =
-      forceCommandTone || isFrontDeskUser
+      forceCommandTone || isFrontDeskOperator
         ? getFrontDeskCommandMessage(targetStatus)
         : message || "Billing prerequisites are required before this action.";
     const resolvedTitle =
@@ -751,23 +971,60 @@ const OrderActions = () => {
     });
   };
 
-  const handleUpdateQuoteRequirementStatus = async (requirementKey, status) => {
-    if (!project || !isQuoteProject || !canManageQuoteWorkflow) return;
-    setQuoteRequirementSavingKey(requirementKey);
+  const handleUpdateQuoteRequirementStatus = async (row, status) => {
+    if (!project || !isQuoteProject || !row?.required) return;
+    if (!canTriggerQuoteRequirementStatus(currentUser, row, status)) {
+      const allowedActor = getQuoteRequirementStatusActorLabel(row.key, status);
+      showToast(
+        `Not authorized. Allowed for this action: ${allowedActor}.`,
+        "error",
+      );
+      return;
+    }
+    const strictGuardMessage = getQuoteRequirementStatusGuardMessage({
+      row,
+      nextStatus: status,
+      allRows: quoteRequirementRows,
+      hasMockupFile: Boolean(latestMockupVersion?.fileUrl),
+    });
+    if (strictGuardMessage) {
+      showToast(strictGuardMessage, "error");
+      return;
+    }
+
+    let notesPayload;
+    if (status === "blocked" || status === "waived") {
+      const note = window.prompt(
+        `Provide reason for marking '${row.label}' as ${status === "waived" ? "Waived" : "Blocked"}:`,
+        row.notes || "",
+      );
+      if (note === null) return;
+      const trimmed = note.trim();
+      if (!trimmed) {
+        showToast(`Reason is required to mark '${row.label}' as ${status}.`, "error");
+        return;
+      }
+      notesPayload = trimmed;
+    }
+
+    setQuoteRequirementSavingKey(row.key);
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/quote-requirements/${encodeURIComponent(requirementKey)}`,
+        `/api/projects/${project._id}/quote-requirements/${encodeURIComponent(row.key)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({
+            status,
+            ...(notesPayload ? { notes: notesPayload } : {}),
+          }),
         },
       );
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
         showToast(
-          `${QUOTE_REQUIREMENT_LABELS[requirementKey] || requirementKey} updated.`,
+          `${row.label} updated.`,
           "success",
         );
       } else {
@@ -845,7 +1102,6 @@ const OrderActions = () => {
         body: JSON.stringify({
           status: "Response Sent",
           submission: {
-            sentBy: quoteSubmissionSentBy.trim(),
             sentVia: normalizeQuoteSubmissionChannels(quoteSubmissionChannels),
           },
         }),
@@ -876,15 +1132,31 @@ const OrderActions = () => {
     }
   };
 
-  const handleQuoteDecision = async (decision) => {
-    if (!project || !isQuoteProject || !canManageQuoteWorkflow) return;
+  const openQuoteDecisionConfirm = (decision) => {
+    if (!project || !isQuoteProject || !canManageQuoteDecision) return;
     const option = QUOTE_DECISION_OPTIONS.find((entry) => entry.value === decision);
     if (!option) return;
+    setQuoteDecisionConfirm({ open: true, decision });
+  };
 
-    const confirmed = window.confirm(
-      `Confirm quote decision: ${option.label}?`,
-    );
-    if (!confirmed) return;
+  const closeQuoteDecisionConfirm = () => {
+    if (quoteDecisionSubmitting) return;
+    setQuoteDecisionConfirm({ open: false, decision: "" });
+  };
+
+  const handleQuoteDecision = async () => {
+    const decision = quoteDecisionConfirm.decision;
+    if (
+      quoteDecisionSubmitting ||
+      !project ||
+      !isQuoteProject ||
+      !canManageQuoteDecision ||
+      !decision
+    ) {
+      return;
+    }
+    const option = QUOTE_DECISION_OPTIONS.find((entry) => entry.value === decision);
+    if (!option) return;
 
     setQuoteDecisionSubmitting(true);
     try {
@@ -905,6 +1177,7 @@ const OrderActions = () => {
         const updated = await res.json();
         setProject(updated);
         showToast(`Quote marked as ${option.label.toLowerCase()}.`, "success");
+        setQuoteDecisionConfirm({ open: false, decision: "" });
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(
@@ -1239,12 +1512,19 @@ const OrderActions = () => {
     }
   };
 
-  const handleDeleteUpdate = async (update) => {
+  const requestDeleteUpdate = (update) => {
     if (!update?._id || !canManageUpdate(update)) return;
-    const confirmed = window.confirm(
-      "Delete this update? This action cannot be undone.",
-    );
-    if (!confirmed) return;
+    setUpdateDeleteConfirm({ open: true, update });
+  };
+
+  const closeDeleteUpdateConfirm = () => {
+    if (updateDeleteSubmittingId) return;
+    setUpdateDeleteConfirm({ open: false, update: null });
+  };
+
+  const handleDeleteUpdate = async () => {
+    const update = updateDeleteConfirm.update;
+    if (updateDeleteSubmittingId || !update?._id || !canManageUpdate(update)) return;
 
     setUpdateDeleteSubmittingId(update._id);
     try {
@@ -1258,6 +1538,7 @@ const OrderActions = () => {
           handleCancelEditUpdate();
         }
         showToast("Update deleted.", "success");
+        setUpdateDeleteConfirm({ open: false, update: null });
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(errorData.message || "Failed to delete update.", "error");
@@ -1975,7 +2256,7 @@ const OrderActions = () => {
   ]);
 
   const lastOrderRevisionUpdatedAt = project?.sectionUpdates?.details || null;
-  const lastOrderRevisionLabel = currentUser?.department?.includes("Front Desk")
+  const lastOrderRevisionLabel = isFrontDeskOperator
     ? "Last updated by Front Desk"
     : "Last updated";
 
@@ -2000,6 +2281,30 @@ const OrderActions = () => {
       {toast.show && (
         <div className={`toast-message ${toast.type}`}>{toast.message}</div>
       )}
+      <ConfirmationModal
+        isOpen={quoteDecisionConfirm.open}
+        onCancel={closeQuoteDecisionConfirm}
+        onConfirm={handleQuoteDecision}
+        title="Confirm Quote Decision"
+        message={`Confirm quote decision: ${
+          QUOTE_DECISION_OPTIONS.find(
+            (entry) => entry.value === quoteDecisionConfirm.decision,
+          )?.label || ""
+        }?`}
+        confirmText={quoteDecisionSubmitting ? "Saving..." : "Confirm"}
+        cancelText="Cancel"
+      />
+      <ConfirmationModal
+        isOpen={updateDeleteConfirm.open}
+        onCancel={closeDeleteUpdateConfirm}
+        onConfirm={handleDeleteUpdate}
+        title="Delete Update"
+        message="Delete this update? This action cannot be undone."
+        confirmText={
+          updateDeleteSubmittingId ? "Deleting..." : "Yes, Delete Update"
+        }
+        cancelText="Cancel"
+      />
 
       <div className="page-header order-actions-header">
         <div>
@@ -2124,61 +2429,142 @@ const OrderActions = () => {
                   response.
                 </p>
                 <div className="quote-requirements-list">
-                  {quoteRequirementRows.map((row) => (
-                    <div
-                      key={row.key}
-                      className={`quote-requirement-item ${
-                        row.required ? "" : "not-required"
-                      }`}
-                    >
-                      <div className="quote-requirement-header">
-                        <span className="quote-requirement-name">{row.label}</span>
-                        <span
-                          className={`quote-requirement-status ${getQuoteRequirementStatusClass(
-                            row.status,
-                          )}`}
-                        >
-                          {row.required
-                            ? getQuoteRequirementStatusLabel(row.status)
-                            : "Not Required"}
-                        </span>
-                      </div>
-                      <div className="quote-requirement-owner">
-                        Responsible: {row.ownerDept || "Unassigned"}
-                      </div>
-                      {row.required && row.completedAt && (
-                        <div className="quote-requirement-meta">
-                          Completed: {formatDateTime(row.completedAt)}
+                  {quoteRequirementRows.map((row) => {
+                    const rowStatusOptions = QUOTE_REQUIREMENT_STATUS_OPTIONS.filter(
+                      (option) => {
+                        if (
+                          !canTriggerQuoteRequirementStatus(
+                            currentUser,
+                            row,
+                            option.value,
+                          )
+                        ) {
+                          return false;
+                        }
+                        const guardMessage = getQuoteRequirementStatusGuardMessage({
+                          row,
+                          nextStatus: option.value,
+                          allRows: quoteRequirementRows,
+                          hasMockupFile: Boolean(latestMockupVersion?.fileUrl),
+                        });
+                        return !guardMessage;
+                      },
+                    );
+                    const rowCanManageByRole =
+                      QUOTE_REQUIREMENT_STATUS_OPTIONS.some((option) =>
+                        canTriggerQuoteRequirementStatus(
+                          currentUser,
+                          row,
+                          option.value,
+                        ),
+                      );
+                    const rowCanManage = rowStatusOptions.length > 0;
+                    const strictGuardHint =
+                      rowCanManageByRole && !rowCanManage
+                        ? QUOTE_REQUIREMENT_STATUS_OPTIONS.filter((option) =>
+                            canTriggerQuoteRequirementStatus(
+                              currentUser,
+                              row,
+                              option.value,
+                            ),
+                          )
+                            .map((option) =>
+                              getQuoteRequirementStatusGuardMessage({
+                                row,
+                                nextStatus: option.value,
+                                allRows: quoteRequirementRows,
+                                hasMockupFile: Boolean(
+                                  latestMockupVersion?.fileUrl,
+                                ),
+                              }),
+                            )
+                            .find(Boolean) ||
+                          "No valid status transition is available yet."
+                        : "";
+
+                    return (
+                      <div
+                        key={row.key}
+                        className={`quote-requirement-item ${
+                          row.required ? "" : "not-required"
+                        }`}
+                      >
+                        <div className="quote-requirement-header">
+                          <span className="quote-requirement-name">{row.label}</span>
+                          <span
+                            className={`quote-requirement-status ${getQuoteRequirementStatusClass(
+                              row.status,
+                            )}`}
+                          >
+                            {row.required
+                              ? getQuoteRequirementStatusLabel(row.status)
+                              : "Not Required"}
+                          </span>
                         </div>
-                      )}
-                      {row.required && canManageQuoteWorkflow && (
-                        <div className="quote-requirement-actions">
-                          {QUOTE_REQUIREMENT_STATUS_OPTIONS.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={`quote-status-btn ${
-                                row.status === option.value ? "active" : ""
-                              }`}
-                              onClick={() =>
-                                handleUpdateQuoteRequirementStatus(
+                        <div className="quote-requirement-owner">
+                          Responsible: {row.ownerDept || "Unassigned"}
+                        </div>
+                        {row.required && row.completedAt && (
+                          <div className="quote-requirement-meta">
+                            Completed: {formatDateTime(row.completedAt)}
+                          </div>
+                        )}
+                        {row.required && row.notes && (
+                          <div className="quote-requirement-meta">
+                            Note: {row.notes}
+                          </div>
+                        )}
+                        {row.required && rowCanManage && (
+                          <div className="quote-requirement-actions">
+                            {rowStatusOptions.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                className={`quote-status-btn ${
+                                  row.status === option.value ? "active" : ""
+                                }`}
+                                onClick={() =>
+                                  handleUpdateQuoteRequirementStatus(
+                                    row,
+                                    option.value,
+                                  )
+                                }
+                                disabled={
+                                  quoteRequirementSavingKey === row.key ||
+                                  quoteDecisionLocked
+                                }
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {row.required && !rowCanManage && (
+                          <div className="quote-requirement-meta">
+                            {strictGuardHint
+                              ? strictGuardHint
+                              : `Allowed: ${getQuoteRequirementStatusActorLabel(
                                   row.key,
-                                  option.value,
-                                )
-                              }
-                              disabled={
-                                quoteRequirementSavingKey === row.key ||
-                                quoteDecisionLocked
-                              }
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                                  "completed",
+                                )}. Waived: Front Desk or Admin.`}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
+                {!quoteHasEditableRequirements && (
+                  <div className="quote-readiness info">
+                    You can monitor progress here. No quote-requirement actions are
+                    available for your role on this order.
+                  </div>
+                )}
+                {!canManageQuoteStages && (
+                  <div className="quote-readiness info">
+                    Front Desk or Admin handles quote stage progression and final
+                    decision.
+                  </div>
+                )}
                 {quoteIncompleteRequirementRows.length > 0 ? (
                   <div className="quote-readiness warning">
                     Pending:
@@ -2224,16 +2610,16 @@ const OrderActions = () => {
                       onClick={openInvoiceModal}
                       disabled={!canManageBilling || quoteDecisionLocked}
                     >
-                      Mark Quote Sent
+                      Confirm Quote Invoice Sent
                     </button>
                   ) : (
                     <button
                       className="action-btn undo-btn"
                       onClick={openInvoiceUndoModal}
                       disabled={!canManageBilling || quoteDecisionLocked}
-                      title="Undo quote sent"
+                      title="Undo quote invoice sent"
                     >
-                      Undo Quote Sent
+                      Undo Quote Invoice Sent
                     </button>
                   )}
                 </div>
@@ -2244,10 +2630,9 @@ const OrderActions = () => {
                 <input
                   id="quote-sent-by"
                   className="form-input"
-                  value={quoteSubmissionSentBy}
-                  onChange={(event) => setQuoteSubmissionSentBy(event.target.value)}
-                  placeholder="e.g. Front Desk / Project Coordinator"
-                  disabled={!canManageQuoteWorkflow || quoteDecisionLocked}
+                  value={quoteSentByRecorded || quoteSentByActorLabel}
+                  readOnly
+                  disabled
                 />
 
                 <div className="quote-field-label">Sent Via</div>
@@ -2258,7 +2643,7 @@ const OrderActions = () => {
                         type="checkbox"
                         checked={normalizedQuoteSubmissionChannels.includes(channel)}
                         onChange={() => toggleQuoteSubmissionChannel(channel)}
-                        disabled={!canManageQuoteWorkflow || quoteDecisionLocked}
+                        disabled={!canManageQuoteStages || quoteDecisionLocked}
                       />
                       <span>{channel}</span>
                     </label>
@@ -2310,7 +2695,7 @@ const OrderActions = () => {
                   value={quoteDecisionNote}
                   onChange={(event) => setQuoteDecisionNote(event.target.value)}
                   placeholder="Add optional notes about client decision."
-                  disabled={!canManageQuoteWorkflow || quoteDecisionLocked}
+                  disabled={!canManageQuoteDecision || quoteDecisionLocked}
                 />
 
                 <label className="quote-field-label" htmlFor="quote-conversion-type">
@@ -2321,7 +2706,7 @@ const OrderActions = () => {
                   className="form-input"
                   value={quoteConversionType}
                   onChange={(event) => setQuoteConversionType(event.target.value)}
-                  disabled={!canManageQuoteWorkflow || quoteDecisionLocked}
+                  disabled={!canManageQuoteDecision || quoteDecisionLocked}
                 >
                   {QUOTE_CONVERSION_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -2334,7 +2719,7 @@ const OrderActions = () => {
                   <button
                     type="button"
                     className="action-btn complete-btn"
-                    onClick={() => handleQuoteDecision("accepted")}
+                    onClick={() => openQuoteDecisionConfirm("accepted")}
                     disabled={
                       quoteDecisionSubmitting ||
                       quoteDecisionLocked ||
@@ -2346,7 +2731,7 @@ const OrderActions = () => {
                   <button
                     type="button"
                     className="action-btn feedback-btn"
-                    onClick={() => handleQuoteDecision("declined")}
+                    onClick={() => openQuoteDecisionConfirm("declined")}
                     disabled={
                       quoteDecisionSubmitting ||
                       quoteDecisionLocked ||
@@ -2358,7 +2743,7 @@ const OrderActions = () => {
                   <button
                     type="button"
                     className="action-btn undo-btn"
-                    onClick={() => handleQuoteDecision("cancelled")}
+                    onClick={() => openQuoteDecisionConfirm("cancelled")}
                     disabled={quoteDecisionSubmitting || quoteDecisionLocked}
                   >
                     Cancel Quote
@@ -2508,195 +2893,193 @@ const OrderActions = () => {
           )}
         </div>
 
-        {!isQuoteProject && (
-          <section className="mockup-standalone-section">
-            <div className="action-card mockup-standalone-card">
-              <h3>Mockup Approval</h3>
-              <p>
-                Confirm client approval before Mockup stage can be marked
-                complete.
-              </p>
+        <section className="mockup-standalone-section">
+          <div className="action-card mockup-standalone-card">
+            <h3>{isQuoteProject ? "Mockup Files" : "Mockup Approval"}</h3>
+            <p>
+              {isQuoteProject
+                ? "View and download mockups to share directly with the client."
+                : "Confirm client approval before Mockup stage can be marked complete."}
+            </p>
 
-              {!latestMockupVersion ? (
-                <div className="mockup-empty-state">
-                  No mockup has been uploaded yet.
-                </div>
-              ) : (
-                <>
-                  <div
-                    className={`mockup-approval-status ${
-                      mockupApprovalConfirmed
-                        ? "approved"
-                        : mockupApprovalRejected
-                          ? "rejected"
-                          : "pending"
-                    }`}
-                  >
-                    Latest: {latestMockupVersionLabel}{" "}
-                    {mockupApprovalConfirmed
+            {!latestMockupVersion ? (
+              <div className="mockup-empty-state">No mockup has been uploaded yet.</div>
+            ) : (
+              <>
+                <div
+                  className={`mockup-approval-status ${
+                    mockupApprovalConfirmed
+                      ? "approved"
+                      : mockupApprovalRejected
+                        ? "rejected"
+                        : "pending"
+                  }`}
+                >
+                  Latest: {latestMockupVersionLabel}{" "}
+                  {isQuoteProject
+                    ? mockupApprovalRejected
+                      ? "Uploaded (Client Rejected)"
+                      : "Uploaded"
+                    : mockupApprovalConfirmed
                       ? "Client Approved"
                       : mockupApprovalRejected
                         ? "Client Rejected"
                         : "Pending Client Approval"}
-                  </div>
+                </div>
 
-                  {mockupApprovalConfirmed &&
-                    latestMockupVersion.clientApproval?.approvedAt && (
-                      <p className="mockup-approval-meta">
-                        Approved:{" "}
-                        {formatDateTime(
-                          latestMockupVersion.clientApproval.approvedAt,
-                        )}
-                      </p>
-                    )}
-                  {mockupApprovalRejected &&
-                    latestMockupVersion.clientApproval?.rejectedAt && (
-                      <p className="mockup-approval-meta rejection">
-                        Rejected:{" "}
-                        {formatDateTime(
-                          latestMockupVersion.clientApproval.rejectedAt,
-                        )}
-                      </p>
-                    )}
-                  {mockupApprovalRejected &&
-                    latestMockupVersion.clientApproval?.rejectionReason && (
-                      <p className="mockup-approval-meta rejection">
-                        Reason:{" "}
-                        {latestMockupVersion.clientApproval.rejectionReason}
-                      </p>
-                    )}
+                {mockupApprovalConfirmed &&
+                  latestMockupVersion.clientApproval?.approvedAt && (
+                    <p className="mockup-approval-meta">
+                      Approved:{" "}
+                      {formatDateTime(latestMockupVersion.clientApproval.approvedAt)}
+                    </p>
+                  )}
+                {mockupApprovalRejected &&
+                  latestMockupVersion.clientApproval?.rejectedAt && (
+                    <p className="mockup-approval-meta rejection">
+                      Rejected:{" "}
+                      {formatDateTime(latestMockupVersion.clientApproval.rejectedAt)}
+                    </p>
+                  )}
+                {mockupApprovalRejected &&
+                  latestMockupVersion.clientApproval?.rejectionReason && (
+                    <p className="mockup-approval-meta rejection">
+                      Reason: {latestMockupVersion.clientApproval.rejectionReason}
+                    </p>
+                  )}
 
-                  <div className="mockup-version-list">
-                    {mockupVersions
-                      .slice()
-                      .reverse()
-                      .map((version) => {
-                        const fileName =
-                          version.fileName ||
-                          version.fileUrl.split("/").pop() ||
-                          `Mockup v${version.version}`;
-                        const decision = getMockupApprovalStatus(
-                          version.clientApproval || {},
-                        );
-                        const isLatestVersion =
-                          Number(version.version) ===
-                          Number(latestMockupVersion?.version);
-                        const canDecideOnVersions =
-                          canManageMockupApproval &&
-                          project.status === "Pending Mockup";
-                        const approveHidden = decision === "rejected";
-                        const approveDisabled =
-                          !isLatestVersion || decision === "approved";
-                        const rejectDisabled =
-                          !isLatestVersion || decision === "rejected";
-                        return (
-                          <div
-                            key={`mockup-version-${version.version}`}
-                            className="mockup-version-item"
-                          >
-                            <div className="mockup-version-main">
-                              <strong>v{version.version}</strong>
-                              <span>
-                                {decision === "approved"
+                <div className="mockup-version-list">
+                  {mockupVersions
+                    .slice()
+                    .reverse()
+                    .map((version) => {
+                      const fileName =
+                        version.fileName ||
+                        version.fileUrl.split("/").pop() ||
+                        `Mockup v${version.version}`;
+                      const decision = getMockupApprovalStatus(
+                        version.clientApproval || {},
+                      );
+                      const isLatestVersion =
+                        Number(version.version) ===
+                        Number(latestMockupVersion?.version);
+                      const canDecideOnVersions =
+                        canManageMockupApproval &&
+                        project.status === "Pending Mockup";
+                      const approveHidden = decision === "rejected";
+                      const approveDisabled =
+                        !isLatestVersion || decision === "approved";
+                      const rejectDisabled =
+                        !isLatestVersion || decision === "rejected";
+                      return (
+                        <div
+                          key={`mockup-version-${version.version}`}
+                          className="mockup-version-item"
+                        >
+                          <div className="mockup-version-main">
+                            <strong>v{version.version}</strong>
+                            <span>
+                              {isQuoteProject
+                                ? "Uploaded"
+                                : decision === "approved"
                                   ? "Approved"
                                   : decision === "rejected"
                                     ? "Rejected"
                                     : "Pending Approval"}
+                            </span>
+                          </div>
+                          <div className="mockup-version-links">
+                            <a
+                              href={version.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              View
+                            </a>
+                            <a href={version.fileUrl} download>
+                              Download
+                            </a>
+                          </div>
+                          <div className="mockup-version-meta">
+                            <span>{fileName}</span>
+                            {version.uploadedAt && (
+                              <span>
+                                Uploaded: {formatDateTime(version.uploadedAt)}
                               </span>
-                            </div>
-                            <div className="mockup-version-links">
-                              <a
-                                href={version.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                View
-                              </a>
-                              <a href={version.fileUrl} download>
-                                Download
-                              </a>
-                            </div>
-                            <div className="mockup-version-meta">
-                              <span>{fileName}</span>
-                              {version.uploadedAt && (
+                            )}
+                            {decision === "rejected" &&
+                              version.clientApproval?.rejectedAt && (
                                 <span>
-                                  Uploaded: {formatDateTime(version.uploadedAt)}
+                                  Rejected:{" "}
+                                  {formatDateTime(
+                                    version.clientApproval.rejectedAt,
+                                  )}
                                 </span>
                               )}
-                              {decision === "rejected" &&
-                                version.clientApproval?.rejectedAt && (
-                                  <span>
-                                    Rejected:{" "}
-                                    {formatDateTime(
-                                      version.clientApproval.rejectedAt,
-                                    )}
-                                  </span>
-                                )}
-                              {decision === "rejected" &&
-                                version.clientApproval?.rejectionReason && (
-                                  <span>
-                                    Reason:{" "}
-                                    {version.clientApproval.rejectionReason}
-                                  </span>
-                                )}
-                            </div>
-                            {canDecideOnVersions && (
-                              <div className="mockup-version-actions">
-                                {!approveHidden && (
-                                  <button
-                                    className="action-btn complete-btn"
-                                    onClick={() => openMockupApprovalModal(version)}
-                                    disabled={approveDisabled}
-                                    title={
-                                      !isLatestVersion
-                                        ? "Only latest version can be approved."
-                                        : decision === "approved"
-                                          ? "Already approved."
-                                          : `Confirm client approval for v${version.version}`
-                                    }
-                                  >
-                                    {decision === "approved"
-                                      ? `Approved (v${version.version})`
-                                      : `Confirm Approval (v${version.version})`}
-                                  </button>
-                                )}
+                            {decision === "rejected" &&
+                              version.clientApproval?.rejectionReason && (
+                                <span>
+                                  Reason:{" "}
+                                  {version.clientApproval.rejectionReason}
+                                </span>
+                              )}
+                          </div>
+                          {canDecideOnVersions && (
+                            <div className="mockup-version-actions">
+                              {!approveHidden && (
                                 <button
-                                  className="action-btn undo-btn"
-                                  onClick={() => openMockupRejectionModal(version)}
-                                  disabled={rejectDisabled}
+                                  className="action-btn complete-btn"
+                                  onClick={() => openMockupApprovalModal(version)}
+                                  disabled={approveDisabled}
                                   title={
                                     !isLatestVersion
-                                      ? "Only latest version can be rejected."
-                                      : decision === "rejected"
-                                        ? "Already rejected."
-                                        : `Mark v${version.version} as rejected`
+                                      ? "Only latest version can be approved."
+                                      : decision === "approved"
+                                        ? "Already approved."
+                                        : `Confirm client approval for v${version.version}`
                                   }
                                 >
-                                  {decision === "rejected"
-                                    ? `Rejected (v${version.version})`
-                                    : `Mark Rejected (v${version.version})`}
+                                  {decision === "approved"
+                                    ? `Approved (v${version.version})`
+                                    : `Confirm Approval (v${version.version})`}
                                 </button>
-                                {!isLatestVersion && (
-                                  <span className="mockup-version-actions-note">
-                                    Latest version only
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                  {!canManageMockupApproval && (
-                    <p className="mockup-approval-meta">
-                      Front Desk or Admin must confirm client decision.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          </section>
-        )}
+                              )}
+                              <button
+                                className="action-btn undo-btn"
+                                onClick={() => openMockupRejectionModal(version)}
+                                disabled={rejectDisabled}
+                                title={
+                                  !isLatestVersion
+                                    ? "Only latest version can be rejected."
+                                    : decision === "rejected"
+                                      ? "Already rejected."
+                                      : `Mark v${version.version} as rejected`
+                                }
+                              >
+                                {decision === "rejected"
+                                  ? `Rejected (v${version.version})`
+                                  : `Mark Rejected (v${version.version})`}
+                              </button>
+                              {!isLatestVersion && (
+                                <span className="mockup-version-actions-note">
+                                  Latest version only
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+                {!isQuoteProject && !canManageMockupApproval && (
+                  <p className="mockup-approval-meta">
+                    Front Desk or Admin must confirm client decision.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </section>
 
 
         <section className="updates-standalone-section">
@@ -2791,7 +3174,7 @@ const OrderActions = () => {
                         )}
                         <button
                           className="action-btn undo-btn updates-preview-action"
-                          onClick={() => handleDeleteUpdate(latestUpdatePreview)}
+                          onClick={() => requestDeleteUpdate(latestUpdatePreview)}
                           disabled={updateDeleteSubmittingId === latestUpdatePreview._id}
                         >
                           {updateDeleteSubmittingId === latestUpdatePreview._id

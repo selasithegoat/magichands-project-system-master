@@ -36,6 +36,53 @@ const STATUS_ACTIONS = {
     complete: "Packaging Completed",
   },
 };
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Samples/Jobs Done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission/Documents",
+};
+const QUOTE_REQUIREMENT_OWNER_SECTION = {
+  cost: "Front Desk",
+  mockup: "Graphics",
+  previousSamples: "Stores",
+  sampleProduction: "Production",
+  bidSubmission: "Admin",
+};
+const QUOTE_REQUIREMENT_ENGAGED_STATUS_OPTIONS = [
+  { value: "pending", label: "Pending" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "blocked", label: "Blocked" },
+];
+const QUOTE_REQUIREMENT_STATUS_TRANSITIONS = {
+  pending: new Set(["in_progress", "blocked", "waived"]),
+  in_progress: new Set(["pending", "completed", "blocked", "waived"]),
+  blocked: new Set(["pending", "in_progress", "waived"]),
+  completed: new Set(["in_progress", "waived"]),
+  waived: new Set(["pending", "in_progress"]),
+};
+const QUOTE_REQUIREMENT_PREREQUISITES = {
+  cost: [],
+  mockup: ["cost"],
+  previousSamples: ["cost"],
+  sampleProduction: ["mockup"],
+  bidSubmission: ["cost", "mockup", "previousSamples", "sampleProduction"],
+};
+const QUOTE_WORKFLOW_STAGES = [
+  "Pending Quote Request",
+  "Quote Request Completed",
+  "Pending Send Response",
+  "Response Sent",
+];
 
 const ACKNOWLEDGE_PHRASE = "I agree to be engaged in this project";
 const COMPLETE_PHRASE = "I confirm this engagement is complete";
@@ -158,6 +205,114 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   }
   return "pending";
 };
+const normalizeQuoteRequirementStatus = (value, fallback = "pending") => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (
+    ["pending", "in_progress", "completed", "blocked", "waived"].includes(
+      normalized,
+    )
+  ) {
+    return normalized;
+  }
+  return fallback;
+};
+const getQuoteRequirementStatusLabel = (status) => {
+  const normalized = normalizeQuoteRequirementStatus(status, "pending");
+  const match = QUOTE_REQUIREMENT_ENGAGED_STATUS_OPTIONS.find(
+    (entry) => entry.value === normalized,
+  );
+  if (match) return match.label;
+  if (normalized === "waived") return "Waived";
+  return "Pending";
+};
+const getQuoteRequirementStatusClass = (status) => {
+  const normalized = normalizeQuoteRequirementStatus(status, "pending");
+  if (normalized === "completed") return "completed";
+  if (normalized === "blocked") return "blocked";
+  if (normalized === "in_progress") return "in-progress";
+  if (normalized === "waived") return "waived";
+  return "pending";
+};
+const isQuoteRequirementSatisfiedStatus = (status) =>
+  ["completed", "waived"].includes(
+    normalizeQuoteRequirementStatus(status, "pending"),
+  );
+const canTransitionQuoteRequirementStatus = (currentStatus, nextStatus) => {
+  const current = normalizeQuoteRequirementStatus(currentStatus, "pending");
+  const next = normalizeQuoteRequirementStatus(nextStatus, "");
+  if (!next) return false;
+  if (current === next) return true;
+  const allowed = QUOTE_REQUIREMENT_STATUS_TRANSITIONS[current];
+  return Boolean(allowed && allowed.has(next));
+};
+const getQuoteRequirementStatusGuardMessage = ({
+  row,
+  nextStatus,
+  allRows = [],
+  mockupUrl = "",
+}) => {
+  if (!row?.required) return "This requirement is not enabled.";
+  const current = normalizeQuoteRequirementStatus(row.status, "pending");
+  const next = normalizeQuoteRequirementStatus(nextStatus, current);
+  if (!canTransitionQuoteRequirementStatus(current, next)) {
+    return `Move '${row.label}' from ${getQuoteRequirementStatusLabel(current)} to ${getQuoteRequirementStatusLabel(next)} is not allowed.`;
+  }
+
+  if (next === "in_progress" || next === "completed") {
+    const prereqs = QUOTE_REQUIREMENT_PREREQUISITES[row.key] || [];
+    const unmet = prereqs.filter((key) => {
+      const dependencyRow = (allRows || []).find((entry) => entry.key === key);
+      if (!dependencyRow?.required) return false;
+      return !isQuoteRequirementSatisfiedStatus(dependencyRow.status);
+    });
+    if (unmet.length > 0) {
+      const unmetLabels = unmet.map(
+        (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
+      );
+      return `Complete prerequisite requirements first: ${unmetLabels.join(", ")}.`;
+    }
+  }
+
+  if (row.key === "mockup" && next === "completed") {
+    if (!mockupUrl) {
+      return "Upload a mockup before marking Mockup as Completed.";
+    }
+  }
+
+  return "";
+};
+const getQuoteRequirementProgress = (project) => {
+  const checklist = project?.quoteDetails?.checklist || {};
+  const progress = project?.quoteDetails?.requirementProgress || {};
+
+  return QUOTE_REQUIREMENT_KEYS.map((key) => {
+    const required = Boolean(checklist?.[key]);
+    const entry = progress?.[key] || {};
+    const ownerSection =
+      QUOTE_REQUIREMENT_OWNER_SECTION[key] ||
+      String(entry?.ownerDept || "").trim() ||
+      "Unassigned";
+    const status = required
+      ? normalizeQuoteRequirementStatus(entry?.status, "pending")
+      : "not_required";
+
+    return {
+      key,
+      label: QUOTE_REQUIREMENT_LABELS[key] || key,
+      required,
+      status,
+      ownerSection,
+      ownerDept:
+        QUOTE_REQUIREMENT_OWNER_SECTION[key] ||
+        String(entry?.ownerDept || "").trim() ||
+        ownerSection,
+      notes: String(entry?.notes || "").trim(),
+      completedAt: entry?.completedAt || null,
+    };
+  });
+};
 
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
@@ -202,6 +357,7 @@ const EngagedProjectActions = ({ user }) => {
   const [mockupFile, setMockupFile] = useState(null);
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
+  const [quoteRequirementSavingKey, setQuoteRequirementSavingKey] = useState("");
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -343,6 +499,76 @@ const EngagedProjectActions = ({ user }) => {
     const projectLeadId = normalizeObjectId(project?.projectLeadId);
     return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
   }, [user, project?.projectLeadId]);
+  const isAdminUser = user?.role === "admin";
+  const isQuoteProject = project?.projectType === "Quote";
+  const quoteRequirementRows = useMemo(
+    () => (isQuoteProject ? getQuoteRequirementProgress(project) : []),
+    [isQuoteProject, project],
+  );
+  const quoteRequirementSummary = useMemo(() => {
+    if (!isQuoteProject) {
+      return { requiredCount: 0, completedCount: 0, blockedCount: 0 };
+    }
+    const requiredRows = quoteRequirementRows.filter((row) => row.required);
+    const completedCount = requiredRows.filter((row) =>
+      ["completed", "waived"].includes(row.status),
+    ).length;
+    const blockedCount = requiredRows.filter(
+      (row) => row.status === "blocked",
+    ).length;
+    return {
+      requiredCount: requiredRows.length,
+      completedCount,
+      blockedCount,
+    };
+  }, [isQuoteProject, quoteRequirementRows]);
+  const quoteMockupRequired = useMemo(
+    () =>
+      quoteRequirementRows.some(
+        (row) => row.key === "mockup" && Boolean(row.required),
+      ),
+    [quoteRequirementRows],
+  );
+  const currentQuoteStageIndex = useMemo(() => {
+    const current = String(project?.status || "");
+    const foundIndex = QUOTE_WORKFLOW_STAGES.indexOf(current);
+    return foundIndex >= 0 ? foundIndex : 0;
+  }, [project?.status]);
+
+  const canManageQuoteRequirementStatus = (row, status) => {
+    if (
+      !isQuoteProject ||
+      !row?.required ||
+      isProjectLeadForProject ||
+      isAdminUser
+    ) {
+      return false;
+    }
+    const normalizedStatus = normalizeQuoteRequirementStatus(status, "");
+    if (
+      !QUOTE_REQUIREMENT_ENGAGED_STATUS_OPTIONS.some(
+        (entry) => entry.value === normalizedStatus,
+      )
+    ) {
+      return false;
+    }
+
+    if (row.ownerSection === "Graphics") {
+      return userEngagedDepts.includes("Graphics");
+    }
+    if (row.ownerSection === "Stores") {
+      return userEngagedDepts.includes("Stores");
+    }
+    if (row.ownerSection === "Production") {
+      return userEngagedDepts.includes("Production");
+    }
+    return false;
+  };
+
+  const getQuoteRowsForSection = (sectionKey) =>
+    quoteRequirementRows.filter(
+      (row) => row.required && row.ownerSection === sectionKey,
+    );
 
   const mockupUrl = project?.mockup?.fileUrl;
   const mockupName = project?.mockup?.fileName || "Approved Mockup";
@@ -510,6 +736,13 @@ const EngagedProjectActions = ({ user }) => {
   });
 
   const handleCompleteStatus = async (targetProject, action) => {
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return false;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -620,6 +853,13 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleOpenUpdateModal = (departments = projectEngagedSubDepts) => {
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -651,6 +891,13 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleSubmitUpdate = async (e) => {
     e.preventDefault();
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -706,6 +953,13 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleAcknowledge = async (targetProject, department) => {
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return false;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -746,6 +1000,13 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openAcknowledgeModal = (targetProject, department) => {
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -833,6 +1094,13 @@ const EngagedProjectActions = ({ user }) => {
   ]);
 
   const openCompleteModal = (targetProject, action) => {
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -848,6 +1116,13 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openMockupModal = (targetProject, action) => {
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -896,6 +1171,13 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleUploadMockup = async (e) => {
     e.preventDefault();
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -930,7 +1212,7 @@ const EngagedProjectActions = ({ user }) => {
         setToast({
           type: "success",
           message:
-            "Mockup uploaded. Wait for Front Desk/Admin client decision before confirming completion.",
+            "Mockup uploaded. You can now confirm Mockup completion.",
         });
         setProject(updatedProject);
         closeMockupModal();
@@ -946,6 +1228,99 @@ const EngagedProjectActions = ({ user }) => {
       setToast({ type: "error", message: "An unexpected error occurred." });
     } finally {
       setMockupUploading(false);
+    }
+  };
+
+  const handleUpdateQuoteRequirementStatus = async (row, status) => {
+    if (!project || !isQuoteProject || !row?.required) return;
+    if (isAdminUser) {
+      setToast({
+        type: "error",
+        message: "Admin workflow mutations are available in the admin portal.",
+      });
+      return;
+    }
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
+    if (!canManageQuoteRequirementStatus(row, status)) {
+      setToast({
+        type: "error",
+        message: `Not authorized. ${row.label} is owned by ${row.ownerDept || row.ownerSection}.`,
+      });
+      return;
+    }
+    const strictGuardMessage = getQuoteRequirementStatusGuardMessage({
+      row,
+      nextStatus: status,
+      allRows: quoteRequirementRows,
+      mockupUrl,
+    });
+    if (strictGuardMessage) {
+      setToast({ type: "error", message: strictGuardMessage });
+      return;
+    }
+
+    let notesPayload;
+    if (status === "blocked") {
+      const note = window.prompt(
+        `Provide reason for marking '${row.label}' as Blocked:`,
+        row.notes || "",
+      );
+      if (note === null) return;
+      const trimmed = note.trim();
+      if (!trimmed) {
+        setToast({
+          type: "error",
+          message: `Reason is required to mark '${row.label}' as Blocked.`,
+        });
+        return;
+      }
+      notesPayload = trimmed;
+    }
+
+    setQuoteRequirementSavingKey(row.key);
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/quote-requirements/${encodeURIComponent(
+          row.key,
+        )}?source=engaged`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            ...(notesPayload ? { notes: notesPayload } : {}),
+          }),
+        },
+      );
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setProject(updatedProject);
+        setToast({
+          type: "success",
+          message: `${row.label} marked as ${getQuoteRequirementStatusLabel(status)}.`,
+        });
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setToast({
+          type: "error",
+          message: errorData.message || "Failed to update quote requirement.",
+        });
+      }
+    } catch (error) {
+      console.error("Quote requirement update error:", error);
+      setToast({
+        type: "error",
+        message: "Network error. Please try again.",
+      });
+    } finally {
+      setQuoteRequirementSavingKey("");
     }
   };
 
@@ -1084,6 +1459,49 @@ const EngagedProjectActions = ({ user }) => {
         </div>
       </div>
 
+      {isQuoteProject && (
+        <section className="engaged-section quote-workflow-section">
+          <div className="engaged-section-header">
+            <div>
+              <h2 className="engaged-section-title">Quote Workflow</h2>
+              <p className="engaged-section-subtitle">
+                Quote orders run on a dedicated workflow and requirement checklist.
+              </p>
+            </div>
+            <div className="engaged-summary-tags">
+              <span className="engaged-tag">
+                Required: {quoteRequirementSummary.requiredCount}
+              </span>
+              <span className="engaged-tag invoice">
+                Done: {quoteRequirementSummary.completedCount}
+              </span>
+              {quoteRequirementSummary.blockedCount > 0 && (
+                <span className="engaged-tag caution">
+                  Blocked: {quoteRequirementSummary.blockedCount}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="quote-workflow-stage-row">
+            {QUOTE_WORKFLOW_STAGES.map((stage, index) => {
+              const isCompleted = index < currentQuoteStageIndex;
+              const isActive =
+                index === currentQuoteStageIndex || project.status === stage;
+              return (
+                <div
+                  key={stage}
+                  className={`quote-workflow-stage ${
+                    isCompleted ? "completed" : isActive ? "active" : "pending"
+                  }`}
+                >
+                  {stage}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {shouldShowScopeReferenceSection && (
         <section className="engaged-scope-section">
           <div className="engaged-scope-header">
@@ -1173,6 +1591,13 @@ const EngagedProjectActions = ({ user }) => {
         </div>
       )}
 
+      {isAdminUser && (
+        <div className="engaged-warning-banner">
+          Admin actions are restricted on the Engaged portal. Use the admin
+          portal to perform workflow mutations.
+        </div>
+      )}
+
       <div className="engaged-sections">
         {departmentSections.length === 0 ? (
           <div className="empty-state">No engaged departments available.</div>
@@ -1181,6 +1606,7 @@ const EngagedProjectActions = ({ user }) => {
             const action = section.action;
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
+            const sectionQuoteRows = getQuoteRowsForSection(section.key);
 
             return (
               <section key={section.key} className="engaged-section">
@@ -1233,10 +1659,14 @@ const EngagedProjectActions = ({ user }) => {
                       className="update-btn"
                       onClick={() => handleOpenUpdateModal(section.subDepts)}
                       disabled={
-                        section.subDepts.length === 0 || isProjectLeadForProject
+                        section.subDepts.length === 0 ||
+                        isProjectLeadForProject ||
+                        isAdminUser
                       }
                       title={
-                        isProjectLeadForProject
+                        isAdminUser
+                          ? "Admin workflow mutations are available in the admin portal."
+                        : isProjectLeadForProject
                           ? "Project leads cannot take engagement actions on their own projects here."
                           : "Post department update"
                       }
@@ -1253,6 +1683,7 @@ const EngagedProjectActions = ({ user }) => {
                         const isAcknowledged = acknowledgedDepts.has(dept);
                         const canAcknowledge =
                           !isAcknowledged &&
+                          !isAdminUser &&
                           !isProjectLeadForProject &&
                           isScopeApprovalComplete(project.status);
                         return (
@@ -1272,6 +1703,8 @@ const EngagedProjectActions = ({ user }) => {
                               title={
                                 isAcknowledged
                                   ? "Already acknowledged"
+                                  : isAdminUser
+                                    ? "Admin workflow mutations are available in the admin portal."
                                   : isProjectLeadForProject
                                     ? "Project leads cannot take engagement actions on their own projects here."
                                   : isScopeApprovalComplete(project.status)
@@ -1287,195 +1720,423 @@ const EngagedProjectActions = ({ user }) => {
                     </div>
                   </div>
 
-                  {action && (() => {
-                    const isPending = project.status === action.pending;
-                    const isProductionAction =
-                      action.complete === "Production Completed";
-                    const isStoresAction = action.complete === "Packaging Completed";
-                    const blockedByBilling =
-                      paymentChecksEnabled &&
-                      isStoresAction &&
-                      pendingDeliveryMissing.length > 0;
-                    const blockedBySample =
-                      paymentChecksEnabled &&
-                      isProductionAction &&
-                      sampleApprovalPending;
-                    const actionKey = `${project._id}:${action.complete}`;
-                    const isUpdating = statusUpdating === actionKey;
-                    const isMockupAction = action.dept === "Graphics";
-                    const mockupAlreadySubmitted = Boolean(mockupUrl);
-                    const mockupApprovalPending =
-                      isMockupAction && mockupApprovalStatus === "pending";
-                    const mockupApprovalRejected =
-                      isMockupAction && mockupApprovalStatus === "rejected";
-                    const mockupApprovalConfirmed =
-                      isMockupAction && mockupApprovalStatus === "approved";
-                    const canConfirmMockupCompletion =
-                      isMockupAction &&
-                      mockupAlreadySubmitted &&
-                      mockupApprovalConfirmed;
-
-                    let disabledReason = "";
-                    if (!isPending) {
-                      disabledReason = `Waiting for ${action.pending}.`;
-                    } else if (isProjectLeadForProject) {
-                      disabledReason =
-                        "Project leads cannot take engagement actions on their own projects here.";
-                    } else if (blockedBySample) {
-                      disabledReason =
-                        "Client sample approval is required before Production can be completed.";
-                    } else if (blockedByBilling) {
-                      disabledReason = `Before Pending Delivery/Pickup, confirm ${pendingDeliveryMissingLabels.join(", ")}.`;
-                    }
-
-                    return (
+                  {isQuoteProject &&
+                    sectionQuoteRows.length > 0 && (
                       <div className="engaged-action-card">
-                        <h3>{action.dept} Stage</h3>
+                        <h3>{section.label} Quote Requirements</h3>
                         <p>
-                          {isMockupAction
-                            ? "Upload the approved mockup and confirm completion."
-                            : "Confirm this stage is complete for the project."}
+                          Update quote checklist tracks owned by{" "}
+                          {section.label.toLowerCase()}.
                         </p>
-                        {isMockupAction ? (
-                          <div className="mockup-action-stack">
+                        <div className="engaged-quote-requirements-list">
+                          {sectionQuoteRows.map((row) => {
+                            const rowOptions =
+                              QUOTE_REQUIREMENT_ENGAGED_STATUS_OPTIONS.filter(
+                                (option) => {
+                                  if (
+                                    !canManageQuoteRequirementStatus(
+                                      row,
+                                      option.value,
+                                    )
+                                  ) {
+                                    return false;
+                                  }
+                                  const guardMessage =
+                                    getQuoteRequirementStatusGuardMessage({
+                                      row,
+                                      nextStatus: option.value,
+                                      allRows: quoteRequirementRows,
+                                      mockupUrl,
+                                    });
+                                  return !guardMessage;
+                                },
+                              );
+                            const canManageAnyStatusOption =
+                              QUOTE_REQUIREMENT_ENGAGED_STATUS_OPTIONS.some(
+                                (option) =>
+                                  canManageQuoteRequirementStatus(
+                                    row,
+                                    option.value,
+                                  ),
+                              );
+                            const strictGuardHint =
+                              canManageAnyStatusOption &&
+                              rowOptions.length === 0
+                                ? QUOTE_REQUIREMENT_ENGAGED_STATUS_OPTIONS.filter(
+                                    (option) =>
+                                      canManageQuoteRequirementStatus(
+                                        row,
+                                        option.value,
+                                      ),
+                                  )
+                                    .map((option) =>
+                                      getQuoteRequirementStatusGuardMessage({
+                                        row,
+                                        nextStatus: option.value,
+                                        allRows: quoteRequirementRows,
+                                        mockupUrl,
+                                      }),
+                                    )
+                                    .find(Boolean) ||
+                                  "No valid status transition is available yet."
+                                : "";
+                            const isRowUpdating =
+                              quoteRequirementSavingKey === row.key;
+                            const isQuoteMockupRow =
+                              row.key === "mockup" && section.key === "Graphics";
+                            const canUploadQuoteMockup =
+                              isQuoteMockupRow &&
+                              userEngagedDepts.includes("Graphics") &&
+                              !isAdminUser &&
+                              !isProjectLeadForProject;
+
+                            return (
+                              <div key={row.key} className="engaged-quote-row">
+                                <div className="engaged-quote-row-header">
+                                  <span className="engaged-quote-row-name">
+                                    {row.label}
+                                  </span>
+                                  <span
+                                    className={`engaged-quote-row-status ${getQuoteRequirementStatusClass(
+                                      row.status,
+                                    )}`}
+                                  >
+                                    {getQuoteRequirementStatusLabel(row.status)}
+                                  </span>
+                                </div>
+                                <div className="engaged-action-meta">
+                                  Responsible: {row.ownerDept || row.ownerSection}
+                                </div>
+                                {row.notes && (
+                                  <div className="engaged-action-meta">
+                                    Note: {row.notes}
+                                  </div>
+                                )}
+                                {row.completedAt && (
+                                  <div className="engaged-action-meta">
+                                    Completed: {formatUpdateDateTime(row.completedAt)}
+                                  </div>
+                                )}
+                                {isQuoteMockupRow && (
+                                  <>
+                                    <div className="mockup-action-stack">
+                                      <button
+                                        className="complete-btn"
+                                        onClick={() => openMockupModal(project, action)}
+                                        disabled={
+                                          isRowUpdating ||
+                                          !canUploadQuoteMockup
+                                        }
+                                        title={
+                                          isAdminUser
+                                            ? "Admin workflow mutations are available in the admin portal."
+                                            : isProjectLeadForProject
+                                              ? "Project leads cannot take engagement actions on their own projects here."
+                                              : mockupApprovalStatus === "rejected"
+                                                ? "Client rejected latest mockup. Upload a revised version."
+                                                : mockupUrl
+                                                  ? "Upload a new revision if changes are needed."
+                                                  : "Upload mockup"
+                                        }
+                                      >
+                                        {mockupApprovalStatus === "rejected"
+                                          ? `Upload Revision (${mockupVersionLabel})`
+                                          : mockupUrl
+                                            ? "Upload New Revision"
+                                            : "Upload Mockup"}
+                                      </button>
+                                    </div>
+                                    {mockupUrl && (
+                                      <>
+                                        <div className="engaged-action-meta">
+                                          Latest mockup {mockupVersionLabel}:{" "}
+                                          {mockupApprovalStatus === "approved"
+                                            ? "Client Approved (optional for Quote workflow)."
+                                            : mockupApprovalStatus === "rejected"
+                                              ? "Client Rejected (upload revision if needed)."
+                                              : "No client decision recorded (not required for Quote workflow)."}
+                                          {mockupApprovalStatus === "rejected" &&
+                                          mockupRejectionReason
+                                            ? ` Reason: ${mockupRejectionReason}`
+                                            : ""}
+                                        </div>
+                                        <div className="mockup-preview">
+                                          {isImageMockup ? (
+                                            <img
+                                              src={mockupUrl}
+                                              alt={mockupName}
+                                              loading="lazy"
+                                            />
+                                          ) : isPdfMockup ? (
+                                            <iframe
+                                              src={mockupUrl}
+                                              title={`Preview of ${mockupName}`}
+                                              loading="lazy"
+                                            />
+                                          ) : (
+                                            <div className="mockup-preview-fallback">
+                                              Preview not available for this file
+                                              type.
+                                            </div>
+                                          )}
+                                        </div>
+                                        <Link
+                                          className="mockup-link download"
+                                          to={mockupUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          download
+                                          reloadDocument
+                                        >
+                                          Download {mockupVersionLabel} -{" "}
+                                          {mockupName}
+                                        </Link>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                                {rowOptions.length > 0 ? (
+                                  <div className="engaged-quote-row-actions">
+                                    {rowOptions.map((option) => (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        className={`quote-status-btn ${
+                                          row.status === option.value ? "active" : ""
+                                        }`}
+                                        onClick={() =>
+                                          handleUpdateQuoteRequirementStatus(
+                                            row,
+                                            option.value,
+                                          )
+                                        }
+                                        disabled={isRowUpdating}
+                                      >
+                                        {isRowUpdating &&
+                                        option.value === row.status
+                                          ? "Saving..."
+                                          : option.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="engaged-action-meta">
+                                    {strictGuardHint
+                                      ? strictGuardHint
+                                      : "You can view this requirement but cannot update it from your assigned departments."}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                  {!isQuoteProject &&
+                    action &&
+                    (() => {
+                      const isPending = project.status === action.pending;
+                      const isProductionAction =
+                        action.complete === "Production Completed";
+                      const isStoresAction = action.complete === "Packaging Completed";
+                      const blockedByBilling =
+                        paymentChecksEnabled &&
+                        isStoresAction &&
+                        pendingDeliveryMissing.length > 0;
+                      const blockedBySample =
+                        paymentChecksEnabled &&
+                        isProductionAction &&
+                        sampleApprovalPending;
+                      const actionKey = `${project._id}:${action.complete}`;
+                      const isUpdating = statusUpdating === actionKey;
+                      const isMockupAction = action.dept === "Graphics";
+                      const mockupAlreadySubmitted = Boolean(mockupUrl);
+                      const mockupApprovalPending =
+                        isMockupAction && mockupApprovalStatus === "pending";
+                      const mockupApprovalRejected =
+                        isMockupAction && mockupApprovalStatus === "rejected";
+                      const mockupApprovalConfirmed =
+                        isMockupAction && mockupApprovalStatus === "approved";
+                      const canConfirmMockupCompletion =
+                        isMockupAction &&
+                        mockupAlreadySubmitted &&
+                        mockupApprovalConfirmed;
+
+                      let disabledReason = "";
+                      if (!isPending) {
+                        disabledReason = `Waiting for ${action.pending}.`;
+                      } else if (isAdminUser) {
+                        disabledReason =
+                          "Admin workflow mutations are available in the admin portal.";
+                      } else if (isProjectLeadForProject) {
+                        disabledReason =
+                          "Project leads cannot take engagement actions on their own projects here.";
+                      } else if (blockedBySample) {
+                        disabledReason =
+                          "Client sample approval is required before Production can be completed.";
+                      } else if (blockedByBilling) {
+                        disabledReason = `Before Pending Delivery/Pickup, confirm ${pendingDeliveryMissingLabels.join(", ")}.`;
+                      }
+
+                      return (
+                        <div className="engaged-action-card">
+                          <h3>{action.dept} Stage</h3>
+                          <p>
+                            {isMockupAction
+                              ? "Upload the approved mockup and confirm completion."
+                              : "Confirm this stage is complete for the project."}
+                          </p>
+                          {isMockupAction ? (
+                            <div className="mockup-action-stack">
+                              <button
+                                className="complete-btn"
+                                onClick={() => openMockupModal(project, action)}
+                                disabled={
+                                  !isPending ||
+                                  isUpdating ||
+                                  isAdminUser ||
+                                  isProjectLeadForProject
+                                }
+                                title={
+                                  !isPending
+                                    ? `Waiting for ${action.pending}.`
+                                    : isAdminUser
+                                      ? "Admin workflow mutations are available in the admin portal."
+                                    : isProjectLeadForProject
+                                      ? "Project leads cannot take engagement actions on their own projects here."
+                                    : mockupApprovalRejected
+                                      ? "Client rejected latest mockup. Upload a revised version."
+                                    : mockupAlreadySubmitted
+                                      ? "Upload a new revision if changes are needed."
+                                      : "Upload mockup"
+                                }
+                              >
+                                {mockupApprovalRejected
+                                  ? `Upload Revision (${mockupVersionLabel})`
+                                  : mockupAlreadySubmitted
+                                    ? "Upload New Revision"
+                                    : "Upload Mockup"}
+                              </button>
+                              <button
+                                className="complete-btn confirm-btn"
+                                onClick={() => openCompleteModal(project, action)}
+                                disabled={
+                                  !isPending ||
+                                  isUpdating ||
+                                  !canConfirmMockupCompletion ||
+                                  isAdminUser ||
+                                  isProjectLeadForProject
+                                }
+                                title={
+                                  !isPending
+                                    ? `Waiting for ${action.pending}.`
+                                    : isAdminUser
+                                      ? "Admin workflow mutations are available in the admin portal."
+                                    : isProjectLeadForProject
+                                      ? "Project leads cannot take engagement actions on their own projects here."
+                                    : !mockupAlreadySubmitted
+                                      ? "Upload mockup before confirming"
+                                    : mockupApprovalRejected
+                                      ? "Client rejected latest mockup. Upload revision first."
+                                    : mockupApprovalPending
+                                      ? "Waiting for Front Desk/Admin client decision."
+                                      : "Confirm mockup completion"
+                                }
+                              >
+                                Confirm Mockup Completion
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               className="complete-btn"
-                              onClick={() => openMockupModal(project, action)}
-                              disabled={
-                                !isPending ||
-                                isUpdating ||
-                                isProjectLeadForProject
-                              }
-                              title={
-                                !isPending
-                                  ? `Waiting for ${action.pending}.`
-                                  : isProjectLeadForProject
-                                    ? "Project leads cannot take engagement actions on their own projects here."
-                                  : mockupApprovalRejected
-                                    ? "Client rejected latest mockup. Upload a revised version."
-                                  : mockupAlreadySubmitted
-                                    ? "Upload a new revision if changes are needed."
-                                    : "Upload approved mockup"
-                              }
-                            >
-                              {mockupApprovalRejected
-                                ? `Upload Revision (${mockupVersionLabel})`
-                                : mockupAlreadySubmitted
-                                  ? "Upload New Revision"
-                                  : "Upload Mockup"}
-                            </button>
-                            <button
-                              className="complete-btn confirm-btn"
                               onClick={() => openCompleteModal(project, action)}
                               disabled={
                                 !isPending ||
                                 isUpdating ||
-                                !canConfirmMockupCompletion ||
-                                isProjectLeadForProject
+                                isAdminUser ||
+                                isProjectLeadForProject ||
+                                blockedBySample
                               }
-                              title={
-                                !isPending
-                                  ? `Waiting for ${action.pending}.`
-                                  : isProjectLeadForProject
-                                    ? "Project leads cannot take engagement actions on their own projects here."
-                                  : !mockupAlreadySubmitted
-                                    ? "Upload mockup before confirming"
-                                  : mockupApprovalRejected
-                                    ? "Client rejected latest mockup. Upload revision first."
-                                  : mockupApprovalPending
-                                    ? "Waiting for Front Desk/Admin client decision."
-                                  : "Confirm mockup completion"
-                              }
+                              title={disabledReason || "Confirm stage completion"}
                             >
-                              Confirm Mockup Completion
+                              {isUpdating ? "Updating..." : action.label}
                             </button>
-                          </div>
-                        ) : (
-                          <button
-                            className="complete-btn"
-                            onClick={() => openCompleteModal(project, action)}
-                            disabled={
-                              !isPending ||
-                              isUpdating ||
-                              isProjectLeadForProject ||
-                              blockedBySample
-                            }
-                            title={disabledReason || "Confirm stage completion"}
-                          >
-                            {isUpdating ? "Updating..." : action.label}
-                          </button>
-                        )}
-                        {isMockupAction && mockupAlreadySubmitted && (
-                          <div className="engaged-action-meta">
-                            Latest mockup {mockupVersionLabel}:{" "}
-                            {mockupApprovalConfirmed
-                              ? "Client Approved."
-                              : mockupApprovalRejected
-                                ? "Client Rejected."
-                                : "Pending Client Decision."}
-                            {mockupApprovalRejected && mockupRejectionReason
-                              ? ` Reason: ${mockupRejectionReason}`
-                              : ""}
-                          </div>
-                        )}
-                        {blockedByBilling && (
-                          <div className="engaged-action-meta">
-                            Full payment or authorization is required before
-                            Pending Delivery/Pickup.
-                          </div>
-                        )}
-                        {blockedBySample && (
-                          <div className="engaged-action-meta">
-                            Client sample approval is required before
-                            Production can be completed.
-                          </div>
-                        )}
-                        {isMockupAction && mockupUrl && (
-                          <>
-                            <div className="mockup-preview">
-                              {isImageMockup ? (
-                                <img
-                                  src={mockupUrl}
-                                  alt={mockupName}
-                                  loading="lazy"
-                                />
-                              ) : isPdfMockup ? (
-                                <iframe
-                                  src={mockupUrl}
-                                  title={`Preview of ${mockupName}`}
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="mockup-preview-fallback">
-                                  Preview not available for this file type.
-                                </div>
-                              )}
+                          )}
+                          {isMockupAction && mockupAlreadySubmitted && (
+                            <div className="engaged-action-meta">
+                              Latest mockup {mockupVersionLabel}:{" "}
+                              {mockupApprovalConfirmed
+                                ? "Client Approved."
+                                : mockupApprovalRejected
+                                  ? "Client Rejected."
+                                  : "Pending Client Decision."}
+                              {mockupApprovalRejected && mockupRejectionReason
+                                ? ` Reason: ${mockupRejectionReason}`
+                                : ""}
                             </div>
-                            <Link
-                              className="mockup-link download"
-                              to={mockupUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                              reloadDocument
-                            >
-                              Download {mockupVersionLabel} - {mockupName}
-                            </Link>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })()}
+                          )}
+                          {blockedByBilling && (
+                            <div className="engaged-action-meta">
+                              Full payment or authorization is required before
+                              Pending Delivery/Pickup.
+                            </div>
+                          )}
+                          {blockedBySample && (
+                            <div className="engaged-action-meta">
+                              Client sample approval is required before
+                              Production can be completed.
+                            </div>
+                          )}
+                          {isMockupAction && mockupUrl && (
+                            <>
+                              <div className="mockup-preview">
+                                {isImageMockup ? (
+                                  <img
+                                    src={mockupUrl}
+                                    alt={mockupName}
+                                    loading="lazy"
+                                  />
+                                ) : isPdfMockup ? (
+                                  <iframe
+                                    src={mockupUrl}
+                                    title={`Preview of ${mockupName}`}
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="mockup-preview-fallback">
+                                    Preview not available for this file type.
+                                  </div>
+                                )}
+                              </div>
+                              <Link
+                                className="mockup-link download"
+                                to={mockupUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                download
+                                reloadDocument
+                              >
+                                Download {mockupVersionLabel} - {mockupName}
+                              </Link>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
 
-                  {section.key === "Production" && (
+                  {section.key === "Production" &&
+                    (!isQuoteProject || quoteMockupRequired) && (
                     <div className="engaged-action-card">
                       <h3>Approved Mockup Reference</h3>
                       <p>
-                        Use the approved mockup from Graphics as your production
-                        reference.
+                        {isQuoteProject
+                          ? "Review the latest mockup from Graphics to guide sample production."
+                          : "Use the approved mockup from Graphics as your production reference."}
                       </p>
 
-                      {mockupUrl && mockupApprovalStatus === "approved" ? (
+                      {mockupUrl &&
+                      (mockupApprovalStatus === "approved" || isQuoteProject) ? (
                         <>
                           <div className="mockup-preview">
                             {isImageMockup ? (
@@ -1500,16 +2161,27 @@ const EngagedProjectActions = ({ user }) => {
                             download
                             reloadDocument
                           >
-                            Download {mockupName}
+                            Download {mockupVersionLabel} - {mockupName}
                           </Link>
+                          {isQuoteProject && (
+                            <div className="engaged-action-meta">
+                              {mockupApprovalStatus === "rejected"
+                                ? `Latest mockup ${mockupVersionLabel} was rejected. Upload a revision if needed.`
+                                : "Client approval is optional for quote workflow."}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="engaged-action-meta">
-                          {mockupUrl
-                            ? mockupApprovalStatus === "rejected"
-                              ? `Latest mockup ${mockupVersionLabel} was rejected. Await revised upload from Graphics.`
-                              : "Latest mockup is pending client approval."
-                            : "Approved mockup is not available yet."}
+                          {isQuoteProject
+                            ? mockupUrl
+                              ? "Latest mockup is available for quote workflow."
+                              : "Mockup is not available yet."
+                            : mockupUrl
+                              ? mockupApprovalStatus === "rejected"
+                                ? `Latest mockup ${mockupVersionLabel} was rejected. Await revised upload from Graphics.`
+                                : "Latest mockup is pending client approval."
+                              : "Approved mockup is not available yet."}
                         </div>
                       )}
                     </div>
@@ -1628,11 +2300,12 @@ const EngagedProjectActions = ({ user }) => {
                 <input
                   type="file"
                   className="input-field"
+                  accept=".jpg,.jpeg,.png,.webp,.gif,.svg,.pdf,.cdr,.ai,.eps,.psd"
                   onChange={(e) => setMockupFile(e.target.files?.[0] || null)}
                   required
                 />
                 <div className="file-hint" style={{ marginTop: "0.5rem" }}>
-                  Any file type allowed (e.g., .cdr, .pdf, .png)
+                  Allowed formats: images, .pdf, .cdr, .ai, .eps, .psd
                 </div>
                 {mockupFile && (
                   <div className="file-hint" style={{ marginTop: "0.25rem" }}>

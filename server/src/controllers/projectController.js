@@ -127,12 +127,9 @@ const cleanupUploadedFilesSafely = async (req) => {
 const canManageBilling = (user) => {
   if (!user) return false;
   if (user.role === "admin") return true;
-  const departments = Array.isArray(user.department)
-    ? user.department
-    : user.department
-      ? [user.department]
-      : [];
-  return departments.includes("Front Desk");
+  return toDepartmentArray(user.department).some(
+    (dept) => normalizeDepartmentValue(dept) === "front desk",
+  );
 };
 
 const canManageMockupApproval = (user) => canManageBilling(user);
@@ -454,6 +451,17 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
   }
   const engagedActionTypes = new Set(["acknowledge", "status", "mockup"]);
   const isEngagedPortalMutation = isEngagedPortalRequest(req);
+  if (
+    req.user?.role === "admin" &&
+    isEngagedPortalMutation &&
+    engagedActionTypes.has(action)
+  ) {
+    res.status(403).json({
+      message:
+        "Admin engagement actions are restricted to the admin portal.",
+    });
+    return false;
+  }
   if (
     isUserAssignedProjectLead(req.user, project) &&
     isEngagedPortalMutation &&
@@ -1041,6 +1049,32 @@ const QUOTE_REQUIREMENT_MUTABLE_STATUSES = new Set([
   "blocked",
   "waived",
 ]);
+const QUOTE_REQUIREMENT_STATUS_TRANSITIONS = {
+  pending: new Set(["in_progress", "blocked", "waived"]),
+  in_progress: new Set(["pending", "completed", "blocked", "waived"]),
+  blocked: new Set(["pending", "in_progress", "waived"]),
+  completed: new Set(["in_progress", "waived"]),
+  waived: new Set(["pending", "in_progress"]),
+};
+const QUOTE_REQUIREMENT_PREREQUISITES = {
+  cost: [],
+  mockup: ["cost"],
+  previousSamples: ["cost"],
+  sampleProduction: ["mockup"],
+  bidSubmission: ["cost", "mockup", "previousSamples", "sampleProduction"],
+};
+const QUOTE_STATUS_ALLOWED_PREVIOUS = {
+  "Pending Quote Request": new Set([
+    "Departmental Engagement Completed",
+    "Pending Quote Request",
+  ]),
+  "Quote Request Completed": new Set(["Pending Quote Request"]),
+  "Pending Send Response": new Set([
+    "Quote Request Completed",
+    "Pending Send Response",
+  ]),
+  "Response Sent": new Set(["Pending Send Response"]),
+};
 const QUOTE_DECISION_STATUS_VALUES = new Set([
   "pending",
   "accepted",
@@ -1059,14 +1093,14 @@ const QUOTE_REQUIREMENT_OWNER_DEPARTMENTS = {
   mockup: "Graphics/Design",
   previousSamples: "Stores",
   sampleProduction: "Production",
-  bidSubmission: "Front Desk",
+  bidSubmission: "Admin",
 };
 const QUOTE_REQUIREMENT_OWNER_CANONICAL = {
   cost: "front desk",
   mockup: "graphics",
   previousSamples: "stores",
   sampleProduction: "production",
-  bidSubmission: "front desk",
+  bidSubmission: "admin",
 };
 const QUOTE_SUBMISSION_CHANNELS = new Set([
   "Email",
@@ -1121,6 +1155,122 @@ const normalizeQuoteSubmissionChannels = (value) => {
   return channels;
 };
 const getQuoteRequirementLabel = (key) => QUOTE_REQUIREMENT_LABELS[key] || key;
+const isQuoteRequirementSatisfiedStatus = (status) => {
+  const normalized = normalizeQuoteRequirementStatus(status, "pending");
+  return normalized === "completed" || normalized === "waived";
+};
+const canTransitionQuoteRequirementStatus = (currentStatus, requestedStatus) => {
+  const current = normalizeQuoteRequirementStatus(currentStatus, "pending");
+  const requested = normalizeQuoteRequirementStatus(requestedStatus, "");
+  if (!requested || !QUOTE_REQUIREMENT_MUTABLE_STATUSES.has(requested)) {
+    return false;
+  }
+  if (current === requested) return true;
+  const allowedTargets = QUOTE_REQUIREMENT_STATUS_TRANSITIONS[current];
+  if (!allowedTargets) return false;
+  return allowedTargets.has(requested);
+};
+const getQuoteRequirementUnmetPrerequisites = (project, requirementKey) => {
+  if (!project || !isQuoteProject(project) || !QUOTE_REQUIREMENT_KEYS.includes(requirementKey)) {
+    return [];
+  }
+
+  const checklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist);
+  const progress =
+    project?.quoteDetails?.requirementProgress &&
+    typeof project.quoteDetails.requirementProgress === "object"
+      ? project.quoteDetails.requirementProgress
+      : {};
+  const prerequisites = QUOTE_REQUIREMENT_PREREQUISITES[requirementKey] || [];
+
+  return prerequisites.filter((dependencyKey) => {
+    if (!checklist[dependencyKey]) return false;
+    const dependencyStatus = normalizeQuoteRequirementStatus(
+      progress?.[dependencyKey]?.status,
+      "pending",
+    );
+    return !isQuoteRequirementSatisfiedStatus(dependencyStatus);
+  });
+};
+const getQuoteRequirementTransitionGuard = (
+  project,
+  requirementKey,
+  currentStatus,
+  requestedStatus,
+) => {
+  if (!project || !isQuoteProject(project)) return null;
+  if (!QUOTE_REQUIREMENT_KEYS.includes(requirementKey)) return null;
+
+  const current = normalizeQuoteRequirementStatus(currentStatus, "pending");
+  const requested = normalizeQuoteRequirementStatus(requestedStatus, "pending");
+  if (!canTransitionQuoteRequirementStatus(current, requested)) {
+    return {
+      code: "QUOTE_REQUIREMENT_INVALID_TRANSITION",
+      message: `Cannot move '${getQuoteRequirementLabel(requirementKey)}' from ${current.replace("_", " ")} to ${requested.replace("_", " ")}.`,
+    };
+  }
+
+  if (requested === "in_progress" || requested === "completed") {
+    const unmetPrerequisites = getQuoteRequirementUnmetPrerequisites(
+      project,
+      requirementKey,
+    );
+    if (unmetPrerequisites.length > 0) {
+      const unmetLabels = unmetPrerequisites.map(getQuoteRequirementLabel);
+      return {
+        code: "QUOTE_REQUIREMENT_PREREQUISITES_INCOMPLETE",
+        missing: unmetPrerequisites,
+        missingLabels: unmetLabels,
+        message: `Complete prerequisite requirements before updating '${getQuoteRequirementLabel(requirementKey)}': ${unmetLabels.join(", ")}.`,
+      };
+    }
+  }
+
+  if (requirementKey === "mockup" && requested === "completed") {
+    const mockupGuard = getMockupCompletionGuard(project, {
+      requireClientApproval: false,
+    });
+    if (mockupGuard) {
+      return {
+        code: mockupGuard.code,
+        message: mockupGuard.message,
+        latestVersion: mockupGuard.latestVersion || null,
+      };
+    }
+  }
+
+  if (requirementKey === "bidSubmission" && requested === "completed") {
+    const missingRequirements = getIncompleteQuoteRequirements(project).filter(
+      (key) => key !== "bidSubmission",
+    );
+    if (missingRequirements.length > 0) {
+      const missingLabels = missingRequirements.map(getQuoteRequirementLabel);
+      return {
+        code: "QUOTE_REQUIREMENT_PREREQUISITES_INCOMPLETE",
+        missing: missingRequirements,
+        missingLabels,
+        message: `Complete prerequisite requirements before marking '${getQuoteRequirementLabel(requirementKey)}' as completed: ${missingLabels.join(", ")}.`,
+      };
+    }
+  }
+
+  return null;
+};
+const getQuoteStatusSequenceGuard = (project, requestedStatus) => {
+  if (!project || !isQuoteProject(project)) return null;
+  const targetStatus = toText(requestedStatus);
+  if (!QUOTE_ONLY_STATUSES.has(targetStatus)) return null;
+
+  const previousStatus = toText(project.status);
+  const allowedPrevious = QUOTE_STATUS_ALLOWED_PREVIOUS[targetStatus];
+  if (!allowedPrevious) return null;
+  if (allowedPrevious.has(previousStatus)) return null;
+
+  return {
+    code: "QUOTE_STATUS_SEQUENCE_VIOLATION",
+    message: `Cannot move quote status to '${targetStatus}' from '${previousStatus}'. Follow the quote workflow sequence.`,
+  };
+};
 const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
   if (!project || !isQuoteProject(project)) return;
 
@@ -1149,9 +1299,7 @@ const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
       status = "pending";
     }
 
-    const ownerDept =
-      normalizeOptionalText(current.ownerDept) ||
-      QUOTE_REQUIREMENT_OWNER_DEPARTMENTS[key];
+    const ownerDept = QUOTE_REQUIREMENT_OWNER_DEPARTMENTS[key];
     const notes = normalizeOptionalText(current.notes);
     const artifacts = Array.isArray(current.artifacts)
       ? current.artifacts
@@ -1172,11 +1320,11 @@ const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
       ownerDept,
       notes,
       completedAt:
-        status === "completed"
+        status === "completed" || status === "waived"
           ? completedAtValue || new Date()
           : null,
       completedBy:
-        status === "completed"
+        status === "completed" || status === "waived"
           ? completedByValue || actorId || null
           : null,
       artifacts,
@@ -1224,7 +1372,7 @@ const getIncompleteQuoteRequirements = (project) => {
   QUOTE_REQUIREMENT_KEYS.forEach((key) => {
     if (!checklist[key]) return;
     const status = normalizeQuoteRequirementStatus(progress?.[key]?.status, "pending");
-    if (status !== "completed") {
+    if (status !== "completed" && status !== "waived") {
       missing.push(key);
     }
   });
@@ -1233,9 +1381,9 @@ const getIncompleteQuoteRequirements = (project) => {
 const buildQuoteRequirementBlockMessage = (missing = []) => {
   const labels = missing.map(getQuoteRequirementLabel).filter(Boolean);
   if (labels.length === 0) {
-    return "Complete all required quote checklist items before finishing quote preparation.";
+    return "Complete or waive all required quote checklist items before finishing quote preparation.";
   }
-  return `Complete required quote checklist items before finishing quote preparation. Missing: ${labels.join(", ")}.`;
+  return `Complete or waive required quote checklist items before finishing quote preparation. Missing: ${labels.join(", ")}.`;
 };
 const getQuoteSubmissionReadiness = (project, submissionInput = {}) => {
   const submission = project?.quoteDetails?.submission || {};
@@ -1267,31 +1415,67 @@ const buildQuoteSubmissionBlockMessage = (missing = []) => {
   }
   return `Quote submission details are incomplete. Missing: ${labels.join(", ")}.`;
 };
-const canManageQuoteRequirement = (user, project, requirementKey) => {
-  if (!user || !project || !QUOTE_REQUIREMENT_KEYS.includes(requirementKey)) return false;
-  if (user.role === "admin" || canManageBilling(user)) return true;
-
-  const userId = toObjectIdString(user._id || user.id);
-  const stakeholderIds = new Set(
-    [
-      toObjectIdString(project.createdBy),
-      toObjectIdString(project.projectLeadId),
-      toObjectIdString(project.assistantLeadId),
-    ].filter(Boolean),
+const isFrontDeskUser = (user) =>
+  toDepartmentArray(user?.department).some(
+    (dept) => normalizeDepartmentValue(dept) === "front desk",
   );
-  if (userId && stakeholderIds.has(userId)) return true;
+const userHasCanonicalDepartment = (user, canonicalDepartment) => {
+  if (!user || !canonicalDepartment) return false;
+  return toDepartmentArray(user.department).some(
+    (dept) => canonicalizeDepartment(dept) === canonicalDepartment,
+  );
+};
+const isQuoteWorkflowAdmin = (user) => hasAdminPortalAccess(user);
+const getQuoteRequirementAllowedActors = (requirementKey, status) => {
+  if (status === "waived") return "Front Desk or Admin";
+  switch (requirementKey) {
+    case "mockup":
+      return "Graphics";
+    case "previousSamples":
+      return "Stores";
+    case "sampleProduction":
+      return "Production, Front Desk, or Admin";
+    case "bidSubmission":
+      return "Admin only";
+    case "cost":
+    default:
+      return "Front Desk or Admin";
+  }
+};
+const canUpdateQuoteRequirementStatus = (user, requirementKey, status) => {
+  if (!user || !QUOTE_REQUIREMENT_KEYS.includes(requirementKey)) return false;
+  const normalizedStatus = normalizeQuoteRequirementStatus(status, "");
+  if (
+    !normalizedStatus ||
+    !QUOTE_REQUIREMENT_MUTABLE_STATUSES.has(normalizedStatus)
+  ) {
+    return false;
+  }
 
-  const requiredCanonical = QUOTE_REQUIREMENT_OWNER_CANONICAL[requirementKey];
-  if (!requiredCanonical) return false;
+  const isAdmin = isQuoteWorkflowAdmin(user);
+  const frontDesk = isFrontDeskUser(user);
 
-  return toDepartmentArray(user.department).some((dept) => {
-    const canonical = canonicalizeDepartment(dept);
-    if (!canonical) return false;
-    if (requiredCanonical === "front desk") {
-      return normalizeDepartmentValue(dept) === "front desk";
-    }
-    return canonical === requiredCanonical;
-  });
+  if (normalizedStatus === "waived") {
+    return isAdmin || frontDesk;
+  }
+
+  switch (requirementKey) {
+    case "mockup":
+      return userHasCanonicalDepartment(user, "graphics");
+    case "previousSamples":
+      return userHasCanonicalDepartment(user, "stores");
+    case "sampleProduction":
+      return (
+        frontDesk ||
+        userHasCanonicalDepartment(user, "production") ||
+        isAdmin
+      );
+    case "bidSubmission":
+      return isAdmin;
+    case "cost":
+    default:
+      return frontDesk || isAdmin;
+  }
 };
 const SUPPLY_SOURCE_VALUES = new Set([
   "in-house",
@@ -2895,7 +3079,10 @@ const getLatestMockupVersion = (project = {}) => {
   return versions.length ? versions[versions.length - 1] : null;
 };
 
-const getMockupCompletionGuard = (project = {}) => {
+const getMockupCompletionGuard = (
+  project = {},
+  { requireClientApproval = true } = {},
+) => {
   const latestVersion = getLatestMockupVersion(project);
 
   if (!latestVersion?.fileUrl) {
@@ -2904,6 +3091,10 @@ const getMockupCompletionGuard = (project = {}) => {
       message: "Please upload the mockup before completing this stage.",
       latestVersion: null,
     };
+  }
+
+  if (!requireClientApproval) {
+    return null;
   }
 
   const approvalStatus = getMockupApprovalStatus(
@@ -4456,9 +4647,26 @@ const updateProjectStatus = async (req, res) => {
     if (!ensureProjectMutationAccess(req, res, project, "status")) return;
 
     const oldStatus = project.status;
+    const projectType = normalizeProjectType(project.projectType, "Standard");
+    if (!isStatusCompatibleWithProjectType(newStatus, projectType)) {
+      return res.status(400).json({
+        message: `${newStatus} is not valid for ${projectType} projects.`,
+      });
+    }
     const isAdmin = req.user.role === "admin";
     const allowBillingOverride =
       Boolean(req.body?.allowBillingOverride) && isAdmin;
+
+    if (
+      isQuoteProject(project) &&
+      hasAdminPortalAccess(req.user) &&
+      !isAdminPortalRequest(req)
+    ) {
+      return res.status(403).json({
+        message:
+          "Quote admin actions are restricted to the admin portal.",
+      });
+    }
 
     // Project Lead can transition from "Completed" to "Finished".
     const isLead =
@@ -4542,9 +4750,11 @@ const updateProjectStatus = async (req, res) => {
     ];
 
     if (!isAdmin && !isFinishing) {
-      const userDepts = req.user.department || [];
+      const userDepts = toDepartmentArray(req.user?.department);
       const deptAction = deptActions.find(
-        (action) => userDepts.includes(action.dept) && newStatus === action.to,
+        (action) =>
+          userHasDepartmentMatch(userDepts, action.dept) &&
+          newStatus === action.to,
       );
 
       if (!deptAction) {
@@ -4562,7 +4772,9 @@ const updateProjectStatus = async (req, res) => {
     }
 
     if (newStatus === "Mockup Completed") {
-      const mockupGuard = getMockupCompletionGuard(project);
+      const mockupGuard = getMockupCompletionGuard(project, {
+        requireClientApproval: !isQuoteProject(project),
+      });
       if (mockupGuard) {
         if (
           mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED" ||
@@ -4627,6 +4839,44 @@ const updateProjectStatus = async (req, res) => {
 
     if (isQuoteProject(project)) {
       syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+      if (
+        QUOTE_ONLY_STATUSES.has(toText(project.status)) &&
+        toText(newStatus) === "Departmental Engagement Completed"
+      ) {
+        return res.status(400).json({
+          code: "QUOTE_STATUS_SEQUENCE_VIOLATION",
+          targetStatus: newStatus,
+          message:
+            "Cannot move a quote project back to Departmental Engagement after quote workflow has started.",
+        });
+      }
+      const quoteStatusGuard = getQuoteStatusSequenceGuard(project, newStatus);
+      if (quoteStatusGuard) {
+        return res.status(400).json({
+          code: quoteStatusGuard.code,
+          targetStatus: newStatus,
+          message: quoteStatusGuard.message,
+        });
+      }
+
+      const quoteDecisionStatus = normalizeQuoteDecisionStatus(
+        project?.quoteDetails?.decision?.status,
+        "pending",
+      );
+      const quoteDecisionLocked = ["accepted", "declined", "cancelled"].includes(
+        quoteDecisionStatus,
+      );
+      if (
+        quoteDecisionLocked &&
+        QUOTE_ONLY_STATUSES.has(toText(newStatus)) &&
+        toText(project.status) !== toText(newStatus)
+      ) {
+        return res.status(400).json({
+          code: "QUOTE_DECISION_LOCKED",
+          message:
+            "Quote workflow is locked after final decision. Reopen the quote before changing quote stages.",
+        });
+      }
 
       if (newStatus === "Quote Request Completed") {
         const missingRequirements = getIncompleteQuoteRequirements(project);
@@ -4642,13 +4892,50 @@ const updateProjectStatus = async (req, res) => {
       }
 
       if (newStatus === "Response Sent") {
+        const missingRequirements = getIncompleteQuoteRequirements(project);
+        if (missingRequirements.length > 0) {
+          return res.status(400).json({
+            code: "QUOTE_REQUIREMENTS_INCOMPLETE",
+            targetStatus: "Response Sent",
+            missing: missingRequirements,
+            missingLabels: missingRequirements.map(getQuoteRequirementLabel),
+            message: buildQuoteRequirementBlockMessage(missingRequirements),
+          });
+        }
+
         const submissionPayload =
           req.body?.submission && typeof req.body.submission === "object"
             ? req.body.submission
             : {};
+        const actorSentBy =
+          toUserDisplayName(req.user) ||
+          normalizeOptionalText(
+            req.user?.employeeId ||
+              req.user?.email ||
+              req.user?.id ||
+              req.user?._id,
+          );
+        const submittedSentVia = normalizeQuoteSubmissionChannels(
+          submissionPayload.sentVia,
+        );
+        const existingSentVia = normalizeQuoteSubmissionChannels(
+          project?.quoteDetails?.submission?.sentVia,
+        );
+        const sentViaForRequest =
+          submittedSentVia.length > 0
+            ? submittedSentVia
+            : existingSentVia.length > 0
+              ? existingSentVia
+              : isAdminPortalRequest(req)
+                ? ["Portal"]
+                : [];
         const { missing, normalizedSubmission } = getQuoteSubmissionReadiness(
           project,
-          submissionPayload,
+          {
+            ...submissionPayload,
+            sentBy: actorSentBy,
+            sentVia: sentViaForRequest,
+          },
         );
         if (missing.length > 0) {
           return res.status(400).json({
@@ -4692,6 +4979,11 @@ const updateProjectStatus = async (req, res) => {
 
     // If the selected status has an auto-advancement, use it
     const finalStatus = statusProgression[newStatus] || newStatus;
+    if (!isStatusCompatibleWithProjectType(finalStatus, projectType)) {
+      return res.status(400).json({
+        message: `${finalStatus} is not valid for ${projectType} projects.`,
+      });
+    }
 
     const isStandardProject = !isQuoteProject(project);
 
@@ -4889,10 +5181,10 @@ const updateQuoteRequirementProgress = async (req, res) => {
       });
     }
 
-    if (!canManageQuoteRequirement(req.user, project, requirementKey)) {
+    if (hasAdminPortalAccess(req.user) && !isAdminPortalRequest(req)) {
       return res.status(403).json({
         message:
-          "Not authorized to update this quote requirement. Use the assigned department or Front Desk account.",
+          "Admin quote requirement actions are restricted to the admin portal.",
       });
     }
 
@@ -4912,6 +5204,25 @@ const updateQuoteRequirementProgress = async (req, res) => {
       });
     }
 
+    const quoteDecisionStatus = normalizeQuoteDecisionStatus(
+      project?.quoteDetails?.decision?.status,
+      "pending",
+    );
+    if (["accepted", "declined", "cancelled"].includes(quoteDecisionStatus)) {
+      return res.status(400).json({
+        code: "QUOTE_DECISION_LOCKED",
+        message:
+          "Quote requirements are locked after final quote decision.",
+      });
+    }
+    if (toText(project.status) === "Response Sent") {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_LOCKED",
+        message:
+          "Quote requirements are locked after response is sent.",
+      });
+    }
+
     const requestedStatus = normalizeQuoteRequirementStatus(
       req.body?.status,
       normalizeQuoteRequirementStatus(entry.status, "pending"),
@@ -4922,15 +5233,66 @@ const updateQuoteRequirementProgress = async (req, res) => {
       });
     }
 
-    entry.status = requestedStatus;
+    if (
+      !canUpdateQuoteRequirementStatus(req.user, requirementKey, requestedStatus)
+    ) {
+      const allowedActors = getQuoteRequirementAllowedActors(
+        requirementKey,
+        requestedStatus,
+      );
+      return res.status(403).json({
+        code:
+          requestedStatus === "waived"
+            ? "QUOTE_REQUIREMENT_WAIVE_RESTRICTED"
+            : "QUOTE_REQUIREMENT_PERMISSION_DENIED",
+        message: `Not authorized to mark '${getQuoteRequirementLabel(requirementKey)}' as ${requestedStatus}. Allowed: ${allowedActors}.`,
+      });
+    }
+
+    const currentStatus = normalizeQuoteRequirementStatus(entry.status, "pending");
+    const transitionGuard = getQuoteRequirementTransitionGuard(
+      project,
+      requirementKey,
+      currentStatus,
+      requestedStatus,
+    );
+    if (transitionGuard) {
+      return res.status(400).json({
+        code: transitionGuard.code,
+        targetRequirement: requirementKey,
+        missing: transitionGuard.missing || [],
+        missingLabels: transitionGuard.missingLabels || [],
+        latestVersion: transitionGuard.latestVersion || null,
+        message: transitionGuard.message,
+      });
+    }
 
     if (req.body?.ownerDept !== undefined) {
-      entry.ownerDept =
-        normalizeOptionalText(req.body.ownerDept) || entry.ownerDept;
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENT_OWNER_LOCKED",
+        message:
+          "Responsibility is fixed by workflow policy and cannot be reassigned.",
+      });
     }
-    if (req.body?.notes !== undefined) {
-      entry.notes = normalizeOptionalText(req.body.notes);
+
+    const nextNotes =
+      req.body?.notes !== undefined
+        ? normalizeOptionalText(req.body.notes)
+        : normalizeOptionalText(entry.notes);
+
+    if (
+      (requestedStatus === "blocked" || requestedStatus === "waived") &&
+      !nextNotes
+    ) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENT_REASON_REQUIRED",
+        message: `A reason note is required when marking a requirement as ${requestedStatus}.`,
+      });
     }
+
+    entry.status = requestedStatus;
+
+    entry.notes = nextNotes;
     if (Array.isArray(req.body?.artifacts)) {
       entry.artifacts = req.body.artifacts
         .map((artifact) => ({
@@ -4941,7 +5303,7 @@ const updateQuoteRequirementProgress = async (req, res) => {
         .filter((artifact) => artifact.label || artifact.url);
     }
 
-    if (requestedStatus === "completed") {
+    if (requestedStatus === "completed" || requestedStatus === "waived") {
       entry.completedAt = new Date();
       entry.completedBy = req.user._id;
     } else {
@@ -4966,6 +5328,7 @@ const updateQuoteRequirementProgress = async (req, res) => {
           key: requirementKey,
           status: requestedStatus,
           ownerDept: entry.ownerDept || null,
+          notes: entry.notes || null,
           missingRequired: missingRequirements,
         },
       },
@@ -4989,6 +5352,12 @@ const updateQuoteDecision = async (req, res) => {
     if (!isQuoteProject(project)) {
       return res.status(400).json({
         message: "Quote decision updates are only available for quote projects.",
+      });
+    }
+
+    if (hasAdminPortalAccess(req.user) && !isAdminPortalRequest(req)) {
+      return res.status(403).json({
+        message: "Admin quote decision actions are restricted to the admin portal.",
       });
     }
 
@@ -5988,13 +6357,9 @@ const uploadProjectMockup = async (req, res) => {
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
 
-    const userDepts = Array.isArray(req.user.department)
-      ? req.user.department
-      : req.user.department
-        ? [req.user.department]
-        : [];
     const isAdmin = req.user.role === "admin";
-    const isGraphics = userDepts.includes("Graphics/Design");
+    const isGraphics = userHasCanonicalDepartment(req.user, "graphics");
+    const quoteProject = isQuoteProject(project);
 
     if (!isAdmin && !isGraphics) {
       return res
@@ -6002,7 +6367,12 @@ const uploadProjectMockup = async (req, res) => {
         .json({ message: "Not authorized to upload mockups" });
     }
 
-    if (project.status !== "Pending Mockup") {
+    if (quoteProject) {
+      // Quote projects can upload mockups as working artifacts for requirement execution.
+      syncQuoteDetailsWorkflow(project, {
+        actorId: req.user._id || req.user.id,
+      });
+    } else if (project.status !== "Pending Mockup") {
       return res.status(400).json({
         message:
           "Mockup upload is only allowed while status is Pending Mockup.",

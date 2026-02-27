@@ -1312,6 +1312,16 @@ function QuoteChecklistCard({ project }) {
     const title = key
       .replace(/([A-Z])/g, " $1")
       .replace(/^./, (str) => str.toUpperCase());
+    const ownerDept =
+      key === "mockup"
+        ? "Graphics/Design"
+        : key === "previousSamples"
+          ? "Stores"
+          : key === "sampleProduction"
+            ? "Production"
+            : key === "bidSubmission"
+              ? "Admin"
+              : "Front Desk";
     return {
       key,
       title,
@@ -1320,7 +1330,7 @@ function QuoteChecklistCard({ project }) {
       statusColor: metadata.color,
       statusBg: metadata.background,
       statusBorder: metadata.border,
-      ownerDept: String(entry?.ownerDept || "").trim(),
+      ownerDept,
       completedAt: entry?.completedAt || null,
     };
   });

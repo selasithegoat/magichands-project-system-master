@@ -47,12 +47,20 @@ if (scanCommand) {
   console.log("Upload malware scanning is disabled (UPLOAD_SCAN_COMMAND not set).");
 }
 
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const IMAGE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".svg",
+]);
 const IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
+  "image/svg+xml",
 ]);
 const CORELDRAW_EXTENSIONS = new Set([".cdr"]);
 const CORELDRAW_MIME_TYPES = new Set([
@@ -62,6 +70,23 @@ const CORELDRAW_MIME_TYPES = new Set([
   "application/x-cdr",
   "application/x-coreldraw",
   "image/x-cdr",
+]);
+const DESIGN_BINARY_EXTENSIONS = new Set([
+  ...CORELDRAW_EXTENSIONS,
+  ".ai",
+  ".eps",
+  ".psd",
+]);
+const DESIGN_BINARY_MIME_TYPES = new Set([
+  ...CORELDRAW_MIME_TYPES,
+  "application/postscript",
+  "application/eps",
+  "application/x-eps",
+  "application/illustrator",
+  "application/vnd.adobe.illustrator",
+  "application/vnd.adobe.photoshop",
+  "image/vnd.adobe.photoshop",
+  "image/eps",
 ]);
 const GENERIC_BINARY_MIME_TYPES = new Set([
   "application/octet-stream",
@@ -80,7 +105,7 @@ const DOCUMENT_EXTENSIONS = new Set([
   ".zip",
   ".rar",
   ".7z",
-  ...CORELDRAW_EXTENSIONS,
+  ...DESIGN_BINARY_EXTENSIONS,
 ]);
 const DOCUMENT_MIME_TYPES = new Set([
   "application/pdf",
@@ -96,7 +121,7 @@ const DOCUMENT_MIME_TYPES = new Set([
   "application/x-zip-compressed",
   "application/x-rar-compressed",
   "application/x-7z-compressed",
-  ...CORELDRAW_MIME_TYPES,
+  ...DESIGN_BINARY_MIME_TYPES,
 ]);
 const MEDIA_EXTENSIONS = new Set([
   ".mp4",
@@ -143,11 +168,11 @@ const FILE_POLICY_BY_FIELD = {
     mimeTypes: IMAGE_MIME_TYPES,
   },
   mockup: {
-    extensions: new Set([...IMAGE_EXTENSIONS, ".pdf", ...CORELDRAW_EXTENSIONS]),
+    extensions: new Set([...IMAGE_EXTENSIONS, ".pdf", ...DESIGN_BINARY_EXTENSIONS]),
     mimeTypes: new Set([
       ...IMAGE_MIME_TYPES,
       "application/pdf",
-      ...CORELDRAW_MIME_TYPES,
+      ...DESIGN_BINARY_MIME_TYPES,
     ]),
   },
   attachments: {
@@ -428,12 +453,15 @@ const fileFilter = (req, file, cb) => {
   const policy = getFilePolicy(file.fieldname);
   const extension = getNormalizedExtension(file.originalname);
   const mimeType = String(file.mimetype || "").toLowerCase();
-  const isCorelDraw = CORELDRAW_EXTENSIONS.has(extension);
+  const isDesignBinary = DESIGN_BINARY_EXTENSIONS.has(extension);
+  const isMockupField = file.fieldname === "mockup";
   const extensionAllowed = policy.extensions.has(extension);
+  const hasGenericBinaryMime =
+    GENERIC_BINARY_MIME_TYPES.has(mimeType) || mimeType.length === 0;
   const mimeAllowed =
     policy.mimeTypes.has(mimeType) ||
-    (isCorelDraw &&
-      (GENERIC_BINARY_MIME_TYPES.has(mimeType) || mimeType.length === 0));
+    (isDesignBinary && hasGenericBinaryMime) ||
+    (isMockupField && extensionAllowed && hasGenericBinaryMime);
 
   if (extensionAllowed && mimeAllowed) {
     return cb(null, true);

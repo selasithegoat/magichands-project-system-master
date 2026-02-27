@@ -463,7 +463,7 @@ const ProjectSchema = new mongoose.Schema(
             ],
             default: "not_required",
           },
-          ownerDept: { type: String, default: "Front Desk" },
+          ownerDept: { type: String, default: "Admin" },
           notes: { type: String, default: "" },
           completedAt: Date,
           completedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

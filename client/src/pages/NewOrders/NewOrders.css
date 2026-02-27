@@ -686,6 +686,12 @@
   color: #166534;
 }
 
+.quote-readiness.info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
 .quote-field-label {
   font-size: 0.75rem;
   font-weight: 600;
