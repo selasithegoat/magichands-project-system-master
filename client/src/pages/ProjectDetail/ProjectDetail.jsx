@@ -1245,13 +1245,90 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
   );
 };
 
-const QuoteChecklistCard = ({ project }) => {
+function QuoteChecklistCard({ project }) {
   const checklist = project.quoteDetails?.checklist || {};
+  const requirementProgress = project.quoteDetails?.requirementProgress || {};
+  const quoteDecision = String(project?.quoteDetails?.decision?.status || "pending")
+    .trim()
+    .toLowerCase();
+  const decisionNote = String(project?.quoteDetails?.decision?.note || "").trim();
+  const statusMeta = {
+    pending: {
+      label: "Pending",
+      color: "#9f1239",
+      background: "#fff1f2",
+      border: "#fecdd3",
+    },
+    in_progress: {
+      label: "In Progress",
+      color: "#1d4ed8",
+      background: "#eff6ff",
+      border: "#bfdbfe",
+    },
+    completed: {
+      label: "Completed",
+      color: "#166534",
+      background: "#f0fdf4",
+      border: "#86efac",
+    },
+    blocked: {
+      label: "Blocked",
+      color: "#b91c1c",
+      background: "#fef2f2",
+      border: "#fecaca",
+    },
+    waived: {
+      label: "Waived",
+      color: "#6d28d9",
+      background: "#f5f3ff",
+      border: "#ddd6fe",
+    },
+    not_required: {
+      label: "Not Required",
+      color: "#475569",
+      background: "#f8fafc",
+      border: "#e2e8f0",
+    },
+  };
+
+  const getStatusKey = (value, required) => {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (
+      ["pending", "in_progress", "completed", "blocked", "waived"].includes(
+        normalized,
+      )
+    ) {
+      return normalized;
+    }
+    return required ? "pending" : "not_required";
+  };
+
+  const requirements = Object.entries(checklist).map(([key, required]) => {
+    const entry = requirementProgress?.[key] || {};
+    const statusKey = getStatusKey(entry?.status, Boolean(required));
+    const metadata = statusMeta[statusKey] || statusMeta.pending;
+    const title = key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, (str) => str.toUpperCase());
+    return {
+      key,
+      title,
+      required: Boolean(required),
+      statusLabel: metadata.label,
+      statusColor: metadata.color,
+      statusBg: metadata.background,
+      statusBorder: metadata.border,
+      ownerDept: String(entry?.ownerDept || "").trim(),
+      completedAt: entry?.completedAt || null,
+    };
+  });
 
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">📋 Quote Requirements</h3>
+        <h3 className="card-title">Quote Requirements</h3>
       </div>
       <div
         className="checklist-grid"
@@ -1262,43 +1339,77 @@ const QuoteChecklistCard = ({ project }) => {
           marginTop: "1rem",
         }}
       >
-        {Object.entries(checklist).map(([key, val]) => (
+        {requirements.map((requirement) => (
           <div
-            key={key}
+            key={requirement.key}
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: "0.35rem",
               padding: "0.75rem",
-              background: val
-                ? "rgba(16, 185, 129, 0.1)"
-                : "rgba(255, 255, 255, 0.03)",
+              background: requirement.statusBg,
               borderRadius: "8px",
-              border: val
-                ? "1px solid rgba(16, 185, 129, 0.2)"
-                : "1px solid var(--border-color)",
-              color: val ? "#10b981" : "var(--text-secondary)",
+              border: `1px solid ${requirement.statusBorder}`,
               transition: "all 0.2s",
             }}
           >
-            <span style={{ fontSize: "1.2rem" }}>{val ? "✓" : "○"}</span>
+            <span
+              style={{
+                fontSize: "0.72rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: requirement.statusColor,
+                fontWeight: 700,
+              }}
+            >
+              {requirement.statusLabel}
+            </span>
             <span
               style={{
                 fontSize: "0.9rem",
-                fontWeight: val ? 600 : 400,
-                color: val ? "#0c0c0cff" : "var(--text-secondary)",
+                fontWeight: 700,
+                color: "#0f172a",
               }}
             >
-              {key
-                .replace(/([A-Z])/g, " $1")
-                .replace(/^./, (str) => str.toUpperCase())}
+              {requirement.title}
             </span>
+            <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+              {requirement.ownerDept
+                ? `Responsible: ${requirement.ownerDept}`
+                : "Responsible: Unassigned"}
+            </span>
+            {requirement.completedAt && (
+              <span style={{ fontSize: "0.72rem", color: "#475569" }}>
+                Completed: {new Date(requirement.completedAt).toLocaleString()}
+              </span>
+            )}
           </div>
         ))}
       </div>
+      <div
+        style={{
+          marginTop: "0.9rem",
+          padding: "0.6rem 0.75rem",
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+          background: "#f8fafc",
+          color: "#334155",
+          fontSize: "0.82rem",
+        }}
+      >
+        <strong style={{ textTransform: "capitalize" }}>
+          Quote Decision: {quoteDecision}
+        </strong>
+        {decisionNote && (
+          <div style={{ marginTop: "0.3rem", color: "#475569" }}>
+            {decisionNote}
+          </div>
+        )}
+      </div>
     </div>
   );
-};
+}
 
 const FeedbackCard = ({ feedbacks = [] }) => {
   const sortedFeedbacks = [...feedbacks].sort((a, b) => {
@@ -3175,3 +3286,4 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
 };
 
 export default ProjectDetail;
+

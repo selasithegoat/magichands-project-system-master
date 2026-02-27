@@ -1019,6 +1019,280 @@ const getAllowedStatusesForProjectType = (projectType) => {
     isStatusCompatibleWithProjectType(status, projectType),
   );
 };
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+const QUOTE_REQUIREMENT_STATUS_VALUES = new Set([
+  "not_required",
+  "pending",
+  "in_progress",
+  "completed",
+  "blocked",
+  "waived",
+]);
+const QUOTE_REQUIREMENT_MUTABLE_STATUSES = new Set([
+  "pending",
+  "in_progress",
+  "completed",
+  "blocked",
+  "waived",
+]);
+const QUOTE_DECISION_STATUS_VALUES = new Set([
+  "pending",
+  "accepted",
+  "declined",
+  "cancelled",
+]);
+const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Samples/Jobs Done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission/Documents",
+};
+const QUOTE_REQUIREMENT_OWNER_DEPARTMENTS = {
+  cost: "Front Desk",
+  mockup: "Graphics/Design",
+  previousSamples: "Stores",
+  sampleProduction: "Production",
+  bidSubmission: "Front Desk",
+};
+const QUOTE_REQUIREMENT_OWNER_CANONICAL = {
+  cost: "front desk",
+  mockup: "graphics",
+  previousSamples: "stores",
+  sampleProduction: "production",
+  bidSubmission: "front desk",
+};
+const QUOTE_SUBMISSION_CHANNELS = new Set([
+  "Email",
+  "WhatsApp",
+  "Call",
+  "In-Person",
+  "Portal",
+  "Other",
+]);
+const QUOTE_DEFAULT_CHECKLIST = {
+  cost: false,
+  mockup: false,
+  previousSamples: false,
+  sampleProduction: false,
+  bidSubmission: false,
+};
+const normalizeQuoteChecklist = (value = {}) => {
+  const source = value && typeof value === "object" ? value : {};
+  return QUOTE_REQUIREMENT_KEYS.reduce((acc, key) => {
+    acc[key] = parseBooleanFlag(source[key], false);
+    return acc;
+  }, {});
+};
+const normalizeQuoteRequirementStatus = (value, fallback = "pending") => {
+  const normalized = toText(value).toLowerCase();
+  if (QUOTE_REQUIREMENT_STATUS_VALUES.has(normalized)) return normalized;
+  return fallback;
+};
+const normalizeQuoteDecisionStatus = (value, fallback = "pending") => {
+  const normalized = toText(value).toLowerCase();
+  if (QUOTE_DECISION_STATUS_VALUES.has(normalized)) return normalized;
+  return fallback;
+};
+const normalizeQuoteSubmissionChannels = (value) => {
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const channels = [];
+  for (const raw of rawValues) {
+    const channel = normalizeOptionalText(raw);
+    if (!channel) continue;
+    const matched =
+      Array.from(QUOTE_SUBMISSION_CHANNELS).find(
+        (allowed) => allowed.toLowerCase() === channel.toLowerCase(),
+      ) || channel;
+    if (!channels.includes(matched)) {
+      channels.push(matched);
+    }
+  }
+  return channels;
+};
+const getQuoteRequirementLabel = (key) => QUOTE_REQUIREMENT_LABELS[key] || key;
+const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
+  if (!project || !isQuoteProject(project)) return;
+
+  project.quoteDetails = project.quoteDetails || {};
+  const checklist = normalizeQuoteChecklist(project.quoteDetails.checklist);
+  project.quoteDetails.checklist = checklist;
+
+  const existingProgress =
+    project.quoteDetails.requirementProgress &&
+    typeof project.quoteDetails.requirementProgress === "object"
+      ? project.quoteDetails.requirementProgress
+      : {};
+
+  const nextProgress = {};
+  QUOTE_REQUIREMENT_KEYS.forEach((key) => {
+    const required = Boolean(checklist[key]);
+    const current = existingProgress[key] || {};
+    let status = normalizeQuoteRequirementStatus(
+      current.status,
+      required ? "pending" : "not_required",
+    );
+
+    if (!required) {
+      status = status === "completed" || status === "waived" ? "waived" : "not_required";
+    } else if (status === "not_required") {
+      status = "pending";
+    }
+
+    const ownerDept =
+      normalizeOptionalText(current.ownerDept) ||
+      QUOTE_REQUIREMENT_OWNER_DEPARTMENTS[key];
+    const notes = normalizeOptionalText(current.notes);
+    const artifacts = Array.isArray(current.artifacts)
+      ? current.artifacts
+          .map((artifact) => ({
+            label: normalizeOptionalText(artifact?.label),
+            url: normalizeOptionalText(artifact?.url),
+            addedAt: toDateOrNull(artifact?.addedAt) || new Date(),
+          }))
+          .filter((artifact) => artifact.label || artifact.url)
+      : [];
+
+    const completedAtValue = toDateOrNull(current.completedAt);
+    const completedByValue = current.completedBy || null;
+
+    nextProgress[key] = {
+      required,
+      status,
+      ownerDept,
+      notes,
+      completedAt:
+        status === "completed"
+          ? completedAtValue || new Date()
+          : null,
+      completedBy:
+        status === "completed"
+          ? completedByValue || actorId || null
+          : null,
+      artifacts,
+    };
+  });
+  project.quoteDetails.requirementProgress = nextProgress;
+
+  const submission = project.quoteDetails.submission || {};
+  project.quoteDetails.submission = {
+    sentBy: normalizeOptionalText(submission.sentBy),
+    sentVia: normalizeQuoteSubmissionChannels(submission.sentVia),
+  };
+
+  const existingDecision = project.quoteDetails.decision || {};
+  const decisionStatus = normalizeQuoteDecisionStatus(existingDecision.status, "pending");
+  project.quoteDetails.decision = {
+    status: decisionStatus,
+    decidedAt: toDateOrNull(existingDecision.decidedAt),
+    decidedBy: existingDecision.decidedBy || null,
+    note: normalizeOptionalText(existingDecision.note),
+  };
+
+  const finalUpdate = project.quoteDetails.finalUpdate || {};
+  if (decisionStatus === "accepted") {
+    project.quoteDetails.finalUpdate = { accepted: true, cancelled: false };
+  } else if (decisionStatus === "declined" || decisionStatus === "cancelled") {
+    project.quoteDetails.finalUpdate = { accepted: false, cancelled: true };
+  } else {
+    project.quoteDetails.finalUpdate = {
+      accepted: parseBooleanFlag(finalUpdate.accepted, false),
+      cancelled: parseBooleanFlag(finalUpdate.cancelled, false),
+    };
+  }
+};
+const getIncompleteQuoteRequirements = (project) => {
+  if (!project || !isQuoteProject(project)) return [];
+  const checklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist);
+  const progress =
+    project?.quoteDetails?.requirementProgress &&
+    typeof project.quoteDetails.requirementProgress === "object"
+      ? project.quoteDetails.requirementProgress
+      : {};
+
+  const missing = [];
+  QUOTE_REQUIREMENT_KEYS.forEach((key) => {
+    if (!checklist[key]) return;
+    const status = normalizeQuoteRequirementStatus(progress?.[key]?.status, "pending");
+    if (status !== "completed") {
+      missing.push(key);
+    }
+  });
+  return missing;
+};
+const buildQuoteRequirementBlockMessage = (missing = []) => {
+  const labels = missing.map(getQuoteRequirementLabel).filter(Boolean);
+  if (labels.length === 0) {
+    return "Complete all required quote checklist items before finishing quote preparation.";
+  }
+  return `Complete required quote checklist items before finishing quote preparation. Missing: ${labels.join(", ")}.`;
+};
+const getQuoteSubmissionReadiness = (project, submissionInput = {}) => {
+  const submission = project?.quoteDetails?.submission || {};
+  const sentBy =
+    normalizeOptionalText(submissionInput.sentBy) ||
+    normalizeOptionalText(submission.sentBy);
+  const sentVia =
+    normalizeQuoteSubmissionChannels(submissionInput.sentVia).length > 0
+      ? normalizeQuoteSubmissionChannels(submissionInput.sentVia)
+      : normalizeQuoteSubmissionChannels(submission.sentVia);
+
+  const missing = [];
+  if (!project?.invoice?.sent) missing.push("quote_sent_confirmation");
+  if (!sentBy) missing.push("sent_by");
+  if (!Array.isArray(sentVia) || sentVia.length === 0) missing.push("sent_via");
+
+  return {
+    missing,
+    normalizedSubmission: { sentBy, sentVia },
+  };
+};
+const buildQuoteSubmissionBlockMessage = (missing = []) => {
+  const labels = [];
+  if (missing.includes("quote_sent_confirmation")) labels.push("Quote sent confirmation");
+  if (missing.includes("sent_by")) labels.push("Sent by");
+  if (missing.includes("sent_via")) labels.push("Sent via");
+  if (labels.length === 0) {
+    return "Quote submission details are required before marking response as sent.";
+  }
+  return `Quote submission details are incomplete. Missing: ${labels.join(", ")}.`;
+};
+const canManageQuoteRequirement = (user, project, requirementKey) => {
+  if (!user || !project || !QUOTE_REQUIREMENT_KEYS.includes(requirementKey)) return false;
+  if (user.role === "admin" || canManageBilling(user)) return true;
+
+  const userId = toObjectIdString(user._id || user.id);
+  const stakeholderIds = new Set(
+    [
+      toObjectIdString(project.createdBy),
+      toObjectIdString(project.projectLeadId),
+      toObjectIdString(project.assistantLeadId),
+    ].filter(Boolean),
+  );
+  if (userId && stakeholderIds.has(userId)) return true;
+
+  const requiredCanonical = QUOTE_REQUIREMENT_OWNER_CANONICAL[requirementKey];
+  if (!requiredCanonical) return false;
+
+  return toDepartmentArray(user.department).some((dept) => {
+    const canonical = canonicalizeDepartment(dept);
+    if (!canonical) return false;
+    if (requiredCanonical === "front desk") {
+      return normalizeDepartmentValue(dept) === "front desk";
+    }
+    return canonical === requiredCanonical;
+  });
+};
 const SUPPLY_SOURCE_VALUES = new Set([
   "in-house",
   "purchase",
@@ -3084,6 +3358,10 @@ const createProject = async (req, res) => {
       },
     });
 
+    if (isQuoteProject(project)) {
+      syncQuoteDetailsWorkflow(project, { actorId: req.user._id });
+    }
+
     // Root project in a lineage starts at version 1 and points to itself.
     project.lineageId = project._id;
     project.parentProjectId = null;
@@ -4251,6 +4529,16 @@ const updateProjectStatus = async (req, res) => {
         from: "Pending Feedback",
         to: "Feedback Completed",
       },
+      {
+        dept: "Front Desk",
+        from: "Pending Quote Request",
+        to: "Quote Request Completed",
+      },
+      {
+        dept: "Front Desk",
+        from: "Pending Send Response",
+        to: "Response Sent",
+      },
     ];
 
     if (!isAdmin && !isFinishing) {
@@ -4337,6 +4625,52 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
+    if (isQuoteProject(project)) {
+      syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+
+      if (newStatus === "Quote Request Completed") {
+        const missingRequirements = getIncompleteQuoteRequirements(project);
+        if (missingRequirements.length > 0) {
+          return res.status(400).json({
+            code: "QUOTE_REQUIREMENTS_INCOMPLETE",
+            targetStatus: "Quote Request Completed",
+            missing: missingRequirements,
+            missingLabels: missingRequirements.map(getQuoteRequirementLabel),
+            message: buildQuoteRequirementBlockMessage(missingRequirements),
+          });
+        }
+      }
+
+      if (newStatus === "Response Sent") {
+        const submissionPayload =
+          req.body?.submission && typeof req.body.submission === "object"
+            ? req.body.submission
+            : {};
+        const { missing, normalizedSubmission } = getQuoteSubmissionReadiness(
+          project,
+          submissionPayload,
+        );
+        if (missing.length > 0) {
+          return res.status(400).json({
+            code: "QUOTE_SUBMISSION_INCOMPLETE",
+            targetStatus: "Response Sent",
+            missing,
+            message: buildQuoteSubmissionBlockMessage(missing),
+          });
+        }
+
+        project.quoteDetails = project.quoteDetails || {};
+        project.quoteDetails.submission = {
+          sentBy: normalizedSubmission.sentBy,
+          sentVia: normalizedSubmission.sentVia,
+        };
+        project.quoteDetails.emailResponseSent = true;
+        project.quoteDetails.submissionDate = new Date();
+        project.sectionUpdates = project.sectionUpdates || {};
+        project.sectionUpdates.details = new Date();
+      }
+    }
+
     // Status progression map: when a stage is marked complete, auto-advance to next pending
     const statusProgression = {
       // Standard workflow
@@ -4351,6 +4685,10 @@ const updateProjectStatus = async (req, res) => {
       // Quote workflow
       "Quote Request Completed": "Pending Send Response",
     };
+    if (isQuoteProject(project)) {
+      statusProgression["Departmental Engagement Completed"] =
+        "Pending Quote Request";
+    }
 
     // If the selected status has an auto-advancement, use it
     const finalStatus = statusProgression[newStatus] || newStatus;
@@ -4527,6 +4865,283 @@ const updateProjectStatus = async (req, res) => {
   } catch (error) {
     console.error("Error updating status:", error);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update quote requirement progress
+// @route   PATCH /api/projects/:id/quote-requirements/:requirementKey
+// @access  Private
+const updateQuoteRequirementProgress = async (req, res) => {
+  try {
+    const { requirementKey } = req.params;
+    if (!QUOTE_REQUIREMENT_KEYS.includes(requirementKey)) {
+      return res.status(400).json({
+        message: "Invalid quote requirement key.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Quote requirement updates are only available for quote projects.",
+      });
+    }
+
+    if (!canManageQuoteRequirement(req.user, project, requirementKey)) {
+      return res.status(403).json({
+        message:
+          "Not authorized to update this quote requirement. Use the assigned department or Front Desk account.",
+      });
+    }
+
+    syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+
+    const entry = project?.quoteDetails?.requirementProgress?.[requirementKey];
+    if (!entry) {
+      return res.status(400).json({
+        message: "Quote requirement data is not initialized.",
+      });
+    }
+
+    if (!entry.required) {
+      return res.status(400).json({
+        message:
+          "This requirement is not enabled in the quote checklist. Enable it before updating progress.",
+      });
+    }
+
+    const requestedStatus = normalizeQuoteRequirementStatus(
+      req.body?.status,
+      normalizeQuoteRequirementStatus(entry.status, "pending"),
+    );
+    if (!QUOTE_REQUIREMENT_MUTABLE_STATUSES.has(requestedStatus)) {
+      return res.status(400).json({
+        message: "Invalid requirement status.",
+      });
+    }
+
+    entry.status = requestedStatus;
+
+    if (req.body?.ownerDept !== undefined) {
+      entry.ownerDept =
+        normalizeOptionalText(req.body.ownerDept) || entry.ownerDept;
+    }
+    if (req.body?.notes !== undefined) {
+      entry.notes = normalizeOptionalText(req.body.notes);
+    }
+    if (Array.isArray(req.body?.artifacts)) {
+      entry.artifacts = req.body.artifacts
+        .map((artifact) => ({
+          label: normalizeOptionalText(artifact?.label),
+          url: normalizeOptionalText(artifact?.url),
+          addedAt: toDateOrNull(artifact?.addedAt) || new Date(),
+        }))
+        .filter((artifact) => artifact.label || artifact.url);
+    }
+
+    if (requestedStatus === "completed") {
+      entry.completedAt = new Date();
+      entry.completedBy = req.user._id;
+    } else {
+      entry.completedAt = null;
+      entry.completedBy = null;
+    }
+
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.details = new Date();
+    project.markModified("quoteDetails.requirementProgress");
+
+    const missingRequirements = getIncompleteQuoteRequirements(project);
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id || req.user.id,
+      "update",
+      `Quote requirement '${getQuoteRequirementLabel(requirementKey)}' marked as ${requestedStatus}.`,
+      {
+        quoteRequirement: {
+          key: requirementKey,
+          status: requestedStatus,
+          ownerDept: entry.ownerDept || null,
+          missingRequired: missingRequirements,
+        },
+      },
+    );
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating quote requirement progress:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update quote decision (accepted/declined/cancelled)
+// @route   PATCH /api/projects/:id/quote-decision
+// @access  Private (Admin or Front Desk)
+const updateQuoteDecision = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Quote decision updates are only available for quote projects.",
+      });
+    }
+
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Only Front Desk or Admin can finalize quote decisions.",
+      });
+    }
+
+    const decision = normalizeQuoteDecisionStatus(req.body?.decision);
+    if (!QUOTE_DECISION_STATUS_VALUES.has(decision) || decision === "pending") {
+      return res.status(400).json({
+        message: "Decision must be accepted, declined, or cancelled.",
+      });
+    }
+
+    syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+
+    const previousType = normalizeProjectType(project.projectType, "Quote");
+    const previousStatus = toText(project.status);
+    const decisionNote = normalizeOptionalText(req.body?.note);
+    const now = new Date();
+
+    if (decision === "accepted") {
+      if (project.status !== "Response Sent") {
+        return res.status(400).json({
+          message:
+            "Quote must be marked as Response Sent before accepting and converting.",
+        });
+      }
+
+      const targetType = normalizeProjectType(req.body?.targetType, "Standard");
+      if (targetType === "Quote") {
+        return res.status(400).json({
+          message: "Accepted quotes must convert to a non-quote project type.",
+        });
+      }
+
+      const targetStatusInput = toText(req.body?.targetStatus);
+      const nextStatus =
+        targetStatusInput &&
+        isStatusCompatibleWithProjectType(targetStatusInput, targetType)
+          ? targetStatusInput
+          : getDefaultStatusForProjectType(targetType);
+
+      project.projectType = targetType;
+      project.status = nextStatus;
+      if (targetType === "Emergency") {
+        project.priority = "Urgent";
+      } else if (req.body?.priority) {
+        project.priority = normalizePriority(req.body.priority, project.priority);
+      }
+
+      project.quoteDetails.decision = {
+        status: "accepted",
+        decidedAt: now,
+        decidedBy: req.user._id,
+        note: decisionNote,
+      };
+      project.quoteDetails.finalUpdate = { accepted: true, cancelled: false };
+      if (decisionNote) {
+        project.quoteDetails.clientFeedback = decisionNote;
+      }
+
+      project.sectionUpdates = project.sectionUpdates || {};
+      project.sectionUpdates.details = now;
+
+      await project.save();
+
+      await logActivity(
+        project._id,
+        req.user._id || req.user.id,
+        "update",
+        `Quote accepted and converted to ${targetType}.`,
+        {
+          quoteDecision: {
+            decision: "accepted",
+            note: decisionNote || null,
+            fromType: previousType,
+            toType: targetType,
+          },
+        },
+      );
+
+      if (previousStatus !== project.status) {
+        await logActivity(
+          project._id,
+          req.user._id || req.user.id,
+          "status_change",
+          `Project status updated to ${project.status} after quote acceptance.`,
+          {
+            statusChange: { from: previousStatus, to: project.status },
+          },
+        );
+      }
+
+      return res.json(project);
+    }
+
+    if (decision === "declined" && project.status !== "Response Sent") {
+      return res.status(400).json({
+        message:
+          "Quote must be marked as Response Sent before registering a declined decision.",
+      });
+    }
+
+    project.quoteDetails.decision = {
+      status: decision,
+      decidedAt: now,
+      decidedBy: req.user._id,
+      note: decisionNote,
+    };
+    project.quoteDetails.finalUpdate = { accepted: false, cancelled: true };
+    if (decisionNote) {
+      project.quoteDetails.clientFeedback = decisionNote;
+    }
+
+    const previousProjectStatus = toText(project.status);
+    project.status = "Finished";
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.details = now;
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id || req.user.id,
+      "update",
+      `Quote decision recorded as ${decision}.`,
+      {
+        quoteDecision: {
+          decision,
+          note: decisionNote || null,
+        },
+      },
+    );
+
+    if (previousProjectStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id || req.user.id,
+        "status_change",
+        `Project status updated to ${project.status} after quote decision.`,
+        {
+          statusChange: { from: previousProjectStatus, to: project.status },
+        },
+      );
+    }
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating quote decision:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -5241,6 +5856,10 @@ const updateProjectType = async (req, res) => {
           note: toText(project?.sampleApproval?.note),
         };
       }
+    }
+
+    if (requestedType === "Quote") {
+      syncQuoteDetailsWorkflow(project, { actorId: req.user._id });
     }
 
     const savedProject = await project.save();
@@ -6967,7 +7586,12 @@ const updateProject = async (req, res) => {
         updatedBy: req.user._id || req.user.id,
       };
     }
-    if (quoteDetails) project.quoteDetails = quoteDetails;
+    if (quoteDetails !== undefined) {
+      project.quoteDetails = quoteDetails || {};
+    }
+    if (project.projectType === "Quote") {
+      syncQuoteDetailsWorkflow(project, { actorId: req.user._id });
+    }
     if (workstreamCode !== undefined) {
       project.workstreamCode = normalizeOptionalText(workstreamCode);
       detailsChanged = true;
@@ -7419,6 +8043,13 @@ const reopenProject = async (req, res) => {
         },
         submissionDate: null,
       };
+      syncQuoteDetailsWorkflow(reopenedProject, { actorId: req.user._id });
+      reopenedProject.quoteDetails.decision = {
+        status: "pending",
+        decidedAt: null,
+        decidedBy: null,
+        note: "",
+      };
     }
 
     sourceProject.lineageId = lineageId;
@@ -7788,6 +8419,8 @@ module.exports = {
   cancelProject,
   reactivateProject,
   updateProjectStatus,
+  updateQuoteRequirementProgress,
+  updateQuoteDecision,
   markInvoiceSent,
   verifyPayment,
   undoInvoiceSent,
