@@ -141,6 +141,14 @@ const STANDARD_WORKFLOW_STATUSES = new Set([
   "Finished",
 ]);
 
+const DELIVERY_COMPLETED_STATUS_KEYS = new Set([
+  "delivered",
+  "pending feedback",
+  "feedback completed",
+  "completed",
+  "finished",
+]);
+
 const QUOTE_WORKFLOW_STATUSES = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
@@ -341,10 +349,40 @@ const buildDeliveryDeadline = (deliveryDate, deliveryTime) => {
   );
 };
 
+const formatDeliveryStatusDate = (value) => {
+  if (!value) return "Unknown date";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Unknown date";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
     .filter(Boolean);
+
+const normalizeStatusKey = (value) => String(value || "")
+  .trim()
+  .toLowerCase();
+
+const isDeliveryCompletedStatus = (status) => {
+  const normalized = normalizeStatusKey(status);
+  if (!normalized) return false;
+  if (DELIVERY_COMPLETED_STATUS_KEYS.has(normalized)) return true;
+  if (normalized.startsWith("delivered")) return true;
+  if (normalized.startsWith("pending feedback")) return true;
+  if (normalized.startsWith("feedback completed")) return true;
+  if (normalized.includes("delivery") && normalized.includes("complete")) {
+    return true;
+  }
+  return false;
+};
 
 const FlipCountdownUnit = ({ value, label }) => {
   const [flipNonce, setFlipNonce] = useState(0);
@@ -423,6 +461,12 @@ const ProjectDetail = ({ user }) => {
   const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
   const currentUserId = toEntityId(user?._id || user?.id);
+  const deliveryDateValue = project?.details?.deliveryDate;
+  const deliveryTimeValue = project?.details?.deliveryTime;
+  const deliveryDeadline = useMemo(
+    () => buildDeliveryDeadline(deliveryDateValue, deliveryTimeValue),
+    [deliveryDateValue, deliveryTimeValue],
+  );
 
   // PDF Image Processing & Form Data removed - moved to ProjectPdfDownload component
   const fetchOrderGroupProjects = async (orderNumber, fallbackProject = null) => {
@@ -489,13 +533,25 @@ const ProjectDetail = ({ user }) => {
   }, [id]);
 
   useEffect(() => {
+    const activeWorkflowStatus = resolveWorkflowStatus(project);
+    const hasValidDeliveryDeadline =
+      deliveryDeadline && !Number.isNaN(deliveryDeadline.getTime());
+    const shouldRunCountdown =
+      hasValidDeliveryDeadline &&
+      !isDeliveryCompletedStatus(project?.status) &&
+      !isDeliveryCompletedStatus(activeWorkflowStatus);
+
+    if (!shouldRunCountdown) {
+      return undefined;
+    }
+
     const timerId = window.setInterval(() => {
       setCountdownNowMs(Date.now());
     }, 1000);
     return () => {
       window.clearInterval(timerId);
     };
-  }, []);
+  }, [deliveryDeadline, project]);
 
   useRealtimeRefresh(
     () => {
@@ -532,12 +588,6 @@ const ProjectDetail = ({ user }) => {
   // Status update logic removed - Admin only feature now.
   // const [advancing, setAdvancing] = useState(false);
 
-  const deliveryDateValue = project?.details?.deliveryDate;
-  const deliveryTimeValue = project?.details?.deliveryTime;
-  const deliveryDeadline = useMemo(
-    () => buildDeliveryDeadline(deliveryDateValue, deliveryTimeValue),
-    [deliveryDateValue, deliveryTimeValue],
-  );
   const deliveryCountdown = useMemo(() => {
     if (!deliveryDeadline || Number.isNaN(deliveryDeadline.getTime())) {
       return {
@@ -587,6 +637,16 @@ const ProjectDetail = ({ user }) => {
     project.hold?.isOnHold || project.status === "On Hold",
   );
   const workflowStatus = resolveWorkflowStatus(project);
+  const isDeliveryCompleted =
+    isDeliveryCompletedStatus(project?.status) ||
+    isDeliveryCompletedStatus(workflowStatus);
+  const deadlineMs = deliveryDeadline?.getTime?.();
+  const deliveredAtSource = Number.isFinite(deadlineMs)
+    ? deliveryDeadline
+    : project?.details?.deliveryDate || project?.updatedAt;
+  const deliveredAtLabel = isDeliveryCompleted
+    ? formatDeliveryStatusDate(deliveredAtSource)
+    : "";
 
   const isEmergency =
     project.priority === "Urgent" || project.projectType === "Emergency";
@@ -747,21 +807,42 @@ const ProjectDetail = ({ user }) => {
             </h1>
           </div>
 
-          <div
-            className={`delivery-countdown-badge ${deliveryCountdown.isOverdue ? "is-overdue" : ""}`}
-            role="status"
-            aria-live="polite"
-          >
-            <span className="delivery-countdown-title">
-              {deliveryCountdown.isOverdue ? "Delivery Overdue" : "Delivery Countdown"}
-            </span>
-            <div className="delivery-countdown-flip">
-              <FlipCountdownUnit value={deliveryCountdown.days} label="Days" />
-              <FlipCountdownUnit value={deliveryCountdown.hours} label="Hours" />
-              <FlipCountdownUnit value={deliveryCountdown.minutes} label="Minutes" />
-              <FlipCountdownUnit value={deliveryCountdown.seconds} label="Seconds" />
+          {isDeliveryCompleted ? (
+            <div
+              className="delivery-countdown-badge is-delivered"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="delivery-countdown-title">Delivery Completed</span>
+              <span className="delivery-delivered-at">
+                Delivered at {deliveredAtLabel}
+              </span>
             </div>
-          </div>
+          ) : (
+            <div
+              className={`delivery-countdown-badge ${deliveryCountdown.isOverdue ? "is-overdue" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className="delivery-countdown-title">
+                {deliveryCountdown.isOverdue
+                  ? "Delivery Overdue"
+                  : "Delivery Countdown"}
+              </span>
+              <div className="delivery-countdown-flip">
+                <FlipCountdownUnit value={deliveryCountdown.days} label="Days" />
+                <FlipCountdownUnit value={deliveryCountdown.hours} label="Hours" />
+                <FlipCountdownUnit
+                  value={deliveryCountdown.minutes}
+                  label="Minutes"
+                />
+                <FlipCountdownUnit
+                  value={deliveryCountdown.seconds}
+                  label="Seconds"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="header-top-actions">
             {/* PDF Download Button - Lazy Loaded */}

@@ -66,6 +66,26 @@
   color: #166534;
 }
 
+.delivery-countdown-badge.is-delivered {
+  padding: 0.55rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.38);
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.delivery-countdown-badge.is-delivered .delivery-countdown-title {
+  color: #166534;
+  letter-spacing: 0.08em;
+}
+
+.delivery-delivered-at {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #14532d;
+}
+
 .delivery-countdown-flip {
   display: flex;
   align-items: flex-start;
