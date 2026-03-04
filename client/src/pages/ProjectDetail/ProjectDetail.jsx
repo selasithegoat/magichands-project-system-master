@@ -30,7 +30,10 @@ import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getGroupedLeadDisplayRows, getLeadDisplay } from "../../utils/leadDisplay";
-import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
+import {
+  getQuoteAwareStatusLabel,
+  getQuoteWorkflowStageLabels,
+} from "../../utils/quoteStatusLabels";
 import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
@@ -117,6 +120,19 @@ const QUOTE_STEPS = [
     statuses: ["Pending Feedback", "Feedback Completed"],
   },
 ];
+
+const getQuoteStepsForProject = (project) => {
+  const labels = getQuoteWorkflowStageLabels(project);
+  return QUOTE_STEPS.map((step) => {
+    if (step.label === "Quote Request") {
+      return { ...step, displayLabel: labels.preparationStepLabel };
+    }
+    if (step.label === "Send Response") {
+      return { ...step, displayLabel: labels.responseStepLabel };
+    }
+    return step;
+  });
+};
 
 const DEFAULT_WORKFLOW_STATUS = "Order Confirmed";
 
@@ -1077,6 +1093,7 @@ const ProjectDetail = ({ user }) => {
                 workflowStatus={workflowStatus}
                 type={project.projectType}
                 isOnHold={isProjectOnHold}
+                project={project}
               />
             </div>
           </>
@@ -3133,9 +3150,12 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
   );
 };
 
-const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
-  const workflowStatusLabel = getQuoteAwareStatusLabel(workflowStatus, type);
-  const steps = type === "Quote" ? QUOTE_STEPS : STATUS_STEPS;
+const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
+  const workflowStatusLabel = getQuoteAwareStatusLabel(
+    workflowStatus,
+    project || type,
+  );
+  const steps = type === "Quote" ? getQuoteStepsForProject(project) : STATUS_STEPS;
 
   // Find current step index
   let currentStepIndex = steps.findIndex((step) =>
@@ -3207,6 +3227,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
           const isActive = index === currentStepIndex;
           const stepColor = getStatusColor(step.label); // Get color for this step label
           const IconComponent = statusIcons[step.label] || CheckCircleIcon;
+          const stepDisplayLabel = step.displayLabel || step.label;
 
           let subText = "Pending";
           if (isCompleted) {
@@ -3303,8 +3324,8 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
                           : "#94a3b8",
                       fontWeight: isActive ? "600" : "500",
                     }}
-                  >
-                    {step.label}
+                    >
+                    {stepDisplayLabel}
                   </span>
                   {isActive &&
                     subText === "Pending" &&

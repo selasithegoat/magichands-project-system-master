@@ -344,6 +344,10 @@ const ProjectSchema = new mongoose.Schema(
         sampleProduction: Boolean,
         bidSubmission: Boolean,
       },
+      activeRequirementKey: {
+        type: String,
+        default: "",
+      },
       requirementProgress: {
         cost: {
           required: { type: Boolean, default: false },
@@ -515,6 +519,10 @@ const ProjectSchema = new mongoose.Schema(
       filledBy: String, // Self / With Colleague
       leadSignature: String,
       submissionDate: Date,
+      lastResponseRequirementKey: {
+        type: String,
+        default: "",
+      },
     },
     acknowledgements: [
       {

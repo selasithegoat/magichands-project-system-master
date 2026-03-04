@@ -415,6 +415,16 @@ const canMutateProject = (user, project, action = "default") => {
   );
   const isFrontDesk = userDepartmentTokens.includes("front desk");
   const hasDeptScope = hasDepartmentOverlap(user.department, project.departments);
+  const userCanonicalDepartments = new Set(
+    toDepartmentArray(user.department)
+      .map(canonicalizeDepartment)
+      .filter(Boolean),
+  );
+  const hasQuoteWorkflowDeptScope =
+    toText(project?.projectType) === "Quote" &&
+    ["front desk", "graphics", "stores", "production"].some((dept) =>
+      userCanonicalDepartments.has(dept),
+    );
 
   switch (action) {
     case "manage":
@@ -424,9 +434,15 @@ const canMutateProject = (user, project, action = "default") => {
     case "feedback":
       return isStakeholder || isFrontDesk;
     case "status":
+    case "mockup":
+      return (
+        isStakeholder ||
+        isFrontDesk ||
+        hasDeptScope ||
+        hasQuoteWorkflowDeptScope
+      );
     case "department":
     case "acknowledge":
-    case "mockup":
     default:
       return isStakeholder || isFrontDesk || hasDeptScope;
   }
@@ -1066,6 +1082,7 @@ const QUOTE_REQUIREMENT_PREREQUISITES = {
 const QUOTE_STATUS_ALLOWED_PREVIOUS = {
   "Pending Quote Request": new Set([
     "Departmental Engagement Completed",
+    "Response Sent",
     "Pending Quote Request",
   ]),
   "Quote Request Completed": new Set(["Pending Quote Request"]),
@@ -1130,10 +1147,17 @@ const QUOTE_DEFAULT_CHECKLIST = {
 };
 const normalizeQuoteChecklist = (value = {}) => {
   const source = value && typeof value === "object" ? value : {};
-  return QUOTE_REQUIREMENT_KEYS.reduce((acc, key) => {
+  const normalized = QUOTE_REQUIREMENT_KEYS.reduce((acc, key) => {
     acc[key] = parseBooleanFlag(source[key], false);
     return acc;
   }, {});
+
+  // Sample Production quotes must go through mockup workflow first.
+  if (normalized.sampleProduction) {
+    normalized.mockup = true;
+  }
+
+  return normalized;
 };
 const normalizeQuoteRequirementStatus = (value, fallback = "pending") => {
   const normalized = toText(value).toLowerCase();
@@ -1166,6 +1190,70 @@ const normalizeQuoteSubmissionChannels = (value) => {
   return channels;
 };
 const getQuoteRequirementLabel = (key) => QUOTE_REQUIREMENT_LABELS[key] || key;
+const getQuoteRequirementProgressMap = (project) =>
+  project?.quoteDetails?.requirementProgress &&
+  typeof project.quoteDetails.requirementProgress === "object"
+    ? project.quoteDetails.requirementProgress
+    : {};
+const getQuoteRequiredRequirementQueue = (project) => {
+  if (!project || !isQuoteProject(project)) return [];
+  const checklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist);
+  return QUOTE_REQUIREMENT_KEYS.filter((key) => Boolean(checklist[key]));
+};
+const getQuoteFirstIncompleteRequirementKey = (project) => {
+  const queue = getQuoteRequiredRequirementQueue(project);
+  if (queue.length === 0) return "";
+  const progress = getQuoteRequirementProgressMap(project);
+
+  for (const key of queue) {
+    const status = normalizeQuoteRequirementStatus(progress?.[key]?.status, "pending");
+    if (!isQuoteRequirementSatisfiedStatus(status)) return key;
+  }
+  return "";
+};
+const setQuoteActiveRequirementKey = (project, requirementKey = "") => {
+  if (!project || !isQuoteProject(project)) return "";
+  project.quoteDetails = project.quoteDetails || {};
+  const normalized = toText(requirementKey);
+  project.quoteDetails.activeRequirementKey = QUOTE_REQUIREMENT_KEYS.includes(
+    normalized,
+  )
+    ? normalized
+    : "";
+  return project.quoteDetails.activeRequirementKey;
+};
+const ensureQuoteActiveRequirementKey = (project, { forceRecompute = false } = {}) => {
+  if (!project || !isQuoteProject(project)) return "";
+  const queue = getQuoteRequiredRequirementQueue(project);
+  if (queue.length === 0) {
+    return setQuoteActiveRequirementKey(project, "");
+  }
+
+  const existing = toText(project?.quoteDetails?.activeRequirementKey);
+  if (!forceRecompute && queue.includes(existing)) {
+    return setQuoteActiveRequirementKey(project, existing);
+  }
+
+  const firstIncomplete = getQuoteFirstIncompleteRequirementKey(project);
+  const nextKey = firstIncomplete || queue[0];
+  return setQuoteActiveRequirementKey(project, nextKey);
+};
+const getQuoteNextIncompleteRequirementKey = (project, currentRequirementKey = "") => {
+  const queue = getQuoteRequiredRequirementQueue(project);
+  if (queue.length === 0) return "";
+
+  const progress = getQuoteRequirementProgressMap(project);
+  const normalizedCurrent = toText(currentRequirementKey);
+  const currentIndex = queue.indexOf(normalizedCurrent);
+  const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+
+  for (let index = startIndex; index < queue.length; index += 1) {
+    const key = queue[index];
+    const status = normalizeQuoteRequirementStatus(progress?.[key]?.status, "pending");
+    if (!isQuoteRequirementSatisfiedStatus(status)) return key;
+  }
+  return "";
+};
 const isQuoteRequirementSatisfiedStatus = (status) => {
   const normalized = normalizeQuoteRequirementStatus(status, "pending");
   return normalized === "completed" || normalized === "waived";
@@ -1238,13 +1326,43 @@ const getQuoteRequirementTransitionGuard = (
   }
 
   if (requirementKey === "mockup" && requested === "completed") {
+    const quoteChecklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist);
+    const requireClientApproval = Boolean(quoteChecklist.sampleProduction);
     const mockupGuard = getMockupCompletionGuard(project, {
-      requireClientApproval: false,
+      requireClientApproval,
     });
     if (mockupGuard) {
       return {
         code: mockupGuard.code,
         message: mockupGuard.message,
+        latestVersion: mockupGuard.latestVersion || null,
+      };
+    }
+  }
+
+  if (
+    requirementKey === "sampleProduction" &&
+    (requested === "in_progress" || requested === "completed")
+  ) {
+    const mockupGuard = getMockupCompletionGuard(project, {
+      requireClientApproval: true,
+    });
+    if (mockupGuard) {
+      const mappedCode =
+        mockupGuard.code === "MOCKUP_FILE_REQUIRED"
+          ? "QUOTE_SAMPLE_PRODUCTION_MOCKUP_REQUIRED"
+          : mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+            ? "QUOTE_SAMPLE_PRODUCTION_MOCKUP_APPROVAL_REQUIRED"
+            : mockupGuard.code;
+      const mappedMessage =
+        mockupGuard.code === "MOCKUP_FILE_REQUIRED"
+          ? "Upload a mockup before Sample Production can begin."
+          : mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+            ? "Client must approve the latest mockup before Sample Production can begin."
+            : mockupGuard.message;
+      return {
+        code: mappedCode,
+        message: mappedMessage,
         latestVersion: mockupGuard.latestVersion || null,
       };
     }
@@ -1342,6 +1460,7 @@ const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
     };
   });
   project.quoteDetails.requirementProgress = nextProgress;
+  ensureQuoteActiveRequirementKey(project);
 
   const submission = project.quoteDetails.submission || {};
   project.quoteDetails.submission = {
@@ -1369,6 +1488,15 @@ const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
       cancelled: parseBooleanFlag(finalUpdate.cancelled, false),
     };
   }
+
+  const lastResponseRequirementKey = toText(
+    project?.quoteDetails?.lastResponseRequirementKey,
+  );
+  project.quoteDetails.lastResponseRequirementKey = QUOTE_REQUIREMENT_KEYS.includes(
+    lastResponseRequirementKey,
+  )
+    ? lastResponseRequirementKey
+    : "";
 };
 const getIncompleteQuoteRequirements = (project) => {
   if (!project || !isQuoteProject(project)) return [];
@@ -1396,7 +1524,12 @@ const buildQuoteRequirementBlockMessage = (missing = []) => {
   }
   return `Complete or waive required quote checklist items before finishing quote preparation. Missing: ${labels.join(", ")}.`;
 };
-const getQuoteSubmissionReadiness = (project, submissionInput = {}) => {
+const getQuoteSubmissionReadiness = (
+  project,
+  submissionInput = {},
+  options = {},
+) => {
+  const requireInvoiceSent = options.requireInvoiceSent !== false;
   const submission = project?.quoteDetails?.submission || {};
   const sentBy =
     normalizeOptionalText(submissionInput.sentBy) ||
@@ -1407,7 +1540,9 @@ const getQuoteSubmissionReadiness = (project, submissionInput = {}) => {
       : normalizeQuoteSubmissionChannels(submission.sentVia);
 
   const missing = [];
-  if (!project?.invoice?.sent) missing.push("quote_sent_confirmation");
+  if (requireInvoiceSent && !project?.invoice?.sent) {
+    missing.push("quote_sent_confirmation");
+  }
   if (!sentBy) missing.push("sent_by");
   if (!Array.isArray(sentVia) || sentVia.length === 0) missing.push("sent_via");
 
@@ -1441,7 +1576,7 @@ const getQuoteRequirementAllowedActors = (requirementKey, status) => {
   if (status === "waived") return "Front Desk or Admin";
   switch (requirementKey) {
     case "mockup":
-      return "Graphics";
+      return "Graphics, Front Desk, or Admin";
     case "previousSamples":
       return "Stores";
     case "sampleProduction":
@@ -1472,7 +1607,11 @@ const canUpdateQuoteRequirementStatus = (user, requirementKey, status) => {
 
   switch (requirementKey) {
     case "mockup":
-      return userHasCanonicalDepartment(user, "graphics");
+      return (
+        frontDesk ||
+        userHasCanonicalDepartment(user, "graphics") ||
+        isAdmin
+      );
     case "previousSamples":
       return userHasCanonicalDepartment(user, "stores");
     case "sampleProduction":
@@ -4659,6 +4798,18 @@ const updateProjectStatus = async (req, res) => {
 
     const oldStatus = project.status;
     const projectType = normalizeProjectType(project.projectType, "Standard");
+    const isQuoteResponseUndoRequested =
+      isQuoteProject(project) &&
+      toText(newStatus) === "Pending Send Response" &&
+      [
+        "Pending Quote Request",
+        "Pending Feedback",
+        "Response Sent",
+        "Pending Send Response",
+      ].includes(
+        toText(project.status),
+      ) &&
+      Boolean(project?.quoteDetails?.emailResponseSent);
     if (!isStatusCompatibleWithProjectType(newStatus, projectType)) {
       return res.status(400).json({
         message: `${newStatus} is not valid for ${projectType} projects.`,
@@ -4762,6 +4913,69 @@ const updateProjectStatus = async (req, res) => {
 
     if (!isAdmin && !isFinishing) {
       const userDepts = toDepartmentArray(req.user?.department);
+      const isQuoteStageCompletion =
+        isQuoteProject(project) &&
+        (newStatus === "Quote Request Completed" || newStatus === "Response Sent");
+      if (isQuoteStageCompletion) {
+        syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+        const activeRequirementKey =
+          ensureQuoteActiveRequirementKey(project) || "cost";
+        const ownerCanonical =
+          QUOTE_REQUIREMENT_OWNER_CANONICAL[activeRequirementKey] || "front desk";
+        const ownerDeptLabel =
+          QUOTE_REQUIREMENT_OWNER_DEPARTMENTS[activeRequirementKey] ||
+          "Front Desk";
+        const canManageQuoteStageByDept =
+          ownerCanonical !== "admin" &&
+          (ownerCanonical === "graphics"
+            ? userHasCanonicalDepartment(req.user, "graphics") ||
+              isFrontDeskUser(req.user)
+            : userHasCanonicalDepartment(req.user, ownerCanonical));
+        if (!canManageQuoteStageByDept) {
+          const ownerLabelForError =
+            ownerCanonical === "graphics"
+              ? "Graphics/Design or Front Desk"
+              : ownerDeptLabel;
+          return res.status(403).json({
+            message: `Only ${ownerLabelForError} can update this quote stage.`,
+          });
+        }
+
+        const requiredStatus =
+          newStatus === "Quote Request Completed"
+            ? "Pending Quote Request"
+            : "Pending Send Response";
+        if (project.status !== requiredStatus) {
+          return res.status(400).json({
+            message: `Status must be '${requiredStatus}' before completing this stage.`,
+          });
+        }
+      } else if (isQuoteResponseUndoRequested) {
+        syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+        const undoRequirementKey =
+          toText(project?.quoteDetails?.lastResponseRequirementKey) ||
+          ensureQuoteActiveRequirementKey(project) ||
+          "";
+        const ownerCanonical =
+          QUOTE_REQUIREMENT_OWNER_CANONICAL[undoRequirementKey] || "front desk";
+        const ownerDeptLabel =
+          QUOTE_REQUIREMENT_OWNER_DEPARTMENTS[undoRequirementKey] || "Front Desk";
+        const canUndoByDept =
+          ownerCanonical !== "admin" &&
+          (ownerCanonical === "graphics"
+            ? userHasCanonicalDepartment(req.user, "graphics") ||
+              isFrontDeskUser(req.user)
+            : userHasCanonicalDepartment(req.user, ownerCanonical));
+        if (!canUndoByDept) {
+          const ownerLabelForError =
+            ownerCanonical === "graphics"
+              ? "Graphics/Design or Front Desk"
+              : ownerDeptLabel;
+          return res.status(403).json({
+            message: `Only ${ownerLabelForError} can undo this send validation.`,
+          });
+        }
+      } else {
       const deptAction = deptActions.find(
         (action) =>
           userHasDepartmentMatch(userDepts, action.dept) &&
@@ -4779,6 +4993,7 @@ const updateProjectStatus = async (req, res) => {
         return res.status(400).json({
           message: `Status must be '${deptAction.from}' before completing this stage.`,
         });
+      }
       }
     }
 
@@ -4848,8 +5063,12 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
+    let quoteActiveRequirementKey = "";
+    let nextQuoteRequirementKey = "";
+
     if (isQuoteProject(project)) {
       syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+      quoteActiveRequirementKey = ensureQuoteActiveRequirementKey(project);
       if (
         QUOTE_ONLY_STATUSES.has(toText(project.status)) &&
         toText(newStatus) === "Departmental Engagement Completed"
@@ -4862,7 +5081,7 @@ const updateProjectStatus = async (req, res) => {
         });
       }
       const quoteStatusGuard = getQuoteStatusSequenceGuard(project, newStatus);
-      if (quoteStatusGuard) {
+      if (quoteStatusGuard && !isQuoteResponseUndoRequested) {
         return res.status(400).json({
           code: quoteStatusGuard.code,
           targetStatus: newStatus,
@@ -4890,29 +5109,124 @@ const updateProjectStatus = async (req, res) => {
       }
 
       if (newStatus === "Quote Request Completed") {
-        const missingRequirements = getIncompleteQuoteRequirements(project);
-        if (missingRequirements.length > 0) {
-          return res.status(400).json({
-            code: "QUOTE_REQUIREMENTS_INCOMPLETE",
-            targetStatus: "Quote Request Completed",
-            missing: missingRequirements,
-            missingLabels: missingRequirements.map(getQuoteRequirementLabel),
-            message: buildQuoteRequirementBlockMessage(missingRequirements),
-          });
+        if (quoteActiveRequirementKey) {
+          const activeRequirementStatus = normalizeQuoteRequirementStatus(
+            project?.quoteDetails?.requirementProgress?.[quoteActiveRequirementKey]
+              ?.status,
+            "pending",
+          );
+          if (!isQuoteRequirementSatisfiedStatus(activeRequirementStatus)) {
+            return res.status(400).json({
+              code: "QUOTE_ACTIVE_REQUIREMENT_INCOMPLETE",
+              targetStatus: "Quote Request Completed",
+              activeRequirement: quoteActiveRequirementKey,
+              activeRequirementLabel: getQuoteRequirementLabel(
+                quoteActiveRequirementKey,
+              ),
+              message: `Complete '${getQuoteRequirementLabel(quoteActiveRequirementKey)}' before marking this stage complete.`,
+            });
+          }
+          if (quoteActiveRequirementKey === "sampleProduction") {
+            const mockupGuard = getMockupCompletionGuard(project, {
+              requireClientApproval: true,
+            });
+            if (mockupGuard) {
+              return res.status(400).json({
+                code:
+                  mockupGuard.code === "MOCKUP_FILE_REQUIRED"
+                    ? "QUOTE_SAMPLE_PRODUCTION_MOCKUP_REQUIRED"
+                    : mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+                      ? "QUOTE_SAMPLE_PRODUCTION_MOCKUP_APPROVAL_REQUIRED"
+                      : mockupGuard.code,
+                targetStatus: "Quote Request Completed",
+                activeRequirement: quoteActiveRequirementKey,
+                activeRequirementLabel: getQuoteRequirementLabel(
+                  quoteActiveRequirementKey,
+                ),
+                message:
+                  mockupGuard.code === "MOCKUP_FILE_REQUIRED"
+                    ? "Upload a mockup before Sample Production can be completed."
+                    : mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+                      ? "Client must approve the latest mockup before Sample Production can be completed."
+                      : mockupGuard.message,
+              });
+            }
+          }
+        } else {
+          const missingRequirements = getIncompleteQuoteRequirements(project);
+          if (missingRequirements.length > 0) {
+            return res.status(400).json({
+              code: "QUOTE_REQUIREMENTS_INCOMPLETE",
+              targetStatus: "Quote Request Completed",
+              missing: missingRequirements,
+              missingLabels: missingRequirements.map(getQuoteRequirementLabel),
+              message: buildQuoteRequirementBlockMessage(missingRequirements),
+            });
+          }
         }
       }
 
       if (newStatus === "Response Sent") {
-        const missingRequirements = getIncompleteQuoteRequirements(project);
-        if (missingRequirements.length > 0) {
-          return res.status(400).json({
-            code: "QUOTE_REQUIREMENTS_INCOMPLETE",
-            targetStatus: "Response Sent",
-            missing: missingRequirements,
-            missingLabels: missingRequirements.map(getQuoteRequirementLabel),
-            message: buildQuoteRequirementBlockMessage(missingRequirements),
-          });
+        if (quoteActiveRequirementKey) {
+          const activeRequirementStatus = normalizeQuoteRequirementStatus(
+            project?.quoteDetails?.requirementProgress?.[quoteActiveRequirementKey]
+              ?.status,
+            "pending",
+          );
+          if (!isQuoteRequirementSatisfiedStatus(activeRequirementStatus)) {
+            return res.status(400).json({
+              code: "QUOTE_ACTIVE_REQUIREMENT_INCOMPLETE",
+              targetStatus: "Response Sent",
+              activeRequirement: quoteActiveRequirementKey,
+              activeRequirementLabel: getQuoteRequirementLabel(
+                quoteActiveRequirementKey,
+              ),
+              message: `Complete '${getQuoteRequirementLabel(quoteActiveRequirementKey)}' before sending this stage response.`,
+            });
+          }
+          if (quoteActiveRequirementKey === "sampleProduction") {
+            const mockupGuard = getMockupCompletionGuard(project, {
+              requireClientApproval: true,
+            });
+            if (mockupGuard) {
+              return res.status(400).json({
+                code:
+                  mockupGuard.code === "MOCKUP_FILE_REQUIRED"
+                    ? "QUOTE_SAMPLE_PRODUCTION_MOCKUP_REQUIRED"
+                    : mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+                      ? "QUOTE_SAMPLE_PRODUCTION_MOCKUP_APPROVAL_REQUIRED"
+                      : mockupGuard.code,
+                targetStatus: "Response Sent",
+                activeRequirement: quoteActiveRequirementKey,
+                activeRequirementLabel: getQuoteRequirementLabel(
+                  quoteActiveRequirementKey,
+                ),
+                message:
+                  mockupGuard.code === "MOCKUP_FILE_REQUIRED"
+                    ? "Upload a mockup before sending Sample Production response."
+                    : mockupGuard.code === "MOCKUP_CLIENT_APPROVAL_REQUIRED"
+                      ? "Client must approve the latest mockup before sending Sample Production response."
+                      : mockupGuard.message,
+              });
+            }
+          }
+        } else {
+          const missingRequirements = getIncompleteQuoteRequirements(project);
+          if (missingRequirements.length > 0) {
+            return res.status(400).json({
+              code: "QUOTE_REQUIREMENTS_INCOMPLETE",
+              targetStatus: "Response Sent",
+              missing: missingRequirements,
+              missingLabels: missingRequirements.map(getQuoteRequirementLabel),
+              message: buildQuoteRequirementBlockMessage(missingRequirements),
+            });
+          }
         }
+
+        nextQuoteRequirementKey = getQuoteNextIncompleteRequirementKey(
+          project,
+          quoteActiveRequirementKey,
+        );
 
         const submissionPayload =
           req.body?.submission && typeof req.body.submission === "object"
@@ -4940,6 +5254,7 @@ const updateProjectStatus = async (req, res) => {
               : isAdminPortalRequest(req)
                 ? ["Portal"]
                 : [];
+        const requireInvoiceSentForLane = quoteActiveRequirementKey !== "mockup";
         const { missing, normalizedSubmission } = getQuoteSubmissionReadiness(
           project,
           {
@@ -4947,6 +5262,7 @@ const updateProjectStatus = async (req, res) => {
             sentBy: actorSentBy,
             sentVia: sentViaForRequest,
           },
+          { requireInvoiceSent: requireInvoiceSentForLane },
         );
         if (missing.length > 0) {
           return res.status(400).json({
@@ -4962,8 +5278,22 @@ const updateProjectStatus = async (req, res) => {
           sentBy: normalizedSubmission.sentBy,
           sentVia: normalizedSubmission.sentVia,
         };
+        project.quoteDetails.lastResponseRequirementKey = quoteActiveRequirementKey || "";
         project.quoteDetails.emailResponseSent = true;
         project.quoteDetails.submissionDate = new Date();
+        project.sectionUpdates = project.sectionUpdates || {};
+        project.sectionUpdates.details = new Date();
+      }
+
+      if (isQuoteResponseUndoRequested) {
+        const undoRequirementKey = toText(
+          project?.quoteDetails?.lastResponseRequirementKey,
+        );
+        if (QUOTE_REQUIREMENT_KEYS.includes(undoRequirementKey)) {
+          setQuoteActiveRequirementKey(project, undoRequirementKey);
+        }
+        project.quoteDetails.emailResponseSent = false;
+        project.quoteDetails.submissionDate = null;
         project.sectionUpdates = project.sectionUpdates || {};
         project.sectionUpdates.details = new Date();
       }
@@ -4987,6 +5317,11 @@ const updateProjectStatus = async (req, res) => {
     if (isQuoteProject(project)) {
       statusProgression["Departmental Engagement Completed"] =
         "Pending Quote Request";
+      if (newStatus === "Response Sent") {
+        statusProgression["Response Sent"] = nextQuoteRequirementKey
+          ? "Pending Quote Request"
+          : "Pending Feedback";
+      }
     }
 
     // If the selected status has an auto-advancement, use it
@@ -4995,6 +5330,30 @@ const updateProjectStatus = async (req, res) => {
       return res.status(400).json({
         message: `${finalStatus} is not valid for ${projectType} projects.`,
       });
+    }
+
+    if (isQuoteProject(project)) {
+      if (
+        toText(newStatus) === "Departmental Engagement Completed" &&
+        finalStatus === "Pending Quote Request"
+      ) {
+        ensureQuoteActiveRequirementKey(project, { forceRecompute: true });
+      } else if (toText(newStatus) === "Response Sent") {
+        if (finalStatus === "Pending Quote Request") {
+          setQuoteActiveRequirementKey(project, nextQuoteRequirementKey);
+        } else {
+          // Final response sent moves to decision phase, preserve latest lane cursor.
+          setQuoteActiveRequirementKey(
+            project,
+            quoteActiveRequirementKey || ensureQuoteActiveRequirementKey(project),
+          );
+        }
+      } else if (
+        toText(newStatus) === "Pending Quote Request" &&
+        toText(project.status) !== "Pending Quote Request"
+      ) {
+        ensureQuoteActiveRequirementKey(project, { forceRecompute: true });
+      }
     }
 
     const isStandardProject = !isQuoteProject(project);
@@ -5216,6 +5575,16 @@ const updateQuoteRequirementProgress = async (req, res) => {
       });
     }
 
+    const activeRequirementKey = ensureQuoteActiveRequirementKey(project);
+    if (activeRequirementKey && requirementKey !== activeRequirementKey) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENT_SEQUENCE_VIOLATION",
+        message: `Complete '${getQuoteRequirementLabel(activeRequirementKey)}' before updating '${getQuoteRequirementLabel(requirementKey)}'.`,
+        activeRequirement: activeRequirementKey,
+        activeRequirementLabel: getQuoteRequirementLabel(activeRequirementKey),
+      });
+    }
+
     const quoteDecisionStatus = normalizeQuoteDecisionStatus(
       project?.quoteDetails?.decision?.status,
       "pending",
@@ -5379,6 +5748,11 @@ const updateQuoteDecision = async (req, res) => {
       });
     }
 
+    const actorId = req.user?._id || req.user?.id || null;
+    if (!actorId || !isValidObjectId(actorId)) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+
     const decision = normalizeQuoteDecisionStatus(req.body?.decision);
     if (!QUOTE_DECISION_STATUS_VALUES.has(decision) || decision === "pending") {
       return res.status(400).json({
@@ -5416,7 +5790,7 @@ const updateQuoteDecision = async (req, res) => {
       project.quoteDetails.decision = {
         status: "accepted_draft",
         decidedAt: now,
-        decidedBy: req.user._id,
+        decidedBy: actorId,
         note: decisionNote,
       };
       project.quoteDetails.finalUpdate = { accepted: true, cancelled: false };
@@ -5433,7 +5807,7 @@ const updateQuoteDecision = async (req, res) => {
 
       await logActivity(
         project._id,
-        req.user._id || req.user.id,
+        actorId,
         "update",
         "Quote accepted and saved to drafts.",
         {
@@ -5447,7 +5821,7 @@ const updateQuoteDecision = async (req, res) => {
       if (previousProjectStatus !== project.status) {
         await logActivity(
           project._id,
-          req.user._id || req.user.id,
+          actorId,
           "status_change",
           `Project status updated to ${project.status} after quote draft acceptance.`,
           {
@@ -5487,7 +5861,10 @@ const updateQuoteDecision = async (req, res) => {
       const nextPriority =
         targetType === "Emergency" ? "Urgent" : requestedPriority;
 
-      const lineageId = project.lineageId || project._id;
+      const lineageCandidate = project.lineageId || project._id;
+      const lineageId = isValidObjectId(lineageCandidate)
+        ? new mongoose.Types.ObjectId(String(lineageCandidate))
+        : project._id;
       const lineageQuery = { $or: [{ lineageId }, { _id: lineageId }] };
       const sourceVersion =
         Number.isFinite(project.versionNumber) && project.versionNumber > 0
@@ -5528,7 +5905,7 @@ const updateQuoteDecision = async (req, res) => {
         priority: nextPriority,
         currentStep: 1,
         orderDate: now,
-        createdBy: req.user._id,
+        createdBy: actorId,
         hold: {
           isOnHold: false,
           reason: "",
@@ -5560,7 +5937,7 @@ const updateQuoteDecision = async (req, res) => {
           ...(sourceObject.sampleRequirement || {}),
           isRequired: targetType === "Quote" ? false : sourceSampleRequired,
           updatedAt: now,
-          updatedBy: req.user._id,
+          updatedBy: actorId,
         },
         sampleApproval: {
           status: "pending",
@@ -5572,7 +5949,7 @@ const updateQuoteDecision = async (req, res) => {
           ...(sourceObject.corporateEmergency || {}),
           isEnabled: nextCorporateEmergencyEnabled,
           updatedAt: now,
-          updatedBy: req.user._id,
+          updatedBy: actorId,
         },
         endOfDayUpdate: "",
         endOfDayUpdateDate: null,
@@ -5589,7 +5966,7 @@ const updateQuoteDecision = async (req, res) => {
         versionState: "active",
         reopenMeta: {
           reason: "Quote converted to project workflow.",
-          reopenedBy: req.user._id,
+          reopenedBy: actorId,
           reopenedAt: now,
           sourceProjectId: project._id,
           sourceStatus: previousStatus,
@@ -5601,7 +5978,7 @@ const updateQuoteDecision = async (req, res) => {
         decision: {
           status: "accepted",
           decidedAt: now,
-          decidedBy: req.user._id,
+          decidedBy: actorId,
           note: decisionNote,
         },
         finalUpdate: {
@@ -5617,7 +5994,7 @@ const updateQuoteDecision = async (req, res) => {
       project.quoteDetails.decision = {
         status: "accepted",
         decidedAt: now,
-        decidedBy: req.user._id,
+        decidedBy: actorId,
         note: decisionNote,
       };
       project.quoteDetails.finalUpdate = { accepted: true, cancelled: false };
@@ -5640,7 +6017,7 @@ const updateQuoteDecision = async (req, res) => {
 
       await logActivity(
         project._id,
-        req.user._id || req.user.id,
+        actorId,
         "update",
         `Quote accepted and converted to ${targetType}.`,
         {
@@ -5659,7 +6036,7 @@ const updateQuoteDecision = async (req, res) => {
       if (previousProjectStatus !== project.status) {
         await logActivity(
           project._id,
-          req.user._id || req.user.id,
+          actorId,
           "status_change",
           `Project status updated to ${project.status} after quote acceptance.`,
           {
@@ -5670,7 +6047,7 @@ const updateQuoteDecision = async (req, res) => {
 
       await logActivity(
         savedConvertedProject._id,
-        req.user._id || req.user.id,
+        actorId,
         "create",
         `Created converted project revision v${nextVersion} from quote v${sourceVersion}.`,
         {
@@ -5706,7 +6083,7 @@ const updateQuoteDecision = async (req, res) => {
     project.quoteDetails.decision = {
       status: decision,
       decidedAt: now,
-      decidedBy: req.user._id,
+      decidedBy: actorId,
       note: decisionNote,
     };
     project.quoteDetails.finalUpdate = { accepted: false, cancelled: true };
@@ -5723,7 +6100,7 @@ const updateQuoteDecision = async (req, res) => {
 
     await logActivity(
       project._id,
-      req.user._id || req.user.id,
+      actorId,
       "update",
       `Quote decision recorded as ${decision}.`,
       {
@@ -5737,7 +6114,7 @@ const updateQuoteDecision = async (req, res) => {
     if (previousProjectStatus !== project.status) {
       await logActivity(
         project._id,
-        req.user._id || req.user.id,
+        actorId,
         "status_change",
         `Project status updated to ${project.status} after quote decision.`,
         {
@@ -5749,7 +6126,15 @@ const updateQuoteDecision = async (req, res) => {
     return res.json(project);
   } catch (error) {
     console.error("Error updating quote decision:", error);
-    return res.status(500).json({ message: "Server Error" });
+    if (
+      error?.name === "ValidationError" ||
+      error?.name === "CastError"
+    ) {
+      return res.status(400).json({
+        message: error?.message || "Invalid quote decision payload.",
+      });
+    }
+    return res.status(500).json({ message: error?.message || "Server Error" });
   }
 };
 
@@ -6900,7 +7285,8 @@ const rejectProjectMockup = async (req, res) => {
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
 
-    if (project.status !== "Pending Mockup") {
+    const quoteProject = isQuoteProject(project);
+    if (!quoteProject && project.status !== "Pending Mockup") {
       return res.status(400).json({
         message: "Mockup rejection is only allowed while status is Pending Mockup.",
       });
@@ -8891,9 +9277,13 @@ const acknowledgeProject = async (req, res) => {
       );
 
     if (shouldMarkDepartmentalEngagementComplete) {
-      project.status = isQuoteProject(project)
-        ? "Pending Quote Request"
-        : "Departmental Engagement Completed";
+      if (isQuoteProject(project)) {
+        syncQuoteDetailsWorkflow(project, { actorId: req.user._id || req.user.id });
+        ensureQuoteActiveRequirementKey(project, { forceRecompute: true });
+        project.status = "Pending Quote Request";
+      } else {
+        project.status = "Departmental Engagement Completed";
+      }
     }
 
     await project.save();
