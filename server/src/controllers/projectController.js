@@ -1079,9 +1079,16 @@ const QUOTE_DECISION_READY_STATUSES = new Set([
   "Response Sent",
   "Pending Feedback",
 ]);
+const QUOTE_FINAL_DECISION_STATUSES = new Set([
+  "accepted",
+  "accepted_draft",
+  "declined",
+  "cancelled",
+]);
 const QUOTE_DECISION_STATUS_VALUES = new Set([
   "pending",
   "accepted",
+  "accepted_draft",
   "declined",
   "cancelled",
 ]);
@@ -1352,7 +1359,7 @@ const syncQuoteDetailsWorkflow = (project, { actorId = null } = {}) => {
   };
 
   const finalUpdate = project.quoteDetails.finalUpdate || {};
-  if (decisionStatus === "accepted") {
+  if (decisionStatus === "accepted" || decisionStatus === "accepted_draft") {
     project.quoteDetails.finalUpdate = { accepted: true, cancelled: false };
   } else if (decisionStatus === "declined" || decisionStatus === "cancelled") {
     project.quoteDetails.finalUpdate = { accepted: false, cancelled: true };
@@ -4867,7 +4874,7 @@ const updateProjectStatus = async (req, res) => {
         project?.quoteDetails?.decision?.status,
         "pending",
       );
-      const quoteDecisionLocked = ["accepted", "declined", "cancelled"].includes(
+      const quoteDecisionLocked = QUOTE_FINAL_DECISION_STATUSES.has(
         quoteDecisionStatus,
       );
       if (
@@ -5213,7 +5220,7 @@ const updateQuoteRequirementProgress = async (req, res) => {
       project?.quoteDetails?.decision?.status,
       "pending",
     );
-    if (["accepted", "declined", "cancelled"].includes(quoteDecisionStatus)) {
+    if (QUOTE_FINAL_DECISION_STATUSES.has(quoteDecisionStatus)) {
       return res.status(400).json({
         code: "QUOTE_DECISION_LOCKED",
         message:
@@ -5346,7 +5353,7 @@ const updateQuoteRequirementProgress = async (req, res) => {
   }
 };
 
-// @desc    Update quote decision (accepted/declined/cancelled)
+// @desc    Update quote decision (accepted/accepted_draft/declined/cancelled)
 // @route   PATCH /api/projects/:id/quote-decision
 // @access  Private (Admin or Front Desk)
 const updateQuoteDecision = async (req, res) => {
@@ -5375,7 +5382,8 @@ const updateQuoteDecision = async (req, res) => {
     const decision = normalizeQuoteDecisionStatus(req.body?.decision);
     if (!QUOTE_DECISION_STATUS_VALUES.has(decision) || decision === "pending") {
       return res.status(400).json({
-        message: "Decision must be accepted, declined, or cancelled.",
+        message:
+          "Decision must be accepted, accepted_draft, declined, or cancelled.",
       });
     }
 
@@ -5383,9 +5391,73 @@ const updateQuoteDecision = async (req, res) => {
 
     const previousType = normalizeProjectType(project.projectType, "Quote");
     const previousStatus = toText(project.status);
-    const quoteDecisionReady = QUOTE_DECISION_READY_STATUSES.has(previousStatus);
+    const previousDecisionStatus = normalizeQuoteDecisionStatus(
+      project?.quoteDetails?.decision?.status,
+      "pending",
+    );
+    const canConvertFromDraft =
+      previousStatus === "Finished" && previousDecisionStatus === "accepted_draft";
+    const quoteDecisionReady =
+      QUOTE_DECISION_READY_STATUSES.has(previousStatus) || canConvertFromDraft;
     const decisionNote = normalizeOptionalText(req.body?.note);
     const now = new Date();
+
+    if (decision === "accepted_draft") {
+      if (
+        !QUOTE_DECISION_READY_STATUSES.has(previousStatus) &&
+        !canConvertFromDraft
+      ) {
+        return res.status(400).json({
+          message:
+            "Quote response must be sent before accepting and saving as draft.",
+        });
+      }
+
+      project.quoteDetails.decision = {
+        status: "accepted_draft",
+        decidedAt: now,
+        decidedBy: req.user._id,
+        note: decisionNote,
+      };
+      project.quoteDetails.finalUpdate = { accepted: true, cancelled: false };
+      if (decisionNote) {
+        project.quoteDetails.clientFeedback = decisionNote;
+      }
+
+      const previousProjectStatus = toText(project.status);
+      project.status = "Finished";
+      project.sectionUpdates = project.sectionUpdates || {};
+      project.sectionUpdates.details = now;
+
+      await project.save();
+
+      await logActivity(
+        project._id,
+        req.user._id || req.user.id,
+        "update",
+        "Quote accepted and saved to drafts.",
+        {
+          quoteDecision: {
+            decision: "accepted_draft",
+            note: decisionNote || null,
+          },
+        },
+      );
+
+      if (previousProjectStatus !== project.status) {
+        await logActivity(
+          project._id,
+          req.user._id || req.user.id,
+          "status_change",
+          `Project status updated to ${project.status} after quote draft acceptance.`,
+          {
+            statusChange: { from: previousProjectStatus, to: project.status },
+          },
+        );
+      }
+
+      return res.json(project);
+    }
 
     if (decision === "accepted") {
       if (!quoteDecisionReady) {
@@ -5408,15 +5480,140 @@ const updateQuoteDecision = async (req, res) => {
         isStatusCompatibleWithProjectType(targetStatusInput, targetType)
           ? targetStatusInput
           : getDefaultStatusForProjectType(targetType);
+      const requestedPriority = normalizePriority(
+        req.body?.priority,
+        normalizePriority(project.priority, "Normal"),
+      );
+      const nextPriority =
+        targetType === "Emergency" ? "Urgent" : requestedPriority;
 
-      project.projectType = targetType;
-      project.status = nextStatus;
-      if (targetType === "Emergency") {
-        project.priority = "Urgent";
-      } else if (req.body?.priority) {
-        project.priority = normalizePriority(req.body.priority, project.priority);
+      const lineageId = project.lineageId || project._id;
+      const lineageQuery = { $or: [{ lineageId }, { _id: lineageId }] };
+      const sourceVersion =
+        Number.isFinite(project.versionNumber) && project.versionNumber > 0
+          ? project.versionNumber
+          : 1;
+      const latestInLineage = await Project.findOne(lineageQuery)
+        .select("_id versionNumber createdAt")
+        .sort({ versionNumber: -1, createdAt: -1 });
+      const sourceIsLatest =
+        !latestInLineage ||
+        latestInLineage._id.toString() === project._id.toString();
+
+      if (!sourceIsLatest) {
+        return res.status(400).json({
+          message:
+            "Only the latest quote revision can be converted. Please open the latest version.",
+        });
       }
 
+      const nextVersion = sourceVersion + 1;
+      const sourceObject = project.toObject({ depopulate: true });
+      delete sourceObject._id;
+      delete sourceObject.__v;
+      delete sourceObject.createdAt;
+      delete sourceObject.updatedAt;
+
+      const sourceSampleRequired = Boolean(sourceObject?.sampleRequirement?.isRequired);
+      const sourceCorporateEmergencyEnabled = Boolean(
+        sourceObject?.corporateEmergency?.isEnabled,
+      );
+      const nextCorporateEmergencyEnabled =
+        targetType === "Corporate Job" ? sourceCorporateEmergencyEnabled : false;
+
+      const convertedProject = new Project({
+        ...sourceObject,
+        projectType: targetType,
+        status: nextStatus,
+        priority: nextPriority,
+        currentStep: 1,
+        orderDate: now,
+        createdBy: req.user._id,
+        hold: {
+          isOnHold: false,
+          reason: "",
+          heldAt: null,
+          heldBy: null,
+          previousStatus: null,
+          releasedAt: null,
+          releasedBy: null,
+        },
+        cancellation: {
+          isCancelled: false,
+          reason: "",
+          cancelledAt: null,
+          cancelledBy: null,
+          resumedStatus: "",
+          resumedHoldState: null,
+          reactivatedAt: null,
+          reactivatedBy: null,
+        },
+        acknowledgements: [],
+        feedbacks: [],
+        invoice: {
+          sent: false,
+          sentAt: null,
+          sentBy: null,
+        },
+        paymentVerifications: [],
+        sampleRequirement: {
+          ...(sourceObject.sampleRequirement || {}),
+          isRequired: targetType === "Quote" ? false : sourceSampleRequired,
+          updatedAt: now,
+          updatedBy: req.user._id,
+        },
+        sampleApproval: {
+          status: "pending",
+          approvedAt: null,
+          approvedBy: null,
+          note: "",
+        },
+        corporateEmergency: {
+          ...(sourceObject.corporateEmergency || {}),
+          isEnabled: nextCorporateEmergencyEnabled,
+          updatedAt: now,
+          updatedBy: req.user._id,
+        },
+        endOfDayUpdate: "",
+        endOfDayUpdateDate: null,
+        endOfDayUpdateBy: null,
+        updates: [],
+        sectionUpdates: {
+          ...(sourceObject.sectionUpdates || {}),
+          details: now,
+        },
+        lineageId,
+        parentProjectId: project._id,
+        versionNumber: nextVersion,
+        isLatestVersion: true,
+        versionState: "active",
+        reopenMeta: {
+          reason: "Quote converted to project workflow.",
+          reopenedBy: req.user._id,
+          reopenedAt: now,
+          sourceProjectId: project._id,
+          sourceStatus: previousStatus,
+        },
+      });
+
+      convertedProject.quoteDetails = {
+        ...(convertedProject.quoteDetails || {}),
+        decision: {
+          status: "accepted",
+          decidedAt: now,
+          decidedBy: req.user._id,
+          note: decisionNote,
+        },
+        finalUpdate: {
+          accepted: true,
+          cancelled: false,
+        },
+      };
+      if (decisionNote) {
+        convertedProject.quoteDetails.clientFeedback = decisionNote;
+      }
+
+      const previousProjectStatus = toText(project.status);
       project.quoteDetails.decision = {
         status: "accepted",
         decidedAt: now,
@@ -5427,11 +5624,19 @@ const updateQuoteDecision = async (req, res) => {
       if (decisionNote) {
         project.quoteDetails.clientFeedback = decisionNote;
       }
-
+      project.status = "Finished";
       project.sectionUpdates = project.sectionUpdates || {};
       project.sectionUpdates.details = now;
+      project.lineageId = lineageId;
+      project.versionNumber = sourceVersion;
+      project.isLatestVersion = false;
+      project.versionState = "superseded";
 
+      await Project.updateMany(lineageQuery, {
+        $set: { isLatestVersion: false },
+      });
       await project.save();
+      const savedConvertedProject = await convertedProject.save();
 
       await logActivity(
         project._id,
@@ -5444,29 +5649,57 @@ const updateQuoteDecision = async (req, res) => {
             note: decisionNote || null,
             fromType: previousType,
             toType: targetType,
+            newProjectId: savedConvertedProject._id,
+            sourceVersion,
+            newVersion: nextVersion,
           },
         },
       );
 
-      if (previousStatus !== project.status) {
+      if (previousProjectStatus !== project.status) {
         await logActivity(
           project._id,
           req.user._id || req.user.id,
           "status_change",
           `Project status updated to ${project.status} after quote acceptance.`,
           {
-            statusChange: { from: previousStatus, to: project.status },
+            statusChange: { from: previousProjectStatus, to: project.status },
           },
         );
       }
 
-      return res.json(project);
+      await logActivity(
+        savedConvertedProject._id,
+        req.user._id || req.user.id,
+        "create",
+        `Created converted project revision v${nextVersion} from quote v${sourceVersion}.`,
+        {
+          quoteConversion: {
+            sourceQuoteId: project._id,
+            sourceVersion,
+            newVersion: nextVersion,
+            fromType: previousType,
+            toType: targetType,
+            targetStatus: nextStatus,
+            note: decisionNote || null,
+          },
+        },
+      );
+
+      const populatedConvertedProject = await Project.findById(
+        savedConvertedProject._id,
+      )
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName employeeId email")
+        .populate("assistantLeadId", "firstName lastName employeeId email");
+
+      return res.json(populatedConvertedProject || savedConvertedProject);
     }
 
-    if (decision === "declined" && !quoteDecisionReady) {
+    if ((decision === "declined" || decision === "cancelled") && !quoteDecisionReady) {
       return res.status(400).json({
         message:
-          "Quote response must be sent before registering a declined decision.",
+          "Quote response must be sent before registering this decision.",
       });
     }
 

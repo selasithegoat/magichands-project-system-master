@@ -17,6 +17,7 @@ const ProjectAnalytics = lazy(
 );
 const Teams = lazy(() => import("./pages/Teams/Teams"));
 const Clients = lazy(() => import("./pages/Clients/Clients"));
+const Drafts = lazy(() => import("./pages/Drafts/Drafts"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
@@ -156,6 +157,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <CancelledOrders user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/drafts"
+            element={
+              <ProtectedRoute>
+                <Drafts user={user} />
               </ProtectedRoute>
             }
           />

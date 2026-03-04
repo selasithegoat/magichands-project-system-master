@@ -1266,6 +1266,14 @@ function QuoteChecklistCard({ project }) {
     .trim()
     .toLowerCase();
   const decisionNote = String(project?.quoteDetails?.decision?.note || "").trim();
+  const quoteDecisionLabelMap = {
+    pending: "Pending",
+    accepted: "Accepted",
+    accepted_draft: "Accepted Draft",
+    declined: "Declined",
+    cancelled: "Cancelled",
+  };
+  const quoteDecisionLabel = quoteDecisionLabelMap[quoteDecision] || "Pending";
   const statusMeta = {
     pending: {
       label: "Pending",
@@ -1423,7 +1431,7 @@ function QuoteChecklistCard({ project }) {
         }}
       >
         <strong style={{ textTransform: "capitalize" }}>
-          Quote Decision: {quoteDecision}
+          Quote Decision: {quoteDecisionLabel}
         </strong>
         {decisionNote && (
           <div style={{ marginTop: "0.3rem", color: "#475569" }}>

@@ -479,7 +479,13 @@ const ProjectSchema = new mongoose.Schema(
       decision: {
         status: {
           type: String,
-          enum: ["pending", "accepted", "declined", "cancelled"],
+          enum: [
+            "pending",
+            "accepted",
+            "accepted_draft",
+            "declined",
+            "cancelled",
+          ],
           default: "pending",
         },
         decidedAt: Date,

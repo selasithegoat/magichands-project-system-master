@@ -108,6 +108,7 @@ const QUOTE_CONVERSION_OPTIONS = [
 ];
 const QUOTE_DECISION_OPTIONS = [
   { value: "accepted", label: "Accepted" },
+  { value: "accepted_draft", label: "Accept & Draft" },
   { value: "declined", label: "Declined" },
   { value: "cancelled", label: "Cancelled" },
 ];
@@ -115,6 +116,24 @@ const QUOTE_DECISION_READY_STATUSES = new Set([
   "Response Sent",
   "Pending Feedback",
 ]);
+const QUOTE_FINAL_DECISION_STATUSES = new Set([
+  "accepted",
+  "accepted_draft",
+  "declined",
+  "cancelled",
+]);
+const QUOTE_DECISION_LABELS = {
+  pending: "Pending",
+  accepted: "Accepted",
+  accepted_draft: "Accepted Draft",
+  declined: "Declined",
+  cancelled: "Cancelled",
+};
+
+const getQuoteDecisionLabel = (value) => {
+  const key = String(value || "").trim().toLowerCase();
+  return QUOTE_DECISION_LABELS[key] || "Pending";
+};
 const toDepartmentArray = (value) => {
   if (Array.isArray(value)) return value;
   if (value === null || value === undefined || value === "") return [];
@@ -873,7 +892,7 @@ const OrderActions = () => {
   const quoteDecisionStatus = String(project?.quoteDetails?.decision?.status || "pending")
     .trim()
     .toLowerCase();
-  const quoteDecisionLocked = ["accepted", "declined", "cancelled"].includes(
+  const quoteDecisionLocked = QUOTE_FINAL_DECISION_STATUSES.has(
     quoteDecisionStatus,
   );
   const canManageQuoteRequirementRow = (row) =>
@@ -1185,6 +1204,9 @@ const OrderActions = () => {
         setProject(updated);
         showToast(`Quote marked as ${option.label.toLowerCase()}.`, "success");
         setQuoteDecisionConfirm({ open: false, decision: "" });
+        if (decision === "accepted" && updated?._id && updated._id !== id) {
+          navigate(`/new-orders/actions/${updated._id}`, { replace: true });
+        }
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(
@@ -2689,8 +2711,8 @@ const OrderActions = () => {
                 <div className="quote-decision-status">
                   Current decision:
                   {" "}
-                  <strong style={{ textTransform: "capitalize" }}>
-                    {quoteDecisionStatus}
+                  <strong>
+                    {getQuoteDecisionLabel(quoteDecisionStatus)}
                   </strong>
                 </div>
 
@@ -2724,6 +2746,18 @@ const OrderActions = () => {
                 </select>
 
                 <div className="quote-decision-actions">
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => openQuoteDecisionConfirm("accepted_draft")}
+                    disabled={
+                      quoteDecisionSubmitting ||
+                      quoteDecisionLocked ||
+                      !isQuoteDecisionReady
+                    }
+                  >
+                    Accept & Draft
+                  </button>
                   <button
                     type="button"
                     className="action-btn complete-btn"
