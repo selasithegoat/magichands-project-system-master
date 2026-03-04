@@ -6,6 +6,7 @@ import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -297,9 +298,14 @@ const Projects = ({ user }) => {
       return { label: "Draft", className: getStatusClass("Draft") };
     }
     const primary = statuses[0];
+    const primaryProject =
+      projects.find((project) => project?.status === primary) || null;
+    const primaryLabel = getQuoteAwareStatusLabel(primary, primaryProject);
     return {
       label:
-        statuses.length === 1 ? primary : `${primary} +${statuses.length - 1} more`,
+        statuses.length === 1
+          ? primaryLabel
+          : `${primaryLabel} +${statuses.length - 1} more`,
       className: getStatusClass(primary),
     };
   };
@@ -747,7 +753,7 @@ const Projects = ({ user }) => {
                         <td>{formatTime(project.receivedTime)}</td>
                         <td>
                           <span className={`status-badge ${getStatusClass(project.status)}`}>
-                            {project.status}
+                            {getQuoteAwareStatusLabel(project.status, project)}
                           </span>
                         </td>
                         <td>
@@ -877,7 +883,7 @@ const Projects = ({ user }) => {
                               <span
                                 className={`status-badge ${getStatusClass(project.status)}`}
                               >
-                                {project.status}
+                                {getQuoteAwareStatusLabel(project.status, project)}
                               </span>
                             </td>
                             <td>

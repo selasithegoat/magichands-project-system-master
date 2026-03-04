@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Modal from "../Modal/Modal";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 import "./ProjectTypeChangeModal.css";
 
 const PROJECT_TYPE_OPTIONS = ["Standard", "Emergency", "Corporate Job", "Quote"];
@@ -178,7 +179,7 @@ const ProjectTypeChangeModal = ({
           </p>
           <p>
             <strong>Current:</strong> {currentType || "Standard"} /{" "}
-            {currentStatus || "N/A"}
+            {getQuoteAwareStatusLabel(currentStatus, currentType) || "N/A"}
           </p>
         </div>
 
@@ -207,7 +208,7 @@ const ProjectTypeChangeModal = ({
             >
               {statusOptions.map((entry) => (
                 <option key={entry} value={entry}>
-                  {entry}
+                  {getQuoteAwareStatusLabel(entry, targetType)}
                 </option>
               ))}
             </select>

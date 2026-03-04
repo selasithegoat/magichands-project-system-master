@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
@@ -242,8 +243,11 @@ const OrdersList = () => {
     return "draft";
   };
 
-  const getProjectDisplayStatus = (project) =>
+  const getProjectRawStatus = (project) =>
     project?.projectLeadId ? project.status : "New Order";
+
+  const getProjectDisplayStatus = (project) =>
+    getQuoteAwareStatusLabel(getProjectRawStatus(project), project);
 
   const getActiveGroupProjects = (group) =>
     (group?.projects || []).filter((project) => !isHistoryEligible(project));
@@ -268,7 +272,7 @@ const OrdersList = () => {
 
   const getGroupStatusMeta = (projects = []) => {
     const statuses = Array.from(
-      new Set(projects.map((project) => getProjectDisplayStatus(project)).filter(Boolean)),
+      new Set(projects.map((project) => getProjectRawStatus(project)).filter(Boolean)),
     );
 
     if (statuses.length === 0) {
@@ -279,9 +283,15 @@ const OrdersList = () => {
     }
 
     const primary = statuses[0];
+    const primaryProject =
+      projects.find((project) => getProjectRawStatus(project) === primary) ||
+      null;
+    const primaryLabel = getQuoteAwareStatusLabel(primary, primaryProject);
     return {
       label:
-        statuses.length === 1 ? primary : `${primary} +${statuses.length - 1} more`,
+        statuses.length === 1
+          ? primaryLabel
+          : `${primaryLabel} +${statuses.length - 1} more`,
       className: getStatusClass(primary),
     };
   };
@@ -450,7 +460,7 @@ const OrdersList = () => {
 
       if (allFilters.status !== "All") {
         const hasStatusMatch = group.activeProjects.some(
-          (project) => getProjectDisplayStatus(project) === allFilters.status,
+          (project) => getProjectRawStatus(project) === allFilters.status,
         );
         if (!hasStatusMatch) return false;
       }
@@ -920,7 +930,7 @@ const OrdersList = () => {
                           <td>{primaryProject.details?.projectName || "Untitled"}</td>
                           <td>
                             <span
-                              className={`status-badge ${getStatusClass(getProjectDisplayStatus(primaryProject))}`}
+                              className={`status-badge ${getStatusClass(getProjectRawStatus(primaryProject))}`}
                             >
                               {getProjectDisplayStatus(primaryProject)}
                             </span>
@@ -1048,7 +1058,7 @@ const OrdersList = () => {
                               <td>{order.details?.projectName || "Untitled"}</td>
                               <td>
                                 <span
-                                  className={`status-badge ${getStatusClass(getProjectDisplayStatus(order))}`}
+                                  className={`status-badge ${getStatusClass(getProjectRawStatus(order))}`}
                                 >
                                   {getProjectDisplayStatus(order)}
                                 </span>
@@ -1189,7 +1199,7 @@ const OrdersList = () => {
                       <span
                         className={`status-badge ${getStatusClass(order.status)}`}
                       >
-                        {order.status}
+                        {getQuoteAwareStatusLabel(order.status, order)}
                       </span>
                     </td>
                     <td>

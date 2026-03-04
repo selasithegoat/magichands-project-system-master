@@ -16,6 +16,7 @@ import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCance
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/ProjectTypeChangeModal";
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -1895,7 +1896,7 @@ const ProjectDetails = ({ user }) => {
                   value={status}
                   style={{ color: "#1e293b" }}
                 >
-                  {status}
+                  {getQuoteAwareStatusLabel(status, project)}
                 </option>
               ))}
             </select>
@@ -1915,22 +1916,24 @@ const ProjectDetails = ({ user }) => {
                 </button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className={`hold-toggle-btn sample ${
-                      sampleRequirementEnabled ? "sample-on" : "sample-off"
-                    }`}
-                    onClick={() =>
-                      handleToggleSampleRequirement(!sampleRequirementEnabled)
-                    }
-                    disabled={isTogglingSampleRequirement || isTogglingHold}
-                  >
-                    {isTogglingSampleRequirement
-                      ? "Updating Sample..."
-                      : sampleRequirementEnabled
-                        ? "Sample Required: ON"
-                        : "Sample Required: OFF"}
-                  </button>
+                  {!isQuoteProject && (
+                    <button
+                      type="button"
+                      className={`hold-toggle-btn sample ${
+                        sampleRequirementEnabled ? "sample-on" : "sample-off"
+                      }`}
+                      onClick={() =>
+                        handleToggleSampleRequirement(!sampleRequirementEnabled)
+                      }
+                      disabled={isTogglingSampleRequirement || isTogglingHold}
+                    >
+                      {isTogglingSampleRequirement
+                        ? "Updating Sample..."
+                        : sampleRequirementEnabled
+                          ? "Sample Required: ON"
+                          : "Sample Required: OFF"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="hold-toggle-btn type-change"

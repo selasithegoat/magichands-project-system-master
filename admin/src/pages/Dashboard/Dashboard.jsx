@@ -9,6 +9,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -599,7 +600,7 @@ const Dashboard = ({ user }) => {
                       project.status,
                     )}`}
                   >
-                    {project.status}
+                    {getQuoteAwareStatusLabel(project.status, project)}
                   </span>
                 </div>
 

@@ -1075,6 +1075,10 @@ const QUOTE_STATUS_ALLOWED_PREVIOUS = {
   ]),
   "Response Sent": new Set(["Pending Send Response"]),
 };
+const QUOTE_DECISION_READY_STATUSES = new Set([
+  "Response Sent",
+  "Pending Feedback",
+]);
 const QUOTE_DECISION_STATUS_VALUES = new Set([
   "pending",
   "accepted",
@@ -4971,6 +4975,7 @@ const updateProjectStatus = async (req, res) => {
       Delivered: "Pending Feedback",
       // Quote workflow
       "Quote Request Completed": "Pending Send Response",
+      "Response Sent": "Pending Feedback",
     };
     if (isQuoteProject(project)) {
       statusProgression["Departmental Engagement Completed"] =
@@ -5215,7 +5220,7 @@ const updateQuoteRequirementProgress = async (req, res) => {
           "Quote requirements are locked after final quote decision.",
       });
     }
-    if (toText(project.status) === "Response Sent") {
+    if (QUOTE_DECISION_READY_STATUSES.has(toText(project.status))) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_LOCKED",
         message:
@@ -5378,14 +5383,15 @@ const updateQuoteDecision = async (req, res) => {
 
     const previousType = normalizeProjectType(project.projectType, "Quote");
     const previousStatus = toText(project.status);
+    const quoteDecisionReady = QUOTE_DECISION_READY_STATUSES.has(previousStatus);
     const decisionNote = normalizeOptionalText(req.body?.note);
     const now = new Date();
 
     if (decision === "accepted") {
-      if (project.status !== "Response Sent") {
+      if (!quoteDecisionReady) {
         return res.status(400).json({
           message:
-            "Quote must be marked as Response Sent before accepting and converting.",
+            "Quote response must be sent before accepting and converting.",
         });
       }
 
@@ -5457,10 +5463,10 @@ const updateQuoteDecision = async (req, res) => {
       return res.json(project);
     }
 
-    if (decision === "declined" && project.status !== "Response Sent") {
+    if (decision === "declined" && !quoteDecisionReady) {
       return res.status(400).json({
         message:
-          "Quote must be marked as Response Sent before registering a declined decision.",
+          "Quote response must be sent before registering a declined decision.",
       });
     }
 
@@ -8652,7 +8658,9 @@ const acknowledgeProject = async (req, res) => {
       );
 
     if (shouldMarkDepartmentalEngagementComplete) {
-      project.status = "Departmental Engagement Completed";
+      project.status = isQuoteProject(project)
+        ? "Pending Quote Request"
+        : "Departmental Engagement Completed";
     }
 
     await project.save();
@@ -8732,7 +8740,10 @@ const undoAcknowledgeProject = async (req, res) => {
 
     const previousStatus = project.status;
     project.acknowledgements.splice(ackIndex, 1);
-    if (project.status === "Departmental Engagement Completed") {
+    if (
+      project.status === "Departmental Engagement Completed" ||
+      (isQuoteProject(project) && project.status === "Pending Quote Request")
+    ) {
       project.status = "Pending Departmental Engagement";
     }
     await project.save();

@@ -30,6 +30,7 @@ import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getGroupedLeadDisplayRows, getLeadDisplay } from "../../utils/leadDisplay";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
@@ -110,6 +111,10 @@ const QUOTE_STEPS = [
   {
     label: "Send Response",
     statuses: ["Pending Send Response", "Response Sent"],
+  },
+  {
+    label: "Decision",
+    statuses: ["Pending Feedback", "Feedback Completed"],
   },
 ];
 
@@ -652,6 +657,19 @@ const ProjectDetail = ({ user }) => {
     project.priority === "Urgent" || project.projectType === "Emergency";
   const isCorporate = project.projectType === "Corporate Job";
   const isQuote = project.projectType === "Quote";
+  const projectStatusLabel = getQuoteAwareStatusLabel(project.status, project);
+  const showFullQuoteDecisionStatus =
+    isQuote &&
+    (project.status === "Pending Feedback" ||
+      project.status === "Feedback Completed");
+  const statusBadgeLabel =
+    project.status === "Order Confirmed"
+      ? "WAITING ACCEPTANCE"
+      : showFullQuoteDecisionStatus
+        ? projectStatusLabel
+        : project.status.startsWith("Pending ")
+          ? project.status.replace("Pending ", "")
+          : projectStatusLabel;
   const showFeedbackSection = [
     "Delivered",
     "Pending Feedback",
@@ -784,11 +802,7 @@ const ProjectDetail = ({ user }) => {
               )}
                 <span className="status-badge">
                   <ClockIcon width="14" height="14" />{" "}
-                  {project.status === "Order Confirmed"
-                    ? "WAITING ACCEPTANCE"
-                    : project.status.startsWith("Pending ")
-                      ? project.status.replace("Pending ", "")
-                      : project.status}
+                  {statusBadgeLabel}
                 </span>
               {project.status === "Completed" && (
                 <button
@@ -2990,6 +3004,8 @@ const ProductionRisksCard = ({
 };
 
 const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
+  const workflowStatusLabel = getQuoteAwareStatusLabel(workflowStatus, project);
+
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
       switch (status) {
@@ -3102,7 +3118,7 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
       </div>
       {isOnHold && (
         <div className="workflow-hold-indicator">
-          On Hold - Workflow paused at {workflowStatus}
+          On Hold - Workflow paused at {workflowStatusLabel}
         </div>
       )}
     </div>
@@ -3110,6 +3126,7 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
 };
 
 const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
+  const workflowStatusLabel = getQuoteAwareStatusLabel(workflowStatus, type);
   const steps = type === "Quote" ? QUOTE_STEPS : STATUS_STEPS;
 
   // Find current step index
@@ -3156,6 +3173,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
     Packaging: PackageIcon,
     "Delivery/Pickup": TruckIcon,
     Feedback: CheckCircleIcon,
+    Decision: CheckCircleIcon,
     "Quote Request": ClipboardListIcon,
     "Send Response": ClockIcon,
   };
@@ -3167,7 +3185,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
       </div>
       {isOnHold && (
         <div className="workflow-hold-indicator approvals-hold-indicator">
-          On Hold - Workflow paused at {workflowStatus}
+          On Hold - Workflow paused at {workflowStatusLabel}
         </div>
       )}
       <div className="approval-list">
@@ -3190,7 +3208,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
             const pendingStatus = stepStatuses[0];
             const completedStatus = stepStatuses[stepStatuses.length - 1];
 
-            if (step.label === "Feedback") {
+            if (step.label === "Feedback" || step.label === "Decision") {
               subText =
                 workflowStatus === "Feedback Completed"
                   ? "Completed"

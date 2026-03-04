@@ -9,6 +9,7 @@ import {
   PRODUCTION_SUB_DEPARTMENTS,
   STORES_SUB_DEPARTMENTS,
 } from "../../constants/departments";
+import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -110,6 +111,10 @@ const QUOTE_DECISION_OPTIONS = [
   { value: "declined", label: "Declined" },
   { value: "cancelled", label: "Cancelled" },
 ];
+const QUOTE_DECISION_READY_STATUSES = new Set([
+  "Response Sent",
+  "Pending Feedback",
+]);
 const toDepartmentArray = (value) => {
   if (Array.isArray(value)) return value;
   if (value === null || value === undefined || value === "") return [];
@@ -880,6 +885,8 @@ const OrderActions = () => {
     isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
   const canManageQuoteDecision =
     isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
+  const isQuoteDecisionReady =
+    isQuoteProject && QUOTE_DECISION_READY_STATUSES.has(project?.status);
   const canCompleteQuotePreparation =
     isQuoteProject &&
     project?.status === "Pending Quote Request" &&
@@ -2329,7 +2336,8 @@ const OrderActions = () => {
               {project.details?.packagingType || "-"}
             </p>
             <p>
-              <strong>Status:</strong> {project.status}
+              <strong>Status:</strong>{" "}
+              {getQuoteAwareStatusLabel(project.status, project)}
             </p>
             <p>
               <strong>Created:</strong> {formatDate(project.createdAt)}
@@ -2723,7 +2731,7 @@ const OrderActions = () => {
                     disabled={
                       quoteDecisionSubmitting ||
                       quoteDecisionLocked ||
-                      project.status !== "Response Sent"
+                      !isQuoteDecisionReady
                     }
                   >
                     Accept & Convert
@@ -2735,7 +2743,7 @@ const OrderActions = () => {
                     disabled={
                       quoteDecisionSubmitting ||
                       quoteDecisionLocked ||
-                      project.status !== "Response Sent"
+                      !isQuoteDecisionReady
                     }
                   >
                     Mark Declined
@@ -2744,7 +2752,11 @@ const OrderActions = () => {
                     type="button"
                     className="action-btn undo-btn"
                     onClick={() => openQuoteDecisionConfirm("cancelled")}
-                    disabled={quoteDecisionSubmitting || quoteDecisionLocked}
+                    disabled={
+                      quoteDecisionSubmitting ||
+                      quoteDecisionLocked ||
+                      !isQuoteDecisionReady
+                    }
                   >
                     Cancel Quote
                   </button>
