@@ -16,7 +16,6 @@ import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCance
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/ProjectTypeChangeModal";
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
-import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -59,185 +58,6 @@ const BILLING_REQUIREMENT_LABELS = {
     "Full payment or authorization verification",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
-const QUOTE_REQUIREMENT_KEYS = [
-  "cost",
-  "mockup",
-  "previousSamples",
-  "sampleProduction",
-  "bidSubmission",
-];
-const QUOTE_REQUIREMENT_LABELS = {
-  cost: "Cost",
-  mockup: "Mockup",
-  previousSamples: "Previous Samples/Jobs Done",
-  sampleProduction: "Sample Production",
-  bidSubmission: "Bid Submission/Documents",
-};
-const QUOTE_REQUIREMENT_OWNER_DEPARTMENTS = {
-  cost: "Front Desk",
-  mockup: "Graphics/Design",
-  previousSamples: "Stores",
-  sampleProduction: "Production",
-  bidSubmission: "Admin",
-};
-const QUOTE_REQUIREMENT_STATUS_OPTIONS = [
-  { value: "pending", label: "Pending" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "blocked", label: "Blocked" },
-  { value: "waived", label: "Waived" },
-];
-const QUOTE_REQUIREMENT_STATUS_TRANSITIONS = {
-  pending: new Set(["in_progress", "blocked", "waived"]),
-  in_progress: new Set(["pending", "completed", "blocked", "waived"]),
-  blocked: new Set(["pending", "in_progress", "waived"]),
-  completed: new Set(["in_progress", "waived"]),
-  waived: new Set(["pending", "in_progress"]),
-};
-const QUOTE_REQUIREMENT_PREREQUISITES = {
-  cost: [],
-  mockup: ["cost"],
-  previousSamples: ["cost"],
-  sampleProduction: ["mockup"],
-  bidSubmission: ["cost", "mockup", "previousSamples", "sampleProduction"],
-};
-const QUOTE_REQUIREMENT_STATUS_META = {
-  pending: {
-    label: "Pending",
-    color: "#9f1239",
-    background: "#fff1f2",
-    border: "#fecdd3",
-  },
-  in_progress: {
-    label: "In Progress",
-    color: "#1d4ed8",
-    background: "#eff6ff",
-    border: "#bfdbfe",
-  },
-  completed: {
-    label: "Completed",
-    color: "#166534",
-    background: "#f0fdf4",
-    border: "#86efac",
-  },
-  blocked: {
-    label: "Blocked",
-    color: "#b91c1c",
-    background: "#fef2f2",
-    border: "#fecaca",
-  },
-  waived: {
-    label: "Waived",
-    color: "#6d28d9",
-    background: "#f5f3ff",
-    border: "#ddd6fe",
-  },
-  not_required: {
-    label: "Not Required",
-    color: "#475569",
-    background: "#f8fafc",
-    border: "#e2e8f0",
-  },
-};
-
-const normalizeQuoteRequirementStatus = (value, fallback = "pending") => {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (
-    ["pending", "in_progress", "completed", "blocked", "waived"].includes(
-      normalized,
-    )
-  ) {
-    return normalized;
-  }
-  return fallback;
-};
-const isQuoteRequirementSatisfiedStatus = (status) =>
-  ["completed", "waived"].includes(
-    normalizeQuoteRequirementStatus(status, "pending"),
-  );
-const canTransitionQuoteRequirementStatus = (currentStatus, nextStatus) => {
-  const current = normalizeQuoteRequirementStatus(currentStatus, "pending");
-  const next = normalizeQuoteRequirementStatus(nextStatus, "");
-  if (!next) return false;
-  if (current === next) return true;
-  const allowed = QUOTE_REQUIREMENT_STATUS_TRANSITIONS[current];
-  return Boolean(allowed && allowed.has(next));
-};
-
-const getQuoteRequirementProgress = (project) => {
-  const checklist = project?.quoteDetails?.checklist || {};
-  const progress = project?.quoteDetails?.requirementProgress || {};
-
-  return QUOTE_REQUIREMENT_KEYS.map((key) => {
-    const required = Boolean(checklist?.[key]);
-    const entry = progress?.[key] || {};
-    const status = required
-      ? normalizeQuoteRequirementStatus(entry?.status, "pending")
-      : "not_required";
-    const statusMeta =
-      QUOTE_REQUIREMENT_STATUS_META[status] ||
-      QUOTE_REQUIREMENT_STATUS_META.pending;
-
-    return {
-      key,
-      label: QUOTE_REQUIREMENT_LABELS[key] || key,
-      required,
-      status,
-      statusMeta,
-      ownerDept:
-        QUOTE_REQUIREMENT_OWNER_DEPARTMENTS[key] ||
-        String(entry?.ownerDept || "").trim() ||
-        "Unassigned",
-      notes: String(entry?.notes || "").trim(),
-      completedAt: entry?.completedAt || null,
-    };
-  });
-};
-const getQuoteRequirementStatusLabel = (status) => {
-  const normalized = normalizeQuoteRequirementStatus(status, "pending");
-  const option = QUOTE_REQUIREMENT_STATUS_OPTIONS.find(
-    (entry) => entry.value === normalized,
-  );
-  if (option?.label) return option.label;
-  if (normalized === "waived") return "Waived";
-  return "Pending";
-};
-const getQuoteRequirementStatusGuardMessage = ({
-  row,
-  nextStatus,
-  allRows = [],
-  hasMockupFile = false,
-}) => {
-  if (!row?.required) return "This requirement is not enabled.";
-  const current = normalizeQuoteRequirementStatus(row.status, "pending");
-  const next = normalizeQuoteRequirementStatus(nextStatus, current);
-  if (!canTransitionQuoteRequirementStatus(current, next)) {
-    return `Move '${row.label}' from ${getQuoteRequirementStatusLabel(current)} to ${getQuoteRequirementStatusLabel(next)} is not allowed.`;
-  }
-
-  if (next === "in_progress" || next === "completed") {
-    const prerequisites = QUOTE_REQUIREMENT_PREREQUISITES[row.key] || [];
-    const unmet = prerequisites.filter((key) => {
-      const dependencyRow = (allRows || []).find((entry) => entry.key === key);
-      if (!dependencyRow?.required) return false;
-      return !isQuoteRequirementSatisfiedStatus(dependencyRow.status);
-    });
-    if (unmet.length > 0) {
-      const labels = unmet.map((key) => QUOTE_REQUIREMENT_LABELS[key] || key);
-      return `Complete prerequisite requirements first: ${labels.join(", ")}.`;
-    }
-  }
-
-  if (row.key === "mockup" && next === "completed") {
-    if (!hasMockupFile) {
-      return "Upload a mockup before marking Mockup as Completed.";
-    }
-  }
-
-  return "";
-};
 
 const getPaymentTypeSet = (project) =>
   new Set(
@@ -484,8 +304,6 @@ const ProjectDetails = ({ user }) => {
   const [isChangingProjectType, setIsChangingProjectType] = useState(false);
   const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
   const [activeContentTab, setActiveContentTab] = useState("overview");
-  const [quoteRequirementSavingKey, setQuoteRequirementSavingKey] =
-    useState("");
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -1285,79 +1103,6 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
-  const handleQuoteRequirementStatusChange = async (
-    requirementKey,
-    nextStatus,
-    currentNotes = "",
-  ) => {
-    if (!ensureProjectIsEditable()) return;
-    if (!project || project.projectType !== "Quote") return;
-
-    const status = normalizeQuoteRequirementStatus(nextStatus, "pending");
-    const requirementRow = quoteRequirementRows.find(
-      (row) => row.key === requirementKey,
-    );
-    const strictGuardMessage = getQuoteRequirementStatusGuardMessage({
-      row: requirementRow,
-      nextStatus: status,
-      allRows: quoteRequirementRows,
-      hasMockupFile: Boolean(mockupUrl),
-    });
-    if (strictGuardMessage) {
-      alert(strictGuardMessage);
-      return;
-    }
-    let notesPayload = String(currentNotes || "").trim();
-
-    if (status === "blocked" || status === "waived") {
-      const promptValue = window.prompt(
-        `Provide reason for marking '${QUOTE_REQUIREMENT_LABELS[requirementKey] || requirementKey}' as ${
-          status === "blocked" ? "Blocked" : "Waived"
-        }:`,
-        notesPayload,
-      );
-      if (promptValue === null) return;
-      notesPayload = String(promptValue || "").trim();
-      if (!notesPayload) {
-        alert(
-          `Reason is required when marking '${QUOTE_REQUIREMENT_LABELS[requirementKey] || requirementKey}' as ${status}.`,
-        );
-        return;
-      }
-    }
-
-    setQuoteRequirementSavingKey(requirementKey);
-    try {
-      const res = await fetch(
-        `/api/projects/${id}/quote-requirements/${encodeURIComponent(requirementKey)}?source=admin`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            status,
-            ...(notesPayload ? { notes: notesPayload } : {}),
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(
-          errorData?.message || "Failed to update quote requirement status.",
-        );
-      }
-
-      const updatedProject = await res.json();
-      setProject(updatedProject);
-    } catch (error) {
-      console.error("Error updating quote requirement status:", error);
-      alert(error.message || "Failed to update quote requirement status.");
-    } finally {
-      setQuoteRequirementSavingKey("");
-    }
-  };
-
   const handleUndoAcknowledgement = async (department) => {
     if (!project) return;
     if (!ensureProjectIsEditable()) return;
@@ -1417,14 +1162,6 @@ const ProjectDetails = ({ user }) => {
       isOverdue,
     };
   }, [countdownNowMs, deliveryDeadline]);
-  const quoteRequirementRows = useMemo(
-    () => getQuoteRequirementProgress(project),
-    [
-      project?.projectType,
-      project?.quoteDetails?.checklist,
-      project?.quoteDetails?.requirementProgress,
-    ],
-  );
 
   useEffect(() => {
     if (!project?._id || billingGuardModal.open) return;
@@ -1548,17 +1285,6 @@ const ProjectDetails = ({ user }) => {
       month: "long",
       day: "numeric",
       year: "numeric",
-    });
-  };
-
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
   };
 
@@ -1896,7 +1622,7 @@ const ProjectDetails = ({ user }) => {
                   value={status}
                   style={{ color: "#1e293b" }}
                 >
-                  {getQuoteAwareStatusLabel(status, project)}
+                  {status}
                 </option>
               ))}
             </select>
@@ -1916,24 +1642,22 @@ const ProjectDetails = ({ user }) => {
                 </button>
               ) : (
                 <>
-                  {!isQuoteProject && (
-                    <button
-                      type="button"
-                      className={`hold-toggle-btn sample ${
-                        sampleRequirementEnabled ? "sample-on" : "sample-off"
-                      }`}
-                      onClick={() =>
-                        handleToggleSampleRequirement(!sampleRequirementEnabled)
-                      }
-                      disabled={isTogglingSampleRequirement || isTogglingHold}
-                    >
-                      {isTogglingSampleRequirement
-                        ? "Updating Sample..."
-                        : sampleRequirementEnabled
-                          ? "Sample Required: ON"
-                          : "Sample Required: OFF"}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={`hold-toggle-btn sample ${
+                      sampleRequirementEnabled ? "sample-on" : "sample-off"
+                    }`}
+                    onClick={() =>
+                      handleToggleSampleRequirement(!sampleRequirementEnabled)
+                    }
+                    disabled={isTogglingSampleRequirement || isTogglingHold}
+                  >
+                    {isTogglingSampleRequirement
+                      ? "Updating Sample..."
+                      : sampleRequirementEnabled
+                        ? "Sample Required: ON"
+                        : "Sample Required: OFF"}
+                  </button>
                   <button
                     type="button"
                     className="hold-toggle-btn type-change"
@@ -2485,188 +2209,6 @@ const ProjectDetails = ({ user }) => {
                   </p>
                 )}
               </div>
-
-              <div
-                style={{
-                  marginTop: "1.25rem",
-                  display: "grid",
-                  gap: "0.75rem",
-                }}
-              >
-                {quoteRequirementRows
-                  .filter((row) => row.required)
-                  .map((row) => {
-                    const rowStatusOptions = QUOTE_REQUIREMENT_STATUS_OPTIONS.filter(
-                      (option) =>
-                        !getQuoteRequirementStatusGuardMessage({
-                          row,
-                          nextStatus: option.value,
-                          allRows: quoteRequirementRows,
-                          hasMockupFile: Boolean(mockupUrl),
-                        }),
-                    );
-                    const strictGuardHint =
-                      rowStatusOptions.length === 0
-                        ? QUOTE_REQUIREMENT_STATUS_OPTIONS.map((option) =>
-                            getQuoteRequirementStatusGuardMessage({
-                              row,
-                              nextStatus: option.value,
-                              allRows: quoteRequirementRows,
-                              hasMockupFile: Boolean(mockupUrl),
-                            }),
-                          ).find(Boolean) ||
-                          "No valid status transition is available yet."
-                        : "";
-
-                    return (
-                      <div
-                        key={row.key}
-                        style={{
-                          border: "1px solid var(--border-color)",
-                          borderRadius: "10px",
-                          padding: "0.75rem",
-                          background: "rgba(255, 255, 255, 0.03)",
-                          display: "grid",
-                          gap: "0.55rem",
-                        }}
-                      >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "0.5rem",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "0.9rem",
-                            fontWeight: 600,
-                            color: "var(--text-primary)",
-                          }}
-                        >
-                          {row.label}
-                        </span>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "0.2rem 0.55rem",
-                            borderRadius: "999px",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            color: row.statusMeta.color,
-                            background: row.statusMeta.background,
-                            border: `1px solid ${row.statusMeta.border}`,
-                          }}
-                        >
-                          {row.statusMeta.label}
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: "0.8rem",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        Responsible: {row.ownerDept}
-                      </div>
-
-                      {row.notes && (
-                        <div
-                          style={{
-                            fontSize: "0.8rem",
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          Note: {row.notes}
-                        </div>
-                      )}
-
-                      {row.completedAt && (
-                        <div
-                          style={{
-                            fontSize: "0.8rem",
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          Completed: {formatDateTime(row.completedAt)}
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "0.45rem",
-                        }}
-                      >
-                        {rowStatusOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() =>
-                              handleQuoteRequirementStatusChange(
-                                row.key,
-                                option.value,
-                                row.notes,
-                              )
-                            }
-                            disabled={quoteRequirementSavingKey === row.key}
-                            style={{
-                              border: "1px solid var(--border-color)",
-                              borderRadius: "8px",
-                              padding: "0.35rem 0.65rem",
-                              fontSize: "0.78rem",
-                              fontWeight: 600,
-                              cursor:
-                                quoteRequirementSavingKey === row.key
-                                  ? "not-allowed"
-                                  : "pointer",
-                              opacity:
-                                quoteRequirementSavingKey === row.key ? 0.7 : 1,
-                              color:
-                                row.status === option.value
-                                  ? "#1d4ed8"
-                                  : "var(--text-secondary)",
-                              background:
-                                row.status === option.value
-                                  ? "#dbeafe"
-                                  : "rgba(255, 255, 255, 0.04)",
-                              borderColor:
-                                row.status === option.value
-                                  ? "#60a5fa"
-                                  : "var(--border-color)",
-                            }}
-                          >
-                            {quoteRequirementSavingKey === row.key &&
-                            row.status === option.value
-                              ? "Saving..."
-                              : option.label}
-                          </button>
-                        ))}
-                      </div>
-                      {strictGuardHint && (
-                        <div
-                          style={{
-                            fontSize: "0.8rem",
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          {strictGuardHint}
-                        </div>
-                      )}
-                    </div>
-                  );
-                  })}
-                {quoteRequirementRows.filter((row) => row.required).length === 0 && (
-                  <p style={{ color: "var(--text-secondary)" }}>
-                    No required checklist tracks are enabled.
-                  </p>
-                )}
-              </div>
             </div>
           )}
             </>
@@ -2823,7 +2365,7 @@ const ProjectDetails = ({ user }) => {
           {mockupUrl && (
             <div className="detail-card">
               <h3 className="card-title">
-                {isQuoteProject ? "Latest Mockup" : "Approved Mockup"}{" "}
+                Approved Mockup{" "}
                 {mockupVersionLabel && (
                   <span
                     style={{
@@ -2855,9 +2397,7 @@ const ProjectDetails = ({ user }) => {
                       padding: "0.45rem 0.6rem",
                     }}
                   >
-                    {isQuoteProject
-                      ? "No client decision recorded yet (optional for quote workflow)."
-                      : "Pending client approval."}
+                    Pending client approval.
                   </div>
                 )}
                 {isMockupClientApproved && mockupApprovedAtLabel && (

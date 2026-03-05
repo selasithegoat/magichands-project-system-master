@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ConfirmationModal from "../ConfirmationModal/ConfirmationModal";
 import { PencilIcon, TrashIcon } from "../../icons/Icons";
-import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 import "./ProjectRemindersCard.css";
 
 const REMINDER_TEMPLATE_OPTIONS = [
@@ -574,11 +573,6 @@ const ProjectRemindersCard = ({ project, user }) => {
     const isStageBased = item.triggerMode === "stage_based";
     const hasConcreteTrigger = Boolean(item.nextTriggerAt || item.remindAt);
     const canEditReminder = canManage && isReminderEditable(item);
-    const watchStatusLabel = getQuoteAwareStatusLabel(item.watchStatus, project);
-    const conditionStatusLabel = getQuoteAwareStatusLabel(
-      item.conditionStatus,
-      project,
-    );
 
     return (
       <div key={item._id} className="admin-reminder-item">
@@ -599,7 +593,7 @@ const ProjectRemindersCard = ({ project, user }) => {
             <span>
               {hasConcreteTrigger
                 ? `Next: ${formatReminderTime(item.nextTriggerAt || item.remindAt)}`
-                : `Awaiting stage: ${watchStatusLabel || "N/A"}`}
+                : `Awaiting stage: ${item.watchStatus || "N/A"}`}
             </span>
           ) : (
             <span>Next: {formatReminderTime(item.nextTriggerAt || item.remindAt)}</span>
@@ -610,7 +604,7 @@ const ProjectRemindersCard = ({ project, user }) => {
           ) : null}
           {item.repeat && item.repeat !== "none" ? <span>Repeats: {item.repeat}</span> : null}
           {!isStageBased && item.conditionStatus ? (
-            <span>Condition: {conditionStatusLabel}</span>
+            <span>Condition: {item.conditionStatus}</span>
           ) : null}
         </div>
 
@@ -840,7 +834,7 @@ const ProjectRemindersCard = ({ project, user }) => {
                         <option value="">Select status</option>
                         {statusOptions.map((status) => (
                           <option key={status} value={status}>
-                            {getQuoteAwareStatusLabel(status, project)}
+                            {status}
                           </option>
                         ))}
                       </select>

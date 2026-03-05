@@ -3,7 +3,6 @@ import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
 import { getLeadDisplay } from "../../utils/leadDisplay";
-import { getQuoteAwareStatusLabel } from "../../utils/quoteStatusLabels";
 
 const resolveProjectTypeKey = (project) => {
   if (project?.projectType === "Emergency" || project?.priority === "Urgent") {
@@ -128,10 +127,6 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const isCompletedStatus =
     project.status === "Completed" || project.status === "Finished";
   const statusInfo = getStatusColor(project.status);
-  const statusLabel =
-    project.status === "Order Confirmed"
-      ? "WAITING ACCEPTANCE"
-      : getQuoteAwareStatusLabel(project.status || "Draft", project);
 
   const getProjectTypeInfo = (typeKey) => {
     switch (typeKey) {
@@ -274,7 +269,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             {projectTypeInfo.label}
           </span>
           <span className={`status-badge ${statusInfo.class}`}>
-            {statusLabel}
+            {project.status === "Order Confirmed"
+              ? "WAITING ACCEPTANCE"
+              : project.status || "Draft"}
           </span>
           {showPendingClientApprovalTag && (
             <span className="status-badge mockup-client-pending">

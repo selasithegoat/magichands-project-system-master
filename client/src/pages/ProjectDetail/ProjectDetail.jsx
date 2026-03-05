@@ -31,10 +31,6 @@ import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getGroupedLeadDisplayRows, getLeadDisplay } from "../../utils/leadDisplay";
 import {
-  getQuoteAwareStatusLabel,
-  getQuoteWorkflowStageLabels,
-} from "../../utils/quoteStatusLabels";
-import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
 } from "../../utils/productionRiskAi";
@@ -115,24 +111,7 @@ const QUOTE_STEPS = [
     label: "Send Response",
     statuses: ["Pending Send Response", "Response Sent"],
   },
-  {
-    label: "Decision",
-    statuses: ["Pending Feedback", "Feedback Completed"],
-  },
 ];
-
-const getQuoteStepsForProject = (project) => {
-  const labels = getQuoteWorkflowStageLabels(project);
-  return QUOTE_STEPS.map((step) => {
-    if (step.label === "Quote Request") {
-      return { ...step, displayLabel: labels.preparationStepLabel };
-    }
-    if (step.label === "Send Response") {
-      return { ...step, displayLabel: labels.responseStepLabel };
-    }
-    return step;
-  });
-};
 
 const DEFAULT_WORKFLOW_STATUS = "Order Confirmed";
 
@@ -673,19 +652,6 @@ const ProjectDetail = ({ user }) => {
     project.priority === "Urgent" || project.projectType === "Emergency";
   const isCorporate = project.projectType === "Corporate Job";
   const isQuote = project.projectType === "Quote";
-  const projectStatusLabel = getQuoteAwareStatusLabel(project.status, project);
-  const showFullQuoteDecisionStatus =
-    isQuote &&
-    (project.status === "Pending Feedback" ||
-      project.status === "Feedback Completed");
-  const statusBadgeLabel =
-    project.status === "Order Confirmed"
-      ? "WAITING ACCEPTANCE"
-      : showFullQuoteDecisionStatus
-        ? projectStatusLabel
-        : project.status.startsWith("Pending ")
-          ? project.status.replace("Pending ", "")
-          : projectStatusLabel;
   const showFeedbackSection = [
     "Delivered",
     "Pending Feedback",
@@ -818,7 +784,11 @@ const ProjectDetail = ({ user }) => {
               )}
                 <span className="status-badge">
                   <ClockIcon width="14" height="14" />{" "}
-                  {statusBadgeLabel}
+                  {project.status === "Order Confirmed"
+                    ? "WAITING ACCEPTANCE"
+                    : project.status.startsWith("Pending ")
+                      ? project.status.replace("Pending ", "")
+                      : project.status}
                 </span>
               {project.status === "Completed" && (
                 <button
@@ -1093,7 +1063,6 @@ const ProjectDetail = ({ user }) => {
                 workflowStatus={workflowStatus}
                 type={project.projectType}
                 isOnHold={isProjectOnHold}
-                project={project}
               />
             </div>
           </>
@@ -1276,108 +1245,13 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
   );
 };
 
-function QuoteChecklistCard({ project }) {
+const QuoteChecklistCard = ({ project }) => {
   const checklist = project.quoteDetails?.checklist || {};
-  const requirementProgress = project.quoteDetails?.requirementProgress || {};
-  const quoteDecision = String(project?.quoteDetails?.decision?.status || "pending")
-    .trim()
-    .toLowerCase();
-  const decisionNote = String(project?.quoteDetails?.decision?.note || "").trim();
-  const quoteDecisionLabelMap = {
-    pending: "Pending",
-    accepted: "Accepted",
-    accepted_draft: "Accepted Draft",
-    declined: "Declined",
-    cancelled: "Cancelled",
-  };
-  const quoteDecisionLabel = quoteDecisionLabelMap[quoteDecision] || "Pending";
-  const statusMeta = {
-    pending: {
-      label: "Pending",
-      color: "#9f1239",
-      background: "#fff1f2",
-      border: "#fecdd3",
-    },
-    in_progress: {
-      label: "In Progress",
-      color: "#1d4ed8",
-      background: "#eff6ff",
-      border: "#bfdbfe",
-    },
-    completed: {
-      label: "Completed",
-      color: "#166534",
-      background: "#f0fdf4",
-      border: "#86efac",
-    },
-    blocked: {
-      label: "Blocked",
-      color: "#b91c1c",
-      background: "#fef2f2",
-      border: "#fecaca",
-    },
-    waived: {
-      label: "Waived",
-      color: "#6d28d9",
-      background: "#f5f3ff",
-      border: "#ddd6fe",
-    },
-    not_required: {
-      label: "Not Required",
-      color: "#475569",
-      background: "#f8fafc",
-      border: "#e2e8f0",
-    },
-  };
-
-  const getStatusKey = (value, required) => {
-    const normalized = String(value || "")
-      .trim()
-      .toLowerCase();
-    if (
-      ["pending", "in_progress", "completed", "blocked", "waived"].includes(
-        normalized,
-      )
-    ) {
-      return normalized;
-    }
-    return required ? "pending" : "not_required";
-  };
-
-  const requirements = Object.entries(checklist).map(([key, required]) => {
-    const entry = requirementProgress?.[key] || {};
-    const statusKey = getStatusKey(entry?.status, Boolean(required));
-    const metadata = statusMeta[statusKey] || statusMeta.pending;
-    const title = key
-      .replace(/([A-Z])/g, " $1")
-      .replace(/^./, (str) => str.toUpperCase());
-    const ownerDept =
-      key === "mockup"
-        ? "Graphics/Design"
-        : key === "previousSamples"
-          ? "Stores"
-          : key === "sampleProduction"
-            ? "Production"
-            : key === "bidSubmission"
-              ? "Admin"
-              : "Front Desk";
-    return {
-      key,
-      title,
-      required: Boolean(required),
-      statusLabel: metadata.label,
-      statusColor: metadata.color,
-      statusBg: metadata.background,
-      statusBorder: metadata.border,
-      ownerDept,
-      completedAt: entry?.completedAt || null,
-    };
-  });
 
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">Quote Requirements</h3>
+        <h3 className="card-title">📋 Quote Requirements</h3>
       </div>
       <div
         className="checklist-grid"
@@ -1388,77 +1262,43 @@ function QuoteChecklistCard({ project }) {
           marginTop: "1rem",
         }}
       >
-        {requirements.map((requirement) => (
+        {Object.entries(checklist).map(([key, val]) => (
           <div
-            key={requirement.key}
+            key={key}
             style={{
               display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              gap: "0.35rem",
+              alignItems: "center",
+              gap: "0.5rem",
               padding: "0.75rem",
-              background: requirement.statusBg,
+              background: val
+                ? "rgba(16, 185, 129, 0.1)"
+                : "rgba(255, 255, 255, 0.03)",
               borderRadius: "8px",
-              border: `1px solid ${requirement.statusBorder}`,
+              border: val
+                ? "1px solid rgba(16, 185, 129, 0.2)"
+                : "1px solid var(--border-color)",
+              color: val ? "#10b981" : "var(--text-secondary)",
               transition: "all 0.2s",
             }}
           >
-            <span
-              style={{
-                fontSize: "0.72rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                color: requirement.statusColor,
-                fontWeight: 700,
-              }}
-            >
-              {requirement.statusLabel}
-            </span>
+            <span style={{ fontSize: "1.2rem" }}>{val ? "✓" : "○"}</span>
             <span
               style={{
                 fontSize: "0.9rem",
-                fontWeight: 700,
-                color: "#0f172a",
+                fontWeight: val ? 600 : 400,
+                color: val ? "#0c0c0cff" : "var(--text-secondary)",
               }}
             >
-              {requirement.title}
+              {key
+                .replace(/([A-Z])/g, " $1")
+                .replace(/^./, (str) => str.toUpperCase())}
             </span>
-            <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-              {requirement.ownerDept
-                ? `Responsible: ${requirement.ownerDept}`
-                : "Responsible: Unassigned"}
-            </span>
-            {requirement.completedAt && (
-              <span style={{ fontSize: "0.72rem", color: "#475569" }}>
-                Completed: {new Date(requirement.completedAt).toLocaleString()}
-              </span>
-            )}
           </div>
         ))}
       </div>
-      <div
-        style={{
-          marginTop: "0.9rem",
-          padding: "0.6rem 0.75rem",
-          borderRadius: "10px",
-          border: "1px solid #e2e8f0",
-          background: "#f8fafc",
-          color: "#334155",
-          fontSize: "0.82rem",
-        }}
-      >
-        <strong style={{ textTransform: "capitalize" }}>
-          Quote Decision: {quoteDecisionLabel}
-        </strong>
-        {decisionNote && (
-          <div style={{ marginTop: "0.3rem", color: "#475569" }}>
-            {decisionNote}
-          </div>
-        )}
-      </div>
     </div>
   );
-}
+};
 
 const FeedbackCard = ({ feedbacks = [] }) => {
   const sortedFeedbacks = [...feedbacks].sort((a, b) => {
@@ -3029,8 +2869,6 @@ const ProductionRisksCard = ({
 };
 
 const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
-  const workflowStatusLabel = getQuoteAwareStatusLabel(workflowStatus, project);
-
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
       switch (status) {
@@ -3143,19 +2981,15 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
       </div>
       {isOnHold && (
         <div className="workflow-hold-indicator">
-          On Hold - Workflow paused at {workflowStatusLabel}
+          On Hold - Workflow paused at {workflowStatus}
         </div>
       )}
     </div>
   );
 };
 
-const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
-  const workflowStatusLabel = getQuoteAwareStatusLabel(
-    workflowStatus,
-    project || type,
-  );
-  const steps = type === "Quote" ? getQuoteStepsForProject(project) : STATUS_STEPS;
+const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
+  const steps = type === "Quote" ? QUOTE_STEPS : STATUS_STEPS;
 
   // Find current step index
   let currentStepIndex = steps.findIndex((step) =>
@@ -3201,7 +3035,6 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
     Packaging: PackageIcon,
     "Delivery/Pickup": TruckIcon,
     Feedback: CheckCircleIcon,
-    Decision: CheckCircleIcon,
     "Quote Request": ClipboardListIcon,
     "Send Response": ClockIcon,
   };
@@ -3213,7 +3046,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
       </div>
       {isOnHold && (
         <div className="workflow-hold-indicator approvals-hold-indicator">
-          On Hold - Workflow paused at {workflowStatusLabel}
+          On Hold - Workflow paused at {workflowStatus}
         </div>
       )}
       <div className="approval-list">
@@ -3227,7 +3060,6 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
           const isActive = index === currentStepIndex;
           const stepColor = getStatusColor(step.label); // Get color for this step label
           const IconComponent = statusIcons[step.label] || CheckCircleIcon;
-          const stepDisplayLabel = step.displayLabel || step.label;
 
           let subText = "Pending";
           if (isCompleted) {
@@ -3237,7 +3069,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
             const pendingStatus = stepStatuses[0];
             const completedStatus = stepStatuses[stepStatuses.length - 1];
 
-            if (step.label === "Feedback" || step.label === "Decision") {
+            if (step.label === "Feedback") {
               subText =
                 workflowStatus === "Feedback Completed"
                   ? "Completed"
@@ -3324,8 +3156,8 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
                           : "#94a3b8",
                       fontWeight: isActive ? "600" : "500",
                     }}
-                    >
-                    {stepDisplayLabel}
+                  >
+                    {step.label}
                   </span>
                   {isActive &&
                     subText === "Pending" &&
@@ -3343,4 +3175,3 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold, project }) => {
 };
 
 export default ProjectDetail;
-

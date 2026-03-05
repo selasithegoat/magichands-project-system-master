@@ -14,7 +14,6 @@ import "./MinimalQuoteForm.css";
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dashboardPath = "/client";
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [leads, setLeads] = useState([]);
@@ -707,7 +706,7 @@ const MinimalQuoteForm = () => {
             <button
               type="button"
               className="minimal-quote-btn-cancel"
-              onClick={() => navigate(dashboardPath)}
+              onClick={() => navigate("/")}
             >
               Cancel
             </button>
@@ -720,8 +719,8 @@ const MinimalQuoteForm = () => {
 
       <ConfirmationModal
         isOpen={showSuccessModal}
-        onClose={() => navigate(dashboardPath)}
-        onConfirm={() => navigate(dashboardPath)}
+        onClose={() => navigate("/")}
+        onConfirm={() => navigate("/")}
         title={editingId ? "Quote Updated Successfully" : "Quote Created Successfully"}
         message={
           editingId

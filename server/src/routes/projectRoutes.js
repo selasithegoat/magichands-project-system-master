@@ -14,8 +14,6 @@ const {
   cancelProject,
   reactivateProject,
   updateProjectStatus,
-  updateQuoteRequirementProgress,
-  updateQuoteDecision,
   uploadProjectMockup,
   approveProjectMockup,
   rejectProjectMockup,
@@ -263,18 +261,6 @@ router.post(
   rejectProjectMockup,
 );
 router.patch("/:id/status", protect, enforceProjectNotOnHold, updateProjectStatus);
-router.patch(
-  "/:id/quote-requirements/:requirementKey",
-  protect,
-  enforceProjectNotOnHold,
-  updateQuoteRequirementProgress,
-);
-router.patch(
-  "/:id/quote-decision",
-  protect,
-  enforceProjectNotOnHold,
-  updateQuoteDecision,
-);
 router.patch("/:id/reopen", protect, enforceProjectNotOnHold, reopenProject); // [NEW] - Reopen completed project
 router.post(
   "/:id/acknowledge",

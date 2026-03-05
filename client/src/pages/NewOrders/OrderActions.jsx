@@ -1,27 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
-import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import {
-  GRAPHICS_SUB_DEPARTMENTS,
-  PHOTOGRAPHY_SUB_DEPARTMENTS,
-  PRODUCTION_SUB_DEPARTMENTS,
-  STORES_SUB_DEPARTMENTS,
-} from "../../constants/departments";
-import {
-  getQuoteActiveRequirementKey,
-  getQuoteAwareStatusLabel,
-  getQuoteWorkflowStageLabels,
-} from "../../utils/quoteStatusLabels";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const INVOICE_CONFIRM_PHRASE = "I confirm the invoice has been sent";
 const INVOICE_UNDO_PHRASE = "I confirm the invoice status should be reset";
-const QUOTE_CONFIRM_PHRASE = "I confirm the quote invoice has been sent";
-const QUOTE_UNDO_PHRASE =
-  "I confirm the quote invoice status should be reset";
+const QUOTE_CONFIRM_PHRASE = "I confirm the quote has been sent";
+const QUOTE_UNDO_PHRASE = "I confirm the quote status should be reset";
 const MOCKUP_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved this mockup";
 const MOCKUP_REJECTION_CONFIRM_PHRASE =
@@ -62,221 +49,6 @@ const PAYMENT_OPTIONS = [
     undoPhrase: "I confirm authorization verification should be removed",
   },
 ];
-const QUOTE_REQUIREMENT_KEYS = [
-  "cost",
-  "mockup",
-  "previousSamples",
-  "sampleProduction",
-  "bidSubmission",
-];
-const QUOTE_REQUIREMENT_LABELS = {
-  cost: "Cost",
-  mockup: "Mockup",
-  previousSamples: "Previous Samples/Jobs Done",
-  sampleProduction: "Sample Production",
-  bidSubmission: "Bid Submission/Documents",
-};
-const QUOTE_REQUIREMENT_STAGE_OWNER_CANONICAL = {
-  cost: "front desk",
-  mockup: "graphics",
-  previousSamples: "stores",
-  sampleProduction: "production",
-  bidSubmission: "admin",
-};
-const QUOTE_REQUIREMENT_STAGE_OWNER_LABELS = {
-  cost: "Front Desk",
-  mockup: "Graphics/Design",
-  previousSamples: "Stores",
-  sampleProduction: "Production",
-  bidSubmission: "Admin",
-};
-const QUOTE_REQUIREMENT_STATUS_OPTIONS = [
-  { value: "pending", label: "Pending" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "blocked", label: "Blocked" },
-  { value: "waived", label: "Waived" },
-];
-const QUOTE_REQUIREMENT_STATUS_TRANSITIONS = {
-  pending: new Set(["in_progress", "blocked", "waived"]),
-  in_progress: new Set(["pending", "completed", "blocked", "waived"]),
-  blocked: new Set(["pending", "in_progress", "waived"]),
-  completed: new Set(["in_progress", "waived"]),
-  waived: new Set(["pending", "in_progress"]),
-};
-const QUOTE_REQUIREMENT_PREREQUISITES = {
-  cost: [],
-  mockup: ["cost"],
-  previousSamples: ["cost"],
-  sampleProduction: ["mockup"],
-  bidSubmission: ["cost", "mockup", "previousSamples", "sampleProduction"],
-};
-const QUOTE_SUBMISSION_CHANNEL_OPTIONS = [
-  "Email",
-  "WhatsApp",
-  "Call",
-  "In-Person",
-  "Portal",
-  "Other",
-];
-const QUOTE_CONVERSION_OPTIONS = [
-  { value: "Standard", label: "Standard Project" },
-  { value: "Emergency", label: "Emergency Project" },
-  { value: "Corporate Job", label: "Corporate Job" },
-];
-const QUOTE_DECISION_OPTIONS = [
-  { value: "accepted", label: "Accepted" },
-  { value: "accepted_draft", label: "Accept & Draft" },
-  { value: "declined", label: "Declined" },
-  { value: "cancelled", label: "Cancelled" },
-];
-const QUOTE_DECISION_READY_STATUSES = new Set([
-  "Response Sent",
-  "Pending Feedback",
-]);
-const QUOTE_FINAL_DECISION_STATUSES = new Set([
-  "accepted",
-  "accepted_draft",
-  "declined",
-  "cancelled",
-]);
-const QUOTE_DECISION_LABELS = {
-  pending: "Pending",
-  accepted: "Accepted",
-  accepted_draft: "Accepted Draft",
-  declined: "Declined",
-  cancelled: "Cancelled",
-};
-
-const getQuoteDecisionLabel = (value) => {
-  const key = String(value || "").trim().toLowerCase();
-  return QUOTE_DECISION_LABELS[key] || "Pending";
-};
-const toDepartmentArray = (value) => {
-  if (Array.isArray(value)) return value;
-  if (value === null || value === undefined || value === "") return [];
-  return [value];
-};
-
-const normalizeDepartmentValue = (value) => {
-  if (value && typeof value === "object") {
-    return String(value.value || value.label || "")
-      .trim()
-      .toLowerCase();
-  }
-  return String(value || "")
-    .trim()
-    .toLowerCase();
-};
-
-const PRODUCTION_DEPARTMENT_TOKENS = new Set(
-  [...PRODUCTION_SUB_DEPARTMENTS, "production"]
-    .map(normalizeDepartmentValue)
-    .filter(Boolean),
-);
-const GRAPHICS_DEPARTMENT_TOKENS = new Set(
-  [...GRAPHICS_SUB_DEPARTMENTS, "graphics/design", "graphics", "design"]
-    .map(normalizeDepartmentValue)
-    .filter(Boolean),
-);
-const STORES_DEPARTMENT_TOKENS = new Set(
-  [...STORES_SUB_DEPARTMENTS, "stores", "stock", "packaging"]
-    .map(normalizeDepartmentValue)
-    .filter(Boolean),
-);
-const PHOTOGRAPHY_DEPARTMENT_TOKENS = new Set(
-  [...PHOTOGRAPHY_SUB_DEPARTMENTS, "photography"]
-    .map(normalizeDepartmentValue)
-    .filter(Boolean),
-);
-
-const canonicalizeDepartment = (value) => {
-  const token = normalizeDepartmentValue(value);
-  if (!token) return "";
-  if (PRODUCTION_DEPARTMENT_TOKENS.has(token)) return "production";
-  if (GRAPHICS_DEPARTMENT_TOKENS.has(token)) return "graphics";
-  if (STORES_DEPARTMENT_TOKENS.has(token)) return "stores";
-  if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) return "photography";
-  return token;
-};
-
-const isFrontDeskDepartment = (value) =>
-  normalizeDepartmentValue(value) === "front desk";
-
-const userHasCanonicalDepartment = (user, targetCanonical) => {
-  if (!user || !targetCanonical) return false;
-  return toDepartmentArray(user.department).some(
-    (dept) => canonicalizeDepartment(dept) === targetCanonical,
-  );
-};
-
-const isFrontDeskUser = (user) =>
-  toDepartmentArray(user?.department).some(isFrontDeskDepartment);
-const isAdminPortalContext = () => {
-  if (typeof window === "undefined") return false;
-  const pathname = String(window.location?.pathname || "")
-    .trim()
-    .toLowerCase();
-  return pathname === "/admin" || pathname.startsWith("/admin/");
-};
-const isQuoteWorkflowAdmin = (user) =>
-  Boolean(
-    isAdminPortalContext() &&
-    user?.role === "admin" &&
-      toDepartmentArray(user?.department).some(
-        (dept) => normalizeDepartmentValue(dept) === "administration",
-      ),
-  );
-
-const getQuoteRequirementStatusActorLabel = (requirementKey, status) => {
-  if (status === "waived") return "Front Desk or Admin";
-  switch (requirementKey) {
-    case "mockup":
-      return "Graphics, Front Desk, or Admin";
-    case "previousSamples":
-      return "Stores";
-    case "sampleProduction":
-      return "Production, Front Desk, or Admin";
-    case "bidSubmission":
-      return "Admin only";
-    case "cost":
-    default:
-      return "Front Desk or Admin";
-  }
-};
-
-const canTriggerQuoteRequirementStatus = (user, requirementRow = {}, status) => {
-  if (!user || !requirementRow?.required) return false;
-  const normalizedStatus = normalizeQuoteRequirementStatus(status, "");
-  if (!normalizedStatus) return false;
-
-  const isAdmin = isQuoteWorkflowAdmin(user);
-  const frontDesk = isFrontDeskUser(user);
-  if (normalizedStatus === "waived") return isAdmin || frontDesk;
-
-  switch (requirementRow.key) {
-    case "mockup":
-      return frontDesk || userHasCanonicalDepartment(user, "graphics") || isAdmin;
-    case "previousSamples":
-      return userHasCanonicalDepartment(user, "stores");
-    case "sampleProduction":
-      return (
-        frontDesk ||
-        userHasCanonicalDepartment(user, "production") ||
-        isAdmin
-      );
-    case "bidSubmission":
-      return isAdmin;
-    case "cost":
-    default:
-      return frontDesk || isAdmin;
-  }
-};
-
-const canManageQuoteRequirementForUser = (user, requirementRow = {}) =>
-  QUOTE_REQUIREMENT_STATUS_OPTIONS.some((option) =>
-    canTriggerQuoteRequirementStatus(user, requirementRow, option.value),
-  );
 
 const formatDate = (dateString) => {
   if (!dateString) return "-";
@@ -305,156 +77,6 @@ const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
     .filter(Boolean);
-
-const normalizeQuoteRequirementStatus = (value, fallback = "pending") => {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  if (
-    ["pending", "in_progress", "completed", "blocked", "waived"].includes(
-      normalized,
-    )
-  ) {
-    return normalized;
-  }
-  return fallback;
-};
-
-const getQuoteRequirementStatusLabel = (status) => {
-  const normalized = normalizeQuoteRequirementStatus(status);
-  const option = QUOTE_REQUIREMENT_STATUS_OPTIONS.find(
-    (entry) => entry.value === normalized,
-  );
-  return option?.label || "Pending";
-};
-
-const getQuoteRequirementStatusClass = (status) => {
-  const normalized = normalizeQuoteRequirementStatus(status);
-  if (normalized === "completed") return "completed";
-  if (normalized === "blocked") return "blocked";
-  if (normalized === "waived") return "waived";
-  if (normalized === "in_progress") return "in-progress";
-  return "pending";
-};
-const isQuoteRequirementSatisfiedStatus = (status) =>
-  ["completed", "waived"].includes(
-    normalizeQuoteRequirementStatus(status, "pending"),
-  );
-const canTransitionQuoteRequirementStatus = (currentStatus, nextStatus) => {
-  const current = normalizeQuoteRequirementStatus(currentStatus, "pending");
-  const next = normalizeQuoteRequirementStatus(nextStatus, "");
-  if (!next) return false;
-  if (current === next) return true;
-  const allowed = QUOTE_REQUIREMENT_STATUS_TRANSITIONS[current];
-  return Boolean(allowed && allowed.has(next));
-};
-
-const normalizeQuoteSubmissionChannels = (value) => {
-  const source = Array.isArray(value) ? value : [];
-  return Array.from(
-    new Set(
-      source
-        .map((entry) => String(entry || "").trim())
-        .filter(Boolean),
-    ),
-  );
-};
-
-const getQuoteRequirementProgress = (project) => {
-  const checklist = project?.quoteDetails?.checklist || {};
-  const progress = project?.quoteDetails?.requirementProgress || {};
-
-  return QUOTE_REQUIREMENT_KEYS.map((key) => {
-    const required = Boolean(checklist?.[key]);
-    const entry = progress?.[key] || {};
-    const ownerDept =
-      key === "mockup"
-        ? "Graphics/Design"
-        : key === "previousSamples"
-          ? "Stores"
-          : key === "sampleProduction"
-            ? "Production"
-            : key === "bidSubmission"
-              ? "Admin"
-              : "Front Desk";
-
-    const status = required
-      ? normalizeQuoteRequirementStatus(entry?.status, "pending")
-      : "not_required";
-
-    return {
-      key,
-      label: QUOTE_REQUIREMENT_LABELS[key] || key,
-      required,
-      status,
-      ownerDept,
-      notes: String(entry?.notes || "").trim(),
-      completedAt: entry?.completedAt || null,
-    };
-  });
-};
-const getQuoteRequirementStatusGuardMessage = ({
-  row,
-  nextStatus,
-  allRows = [],
-  hasMockupFile = false,
-  hasMockupApproval = false,
-  requireMockupApproval = false,
-  activeRequirementKey = "",
-}) => {
-  if (!row?.required) return "This requirement is not enabled.";
-  const normalizedActiveRequirementKey = String(activeRequirementKey || "").trim();
-  if (
-    normalizedActiveRequirementKey &&
-    row.key !== normalizedActiveRequirementKey
-  ) {
-    const activeLabel =
-      QUOTE_REQUIREMENT_LABELS[normalizedActiveRequirementKey] ||
-      normalizedActiveRequirementKey;
-    return `Complete '${activeLabel}' before updating '${row.label}'.`;
-  }
-  const current = normalizeQuoteRequirementStatus(row.status, "pending");
-  const next = normalizeQuoteRequirementStatus(nextStatus, current);
-  if (!canTransitionQuoteRequirementStatus(current, next)) {
-    return `Move '${row.label}' from ${getQuoteRequirementStatusLabel(current)} to ${getQuoteRequirementStatusLabel(next)} is not allowed.`;
-  }
-
-  if (next === "in_progress" || next === "completed") {
-    const prerequisites = QUOTE_REQUIREMENT_PREREQUISITES[row.key] || [];
-    const unmet = prerequisites.filter((key) => {
-      const dependencyRow = (allRows || []).find((entry) => entry.key === key);
-      if (!dependencyRow?.required) return false;
-      return !isQuoteRequirementSatisfiedStatus(dependencyRow.status);
-    });
-    if (unmet.length > 0) {
-      const labels = unmet.map((key) => QUOTE_REQUIREMENT_LABELS[key] || key);
-      return `Complete prerequisite requirements first: ${labels.join(", ")}.`;
-    }
-  }
-
-  if (row.key === "mockup" && next === "completed") {
-    if (!hasMockupFile) {
-      return "Upload a mockup before marking Mockup as Completed.";
-    }
-    if (requireMockupApproval && !hasMockupApproval) {
-      return "Front Desk must confirm client approval before Mockup can be completed for Sample Production.";
-    }
-  }
-
-  if (
-    row.key === "sampleProduction" &&
-    (next === "in_progress" || next === "completed")
-  ) {
-    if (!hasMockupFile) {
-      return "Upload a mockup before Sample Production can begin.";
-    }
-    if (requireMockupApproval && !hasMockupApproval) {
-      return "Client mockup approval is required before Sample Production can begin.";
-    }
-  }
-
-  return "";
-};
 
 const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
   const missing = [];
@@ -690,21 +312,6 @@ const OrderActions = () => {
   const [sampleApprovalResetInput, setSampleApprovalResetInput] = useState("");
   const [sampleApprovalResetSubmitting, setSampleApprovalResetSubmitting] =
     useState(false);
-  const [quoteRequirementSavingKey, setQuoteRequirementSavingKey] = useState("");
-  const [quoteStageSubmitting, setQuoteStageSubmitting] = useState(false);
-  const [quoteSubmissionChannels, setQuoteSubmissionChannels] = useState([]);
-  const [quoteResponseSubmitting, setQuoteResponseSubmitting] = useState(false);
-  const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
-  const [quoteDecisionConfirm, setQuoteDecisionConfirm] = useState({
-    open: false,
-    decision: "",
-  });
-  const [quoteConversionType, setQuoteConversionType] = useState("Standard");
-  const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
-  const [updateDeleteConfirm, setUpdateDeleteConfirm] = useState({
-    open: false,
-    update: null,
-  });
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
   const [orderNumberDraft, setOrderNumberDraft] = useState("");
@@ -848,29 +455,9 @@ const OrderActions = () => {
     project?.details?.attachments,
   ]);
 
-  useEffect(() => {
-    if (!project || project.projectType !== "Quote") {
-      setQuoteSubmissionChannels([]);
-      setQuoteDecisionNote("");
-      setQuoteConversionType("Standard");
-      return;
-    }
-
-    setQuoteSubmissionChannels(
-      normalizeQuoteSubmissionChannels(project?.quoteDetails?.submission?.sentVia),
-    );
-    setQuoteDecisionNote(
-      String(project?.quoteDetails?.decision?.note || "").trim(),
-    );
-  }, [project]);
-
-  const userDepartments = useMemo(
-    () => toDepartmentArray(currentUser?.department),
-    [currentUser?.department],
-  );
-  const isFrontDeskOperator = userDepartments.some(isFrontDeskDepartment);
   const canManageBilling =
-    isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
+    currentUser?.role === "admin" ||
+    currentUser?.department?.includes("Front Desk");
   const canMarkDelivered = canManageBilling;
   const canManageFeedback = canManageBilling;
   const canShareUpdates = canManageBilling;
@@ -905,11 +492,10 @@ const OrderActions = () => {
     latestMockupVersion?.fileUrl && latestMockupDecisionStatus === "approved",
   );
   const isQuoteProject = project?.projectType === "Quote";
-  const quoteRequiresSampleProduction =
-    isQuoteProject && Boolean(project?.quoteDetails?.checklist?.sampleProduction);
-  const useQuoteMockupApprovalFlow =
-    isQuoteProject && quoteRequiresSampleProduction;
   const invoiceSent = Boolean(project?.invoice?.sent);
+  const isFrontDeskUser = Boolean(
+    currentUser?.department?.includes?.("Front Desk"),
+  );
   const billingDocumentLabel = isQuoteProject ? "Quote" : "Invoice";
   const billingDocumentLower = isQuoteProject ? "quote" : "invoice";
   const billingConfirmPhrase = isQuoteProject
@@ -918,8 +504,7 @@ const OrderActions = () => {
   const billingUndoPhrase = isQuoteProject
     ? QUOTE_UNDO_PHRASE
     : INVOICE_UNDO_PHRASE;
-  const canManageMockupApproval =
-    canManageBilling && (!isQuoteProject || useQuoteMockupApprovalFlow);
+  const canManageMockupApproval = canManageBilling && !isQuoteProject;
   const sampleRequirementEnabled =
     !isQuoteProject && Boolean(project?.sampleRequirement?.isRequired);
   const sampleApprovalStatus = getSampleApprovalStatus(project?.sampleApproval || {});
@@ -927,158 +512,6 @@ const OrderActions = () => {
     sampleRequirementEnabled && sampleApprovalStatus === "approved";
   const sampleApprovalPending =
     sampleRequirementEnabled && sampleApprovalStatus !== "approved";
-  const quoteRequirementRows = useMemo(
-    () => (isQuoteProject ? getQuoteRequirementProgress(project) : []),
-    [isQuoteProject, project],
-  );
-  const quoteActiveRequirementKey = useMemo(
-    () => (isQuoteProject ? getQuoteActiveRequirementKey(project) : ""),
-    [isQuoteProject, project],
-  );
-  const quoteActiveRequirementRow = useMemo(
-    () =>
-      quoteRequirementRows.find((row) => row.key === quoteActiveRequirementKey) ||
-      null,
-    [quoteActiveRequirementKey, quoteRequirementRows],
-  );
-  const quoteActiveRequirementOwner =
-    QUOTE_REQUIREMENT_STAGE_OWNER_CANONICAL[quoteActiveRequirementKey] ||
-    "front desk";
-  const quoteActiveRequirementOwnerLabel =
-    quoteActiveRequirementOwner === "graphics"
-      ? "Graphics/Design or Front Desk"
-      : QUOTE_REQUIREMENT_STAGE_OWNER_LABELS[quoteActiveRequirementKey] ||
-        "Front Desk";
-  const quoteLastResponseRequirementKey = String(
-    project?.quoteDetails?.lastResponseRequirementKey || "",
-  ).trim();
-  const quoteUndoRequirementKey =
-    quoteLastResponseRequirementKey || quoteActiveRequirementKey || "";
-  const quoteUndoRequirementOwner =
-    QUOTE_REQUIREMENT_STAGE_OWNER_CANONICAL[quoteUndoRequirementKey] ||
-    "front desk";
-  const quoteActiveRequirementReady =
-    !quoteActiveRequirementRow ||
-    !quoteActiveRequirementRow.required ||
-    isQuoteRequirementSatisfiedStatus(quoteActiveRequirementRow.status);
-  const quoteWorkflowStageLabels = useMemo(
-    () =>
-      isQuoteProject
-        ? getQuoteWorkflowStageLabels(project)
-        : {
-            preparationStepLabel: "Quote Request",
-            responseStepLabel: "Send Response",
-          },
-    [isQuoteProject, project],
-  );
-  const quotePreparationCompletedLabel = getQuoteAwareStatusLabel(
-    "Quote Request Completed",
-    project,
-  );
-  const quoteResponseSentLabel = getQuoteAwareStatusLabel("Response Sent", project);
-  const quoteIncompleteRequirementRows = useMemo(
-    () =>
-      quoteRequirementRows.filter(
-        (row) =>
-          row.required && row.status !== "completed" && row.status !== "waived",
-      ),
-    [quoteRequirementRows],
-  );
-  const quoteDecisionStatus = String(project?.quoteDetails?.decision?.status || "pending")
-    .trim()
-    .toLowerCase();
-  const quoteDecisionLocked = QUOTE_FINAL_DECISION_STATUSES.has(
-    quoteDecisionStatus,
-  );
-  const canManageQuoteRequirementRow = (row) =>
-    canManageQuoteRequirementForUser(currentUser, row);
-  const quoteHasEditableRequirements = quoteRequirementRows.some(
-    (row) => row.required && canManageQuoteRequirementRow(row),
-  );
-  const canManageQuoteStages =
-    isQuoteWorkflowAdmin(currentUser) ||
-    (quoteActiveRequirementOwner !== "admin" &&
-      (quoteActiveRequirementOwner === "graphics"
-        ? userHasCanonicalDepartment(currentUser, "graphics") ||
-          isFrontDeskUser(currentUser)
-        : userHasCanonicalDepartment(currentUser, quoteActiveRequirementOwner)));
-  const canManageQuoteSendUndo =
-    isQuoteWorkflowAdmin(currentUser) ||
-    canManageQuoteStages ||
-    (quoteUndoRequirementOwner !== "admin" &&
-      (quoteUndoRequirementOwner === "graphics"
-        ? userHasCanonicalDepartment(currentUser, "graphics") ||
-          isFrontDeskUser(currentUser)
-        : userHasCanonicalDepartment(currentUser, quoteUndoRequirementOwner)));
-  const canManageQuoteDecision =
-    isFrontDeskOperator || isQuoteWorkflowAdmin(currentUser);
-  const isQuoteDecisionReady =
-    isQuoteProject && QUOTE_DECISION_READY_STATUSES.has(project?.status);
-  const canCompleteQuotePreparation =
-    isQuoteProject &&
-    project?.status === "Pending Quote Request" &&
-    canManageQuoteStages;
-  const canMarkQuoteResponseSent =
-    isQuoteProject &&
-    project?.status === "Pending Send Response" &&
-    canManageQuoteStages;
-  const isQuoteSendStage =
-    isQuoteProject && String(project?.status || "").trim() === "Pending Send Response";
-  const isQuoteResponseValidated =
-    isQuoteProject && Boolean(project?.quoteDetails?.emailResponseSent);
-  const canUndoQuoteResponseSent =
-    isQuoteResponseValidated &&
-    [
-      "Pending Quote Request",
-      "Pending Feedback",
-      "Response Sent",
-      "Pending Send Response",
-    ].includes(
-      String(project?.status || "").trim(),
-    ) &&
-    canManageQuoteSendUndo;
-  const isMockupSendLane = isQuoteProject && quoteActiveRequirementKey === "mockup";
-  const requireQuoteInvoiceInSendStep = !isMockupSendLane;
-  const normalizedQuoteSubmissionChannels = normalizeQuoteSubmissionChannels(
-    quoteSubmissionChannels,
-  );
-  const quoteSentByRecorded = String(
-    project?.quoteDetails?.submission?.sentBy || "",
-  ).trim();
-  const quoteSentByActorLabel = useMemo(() => {
-    const firstName = String(currentUser?.firstName || "").trim();
-    const lastName = String(currentUser?.lastName || "").trim();
-    const fullName = `${firstName} ${lastName}`.trim();
-    if (fullName) return fullName;
-    return (
-      String(currentUser?.employeeId || "").trim() ||
-      String(currentUser?.email || "").trim() ||
-      "Current user"
-    );
-  }, [currentUser?.firstName, currentUser?.lastName, currentUser?.employeeId, currentUser?.email]);
-  const quoteSubmissionMissing = useMemo(() => {
-    const missing = [];
-    if (requireQuoteInvoiceInSendStep && !invoiceSent) {
-      missing.push("Quote sent confirmation");
-    }
-    if (normalizedQuoteSubmissionChannels.length === 0) missing.push("Sent via");
-    return missing;
-  }, [
-    invoiceSent,
-    normalizedQuoteSubmissionChannels,
-    requireQuoteInvoiceInSendStep,
-  ]);
-  const quoteSendValidationButtonLabel = isMockupSendLane
-    ? "Validate Mockup Sent"
-    : `Mark ${quoteResponseSentLabel}`;
-  const showQuoteSubmissionMissing =
-    !isQuoteResponseValidated && quoteSubmissionMissing.length > 0;
-  const canEditQuoteSubmissionChannels =
-    canManageQuoteStages &&
-    isQuoteSendStage &&
-    !quoteDecisionLocked &&
-    !isQuoteResponseValidated &&
-    !quoteResponseSubmitting;
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -1106,7 +539,7 @@ const OrderActions = () => {
     forceCommandTone = false,
   }) => {
     const resolvedMessage =
-      forceCommandTone || isFrontDeskOperator
+      forceCommandTone || isFrontDeskUser
         ? getFrontDeskCommandMessage(targetStatus)
         : message || "Billing prerequisites are required before this action.";
     const resolvedTitle =
@@ -1137,281 +570,6 @@ const OrderActions = () => {
       message: "",
       missingLabels: [],
     });
-  };
-
-  const handleUpdateQuoteRequirementStatus = async (row, status) => {
-    if (!project || !isQuoteProject || !row?.required) return;
-    if (!canTriggerQuoteRequirementStatus(currentUser, row, status)) {
-      const allowedActor = getQuoteRequirementStatusActorLabel(row.key, status);
-      showToast(
-        `Not authorized. Allowed for this action: ${allowedActor}.`,
-        "error",
-      );
-      return;
-    }
-    const strictGuardMessage = getQuoteRequirementStatusGuardMessage({
-      row,
-      nextStatus: status,
-      allRows: quoteRequirementRows,
-      hasMockupFile: Boolean(latestMockupVersion?.fileUrl),
-      hasMockupApproval: mockupApprovalConfirmed,
-      requireMockupApproval: quoteRequiresSampleProduction,
-      activeRequirementKey: quoteActiveRequirementKey,
-    });
-    if (strictGuardMessage) {
-      showToast(strictGuardMessage, "error");
-      return;
-    }
-
-    let notesPayload;
-    if (status === "blocked" || status === "waived") {
-      const note = window.prompt(
-        `Provide reason for marking '${row.label}' as ${status === "waived" ? "Waived" : "Blocked"}:`,
-        row.notes || "",
-      );
-      if (note === null) return;
-      const trimmed = note.trim();
-      if (!trimmed) {
-        showToast(`Reason is required to mark '${row.label}' as ${status}.`, "error");
-        return;
-      }
-      notesPayload = trimmed;
-    }
-
-    setQuoteRequirementSavingKey(row.key);
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/quote-requirements/${encodeURIComponent(row.key)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status,
-            ...(notesPayload ? { notes: notesPayload } : {}),
-          }),
-        },
-      );
-      if (res.ok) {
-        const updated = await res.json();
-        setProject(updated);
-        showToast(
-          `${row.label} updated.`,
-          "success",
-        );
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        showToast(
-          errorData.message || "Failed to update quote requirement.",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error("Quote requirement update error:", error);
-      showToast("Network error. Please try again.", "error");
-    } finally {
-      setQuoteRequirementSavingKey("");
-    }
-  };
-
-  const handleCompleteQuotePreparation = async () => {
-    if (!project || !isQuoteProject || !canCompleteQuotePreparation) return;
-    setQuoteStageSubmitting(true);
-    try {
-      const res = await fetch(`/api/projects/${project._id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Quote Request Completed" }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setProject(updated);
-        showToast(`Marked as ${quotePreparationCompletedLabel}.`, "success");
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        if (
-          errorData?.code === "QUOTE_REQUIREMENTS_INCOMPLETE" ||
-          errorData?.code === "QUOTE_ACTIVE_REQUIREMENT_INCOMPLETE"
-        ) {
-          const labels = Array.isArray(errorData.missingLabels)
-            ? errorData.missingLabels
-            : [];
-          showToast(
-            errorData?.activeRequirementLabel
-              ? `Complete '${errorData.activeRequirementLabel}' first.`
-              : labels.length > 0
-              ? `Complete these requirements first: ${labels.join(", ")}.`
-              : errorData.message || "Quote requirements are incomplete.",
-            "error",
-          );
-        } else {
-          showToast(
-            errorData.message || "Failed to complete quote preparation.",
-            "error",
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Quote preparation completion error:", error);
-      showToast("Network error. Please try again.", "error");
-    } finally {
-      setQuoteStageSubmitting(false);
-    }
-  };
-
-  const toggleQuoteSubmissionChannel = (channel) => {
-    if (!canEditQuoteSubmissionChannels) return;
-    setQuoteSubmissionChannels((prev) => {
-      const normalized = normalizeQuoteSubmissionChannels(prev);
-      if (normalized.includes(channel)) {
-        return normalized.filter((entry) => entry !== channel);
-      }
-      return [...normalized, channel];
-    });
-  };
-
-  const handleMarkQuoteResponseSent = async () => {
-    if (!project || !isQuoteProject || !canMarkQuoteResponseSent) return;
-    setQuoteResponseSubmitting(true);
-    try {
-      const res = await fetch(`/api/projects/${project._id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "Response Sent",
-          submission: {
-            sentVia: normalizeQuoteSubmissionChannels(quoteSubmissionChannels),
-          },
-        }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setProject(updated);
-        showToast(`Marked as ${quoteResponseSentLabel}.`, "success");
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        if (errorData?.code === "QUOTE_SUBMISSION_INCOMPLETE") {
-          showToast(
-            errorData.message || "Quote submission details are incomplete.",
-            "error",
-          );
-        } else if (errorData?.code === "QUOTE_ACTIVE_REQUIREMENT_INCOMPLETE") {
-          showToast(
-            errorData.message ||
-              "Complete the current requirement before sending response.",
-            "error",
-          );
-        } else {
-          showToast(
-            errorData.message || "Failed to mark quote response as sent.",
-            "error",
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Quote response status update error:", error);
-      showToast("Network error. Please try again.", "error");
-    } finally {
-      setQuoteResponseSubmitting(false);
-    }
-  };
-
-  const handleUndoQuoteResponseSent = async () => {
-    if (
-      !project ||
-      !isQuoteProject ||
-      quoteResponseSubmitting ||
-      !canUndoQuoteResponseSent
-    ) {
-      return;
-    }
-    setQuoteResponseSubmitting(true);
-    try {
-      const res = await fetch(`/api/projects/${project._id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Pending Send Response" }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setProject(updated);
-        showToast("Send validation undone.", "success");
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        showToast(
-          errorData.message || "Failed to undo send validation.",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error("Undo quote response status update error:", error);
-      showToast("Network error. Please try again.", "error");
-    } finally {
-      setQuoteResponseSubmitting(false);
-    }
-  };
-
-  const openQuoteDecisionConfirm = (decision) => {
-    if (!project || !isQuoteProject || !canManageQuoteDecision) return;
-    const option = QUOTE_DECISION_OPTIONS.find((entry) => entry.value === decision);
-    if (!option) return;
-    setQuoteDecisionConfirm({ open: true, decision });
-  };
-
-  const closeQuoteDecisionConfirm = () => {
-    if (quoteDecisionSubmitting) return;
-    setQuoteDecisionConfirm({ open: false, decision: "" });
-  };
-
-  const handleQuoteDecision = async () => {
-    const decision = quoteDecisionConfirm.decision;
-    if (
-      quoteDecisionSubmitting ||
-      !project ||
-      !isQuoteProject ||
-      !canManageQuoteDecision ||
-      !decision
-    ) {
-      return;
-    }
-    const option = QUOTE_DECISION_OPTIONS.find((entry) => entry.value === decision);
-    if (!option) return;
-
-    setQuoteDecisionSubmitting(true);
-    try {
-      const body = {
-        decision,
-        note: quoteDecisionNote.trim(),
-      };
-      if (decision === "accepted") {
-        body.targetType = quoteConversionType;
-      }
-
-      const res = await fetch(`/api/projects/${project._id}/quote-decision`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setProject(updated);
-        showToast(`Quote marked as ${option.label.toLowerCase()}.`, "success");
-        setQuoteDecisionConfirm({ open: false, decision: "" });
-        if (decision === "accepted" && updated?._id && updated._id !== id) {
-          navigate(`/new-orders/actions/${updated._id}`, { replace: true });
-        }
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        showToast(
-          errorData.message || "Failed to update quote decision.",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error("Quote decision update error:", error);
-      showToast("Network error. Please try again.", "error");
-    } finally {
-      setQuoteDecisionSubmitting(false);
-    }
   };
 
   const handleDeliveryComplete = async () => {
@@ -1733,19 +891,12 @@ const OrderActions = () => {
     }
   };
 
-  const requestDeleteUpdate = (update) => {
+  const handleDeleteUpdate = async (update) => {
     if (!update?._id || !canManageUpdate(update)) return;
-    setUpdateDeleteConfirm({ open: true, update });
-  };
-
-  const closeDeleteUpdateConfirm = () => {
-    if (updateDeleteSubmittingId) return;
-    setUpdateDeleteConfirm({ open: false, update: null });
-  };
-
-  const handleDeleteUpdate = async () => {
-    const update = updateDeleteConfirm.update;
-    if (updateDeleteSubmittingId || !update?._id || !canManageUpdate(update)) return;
+    const confirmed = window.confirm(
+      "Delete this update? This action cannot be undone.",
+    );
+    if (!confirmed) return;
 
     setUpdateDeleteSubmittingId(update._id);
     try {
@@ -1759,7 +910,6 @@ const OrderActions = () => {
           handleCancelEditUpdate();
         }
         showToast("Update deleted.", "success");
-        setUpdateDeleteConfirm({ open: false, update: null });
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(errorData.message || "Failed to delete update.", "error");
@@ -2359,14 +1509,6 @@ const OrderActions = () => {
     !isQuoteProject &&
     project.status === "Pending Mockup" &&
     mockupApprovalRejected;
-  const showMockupPendingApprovalBanner =
-    Boolean(latestMockupVersion) &&
-    mockupApprovalPending &&
-    (!isQuoteProject || useQuoteMockupApprovalFlow);
-  const showMockupRejectedBanner =
-    Boolean(latestMockupVersion) &&
-    mockupApprovalRejected &&
-    (!isQuoteProject || useQuoteMockupApprovalFlow);
   const mockupApprovalMissingLabels =
     showMockupApprovalWarning && latestMockupVersion
       ? [`Client approval for mockup ${latestMockupVersionLabel}`]
@@ -2485,7 +1627,7 @@ const OrderActions = () => {
   ]);
 
   const lastOrderRevisionUpdatedAt = project?.sectionUpdates?.details || null;
-  const lastOrderRevisionLabel = isFrontDeskOperator
+  const lastOrderRevisionLabel = currentUser?.department?.includes("Front Desk")
     ? "Last updated by Front Desk"
     : "Last updated";
 
@@ -2510,30 +1652,6 @@ const OrderActions = () => {
       {toast.show && (
         <div className={`toast-message ${toast.type}`}>{toast.message}</div>
       )}
-      <ConfirmationModal
-        isOpen={quoteDecisionConfirm.open}
-        onCancel={closeQuoteDecisionConfirm}
-        onConfirm={handleQuoteDecision}
-        title="Confirm Quote Decision"
-        message={`Confirm quote decision: ${
-          QUOTE_DECISION_OPTIONS.find(
-            (entry) => entry.value === quoteDecisionConfirm.decision,
-          )?.label || ""
-        }?`}
-        confirmText={quoteDecisionSubmitting ? "Saving..." : "Confirm"}
-        cancelText="Cancel"
-      />
-      <ConfirmationModal
-        isOpen={updateDeleteConfirm.open}
-        onCancel={closeDeleteUpdateConfirm}
-        onConfirm={handleDeleteUpdate}
-        title="Delete Update"
-        message="Delete this update? This action cannot be undone."
-        confirmText={
-          updateDeleteSubmittingId ? "Deleting..." : "Yes, Delete Update"
-        }
-        cancelText="Cancel"
-      />
 
       <div className="page-header order-actions-header">
         <div>
@@ -2558,8 +1676,7 @@ const OrderActions = () => {
               {project.details?.packagingType || "-"}
             </p>
             <p>
-              <strong>Status:</strong>{" "}
-              {getQuoteAwareStatusLabel(project.status, project)}
+              <strong>Status:</strong> {project.status}
             </p>
             <p>
               <strong>Created:</strong> {formatDate(project.createdAt)}
@@ -2636,13 +1753,13 @@ const OrderActions = () => {
             Confirm full payment or authorization now before delivery can proceed.
           </div>
         )}
-        {showMockupPendingApprovalBanner && (
+        {mockupApprovalPending && latestMockupVersion && (
           <div className="warning-banner critical">
             Confirm client approval for mockup {latestMockupVersionLabel} now
             before mockup completion can proceed.
           </div>
         )}
-        {showMockupRejectedBanner && (
+        {mockupApprovalRejected && latestMockupVersion && (
           <div className="warning-banner critical">
             Client rejected mockup {latestMockupVersionLabel}. Request Graphics
             to upload a revised version before mockup completion.
@@ -2650,440 +1767,69 @@ const OrderActions = () => {
         )}
 
         <div className="action-grid">
-          {isQuoteProject ? (
-            <>
-              <div className="action-card quote-requirements-card">
-                <h3>{quoteWorkflowStageLabels.preparationStepLabel}</h3>
-                <p>
-                  Update the active requirement lane, then complete this stage to
-                  move to the send step.
-                </p>
-                {quoteActiveRequirementRow?.required && (
-                  <div className="quote-readiness info">
-                    Active lane: <strong>{quoteActiveRequirementRow.label}</strong>
-                  </div>
-                )}
-                <div className="quote-requirements-list">
-                  {quoteRequirementRows.map((row) => {
-                    const rowStatusOptions = QUOTE_REQUIREMENT_STATUS_OPTIONS.filter(
-                      (option) => {
-                        if (
-                          !canTriggerQuoteRequirementStatus(
-                            currentUser,
-                            row,
-                            option.value,
-                          )
-                        ) {
-                          return false;
-                        }
-                        const guardMessage = getQuoteRequirementStatusGuardMessage({
-                          row,
-                          nextStatus: option.value,
-                          allRows: quoteRequirementRows,
-                          hasMockupFile: Boolean(latestMockupVersion?.fileUrl),
-                          hasMockupApproval: mockupApprovalConfirmed,
-                          requireMockupApproval: quoteRequiresSampleProduction,
-                          activeRequirementKey: quoteActiveRequirementKey,
-                        });
-                        return !guardMessage;
-                      },
-                    );
-                    const rowCanManageByRole =
-                      QUOTE_REQUIREMENT_STATUS_OPTIONS.some((option) =>
-                        canTriggerQuoteRequirementStatus(
-                          currentUser,
-                          row,
-                          option.value,
-                        ),
-                      );
-                    const rowCanManage = rowStatusOptions.length > 0;
-                    const strictGuardHint =
-                      rowCanManageByRole && !rowCanManage
-                        ? QUOTE_REQUIREMENT_STATUS_OPTIONS.filter((option) =>
-                            canTriggerQuoteRequirementStatus(
-                              currentUser,
-                              row,
-                              option.value,
-                            ),
-                          )
-                            .map((option) =>
-                              getQuoteRequirementStatusGuardMessage({
-                                row,
-                                nextStatus: option.value,
-                                allRows: quoteRequirementRows,
-                                hasMockupFile: Boolean(
-                                  latestMockupVersion?.fileUrl,
-                                ),
-                                hasMockupApproval: mockupApprovalConfirmed,
-                                requireMockupApproval: quoteRequiresSampleProduction,
-                                activeRequirementKey: quoteActiveRequirementKey,
-                              }),
-                            )
-                            .find(Boolean) ||
-                          "No valid status transition is available yet."
-                        : "";
+          <div className="action-card">
+            <h3>Delivery</h3>
+            <p>Mark the order as delivered once handed over.</p>
+            <button
+              className="action-btn complete-btn"
+              onClick={openDeliveryModal}
+              disabled={!canMarkDelivered || project.status !== "Pending Delivery/Pickup"}
+              title={
+                project.status === "Pending Delivery/Pickup"
+                  ? "Mark as Delivered"
+                  : "Waiting for Pending Delivery/Pickup"
+              }
+            >
+              Delivery Complete
+            </button>
+          </div>
 
-                    return (
-                      <div
-                        key={row.key}
-                        className={`quote-requirement-item ${
-                          row.required ? "" : "not-required"
-                        }`}
-                      >
-                        <div className="quote-requirement-header">
-                          <span className="quote-requirement-name">{row.label}</span>
-                          <span
-                            className={`quote-requirement-status ${getQuoteRequirementStatusClass(
-                              row.status,
-                            )}`}
-                          >
-                            {row.required
-                              ? getQuoteRequirementStatusLabel(row.status)
-                              : "Not Required"}
-                          </span>
-                        </div>
-                        <div className="quote-requirement-owner">
-                          Responsible: {row.ownerDept || "Unassigned"}
-                        </div>
-                        {row.required && row.completedAt && (
-                          <div className="quote-requirement-meta">
-                            Completed: {formatDateTime(row.completedAt)}
-                          </div>
-                        )}
-                        {row.required && row.notes && (
-                          <div className="quote-requirement-meta">
-                            Note: {row.notes}
-                          </div>
-                        )}
-                        {row.required && rowCanManage && (
-                          <div className="quote-requirement-actions">
-                            {rowStatusOptions.map((option) => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                className={`quote-status-btn ${
-                                  row.status === option.value ? "active" : ""
-                                }`}
-                                onClick={() =>
-                                  handleUpdateQuoteRequirementStatus(
-                                    row,
-                                    option.value,
-                                  )
-                                }
-                                disabled={
-                                  quoteRequirementSavingKey === row.key ||
-                                  quoteDecisionLocked
-                                }
-                              >
-                                {option.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {row.required && !rowCanManage && (
-                          <div className="quote-requirement-meta">
-                            {strictGuardHint
-                              ? strictGuardHint
-                              : `Allowed: ${getQuoteRequirementStatusActorLabel(
-                                  row.key,
-                                  "completed",
-                                )}. Waived: Front Desk or Admin.`}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {!quoteHasEditableRequirements && (
-                  <div className="quote-readiness info">
-                    You can monitor progress here. No quote-requirement actions are
-                    available for your role on this order.
-                  </div>
-                )}
-                {!canManageQuoteStages && (
-                  <div className="quote-readiness info">
-                    Only {quoteActiveRequirementOwnerLabel} (or Admin) can
-                    progress this quote lane.
-                  </div>
-                )}
-                {quoteIncompleteRequirementRows.length > 0 ? (
-                  <div className="quote-readiness warning">
-                    Pending:
-                    {" "}
-                    {quoteIncompleteRequirementRows
-                      .map((row) => row.label)
-                      .join(", ")}
-                  </div>
-                ) : (
-                  <div className="quote-readiness success">
-                    All required quote tracks are completed.
-                  </div>
-                )}
-                <button
-                  className="action-btn complete-btn"
-                  onClick={handleCompleteQuotePreparation}
-                  disabled={
-                    !canCompleteQuotePreparation ||
-                    !quoteActiveRequirementReady ||
-                    quoteStageSubmitting ||
-                    quoteDecisionLocked
-                  }
-                  title={
-                    quoteActiveRequirementReady
-                      ? `Mark ${quotePreparationCompletedLabel}`
-                      : quoteActiveRequirementRow?.required
-                        ? `Complete '${quoteActiveRequirementRow.label}' first`
-                        : "Finish required checklist items first"
-                  }
-                >
-                  {quoteStageSubmitting
-                    ? "Updating..."
-                    : `Mark ${quotePreparationCompletedLabel}`}
-                </button>
-              </div>
+          <div className="action-card">
+            <h3>Feedback</h3>
+            <p>Capture client feedback after delivery.</p>
+            <button
+              className="action-btn feedback-btn"
+              onClick={openFeedbackModal}
+              disabled={!canManageFeedback || !canAddFeedbackFor(project)}
+              title={
+                !canManageFeedback
+                  ? "Not authorized to add feedback"
+                  : canAddFeedbackFor(project)
+                  ? "Add feedback"
+                  : "Feedback available after delivery"
+              }
+            >
+              Add Feedback
+            </button>
+          </div>
 
-              <div className="action-card quote-response-card">
-                <h3>{quoteWorkflowStageLabels.responseStepLabel}</h3>
-                <p>Capture outbound response details and mark as sent.</p>
-
-                {requireQuoteInvoiceInSendStep && (
-                  <div className="billing-actions">
-                    {!invoiceSent ? (
-                      <button
-                        className="action-btn"
-                        onClick={openInvoiceModal}
-                        disabled={!canManageBilling || quoteDecisionLocked}
-                      >
-                        Confirm Quote Invoice Sent
-                      </button>
-                    ) : (
-                      <button
-                        className="action-btn undo-btn"
-                        onClick={openInvoiceUndoModal}
-                        disabled={!canManageBilling || quoteDecisionLocked}
-                        title="Undo quote invoice sent"
-                      >
-                        Undo Quote Invoice Sent
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <label className="quote-field-label" htmlFor="quote-sent-by">
-                  Sent By
-                </label>
-                <input
-                  id="quote-sent-by"
-                  className="form-input"
-                  value={quoteSentByRecorded || quoteSentByActorLabel}
-                  readOnly
-                  disabled
-                />
-
-                <div className="quote-field-label">Sent Via</div>
-                <div className="quote-channel-grid">
-                  {QUOTE_SUBMISSION_CHANNEL_OPTIONS.map((channel) => (
-                    <label key={channel} className="quote-channel-option">
-                      <input
-                        type="checkbox"
-                        checked={normalizedQuoteSubmissionChannels.includes(channel)}
-                        onChange={() => toggleQuoteSubmissionChannel(channel)}
-                        disabled={!canEditQuoteSubmissionChannels}
-                      />
-                      <span>{channel}</span>
-                    </label>
-                  ))}
-                </div>
-
-                {showQuoteSubmissionMissing && (
-                  <div className="quote-readiness warning">
-                    Missing:
-                    {" "}
-                    {quoteSubmissionMissing.join(", ")}
-                  </div>
-                )}
-                {canUndoQuoteResponseSent ? (
+          <div className="action-card">
+            <h3>Billing</h3>
+              <p>
+                {isQuoteProject
+                  ? "Confirm quote response sent."
+                  : "Confirm invoice and payment milestones."}
+              </p>
+              <div className="billing-actions">
+                {!invoiceSent ? (
                   <button
-                    className="action-btn undo-btn"
-                    onClick={handleUndoQuoteResponseSent}
-                    disabled={quoteResponseSubmitting || quoteDecisionLocked}
-                    title="Undo send validation"
-                  >
-                    {quoteResponseSubmitting
-                      ? "Updating..."
-                      : "Undo Send Validation"}
-                  </button>
-                ) : (
-                  <button
-                    className="action-btn complete-btn"
-                    onClick={handleMarkQuoteResponseSent}
-                    disabled={
-                      !canMarkQuoteResponseSent ||
-                      quoteSubmissionMissing.length > 0 ||
-                      quoteResponseSubmitting ||
-                      quoteDecisionLocked
-                    }
-                  >
-                    {quoteResponseSubmitting
-                      ? "Updating..."
-                      : quoteSendValidationButtonLabel}
-                  </button>
-                )}
-              </div>
-
-              <div className="action-card quote-decision-card">
-                <h3>Quote Decision</h3>
-                <p>Record final client decision and close or convert the quote.</p>
-
-                <div className="quote-decision-status">
-                  Current decision:
-                  {" "}
-                  <strong>
-                    {getQuoteDecisionLabel(quoteDecisionStatus)}
-                  </strong>
-                </div>
-
-                <label className="quote-field-label" htmlFor="quote-decision-note">
-                  Decision Notes
-                </label>
-                <textarea
-                  id="quote-decision-note"
-                  className="form-input textarea-short"
-                  value={quoteDecisionNote}
-                  onChange={(event) => setQuoteDecisionNote(event.target.value)}
-                  placeholder="Add optional notes about client decision."
-                  disabled={!canManageQuoteDecision || quoteDecisionLocked}
-                />
-
-                <label className="quote-field-label" htmlFor="quote-conversion-type">
-                  Accepted Conversion Type
-                </label>
-                <select
-                  id="quote-conversion-type"
-                  className="form-input"
-                  value={quoteConversionType}
-                  onChange={(event) => setQuoteConversionType(event.target.value)}
-                  disabled={!canManageQuoteDecision || quoteDecisionLocked}
-                >
-                  {QUOTE_CONVERSION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="quote-decision-actions">
-                  <button
-                    type="button"
                     className="action-btn"
-                    onClick={() => openQuoteDecisionConfirm("accepted_draft")}
-                    disabled={
-                      quoteDecisionSubmitting ||
-                      quoteDecisionLocked ||
-                      !isQuoteDecisionReady
-                    }
+                    onClick={openInvoiceModal}
+                    disabled={!canManageBilling}
                   >
-                    Accept & Draft
+                    Mark {billingDocumentLabel} Sent
                   </button>
+                ) : (
                   <button
-                    type="button"
-                    className="action-btn complete-btn"
-                    onClick={() => openQuoteDecisionConfirm("accepted")}
-                    disabled={
-                      quoteDecisionSubmitting ||
-                      quoteDecisionLocked ||
-                      !isQuoteDecisionReady
-                    }
-                  >
-                    Accept & Convert
-                  </button>
-                  <button
-                    type="button"
-                    className="action-btn feedback-btn"
-                    onClick={() => openQuoteDecisionConfirm("declined")}
-                    disabled={
-                      quoteDecisionSubmitting ||
-                      quoteDecisionLocked ||
-                      !isQuoteDecisionReady
-                    }
-                  >
-                    Mark Declined
-                  </button>
-                  <button
-                    type="button"
                     className="action-btn undo-btn"
-                    onClick={() => openQuoteDecisionConfirm("cancelled")}
-                    disabled={
-                      quoteDecisionSubmitting ||
-                      quoteDecisionLocked ||
-                      !isQuoteDecisionReady
-                    }
+                    onClick={openInvoiceUndoModal}
+                    disabled={!canManageBilling}
+                    title={`Undo ${billingDocumentLower} sent`}
                   >
-                    Cancel Quote
+                    Undo {billingDocumentLabel} Sent
                   </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="action-card">
-                <h3>Delivery</h3>
-                <p>Mark the order as delivered once handed over.</p>
-                <button
-                  className="action-btn complete-btn"
-                  onClick={openDeliveryModal}
-                  disabled={!canMarkDelivered || project.status !== "Pending Delivery/Pickup"}
-                  title={
-                    project.status === "Pending Delivery/Pickup"
-                      ? "Mark as Delivered"
-                      : "Waiting for Pending Delivery/Pickup"
-                  }
-                >
-                  Delivery Complete
-                </button>
-              </div>
-
-              <div className="action-card">
-                <h3>Feedback</h3>
-                <p>Capture client feedback after delivery.</p>
-                <button
-                  className="action-btn feedback-btn"
-                  onClick={openFeedbackModal}
-                  disabled={!canManageFeedback || !canAddFeedbackFor(project)}
-                  title={
-                    !canManageFeedback
-                      ? "Not authorized to add feedback"
-                      : canAddFeedbackFor(project)
-                        ? "Add feedback"
-                        : "Feedback available after delivery"
-                  }
-                >
-                  Add Feedback
-                </button>
-              </div>
-
-              <div className="action-card">
-                <h3>Billing</h3>
-                <p>Confirm invoice and payment milestones.</p>
-                <div className="billing-actions">
-                  {!invoiceSent ? (
-                    <button
-                      className="action-btn"
-                      onClick={openInvoiceModal}
-                      disabled={!canManageBilling}
-                    >
-                      Mark {billingDocumentLabel} Sent
-                    </button>
-                  ) : (
-                    <button
-                      className="action-btn undo-btn"
-                      onClick={openInvoiceUndoModal}
-                      disabled={!canManageBilling}
-                      title={`Undo ${billingDocumentLower} sent`}
-                    >
-                      Undo {billingDocumentLabel} Sent
-                    </button>
-                  )}
+                )}
+                {!isQuoteProject && (
                   <div className="payment-actions">
                     {PAYMENT_OPTIONS.map((option) => (
                       <div key={option.type} className="payment-action-group">
@@ -3109,271 +1855,253 @@ const OrderActions = () => {
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
               </div>
+            </div>
 
-              <div className="action-card">
-                <h3>Production Sample Approval</h3>
-                <p>
-                  Confirm client decision on production sample before completing
-                  Production stage.
-                </p>
-                <div className="billing-actions">
-                  {!sampleRequirementEnabled ? (
-                    <div className="mockup-empty-state">
-                      Sample approval requirement is currently off.
+          {!isQuoteProject && (
+            <div className="action-card">
+              <h3>Production Sample Approval</h3>
+              <p>
+                Confirm client decision on production sample before completing
+                Production stage.
+              </p>
+              <div className="billing-actions">
+                {!sampleRequirementEnabled ? (
+                  <div className="mockup-empty-state">
+                    Sample approval requirement is currently off.
+                  </div>
+                ) : sampleApprovalConfirmed ? (
+                  <>
+                    <div className="mockup-approval-status approved">
+                      Client sample approval confirmed
                     </div>
-                  ) : sampleApprovalConfirmed ? (
-                    <>
-                      <div className="mockup-approval-status approved">
-                        Client sample approval confirmed
-                      </div>
-                      {project?.sampleApproval?.approvedAt && (
-                        <p className="mockup-approval-meta">
-                          Approved: {formatDateTime(project.sampleApproval.approvedAt)}
-                        </p>
-                      )}
-                      <button
-                        className="action-btn undo-btn"
-                        onClick={openSampleApprovalResetModal}
-                        disabled={!canManageBilling}
-                      >
-                        Reset to Pending
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="mockup-approval-status pending">
-                        Client sample approval pending
-                      </div>
-                      <button
-                        className="action-btn complete-btn"
-                        onClick={openSampleApprovalModal}
-                        disabled={!canManageBilling}
-                      >
-                        Confirm Sample Approval
-                      </button>
-                    </>
-                  )}
-                  {!canManageBilling && (
-                    <p className="mockup-approval-meta">
-                      Front Desk or Admin must confirm client sample approval.
-                    </p>
-                  )}
-                </div>
+                    {project?.sampleApproval?.approvedAt && (
+                      <p className="mockup-approval-meta">
+                        Approved: {formatDateTime(project.sampleApproval.approvedAt)}
+                      </p>
+                    )}
+                    <button
+                      className="action-btn undo-btn"
+                      onClick={openSampleApprovalResetModal}
+                      disabled={!canManageBilling}
+                    >
+                      Reset to Pending
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="mockup-approval-status pending">
+                      Client sample approval pending
+                    </div>
+                    <button
+                      className="action-btn complete-btn"
+                      onClick={openSampleApprovalModal}
+                      disabled={!canManageBilling}
+                    >
+                      Confirm Sample Approval
+                    </button>
+                  </>
+                )}
+                {!canManageBilling && (
+                  <p className="mockup-approval-meta">
+                    Front Desk or Admin must confirm client sample approval.
+                  </p>
+                )}
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        <section className="mockup-standalone-section">
-          <div className="action-card mockup-standalone-card">
-            <h3>
-              {isQuoteProject && !useQuoteMockupApprovalFlow
-                ? "Mockup Files"
-                : "Mockup Approval"}
-            </h3>
-            <p>
-              {useQuoteMockupApprovalFlow
-                ? "Front Desk must confirm client approval before Graphics can complete Mockup and before Sample Production can begin."
-                : isQuoteProject
-                ? "View and download mockups to share directly with the client."
-                : "Confirm client approval before Mockup stage can be marked complete."}
-            </p>
+        {!isQuoteProject && (
+          <section className="mockup-standalone-section">
+            <div className="action-card mockup-standalone-card">
+              <h3>Mockup Approval</h3>
+              <p>
+                Confirm client approval before Mockup stage can be marked
+                complete.
+              </p>
 
-            {!latestMockupVersion ? (
-              <div className="mockup-empty-state">No mockup has been uploaded yet.</div>
-            ) : (
-              <>
-                <div
-                  className={`mockup-approval-status ${
-                    mockupApprovalConfirmed
-                      ? "approved"
-                      : mockupApprovalRejected
-                        ? "rejected"
-                        : "pending"
-                  }`}
-                >
-                  Latest: {latestMockupVersionLabel}{" "}
-                  {isQuoteProject
-                    ? useQuoteMockupApprovalFlow
-                      ? mockupApprovalConfirmed
-                        ? "Client Approved"
+              {!latestMockupVersion ? (
+                <div className="mockup-empty-state">
+                  No mockup has been uploaded yet.
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={`mockup-approval-status ${
+                      mockupApprovalConfirmed
+                        ? "approved"
                         : mockupApprovalRejected
-                          ? "Client Rejected"
-                          : "Pending Client Approval"
-                      : mockupApprovalRejected
-                        ? "Uploaded (Client Rejected)"
-                        : "Uploaded"
-                    : mockupApprovalConfirmed
+                          ? "rejected"
+                          : "pending"
+                    }`}
+                  >
+                    Latest: {latestMockupVersionLabel}{" "}
+                    {mockupApprovalConfirmed
                       ? "Client Approved"
                       : mockupApprovalRejected
                         ? "Client Rejected"
                         : "Pending Client Approval"}
-                </div>
+                  </div>
 
-                {mockupApprovalConfirmed &&
-                  latestMockupVersion.clientApproval?.approvedAt && (
-                    <p className="mockup-approval-meta">
-                      Approved:{" "}
-                      {formatDateTime(latestMockupVersion.clientApproval.approvedAt)}
-                    </p>
-                  )}
-                {mockupApprovalRejected &&
-                  latestMockupVersion.clientApproval?.rejectedAt && (
-                    <p className="mockup-approval-meta rejection">
-                      Rejected:{" "}
-                      {formatDateTime(latestMockupVersion.clientApproval.rejectedAt)}
-                    </p>
-                  )}
-                {mockupApprovalRejected &&
-                  latestMockupVersion.clientApproval?.rejectionReason && (
-                    <p className="mockup-approval-meta rejection">
-                      Reason: {latestMockupVersion.clientApproval.rejectionReason}
-                    </p>
-                  )}
+                  {mockupApprovalConfirmed &&
+                    latestMockupVersion.clientApproval?.approvedAt && (
+                      <p className="mockup-approval-meta">
+                        Approved:{" "}
+                        {formatDateTime(
+                          latestMockupVersion.clientApproval.approvedAt,
+                        )}
+                      </p>
+                    )}
+                  {mockupApprovalRejected &&
+                    latestMockupVersion.clientApproval?.rejectedAt && (
+                      <p className="mockup-approval-meta rejection">
+                        Rejected:{" "}
+                        {formatDateTime(
+                          latestMockupVersion.clientApproval.rejectedAt,
+                        )}
+                      </p>
+                    )}
+                  {mockupApprovalRejected &&
+                    latestMockupVersion.clientApproval?.rejectionReason && (
+                      <p className="mockup-approval-meta rejection">
+                        Reason:{" "}
+                        {latestMockupVersion.clientApproval.rejectionReason}
+                      </p>
+                    )}
 
-                <div className="mockup-version-list">
-                  {mockupVersions
-                    .slice()
-                    .reverse()
-                    .map((version) => {
-                      const fileName =
-                        version.fileName ||
-                        version.fileUrl.split("/").pop() ||
-                        `Mockup v${version.version}`;
-                      const decision = getMockupApprovalStatus(
-                        version.clientApproval || {},
-                      );
-                      const isLatestVersion =
-                        Number(version.version) ===
-                        Number(latestMockupVersion?.version);
-                      const canDecideOnVersions =
-                        canManageMockupApproval &&
-                        (isQuoteProject
-                          ? useQuoteMockupApprovalFlow && !quoteDecisionLocked
-                          : project.status === "Pending Mockup");
-                      const approveHidden = decision === "rejected";
-                      const approveDisabled =
-                        !isLatestVersion || decision === "approved";
-                      const rejectDisabled =
-                        !isLatestVersion || decision === "rejected";
-                      return (
-                        <div
-                          key={`mockup-version-${version.version}`}
-                          className="mockup-version-item"
-                        >
-                          <div className="mockup-version-main">
-                            <strong>v{version.version}</strong>
-                            <span>
-                              {isQuoteProject
-                                ? useQuoteMockupApprovalFlow
-                                  ? decision === "approved"
-                                    ? "Approved"
-                                    : decision === "rejected"
-                                      ? "Rejected"
-                                      : "Pending Approval"
-                                  : "Uploaded"
-                                : decision === "approved"
+                  <div className="mockup-version-list">
+                    {mockupVersions
+                      .slice()
+                      .reverse()
+                      .map((version) => {
+                        const fileName =
+                          version.fileName ||
+                          version.fileUrl.split("/").pop() ||
+                          `Mockup v${version.version}`;
+                        const decision = getMockupApprovalStatus(
+                          version.clientApproval || {},
+                        );
+                        const isLatestVersion =
+                          Number(version.version) ===
+                          Number(latestMockupVersion?.version);
+                        const canDecideOnVersions =
+                          canManageMockupApproval &&
+                          project.status === "Pending Mockup";
+                        const approveHidden = decision === "rejected";
+                        const approveDisabled =
+                          !isLatestVersion || decision === "approved";
+                        const rejectDisabled =
+                          !isLatestVersion || decision === "rejected";
+                        return (
+                          <div
+                            key={`mockup-version-${version.version}`}
+                            className="mockup-version-item"
+                          >
+                            <div className="mockup-version-main">
+                              <strong>v{version.version}</strong>
+                              <span>
+                                {decision === "approved"
                                   ? "Approved"
                                   : decision === "rejected"
                                     ? "Rejected"
                                     : "Pending Approval"}
-                            </span>
-                          </div>
-                          <div className="mockup-version-links">
-                            <a
-                              href={version.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              View
-                            </a>
-                            <a href={version.fileUrl} download>
-                              Download
-                            </a>
-                          </div>
-                          <div className="mockup-version-meta">
-                            <span>{fileName}</span>
-                            {version.uploadedAt && (
-                              <span>
-                                Uploaded: {formatDateTime(version.uploadedAt)}
                               </span>
-                            )}
-                            {decision === "rejected" &&
-                              version.clientApproval?.rejectedAt && (
+                            </div>
+                            <div className="mockup-version-links">
+                              <a
+                                href={version.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                View
+                              </a>
+                              <a href={version.fileUrl} download>
+                                Download
+                              </a>
+                            </div>
+                            <div className="mockup-version-meta">
+                              <span>{fileName}</span>
+                              {version.uploadedAt && (
                                 <span>
-                                  Rejected:{" "}
-                                  {formatDateTime(
-                                    version.clientApproval.rejectedAt,
-                                  )}
+                                  Uploaded: {formatDateTime(version.uploadedAt)}
                                 </span>
                               )}
-                            {decision === "rejected" &&
-                              version.clientApproval?.rejectionReason && (
-                                <span>
-                                  Reason:{" "}
-                                  {version.clientApproval.rejectionReason}
-                                </span>
-                              )}
-                          </div>
-                          {canDecideOnVersions && (
-                            <div className="mockup-version-actions">
-                              {!approveHidden && (
+                              {decision === "rejected" &&
+                                version.clientApproval?.rejectedAt && (
+                                  <span>
+                                    Rejected:{" "}
+                                    {formatDateTime(
+                                      version.clientApproval.rejectedAt,
+                                    )}
+                                  </span>
+                                )}
+                              {decision === "rejected" &&
+                                version.clientApproval?.rejectionReason && (
+                                  <span>
+                                    Reason:{" "}
+                                    {version.clientApproval.rejectionReason}
+                                  </span>
+                                )}
+                            </div>
+                            {canDecideOnVersions && (
+                              <div className="mockup-version-actions">
+                                {!approveHidden && (
+                                  <button
+                                    className="action-btn complete-btn"
+                                    onClick={() => openMockupApprovalModal(version)}
+                                    disabled={approveDisabled}
+                                    title={
+                                      !isLatestVersion
+                                        ? "Only latest version can be approved."
+                                        : decision === "approved"
+                                          ? "Already approved."
+                                          : `Confirm client approval for v${version.version}`
+                                    }
+                                  >
+                                    {decision === "approved"
+                                      ? `Approved (v${version.version})`
+                                      : `Confirm Approval (v${version.version})`}
+                                  </button>
+                                )}
                                 <button
-                                  className="action-btn complete-btn"
-                                  onClick={() => openMockupApprovalModal(version)}
-                                  disabled={approveDisabled}
+                                  className="action-btn undo-btn"
+                                  onClick={() => openMockupRejectionModal(version)}
+                                  disabled={rejectDisabled}
                                   title={
                                     !isLatestVersion
-                                      ? "Only latest version can be approved."
-                                      : decision === "approved"
-                                        ? "Already approved."
-                                        : `Confirm client approval for v${version.version}`
+                                      ? "Only latest version can be rejected."
+                                      : decision === "rejected"
+                                        ? "Already rejected."
+                                        : `Mark v${version.version} as rejected`
                                   }
                                 >
-                                  {decision === "approved"
-                                    ? `Approved (v${version.version})`
-                                    : `Confirm Approval (v${version.version})`}
+                                  {decision === "rejected"
+                                    ? `Rejected (v${version.version})`
+                                    : `Mark Rejected (v${version.version})`}
                                 </button>
-                              )}
-                              <button
-                                className="action-btn undo-btn"
-                                onClick={() => openMockupRejectionModal(version)}
-                                disabled={rejectDisabled}
-                                title={
-                                  !isLatestVersion
-                                    ? "Only latest version can be rejected."
-                                    : decision === "rejected"
-                                      ? "Already rejected."
-                                      : `Mark v${version.version} as rejected`
-                                }
-                              >
-                                {decision === "rejected"
-                                  ? `Rejected (v${version.version})`
-                                  : `Mark Rejected (v${version.version})`}
-                              </button>
-                              {!isLatestVersion && (
-                                <span className="mockup-version-actions-note">
-                                  Latest version only
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-                {(!isQuoteProject || useQuoteMockupApprovalFlow) &&
-                  !canManageMockupApproval && (
-                  <p className="mockup-approval-meta">
-                    Front Desk or Admin must confirm client decision.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </section>
+                                {!isLatestVersion && (
+                                  <span className="mockup-version-actions-note">
+                                    Latest version only
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                  {!canManageMockupApproval && (
+                    <p className="mockup-approval-meta">
+                      Front Desk or Admin must confirm client decision.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        )}
 
 
         <section className="updates-standalone-section">
@@ -3468,7 +2196,7 @@ const OrderActions = () => {
                         )}
                         <button
                           className="action-btn undo-btn updates-preview-action"
-                          onClick={() => requestDeleteUpdate(latestUpdatePreview)}
+                          onClick={() => handleDeleteUpdate(latestUpdatePreview)}
                           disabled={updateDeleteSubmittingId === latestUpdatePreview._id}
                         >
                           {updateDeleteSubmittingId === latestUpdatePreview._id

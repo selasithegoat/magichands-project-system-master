@@ -17,10 +17,6 @@ import "./EngagedProjects.css";
 const STATUS_OPTIONS = [
   "All",
   "Pending Departmental Engagement",
-  "Pending Quote Request",
-  "Quote Request Completed",
-  "Pending Send Response",
-  "Response Sent",
   "Pending Mockup",
   "Pending Proof Reading",
   "Pending Production",
