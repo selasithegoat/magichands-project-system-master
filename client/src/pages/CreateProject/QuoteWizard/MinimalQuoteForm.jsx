@@ -14,6 +14,8 @@ import "./MinimalQuoteForm.css";
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const dashboardPath = "/client";
+
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [leads, setLeads] = useState([]);
@@ -492,7 +494,8 @@ const MinimalQuoteForm = () => {
                         updateItem(index, "description", e.target.value)
                       }
                     />
-                  </div> <br/>
+                  </div>{" "}
+                  <br />
                   <div className="item-field details" style={{ flex: 2 }}>
                     <Input
                       placeholder="Details (Optional)"
@@ -612,12 +615,12 @@ const MinimalQuoteForm = () => {
                     document.getElementById("quote-attachments").click()
                   }
                   style={{ cursor: "pointer" }}
-                  >
-                    <FolderIcon />
-                    <p>Click to upload reference files</p>
-                    <span>Any file type (images, PDFs, audio, video)</span>
-                  </div>
-                )}
+                >
+                  <FolderIcon />
+                  <p>Click to upload reference files</p>
+                  <span>Any file type (images, PDFs, audio, video)</span>
+                </div>
+              )}
 
             {(selectedFiles.length > 0 ||
               existingSampleImage ||
@@ -719,9 +722,13 @@ const MinimalQuoteForm = () => {
 
       <ConfirmationModal
         isOpen={showSuccessModal}
-        onClose={() => navigate("/")}
-        onConfirm={() => navigate("/")}
-        title={editingId ? "Quote Updated Successfully" : "Quote Created Successfully"}
+        onClose={() => navigate(dashboardPath)}
+        onConfirm={() => navigate(dashboardPath)}
+        title={
+          editingId
+            ? "Quote Updated Successfully"
+            : "Quote Created Successfully"
+        }
         message={
           editingId
             ? `Quote revision ${createdOrderNumber} has been saved successfully.`

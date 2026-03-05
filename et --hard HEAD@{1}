@@ -1,0 +1,176 @@
+[33m85fb97e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m HEAD@{0}: reset: moving to HEAD~6
+[33m813958c[m HEAD@{1}: commit: fix: fix the workflow for Sample Production Quote
+[33me9a01ca[m HEAD@{2}: commit: feat(quotes): add Accept & Draft workflow, admin drafts page, and preserve quote history on Finish
+[33m3bf314f[m HEAD@{3}: commit: fix: change feedback status to decision for Quote orders
+[33m1890bb1[m HEAD@{4}: commit: fix: fix the redirection to login page on successful quote order creation bug
+[33mad5c573[m HEAD@{5}: commit: fix(Quote Order): fix quote order workflow
+[33m53d4b5e[m HEAD@{6}: commit: feat(Quote Orders): rewire Quote order worklow
+[33m85fb97e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m HEAD@{7}: commit: fix(Countdown): modify countdown timer to only run when status is truly pre-delivery
+[33m1c4b5fd[m HEAD@{8}: commit: feat: add Logo splash on login
+[33ma2ca3f6[m HEAD@{9}: commit: feat(project-details): add flip countdown animation with overdue mode and dynamic title
+[33ma69882c[m HEAD@{10}: commit: fix(notification): fix notification modal icons
+[33m7750549[m HEAD@{11}: commit: feat(reminder): add edit and delete buttons, and changed default delay time to 0 minutes
+[33mea72541[m HEAD@{12}: commit: feat(Reminder): add reminder alert, rearranged reminder history
+[33m2672075[m HEAD@{13}: commit: fix(notification): changed notification sounds
+[33mddb7b25[m HEAD@{14}: commit: feat(notification): add notification sound feature
+[33m4ffbb29[m HEAD@{15}: commit: feat(Reminder): Add set reminder feature
+[33m1240a90[m HEAD@{16}: commit: fix(bottleneck): fix bottle neck to show caution for all bottlneck projects
+[33m6169b31[m HEAD@{17}: commit: feat: show grouped order leads in project details
+[33m3ec6f9d[m HEAD@{18}: commit: feat(packaging): add packaging type to project creations
+[33m9be8ffd[m HEAD@{19}: commit: fix (notification): fixed notification rendering bug
+[33m6ac85b9[m HEAD@{20}: commit: fix (Front Desk): fix Order History to only include projects with status "Finished"
+[33m656369e[m HEAD@{21}: commit: feat (Dashboard): add animations to stat card icons
+[33m292251f[m HEAD@{22}: commit: fix(client-dashboard): apply corporate green stat-card theme and hide sample-approval tag after approval
+[33mdcba8bd[m HEAD@{23}: commit: feat (dashboard): add more new stat cards to admin and client and refined admin dashboard
+[33md6206cb[m HEAD@{24}: commit: fix: rearranged project details page in admin portal
+[33mdaaf6b7[m HEAD@{25}: commit: refactor(updates): standardize mockup/sample latest-update text and normalize legacy entries to short labels
+[33m112c2a9[m HEAD@{26}: commit: feat(admin): add project type conversion workflow (including Quote->Project)
+[33m2ecc74f[m HEAD@{27}: commit: feat: add Corporate Emergency persisted on project, surface sample-approval/corporate-emergency awareness via tags + watermarks on project cards, project details, and brief PDFs
+[33m513696b[m HEAD@{28}: commit: feat: add client sample-approval workflow with production blockers, cross-portal caution tags/modals, and standardized mockup/sample latest-update messages
+[33mda3bcf9[m HEAD@{29}: commit: fix (upload): redefined the .cdr file uploads bug
+[33ma73b803[m HEAD@{30}: commit: feat(mockup): auto-sync pending client approval to latest updates and add per-version decision controls
+[33ma0a6fd5[m HEAD@{31}: commit: feat: add mockup version and revision and set mockup approval functionality before mockup can be complete
+[33m15761da[m HEAD@{32}: commit: fix(client-portal): enforce read-only Order Items in project details for all users
+[33m4ec540e[m HEAD@{33}: commit: fix: fix the performance analysis stat grid arrangement
+[33ma2db5cc[m HEAD@{34}: commit: feat(project-details): add prominent live delivery countdown in admin and lead headers
+[33m87aa756[m HEAD@{35}: commit: feat(workflow): add cancelled-order lifecycle, and improve bottleneck stage alerts
+[33m946692e[m HEAD@{36}: commit: feat (admin): add alert to cancel project after 14days of bottle neck.
+[33m781fbe6[m HEAD@{37}: commit: feat(billing): add status blockers, warning popups, and billing notifications (admin override only)
+[33m6d1aadc[m HEAD@{38}: commit: feat(client): add Quotes dashboard card/view and mark emergency EOD updates in red
+[33m28f39c3[m HEAD@{39}: commit: feat(create-wizard): preserve draft inputs on exit and resume on reopen (save draft & exit flow)
+[33mee92904[m HEAD@{40}: commit: feat(step5): redesign Scope & Items breakdown into clear table layout with qty/item/details and mobile-friendly formatting
+[33m8dcb7c0[m HEAD@{41}: commit: feat: default contact type to "None" and surface front-desk contact type across Step 1, Review (Step 5), and Project Details
+[33md86d528[m HEAD@{42}: commit: feat(workflow): add Proof Reading, Quality Control, and Photography stages with admin-only validation for PR/QC
+[33mba8aea5[m HEAD@{43}: commit: fix: show only latest project update preview in Order Actions and ensure update feed stays current
+[33m5075abb[m HEAD@{44}: commit: feat(eod): Remove the Mark as Final End of Day Update checkbox and sort End of Day Update table by lead name (A-Z)
+[33md09d4e6[m HEAD@{45}: commit: feat(ui): apply project-type themed styling to project cards across dashboard, ongoing, and history views
+[33m9c16884[m HEAD@{46}: commit: feat(dashboard): add emergencies card, make emergency card fully themed with high-contrast colors and keep overdue/emergency pulse alerts.
+[33m786fdca[m HEAD@{47}: commit: fix(engaged-actions): block project leads from acting on their own engaged projects while allowing other department members
+[33m454b2a0[m HEAD@{48}: commit: feat(workflow): add Departmental Engagement stage after scope approval with strict all-department acknowledgement gating
+[33m9d17d08[m HEAD@{49}: commit: fix: make admin-lead permissions portal-aware and restore Order Confirmed -> Pending Scope Approval acceptance flow
+[33m158821b[m HEAD@{50}: commit: feat: Add password visibility toggle to the client portal login.
+[33m9607640[m HEAD@{51}: commit: fix(auth): harden logout/session clearing across devices and set inactivity timeout to 5 minutes
+[33m8a1e770[m HEAD@{52}: commit: feat(engaged-projects): add polished brief overview and reference materials section before actions
+[33m22bfc34[m HEAD@{53}: commit: fix(auth): restrict admin portal to Administration admins and fix LAN admin access
+[33m3e262c1[m HEAD@{54}: commit: fix: fix the employee card layout
+[33mfb3ea54[m HEAD@{55}: commit: feat(auth): enforce admin-grade password policy on user password changes and add profile strength guidance UI
+[33mab5798a[m HEAD@{56}: commit: fix(upload-access): resolve grouped-order files by URL fallback to allow authorized lead/admin access
+[33m778210d[m HEAD@{57}: commit: fix: fix admin projects page render cycle bug in loop
+[33m8385e03[m HEAD@{58}: commit: feat(orders): implement grouped-order workflow across front desk/admin
+[33m7df071c[m HEAD@{59}: commit: feat(ai-risk): make suggestions project-aware and reduce repetition
+[33m84ce7a7[m HEAD@{60}: commit: feat(order-actions): add order revision editing, timestamps, and notifications
+[33mc5ff1cc[m HEAD@{61}: commit: fix: update upload folder naming so new uploads resolve to orderId_projectName more accurately.
+[33mda46444[m HEAD@{62}: commit: fix: Scope global API rate limiting to write methods
+[33m97d8b87[m HEAD@{63}: commit: feat(notifications): alert new and previous lead when project lead is reassigned
+[33m24a7833[m HEAD@{64}: commit: feat(engaged-projects): show approved mockup reference and download in production section
+[33m806ac0c[m HEAD@{65}: commit: feat(notifications): send billing status-change alerts to creator, front desk, admins, and actor
+[33me3ebf2a[m HEAD@{66}: commit: fix(uploads): restore image access with slug-aware project lookup and tolerant orderId matching
+[33mde8a334[m HEAD@{67}: commit: fix(security): validate login primitives and enforce object-level upload access
+[33mfb7b79d[m HEAD@{68}: commit: chore(security): add automated secret scanning and tighten secret file hygiene
+[33mc7debed[m HEAD@{69}: commit: chore(security): apply available npm audit fixes across server and admin
+[33m104c648[m HEAD@{70}: commit: fix(security): disable public self-registration by default
+[33m18ea34a[m HEAD@{71}: commit: fix(security): restrict employee directory access and minimize user payload
+[33mdbc8a77[m HEAD@{72}: commit: fix(security): restrict uploads and protect public file serving
+[33mf08fae2[m HEAD@{73}: commit: fix(security): harden credentialed CORS and add CSRF origin checks
+[33m138fcd6[m HEAD@{74}: commit: fix(security): enforce object-level authorization for project mutations
+[33m65239a9[m HEAD@{75}: commit: fix(security): enforce object-level auth on project update APIs
+[33m95837c1[m HEAD@{76}: commit: feat(inventory): add stores inventory module with CRUD, searchable selectors, and pagination
+[33m34723fc[m HEAD@{77}: commit: feat: replaced portal UI <a> tags with React Router <Link> across client and admin
+[33mbbbc396[m HEAD@{78}: commit: refactor(profile): remove admin-managed employee type and department from editable form
+[33mb9091ef[m HEAD@{79}: commit: fix: fixe EOD pagination buttons UI
+[33m56cd635[m HEAD@{80}: commit: feat(frontdesk,admin): paginate all orders and refine post-feedback project visibility
+[33mfc05481[m HEAD@{81}: commit: feat: Implement the reopen project/order restructure
+[33m9a05ca4[m HEAD@{82}: commit: update: Add Project Lead under Order ID
+[33m1d35e7f[m HEAD@{83}: commit: fix: fix duplicate "on hold" nitification
+[33md131f76[m HEAD@{84}: commit: feat: redesign the email message look
+[33mcbda4a3[m HEAD@{85}: commit: feat: Add Front Desk “Updates” section & edit button to "Updates" in Project Details
+[33me26eb7a[m HEAD@{86}: commit: fix(billing): require full payment verification before marking delivery complete when only part payment exists
+[33mcaf339b[m HEAD@{87}: commit: feat: email custom design
+[33mca12366[m HEAD@{88}: commit: Implement: duplicate-notification guard at the service layer.
+[33m8ba1c92[m HEAD@{89}: commit: added a dedicated billing notification service
+[33m862b067[m HEAD@{90}: commit: disabled notification popups on page refresh in the client portal.
+[33m25ff7b6[m HEAD@{91}: commit: feat: add Ollama failover for production risk suggestions
+[33m6b8441c[m HEAD@{92}: commit: feat(server): add rate limiting, MongoDB indexes, and rclone backup script
+[33me501b95[m HEAD@{93}: commit: change: changed the next and previous button
+[33mdc6ed59[m HEAD@{94}: commit: Fix: touch rotation pause. release now reliably resumes countdown.
+[33m26db4a6[m HEAD@{95}: commit: implement: logout confirmation dialog for client and admin
+[33m8c65c4d[m HEAD@{96}: commit: fix: final swipe changes
+[33mdb73209[m HEAD@{97}: commit: fix: page swiping animation changes
+[33m23a2d95[m HEAD@{98}: commit: 1. fix: responsive views
+[33m704ecfb[m HEAD@{99}: commit: feat(opsportal): add auto-rotating multi-page wallboard, fix deadline time sync, and optimize full-screen responsive layout
+[33m4bc329f[m HEAD@{100}: commit: fix: delivery time unmatch in approaching deadline section
+[33m1b03940[m HEAD@{101}: commit: feat(ops): add manager wallboard portal with live metrics, secure ops API, and proxy fix
+[33mad07124[m HEAD@{102}: commit: implement: AI production risk suggestions now use Project Name and Item Description more directly for precision.
+[33md5814f0[m HEAD@{103}: commit: fix(quote-wizard): resolve lead names, lock prefilled step-1 fields, and remove quote item department input
+[33m680f73f[m HEAD@{104}: commit: fix engaged action cards height
+[33m91d9c2f[m HEAD@{105}: commit: change min and max risk suggestions
+[33m976bd18[m HEAD@{106}: commit: feat: implement AI suggestions for Production Risks
+[33m0189c38[m HEAD@{107}: commit: feat: treat quote projects as enquiries (Quote Sent, no payment verification)
+[33m8a40d44[m HEAD@{108}: commit: add project on hold feature
+[33m73ffc0c[m HEAD@{109}: commit: Show only billing actions or undo buttons to reduce clutter
+[33m8f8e68f[m HEAD@{110}: commit: Fix mockup actions flow and embed inline preview
+[33mffb8eb8[m HEAD@{111}: commit: fix the dropped upload mockup feature and completion on mockup upload
+[33mf88aabe[m HEAD@{112}: commit: Add weekly digest widget with due-date reminders and email scheduler
+[33me431236[m HEAD@{113}: commit: Fix long mockup filenames overflowing the download button
+[33m99a429f[m HEAD@{114}: commit: Add a dedicated Engaged Project Actions page
+[33m0a5f9d6[m HEAD@{115}: commit: Add order actions flow with billing tags and production payment gating
+[33m6d97950[m HEAD@{116}: commit: Blocked department engagement acceptance until scope approval is complete
+[33m0fe3885[m HEAD@{117}: commit: Add project analytics chart and CSV export
+[33m43e83cc[m HEAD@{118}: commit: Add project analytics page and API, update analytics table navigation
+[33m639ccfa[m HEAD@{119}: commit: made analytics labels clearer with stage descriptions, status-range context, and more explicit metric labels.
+[33m7b1681b[m HEAD@{120}: commit: CSV export is implemented on the Analytics page.
+[33m07f9f66[m HEAD@{121}: commit: Added an Admin-only Performance Analytics page
+[33mb62934f[m HEAD@{122}: reset: moving to HEAD~1
+[33m1fabe03[m HEAD@{123}: commit: created comments section for projects
+[33mb62934f[m HEAD@{124}: commit: add migrate-uploads.js to server/.gitignore.
+[33me3f1a03[m HEAD@{125}: commit: organized uploads into folders
+[33me6d8227[m HEAD@{126}: commit: move approved mockup to it's own section
+[33m9501b11[m HEAD@{127}: commit: add approved mockup to admin and remove View Mockup button
+[33mb96fed3[m HEAD@{128}: commit: Add mockup upload flow, status confirmation, and production access/notifications
+[33mfb31a04[m HEAD@{129}: commit: Updated the action buttons to lay out horizontally with wrapping and natural button widths.
+[33mded9450[m HEAD@{130}: commit: edit phrase color
+[33m0526ace[m HEAD@{131}: commit: Implemented search on Ongoing Projects.
+[33m41e65ae[m HEAD@{132}: commit: replaced the avatar image with initials computed from the lead name in
+[33m6ffa067[m HEAD@{133}: commit: removed the "Start New Project" button in the title section
+[33mbf4914b[m HEAD@{134}: commit: fixed the engaged-project visibility issue by treating parent departments as covering all their sub‑departments on both server and client
+[33m49330d7[m HEAD@{135}: commit: Add engagement/delivery confirmations, admin unacknowledge, and PDF ack tagging
+[33mf52467d[m HEAD@{136}: commit: Feedback shows Completed only when status is Feedback Completed; otherwise it shows Pending.
+[33m3fb3d81[m HEAD@{137}: commit: added a feedback workflow with new statuses (Pending Feedback, Feedback Completed), auto‑advance from delivery, and API support to add/delete feedback.
+[33mf19c800[m HEAD@{138}: commit: Adjusted Delivered progress to 95% in both Project Detail (quote and standard) and Project Card maps so only Completed/Finished are 100%.
+[33m174d182[m HEAD@{139}: commit: README.md update
+[33ma8a1618[m HEAD@{140}: commit: Readme.md edit
+[33m74bd76a[m HEAD@{141}: commit: edited Readme.md
+[33me9e1fb3[m HEAD@{142}: commit (merge): Resolve merge: keep ours
+[33md926024[m HEAD@{143}: checkout: moving from main to main
+[33md926024[m HEAD@{144}: commit: changed Total Active to Total Projects
+[33mf81afd5[m HEAD@{145}: commit: Updated the Admin Project Details “People & Department” display
+[33m0e2667d[m HEAD@{146}: commit: updated the project assignment flow so both Lead and Assistant Lead are notified when assignment happens via project update.
+[33mb4e0748[m HEAD@{147}: commit: Added shared lead-display helpers in both portals so lead names render as LeadFirst / AssistantFirst when an assistant exists, with safe fallbacks.
+[33mc82f5f1[m HEAD@{148}: commit: Added optional Assistant Lead selection to all New Order creation flows
+[33m25a51ab[m HEAD@{149}: commit: replaced the History table “Completion” column with “Department” and populated it with the user‑engaged sub‑department(s)
+[33m34b089d[m HEAD@{150}: commit: added an Engaged Projects tab switcher with a new History view that lists only Completed and Finished projects
+[33m2d44f67[m HEAD@{151}: commit: regenerated the favicon assets
+[33m1ee4966[m HEAD@{152}: commit: few edit's on favicon
+[33m5d57277[m HEAD@{153}: commit: Updated both portals to use the logo as the favicon.
+[33mcdac10b[m HEAD@{154}: commit: edited README.md
+[33mac603b4[m HEAD@{155}: commit: Added the AGPL‑3.0 license file and updated the README to reference it.
+[33m36d18bf[m HEAD@{156}: commit: Disabled the “Project Activity Updated” notifications at the source so status changes no longer produce duplicate alerts.
+[33m995ff5c[m HEAD@{157}: commit: Synced Profile stats by counting Completed, Finished, and Delivered projects for Tasks Completed/Hours Logged
+[33m4cb21a5[m HEAD@{158}: commit: Added Production sub-department selection to employee registration/edit (multi-select) and normalized storage alongside Production.
+[33m9af0c30[m HEAD@{159}: commit: Updated the admin dashboard so the Total Completed count treats Finished as completed
+[33m5768ff7[m HEAD@{160}: commit: Fixed the quote wizard visibility issues by defining the missing theme variables and tightening the quote wizard button/title styles.
+[33mfea6feb[m HEAD@{161}: commit: Project detail progress for Quote projects now treats Finished and Delivered as 100 too.
+[33m944cd46[m HEAD@{162}: commit: 1. Updated the client dashboard “Active Projects” count to exclude history statuses.
+[33m976c224[m HEAD@{163}: commit: 1. Allow all file types (audio/video/etc.)
+[33mb65a848[m HEAD@{164}: commit: removed the lead avatar
+[33m7ae8655[m HEAD@{165}: commit: made the project details of step 1 readOnly
+[33me90e02b[m HEAD@{166}: commit: few UI fixes
+[33m1cf76e4[m HEAD@{167}: commit: The admin Project Details header now stacks vertically
+[33m7b07e06[m HEAD@{168}: commit: Added a server‑side SSE (Server‑Sent Events) stream at /api/realtime
+[33m2ca65e6[m HEAD@{169}: commit: refined the project status changes
+[33m53de98c[m HEAD@{170}: commit: Increased and made the upload size limit configurable
+[33m72c2724[m HEAD@{171}: commit: fixed Admin dashboard and projects page not populating data
+[33m91508be[m HEAD@{172}: commit: changed url links from IP and Port to custom url name
+[33mf4daab3[m HEAD@{173}: commit: make both base links land on the login screens cleanly
+[33m0bcc837[m HEAD@{174}: commit: configured host for LAN
+[33maad9926[m HEAD@{175}: commit (initial): initial commit
