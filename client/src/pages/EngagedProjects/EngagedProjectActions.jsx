@@ -82,31 +82,24 @@ const BILLING_REQUIREMENT_LABELS = {
     "Full payment or authorization verification",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
-const QUOTE_REQUIREMENT_KEYS = [
-  "cost",
-  "mockup",
-  "previousSamples",
-  "sampleProduction",
-  "bidSubmission",
-];
-const QUOTE_REQUIREMENT_LABELS = {
-  cost: "Cost",
-  mockup: "Mockup",
-  previousSamples: "Previous Sample / Jobs Done",
-  sampleProduction: "Sample Production",
-  bidSubmission: "Bid Submission / Documents",
+const QUOTE_REQUIREMENT_MOCKUP_KEY = "mockup";
+const QUOTE_REQUIREMENT_MOCKUP_LABEL = "Mockup";
+const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Departmental Engagement",
+]);
+const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set([
+  "Pending Quote Request",
+  "Pending Mockup",
+]);
+const QUOTE_MOCKUP_SUBMIT_TRANSITIONS = {
+  assigned: ["in_progress", "dept_submitted"],
+  in_progress: ["dept_submitted"],
+  client_revision_requested: ["in_progress", "dept_submitted"],
+  blocked: ["in_progress", "dept_submitted"],
 };
-const QUOTE_REQUIREMENT_DEPARTMENT_KEYS = {
-  Graphics: ["mockup", "sampleProduction"],
-  Production: ["sampleProduction"],
-  Stores: ["previousSamples"],
-};
-
-const normalizeQuoteChecklist = (checklist = {}) =>
-  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
-    accumulator[key] = Boolean(checklist?.[key]);
-    return accumulator;
-  }, {});
 
 const formatQuoteRequirementStatus = (status = "") => {
   const normalized = String(status || "").trim().toLowerCase();
@@ -117,47 +110,31 @@ const formatQuoteRequirementStatus = (status = "") => {
     .join(" ");
 };
 
-const getQuoteRequirementItems = (project = {}) => {
+const getQuoteRequirementState = (project = {}, key = "") => {
   const quoteDetails = project?.quoteDetails || {};
-  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
+  const checklistRequired = Boolean(quoteDetails?.checklist?.[key]);
   const rawItems =
     quoteDetails?.requirementItems &&
     typeof quoteDetails.requirementItems === "object"
       ? quoteDetails.requirementItems
       : {};
+  const rawItem = rawItems?.[key] && typeof rawItems[key] === "object"
+    ? rawItems[key]
+    : {};
+  const rawStatus = String(rawItem?.status || "").trim().toLowerCase();
+  const isRequired = Boolean(rawItem?.isRequired) || checklistRequired;
+  const status = isRequired
+    ? rawStatus && rawStatus !== "not_required"
+      ? rawStatus
+      : "assigned"
+    : "not_required";
 
-  return QUOTE_REQUIREMENT_KEYS.map((key) => {
-    const rawItem =
-      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
-    const isRequired = Boolean(checklist[key]);
-    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
-    const status = isRequired ? normalizedStatus || "assigned" : "not_required";
-
-    return {
-      key,
-      label: QUOTE_REQUIREMENT_LABELS[key] || key,
-      isRequired,
-      status,
-      updatedAt: rawItem?.updatedAt || null,
-      note: String(rawItem?.note || "").trim(),
-    };
-  });
-};
-
-const getQuoteDepartmentActions = (status) => {
-  const normalized = String(status || "").trim().toLowerCase();
-
-  if (normalized === "assigned") {
-    return [{ toStatus: "in_progress", label: "Start Work" }];
-  }
-  if (normalized === "in_progress") {
-    return [{ toStatus: "dept_submitted", label: "Submit to Front Desk" }];
-  }
-  if (normalized === "client_revision_requested") {
-    return [{ toStatus: "in_progress", label: "Start Rework" }];
-  }
-
-  return [];
+  return {
+    isRequired,
+    status,
+    updatedAt: rawItem?.updatedAt || null,
+    note: String(rawItem?.note || "").trim(),
+  };
 };
 
 const formatBillingRequirementLabels = (missing = []) =>
@@ -279,8 +256,6 @@ const EngagedProjectActions = ({ user }) => {
   const [mockupFile, setMockupFile] = useState(null);
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
-  const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
-    useState("");
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -365,25 +340,31 @@ const EngagedProjectActions = ({ user }) => {
   );
   const isQuoteProject = project?.projectType === "Quote";
   const paymentChecksEnabled = !isQuoteProject;
-  const quoteRequirementItems = useMemo(
-    () => (isQuoteProject ? getQuoteRequirementItems(project) : []),
+  const quoteMockupRequirement = useMemo(
+    () =>
+      isQuoteProject
+        ? getQuoteRequirementState(project, QUOTE_REQUIREMENT_MOCKUP_KEY)
+        : {
+            isRequired: false,
+            status: "not_required",
+            updatedAt: null,
+            note: "",
+          },
     [isQuoteProject, project],
   );
-  const quoteDepartmentQueueBySection = useMemo(() => {
-    if (!isQuoteProject) return {};
+  const quoteDepartmentalEngagementComplete = useMemo(() => {
+    if (!isQuoteProject) return true;
+    const status = String(project?.status || "").trim();
+    if (QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(status)) return false;
 
-    return Object.entries(QUOTE_REQUIREMENT_DEPARTMENT_KEYS).reduce(
-      (accumulator, [sectionKey, requirementKeys]) => {
-        accumulator[sectionKey] = quoteRequirementItems.filter(
-          (item) =>
-            item.isRequired &&
-            requirementKeys.includes(item.key),
-        );
-        return accumulator;
-      },
-      {},
+    const engagedDepartments = Array.isArray(project?.departments)
+      ? project.departments
+      : [];
+    if (engagedDepartments.length === 0) return false;
+    return engagedDepartments.every((departmentName) =>
+      acknowledgedDepts.has(departmentName),
     );
-  }, [isQuoteProject, quoteRequirementItems]);
+  }, [isQuoteProject, project?.status, project?.departments, acknowledgedDepts]);
   const invoiceSent = Boolean(project?.invoice?.sent);
   const pendingProductionMissing =
     project && paymentChecksEnabled
@@ -980,11 +961,12 @@ const EngagedProjectActions = ({ user }) => {
     if (!completeTarget) return;
     if (completeInput.trim() !== COMPLETE_PHRASE) return;
 
+    const isQuoteMockupCompletion =
+      isQuoteProject && completeTarget?.action?.dept === "Graphics";
     setCompleteSubmitting(true);
-    const completed = await handleCompleteStatus(
-      completeTarget.project,
-      completeTarget.action,
-    );
+    const completed = isQuoteMockupCompletion
+      ? await handleConfirmQuoteMockupRequirement(completeTarget.project)
+      : await handleCompleteStatus(completeTarget.project, completeTarget.action);
     setCompleteSubmitting(false);
     if (completed) {
       setShowCompleteModal(false);
@@ -1028,8 +1010,9 @@ const EngagedProjectActions = ({ user }) => {
         const updatedProject = await res.json();
         setToast({
           type: "success",
-          message:
-            "Mockup uploaded. Wait for Front Desk/Admin client decision before confirming completion.",
+          message: isQuoteProject
+            ? "Mockup uploaded and submitted to Front Desk for processing."
+            : "Mockup uploaded. Wait for Front Desk/Admin client decision before confirming completion.",
         });
         setProject(updatedProject);
         closeMockupModal();
@@ -1048,23 +1031,22 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
-  const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
-    if (!project || !isQuoteProject) return;
-    if (isProjectLeadForProject) {
-      setToast({
-        type: "error",
-        message:
-          "Project Leads cannot take engagement actions on their own projects here.",
-      });
-      return;
+  const transitionQuoteRequirement = async ({
+    targetProject,
+    requirementKey,
+    toStatus,
+    suppressErrorToast = false,
+  } = {}) => {
+    if (!targetProject?._id || !isQuoteProject) {
+      return {
+        ok: false,
+        errorData: { message: "Quote project is not available." },
+      };
     }
-
-    const pendingKey = `${requirementKey}:${toStatus}`;
-    setQuoteRequirementSubmittingKey(pendingKey);
 
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/quote-requirements/${requirementKey}/transition?source=engaged`,
+        `/api/projects/${targetProject._id}/quote-requirements/${requirementKey}/transition?source=engaged`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -1075,27 +1057,134 @@ const EngagedProjectActions = ({ user }) => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        setToast({
-          type: "success",
-          message: `${QUOTE_REQUIREMENT_LABELS[requirementKey] || "Requirement"} moved to ${formatQuoteRequirementStatus(toStatus)}.`,
-        });
-        return;
+        return { ok: true, project: updated };
       }
 
       const errorData = await res.json().catch(() => ({}));
-      setToast({
-        type: "error",
-        message: errorData.message || "Failed to update quote requirement.",
-      });
+      if (!suppressErrorToast) {
+        setToast({
+          type: "error",
+          message: errorData.message || "Failed to update quote requirement.",
+        });
+      }
+      return { ok: false, errorData };
     } catch (error) {
       console.error("Quote requirement transition error:", error);
+      if (!suppressErrorToast) {
+        setToast({
+          type: "error",
+          message: "An unexpected error occurred.",
+        });
+      }
+      return {
+        ok: false,
+        errorData: { message: "An unexpected error occurred." },
+      };
+    }
+  };
+
+  const handleConfirmQuoteMockupRequirement = async (targetProject) => {
+    if (!targetProject?._id || !isQuoteProject) return false;
+
+    if (isProjectLeadForProject) {
       setToast({
         type: "error",
-        message: "An unexpected error occurred.",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
       });
-    } finally {
-      setQuoteRequirementSubmittingKey("");
+      return false;
     }
+
+    const quoteStatus = String(targetProject?.status || "").trim();
+    const engagedDepartments = Array.isArray(targetProject?.departments)
+      ? targetProject.departments
+      : [];
+    const targetAcknowledged = new Set(
+      (targetProject?.acknowledgements || []).map((ack) => ack.department),
+    );
+    const departmentalEngagementDone =
+      !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus) &&
+      engagedDepartments.length > 0 &&
+      engagedDepartments.every((departmentName) =>
+        targetAcknowledged.has(departmentName),
+      );
+
+    if (!departmentalEngagementDone) {
+      setToast({
+        type: "error",
+        message: "Complete departmental engagement before submitting mockup.",
+      });
+      return false;
+    }
+
+    if (!targetProject?.mockup?.fileUrl) {
+      setToast({
+        type: "error",
+        message: "Upload the mockup file before confirming completion.",
+      });
+      return false;
+    }
+
+    const mockupRequirement = getQuoteRequirementState(
+      targetProject,
+      QUOTE_REQUIREMENT_MOCKUP_KEY,
+    );
+
+    if (!mockupRequirement.isRequired) {
+      setToast({
+        type: "error",
+        message: "Mockup is not marked as a required quote item.",
+      });
+      return false;
+    }
+
+    const plannedTransitions =
+      QUOTE_MOCKUP_SUBMIT_TRANSITIONS[mockupRequirement.status] || [];
+
+    if (plannedTransitions.length === 0) {
+      const normalizedStatus = String(mockupRequirement.status || "").trim().toLowerCase();
+      const statusMessage =
+        normalizedStatus === "dept_submitted"
+          ? "Mockup requirement has already been submitted to Front Desk."
+          : ["frontdesk_review", "sent_to_client"].includes(normalizedStatus)
+            ? "Mockup requirement is awaiting Front Desk/client review."
+            : normalizedStatus === "client_approved"
+              ? "Mockup requirement is already client-approved."
+              : `Mockup requirement cannot be submitted from ${formatQuoteRequirementStatus(normalizedStatus)}.`;
+      setToast({
+        type: "error",
+        message: statusMessage,
+      });
+      return false;
+    }
+
+    let workingProject = targetProject;
+    for (const nextStatus of plannedTransitions) {
+      const transitionResult = await transitionQuoteRequirement({
+        targetProject: workingProject,
+        requirementKey: QUOTE_REQUIREMENT_MOCKUP_KEY,
+        toStatus: nextStatus,
+        suppressErrorToast: true,
+      });
+
+      if (!transitionResult.ok) {
+        setToast({
+          type: "error",
+          message:
+            transitionResult.errorData?.message ||
+            "Failed to submit mockup requirement.",
+        });
+        return false;
+      }
+
+      workingProject = transitionResult.project || workingProject;
+    }
+
+    setToast({
+      type: "success",
+      message: `${QUOTE_REQUIREMENT_MOCKUP_LABEL} requirement submitted to Front Desk.`,
+    });
+    return true;
   };
 
   if (loading) {
@@ -1329,15 +1418,6 @@ const EngagedProjectActions = ({ user }) => {
             const action = section.action;
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
-            const supportsQuoteQueue =
-              isQuoteProject &&
-              Object.prototype.hasOwnProperty.call(
-                QUOTE_REQUIREMENT_DEPARTMENT_KEYS,
-                section.key,
-              );
-            const sectionQuoteQueueItems = supportsQuoteQueue
-              ? quoteDepartmentQueueBySection[section.key] || []
-              : [];
 
             return (
               <section key={section.key} className="engaged-section">
@@ -1444,109 +1524,6 @@ const EngagedProjectActions = ({ user }) => {
                     </div>
                   </div>
 
-                  {supportsQuoteQueue && (
-                    <div className="engaged-action-card engaged-quote-queue-card">
-                      <h3>Quote Requirement Queue</h3>
-                      <p>
-                        Move required quote items from assignment to department
-                        submission.
-                      </p>
-
-                      {sectionQuoteQueueItems.length === 0 ? (
-                        <div className="engaged-quote-queue-empty">
-                          No required quote requirements are currently assigned to{" "}
-                          {section.label}.
-                        </div>
-                      ) : (
-                        <div className="engaged-quote-queue-list">
-                          {sectionQuoteQueueItems.map((item) => {
-                            const normalizedStatus = String(item.status || "")
-                              .trim()
-                              .toLowerCase();
-                            const quickActions = getQuoteDepartmentActions(
-                              normalizedStatus,
-                            );
-                            const submittingThisRequirement =
-                              quoteRequirementSubmittingKey.startsWith(
-                                `${item.key}:`,
-                              );
-                            const itemClassName = [
-                              "engaged-quote-queue-item",
-                              normalizedStatus === "client_approved"
-                                ? "is-approved"
-                                : "",
-                              normalizedStatus === "client_revision_requested"
-                                ? "is-revision"
-                                : "",
-                              normalizedStatus === "dept_submitted"
-                                ? "is-submitted"
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ");
-
-                            return (
-                              <div key={item.key} className={itemClassName}>
-                                <div className="engaged-quote-queue-item-header">
-                                  <strong>{item.label}</strong>
-                                  <span className="engaged-quote-queue-status">
-                                    {formatQuoteRequirementStatus(normalizedStatus)}
-                                  </span>
-                                </div>
-
-                                {item.updatedAt && (
-                                  <div className="engaged-action-meta">
-                                    Updated: {formatUpdateDateTime(item.updatedAt)}
-                                  </div>
-                                )}
-
-                                {item.note && (
-                                  <div className="engaged-action-meta">
-                                    Note: {item.note}
-                                  </div>
-                                )}
-
-                                {quickActions.length > 0 ? (
-                                  <div className="engaged-quote-queue-actions">
-                                    {quickActions.map((actionItem) => (
-                                      <button
-                                        key={`${item.key}-${actionItem.toStatus}`}
-                                        className="complete-btn engaged-quote-queue-btn"
-                                        onClick={() =>
-                                          handleQuoteRequirementTransition(
-                                            item.key,
-                                            actionItem.toStatus,
-                                          )
-                                        }
-                                        disabled={
-                                          submittingThisRequirement ||
-                                          isProjectLeadForProject
-                                        }
-                                      >
-                                        {actionItem.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="engaged-action-meta">
-                                    {normalizedStatus === "dept_submitted"
-                                      ? "Submitted. Waiting for Front Desk review."
-                                      : normalizedStatus === "frontdesk_review" ||
-                                          normalizedStatus === "sent_to_client"
-                                        ? "Waiting for Front Desk/client response."
-                                        : normalizedStatus === "client_approved"
-                                          ? "Client approved. No further department action."
-                                          : "No department action required at this stage."}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {action && (() => {
                     const isPending = project.status === action.pending;
                     const isProductionAction =
@@ -1563,6 +1540,10 @@ const EngagedProjectActions = ({ user }) => {
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
+                    const isQuoteGraphicsAction = isQuoteProject && isMockupAction;
+                    const quoteAllowsMockupWorkflowStatus =
+                      isQuoteGraphicsAction &&
+                      QUOTE_MOCKUP_WORKFLOW_STATUS_SET.has(project.status);
                     const mockupAlreadySubmitted = Boolean(mockupUrl);
                     const mockupApprovalPending =
                       isMockupAction && mockupApprovalStatus === "pending";
@@ -1571,12 +1552,35 @@ const EngagedProjectActions = ({ user }) => {
                     const mockupApprovalConfirmed =
                       isMockupAction && mockupApprovalStatus === "approved";
                     const canConfirmMockupCompletion =
+                      !isQuoteGraphicsAction &&
                       isMockupAction &&
                       mockupAlreadySubmitted &&
                       mockupApprovalConfirmed;
+                    const quoteMockupStatus = String(
+                      quoteMockupRequirement?.status || "",
+                    )
+                      .trim()
+                      .toLowerCase();
+                    const quoteMockupStatusLabel =
+                      formatQuoteRequirementStatus(quoteMockupStatus);
+                    const quoteMockupTransitions =
+                      QUOTE_MOCKUP_SUBMIT_TRANSITIONS[quoteMockupStatus] || [];
+                    const quoteMockupReadyForSubmission =
+                      isQuoteGraphicsAction &&
+                      quoteAllowsMockupWorkflowStatus &&
+                      quoteMockupRequirement.isRequired &&
+                      quoteDepartmentalEngagementComplete &&
+                      mockupAlreadySubmitted &&
+                      quoteMockupTransitions.length > 0;
+                    const canUploadMockup =
+                      !isUpdating &&
+                      !isProjectLeadForProject &&
+                      (isQuoteGraphicsAction
+                        ? quoteAllowsMockupWorkflowStatus
+                        : isPending);
 
                     let disabledReason = "";
-                    if (!isPending) {
+                    if (!isQuoteGraphicsAction && !isPending) {
                       disabledReason = `Waiting for ${action.pending}.`;
                     } else if (isProjectLeadForProject) {
                       disabledReason =
@@ -1588,12 +1592,87 @@ const EngagedProjectActions = ({ user }) => {
                       disabledReason = `Before Pending Delivery/Pickup, confirm ${pendingDeliveryMissingLabels.join(", ")}.`;
                     }
 
+                    let mockupUploadTitle = "Upload approved mockup";
+                    if (isProjectLeadForProject) {
+                      mockupUploadTitle =
+                        "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      !quoteAllowsMockupWorkflowStatus
+                    ) {
+                      mockupUploadTitle =
+                        "Mockup upload is only available while status is Pending Quote Request.";
+                    } else if (!isQuoteGraphicsAction && !isPending) {
+                      mockupUploadTitle = `Waiting for ${action.pending}.`;
+                    } else if (mockupApprovalRejected) {
+                      mockupUploadTitle =
+                        "Client rejected latest mockup. Upload a revised version.";
+                    } else if (mockupAlreadySubmitted) {
+                      mockupUploadTitle =
+                        "Upload a new revision if changes are needed.";
+                    }
+
+                    let mockupConfirmTitle = "Confirm mockup completion";
+                    if (isProjectLeadForProject) {
+                      mockupConfirmTitle =
+                        "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      !quoteAllowsMockupWorkflowStatus
+                    ) {
+                      mockupConfirmTitle =
+                        "Mockup completion for quote is only available while status is Pending Quote Request.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      !quoteDepartmentalEngagementComplete
+                    ) {
+                      mockupConfirmTitle =
+                        "Departmental engagement must be completed first.";
+                    } else if (isQuoteGraphicsAction && !mockupAlreadySubmitted) {
+                      mockupConfirmTitle = "Upload mockup before confirming.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      !quoteMockupRequirement.isRequired
+                    ) {
+                      mockupConfirmTitle =
+                        "Mockup is not marked as required for this quote.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      quoteMockupTransitions.length === 0
+                    ) {
+                      if (quoteMockupStatus === "client_approved") {
+                        mockupConfirmTitle =
+                          "Mockup requirement is already client-approved.";
+                      } else if (
+                        ["dept_submitted", "frontdesk_review", "sent_to_client"].includes(
+                          quoteMockupStatus,
+                        )
+                      ) {
+                        mockupConfirmTitle =
+                          "Mockup requirement is already awaiting Front Desk/client review.";
+                      } else {
+                        mockupConfirmTitle = `Cannot submit from ${quoteMockupStatusLabel}.`;
+                      }
+                    } else if (!isQuoteGraphicsAction && !isPending) {
+                      mockupConfirmTitle = `Waiting for ${action.pending}.`;
+                    } else if (!isQuoteGraphicsAction && !mockupAlreadySubmitted) {
+                      mockupConfirmTitle = "Upload mockup before confirming";
+                    } else if (!isQuoteGraphicsAction && mockupApprovalRejected) {
+                      mockupConfirmTitle =
+                        "Client rejected latest mockup. Upload revision first.";
+                    } else if (!isQuoteGraphicsAction && mockupApprovalPending) {
+                      mockupConfirmTitle =
+                        "Waiting for Front Desk/Admin client decision.";
+                    }
+
                     return (
                       <div className="engaged-action-card">
                         <h3>{action.dept} Stage</h3>
                         <p>
                           {isMockupAction
-                            ? "Upload the approved mockup and confirm completion."
+                            ? isQuoteGraphicsAction
+                              ? "Upload mockup, then confirm completion to submit this quote requirement to Front Desk."
+                              : "Upload the approved mockup and confirm completion."
                             : "Confirm this stage is complete for the project."}
                         </p>
                         {isMockupAction ? (
@@ -1601,22 +1680,8 @@ const EngagedProjectActions = ({ user }) => {
                             <button
                               className="complete-btn"
                               onClick={() => openMockupModal(project, action)}
-                              disabled={
-                                !isPending ||
-                                isUpdating ||
-                                isProjectLeadForProject
-                              }
-                              title={
-                                !isPending
-                                  ? `Waiting for ${action.pending}.`
-                                  : isProjectLeadForProject
-                                    ? "Project leads cannot take engagement actions on their own projects here."
-                                  : mockupApprovalRejected
-                                    ? "Client rejected latest mockup. Upload a revised version."
-                                  : mockupAlreadySubmitted
-                                    ? "Upload a new revision if changes are needed."
-                                    : "Upload approved mockup"
-                              }
+                              disabled={!canUploadMockup}
+                              title={mockupUploadTitle}
                             >
                               {mockupApprovalRejected
                                 ? `Upload Revision (${mockupVersionLabel})`
@@ -1628,24 +1693,13 @@ const EngagedProjectActions = ({ user }) => {
                               className="complete-btn confirm-btn"
                               onClick={() => openCompleteModal(project, action)}
                               disabled={
-                                !isPending ||
                                 isUpdating ||
-                                !canConfirmMockupCompletion ||
+                                (isQuoteGraphicsAction
+                                  ? !quoteMockupReadyForSubmission
+                                  : !isPending || !canConfirmMockupCompletion) ||
                                 isProjectLeadForProject
                               }
-                              title={
-                                !isPending
-                                  ? `Waiting for ${action.pending}.`
-                                  : isProjectLeadForProject
-                                    ? "Project leads cannot take engagement actions on their own projects here."
-                                  : !mockupAlreadySubmitted
-                                    ? "Upload mockup before confirming"
-                                  : mockupApprovalRejected
-                                    ? "Client rejected latest mockup. Upload revision first."
-                                  : mockupApprovalPending
-                                    ? "Waiting for Front Desk/Admin client decision."
-                                  : "Confirm mockup completion"
-                              }
+                              title={mockupConfirmTitle}
                             >
                               Confirm Mockup Completion
                             </button>
@@ -1675,6 +1729,17 @@ const EngagedProjectActions = ({ user }) => {
                                 : "Pending Client Decision."}
                             {mockupApprovalRejected && mockupRejectionReason
                               ? ` Reason: ${mockupRejectionReason}`
+                              : ""}
+                          </div>
+                        )}
+                        {isQuoteGraphicsAction && quoteMockupRequirement.isRequired && (
+                          <div className="engaged-action-meta">
+                            Quote mockup requirement: {quoteMockupStatusLabel}.
+                            {quoteMockupRequirement.updatedAt
+                              ? ` Updated: ${formatUpdateDateTime(quoteMockupRequirement.updatedAt)}.`
+                              : ""}
+                            {quoteMockupRequirement.note
+                              ? ` Note: ${quoteMockupRequirement.note}`
                               : ""}
                           </div>
                         )}

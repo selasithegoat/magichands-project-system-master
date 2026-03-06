@@ -582,7 +582,7 @@ const OrderActions = () => {
   const billingUndoPhrase = isQuoteProject
     ? QUOTE_UNDO_PHRASE
     : INVOICE_UNDO_PHRASE;
-  const canManageMockupApproval = canManageBilling && !isQuoteProject;
+  const canManageMockupApproval = canManageBilling;
   const sampleRequirementEnabled =
     !isQuoteProject && Boolean(project?.sampleRequirement?.isRequired);
   const sampleApprovalStatus = getSampleApprovalStatus(project?.sampleApproval || {});
@@ -596,6 +596,9 @@ const OrderActions = () => {
   );
   const requiredQuoteRequirementItems = quoteRequirementItems.filter(
     (item) => item.isRequired,
+  );
+  const frontDeskQueueRequirementItems = requiredQuoteRequirementItems.filter(
+    (item) => item.key !== "mockup",
   );
   const allQuoteRequirementsApproved =
     isQuoteProject &&
@@ -1415,6 +1418,13 @@ const OrderActions = () => {
 
   const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
     if (!project || !isQuoteProject || !canManageBilling) return;
+    if (requirementKey === "mockup") {
+      showToast(
+        "Use the Mockup Approval panel for client approval or revision on mockups.",
+        "error",
+      );
+      return;
+    }
 
     const pendingKey = `${requirementKey}:${toStatus}`;
     setQuoteRequirementSubmittingKey(pendingKey);
@@ -1628,15 +1638,17 @@ const OrderActions = () => {
     !isQuoteProject &&
     project.status === "Pending Production" &&
     sampleApprovalPending;
+  const mockupReviewStageOpen =
+    project &&
+    (project.status === "Pending Mockup" ||
+      (isQuoteProject && project.status === "Pending Quote Request"));
   const showMockupApprovalWarning =
     project &&
-    !isQuoteProject &&
-    project.status === "Pending Mockup" &&
+    mockupReviewStageOpen &&
     mockupApprovalPending;
   const showMockupRejectionWarning =
     project &&
-    !isQuoteProject &&
-    project.status === "Pending Mockup" &&
+    mockupReviewStageOpen &&
     mockupApprovalRejected;
   const mockupApprovalMissingLabels =
     showMockupApprovalWarning && latestMockupVersion
@@ -2023,14 +2035,20 @@ const OrderActions = () => {
                 Front Desk coordinates client-facing transitions for required quote
                 items.
               </p>
+              {requiredQuoteRequirementItems.some((item) => item.key === "mockup") && (
+                <p className="mockup-approval-meta">
+                  Mockup review uses the standard Mockup Approval section below.
+                </p>
+              )}
 
-              {requiredQuoteRequirementItems.length === 0 ? (
+              {frontDeskQueueRequirementItems.length === 0 ? (
                 <div className="mockup-empty-state">
-                  No required quote requirements are currently selected.
+                  No additional quote requirements are currently pending Front Desk
+                  queue actions.
                 </div>
               ) : (
                 <div className="quote-requirements-list">
-                  {requiredQuoteRequirementItems.map((item) => {
+                  {frontDeskQueueRequirementItems.map((item) => {
                     const actions = getQuoteFrontDeskActions(item.status);
                     const submittingThisRequirement = quoteRequirementSubmittingKey
                       .startsWith(`${item.key}:`);
@@ -2145,14 +2163,14 @@ const OrderActions = () => {
           )}
         </div>
 
-        {!isQuoteProject && (
-          <section className="mockup-standalone-section">
-            <div className="action-card mockup-standalone-card">
-              <h3>Mockup Approval</h3>
-              <p>
-                Confirm client approval before Mockup stage can be marked
-                complete.
-              </p>
+        <section className="mockup-standalone-section">
+          <div className="action-card mockup-standalone-card">
+            <h3>Mockup Approval</h3>
+            <p>
+              {isQuoteProject
+                ? "Review uploaded mockups with client and record approval or revision request."
+                : "Confirm client approval before Mockup stage can be marked complete."}
+            </p>
 
               {!latestMockupVersion ? (
                 <div className="mockup-empty-state">
@@ -2220,7 +2238,9 @@ const OrderActions = () => {
                           Number(latestMockupVersion?.version);
                         const canDecideOnVersions =
                           canManageMockupApproval &&
-                          project.status === "Pending Mockup";
+                          (project.status === "Pending Mockup" ||
+                            (isQuoteProject &&
+                              project.status === "Pending Quote Request"));
                         const approveHidden = decision === "rejected";
                         const approveDisabled =
                           !isLatestVersion || decision === "approved";
@@ -2331,9 +2351,8 @@ const OrderActions = () => {
                   )}
                 </>
               )}
-            </div>
-          </section>
-        )}
+          </div>
+        </section>
 
 
         <section className="updates-standalone-section">

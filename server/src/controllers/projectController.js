@@ -1088,6 +1088,40 @@ const QUOTE_STATUS_SYNC_PENDING_SET = new Set([
   "Pending Send Response",
 ]);
 
+const getAutoProgressedStatus = (status, project = {}) => {
+  const progression = {
+    // Standard workflow
+    "Scope Approval Completed": "Pending Departmental Engagement",
+    "Departmental Engagement Completed": isQuoteProject(project)
+      ? "Pending Quote Request"
+      : "Pending Mockup",
+    "Mockup Completed": "Pending Proof Reading",
+    "Proof Reading Completed": "Pending Production",
+    "Production Completed": "Pending Quality Control",
+    "Quality Control Completed": "Pending Photography",
+    "Photography Completed": "Pending Packaging",
+    "Packaging Completed": "Pending Delivery/Pickup",
+    Delivered: "Pending Feedback",
+    // Quote workflow
+    "Quote Request Completed": "Pending Send Response",
+  };
+
+  return progression[status] || status;
+};
+
+const isMockupWorkflowStatusAllowed = (project = {}, status = "") => {
+  const allowedStatuses = new Set(["Pending Mockup"]);
+  if (isQuoteProject(project)) {
+    allowedStatuses.add("Pending Quote Request");
+  }
+  return allowedStatuses.has(status);
+};
+
+const getMockupWorkflowStatusMessage = (project = {}) =>
+  isQuoteProject(project)
+    ? "Mockup action is only allowed while status is Pending Mockup or Pending Quote Request."
+    : "Mockup action is only allowed while status is Pending Mockup.";
+
 const formatQuoteRequirementStatusLabel = (status = "") => {
   const normalized = toText(status).toLowerCase();
   if (!normalized) return "";
@@ -1245,6 +1279,83 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
     fromStatus: previousStatus,
     toStatus: nextStatus,
     allRequirementsCompleted,
+  };
+};
+
+const syncQuoteMockupRequirementDecision = ({
+  project,
+  targetStatus,
+  actorId,
+  note = "",
+} = {}) => {
+  if (!isQuoteProject(project)) {
+    return {
+      changed: false,
+      fromStatus: "",
+      toStatus: toText(targetStatus).toLowerCase(),
+      statusSync: {
+        changed: false,
+        fromStatus: toText(project?.status),
+        toStatus: toText(project?.status),
+      },
+    };
+  }
+
+  const normalizedTargetStatus = toText(targetStatus).toLowerCase();
+  if (!QUOTE_REQUIREMENT_STATUS_SET.has(normalizedTargetStatus)) {
+    return {
+      changed: false,
+      fromStatus: "",
+      toStatus: normalizedTargetStatus,
+      statusSync: {
+        changed: false,
+        fromStatus: toText(project?.status),
+        toStatus: toText(project?.status),
+      },
+    };
+  }
+
+  project.quoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project.quoteDetails || {},
+    existingQuoteDetails: project.quoteDetails || {},
+  });
+  const requirementItem = project.quoteDetails?.requirementItems?.mockup;
+  if (!requirementItem?.isRequired) {
+    const statusSync = syncQuoteProjectStatusByRequirements(project);
+    return {
+      changed: false,
+      fromStatus: "",
+      toStatus: normalizedTargetStatus,
+      statusSync,
+    };
+  }
+
+  const fromStatus = toText(requirementItem.status).toLowerCase() || "assigned";
+  const transitionTime = new Date();
+  if (fromStatus !== normalizedTargetStatus) {
+    requirementItem.history = Array.isArray(requirementItem.history)
+      ? requirementItem.history
+      : [];
+    requirementItem.history.push({
+      fromStatus,
+      toStatus: normalizedTargetStatus,
+      changedAt: transitionTime,
+      changedBy: actorId || null,
+      note: toText(note),
+    });
+    requirementItem.status = normalizedTargetStatus;
+    requirementItem.updatedAt = transitionTime;
+    requirementItem.updatedBy = actorId || null;
+    requirementItem.note = toText(note);
+    project.markModified("quoteDetails.requirementItems");
+  }
+
+  const statusSync = syncQuoteProjectStatusByRequirements(project);
+  return {
+    changed: fromStatus !== normalizedTargetStatus,
+    fromStatus,
+    toStatus: normalizedTargetStatus,
+    statusSync,
   };
 };
 
@@ -4689,23 +4800,8 @@ const updateProjectStatus = async (req, res) => {
       });
     }
 
-    // Status progression map: when a stage is marked complete, auto-advance to next pending
-    const statusProgression = {
-      // Standard workflow
-      "Scope Approval Completed": "Pending Departmental Engagement",
-      "Mockup Completed": "Pending Proof Reading",
-      "Proof Reading Completed": "Pending Production",
-      "Production Completed": "Pending Quality Control",
-      "Quality Control Completed": "Pending Photography",
-      "Photography Completed": "Pending Packaging",
-      "Packaging Completed": "Pending Delivery/Pickup",
-      Delivered: "Pending Feedback",
-      // Quote workflow
-      "Quote Request Completed": "Pending Send Response",
-    };
-
     // If the selected status has an auto-advancement, use it
-    const finalStatus = statusProgression[newStatus] || newStatus;
+    const finalStatus = getAutoProgressedStatus(newStatus, project);
 
     const isStandardProject = !isQuoteProject(project);
 
@@ -5993,10 +6089,9 @@ const uploadProjectMockup = async (req, res) => {
         .json({ message: "Not authorized to upload mockups" });
     }
 
-    if (project.status !== "Pending Mockup") {
+    if (!isMockupWorkflowStatusAllowed(project, project.status)) {
       return res.status(400).json({
-        message:
-          "Mockup upload is only allowed while status is Pending Mockup.",
+        message: getMockupWorkflowStatusMessage(project),
       });
     }
 
@@ -6090,6 +6185,61 @@ const uploadProjectMockup = async (req, res) => {
       versions: mergedVersions,
     };
 
+    let quoteMockupRequirementAutoMoved = null;
+    if (isQuoteProject(project)) {
+      project.quoteDetails = normalizeQuoteDetailsWorkflow({
+        quoteDetailsInput: project.quoteDetails || {},
+        existingQuoteDetails: project.quoteDetails || {},
+      });
+
+      const requirementItem = project.quoteDetails?.requirementItems?.mockup;
+      const fromStatus = toText(requirementItem?.status).toLowerCase() || "assigned";
+      const shouldAutoMove =
+        Boolean(requirementItem?.isRequired) &&
+        ["assigned", "in_progress", "client_revision_requested", "blocked"].includes(
+          fromStatus,
+        );
+
+      if (shouldAutoMove) {
+        const transitionSequence =
+          fromStatus === "in_progress"
+            ? ["dept_submitted"]
+            : ["in_progress", "dept_submitted"];
+        const transitionTime = new Date();
+        const transitionNote =
+          toText(note) || `Mockup ${buildMockupVersionLabel(nextVersion)} uploaded.`;
+
+        requirementItem.history = Array.isArray(requirementItem.history)
+          ? requirementItem.history
+          : [];
+
+        let previousStatus = fromStatus;
+        transitionSequence.forEach((toStatus) => {
+          requirementItem.history.push({
+            fromStatus: previousStatus,
+            toStatus,
+            changedAt: transitionTime,
+            changedBy: req.user._id,
+            note: transitionNote,
+          });
+          previousStatus = toStatus;
+        });
+
+        requirementItem.status = "dept_submitted";
+        requirementItem.updatedAt = transitionTime;
+        requirementItem.updatedBy = req.user._id;
+        requirementItem.note = transitionNote;
+        project.markModified("quoteDetails.requirementItems");
+
+        const statusSync = syncQuoteProjectStatusByRequirements(project);
+        quoteMockupRequirementAutoMoved = {
+          fromStatus,
+          toStatus: "dept_submitted",
+          statusSync,
+        };
+      }
+    }
+
     await project.save();
 
     await createProjectSystemUpdateAndSnapshot({
@@ -6112,6 +6262,42 @@ const uploadProjectMockup = async (req, res) => {
         },
       },
     );
+
+    if (quoteMockupRequirementAutoMoved) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "update",
+        `Quote requirement 'Mockup' moved from ${formatQuoteRequirementStatusLabel(
+          quoteMockupRequirementAutoMoved.fromStatus,
+        )} to ${formatQuoteRequirementStatusLabel(
+          quoteMockupRequirementAutoMoved.toStatus,
+        )} after upload.`,
+        {
+          quoteRequirement: {
+            key: "mockup",
+            label: "Mockup",
+            fromStatus: quoteMockupRequirementAutoMoved.fromStatus,
+            toStatus: quoteMockupRequirementAutoMoved.toStatus,
+          },
+        },
+      );
+
+      if (quoteMockupRequirementAutoMoved.statusSync?.changed) {
+        await logActivity(
+          project._id,
+          req.user._id,
+          "status_change",
+          `Project status updated to ${quoteMockupRequirementAutoMoved.statusSync.toStatus}`,
+          {
+            statusChange: {
+              from: quoteMockupRequirementAutoMoved.statusSync.fromStatus,
+              to: quoteMockupRequirementAutoMoved.statusSync.toStatus,
+            },
+          },
+        );
+      }
+    }
 
     await notifyMockupVersionUploaded({
       project,
@@ -6233,6 +6419,15 @@ const approveProjectMockup = async (req, res) => {
       approvedVersion: requestedVersion,
     };
 
+    const quoteMockupDecisionSync = syncQuoteMockupRequirementDecision({
+      project,
+      targetStatus: "client_approved",
+      actorId: req.user._id,
+      note:
+        approvalNote ||
+        `Client approved ${requestedVersionLabel} via Front Desk/Admin review.`,
+    });
+
     await project.save();
 
     await logActivity(
@@ -6247,6 +6442,43 @@ const approveProjectMockup = async (req, res) => {
         },
       },
     );
+
+    if (quoteMockupDecisionSync.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "update",
+        `Quote requirement 'Mockup' moved from ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.fromStatus,
+        )} to ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.toStatus,
+        )} after client mockup approval.`,
+        {
+          quoteRequirement: {
+            key: "mockup",
+            label: "Mockup",
+            fromStatus: quoteMockupDecisionSync.fromStatus,
+            toStatus: quoteMockupDecisionSync.toStatus,
+            note: approvalNote,
+          },
+        },
+      );
+    }
+
+    if (quoteMockupDecisionSync.statusSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${quoteMockupDecisionSync.statusSync.toStatus}`,
+        {
+          statusChange: {
+            from: quoteMockupDecisionSync.statusSync.fromStatus,
+            to: quoteMockupDecisionSync.statusSync.toStatus,
+          },
+        },
+      );
+    }
 
     await createProjectSystemUpdateAndSnapshot({
       project,
@@ -6282,9 +6514,9 @@ const rejectProjectMockup = async (req, res) => {
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
 
-    if (project.status !== "Pending Mockup") {
+    if (!isMockupWorkflowStatusAllowed(project, project.status)) {
       return res.status(400).json({
-        message: "Mockup rejection is only allowed while status is Pending Mockup.",
+        message: getMockupWorkflowStatusMessage(project),
       });
     }
 
@@ -6373,9 +6605,18 @@ const rejectProjectMockup = async (req, res) => {
       approvedVersion: null,
     };
 
+    const versionLabel = buildMockupVersionLabel(requestedVersion);
+    const quoteMockupDecisionSync = syncQuoteMockupRequirementDecision({
+      project,
+      targetStatus: "client_revision_requested",
+      actorId: req.user._id,
+      note:
+        rejectionReason ||
+        `Client requested revision for ${versionLabel} via Front Desk/Admin review.`,
+    });
+
     await project.save();
 
-    const versionLabel = buildMockupVersionLabel(requestedVersion);
     await logActivity(
       project._id,
       req.user._id,
@@ -6388,6 +6629,43 @@ const rejectProjectMockup = async (req, res) => {
         },
       },
     );
+
+    if (quoteMockupDecisionSync.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "update",
+        `Quote requirement 'Mockup' moved from ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.fromStatus,
+        )} to ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.toStatus,
+        )} after client requested revision.`,
+        {
+          quoteRequirement: {
+            key: "mockup",
+            label: "Mockup",
+            fromStatus: quoteMockupDecisionSync.fromStatus,
+            toStatus: quoteMockupDecisionSync.toStatus,
+            note: rejectionReason,
+          },
+        },
+      );
+    }
+
+    if (quoteMockupDecisionSync.statusSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${quoteMockupDecisionSync.statusSync.toStatus}`,
+        {
+          statusChange: {
+            from: quoteMockupDecisionSync.statusSync.fromStatus,
+            to: quoteMockupDecisionSync.statusSync.toStatus,
+          },
+        },
+      );
+    }
 
     await notifyMockupRejected({
       project,
@@ -8296,7 +8574,10 @@ const acknowledgeProject = async (req, res) => {
       );
 
     if (shouldMarkDepartmentalEngagementComplete) {
-      project.status = "Departmental Engagement Completed";
+      project.status = getAutoProgressedStatus(
+        "Departmental Engagement Completed",
+        project,
+      );
     }
 
     await project.save();
@@ -8376,7 +8657,14 @@ const undoAcknowledgeProject = async (req, res) => {
 
     const previousStatus = project.status;
     project.acknowledgements.splice(ackIndex, 1);
-    if (project.status === "Departmental Engagement Completed") {
+    const progressedDepartmentStatus = getAutoProgressedStatus(
+      "Departmental Engagement Completed",
+      project,
+    );
+    if (
+      project.status === "Departmental Engagement Completed" ||
+      project.status === progressedDepartmentStatus
+    ) {
       project.status = "Pending Departmental Engagement";
     }
     await project.save();
