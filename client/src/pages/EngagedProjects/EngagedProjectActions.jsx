@@ -84,6 +84,8 @@ const BILLING_REQUIREMENT_LABELS = {
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
 const QUOTE_REQUIREMENT_MOCKUP_KEY = "mockup";
 const QUOTE_REQUIREMENT_MOCKUP_LABEL = "Mockup";
+const QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY = "previousSamples";
+const QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_LABEL = "Previous Sample / Jobs Done";
 const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
@@ -100,6 +102,11 @@ const QUOTE_MOCKUP_SUBMIT_TRANSITIONS = {
   client_revision_requested: ["in_progress", "dept_submitted"],
   blocked: ["in_progress", "dept_submitted"],
 };
+const QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES = new Set([
+  "assigned",
+  "in_progress",
+  "client_revision_requested",
+]);
 
 const formatQuoteRequirementStatus = (status = "") => {
   const normalized = String(status || "").trim().toLowerCase();
@@ -222,6 +229,7 @@ const EngagedProjectActions = ({ user }) => {
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
   const [statusUpdating, setStatusUpdating] = useState(null);
+  const [quoteRequirementUpdating, setQuoteRequirementUpdating] = useState("");
 
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateScopeDepts, setUpdateScopeDepts] = useState([]);
@@ -352,6 +360,18 @@ const EngagedProjectActions = ({ user }) => {
           },
     [isQuoteProject, project],
   );
+  const quotePreviousSamplesRequirement = useMemo(
+    () =>
+      isQuoteProject
+        ? getQuoteRequirementState(project, QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY)
+        : {
+            isRequired: false,
+            status: "not_required",
+            updatedAt: null,
+            note: "",
+          },
+    [isQuoteProject, project],
+  );
   const quoteDepartmentalEngagementComplete = useMemo(() => {
     if (!isQuoteProject) return true;
     const status = String(project?.status || "").trim();
@@ -445,6 +465,17 @@ const EngagedProjectActions = ({ user }) => {
     /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(mockupUrl || "");
   const isPdfMockup =
     mockupType === "application/pdf" || /\.pdf$/i.test(mockupUrl || "");
+  const quotePreviousSamplesStatus = String(
+    quotePreviousSamplesRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const quotePreviousSamplesStatusLabel =
+    quotePreviousSamplesStatus === "dept_submitted"
+      ? "Sample Retrieved"
+      : quotePreviousSamplesStatus === "sent_to_client"
+        ? "Sample Retrieved Confirmed"
+        : formatQuoteRequirementStatus(quotePreviousSamplesStatus);
   const departmentSections = useMemo(() => {
     if (!project) return [];
 
@@ -1083,6 +1114,114 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const handleConfirmQuotePreviousSamplesRetrieved = async (targetProject) => {
+    if (!targetProject?._id || !isQuoteProject) return false;
+
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return false;
+    }
+
+    const quoteStatus = String(targetProject?.status || "").trim();
+    const engagedDepartments = Array.isArray(targetProject?.departments)
+      ? targetProject.departments
+      : [];
+    const targetAcknowledged = new Set(
+      (targetProject?.acknowledgements || []).map((ack) => ack.department),
+    );
+    const departmentalEngagementDone =
+      !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus) &&
+      engagedDepartments.length > 0 &&
+      engagedDepartments.every((departmentName) =>
+        targetAcknowledged.has(departmentName),
+      );
+
+    if (!departmentalEngagementDone) {
+      setToast({
+        type: "error",
+        message: "Complete departmental engagement before confirming retrieval.",
+      });
+      return false;
+    }
+
+    const previousSamplesRequirement = getQuoteRequirementState(
+      targetProject,
+      QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY,
+    );
+
+    if (!previousSamplesRequirement.isRequired) {
+      setToast({
+        type: "error",
+        message:
+          "Previous Sample / Jobs Done is not marked as a required quote item.",
+      });
+      return false;
+    }
+
+    const requirementStatus = String(previousSamplesRequirement.status || "")
+      .trim()
+      .toLowerCase();
+    if (!QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(requirementStatus)) {
+      if (
+        ["dept_submitted", "frontdesk_review", "sent_to_client"].includes(
+          requirementStatus,
+        )
+      ) {
+        setToast({
+          type: "success",
+          message:
+            "Retrieval is already confirmed. Front Desk can proceed with sample retrieval confirmation.",
+        });
+        return true;
+      }
+
+      if (requirementStatus === "client_approved") {
+        setToast({
+          type: "success",
+          message: "Previous sample request is already completed.",
+        });
+        return true;
+      }
+
+      setToast({
+        type: "error",
+        message: `Cannot confirm retrieval from ${formatQuoteRequirementStatus(requirementStatus)}.`,
+      });
+      return false;
+    }
+
+    const pendingKey = `${targetProject._id}:${QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY}:dept_submitted`;
+    setQuoteRequirementUpdating(pendingKey);
+
+    const transitionResult = await transitionQuoteRequirement({
+      targetProject,
+      requirementKey: QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY,
+      toStatus: "dept_submitted",
+      suppressErrorToast: true,
+    });
+    setQuoteRequirementUpdating("");
+
+    if (!transitionResult.ok) {
+      setToast({
+        type: "error",
+        message:
+          transitionResult.errorData?.message ||
+          "Failed to confirm previous sample retrieval.",
+      });
+      return false;
+    }
+
+    setToast({
+      type: "success",
+      message: `${QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_LABEL} marked as Sample Retrieved and submitted to Front Desk.`,
+    });
+    return true;
+  };
+
   const handleConfirmQuoteMockupRequirement = async (targetProject) => {
     if (!targetProject?._id || !isQuoteProject) return false;
 
@@ -1445,6 +1584,8 @@ const EngagedProjectActions = ({ user }) => {
         ) : (
           departmentSections.map((section) => {
             const action = section.action;
+            const showStageCompletionAction =
+              Boolean(action) && !(isQuoteProject && section.key === "Stores");
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
 
@@ -1553,7 +1694,7 @@ const EngagedProjectActions = ({ user }) => {
                     </div>
                   </div>
 
-                  {action && (() => {
+                  {showStageCompletionAction && (() => {
                     const isPending = project.status === action.pending;
                     const isProductionAction =
                       action.complete === "Production Completed";
@@ -1805,6 +1946,80 @@ const EngagedProjectActions = ({ user }) => {
                             </Link>
                           </>
                         )}
+                      </div>
+                    );
+                  })()}
+
+                  {section.key === "Stores" && isQuoteProject && (() => {
+                    const retrievalActionKey = `${project._id}:${QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY}:dept_submitted`;
+                    const retrievalUpdating =
+                      quoteRequirementUpdating === retrievalActionKey;
+                    const canConfirmRetrieved =
+                      quotePreviousSamplesRequirement.isRequired &&
+                      quoteDepartmentalEngagementComplete &&
+                      QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(
+                        quotePreviousSamplesStatus,
+                      ) &&
+                      !isProjectLeadForProject &&
+                      !retrievalUpdating;
+
+                    let retrievalTitle = "Confirm sample retrieval";
+                    if (isProjectLeadForProject) {
+                      retrievalTitle =
+                        "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (!quotePreviousSamplesRequirement.isRequired) {
+                      retrievalTitle =
+                        "Previous Sample / Jobs Done is not required for this quote.";
+                    } else if (!quoteDepartmentalEngagementComplete) {
+                      retrievalTitle =
+                        "Departmental engagement must be completed first.";
+                    } else if (
+                      ["dept_submitted", "frontdesk_review"].includes(
+                        quotePreviousSamplesStatus,
+                      )
+                    ) {
+                      retrievalTitle =
+                        "Retrieval already confirmed. Front Desk should also confirm sample retrieval.";
+                    } else if (
+                      ["sent_to_client", "client_approved"].includes(
+                        quotePreviousSamplesStatus,
+                      )
+                    ) {
+                      retrievalTitle = "Sample retrieval already confirmed.";
+                    } else if (!QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(
+                      quotePreviousSamplesStatus,
+                    )) {
+                      retrievalTitle = `Cannot confirm retrieval from ${quotePreviousSamplesStatusLabel}.`;
+                    }
+
+                    return (
+                      <div className="engaged-action-card">
+                        <h3>Previous Sample Retrieval</h3>
+                        <p>
+                          Confirm when previous samples/jobs are retrieved. Front
+                          Desk will then confirm sample retrieval.
+                        </p>
+                        <button
+                          className="complete-btn confirm-btn"
+                          onClick={() =>
+                            handleConfirmQuotePreviousSamplesRetrieved(project)
+                          }
+                          disabled={!canConfirmRetrieved}
+                          title={retrievalTitle}
+                        >
+                          {retrievalUpdating
+                            ? "Confirming..."
+                            : "Confirm Sample Retrieved"}
+                        </button>
+                        <div className="engaged-action-meta">
+                          Requirement status: {quotePreviousSamplesStatusLabel}.
+                          {quotePreviousSamplesRequirement.updatedAt
+                            ? ` Updated: ${formatUpdateDateTime(quotePreviousSamplesRequirement.updatedAt)}.`
+                            : ""}
+                          {quotePreviousSamplesRequirement.note
+                            ? ` Note: ${quotePreviousSamplesRequirement.note}`
+                            : ""}
+                        </div>
                       </div>
                     );
                   })()}

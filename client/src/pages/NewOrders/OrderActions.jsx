@@ -133,8 +133,51 @@ const getQuoteRequirementItems = (project = {}) => {
   });
 };
 
-const getQuoteFrontDeskActions = (status) => {
+const isQuoteRequirementCompleted = (requirementKey, status) => {
+  const normalizedKey = String(requirementKey || "").trim();
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (!normalizedStatus) return false;
+
+  if (normalizedKey === "previousSamples") {
+    return normalizedStatus === "sent_to_client" || normalizedStatus === "client_approved";
+  }
+
+  return normalizedStatus === "client_approved";
+};
+
+const formatQuoteRequirementStatusForItem = (requirementKey, status) => {
+  const normalizedKey = String(requirementKey || "").trim();
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+
+  if (normalizedKey === "previousSamples") {
+    if (normalizedStatus === "dept_submitted") return "Sample Retrieved";
+    if (normalizedStatus === "sent_to_client") {
+      return "Sample Retrieved Confirmed";
+    }
+  }
+
+  return formatQuoteRequirementStatus(status);
+};
+
+const getQuoteFrontDeskActions = (requirementKey, status) => {
+  const normalizedKey = String(requirementKey || "").trim();
   const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalizedKey === "previousSamples") {
+    if (
+      ["assigned", "in_progress", "client_revision_requested"].includes(
+        normalized,
+      )
+    ) {
+      return [{ toStatus: "dept_submitted", label: "Confirm Sample Retrieved" }];
+    }
+
+    if (normalized === "dept_submitted" || normalized === "frontdesk_review") {
+      return [{ toStatus: "sent_to_client", label: "Confirm Sample Retrieved" }];
+    }
+
+    return [];
+  }
 
   if (normalized === "dept_submitted") {
     return [{ toStatus: "frontdesk_review", label: "Review Internally" }];
@@ -600,11 +643,11 @@ const OrderActions = () => {
   const frontDeskQueueRequirementItems = requiredQuoteRequirementItems.filter(
     (item) => item.key !== "mockup",
   );
-  const allQuoteRequirementsApproved =
+  const allQuoteRequirementsCompleted =
     isQuoteProject &&
     requiredQuoteRequirementItems.length > 0 &&
     requiredQuoteRequirementItems.every(
-      (item) => item.status === "client_approved",
+      (item) => isQuoteRequirementCompleted(item.key, item.status),
     );
 
   const getFrontDeskCommandMessage = (targetStatus) => {
@@ -1443,7 +1486,7 @@ const OrderActions = () => {
         const updated = await res.json();
         setProject(updated);
         showToast(
-          `${QUOTE_REQUIREMENT_LABELS[requirementKey] || "Requirement"} moved to ${formatQuoteRequirementStatus(toStatus)}.`,
+          `${QUOTE_REQUIREMENT_LABELS[requirementKey] || "Requirement"} moved to ${formatQuoteRequirementStatusForItem(requirementKey, toStatus)}.`,
           "success",
         );
       } else {
@@ -1866,7 +1909,7 @@ const OrderActions = () => {
               ))}
             {isQuoteProject &&
               requiredQuoteRequirementItems.length > 0 &&
-              !allQuoteRequirementsApproved && (
+              !allQuoteRequirementsCompleted && (
                 <span className="status-tag caution">
                   Quote Requirements Pending
                 </span>
@@ -1886,9 +1929,9 @@ const OrderActions = () => {
 
         {isQuoteProject &&
           requiredQuoteRequirementItems.length > 0 &&
-          !allQuoteRequirementsApproved && (
+          !allQuoteRequirementsCompleted && (
             <div className="warning-banner critical">
-              Required quote requirements are still pending client approval.
+              Required quote requirements are still pending completion.
             </div>
           )}
 
@@ -1923,22 +1966,26 @@ const OrderActions = () => {
         )}
 
         <div className="action-grid">
-          <div className="action-card">
-            <h3>Delivery</h3>
-            <p>Mark the order as delivered once handed over.</p>
-            <button
-              className="action-btn complete-btn"
-              onClick={openDeliveryModal}
-              disabled={!canMarkDelivered || project.status !== "Pending Delivery/Pickup"}
-              title={
-                project.status === "Pending Delivery/Pickup"
-                  ? "Mark as Delivered"
-                  : "Waiting for Pending Delivery/Pickup"
-              }
-            >
-              Delivery Complete
-            </button>
-          </div>
+          {!isQuoteProject && (
+            <div className="action-card">
+              <h3>Delivery</h3>
+              <p>Mark the order as delivered once handed over.</p>
+              <button
+                className="action-btn complete-btn"
+                onClick={openDeliveryModal}
+                disabled={
+                  !canMarkDelivered || project.status !== "Pending Delivery/Pickup"
+                }
+                title={
+                  project.status === "Pending Delivery/Pickup"
+                    ? "Mark as Delivered"
+                    : "Waiting for Pending Delivery/Pickup"
+                }
+              >
+                Delivery Complete
+              </button>
+            </div>
+          )}
 
           <div className="action-card">
             <h3>Feedback</h3>
@@ -1973,11 +2020,11 @@ const OrderActions = () => {
                     onClick={openInvoiceModal}
                     disabled={
                       !canManageBilling ||
-                      (isQuoteProject && !allQuoteRequirementsApproved)
+                      (isQuoteProject && !allQuoteRequirementsCompleted)
                     }
                     title={
-                      isQuoteProject && !allQuoteRequirementsApproved
-                        ? "All required quote requirements must be client-approved first."
+                      isQuoteProject && !allQuoteRequirementsCompleted
+                        ? "All required quote requirements must be completed first."
                         : undefined
                     }
                   >
@@ -2021,7 +2068,7 @@ const OrderActions = () => {
                   </div>
                 )}
               </div>
-              {isQuoteProject && !allQuoteRequirementsApproved && (
+              {isQuoteProject && !allQuoteRequirementsCompleted && (
                 <p className="mockup-approval-meta">
                   Complete required quote requirements before sending the quote.
                 </p>
@@ -2049,7 +2096,7 @@ const OrderActions = () => {
               ) : (
                 <div className="quote-requirements-list">
                   {frontDeskQueueRequirementItems.map((item) => {
-                    const actions = getQuoteFrontDeskActions(item.status);
+                    const actions = getQuoteFrontDeskActions(item.key, item.status);
                     const submittingThisRequirement = quoteRequirementSubmittingKey
                       .startsWith(`${item.key}:`);
 
@@ -2058,7 +2105,10 @@ const OrderActions = () => {
                         <div className="quote-requirement-item-header">
                           <strong>{item.label}</strong>
                           <span className="mockup-approval-meta quote-requirement-status">
-                            {formatQuoteRequirementStatus(item.status)}
+                            {formatQuoteRequirementStatusForItem(
+                              item.key,
+                              item.status,
+                            )}
                           </span>
                         </div>
 
@@ -2094,9 +2144,12 @@ const OrderActions = () => {
                           </div>
                         ) : (
                           <div className="mockup-approval-meta">
-                            {item.status === "client_approved"
-                              ? "Client has approved this requirement."
-                              : item.status === "client_revision_requested"
+                            {item.key === "previousSamples" &&
+                            ["sent_to_client", "client_approved"].includes(item.status)
+                              ? "Previous sample retrieval has been confirmed."
+                              : item.status === "client_approved"
+                                ? "Client has approved this requirement."
+                                : item.status === "client_revision_requested"
                                 ? "Client requested revision. Waiting for department rework."
                                 : "Waiting for department or admin action."}
                           </div>
@@ -2965,7 +3018,7 @@ const OrderActions = () => {
         </div>
       )}
 
-      {deliveryModal.open && (
+      {!isQuoteProject && deliveryModal.open && (
         <div className="confirm-modal-overlay" onClick={closeDeliveryModal}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-modal-header">

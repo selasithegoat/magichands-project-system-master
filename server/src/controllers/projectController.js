@@ -1052,6 +1052,13 @@ const QUOTE_REQUIREMENT_ALLOWED_TRANSITIONS = {
   blocked: new Set(["in_progress", "cancelled"]),
   cancelled: new Set(["assigned"]),
 };
+const QUOTE_REQUIREMENT_CUSTOM_ALLOWED_TRANSITIONS = {
+  previousSamples: {
+    assigned: new Set(["dept_submitted"]),
+    dept_submitted: new Set(["sent_to_client"]),
+    client_revision_requested: new Set(["dept_submitted"]),
+  },
+};
 const QUOTE_REQUIREMENT_FRONT_DESK_STAGES = new Set([
   "frontdesk_review",
   "sent_to_client",
@@ -1230,6 +1237,21 @@ const getNormalizedQuoteRequirementItems = (project = {}) => {
   return normalizedQuoteDetails.requirementItems || {};
 };
 
+const isQuoteRequirementCompleted = (requirementKey = "", status = "") => {
+  const normalizedKey = toText(requirementKey);
+  const normalizedStatus = toText(status).toLowerCase();
+  if (!normalizedStatus) return false;
+
+  if (normalizedKey === "previousSamples") {
+    return (
+      normalizedStatus === "sent_to_client" ||
+      normalizedStatus === QUOTE_REQUIREMENT_APPROVED_STATUS
+    );
+  }
+
+  return normalizedStatus === QUOTE_REQUIREMENT_APPROVED_STATUS;
+};
+
 const areQuoteRequirementsCompleted = (project = {}) => {
   if (!isQuoteProject(project)) return false;
 
@@ -1241,7 +1263,7 @@ const areQuoteRequirementsCompleted = (project = {}) => {
   if (requiredKeys.length === 0) return false;
 
   return requiredKeys.every(
-    (key) => requirementItems?.[key]?.status === QUOTE_REQUIREMENT_APPROVED_STATUS,
+    (key) => isQuoteRequirementCompleted(key, requirementItems?.[key]?.status),
   );
 };
 
@@ -1411,12 +1433,22 @@ const canTransitionQuoteRequirementByRole = ({
   return false;
 };
 
-const isQuoteRequirementTransitionAllowed = (fromStatus, toStatus) => {
+const isQuoteRequirementTransitionAllowed = (
+  fromStatus,
+  toStatus,
+  requirementKey = "",
+) => {
   const normalizedFrom = toText(fromStatus).toLowerCase();
   const normalizedTo = toText(toStatus).toLowerCase();
   const allowedTargets = QUOTE_REQUIREMENT_ALLOWED_TRANSITIONS[normalizedFrom];
-  if (!allowedTargets) return false;
-  return allowedTargets.has(normalizedTo);
+  if (allowedTargets?.has(normalizedTo)) return true;
+
+  const requirementCustomTransitions =
+    QUOTE_REQUIREMENT_CUSTOM_ALLOWED_TRANSITIONS[toText(requirementKey)] || {};
+  const customAllowedTargets = requirementCustomTransitions[normalizedFrom];
+  if (customAllowedTargets?.has(normalizedTo)) return true;
+
+  return false;
 };
 
 const normalizeProjectType = (value, fallback = "Standard") => {
@@ -4802,7 +4834,7 @@ const updateProjectStatus = async (req, res) => {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_PENDING",
           message:
-            "All required quote requirements must be client-approved before quote request can be completed.",
+            "All required quote requirements must be completed before quote request can be completed.",
         });
       }
     }
@@ -5091,7 +5123,7 @@ const transitionQuoteRequirement = async (req, res) => {
       return res.json(project);
     }
 
-    if (!isQuoteRequirementTransitionAllowed(fromStatus, toStatus)) {
+    if (!isQuoteRequirementTransitionAllowed(fromStatus, toStatus, requirementKey)) {
       return res.status(400).json({
         message: `Transition from '${formatQuoteRequirementStatusLabel(fromStatus)}' to '${formatQuoteRequirementStatusLabel(toStatus)}' is not allowed.`,
       });
@@ -5224,7 +5256,7 @@ const markInvoiceSent = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_PENDING",
         message:
-          "All required quote requirements must be client-approved before sending quote response.",
+          "All required quote requirements must be completed before sending quote response.",
       });
     }
 
