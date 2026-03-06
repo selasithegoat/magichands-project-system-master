@@ -1125,6 +1125,26 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
+    const targetMockupApprovalStatus = getMockupApprovalStatus(
+      targetProject?.mockup?.clientApproval || {},
+    );
+    if (targetMockupApprovalStatus === "rejected") {
+      setToast({
+        type: "error",
+        message:
+          "Client rejected the latest mockup. Upload a revised version before confirming completion.",
+      });
+      return false;
+    }
+    if (targetMockupApprovalStatus !== "approved") {
+      setToast({
+        type: "error",
+        message:
+          "Front Desk/Admin must confirm client approval before Graphics can confirm completion.",
+      });
+      return false;
+    }
+
     const mockupRequirement = getQuoteRequirementState(
       targetProject,
       QUOTE_REQUIREMENT_MOCKUP_KEY,
@@ -1138,19 +1158,28 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
+    if (mockupRequirement.status === "client_approved") {
+      setToast({
+        type: "success",
+        message:
+          "Client approval is confirmed. Front Desk can proceed with quote processing.",
+      });
+      return true;
+    }
+
     const plannedTransitions =
       QUOTE_MOCKUP_SUBMIT_TRANSITIONS[mockupRequirement.status] || [];
 
     if (plannedTransitions.length === 0) {
       const normalizedStatus = String(mockupRequirement.status || "").trim().toLowerCase();
       const statusMessage =
-        normalizedStatus === "dept_submitted"
-          ? "Mockup requirement has already been submitted to Front Desk."
-          : ["frontdesk_review", "sent_to_client"].includes(normalizedStatus)
-            ? "Mockup requirement is awaiting Front Desk/client review."
-            : normalizedStatus === "client_approved"
-              ? "Mockup requirement is already client-approved."
-              : `Mockup requirement cannot be submitted from ${formatQuoteRequirementStatus(normalizedStatus)}.`;
+        normalizedStatus === "dept_submitted" ||
+        normalizedStatus === "frontdesk_review" ||
+        normalizedStatus === "sent_to_client"
+          ? "Mockup requirement is awaiting Front Desk/client review."
+          : normalizedStatus === "client_approved"
+            ? "Mockup requirement is already client-approved."
+            : `Mockup requirement cannot be submitted from ${formatQuoteRequirementStatus(normalizedStatus)}.`;
       setToast({
         type: "error",
         message: statusMessage,
@@ -1552,10 +1581,14 @@ const EngagedProjectActions = ({ user }) => {
                     const mockupApprovalConfirmed =
                       isMockupAction && mockupApprovalStatus === "approved";
                     const canConfirmMockupCompletion =
-                      !isQuoteGraphicsAction &&
                       isMockupAction &&
                       mockupAlreadySubmitted &&
-                      mockupApprovalConfirmed;
+                      mockupApprovalConfirmed &&
+                      (isQuoteGraphicsAction
+                        ? quoteAllowsMockupWorkflowStatus &&
+                          quoteMockupRequirement.isRequired &&
+                          quoteDepartmentalEngagementComplete
+                        : isPending);
                     const quoteMockupStatus = String(
                       quoteMockupRequirement?.status || "",
                     )
@@ -1563,15 +1596,6 @@ const EngagedProjectActions = ({ user }) => {
                       .toLowerCase();
                     const quoteMockupStatusLabel =
                       formatQuoteRequirementStatus(quoteMockupStatus);
-                    const quoteMockupTransitions =
-                      QUOTE_MOCKUP_SUBMIT_TRANSITIONS[quoteMockupStatus] || [];
-                    const quoteMockupReadyForSubmission =
-                      isQuoteGraphicsAction &&
-                      quoteAllowsMockupWorkflowStatus &&
-                      quoteMockupRequirement.isRequired &&
-                      quoteDepartmentalEngagementComplete &&
-                      mockupAlreadySubmitted &&
-                      quoteMockupTransitions.length > 0;
                     const canUploadMockup =
                       !isUpdating &&
                       !isProjectLeadForProject &&
@@ -1601,7 +1625,7 @@ const EngagedProjectActions = ({ user }) => {
                       !quoteAllowsMockupWorkflowStatus
                     ) {
                       mockupUploadTitle =
-                        "Mockup upload is only available while status is Pending Quote Request.";
+                        "Mockup upload is only available while status is Pending Quote Request or Pending Mockup.";
                     } else if (!isQuoteGraphicsAction && !isPending) {
                       mockupUploadTitle = `Waiting for ${action.pending}.`;
                     } else if (mockupApprovalRejected) {
@@ -1621,7 +1645,7 @@ const EngagedProjectActions = ({ user }) => {
                       !quoteAllowsMockupWorkflowStatus
                     ) {
                       mockupConfirmTitle =
-                        "Mockup completion for quote is only available while status is Pending Quote Request.";
+                        "Mockup completion for quote is only available while status is Pending Quote Request or Pending Mockup.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteDepartmentalEngagementComplete
@@ -1636,23 +1660,18 @@ const EngagedProjectActions = ({ user }) => {
                     ) {
                       mockupConfirmTitle =
                         "Mockup is not marked as required for this quote.";
+                    } else if (isQuoteGraphicsAction && mockupApprovalRejected) {
+                      mockupConfirmTitle =
+                        "Client rejected latest mockup. Upload revision first.";
+                    } else if (isQuoteGraphicsAction && mockupApprovalPending) {
+                      mockupConfirmTitle =
+                        "Waiting for Front Desk/Admin client decision.";
                     } else if (
                       isQuoteGraphicsAction &&
-                      quoteMockupTransitions.length === 0
+                      quoteMockupStatus === "client_approved"
                     ) {
-                      if (quoteMockupStatus === "client_approved") {
-                        mockupConfirmTitle =
-                          "Mockup requirement is already client-approved.";
-                      } else if (
-                        ["dept_submitted", "frontdesk_review", "sent_to_client"].includes(
-                          quoteMockupStatus,
-                        )
-                      ) {
-                        mockupConfirmTitle =
-                          "Mockup requirement is already awaiting Front Desk/client review.";
-                      } else {
-                        mockupConfirmTitle = `Cannot submit from ${quoteMockupStatusLabel}.`;
-                      }
+                      mockupConfirmTitle =
+                        "Front Desk confirmed client approval. Confirm to acknowledge completion.";
                     } else if (!isQuoteGraphicsAction && !isPending) {
                       mockupConfirmTitle = `Waiting for ${action.pending}.`;
                     } else if (!isQuoteGraphicsAction && !mockupAlreadySubmitted) {
@@ -1671,7 +1690,7 @@ const EngagedProjectActions = ({ user }) => {
                         <p>
                           {isMockupAction
                             ? isQuoteGraphicsAction
-                              ? "Upload mockup, then confirm completion to submit this quote requirement to Front Desk."
+                              ? "Upload mockup for Front Desk/client review. Confirm completion only after Front Desk records client approval."
                               : "Upload the approved mockup and confirm completion."
                             : "Confirm this stage is complete for the project."}
                         </p>
@@ -1694,9 +1713,7 @@ const EngagedProjectActions = ({ user }) => {
                               onClick={() => openCompleteModal(project, action)}
                               disabled={
                                 isUpdating ||
-                                (isQuoteGraphicsAction
-                                  ? !quoteMockupReadyForSubmission
-                                  : !isPending || !canConfirmMockupCompletion) ||
+                                !canConfirmMockupCompletion ||
                                 isProjectLeadForProject
                               }
                               title={mockupConfirmTitle}

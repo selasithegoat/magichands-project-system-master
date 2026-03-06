@@ -3096,13 +3096,27 @@ const getMockupNotificationRecipients = async (project = {}) => {
     recipients.add(leadId);
   }
 
-  const adminsAndFrontDesk = await User.find({
-    $or: [{ role: "admin" }, { department: FRONT_DESK_DEPARTMENT }],
-  })
-    .select("_id")
-    .lean();
+  const [adminsAndFrontDesk, graphicsUsers] = await Promise.all([
+    User.find({
+      $or: [{ role: "admin" }, { department: FRONT_DESK_DEPARTMENT }],
+    })
+      .select("_id")
+      .lean(),
+    User.find({
+      department: { $in: ["Graphics/Design", "graphics", "design"] },
+    })
+      .select("_id")
+      .lean(),
+  ]);
 
   adminsAndFrontDesk.forEach((entry) => {
+    const userId = toObjectIdString(entry?._id);
+    if (userId) {
+      recipients.add(userId);
+    }
+  });
+
+  graphicsUsers.forEach((entry) => {
     const userId = toObjectIdString(entry?._id);
     if (userId) {
       recipients.add(userId);
