@@ -5130,6 +5130,20 @@ const transitionQuoteRequirement = async (req, res) => {
     }
 
     if (
+      requirementKey === "sampleProduction" &&
+      ["in_progress", "dept_submitted"].includes(toStatus)
+    ) {
+      const mockupGuard = getMockupCompletionGuard(project);
+      if (mockupGuard) {
+        return res.status(400).json({
+          code: "MOCKUP_COMPLETION_REQUIRED_FOR_SAMPLE_PRODUCTION",
+          message:
+            "Complete mockup approval/completion first before starting sample production.",
+        });
+      }
+    }
+
+    if (
       !canTransitionQuoteRequirementByRole({
         user: req.user,
         requirementKey,

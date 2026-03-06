@@ -86,6 +86,8 @@ const QUOTE_REQUIREMENT_MOCKUP_KEY = "mockup";
 const QUOTE_REQUIREMENT_MOCKUP_LABEL = "Mockup";
 const QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_KEY = "previousSamples";
 const QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_LABEL = "Previous Sample / Jobs Done";
+const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY = "sampleProduction";
+const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL = "Sample Production";
 const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
@@ -107,6 +109,12 @@ const QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES = new Set([
   "in_progress",
   "client_revision_requested",
 ]);
+const QUOTE_SAMPLE_PRODUCTION_SUBMIT_TRANSITIONS = {
+  assigned: ["in_progress", "dept_submitted"],
+  in_progress: ["dept_submitted"],
+  client_revision_requested: ["in_progress", "dept_submitted"],
+  blocked: ["in_progress", "dept_submitted"],
+};
 
 const formatQuoteRequirementStatus = (status = "") => {
   const normalized = String(status || "").trim().toLowerCase();
@@ -372,6 +380,18 @@ const EngagedProjectActions = ({ user }) => {
           },
     [isQuoteProject, project],
   );
+  const quoteSampleProductionRequirement = useMemo(
+    () =>
+      isQuoteProject
+        ? getQuoteRequirementState(project, QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY)
+        : {
+            isRequired: false,
+            status: "not_required",
+            updatedAt: null,
+            note: "",
+          },
+    [isQuoteProject, project],
+  );
   const quoteDepartmentalEngagementComplete = useMemo(() => {
     if (!isQuoteProject) return true;
     const status = String(project?.status || "").trim();
@@ -476,6 +496,17 @@ const EngagedProjectActions = ({ user }) => {
       : quotePreviousSamplesStatus === "sent_to_client"
         ? "Sample Retrieved Confirmed"
         : formatQuoteRequirementStatus(quotePreviousSamplesStatus);
+  const quoteSampleProductionStatus = String(
+    quoteSampleProductionRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const quoteSampleProductionStatusLabel =
+    formatQuoteRequirementStatus(quoteSampleProductionStatus);
+  const quoteMockupReadyForSampleProduction =
+    isQuoteProject &&
+    Boolean(mockupUrl) &&
+    mockupApprovalStatus === "approved";
   const departmentSections = useMemo(() => {
     if (!project) return [];
 
@@ -1222,6 +1253,135 @@ const EngagedProjectActions = ({ user }) => {
     return true;
   };
 
+  const handleSubmitQuoteSampleProduction = async (targetProject) => {
+    if (!targetProject?._id || !isQuoteProject) return false;
+
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return false;
+    }
+
+    const quoteStatus = String(targetProject?.status || "").trim();
+    const engagedDepartments = Array.isArray(targetProject?.departments)
+      ? targetProject.departments
+      : [];
+    const targetAcknowledged = new Set(
+      (targetProject?.acknowledgements || []).map((ack) => ack.department),
+    );
+    const departmentalEngagementDone =
+      !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus) &&
+      engagedDepartments.length > 0 &&
+      engagedDepartments.every((departmentName) =>
+        targetAcknowledged.has(departmentName),
+      );
+
+    if (!departmentalEngagementDone) {
+      setToast({
+        type: "error",
+        message:
+          "Complete departmental engagement before submitting sample production.",
+      });
+      return false;
+    }
+
+    const targetMockupApprovalStatus = getMockupApprovalStatus(
+      targetProject?.mockup?.clientApproval || {},
+    );
+    if (!targetProject?.mockup?.fileUrl || targetMockupApprovalStatus !== "approved") {
+      setToast({
+        type: "error",
+        message:
+          "Front Desk must approve mockup and mockup must be completed before sample production can begin.",
+      });
+      return false;
+    }
+
+    const sampleProductionRequirement = getQuoteRequirementState(
+      targetProject,
+      QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY,
+    );
+
+    if (!sampleProductionRequirement.isRequired) {
+      setToast({
+        type: "error",
+        message: `${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL} is not marked as a required quote item.`,
+      });
+      return false;
+    }
+
+    const sampleProductionStatus = String(sampleProductionRequirement.status || "")
+      .trim()
+      .toLowerCase();
+    const plannedTransitions =
+      QUOTE_SAMPLE_PRODUCTION_SUBMIT_TRANSITIONS[sampleProductionStatus] || [];
+
+    if (plannedTransitions.length === 0) {
+      if (
+        ["dept_submitted", "frontdesk_review", "sent_to_client"].includes(
+          sampleProductionStatus,
+        )
+      ) {
+        setToast({
+          type: "success",
+          message:
+            "Sample Production is already submitted and awaiting Front Desk/client review.",
+        });
+        return true;
+      }
+
+      if (sampleProductionStatus === "client_approved") {
+        setToast({
+          type: "success",
+          message: "Sample Production is already client-approved.",
+        });
+        return true;
+      }
+
+      setToast({
+        type: "error",
+        message: `Cannot submit ${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL.toLowerCase()} from ${formatQuoteRequirementStatus(sampleProductionStatus)}.`,
+      });
+      return false;
+    }
+
+    const pendingKey = `${targetProject._id}:${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY}:submit`;
+    setQuoteRequirementUpdating(pendingKey);
+
+    let workingProject = targetProject;
+    for (const nextStatus of plannedTransitions) {
+      const transitionResult = await transitionQuoteRequirement({
+        targetProject: workingProject,
+        requirementKey: QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY,
+        toStatus: nextStatus,
+        suppressErrorToast: true,
+      });
+
+      if (!transitionResult.ok) {
+        setQuoteRequirementUpdating("");
+        setToast({
+          type: "error",
+          message:
+            transitionResult.errorData?.message ||
+            `Failed to submit ${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL.toLowerCase()}.`,
+        });
+        return false;
+      }
+
+      workingProject = transitionResult.project || workingProject;
+    }
+
+    setQuoteRequirementUpdating("");
+    setToast({
+      type: "success",
+      message: `${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL} submitted to Front Desk for quote processing.`,
+    });
+    return true;
+  };
+
   const handleConfirmQuoteMockupRequirement = async (targetProject) => {
     if (!targetProject?._id || !isQuoteProject) return false;
 
@@ -1301,7 +1461,7 @@ const EngagedProjectActions = ({ user }) => {
       setToast({
         type: "success",
         message:
-          "Client approval is confirmed. Front Desk can proceed with quote processing.",
+          "Client approval is confirmed. Mockup is complete and Production can begin sample production.",
       });
       return true;
     }
@@ -1585,7 +1745,8 @@ const EngagedProjectActions = ({ user }) => {
           departmentSections.map((section) => {
             const action = section.action;
             const showStageCompletionAction =
-              Boolean(action) && !(isQuoteProject && section.key === "Stores");
+              Boolean(action) &&
+              !(isQuoteProject && ["Stores", "Production"].includes(section.key));
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
 
@@ -2024,6 +2185,80 @@ const EngagedProjectActions = ({ user }) => {
                     );
                   })()}
 
+                  {section.key === "Production" && isQuoteProject && (() => {
+                    const sampleProductionActionKey = `${project._id}:${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY}:submit`;
+                    const sampleProductionUpdating =
+                      quoteRequirementUpdating === sampleProductionActionKey;
+                    const sampleProductionTransitions =
+                      QUOTE_SAMPLE_PRODUCTION_SUBMIT_TRANSITIONS[
+                        quoteSampleProductionStatus
+                      ] || [];
+                    const canSubmitSampleProduction =
+                      quoteSampleProductionRequirement.isRequired &&
+                      quoteDepartmentalEngagementComplete &&
+                      quoteMockupReadyForSampleProduction &&
+                      sampleProductionTransitions.length > 0 &&
+                      !isProjectLeadForProject &&
+                      !sampleProductionUpdating;
+
+                    let sampleProductionTitle =
+                      "Submit sample production to Front Desk";
+                    if (isProjectLeadForProject) {
+                      sampleProductionTitle =
+                        "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (!quoteSampleProductionRequirement.isRequired) {
+                      sampleProductionTitle =
+                        `${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL} is not required for this quote.`;
+                    } else if (!quoteDepartmentalEngagementComplete) {
+                      sampleProductionTitle =
+                        "Departmental engagement must be completed first.";
+                    } else if (!quoteMockupReadyForSampleProduction) {
+                      sampleProductionTitle =
+                        "Front Desk must approve mockup and mockup must be completed first.";
+                    } else if (
+                      ["dept_submitted", "frontdesk_review", "sent_to_client"].includes(
+                        quoteSampleProductionStatus,
+                      )
+                    ) {
+                      sampleProductionTitle =
+                        "Sample Production is already awaiting Front Desk/client review.";
+                    } else if (quoteSampleProductionStatus === "client_approved") {
+                      sampleProductionTitle =
+                        `${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL} is already client-approved.`;
+                    } else if (sampleProductionTransitions.length === 0) {
+                      sampleProductionTitle = `Cannot submit from ${quoteSampleProductionStatusLabel}.`;
+                    }
+
+                    return (
+                      <div className="engaged-action-card">
+                        <h3>Quote {QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL}</h3>
+                        <p>
+                          Submit sample production progress after mockup is
+                          approved and confirmed complete.
+                        </p>
+                        <button
+                          className="complete-btn confirm-btn"
+                          onClick={() => handleSubmitQuoteSampleProduction(project)}
+                          disabled={!canSubmitSampleProduction}
+                          title={sampleProductionTitle}
+                        >
+                          {sampleProductionUpdating
+                            ? "Submitting..."
+                            : "Submit Sample Production"}
+                        </button>
+                        <div className="engaged-action-meta">
+                          Requirement status: {quoteSampleProductionStatusLabel}.
+                          {quoteSampleProductionRequirement.updatedAt
+                            ? ` Updated: ${formatUpdateDateTime(quoteSampleProductionRequirement.updatedAt)}.`
+                            : ""}
+                          {quoteSampleProductionRequirement.note
+                            ? ` Note: ${quoteSampleProductionRequirement.note}`
+                            : ""}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {section.key === "Production" && (
                     <div className="engaged-action-card">
                       <h3>Approved Mockup Reference</h3>
@@ -2065,8 +2300,12 @@ const EngagedProjectActions = ({ user }) => {
                           {mockupUrl
                             ? mockupApprovalStatus === "rejected"
                               ? `Latest mockup ${mockupVersionLabel} was rejected. Await revised upload from Graphics.`
-                              : "Latest mockup is pending client approval."
-                            : "Approved mockup is not available yet."}
+                              : isQuoteProject
+                                ? "Mockup must be client-approved and confirmed complete before sample production begins."
+                                : "Latest mockup is pending client approval."
+                            : isQuoteProject
+                              ? "Approved mockup is not available yet for sample production."
+                              : "Approved mockup is not available yet."}
                         </div>
                       )}
                     </div>
