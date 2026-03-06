@@ -14,6 +14,7 @@ const {
   cancelProject,
   reactivateProject,
   updateProjectStatus,
+  transitionQuoteRequirement,
   uploadProjectMockup,
   approveProjectMockup,
   rejectProjectMockup,
@@ -259,6 +260,12 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   rejectProjectMockup,
+);
+router.patch(
+  "/:id/quote-requirements/:requirementKey/transition",
+  protect,
+  enforceProjectNotOnHold,
+  transitionQuoteRequirement,
 );
 router.patch("/:id/status", protect, enforceProjectNotOnHold, updateProjectStatus);
 router.patch("/:id/reopen", protect, enforceProjectNotOnHold, reopenProject); // [NEW] - Reopen completed project

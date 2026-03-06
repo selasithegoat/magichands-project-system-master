@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
 
 import "./ProjectDetails.css";
@@ -58,6 +58,74 @@ const BILLING_REQUIREMENT_LABELS = {
     "Full payment or authorization verification",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Sample / Jobs Done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission / Documents",
+};
+const QUOTE_REQUIREMENT_STATUS_OPTIONS = [
+  "assigned",
+  "in_progress",
+  "dept_submitted",
+  "frontdesk_review",
+  "sent_to_client",
+  "client_approved",
+  "client_revision_requested",
+  "blocked",
+  "cancelled",
+];
+
+const normalizeQuoteChecklist = (checklist = {}) =>
+  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = Boolean(checklist?.[key]);
+    return accumulator;
+  }, {});
+
+const formatQuoteRequirementStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Assigned";
+  return normalized
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+};
+
+const getQuoteRequirementItems = (project = {}) => {
+  const quoteDetails = project?.quoteDetails || {};
+  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
+  const rawItems =
+    quoteDetails?.requirementItems && typeof quoteDetails.requirementItems === "object"
+      ? quoteDetails.requirementItems
+      : {};
+
+  return QUOTE_REQUIREMENT_KEYS.map((key) => {
+    const rawItem =
+      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
+    const isRequired = Boolean(checklist[key]);
+    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
+    const resolvedStatus = isRequired
+      ? normalizedStatus || "assigned"
+      : "not_required";
+
+    return {
+      key,
+      label: QUOTE_REQUIREMENT_LABELS[key] || key,
+      isRequired,
+      status: resolvedStatus,
+      note: String(rawItem?.note || "").trim(),
+      updatedAt: rawItem?.updatedAt || null,
+    };
+  });
+};
 
 const getPaymentTypeSet = (project) =>
   new Set(
@@ -231,32 +299,13 @@ const FolderIcon = ({ width = 24, height = 24, color = "currentColor" }) => (
 );
 
 const FlipCountdownUnit = ({ value, label }) => {
-  const [flipNonce, setFlipNonce] = useState(0);
-  const hasMountedRef = useRef(false);
-  const previousValueRef = useRef(value);
-
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      previousValueRef.current = value;
-      return;
-    }
-
-    if (value === previousValueRef.current) {
-      return;
-    }
-
-    previousValueRef.current = value;
-    setFlipNonce((current) => current + 1);
-  }, [value]);
+  const normalizedValue = String(value).padStart(2, "0");
 
   return (
     <div className="delivery-countdown-unit">
       <span
-        key={`${label}-${flipNonce}`}
-        className={`delivery-countdown-card${
-          flipNonce > 0 ? " is-flipping" : ""
-        }`}
+        key={`${label}-${normalizedValue}`}
+        className="delivery-countdown-card is-flipping"
       >
         {value}
       </span>
@@ -304,6 +353,8 @@ const ProjectDetails = ({ user }) => {
   const [isChangingProjectType, setIsChangingProjectType] = useState(false);
   const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
   const [activeContentTab, setActiveContentTab] = useState("overview");
+  const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
+    useState("");
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -1069,16 +1120,6 @@ const ProjectDetails = ({ user }) => {
     const currentChecklist = project.quoteDetails.checklist || {};
     const updatedChecklist = { ...currentChecklist, [key]: !val };
 
-    // Optimistic update
-    const updatedProject = {
-      ...project,
-      quoteDetails: {
-        ...project.quoteDetails,
-        checklist: updatedChecklist,
-      },
-    };
-    setProject(updatedProject);
-
     try {
       const res = await fetch(`/api/projects/${id}`, {
         method: "PUT",
@@ -1093,13 +1134,50 @@ const ProjectDetails = ({ user }) => {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to update checklist");
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update checklist");
       }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
     } catch (err) {
       console.error("Error updating checklist:", err);
       alert("Failed to update checklist");
-      // Revert is not strictly necessary if we rely on next fetch, but good practice
-      // For now, simpler to just re-fetch if needed or rely on alert
+    }
+  };
+
+  const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
+    if (!ensureProjectIsEditable()) return;
+    if (!project || project.projectType !== "Quote") return;
+
+    const pendingKey = `${requirementKey}:${toStatus}`;
+    setQuoteRequirementSubmittingKey(pendingKey);
+
+    try {
+      const res = await fetch(
+        `/api/projects/${id}/quote-requirements/${requirementKey}/transition?source=admin`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            toStatus,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update quote requirement.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+    } catch (error) {
+      console.error("Error updating quote requirement:", error);
+      alert(error.message || "Failed to update quote requirement.");
+    } finally {
+      setQuoteRequirementSubmittingKey("");
     }
   };
 
@@ -1397,6 +1475,9 @@ const ProjectDetails = ({ user }) => {
   };
   const paymentTypes = (project.paymentVerifications || []).map((entry) => entry.type);
   const isQuoteProject = project.projectType === "Quote";
+  const quoteRequirementItems = isQuoteProject
+    ? getQuoteRequirementItems(project)
+    : [];
   const isCorporateProject = project.projectType === "Corporate Job";
   const corporateEmergencyEnabled =
     isCorporateProject && Boolean(project?.corporateEmergency?.isEnabled);
@@ -1436,20 +1517,6 @@ const ProjectDetails = ({ user }) => {
     sampleRequirementEnabled &&
     project.status === "Pending Production" &&
     sampleApprovalStatus !== "approved";
-  const sampleMissingLabels = showPendingProductionSampleWarning
-    ? [SAMPLE_APPROVAL_MISSING_LABEL]
-    : [];
-  const currentGuardKey = project?._id
-    ? `${project._id}|${project.status}|${
-        showPendingProductionSampleWarning
-          ? sampleMissingLabels.join("|")
-          : showPendingProductionWarning
-            ? pendingProductionMissingLabels.join("|")
-            : showPendingDeliveryWarning
-              ? pendingDeliveryMissingLabels.join("|")
-              : ""
-      }`
-    : "";
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
@@ -2149,62 +2216,81 @@ const ProjectDetails = ({ user }) => {
           {project.projectType === "Quote" && (
             <div className="detail-card">
               <h3 className="card-title">Quote Requirements</h3>
-              <div
-                className="checklist-admin-grid"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: "1rem",
-                  marginTop: "1rem",
-                }}
-              >
-                {project.quoteDetails?.checklist ? (
-                  Object.entries(project.quoteDetails.checklist).map(
-                    ([key, val]) => (
-                      <div
-                        key={key}
-                        onClick={() => handleChecklistToggle(key, val)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          padding: "0.75rem",
-                          background: val
-                            ? "rgba(16, 185, 129, 0.1)"
-                            : "rgba(255, 255, 255, 0.03)",
-                          borderRadius: "8px",
-                          border: val
-                            ? "1px solid rgba(16, 185, 129, 0.2)"
-                            : "1px solid var(--border-color)",
-                          cursor: "pointer",
-                          transition: "all 0.2s",
-                        }}
-                        className="checklist-admin-item"
-                      >
-                        <span
-                          style={{
-                            color: val ? "#10b981" : "var(--text-secondary)",
-                            fontSize: "1.2rem",
-                          }}
-                        >
-                          {val ? "✓" : "○"}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "0.9rem",
-                            color: val ? "#f8fafc" : "var(--text-secondary)",
-                            fontWeight: val ? 600 : 400,
-                          }}
-                        >
-                          {key
-                            .replace(/([A-Z])/g, " $1")
-                            .replace(/^./, (str) => str.toUpperCase())}
-                        </span>
+              <div className="checklist-admin-grid quote-requirements-admin-grid">
+                {quoteRequirementItems.length > 0 ? (
+                  quoteRequirementItems.map((item) => {
+                    const submittingThisRequirement = quoteRequirementSubmittingKey
+                      .startsWith(`${item.key}:`);
+                    const selectedStatus =
+                      item.status === "not_required" ? "assigned" : item.status;
+                    const itemClassName = [
+                      "checklist-admin-item",
+                      "quote-requirement-admin-item",
+                      item.isRequired ? "is-required" : "is-not-required",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+                    const toggleClassName = [
+                      "quote-requirement-admin-toggle",
+                      item.isRequired ? "is-required" : "is-not-required",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+
+                    return (
+                      <div key={item.key} className={itemClassName}>
+                        <div className="quote-requirement-admin-header">
+                          <span className="quote-requirement-admin-title">{item.label}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleChecklistToggle(item.key, item.isRequired)
+                            }
+                            disabled={submittingThisRequirement}
+                            className={toggleClassName}
+                          >
+                            {item.isRequired ? "Required" : "Not Required"}
+                          </button>
+                        </div>
+
+                        <div className="quote-requirement-admin-status">
+                          Status: {formatQuoteRequirementStatus(item.status)}
+                        </div>
+
+                        {item.updatedAt && (
+                          <div className="quote-requirement-admin-updated">
+                            Updated {formatLastUpdated(item.updatedAt)}
+                          </div>
+                        )}
+
+                        {item.isRequired ? (
+                          <select
+                            value={selectedStatus}
+                            onChange={(event) =>
+                              handleQuoteRequirementTransition(
+                                item.key,
+                                event.target.value,
+                              )
+                            }
+                            disabled={submittingThisRequirement}
+                            className="quote-requirement-admin-select"
+                          >
+                            {QUOTE_REQUIREMENT_STATUS_OPTIONS.map((statusOption) => (
+                              <option key={statusOption} value={statusOption}>
+                                {formatQuoteRequirementStatus(statusOption)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="quote-requirement-admin-helper">
+                            Enable this requirement to start its workflow.
+                          </div>
+                        )}
                       </div>
-                    ),
-                  )
+                    );
+                  })
                 ) : (
-                  <p style={{ color: "var(--text-secondary)" }}>
+                  <p className="quote-requirement-admin-empty">
                     No checklist requirements.
                   </p>
                 )}

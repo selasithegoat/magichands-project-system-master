@@ -82,6 +82,83 @@ const BILLING_REQUIREMENT_LABELS = {
     "Full payment or authorization verification",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Sample / Jobs Done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission / Documents",
+};
+const QUOTE_REQUIREMENT_DEPARTMENT_KEYS = {
+  Graphics: ["mockup", "sampleProduction"],
+  Production: ["sampleProduction"],
+  Stores: ["previousSamples"],
+};
+
+const normalizeQuoteChecklist = (checklist = {}) =>
+  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = Boolean(checklist?.[key]);
+    return accumulator;
+  }, {});
+
+const formatQuoteRequirementStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Assigned";
+  return normalized
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+};
+
+const getQuoteRequirementItems = (project = {}) => {
+  const quoteDetails = project?.quoteDetails || {};
+  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
+  const rawItems =
+    quoteDetails?.requirementItems &&
+    typeof quoteDetails.requirementItems === "object"
+      ? quoteDetails.requirementItems
+      : {};
+
+  return QUOTE_REQUIREMENT_KEYS.map((key) => {
+    const rawItem =
+      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
+    const isRequired = Boolean(checklist[key]);
+    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
+    const status = isRequired ? normalizedStatus || "assigned" : "not_required";
+
+    return {
+      key,
+      label: QUOTE_REQUIREMENT_LABELS[key] || key,
+      isRequired,
+      status,
+      updatedAt: rawItem?.updatedAt || null,
+      note: String(rawItem?.note || "").trim(),
+    };
+  });
+};
+
+const getQuoteDepartmentActions = (status) => {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "assigned") {
+    return [{ toStatus: "in_progress", label: "Start Work" }];
+  }
+  if (normalized === "in_progress") {
+    return [{ toStatus: "dept_submitted", label: "Submit to Front Desk" }];
+  }
+  if (normalized === "client_revision_requested") {
+    return [{ toStatus: "in_progress", label: "Start Rework" }];
+  }
+
+  return [];
+};
 
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
@@ -202,6 +279,8 @@ const EngagedProjectActions = ({ user }) => {
   const [mockupFile, setMockupFile] = useState(null);
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
+  const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
+    useState("");
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -284,7 +363,27 @@ const EngagedProjectActions = ({ user }) => {
       ),
     [project],
   );
-  const paymentChecksEnabled = project?.projectType !== "Quote";
+  const isQuoteProject = project?.projectType === "Quote";
+  const paymentChecksEnabled = !isQuoteProject;
+  const quoteRequirementItems = useMemo(
+    () => (isQuoteProject ? getQuoteRequirementItems(project) : []),
+    [isQuoteProject, project],
+  );
+  const quoteDepartmentQueueBySection = useMemo(() => {
+    if (!isQuoteProject) return {};
+
+    return Object.entries(QUOTE_REQUIREMENT_DEPARTMENT_KEYS).reduce(
+      (accumulator, [sectionKey, requirementKeys]) => {
+        accumulator[sectionKey] = quoteRequirementItems.filter(
+          (item) =>
+            item.isRequired &&
+            requirementKeys.includes(item.key),
+        );
+        return accumulator;
+      },
+      {},
+    );
+  }, [isQuoteProject, quoteRequirementItems]);
   const invoiceSent = Boolean(project?.invoice?.sent);
   const pendingProductionMissing =
     project && paymentChecksEnabled
@@ -949,6 +1048,56 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
+    if (!project || !isQuoteProject) return;
+    if (isProjectLeadForProject) {
+      setToast({
+        type: "error",
+        message:
+          "Project Leads cannot take engagement actions on their own projects here.",
+      });
+      return;
+    }
+
+    const pendingKey = `${requirementKey}:${toStatus}`;
+    setQuoteRequirementSubmittingKey(pendingKey);
+
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/quote-requirements/${requirementKey}/transition?source=engaged`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toStatus }),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        setToast({
+          type: "success",
+          message: `${QUOTE_REQUIREMENT_LABELS[requirementKey] || "Requirement"} moved to ${formatQuoteRequirementStatus(toStatus)}.`,
+        });
+        return;
+      }
+
+      const errorData = await res.json().catch(() => ({}));
+      setToast({
+        type: "error",
+        message: errorData.message || "Failed to update quote requirement.",
+      });
+    } catch (error) {
+      console.error("Quote requirement transition error:", error);
+      setToast({
+        type: "error",
+        message: "An unexpected error occurred.",
+      });
+    } finally {
+      setQuoteRequirementSubmittingKey("");
+    }
+  };
+
   if (loading) {
     return (
       <div className="engaged-projects-container">
@@ -962,9 +1111,8 @@ const EngagedProjectActions = ({ user }) => {
       <div className="engaged-projects-container">
         <div className="empty-state">{error || "Project not found."}</div>
         <button
-          className="update-btn view-actions-btn"
+          className="update-btn view-actions-btn engaged-back-btn-error"
           onClick={() => navigate("/engaged-projects")}
-          style={{ marginTop: "1rem" }}
         >
           Back to Engaged Projects
         </button>
@@ -1181,6 +1329,15 @@ const EngagedProjectActions = ({ user }) => {
             const action = section.action;
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
+            const supportsQuoteQueue =
+              isQuoteProject &&
+              Object.prototype.hasOwnProperty.call(
+                QUOTE_REQUIREMENT_DEPARTMENT_KEYS,
+                section.key,
+              );
+            const sectionQuoteQueueItems = supportsQuoteQueue
+              ? quoteDepartmentQueueBySection[section.key] || []
+              : [];
 
             return (
               <section key={section.key} className="engaged-section">
@@ -1286,6 +1443,109 @@ const EngagedProjectActions = ({ user }) => {
                       })}
                     </div>
                   </div>
+
+                  {supportsQuoteQueue && (
+                    <div className="engaged-action-card engaged-quote-queue-card">
+                      <h3>Quote Requirement Queue</h3>
+                      <p>
+                        Move required quote items from assignment to department
+                        submission.
+                      </p>
+
+                      {sectionQuoteQueueItems.length === 0 ? (
+                        <div className="engaged-quote-queue-empty">
+                          No required quote requirements are currently assigned to{" "}
+                          {section.label}.
+                        </div>
+                      ) : (
+                        <div className="engaged-quote-queue-list">
+                          {sectionQuoteQueueItems.map((item) => {
+                            const normalizedStatus = String(item.status || "")
+                              .trim()
+                              .toLowerCase();
+                            const quickActions = getQuoteDepartmentActions(
+                              normalizedStatus,
+                            );
+                            const submittingThisRequirement =
+                              quoteRequirementSubmittingKey.startsWith(
+                                `${item.key}:`,
+                              );
+                            const itemClassName = [
+                              "engaged-quote-queue-item",
+                              normalizedStatus === "client_approved"
+                                ? "is-approved"
+                                : "",
+                              normalizedStatus === "client_revision_requested"
+                                ? "is-revision"
+                                : "",
+                              normalizedStatus === "dept_submitted"
+                                ? "is-submitted"
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+
+                            return (
+                              <div key={item.key} className={itemClassName}>
+                                <div className="engaged-quote-queue-item-header">
+                                  <strong>{item.label}</strong>
+                                  <span className="engaged-quote-queue-status">
+                                    {formatQuoteRequirementStatus(normalizedStatus)}
+                                  </span>
+                                </div>
+
+                                {item.updatedAt && (
+                                  <div className="engaged-action-meta">
+                                    Updated: {formatUpdateDateTime(item.updatedAt)}
+                                  </div>
+                                )}
+
+                                {item.note && (
+                                  <div className="engaged-action-meta">
+                                    Note: {item.note}
+                                  </div>
+                                )}
+
+                                {quickActions.length > 0 ? (
+                                  <div className="engaged-quote-queue-actions">
+                                    {quickActions.map((actionItem) => (
+                                      <button
+                                        key={`${item.key}-${actionItem.toStatus}`}
+                                        className="complete-btn engaged-quote-queue-btn"
+                                        onClick={() =>
+                                          handleQuoteRequirementTransition(
+                                            item.key,
+                                            actionItem.toStatus,
+                                          )
+                                        }
+                                        disabled={
+                                          submittingThisRequirement ||
+                                          isProjectLeadForProject
+                                        }
+                                      >
+                                        {actionItem.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="engaged-action-meta">
+                                    {normalizedStatus === "dept_submitted"
+                                      ? "Submitted. Waiting for Front Desk review."
+                                      : normalizedStatus === "frontdesk_review" ||
+                                          normalizedStatus === "sent_to_client"
+                                        ? "Waiting for Front Desk/client response."
+                                        : normalizedStatus === "client_approved"
+                                          ? "Client approved. No further department action."
+                                          : "No department action required at this stage."}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {action && (() => {
                     const isPending = project.status === action.pending;
@@ -1631,11 +1891,11 @@ const EngagedProjectActions = ({ user }) => {
                   onChange={(e) => setMockupFile(e.target.files?.[0] || null)}
                   required
                 />
-                <div className="file-hint" style={{ marginTop: "0.5rem" }}>
+                <div className="file-hint file-hint-spaced-md">
                   Any file type allowed (e.g., .cdr, .pdf, .png)
                 </div>
                 {mockupFile && (
-                  <div className="file-hint" style={{ marginTop: "0.25rem" }}>
+                  <div className="file-hint file-hint-spaced-sm">
                     Selected: {mockupFile.name}
                   </div>
                 )}
@@ -1714,7 +1974,7 @@ const EngagedProjectActions = ({ user }) => {
               Type the phrase below to confirm:
             </p>
             <div className="acknowledge-phrase">{COMPLETE_PHRASE}</div>
-            <div className="form-group" style={{ marginTop: "1rem" }}>
+            <div className="form-group form-group-top-spaced">
               <label>Confirmation</label>
               <input
                 type="text"
@@ -1761,7 +2021,7 @@ const EngagedProjectActions = ({ user }) => {
               Type the phrase below to confirm:
             </p>
             <div className="acknowledge-phrase">{ACKNOWLEDGE_PHRASE}</div>
-            <div className="form-group" style={{ marginTop: "1rem" }}>
+            <div className="form-group form-group-top-spaced">
               <label>Confirmation</label>
               <input
                 type="text"

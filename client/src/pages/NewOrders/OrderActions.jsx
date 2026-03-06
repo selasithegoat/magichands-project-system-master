@@ -72,11 +72,87 @@ const BILLING_REQUIREMENT_LABELS = {
   full_payment_or_authorized:
     "Full payment or authorization verification",
 };
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Sample / Jobs Done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission / Documents",
+};
 
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
     .filter(Boolean);
+
+const normalizeQuoteChecklist = (checklist = {}) =>
+  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = Boolean(checklist?.[key]);
+    return accumulator;
+  }, {});
+
+const formatQuoteRequirementStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Assigned";
+  return normalized
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+};
+
+const getQuoteRequirementItems = (project = {}) => {
+  const quoteDetails = project?.quoteDetails || {};
+  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
+  const rawItems =
+    quoteDetails?.requirementItems && typeof quoteDetails.requirementItems === "object"
+      ? quoteDetails.requirementItems
+      : {};
+
+  return QUOTE_REQUIREMENT_KEYS.map((key) => {
+    const rawItem =
+      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
+    const isRequired = Boolean(checklist[key]);
+    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
+    const status = isRequired ? normalizedStatus || "assigned" : "not_required";
+
+    return {
+      key,
+      label: QUOTE_REQUIREMENT_LABELS[key] || key,
+      isRequired,
+      status,
+      updatedAt: rawItem?.updatedAt || null,
+      note: String(rawItem?.note || "").trim(),
+    };
+  });
+};
+
+const getQuoteFrontDeskActions = (status) => {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "dept_submitted") {
+    return [{ toStatus: "frontdesk_review", label: "Review Internally" }];
+  }
+
+  if (normalized === "frontdesk_review") {
+    return [{ toStatus: "sent_to_client", label: "Send to Client" }];
+  }
+
+  if (normalized === "sent_to_client") {
+    return [
+      { toStatus: "client_approved", label: "Client Approved" },
+      { toStatus: "client_revision_requested", label: "Client Requested Revision" },
+    ];
+  }
+
+  return [];
+};
 
 const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
   const missing = [];
@@ -312,6 +388,8 @@ const OrderActions = () => {
   const [sampleApprovalResetInput, setSampleApprovalResetInput] = useState("");
   const [sampleApprovalResetSubmitting, setSampleApprovalResetSubmitting] =
     useState(false);
+  const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
+    useState("");
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
   const [orderNumberDraft, setOrderNumberDraft] = useState("");
@@ -512,6 +590,19 @@ const OrderActions = () => {
     sampleRequirementEnabled && sampleApprovalStatus === "approved";
   const sampleApprovalPending =
     sampleRequirementEnabled && sampleApprovalStatus !== "approved";
+  const quoteRequirementItems = useMemo(
+    () => (isQuoteProject ? getQuoteRequirementItems(project) : []),
+    [isQuoteProject, project],
+  );
+  const requiredQuoteRequirementItems = quoteRequirementItems.filter(
+    (item) => item.isRequired,
+  );
+  const allQuoteRequirementsApproved =
+    isQuoteProject &&
+    requiredQuoteRequirementItems.length > 0 &&
+    requiredQuoteRequirementItems.every(
+      (item) => item.status === "client_approved",
+    );
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -1322,6 +1413,44 @@ const OrderActions = () => {
     }
   };
 
+  const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+
+    const pendingKey = `${requirementKey}:${toStatus}`;
+    setQuoteRequirementSubmittingKey(pendingKey);
+
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/quote-requirements/${requirementKey}/transition`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toStatus }),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          `${QUOTE_REQUIREMENT_LABELS[requirementKey] || "Requirement"} moved to ${formatQuoteRequirementStatus(toStatus)}.`,
+          "success",
+        );
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to update quote requirement.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Quote requirement transition error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteRequirementSubmittingKey("");
+    }
+  };
+
   const canManageOrderRevision = canManageBilling;
   const orderRevisionDirty = useMemo(() => {
     if (!project) return false;
@@ -1723,6 +1852,13 @@ const OrderActions = () => {
                   {paymentLabels[type] || type}
                 </span>
               ))}
+            {isQuoteProject &&
+              requiredQuoteRequirementItems.length > 0 &&
+              !allQuoteRequirementsApproved && (
+                <span className="status-tag caution">
+                  Quote Requirements Pending
+                </span>
+              )}
             {showPendingProductionWarning && (
               <span className="status-tag caution">
                 Pending Production Blocked: {pendingProductionMissingLabels.join(", ")}
@@ -1735,6 +1871,14 @@ const OrderActions = () => {
             )}
           </div>
         </div>
+
+        {isQuoteProject &&
+          requiredQuoteRequirementItems.length > 0 &&
+          !allQuoteRequirementsApproved && (
+            <div className="warning-banner critical">
+              Required quote requirements are still pending client approval.
+            </div>
+          )}
 
         {showPendingProductionWarning && (
           <div className="warning-banner critical">
@@ -1815,7 +1959,15 @@ const OrderActions = () => {
                   <button
                     className="action-btn"
                     onClick={openInvoiceModal}
-                    disabled={!canManageBilling}
+                    disabled={
+                      !canManageBilling ||
+                      (isQuoteProject && !allQuoteRequirementsApproved)
+                    }
+                    title={
+                      isQuoteProject && !allQuoteRequirementsApproved
+                        ? "All required quote requirements must be client-approved first."
+                        : undefined
+                    }
                   >
                     Mark {billingDocumentLabel} Sent
                   </button>
@@ -1857,7 +2009,87 @@ const OrderActions = () => {
                   </div>
                 )}
               </div>
+              {isQuoteProject && !allQuoteRequirementsApproved && (
+                <p className="mockup-approval-meta">
+                  Complete required quote requirements before sending the quote.
+                </p>
+              )}
             </div>
+
+          {isQuoteProject && (
+            <div className="action-card">
+              <h3>Quote Requirements</h3>
+              <p>
+                Front Desk coordinates client-facing transitions for required quote
+                items.
+              </p>
+
+              {requiredQuoteRequirementItems.length === 0 ? (
+                <div className="mockup-empty-state">
+                  No required quote requirements are currently selected.
+                </div>
+              ) : (
+                <div className="quote-requirements-list">
+                  {requiredQuoteRequirementItems.map((item) => {
+                    const actions = getQuoteFrontDeskActions(item.status);
+                    const submittingThisRequirement = quoteRequirementSubmittingKey
+                      .startsWith(`${item.key}:`);
+
+                    return (
+                      <div key={item.key} className="quote-requirement-item">
+                        <div className="quote-requirement-item-header">
+                          <strong>{item.label}</strong>
+                          <span className="mockup-approval-meta quote-requirement-status">
+                            {formatQuoteRequirementStatus(item.status)}
+                          </span>
+                        </div>
+
+                        {item.updatedAt && (
+                          <div className="mockup-approval-meta">
+                            Updated: {formatDateTime(item.updatedAt)}
+                          </div>
+                        )}
+
+                        {item.note && (
+                          <div className="mockup-approval-meta">Note: {item.note}</div>
+                        )}
+
+                        {actions.length > 0 ? (
+                          <div className="billing-actions">
+                            {actions.map((action) => (
+                              <button
+                                key={`${item.key}-${action.toStatus}`}
+                                className="action-btn"
+                                onClick={() =>
+                                  handleQuoteRequirementTransition(
+                                    item.key,
+                                    action.toStatus,
+                                  )
+                                }
+                                disabled={
+                                  !canManageBilling || submittingThisRequirement
+                                }
+                              >
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mockup-approval-meta">
+                            {item.status === "client_approved"
+                              ? "Client has approved this requirement."
+                              : item.status === "client_revision_requested"
+                                ? "Client requested revision. Waiting for department rework."
+                                : "Waiting for department or admin action."}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {!isQuoteProject && (
             <div className="action-card">
@@ -2338,7 +2570,7 @@ const OrderActions = () => {
                 type="file"
                 accept="image/*"
                 id="order-actions-sample-image"
-                style={{ display: "none" }}
+                className="file-input-hidden"
                 onChange={handleSampleImageSelection}
                 disabled={!canManageOrderRevision || referenceSaving}
               />
@@ -2369,7 +2601,7 @@ const OrderActions = () => {
                 type="file"
                 multiple
                 id="order-actions-reference-materials"
-                style={{ display: "none" }}
+                className="file-input-hidden"
                 onChange={handleReferenceFileSelection}
                 disabled={!canManageOrderRevision || referenceSaving}
               />

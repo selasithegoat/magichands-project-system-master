@@ -317,6 +317,10 @@
   box-shadow: none;
 }
 
+.engaged-back-btn-error {
+  margin-top: 1rem;
+}
+
 .complete-btn {
   padding: 0.5rem 1rem;
   background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -459,6 +463,14 @@
 .file-hint {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.file-hint.file-hint-spaced-md {
+  margin-top: 0.5rem;
+}
+
+.file-hint.file-hint-spaced-sm {
+  margin-top: 0.25rem;
 }
 
 .empty-state {
@@ -847,6 +859,80 @@
   color: var(--text-secondary);
 }
 
+.engaged-quote-queue-card {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.engaged-quote-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.engaged-quote-queue-empty {
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.engaged-quote-queue-item {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: var(--card-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.engaged-quote-queue-item.is-submitted {
+  border-color: rgba(59, 130, 246, 0.34);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.engaged-quote-queue-item.is-revision {
+  border-color: rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.engaged-quote-queue-item.is-approved {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.engaged-quote-queue-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.85rem;
+}
+
+.engaged-quote-queue-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+
+.engaged-quote-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.1rem;
+}
+
+.complete-btn.engaged-quote-queue-btn {
+  padding: 0.38rem 0.65rem;
+  font-size: 0.75rem;
+}
+
 .engaged-ack-list {
   display: flex;
   flex-direction: column;
@@ -997,6 +1083,10 @@
 
 .form-group {
   margin-bottom: 1rem;
+}
+
+.form-group.form-group-top-spaced {
+  margin-top: 1rem;
 }
 
 .form-group label {

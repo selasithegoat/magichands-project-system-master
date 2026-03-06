@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Link,
@@ -260,6 +260,62 @@ const BILLING_REQUIREMENT_LABELS = {
   full_payment_or_authorized:
     "Full payment or authorization verification",
 };
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Sample / Jobs Done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission / Documents",
+};
+
+const normalizeQuoteChecklist = (checklist = {}) =>
+  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = Boolean(checklist?.[key]);
+    return accumulator;
+  }, {});
+
+const formatQuoteRequirementStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Assigned";
+  return normalized
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+};
+
+const getQuoteRequirementItems = (project = {}) => {
+  const quoteDetails = project?.quoteDetails || {};
+  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
+  const rawItems =
+    quoteDetails?.requirementItems &&
+    typeof quoteDetails.requirementItems === "object"
+      ? quoteDetails.requirementItems
+      : {};
+
+  return QUOTE_REQUIREMENT_KEYS.map((key) => {
+    const rawItem =
+      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
+    const isRequired = Boolean(checklist[key]);
+    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
+    const status = isRequired ? normalizedStatus || "assigned" : "not_required";
+
+    return {
+      key,
+      label: QUOTE_REQUIREMENT_LABELS[key] || key,
+      isRequired,
+      status,
+      updatedAt: rawItem?.updatedAt || null,
+      note: String(rawItem?.note || "").trim(),
+    };
+  });
+};
 
 const getMockupApprovalStatus = (approval = {}) => {
   const explicit = String(approval?.status || "")
@@ -385,32 +441,13 @@ const isDeliveryCompletedStatus = (status) => {
 };
 
 const FlipCountdownUnit = ({ value, label }) => {
-  const [flipNonce, setFlipNonce] = useState(0);
-  const hasMountedRef = useRef(false);
-  const previousValueRef = useRef(value);
-
-  useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      previousValueRef.current = value;
-      return;
-    }
-
-    if (value === previousValueRef.current) {
-      return;
-    }
-
-    previousValueRef.current = value;
-    setFlipNonce((current) => current + 1);
-  }, [value]);
+  const normalizedValue = String(value).padStart(2, "0");
 
   return (
     <div className="delivery-countdown-unit">
       <span
-        key={`${label}-${flipNonce}`}
-        className={`delivery-countdown-card${
-          flipNonce > 0 ? " is-flipping" : ""
-        }`}
+        key={`${label}-${normalizedValue}`}
+        className="delivery-countdown-card is-flipping"
       >
         {value}
       </span>
@@ -1246,60 +1283,86 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
 };
 
 const QuoteChecklistCard = ({ project }) => {
-  const checklist = project.quoteDetails?.checklist || {};
+  const items = getQuoteRequirementItems(project);
+  const requiredItems = items.filter((item) => item.isRequired);
+  const approvedCount = requiredItems.filter(
+    (item) => item.status === "client_approved",
+  ).length;
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "N/A";
+    const parsed = new Date(dateString);
+    if (Number.isNaN(parsed.getTime())) return "N/A";
+    return parsed.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">📋 Quote Requirements</h3>
+        <h3 className="card-title">Quote Requirements</h3>
       </div>
-      <div
-        className="checklist-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: "1rem",
-          marginTop: "1rem",
-        }}
-      >
-        {Object.entries(checklist).map(([key, val]) => (
-          <div
-            key={key}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.75rem",
-              background: val
-                ? "rgba(16, 185, 129, 0.1)"
-                : "rgba(255, 255, 255, 0.03)",
-              borderRadius: "8px",
-              border: val
-                ? "1px solid rgba(16, 185, 129, 0.2)"
-                : "1px solid var(--border-color)",
-              color: val ? "#10b981" : "var(--text-secondary)",
-              transition: "all 0.2s",
-            }}
-          >
-            <span style={{ fontSize: "1.2rem" }}>{val ? "✓" : "○"}</span>
-            <span
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: val ? 600 : 400,
-                color: val ? "#0c0c0cff" : "var(--text-secondary)",
-              }}
-            >
-              {key
-                .replace(/([A-Z])/g, " $1")
-                .replace(/^./, (str) => str.toUpperCase())}
-            </span>
-          </div>
-        ))}
+      <p className="info-subtext quote-requirements-summary">
+        Client-approved: {approvedCount}/{requiredItems.length || 0} required items
+      </p>
+      <div className="checklist-grid quote-requirements-grid">
+        {items.map((item) => {
+          const status = String(item.status || "").toLowerCase();
+          const isApproved = status === "client_approved";
+          const isRevision = status === "client_revision_requested";
+          const cardClassName = [
+            "quote-requirement-card",
+            isApproved ? "is-approved" : "",
+            isRevision ? "is-revision" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const requiredBadgeClassName = [
+            "quote-requirement-required-pill",
+            item.isRequired ? "is-required" : "is-not-required",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const statusClassName = [
+            "quote-requirement-status-line",
+            isApproved ? "is-approved" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          return (
+            <div key={item.key} className={cardClassName}>
+              <div className="quote-requirement-card-header">
+                <strong>{item.label}</strong>
+                <span className={requiredBadgeClassName}>
+                  {item.isRequired ? "Required" : "Not Required"}
+                </span>
+              </div>
+              <div className={statusClassName}>
+                Status: {formatQuoteRequirementStatus(status)}
+              </div>
+              {item.updatedAt && (
+                <div className="quote-requirement-meta quote-requirement-updated">
+                  Updated: {formatDateTime(item.updatedAt)}
+                </div>
+              )}
+              {item.note && (
+                <div className="quote-requirement-meta quote-requirement-note">
+                  Note: {item.note}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 };
-
 const FeedbackCard = ({ feedbacks = [] }) => {
   const sortedFeedbacks = [...feedbacks].sort((a, b) => {
     const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;

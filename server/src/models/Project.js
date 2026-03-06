@@ -1,5 +1,82 @@
 const mongoose = require("mongoose");
 
+const QUOTE_REQUIREMENT_STATUSES = [
+  "not_required",
+  "assigned",
+  "in_progress",
+  "dept_submitted",
+  "frontdesk_review",
+  "sent_to_client",
+  "client_approved",
+  "client_revision_requested",
+  "blocked",
+  "cancelled",
+];
+
+const QuoteRequirementHistorySchema = new mongoose.Schema(
+  {
+    fromStatus: {
+      type: String,
+      enum: QUOTE_REQUIREMENT_STATUSES,
+    },
+    toStatus: {
+      type: String,
+      enum: QUOTE_REQUIREMENT_STATUSES,
+      required: true,
+    },
+    changedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    changedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    note: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false },
+);
+
+const QuoteRequirementItemSchema = new mongoose.Schema(
+  {
+    isRequired: {
+      type: Boolean,
+      default: false,
+    },
+    status: {
+      type: String,
+      enum: QUOTE_REQUIREMENT_STATUSES,
+      default: "not_required",
+    },
+    updatedAt: Date,
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    note: {
+      type: String,
+      default: "",
+    },
+    history: {
+      type: [QuoteRequirementHistorySchema],
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
+const createDefaultQuoteRequirementItem = () => ({
+  isRequired: false,
+  status: "not_required",
+  updatedAt: null,
+  updatedBy: null,
+  note: "",
+  history: [],
+});
+
 const ProjectSchema = new mongoose.Schema(
   {
     orderId: {
@@ -343,6 +420,28 @@ const ProjectSchema = new mongoose.Schema(
         previousSamples: Boolean,
         sampleProduction: Boolean,
         bidSubmission: Boolean,
+      },
+      requirementItems: {
+        cost: {
+          type: QuoteRequirementItemSchema,
+          default: createDefaultQuoteRequirementItem,
+        },
+        mockup: {
+          type: QuoteRequirementItemSchema,
+          default: createDefaultQuoteRequirementItem,
+        },
+        previousSamples: {
+          type: QuoteRequirementItemSchema,
+          default: createDefaultQuoteRequirementItem,
+        },
+        sampleProduction: {
+          type: QuoteRequirementItemSchema,
+          default: createDefaultQuoteRequirementItem,
+        },
+        bidSubmission: {
+          type: QuoteRequirementItemSchema,
+          default: createDefaultQuoteRequirementItem,
+        },
       },
       productionChecklist: {
         inHouse: Boolean,
