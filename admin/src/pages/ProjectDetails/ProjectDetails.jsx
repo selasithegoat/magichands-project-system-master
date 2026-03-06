@@ -83,6 +83,15 @@ const QUOTE_REQUIREMENT_STATUS_OPTIONS = [
   "blocked",
   "cancelled",
 ];
+const getQuoteRequirementStatusOptionsByKey = (key, selectedStatus) => {
+  if (key !== "bidSubmission") return QUOTE_REQUIREMENT_STATUS_OPTIONS;
+
+  if (selectedStatus === "sent_to_client") {
+    return ["sent_to_client", "assigned"];
+  }
+
+  return Array.from(new Set([selectedStatus, "sent_to_client"]));
+};
 
 const normalizeQuoteChecklist = (checklist = {}) =>
   QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
@@ -2223,6 +2232,15 @@ const ProjectDetails = ({ user }) => {
                       .startsWith(`${item.key}:`);
                     const selectedStatus =
                       item.status === "not_required" ? "assigned" : item.status;
+                    const statusOptions = Array.from(
+                      new Set([
+                        ...getQuoteRequirementStatusOptionsByKey(
+                          item.key,
+                          selectedStatus,
+                        ),
+                        selectedStatus,
+                      ]),
+                    );
                     const itemClassName = [
                       "checklist-admin-item",
                       "quote-requirement-admin-item",
@@ -2275,7 +2293,7 @@ const ProjectDetails = ({ user }) => {
                             disabled={submittingThisRequirement}
                             className="quote-requirement-admin-select"
                           >
-                            {QUOTE_REQUIREMENT_STATUS_OPTIONS.map((statusOption) => (
+                            {statusOptions.map((statusOption) => (
                               <option key={statusOption} value={statusOption}>
                                 {formatQuoteRequirementStatus(statusOption)}
                               </option>

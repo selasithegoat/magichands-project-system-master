@@ -138,7 +138,7 @@ const isQuoteRequirementCompleted = (requirementKey, status) => {
   const normalizedStatus = String(status || "").trim().toLowerCase();
   if (!normalizedStatus) return false;
 
-  if (normalizedKey === "previousSamples") {
+  if (normalizedKey === "previousSamples" || normalizedKey === "bidSubmission") {
     return normalizedStatus === "sent_to_client" || normalizedStatus === "client_approved";
   }
 
@@ -155,6 +155,9 @@ const formatQuoteRequirementStatusForItem = (requirementKey, status) => {
       return "Sample Retrieved Confirmed";
     }
   }
+  if (normalizedKey === "bidSubmission" && normalizedStatus === "sent_to_client") {
+    return "Documents Sent";
+  }
 
   return formatQuoteRequirementStatus(status);
 };
@@ -162,6 +165,24 @@ const formatQuoteRequirementStatusForItem = (requirementKey, status) => {
 const getQuoteFrontDeskActions = (requirementKey, status) => {
   const normalizedKey = String(requirementKey || "").trim();
   const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalizedKey === "bidSubmission") {
+    if (
+      [
+        "assigned",
+        "in_progress",
+        "dept_submitted",
+        "frontdesk_review",
+        "client_revision_requested",
+        "client_approved",
+        "blocked",
+      ].includes(normalized)
+    ) {
+      return [{ toStatus: "sent_to_client", label: "Mark Documents Sent" }];
+    }
+
+    return [];
+  }
 
   if (normalizedKey === "previousSamples") {
     if (
@@ -2147,6 +2168,11 @@ const OrderActions = () => {
                             {item.key === "previousSamples" &&
                             ["sent_to_client", "client_approved"].includes(item.status)
                               ? "Previous sample retrieval has been confirmed."
+                              : item.key === "bidSubmission" &&
+                                ["sent_to_client", "client_approved"].includes(
+                                  item.status,
+                                )
+                              ? "Bid submission documents have been sent."
                               : item.status === "client_approved"
                                 ? "Client has approved this requirement."
                                 : item.status === "client_revision_requested"

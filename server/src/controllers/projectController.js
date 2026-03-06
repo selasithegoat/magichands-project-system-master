@@ -1058,6 +1058,16 @@ const QUOTE_REQUIREMENT_CUSTOM_ALLOWED_TRANSITIONS = {
     dept_submitted: new Set(["sent_to_client"]),
     client_revision_requested: new Set(["dept_submitted"]),
   },
+  bidSubmission: {
+    assigned: new Set(["sent_to_client"]),
+    in_progress: new Set(["sent_to_client"]),
+    dept_submitted: new Set(["sent_to_client"]),
+    frontdesk_review: new Set(["sent_to_client"]),
+    client_revision_requested: new Set(["sent_to_client"]),
+    client_approved: new Set(["sent_to_client"]),
+    sent_to_client: new Set(["assigned"]),
+    blocked: new Set(["sent_to_client"]),
+  },
 };
 const QUOTE_REQUIREMENT_FRONT_DESK_STAGES = new Set([
   "frontdesk_review",
@@ -1070,6 +1080,7 @@ const QUOTE_REQUIREMENT_FRONT_DESK_MANAGED_KEYS = new Set([
   "mockup",
   "previousSamples",
   "sampleProduction",
+  "bidSubmission",
 ]);
 const QUOTE_REQUIREMENT_DEPARTMENT_STAGES = new Set([
   "in_progress",
@@ -1242,7 +1253,7 @@ const isQuoteRequirementCompleted = (requirementKey = "", status = "") => {
   const normalizedStatus = toText(status).toLowerCase();
   if (!normalizedStatus) return false;
 
-  if (normalizedKey === "previousSamples") {
+  if (normalizedKey === "previousSamples" || normalizedKey === "bidSubmission") {
     return (
       normalizedStatus === "sent_to_client" ||
       normalizedStatus === QUOTE_REQUIREMENT_APPROVED_STATUS
@@ -5121,6 +5132,16 @@ const transitionQuoteRequirement = async (req, res) => {
 
     if (fromStatus === toStatus) {
       return res.json(project);
+    }
+
+    if (
+      requirementKey === "bidSubmission" &&
+      !["sent_to_client", "assigned", "not_required"].includes(toStatus)
+    ) {
+      return res.status(400).json({
+        message:
+          "Bid Submission / Documents can only be marked as sent for quote validation.",
+      });
     }
 
     if (!isQuoteRequirementTransitionAllowed(fromStatus, toStatus, requirementKey)) {
