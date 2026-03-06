@@ -582,6 +582,113 @@
   color: var(--text-secondary);
 }
 
+.quote-decision-admin-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.quote-decision-admin-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.quote-decision-admin-status.is-pending {
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fcd34d;
+}
+
+.quote-decision-admin-status.is-go-ahead {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.quote-decision-admin-status.is-declined {
+  background: rgba(244, 63, 94, 0.14);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fda4af;
+}
+
+.quote-decision-admin-meta {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.quote-decision-admin-note {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.quote-decision-admin-note span {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quote-decision-admin-note textarea {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input, var(--bg-card));
+  color: var(--text-primary);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+  resize: vertical;
+}
+
+.quote-decision-admin-note textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.quote-decision-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.quote-decision-admin-btn {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quote-decision-admin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quote-decision-admin-btn.go-ahead {
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.quote-decision-admin-btn.declined {
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.14);
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

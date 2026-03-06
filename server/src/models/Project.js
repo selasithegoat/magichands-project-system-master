@@ -463,6 +463,29 @@ const ProjectSchema = new mongoose.Schema(
         accepted: Boolean,
         cancelled: Boolean,
       },
+      decision: {
+        status: {
+          type: String,
+          enum: ["pending", "go_ahead", "declined"],
+          default: "pending",
+        },
+        note: String,
+        validatedAt: Date,
+        validatedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        convertedAt: Date,
+        convertedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        convertedToType: {
+          type: String,
+          enum: ["Standard", "Emergency", "Corporate Job", "Quote"],
+          default: "Quote",
+        },
+      },
       filledBy: String, // Self / With Colleague
       leadSignature: String,
       submissionDate: Date,

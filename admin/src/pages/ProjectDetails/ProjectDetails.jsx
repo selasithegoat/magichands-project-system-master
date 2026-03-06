@@ -50,6 +50,25 @@ const STATUS_AUTO_ADVANCE_TARGETS = {
   "Proof Reading Completed": "Pending Production",
   "Packaging Completed": "Pending Delivery/Pickup",
 };
+const QUOTE_STATUS_DECISION_DISPLAY_MAP = {
+  "Pending Feedback": "Pending Decision",
+  "Feedback Completed": "Decision Completed",
+};
+const QUOTE_STATUS_DECISION_STORAGE_MAP = {
+  "Pending Decision": "Pending Feedback",
+  "Decision Completed": "Feedback Completed",
+};
+
+const mapQuoteStatusForDisplay = (status, isQuoteProject = false) => {
+  const normalized = String(status || "").trim();
+  if (!isQuoteProject) return normalized;
+  return QUOTE_STATUS_DECISION_DISPLAY_MAP[normalized] || normalized;
+};
+
+const mapQuoteStatusForStorage = (status) => {
+  const normalized = String(status || "").trim();
+  return QUOTE_STATUS_DECISION_STORAGE_MAP[normalized] || normalized;
+};
 
 const BILLING_REQUIREMENT_LABELS = {
   invoice: "Invoice confirmation",
@@ -134,6 +153,49 @@ const getQuoteRequirementItems = (project = {}) => {
       updatedAt: rawItem?.updatedAt || null,
     };
   });
+};
+
+const normalizeQuoteDecisionStatus = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (
+    [
+      "go_ahead",
+      "go-ahead",
+      "goahead",
+      "proceed",
+      "accepted",
+      "approved",
+      "yes",
+    ].includes(normalized)
+  ) {
+    return "go_ahead";
+  }
+  if (
+    ["declined", "rejected", "cancelled", "cancel", "no"].includes(
+      normalized,
+    )
+  ) {
+    return "declined";
+  }
+  return "pending";
+};
+
+const getQuoteDecisionState = (project = {}) => {
+  const decision = project?.quoteDetails?.decision || {};
+  return {
+    status: normalizeQuoteDecisionStatus(decision?.status),
+    note: String(decision?.note || "").trim(),
+    validatedAt: decision?.validatedAt || null,
+    convertedAt: decision?.convertedAt || null,
+    convertedToType: String(decision?.convertedToType || "").trim(),
+  };
+};
+
+const formatQuoteDecisionStatus = (value) => {
+  const status = normalizeQuoteDecisionStatus(value);
+  if (status === "go_ahead") return "Go Ahead";
+  if (status === "declined") return "Declined";
+  return "Pending Decision";
 };
 
 const getPaymentTypeSet = (project) =>
@@ -364,6 +426,8 @@ const ProjectDetails = ({ user }) => {
   const [activeContentTab, setActiveContentTab] = useState("overview");
   const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
     useState("");
+  const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
+  const [quoteDecisionNoteDraft, setQuoteDecisionNoteDraft] = useState("");
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -422,6 +486,20 @@ const ProjectDetails = ({ user }) => {
     return true;
   };
 
+  useEffect(() => {
+    if (project?.projectType !== "Quote") {
+      setQuoteDecisionNoteDraft("");
+      return;
+    }
+
+    setQuoteDecisionNoteDraft(getQuoteDecisionState(project).note);
+  }, [
+    project,
+    project?._id,
+    project?.projectType,
+    project?.quoteDetails?.decision?.note,
+  ]);
+
   const closeBillingGuardModal = () => {
     if (billingGuardSubmitting) return;
     const missingKey = (billingGuardModal.missingLabels || []).join("|");
@@ -468,10 +546,14 @@ const ProjectDetails = ({ user }) => {
     { allowBillingOverride = false } = {},
   ) => {
     if (!project) return false;
+    const normalizedStatusForApi =
+      project.projectType === "Quote"
+        ? mapQuoteStatusForStorage(newStatus)
+        : newStatus;
     const oldStatus = project.status;
 
     // Optimistic update
-    setProject({ ...project, status: newStatus });
+    setProject({ ...project, status: normalizedStatusForApi });
 
     try {
       const res = await fetch(`/api/projects/${id}/status?source=admin`, {
@@ -479,7 +561,7 @@ const ProjectDetails = ({ user }) => {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          status: newStatus,
+          status: normalizedStatusForApi,
           allowBillingOverride: allowBillingOverride && user?.role === "admin",
         }),
       });
@@ -1190,6 +1272,38 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
+  const handleQuoteDecisionValidation = async (decision) => {
+    if (!ensureProjectIsEditable()) return;
+    if (!project || project.projectType !== "Quote") return;
+    if (quoteDecisionSubmitting) return;
+
+    setQuoteDecisionSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${id}/quote-decision?source=admin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          decision,
+          note: quoteDecisionNoteDraft,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to validate quote decision.");
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+    } catch (error) {
+      console.error("Error validating quote decision:", error);
+      alert(error.message || "Failed to validate quote decision.");
+    } finally {
+      setQuoteDecisionSubmitting(false);
+    }
+  };
+
   const handleUndoAcknowledgement = async (department) => {
     if (!project) return;
     if (!ensureProjectIsEditable()) return;
@@ -1487,6 +1601,14 @@ const ProjectDetails = ({ user }) => {
   const quoteRequirementItems = isQuoteProject
     ? getQuoteRequirementItems(project)
     : [];
+  const quoteDecisionState = isQuoteProject
+    ? getQuoteDecisionState(project)
+    : { status: "pending", note: "", validatedAt: null };
+  const quoteDecisionTaken =
+    isQuoteProject &&
+    ["go_ahead", "declined"].includes(quoteDecisionState.status);
+  const canValidateQuoteDecision =
+    isQuoteProject && project.status === "Response Sent";
   const isCorporateProject = project.projectType === "Corporate Job";
   const corporateEmergencyEnabled =
     isCorporateProject && Boolean(project?.corporateEmergency?.isEnabled);
@@ -1628,7 +1750,7 @@ const ProjectDetails = ({ user }) => {
               className={`status-badge-select ${project.status
                 ?.toLowerCase()
                 .replace(" ", "-")}`}
-              value={project.status}
+              value={mapQuoteStatusForDisplay(project.status, isQuoteProject)}
               onChange={(e) => handleStatusChange(e.target.value)}
               disabled={
                 loading ||
@@ -1662,8 +1784,8 @@ const ProjectDetails = ({ user }) => {
                     "Quote Request Completed",
                     "Pending Send Response",
                     "Response Sent",
-                    "Pending Feedback",
-                    "Feedback Completed",
+                    "Pending Decision",
+                    "Decision Completed",
                     "Completed",
                     ...(isProjectOnHold ? ["On Hold"] : []),
                   ]
@@ -2225,6 +2347,85 @@ const ProjectDetails = ({ user }) => {
           {project.projectType === "Quote" && (
             <div className="detail-card">
               <h3 className="card-title">Quote Requirements</h3>
+              <div className="quote-decision-admin-panel">
+                <div
+                  className={`quote-decision-admin-status ${
+                    quoteDecisionState.status === "go_ahead"
+                      ? "is-go-ahead"
+                      : quoteDecisionState.status === "declined"
+                        ? "is-declined"
+                        : "is-pending"
+                  }`}
+                >
+                  Decision: {formatQuoteDecisionStatus(quoteDecisionState.status)}
+                </div>
+
+                {quoteDecisionState.validatedAt && (
+                  <div className="quote-decision-admin-meta">
+                    Validated {formatLastUpdated(quoteDecisionState.validatedAt)}
+                  </div>
+                )}
+
+                <label className="quote-decision-admin-note">
+                  <span>Front Desk / Admin Note (Optional)</span>
+                  <textarea
+                    rows={2}
+                    value={quoteDecisionNoteDraft}
+                    onChange={(event) =>
+                      setQuoteDecisionNoteDraft(event.target.value)
+                    }
+                    disabled={quoteDecisionSubmitting}
+                    placeholder="Client decision context..."
+                  />
+                </label>
+
+                <div className="quote-decision-admin-actions">
+                  <button
+                    type="button"
+                    className="quote-decision-admin-btn go-ahead"
+                    onClick={() => handleQuoteDecisionValidation("go_ahead")}
+                    disabled={
+                      quoteDecisionSubmitting || !canValidateQuoteDecision
+                    }
+                  >
+                    {quoteDecisionSubmitting ? "Saving..." : "Client Go Ahead"}
+                  </button>
+                  <button
+                    type="button"
+                    className="quote-decision-admin-btn declined"
+                    onClick={() => handleQuoteDecisionValidation("declined")}
+                    disabled={
+                      quoteDecisionSubmitting || !canValidateQuoteDecision
+                    }
+                  >
+                    {quoteDecisionSubmitting ? "Saving..." : "Client Declined"}
+                  </button>
+                  {quoteDecisionTaken && (
+                    <button
+                      type="button"
+                      className="quote-decision-admin-btn reset"
+                      onClick={() => handleQuoteDecisionValidation("pending")}
+                      disabled={quoteDecisionSubmitting}
+                    >
+                      {quoteDecisionSubmitting ? "Saving..." : "Reset"}
+                    </button>
+                  )}
+                </div>
+
+                {!canValidateQuoteDecision && (
+                  <div className="quote-decision-admin-meta">
+                    Quote decision can only be validated after status reaches
+                    Response Sent.
+                  </div>
+                )}
+
+                {quoteDecisionState.status === "go_ahead" && (
+                  <div className="quote-decision-admin-meta">
+                    Use <strong>Change Type</strong> in the header to convert this
+                    quote to the preferred project type.
+                  </div>
+                )}
+              </div>
               <div className="checklist-admin-grid quote-requirements-admin-grid">
                 {quoteRequirementItems.length > 0 ? (
                   quoteRequirementItems.map((item) => {

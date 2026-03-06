@@ -558,6 +558,60 @@
   gap: 0.75rem;
 }
 
+.quote-decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.quote-decision-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.quote-decision-field span {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.quote-decision-field textarea,
+.quote-decision-select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.quote-decision-field textarea:focus,
+.quote-decision-select:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.35);
+}
+
+.quote-decision-convert {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.quote-decision-convert-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.quote-decision-convert-row .quote-decision-select {
+  flex: 1 1 170px;
+  min-width: 150px;
+}
+
 .quote-requirements-list {
   display: flex;
   flex-direction: column;

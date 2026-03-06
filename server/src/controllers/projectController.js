@@ -990,6 +990,17 @@ const DEFAULT_STATUS_BY_PROJECT_TYPE = {
   Emergency: "Pending Departmental Engagement",
   "Corporate Job": "Pending Departmental Engagement",
 };
+const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
+  "pending decision": "Pending Feedback",
+  "decision completed": "Feedback Completed",
+});
+const normalizeStatusForStorageByProjectType = (status = "", projectType = "") => {
+  const normalizedStatus = toText(status);
+  if (!normalizedStatus) return "";
+  if (projectType !== "Quote") return normalizedStatus;
+  const aliasKey = normalizedStatus.toLowerCase();
+  return QUOTE_STATUS_ALIAS_TO_STORED[aliasKey] || normalizedStatus;
+};
 const QUOTE_REQUIREMENT_KEYS = [
   "cost",
   "mockup",
@@ -1105,6 +1116,25 @@ const QUOTE_STATUS_SYNC_PENDING_SET = new Set([
   "Quote Request Completed",
   "Pending Send Response",
 ]);
+const QUOTE_DECISION_STATUS_VALUES = ["pending", "go_ahead", "declined"];
+const QUOTE_DECISION_STATUS_SET = new Set(QUOTE_DECISION_STATUS_VALUES);
+const QUOTE_DECISION_STATUS_ALIASES = {
+  pending: "pending",
+  undecided: "pending",
+  reset: "pending",
+  "go_ahead": "go_ahead",
+  "go-ahead": "go_ahead",
+  goahead: "go_ahead",
+  proceed: "go_ahead",
+  accepted: "go_ahead",
+  approved: "go_ahead",
+  yes: "go_ahead",
+  declined: "declined",
+  rejected: "declined",
+  cancel: "declined",
+  cancelled: "declined",
+  no: "declined",
+};
 
 const getAutoProgressedStatus = (status, project = {}) => {
   const progression = {
@@ -1155,6 +1185,39 @@ const toPlainObject = (value) => {
   if (typeof value === "object") return value;
   return {};
 };
+
+const normalizeQuoteDecisionStatus = (value, fallback = "pending") => {
+  const token = toText(value).toLowerCase();
+  if (!token) return fallback;
+  const mapped = QUOTE_DECISION_STATUS_ALIASES[token] || token;
+  if (!QUOTE_DECISION_STATUS_SET.has(mapped)) return fallback;
+  return mapped;
+};
+
+const normalizeQuoteDecision = (decision = {}) => {
+  const source = toPlainObject(decision);
+  const status = normalizeQuoteDecisionStatus(source.status, "pending");
+  return {
+    status,
+    note: toText(source.note),
+    validatedAt: toDateOrNull(source.validatedAt),
+    validatedBy: source.validatedBy || null,
+    convertedAt: toDateOrNull(source.convertedAt),
+    convertedBy: source.convertedBy || null,
+    convertedToType: normalizeProjectType(source.convertedToType, "Quote"),
+  };
+};
+
+const getNormalizedQuoteDecision = (project = {}) => {
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  return normalizeQuoteDecision(normalizedQuoteDetails?.decision || {});
+};
+
+const hasQuoteDecisionRecorded = (project = {}) =>
+  ["go_ahead", "declined"].includes(getNormalizedQuoteDecision(project).status);
 
 const normalizeQuoteChecklistValue = (checklist = {}) =>
   QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
@@ -1233,10 +1296,15 @@ const normalizeQuoteDetailsWorkflow = ({
     });
   });
 
+  const normalizedDecision = normalizeQuoteDecision(
+    incoming.decision !== undefined ? incoming.decision : existing.decision,
+  );
+
   return {
     ...merged,
     checklist: normalizedChecklist,
     requirementItems: normalizedRequirementItems,
+    decision: normalizedDecision,
   };
 };
 
@@ -4659,12 +4727,12 @@ const reactivateProject = async (req, res) => {
 // @access  Private (Admin or permitted departments)
 const updateProjectStatus = async (req, res) => {
   try {
-    const { status: newStatus } = req.body;
-    if (!newStatus) {
+    const requestedStatus = toText(req.body?.status);
+    if (!requestedStatus) {
       return res.status(400).json({ message: "Status is required" });
     }
 
-    if (newStatus === HOLD_STATUS) {
+    if (requestedStatus === HOLD_STATUS) {
       return res.status(400).json({
         message: "Use the project hold endpoint to put this project on hold.",
       });
@@ -4677,6 +4745,10 @@ const updateProjectStatus = async (req, res) => {
     const isAdmin = req.user.role === "admin";
     const allowBillingOverride =
       Boolean(req.body?.allowBillingOverride) && isAdmin;
+    const newStatus = normalizeStatusForStorageByProjectType(
+      requestedStatus,
+      normalizeProjectType(project?.projectType, "Standard"),
+    );
 
     if (isQuoteProject(project)) {
       project.quoteDetails = normalizeQuoteDetailsWorkflow({
@@ -4855,6 +4927,16 @@ const updateProjectStatus = async (req, res) => {
         message:
           "Mark quote as sent from billing before setting status to Response Sent.",
       });
+    }
+
+    if (isQuoteProject(project) && newStatus === "Finished") {
+      if (!hasQuoteDecisionRecorded(project)) {
+        return res.status(400).json({
+          code: "QUOTE_DECISION_PENDING",
+          message:
+            "Client quote decision must be validated before marking this quote as Finished.",
+        });
+      }
     }
 
     // If the selected status has an auto-advancement, use it
@@ -5265,6 +5347,121 @@ const transitionQuoteRequirement = async (req, res) => {
     return res.json(project);
   } catch (error) {
     console.error("Error transitioning quote requirement:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Validate quote decision after response is sent
+// @route   PATCH /api/projects/:id/quote-decision
+// @access  Private (Admin or Front Desk)
+const updateQuoteDecision = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to validate quote decision.",
+      });
+    }
+
+    const rawDecisionValue = req.body?.decision ?? req.body?.status;
+    const normalizedDecision = normalizeQuoteDecisionStatus(
+      rawDecisionValue,
+      "",
+    );
+    const note = toText(req.body?.note).slice(0, 500);
+
+    if (!normalizedDecision) {
+      return res.status(400).json({
+        message: "Invalid quote decision.",
+        allowed: QUOTE_DECISION_STATUS_VALUES.filter(
+          (status) => status !== "pending",
+        ),
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Quote decision is only available for quote projects.",
+      });
+    }
+
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    if (
+      normalizedDecision !== "pending" &&
+      project.status !== "Response Sent"
+    ) {
+      return res.status(400).json({
+        code: "QUOTE_DECISION_REQUIRES_RESPONSE_SENT",
+        message:
+          "Quote decision can only be validated after quote response has been sent.",
+      });
+    }
+
+    const existingDecision = normalizeQuoteDecision(
+      project.quoteDetails?.decision || {},
+    );
+    const now = new Date();
+    const nextDecision = {
+      ...existingDecision,
+      status: normalizedDecision,
+      note,
+      validatedAt: normalizedDecision === "pending" ? null : now,
+      validatedBy: normalizedDecision === "pending" ? null : req.user._id,
+    };
+
+    if (normalizedDecision !== "go_ahead") {
+      nextDecision.convertedAt = null;
+      nextDecision.convertedBy = null;
+      nextDecision.convertedToType = "Quote";
+    }
+
+    project.quoteDetails.decision = nextDecision;
+    project.markModified("quoteDetails.decision");
+    await project.save();
+
+    const decisionLabel =
+      normalizedDecision === "go_ahead"
+        ? "Go Ahead"
+        : normalizedDecision === "declined"
+          ? "Declined"
+          : "Pending";
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      `Quote decision validated as ${decisionLabel}.`,
+      {
+        quoteDecision: {
+          status: normalizedDecision,
+          note,
+        },
+      },
+    );
+
+    const actorName =
+      `${toText(req.user?.firstName)} ${toText(req.user?.lastName)}`.trim() ||
+      "A user";
+
+    await notifyAdmins(
+      req.user._id,
+      project._id,
+      "SYSTEM",
+      "Quote Decision Updated",
+      `${actorName} validated quote decision as ${decisionLabel} for project #${getProjectDisplayRef(
+        project,
+      )}.`,
+    );
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating quote decision:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -5899,13 +6096,13 @@ const updateCorporateEmergency = async (req, res) => {
 
 // @desc    Change project type / convert quote to project workflow
 // @route   PATCH /api/projects/:id/project-type
-// @access  Private (Admin portal only)
+// @access  Private (Admin or Front Desk)
 const updateProjectType = async (req, res) => {
   try {
-    if (!hasAdminPortalAccess(req.user) || !isAdminPortalRequest(req)) {
+    if (!canManageBilling(req.user)) {
       return res.status(403).json({
         message:
-          "Only Administration admins can change project types from the admin portal.",
+          "Only Admin or Front Desk can change project types.",
       });
     }
 
@@ -5927,8 +6124,50 @@ const updateProjectType = async (req, res) => {
       });
     }
     const requestedType = normalizeProjectType(rawTargetType, previousType);
-    const requestedStatus = toText(req.body?.targetStatus || req.body?.status);
+    const requestedStatus = normalizeStatusForStorageByProjectType(
+      req.body?.targetStatus || req.body?.status,
+      requestedType,
+    );
     const previousStatus = toText(project.status);
+    const isFrontDeskUser =
+      req.user?.role !== "admin" && canManageBilling(req.user);
+    const isQuoteToProjectConversion =
+      previousType === "Quote" && requestedType !== "Quote";
+
+    if (isFrontDeskUser && previousType !== "Quote") {
+      return res.status(403).json({
+        message:
+          "Front Desk can only convert quote projects to a production project type.",
+      });
+    }
+
+    if (isFrontDeskUser && requestedType === "Quote") {
+      return res.status(403).json({
+        message: "Front Desk cannot convert projects back to Quote type.",
+      });
+    }
+
+    const currentQuoteDecision = normalizeQuoteDecision(
+      project?.quoteDetails?.decision || {},
+    );
+
+    if (isQuoteToProjectConversion) {
+      if (previousStatus !== "Response Sent") {
+        return res.status(400).json({
+          code: "QUOTE_CONVERSION_REQUIRES_RESPONSE_SENT",
+          message:
+            "Quote can only be converted to a project type after quote response has been sent.",
+        });
+      }
+
+      if (currentQuoteDecision.status !== "go_ahead") {
+        return res.status(400).json({
+          code: "QUOTE_DECISION_REQUIRED_FOR_CONVERSION",
+          message:
+            "Client quote decision must be validated as Go Ahead before conversion.",
+        });
+      }
+    }
 
     let nextStatus = "";
     if (requestedStatus) {
@@ -6015,6 +6254,25 @@ const updateProjectType = async (req, res) => {
         quoteDetailsInput: project.quoteDetails || {},
         existingQuoteDetails: project.quoteDetails || {},
       });
+    }
+
+    if (isQuoteToProjectConversion) {
+      project.quoteDetails = normalizeQuoteDetailsWorkflow({
+        quoteDetailsInput: project.quoteDetails || {},
+        existingQuoteDetails: project.quoteDetails || {},
+      });
+      const nextDecision = {
+        ...normalizeQuoteDecision(project.quoteDetails?.decision || {}),
+        status: "go_ahead",
+        validatedAt:
+          currentQuoteDecision.validatedAt || toDateOrNull(now) || now,
+        validatedBy: currentQuoteDecision.validatedBy || req.user._id,
+        convertedAt: now,
+        convertedBy: req.user._id,
+        convertedToType: requestedType,
+      };
+      project.quoteDetails.decision = nextDecision;
+      project.markModified("quoteDetails.decision");
     }
 
     if (nextSampleRequired) {
@@ -7910,8 +8168,13 @@ const updateProject = async (req, res) => {
     }
 
     if (currentStep) project.currentStep = currentStep;
-    if (status) project.status = status;
     if (projectType) project.projectType = projectType;
+    if (status) {
+      project.status = normalizeStatusForStorageByProjectType(
+        status,
+        normalizeProjectType(project.projectType, "Standard"),
+      );
+    }
     if (priority) project.priority = priority;
     if (project.projectType !== "Corporate Job") {
       project.corporateEmergency = {
@@ -7968,6 +8231,19 @@ const updateProject = async (req, res) => {
         existingQuoteDetails: project.quoteDetails || {},
       });
     }
+
+    if (
+      toText(project.status) === "Finished" &&
+      project.projectType === "Quote" &&
+      !hasQuoteDecisionRecorded(project)
+    ) {
+      return res.status(400).json({
+        code: "QUOTE_DECISION_PENDING",
+        message:
+          "Client quote decision must be validated before marking this quote as Finished.",
+      });
+    }
+
     if (workstreamCode !== undefined) {
       project.workstreamCode = normalizeOptionalText(workstreamCode);
       detailsChanged = true;
@@ -8417,6 +8693,15 @@ const reopenProject = async (req, res) => {
           accepted: false,
           cancelled: false,
         },
+        decision: {
+          status: "pending",
+          note: "",
+          validatedAt: null,
+          validatedBy: null,
+          convertedAt: null,
+          convertedBy: null,
+          convertedToType: "Quote",
+        },
         submissionDate: null,
         requirementItems: {},
       };
@@ -8803,6 +9088,7 @@ module.exports = {
   reactivateProject,
   updateProjectStatus,
   transitionQuoteRequirement,
+  updateQuoteDecision,
   markInvoiceSent,
   verifyPayment,
   undoInvoiceSent,

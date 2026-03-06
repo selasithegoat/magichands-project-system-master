@@ -254,6 +254,14 @@ const getStatusColor = (status) => {
   }
 };
 
+const formatProjectStatusForDisplay = (status = "", projectType = "") => {
+  const normalized = String(status || "").trim();
+  if (projectType !== "Quote") return normalized;
+  if (normalized === "Pending Feedback") return "Pending Decision";
+  if (normalized === "Feedback Completed") return "Decision Completed";
+  return normalized;
+};
+
 const BILLING_REQUIREMENT_LABELS = {
   invoice: "Invoice confirmation",
   payment_verification_any: "Payment method verification",
@@ -612,9 +620,11 @@ const ProjectDetail = ({ user }) => {
         // Force refresh or redirect to history
         navigate("/history");
       } else {
-        console.error("Failed to finish project");
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Failed to finish project", errorData);
         alert(
-          "Failed to mark project as finished. Make sure it is 'Completed'.",
+          errorData.message ||
+            "Failed to mark project as finished. Make sure it is 'Completed'.",
         );
       }
     } catch (err) {
@@ -689,6 +699,10 @@ const ProjectDetail = ({ user }) => {
     project.priority === "Urgent" || project.projectType === "Emergency";
   const isCorporate = project.projectType === "Corporate Job";
   const isQuote = project.projectType === "Quote";
+  const projectStatusDisplay = formatProjectStatusForDisplay(
+    project.status,
+    project.projectType,
+  );
   const showFeedbackSection = [
     "Delivered",
     "Pending Feedback",
@@ -821,11 +835,11 @@ const ProjectDetail = ({ user }) => {
               )}
                 <span className="status-badge">
                   <ClockIcon width="14" height="14" />{" "}
-                  {project.status === "Order Confirmed"
+                  {projectStatusDisplay === "Order Confirmed"
                     ? "WAITING ACCEPTANCE"
-                    : project.status.startsWith("Pending ")
-                      ? project.status.replace("Pending ", "")
-                      : project.status}
+                    : projectStatusDisplay.startsWith("Pending ")
+                      ? projectStatusDisplay.replace("Pending ", "")
+                      : projectStatusDisplay}
                 </span>
               {project.status === "Completed" && (
                 <button

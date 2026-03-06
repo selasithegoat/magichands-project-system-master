@@ -86,6 +86,16 @@ const QUOTE_REQUIREMENT_LABELS = {
   sampleProduction: "Sample Production",
   bidSubmission: "Bid Submission / Documents",
 };
+const QUOTE_CONVERSION_TYPE_OPTIONS = [
+  "Standard",
+  "Emergency",
+  "Corporate Job",
+];
+const QUOTE_DECISION_STATUS_LABELS = {
+  pending: "Pending Decision",
+  go_ahead: "Go Ahead",
+  declined: "Declined",
+};
 
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
@@ -131,6 +141,14 @@ const getQuoteRequirementItems = (project = {}) => {
       note: String(rawItem?.note || "").trim(),
     };
   });
+};
+
+const formatProjectStatusForDisplay = (status, isQuoteProject = false) => {
+  const normalized = String(status || "").trim();
+  if (!isQuoteProject) return normalized;
+  if (normalized === "Pending Feedback") return "Pending Decision";
+  if (normalized === "Feedback Completed") return "Decision Completed";
+  return normalized;
 };
 
 const isQuoteRequirementCompleted = (requirementKey, status) => {
@@ -217,6 +235,46 @@ const getQuoteFrontDeskActions = (requirementKey, status) => {
 
   return [];
 };
+
+const normalizeQuoteDecisionStatus = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (
+    [
+      "go_ahead",
+      "go-ahead",
+      "goahead",
+      "proceed",
+      "accepted",
+      "approved",
+      "yes",
+    ].includes(normalized)
+  ) {
+    return "go_ahead";
+  }
+  if (
+    ["declined", "rejected", "cancelled", "cancel", "no"].includes(
+      normalized,
+    )
+  ) {
+    return "declined";
+  }
+  return "pending";
+};
+
+const getQuoteDecisionState = (project = {}) => {
+  const decision = project?.quoteDetails?.decision || {};
+  return {
+    status: normalizeQuoteDecisionStatus(decision?.status),
+    note: String(decision?.note || "").trim(),
+    validatedAt: decision?.validatedAt || null,
+    convertedAt: decision?.convertedAt || null,
+    convertedToType: String(decision?.convertedToType || "").trim(),
+  };
+};
+
+const formatQuoteDecisionStatus = (value) =>
+  QUOTE_DECISION_STATUS_LABELS[normalizeQuoteDecisionStatus(value)] ||
+  "Pending Decision";
 
 const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
   const missing = [];
@@ -454,6 +512,11 @@ const OrderActions = () => {
     useState(false);
   const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
     useState("");
+  const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
+  const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
+  const [quoteConversionType, setQuoteConversionType] = useState("Standard");
+  const [quoteConversionSubmitting, setQuoteConversionSubmitting] =
+    useState(false);
 
   const [briefOverviewDraft, setBriefOverviewDraft] = useState("");
   const [orderNumberDraft, setOrderNumberDraft] = useState("");
@@ -597,6 +660,26 @@ const OrderActions = () => {
     project?.details?.attachments,
   ]);
 
+  useEffect(() => {
+    const isQuote = project?.projectType === "Quote";
+    const decision = project?.quoteDetails?.decision || {};
+
+    if (!isQuote) {
+      setQuoteDecisionNote("");
+      setQuoteConversionType("Standard");
+      return;
+    }
+
+    setQuoteDecisionNote(String(decision?.note || "").trim());
+
+    const convertedType = String(decision?.convertedToType || "").trim();
+    setQuoteConversionType(
+      QUOTE_CONVERSION_TYPE_OPTIONS.includes(convertedType)
+        ? convertedType
+        : "Standard",
+    );
+  }, [project?._id, project?.projectType, project?.quoteDetails?.decision]);
+
   const canManageBilling =
     currentUser?.role === "admin" ||
     currentUser?.department?.includes("Front Desk");
@@ -670,6 +753,17 @@ const OrderActions = () => {
     requiredQuoteRequirementItems.every(
       (item) => isQuoteRequirementCompleted(item.key, item.status),
     );
+  const quoteDecisionState = useMemo(
+    () => getQuoteDecisionState(project),
+    [project],
+  );
+  const quoteDecisionStatus = quoteDecisionState.status;
+  const quoteDecisionTaken =
+    isQuoteProject && ["go_ahead", "declined"].includes(quoteDecisionStatus);
+  const canValidateQuoteDecision =
+    isQuoteProject && canManageBilling && project?.status === "Response Sent";
+  const canConvertQuoteToProject =
+    canValidateQuoteDecision && quoteDecisionStatus === "go_ahead";
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -1525,6 +1619,86 @@ const OrderActions = () => {
     }
   };
 
+  const handleValidateQuoteDecision = async (decisionStatus) => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    if (!["go_ahead", "declined", "pending"].includes(decisionStatus)) return;
+
+    setQuoteDecisionSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${project._id}/quote-decision`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision: decisionStatus,
+          note: quoteDecisionNote,
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          decisionStatus === "go_ahead"
+            ? "Quote decision validated: client will proceed."
+            : decisionStatus === "declined"
+              ? "Quote decision validated: client declined."
+              : "Quote decision reset to pending.",
+          "success",
+        );
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to validate quote decision.", "error");
+      }
+    } catch (error) {
+      console.error("Quote decision validation error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteDecisionSubmitting(false);
+    }
+  };
+
+  const handleConvertQuoteToProject = async () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    if (!canConvertQuoteToProject) {
+      showToast(
+        "Validate client decision as Go Ahead before converting this quote.",
+        "error",
+      );
+      return;
+    }
+
+    const targetType = QUOTE_CONVERSION_TYPE_OPTIONS.includes(quoteConversionType)
+      ? quoteConversionType
+      : "Standard";
+
+    setQuoteConversionSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${project._id}/project-type`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetType,
+          reason:
+            "Converted from quote after client decision validated by Front Desk.",
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(`Quote converted to ${targetType}.`, "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to convert quote.", "error");
+      }
+    } catch (error) {
+      console.error("Quote conversion error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteConversionSubmitting(false);
+    }
+  };
+
   const canManageOrderRevision = canManageBilling;
   const orderRevisionDirty = useMemo(() => {
     if (!project) return false;
@@ -1881,7 +2055,8 @@ const OrderActions = () => {
               {project.details?.packagingType || "-"}
             </p>
             <p>
-              <strong>Status:</strong> {project.status}
+              <strong>Status:</strong>{" "}
+              {formatProjectStatusForDisplay(project.status, isQuoteProject)}
             </p>
             <p>
               <strong>Created:</strong> {formatDate(project.createdAt)}
@@ -1935,6 +2110,19 @@ const OrderActions = () => {
                   Quote Requirements Pending
                 </span>
               )}
+            {isQuoteProject && project.status === "Response Sent" && (
+              <span
+                className={`status-tag ${
+                  quoteDecisionStatus === "go_ahead"
+                    ? "invoice"
+                    : quoteDecisionStatus === "declined"
+                      ? "rejection"
+                      : "caution"
+                }`}
+              >
+                Quote Decision: {formatQuoteDecisionStatus(quoteDecisionStatus)}
+              </span>
+            )}
             {showPendingProductionWarning && (
               <span className="status-tag caution">
                 Pending Production Blocked: {pendingProductionMissingLabels.join(", ")}
@@ -1953,6 +2141,15 @@ const OrderActions = () => {
           !allQuoteRequirementsCompleted && (
             <div className="warning-banner critical">
               Required quote requirements are still pending completion.
+            </div>
+          )}
+
+        {isQuoteProject &&
+          project.status === "Response Sent" &&
+          !quoteDecisionTaken && (
+            <div className="warning-banner critical">
+              Client quote decision is pending. Front Desk must validate client
+              decision before this quote can be finished.
             </div>
           )}
 
@@ -2095,6 +2292,134 @@ const OrderActions = () => {
                 </p>
               )}
             </div>
+
+          {isQuoteProject && (
+            <div className="action-card">
+              <h3>Quote Decision</h3>
+              <p>
+                After response is sent, validate client decision before quote
+                closure or conversion.
+              </p>
+
+              <div className="billing-actions">
+                <div
+                  className={`mockup-approval-status ${
+                    quoteDecisionStatus === "go_ahead"
+                      ? "approved"
+                      : quoteDecisionStatus === "declined"
+                        ? "rejected"
+                        : "pending"
+                  }`}
+                >
+                  Current: {formatQuoteDecisionStatus(quoteDecisionStatus)}
+                </div>
+
+                {quoteDecisionState.validatedAt && (
+                  <p className="mockup-approval-meta">
+                    Validated: {formatDateTime(quoteDecisionState.validatedAt)}
+                  </p>
+                )}
+
+                <label className="quote-decision-field">
+                  <span>Front Desk Note (Optional)</span>
+                  <textarea
+                    rows={2}
+                    value={quoteDecisionNote}
+                    onChange={(event) => setQuoteDecisionNote(event.target.value)}
+                    placeholder="Client confirmed they will proceed / declined."
+                    disabled={
+                      !canManageBilling ||
+                      quoteDecisionSubmitting ||
+                      quoteConversionSubmitting
+                    }
+                  />
+                </label>
+
+                {canValidateQuoteDecision ? (
+                  <div className="quote-decision-actions">
+                    <button
+                      className="action-btn complete-btn"
+                      onClick={() => handleValidateQuoteDecision("go_ahead")}
+                      disabled={
+                        !canManageBilling ||
+                        quoteDecisionSubmitting ||
+                        quoteConversionSubmitting
+                      }
+                    >
+                      {quoteDecisionSubmitting ? "Saving..." : "Client Go Ahead"}
+                    </button>
+                    <button
+                      className="action-btn undo-btn"
+                      onClick={() => handleValidateQuoteDecision("declined")}
+                      disabled={
+                        !canManageBilling ||
+                        quoteDecisionSubmitting ||
+                        quoteConversionSubmitting
+                      }
+                    >
+                      {quoteDecisionSubmitting ? "Saving..." : "Client Declined"}
+                    </button>
+                    {quoteDecisionTaken && (
+                      <button
+                        className="action-btn"
+                        onClick={() => handleValidateQuoteDecision("pending")}
+                        disabled={
+                          !canManageBilling ||
+                          quoteDecisionSubmitting ||
+                          quoteConversionSubmitting
+                        }
+                      >
+                        {quoteDecisionSubmitting
+                          ? "Saving..."
+                          : "Reset to Pending"}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mockup-approval-meta">
+                    Quote decision can be validated once status reaches Response
+                    Sent.
+                  </p>
+                )}
+
+                {quoteDecisionStatus === "go_ahead" && (
+                  <div className="quote-decision-convert">
+                    <div className="quote-decision-convert-row">
+                      <select
+                        className="quote-decision-select"
+                        value={quoteConversionType}
+                        onChange={(event) =>
+                          setQuoteConversionType(event.target.value)
+                        }
+                        disabled={!canManageBilling || quoteConversionSubmitting}
+                      >
+                        {QUOTE_CONVERSION_TYPE_OPTIONS.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="action-btn complete-btn"
+                        onClick={handleConvertQuoteToProject}
+                        disabled={
+                          !canConvertQuoteToProject || quoteConversionSubmitting
+                        }
+                      >
+                        {quoteConversionSubmitting
+                          ? "Converting..."
+                          : `Convert to ${quoteConversionType}`}
+                      </button>
+                    </div>
+                    <p className="mockup-approval-meta">
+                      Front Desk converts this quote into the selected project
+                      type after client go-ahead.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {isQuoteProject && (
             <div className="action-card">
