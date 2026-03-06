@@ -764,6 +764,10 @@ const OrderActions = () => {
     isQuoteProject && canManageBilling && project?.status === "Response Sent";
   const canConvertQuoteToProject =
     canValidateQuoteDecision && quoteDecisionStatus === "go_ahead";
+  const convertedFromQuoteAt =
+    !isQuoteProject && project?.quoteDetails?.decision?.convertedAt
+      ? project.quoteDetails.decision.convertedAt
+      : null;
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -2103,6 +2107,11 @@ const OrderActions = () => {
                   {paymentLabels[type] || type}
                 </span>
               ))}
+            {!isQuoteProject && convertedFromQuoteAt && (
+              <span className="status-tag payment">
+                Converted from Quote ({formatDate(convertedFromQuoteAt)})
+              </span>
+            )}
             {isQuoteProject &&
               requiredQuoteRequirementItems.length > 0 &&
               !allQuoteRequirementsCompleted && (

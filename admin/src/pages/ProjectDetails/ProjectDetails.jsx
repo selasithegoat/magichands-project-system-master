@@ -1609,6 +1609,15 @@ const ProjectDetails = ({ user }) => {
     ["go_ahead", "declined"].includes(quoteDecisionState.status);
   const canValidateQuoteDecision =
     isQuoteProject && project.status === "Response Sent";
+  const convertedFromQuoteAt =
+    !isQuoteProject && project?.quoteDetails?.decision?.convertedAt
+      ? project.quoteDetails.decision.convertedAt
+      : null;
+  const convertedFromQuoteType =
+    !isQuoteProject && project?.quoteDetails?.decision?.convertedToType
+      ? String(project.quoteDetails.decision.convertedToType)
+      : "";
+  const hasConvertedQuoteReference = Boolean(convertedFromQuoteAt);
   const isCorporateProject = project.projectType === "Corporate Job";
   const corporateEmergencyEnabled =
     isCorporateProject && Boolean(project?.corporateEmergency?.isEnabled);
@@ -1673,6 +1682,7 @@ const ProjectDetails = ({ user }) => {
     (isCorporateProject && corporateEmergencyEnabled) ||
       invoiceSent ||
       (!isQuoteProject && paymentTypes.length > 0) ||
+      hasConvertedQuoteReference ||
       sampleRequirementEnabled ||
       showPendingProductionWarning ||
       showPendingProductionSampleWarning ||
@@ -1938,6 +1948,13 @@ const ProjectDetails = ({ user }) => {
                   {paymentLabels[type] || type}
                 </span>
               ))}
+            {hasConvertedQuoteReference && (
+              <span className="billing-tag payment">
+                Converted from Quote
+                {convertedFromQuoteType ? ` -> ${convertedFromQuoteType}` : ""}
+                {` (${formatLastUpdated(convertedFromQuoteAt)})`}
+              </span>
+            )}
             {sampleRequirementEnabled && (
               <span
                 className={`billing-tag sample-requirement ${

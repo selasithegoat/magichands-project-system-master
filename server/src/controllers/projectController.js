@@ -6185,6 +6185,11 @@ const updateProjectType = async (req, res) => {
       nextStatus = getDefaultStatusForProjectType(requestedType);
     }
 
+    if (isQuoteToProjectConversion) {
+      // Quote conversion always restarts the full standard workflow from scope approval.
+      nextStatus = "Pending Scope Approval";
+    }
+
     const requestedPriority = normalizePriority(
       req.body?.priority,
       normalizePriority(project.priority, "Normal"),
@@ -6273,6 +6278,15 @@ const updateProjectType = async (req, res) => {
       };
       project.quoteDetails.decision = nextDecision;
       project.markModified("quoteDetails.decision");
+
+      // Converted projects must follow normal workflow/billing gates from scratch.
+      project.acknowledgements = [];
+      project.invoice = {
+        sent: false,
+        sentAt: null,
+        sentBy: null,
+      };
+      project.paymentVerifications = [];
     }
 
     if (nextSampleRequired) {
