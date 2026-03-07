@@ -420,6 +420,8 @@ const canMutateProject = (user, project, action = "default") => {
   const hasDeptScope = hasDepartmentOverlap(user.department, project.departments);
 
   switch (action) {
+    case "revision":
+      return isFrontDesk;
     case "manage":
     case "delete":
     case "reopen":
@@ -7973,7 +7975,12 @@ const updateProject = async (req, res) => {
         : null;
 
     const project = await Project.findById(id);
-    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Only Front Desk and Admin can revise order details.",
+      });
+    }
+    if (!ensureProjectMutationAccess(req, res, project, "revision")) return;
 
     // Helper
     const getValue = (field) => (field && field.value ? field.value : field);

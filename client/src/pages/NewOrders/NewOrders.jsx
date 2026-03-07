@@ -45,6 +45,11 @@ const NewOrders = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const isRevisionMode = Boolean(editingId && location.state?.revisionMode);
+  const revisionReturnTo =
+    editingId && typeof location.state?.returnTo === "string"
+      ? location.state.returnTo
+      : "";
 
   // Fetch users for project lead
   useEffect(() => {
@@ -370,8 +375,9 @@ const NewOrders = () => {
           setExistingAttachments([]);
         }
 
-        // Navigate back to landing after short delay
-        setTimeout(() => navigate("/create"), 1500);
+        const nextPath =
+          editingId && revisionReturnTo ? revisionReturnTo : "/create";
+        setTimeout(() => navigate(nextPath), 1500);
       } else {
         const errorData = await res.json();
         showToast(`Error: ${errorData.message || "Failed to submit"}`, "error");
@@ -408,13 +414,25 @@ const NewOrders = () => {
       )}
 
       <div className="page-header">
-        <h1>{editingId ? "Edit Reopened Order" : "Create New Order"}</h1>
+        <h1>
+          {editingId
+            ? isRevisionMode
+              ? "Order Revision"
+              : "Edit Reopened Order"
+            : "Create New Order"}
+        </h1>
         <p className="subtitle">
-          Fill in the details for the{" "}
-          <span style={{ color: isCorporate ? "#42a165" : "inherit" }}>
-            {formData.projectType}
-          </span>{" "}
-          job
+          {editingId
+            ? "Update project information with the complete order form."
+            : "Fill in the details for the "}
+          {!editingId && (
+            <>
+              <span style={{ color: isCorporate ? "#42a165" : "inherit" }}>
+                {formData.projectType}
+              </span>{" "}
+              job
+            </>
+          )}
         </p>
       </div>
 
@@ -904,7 +922,9 @@ const NewOrders = () => {
                     ? "Saving..."
                     : "Creating..."
                   : editingId
-                    ? "Save Reopened Order"
+                    ? isRevisionMode
+                      ? "Save Order Revision"
+                      : "Save Reopened Order"
                     : "Create Order"}
               </button>
             </div>
@@ -916,13 +936,27 @@ const NewOrders = () => {
         isOpen={showConfirmModal}
         onConfirm={handleConfirmSubmit}
         onCancel={() => setShowConfirmModal(false)}
-        title={editingId ? "Confirm Order Update" : "Confirm New Order"}
+        title={
+          editingId
+            ? isRevisionMode
+              ? "Confirm Order Revision"
+              : "Confirm Order Update"
+            : "Confirm New Order"
+        }
         message={
           editingId
-            ? `Are you sure you want to save reopened order ${formData.orderNumber}?`
+            ? isRevisionMode
+              ? `Are you sure you want to save all revision updates for order ${formData.orderNumber}?`
+              : `Are you sure you want to save reopened order ${formData.orderNumber}?`
             : `Are you sure you want to create order ${formData.orderNumber} for ${formData.projectName}? It will be assigned to the selected Project Lead for approval.`
         }
-        confirmText={editingId ? "Yes, Save Changes" : "Yes, Create Order"}
+        confirmText={
+          editingId
+            ? isRevisionMode
+              ? "Yes, Save Revision"
+              : "Yes, Save Changes"
+            : "Yes, Create Order"
+        }
         cancelText="Cancel"
       />
     </div>
