@@ -6,6 +6,13 @@ import UserAvatar from "../../components/ui/UserAvatar";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import "./NewOrders.css";
 
+const REVISION_LOCKED_STATUSES = new Set([
+  "Completed",
+  "Delivered",
+  "Feedback Completed",
+  "Finished",
+]);
+
 const NewOrders = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -44,12 +51,16 @@ const NewOrders = () => {
   const [isToastFading, setIsToastFading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
+  const [editingProjectStatus, setEditingProjectStatus] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const isRevisionMode = Boolean(editingId && location.state?.revisionMode);
   const revisionReturnTo =
     editingId && typeof location.state?.returnTo === "string"
       ? location.state.returnTo
       : "";
+  const isRevisionLocked =
+    Boolean(editingId) &&
+    REVISION_LOCKED_STATUSES.has(String(editingProjectStatus || ""));
 
   // Fetch users for project lead
   useEffect(() => {
@@ -128,6 +139,7 @@ const NewOrders = () => {
 
   const applyProjectToForm = (project) => {
     if (!project) return;
+    setEditingProjectStatus(project.status || "");
     setFormData({
       orderNumber: project.orderId || "",
       clientName: project.details?.client || "",
@@ -207,6 +219,7 @@ const NewOrders = () => {
 
     const now = new Date();
     const isoString = toDateTimeLocal(now);
+    setEditingProjectStatus("");
     setFormData((prev) => ({
       ...prev,
       orderNumber: generateOrderNumber(),
@@ -264,6 +277,13 @@ const NewOrders = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (editingId && isRevisionLocked) {
+      showToast(
+        "Order revision is locked after completion. Reopen the project to revise it.",
+        "error",
+      );
+      return;
+    }
     if (!formData.projectLeadId) {
       showToast("Please select a Project Lead.", "error");
       return;
@@ -272,6 +292,14 @@ const NewOrders = () => {
   };
 
   const handleConfirmSubmit = async () => {
+    if (editingId && isRevisionLocked) {
+      setShowConfirmModal(false);
+      showToast(
+        "Order revision is locked after completion. Reopen the project to revise it.",
+        "error",
+      );
+      return;
+    }
     setShowConfirmModal(false);
     setIsLoading(true);
 
@@ -916,7 +944,11 @@ const NewOrders = () => {
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="submit-btn" disabled={isLoading}>
+              <button
+                type="submit"
+                className="submit-btn"
+                disabled={isLoading || (editingId && isRevisionLocked)}
+              >
                 {isLoading
                   ? editingId
                     ? "Saving..."

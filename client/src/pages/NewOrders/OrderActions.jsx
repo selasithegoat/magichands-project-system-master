@@ -18,6 +18,12 @@ const SAMPLE_APPROVAL_RESET_PHRASE =
   "I confirm sample approval should be reset to pending";
 const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
+const REVISION_LOCKED_STATUSES = new Set([
+  "Completed",
+  "Delivered",
+  "Feedback Completed",
+  "Finished",
+]);
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -1636,8 +1642,18 @@ const OrderActions = () => {
   };
 
   const canManageOrderRevision = canManageBilling;
+  const isOrderRevisionLocked = REVISION_LOCKED_STATUSES.has(
+    String(project?.status || ""),
+  );
   const openFullOrderRevision = () => {
     if (!project || !canManageOrderRevision) return;
+    if (isOrderRevisionLocked) {
+      showToast(
+        "Order revision is locked after completion. Reopen the project to revise it.",
+        "error",
+      );
+      return;
+    }
     navigate(`/new-orders/form?edit=${project._id}`, {
       state: {
         revisionMode: true,
@@ -2745,11 +2761,17 @@ const OrderActions = () => {
                 Only Front Desk and Admin can revise full order details.
               </p>
             )}
+            {canManageOrderRevision && isOrderRevisionLocked && (
+              <p className="order-revision-note">
+                Revision is locked because this project is completed. Reopen it to
+                create a new revision.
+              </p>
+            )}
             <div className="order-revision-actions">
               <button
                 className="action-btn update-submit-btn"
                 onClick={openFullOrderRevision}
-                disabled={!canManageOrderRevision}
+                disabled={!canManageOrderRevision || isOrderRevisionLocked}
               >
                 Open Full Revision Form
               </button>

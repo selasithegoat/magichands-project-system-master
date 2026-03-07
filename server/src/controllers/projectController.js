@@ -102,6 +102,12 @@ const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
   "Pending Feedback",
   "Delivered",
 ]);
+const REVISION_LOCKED_STATUSES = new Set([
+  "Completed",
+  "Delivered",
+  "Feedback Completed",
+  "Finished",
+]);
 
 const mapFeedbackAttachments = (req, userId) => {
   const files = Array.isArray(req.files) ? req.files : [];
@@ -7981,6 +7987,12 @@ const updateProject = async (req, res) => {
       });
     }
     if (!ensureProjectMutationAccess(req, res, project, "revision")) return;
+    if (REVISION_LOCKED_STATUSES.has(toText(project?.status))) {
+      return res.status(400).json({
+        message:
+          "Order revision is locked after completion. Reopen the project to revise it.",
+      });
+    }
 
     // Helper
     const getValue = (field) => (field && field.value ? field.value : field);
