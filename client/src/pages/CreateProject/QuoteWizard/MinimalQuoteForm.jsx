@@ -7,9 +7,31 @@ import Input from "../../../components/ui/Input";
 import Select from "../../../components/ui/Select";
 import UserAvatar from "../../../components/ui/UserAvatar";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
+import ClockIcon from "../../../components/icons/ClockIcon";
 import FolderIconStd from "../../../components/icons/FolderIcon"; // Renamed to avoid collision if any
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 import "./MinimalQuoteForm.css";
+
+const normalizeTimeForInput = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const hhmm = raw.match(/^([01]\d|2[0-3]):([0-5]\d)/);
+  if (hhmm) {
+    return `${hhmm[1]}:${hhmm[2]}`;
+  }
+
+  const amPm = raw.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (amPm) {
+    const hour12 = Number(amPm[1]);
+    const minutes = amPm[2];
+    const suffix = amPm[3].toLowerCase();
+    const hour24 = (hour12 % 12) + (suffix === "pm" ? 12 : 0);
+    return `${String(hour24).padStart(2, "0")}:${minutes}`;
+  }
+
+  return "";
+};
 
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
@@ -38,6 +60,7 @@ const MinimalQuoteForm = () => {
     clientEmail: "", // [NEW]
     clientPhone: "", // [NEW]
     deliveryDate: "",
+    deliveryTime: "",
     projectLeadId: "",
     assistantLeadId: "",
     quoteNumber: "",
@@ -62,6 +85,7 @@ const MinimalQuoteForm = () => {
       deliveryDate: project.details?.deliveryDate
         ? new Date(project.details.deliveryDate).toISOString().slice(0, 10)
         : "",
+      deliveryTime: normalizeTimeForInput(project.details?.deliveryTime),
       projectLeadId: project.projectLeadId?._id || project.projectLeadId || "",
       assistantLeadId:
         project.assistantLeadId?._id || project.assistantLeadId || "",
@@ -207,6 +231,10 @@ const MinimalQuoteForm = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.deliveryTime) {
+      triggerToast("Please set delivery time for this quote request.", "error");
+      return;
+    }
     if (!formData.projectLeadId) {
       alert("Please select a Project Lead. This is a required field.");
       return;
@@ -240,6 +268,7 @@ const MinimalQuoteForm = () => {
       formPayload.append("clientPhone", formData.clientPhone); // [NEW]
       formPayload.append("briefOverview", formData.briefOverview);
       formPayload.append("deliveryDate", formData.deliveryDate);
+      formPayload.append("deliveryTime", formData.deliveryTime);
       formPayload.append("projectLeadId", formData.projectLeadId);
       if (formData.assistantLeadId) {
         formPayload.append("assistantLeadId", formData.assistantLeadId);
@@ -454,6 +483,18 @@ const MinimalQuoteForm = () => {
                   })
                 }
                 icon={<CalendarIcon />}
+              />
+              <Input
+                type="time"
+                label="Requested Completion Time"
+                value={formData.deliveryTime}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "deliveryTime", value: e.target.value },
+                  })
+                }
+                icon={<ClockIcon />}
+                required
               />
             </div>
 

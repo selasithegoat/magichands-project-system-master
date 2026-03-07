@@ -3570,6 +3570,12 @@ const createProject = async (req, res) => {
       ),
     );
     const normalizedProjectType = toText(req.body.projectType) || "Standard";
+    const normalizedDeliveryTime = toText(finalDeliveryTime);
+    if (normalizedProjectType === "Quote" && !normalizedDeliveryTime) {
+      return res.status(400).json({
+        message: "Delivery time is required when creating a quote order.",
+      });
+    }
     const isCorporateEmergency =
       normalizedProjectType === "Corporate Job" &&
       parseCorporateEmergencyFlag(corporateEmergency, false);
@@ -3609,7 +3615,7 @@ const createProject = async (req, res) => {
         projectName,
         briefOverview: getValue(req.body.briefOverview) || description, // [NEW] Map briefOverview, fallback to description if legacy
         deliveryDate,
-        deliveryTime: finalDeliveryTime, // [NEW]
+        deliveryTime: normalizedDeliveryTime, // [NEW]
         deliveryLocation,
         contactType: getValue(contactType) || "None",
         supplySource: normalizedSupplySource,
