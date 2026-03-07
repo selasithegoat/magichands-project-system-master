@@ -1395,6 +1395,50 @@ const FeedbackCard = ({ feedbacks = [] }) => {
     });
   };
 
+  const resolveAttachmentUrl = (attachment = {}) => {
+    const rawUrl = String(attachment?.fileUrl || attachment?.url || "").trim();
+    if (!rawUrl) return "";
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      return rawUrl;
+    }
+    if (rawUrl.startsWith("/")) return rawUrl;
+    return `/${rawUrl.replace(/^\/+/, "")}`;
+  };
+
+  const getAttachmentName = (attachment = {}, index = 0) => {
+    const preferredName = String(
+      attachment?.fileName || attachment?.name || "",
+    ).trim();
+    if (preferredName) return preferredName;
+    const url = resolveAttachmentUrl(attachment);
+    const pathWithoutQuery = url.split("?")[0];
+    const segments = pathWithoutQuery.split("/").filter(Boolean);
+    return segments[segments.length - 1] || `attachment-${index + 1}`;
+  };
+
+  const getAttachmentType = (attachment = {}) => {
+    const mimeType = String(
+      attachment?.fileType || attachment?.type || "",
+    ).toLowerCase();
+
+    if (mimeType.startsWith("image/")) return "image";
+    if (mimeType.startsWith("audio/")) return "audio";
+    if (mimeType.startsWith("video/")) return "video";
+
+    const attachmentName = getAttachmentName(attachment).toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(attachmentName)) {
+      return "image";
+    }
+    if (/\.(mp3|wav|m4a|aac|ogg|flac)$/.test(attachmentName)) {
+      return "audio";
+    }
+    if (/\.(mp4|webm|mov|avi|mkv|m4v)$/.test(attachmentName)) {
+      return "video";
+    }
+
+    return "file";
+  };
+
   return (
     <div className="detail-card">
       <div className="card-header">
@@ -1429,6 +1473,87 @@ const FeedbackCard = ({ feedbacks = [] }) => {
                   ? feedback.notes
                   : "No notes provided."}
               </div>
+              {Array.isArray(feedback.attachments) &&
+                feedback.attachments.length > 0 && (
+                <div className="feedback-attachments">
+                  <p className="feedback-attachments-label">Client Media</p>
+                  <div className="feedback-attachments-grid">
+                    {feedback.attachments.map((attachment, index) => {
+                      const attachmentUrl = resolveAttachmentUrl(attachment);
+                      if (!attachmentUrl) return null;
+                      const attachmentName = getAttachmentName(attachment, index);
+                      const attachmentType = getAttachmentType(attachment);
+
+                      return (
+                        <div
+                          className="feedback-attachment-card"
+                          key={`${feedback._id || feedback.createdAt}-${attachmentName}-${index}`}
+                        >
+                          {attachmentType === "image" && (
+                            <a
+                              href={attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="feedback-attachment-preview-link"
+                            >
+                              <img
+                                src={attachmentUrl}
+                                alt={attachmentName}
+                                className="feedback-attachment-image"
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
+                          {attachmentType === "audio" && (
+                            <audio
+                              controls
+                              preload="metadata"
+                              className="feedback-attachment-audio"
+                            >
+                              <source src={attachmentUrl} />
+                              Your browser does not support audio playback.
+                            </audio>
+                          )}
+                          {attachmentType === "video" && (
+                            <video
+                              controls
+                              preload="metadata"
+                              className="feedback-attachment-video"
+                            >
+                              <source src={attachmentUrl} />
+                              Your browser does not support video playback.
+                            </video>
+                          )}
+                          {attachmentType === "file" && (
+                            <a
+                              href={attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="feedback-attachment-file-link"
+                            >
+                              Open Attachment
+                            </a>
+                          )}
+                          <div className="feedback-attachment-meta">
+                            <span className="feedback-attachment-name" title={attachmentName}>
+                              {attachmentName}
+                            </span>
+                            <a
+                              href={attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="feedback-attachment-download"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
