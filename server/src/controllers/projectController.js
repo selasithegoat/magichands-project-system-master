@@ -7079,13 +7079,6 @@ const addFeedbackToProject = async (req, res) => {
     const willMarkFeedbackComplete = FEEDBACK_COMPLETION_GATE_STATUSES.has(
       project.status,
     );
-    if (willMarkFeedbackComplete && feedbackAttachments.length === 0) {
-      await cleanupUploadedFilesSafely(req);
-      return res.status(400).json({
-        message:
-          "Attach at least one photo, audio, or video before completing feedback.",
-      });
-    }
 
     const feedbackEntry = {
       type,

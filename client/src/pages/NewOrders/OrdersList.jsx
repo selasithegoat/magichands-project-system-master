@@ -9,10 +9,6 @@ const ALL_ORDERS_PAGE_SIZE = 10;
 const GROUP_ROW_TRANSITION_MS = 220;
 const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
-const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
-  "Pending Feedback",
-  "Delivered",
-]);
 
 const isFeedbackMediaFile = (file) => {
   const mimeType = String(file?.type || "").toLowerCase();
@@ -680,17 +676,6 @@ const OrdersList = () => {
   const handleAddFeedback = async () => {
     if (!feedbackModal.project) return;
 
-    const requiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
-      feedbackModal.project?.status || "",
-    );
-    if (requiresMediaAttachment && feedbackFiles.length === 0) {
-      showToast(
-        "Attach at least one photo, audio, or video before completing feedback.",
-        "error",
-      );
-      return;
-    }
-
     setFeedbackSaving(true);
     try {
       const payload = new FormData();
@@ -771,10 +756,6 @@ const OrdersList = () => {
     const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
     return bTime - aTime;
   });
-
-  const feedbackRequiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
-    feedbackModal.project?.status || "",
-  );
 
   return (
     <div className="orders-management-section" style={{ marginTop: "3rem" }}>
@@ -1345,10 +1326,7 @@ const OrdersList = () => {
               />
 
               <label>
-                Client Media{" "}
-                {feedbackRequiresMediaAttachment
-                  ? "(Required to complete feedback)"
-                  : "(Optional)"}
+                Client Media (Optional)
               </label>
               <input
                 type="file"
@@ -1386,11 +1364,7 @@ const OrdersList = () => {
                 <button
                   className="action-btn feedback-submit"
                   onClick={handleAddFeedback}
-                  disabled={
-                    feedbackSaving ||
-                    (feedbackRequiresMediaAttachment &&
-                      feedbackFiles.length === 0)
-                  }
+                  disabled={feedbackSaving}
                 >
                   {feedbackSaving ? "Saving..." : "Submit Feedback"}
                 </button>

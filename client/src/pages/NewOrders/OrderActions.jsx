@@ -19,10 +19,6 @@ const SAMPLE_APPROVAL_RESET_PHRASE =
   "I confirm sample approval should be reset to pending";
 const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
-const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
-  "Pending Feedback",
-  "Delivered",
-]);
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -942,17 +938,6 @@ const OrderActions = () => {
   const handleAddFeedback = async () => {
     if (!project) return;
 
-    const requiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
-      project.status || "",
-    );
-    if (requiresMediaAttachment && feedbackFiles.length === 0) {
-      showToast(
-        "Attach at least one photo, audio, or video before completing feedback.",
-        "error",
-      );
-      return;
-    }
-
     setFeedbackSaving(true);
     try {
       const payload = new FormData();
@@ -1020,10 +1005,6 @@ const OrderActions = () => {
       const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
       return bTime - aTime;
     });
-
-  const feedbackRequiresMediaAttachment = FEEDBACK_COMPLETION_GATE_STATUSES.has(
-    project?.status || "",
-  );
 
   const recentUpdates = useMemo(() => projectUpdates || [], [projectUpdates]);
   const latestUpdatePreview = useMemo(
@@ -3628,10 +3609,7 @@ const OrderActions = () => {
               />
 
               <label>
-                Client Media{" "}
-                {feedbackRequiresMediaAttachment
-                  ? "(Required to complete feedback)"
-                  : "(Optional)"}
+                Client Media (Optional)
               </label>
               <input
                 type="file"
@@ -3669,11 +3647,7 @@ const OrderActions = () => {
                 <button
                   className="action-btn feedback-submit"
                   onClick={handleAddFeedback}
-                  disabled={
-                    feedbackSaving ||
-                    (feedbackRequiresMediaAttachment &&
-                      feedbackFiles.length === 0)
-                  }
+                  disabled={feedbackSaving}
                 >
                   {feedbackSaving ? "Saving..." : "Submit Feedback"}
                 </button>
