@@ -31,6 +31,47 @@ const normalizeDepartmentToken = (value) => {
   return String(value).trim().toLowerCase();
 };
 
+const PRODUCTION_DEPARTMENT_TOKENS = new Set([
+  "production",
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+  "outside-production",
+]);
+const GRAPHICS_DEPARTMENT_TOKENS = new Set([
+  "graphics/design",
+  "graphics",
+  "design",
+]);
+const STORES_DEPARTMENT_TOKENS = new Set(["stores", "stock", "packaging"]);
+const PHOTOGRAPHY_DEPARTMENT_TOKENS = new Set(["photography"]);
+
+const canonicalizeDepartmentToken = (value) => {
+  const token = normalizeDepartmentToken(value);
+  if (!token) return "";
+  if (PRODUCTION_DEPARTMENT_TOKENS.has(token)) return "production";
+  if (GRAPHICS_DEPARTMENT_TOKENS.has(token)) return "graphics";
+  if (STORES_DEPARTMENT_TOKENS.has(token)) return "stores";
+  if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) return "photography";
+  return token;
+};
+
 const isUserFrontDesk = (user) => {
   if (!user) return false;
   const userDepartments = normalizeDepartments(user.department)
@@ -94,14 +135,14 @@ const canAccessProjectUpdates = (user, project) => {
 
   const userDepartments = new Set(
     normalizeDepartments(user.department)
-      .map(normalizeDepartmentToken)
+      .map(canonicalizeDepartmentToken)
       .filter(Boolean),
   );
 
   if (userDepartments.size === 0) return false;
 
   const projectDepartments = normalizeDepartments(project.departments)
-    .map(normalizeDepartmentToken)
+    .map(canonicalizeDepartmentToken)
     .filter(Boolean);
 
   return projectDepartments.some((dept) => userDepartments.has(dept));
