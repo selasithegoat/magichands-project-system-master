@@ -3696,12 +3696,18 @@ const createProject = async (req, res) => {
 
     // [New] Notify Admins (if creator is not admin)
     if (req.user.role !== "admin") {
+      const excludeAdminRecipientIds = [
+        savedProject.projectLeadId?.toString(),
+        savedProject.assistantLeadId?.toString(),
+      ].filter(Boolean);
+
       await notifyAdmins(
         req.user._id,
         savedProject._id,
         "SYSTEM",
         "New Project Created",
         `${req.user.firstName} ${req.user.lastName} created a new project #${savedProject.orderId || savedProject._id}: ${savedProject.details.projectName}`,
+        { excludeUserIds: excludeAdminRecipientIds },
       );
     }
 

@@ -3,6 +3,7 @@ const SOUND_VOLUME = 0.75;
 
 const SOUND_SRC = {
   notification: "/sounds/mh-notification.wav",
+  newOrder: "/sounds/mh-new-order.wav",
   reminder: "/sounds/mh-reminder.wav",
 };
 
@@ -11,18 +12,24 @@ let unlockListenersAttached = false;
 
 const lastPlayedAt = {
   notification: 0,
+  newOrder: 0,
   reminder: 0,
 };
 
 const soundCache = {
   notification: null,
+  newOrder: null,
   reminder: null,
 };
 
-const resolveSoundKind = (notificationType) =>
-  String(notificationType || "").toUpperCase() === "REMINDER"
-    ? "reminder"
-    : "notification";
+const resolveSoundKind = (notificationType) => {
+  const normalizedType = String(notificationType || "").toUpperCase();
+  if (normalizedType === "REMINDER") return "reminder";
+  if (normalizedType === "ASSIGNMENT" || normalizedType === "NEW_ORDER") {
+    return "newOrder";
+  }
+  return "notification";
+};
 
 const createSound = (kind) => {
   if (typeof window === "undefined" || typeof Audio === "undefined") return null;
@@ -55,9 +62,11 @@ export const initNotificationSound = () => {
 
   const primeSounds = () => {
     const notificationSound = getSound("notification");
+    const newOrderSound = getSound("newOrder");
     const reminderSound = getSound("reminder");
 
     notificationSound?.load?.();
+    newOrderSound?.load?.();
     reminderSound?.load?.();
   };
 

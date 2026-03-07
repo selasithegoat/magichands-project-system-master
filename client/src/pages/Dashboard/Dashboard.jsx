@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import "./Dashboard.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ProjectCard from "../../components/ui/ProjectCard";
@@ -15,6 +15,7 @@ import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { playNotificationSound } from "../../utils/notificationSound";
 
 const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
 
@@ -36,6 +37,18 @@ const isCorporateProject = (project) => project?.projectType === "Corporate Job"
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
 
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    if (value._id) return toEntityId(value._id);
+    if (value.id) return String(value.id);
+  }
+  return "";
+};
+
 const Dashboard = ({
   onNavigateProject,
   onCreateProject,
@@ -47,6 +60,8 @@ const Dashboard = ({
   const [isLoading, setIsLoading] = useState(true);
   const [digest, setDigest] = useState(null);
   const [digestLoading, setDigestLoading] = useState(true);
+  const leadUserId = toEntityId(user?._id || user?.id);
+  const previousLeadPendingIdsRef = useRef(new Set());
 
   useEffect(() => {
     fetchProjects();
@@ -228,6 +243,59 @@ const Dashboard = ({
     }
   };
 
+  const leadPendingAssignmentProjects = useMemo(
+    () =>
+      projects.filter((project) => {
+        const leadId = toEntityId(project?.projectLeadId);
+        return (
+          Boolean(leadUserId) &&
+          leadId === leadUserId &&
+          isPendingAcceptanceProject(project)
+        );
+      }),
+    [projects, leadUserId],
+  );
+
+  useEffect(() => {
+    const nextIds = new Set(
+      leadPendingAssignmentProjects
+        .map((project) => toEntityId(project?._id))
+        .filter(Boolean),
+    );
+    const hasNewAssignment = Array.from(nextIds).some(
+      (projectId) => !previousLeadPendingIdsRef.current.has(projectId),
+    );
+    const allowSound = user?.notificationSettings?.sound ?? true;
+
+    if (hasNewAssignment && allowSound) {
+      playNotificationSound("ASSIGNMENT", allowSound).catch(() => {});
+    }
+
+    previousLeadPendingIdsRef.current = nextIds;
+  }, [leadPendingAssignmentProjects, user?.notificationSettings?.sound]);
+
+  const handleAcceptPendingProject = (project) => {
+    const projectId = project?._id;
+    if (!projectId) return;
+    const route =
+      project?.projectType === "Quote"
+        ? `/create/quote-wizard?edit=${projectId}`
+        : `/create/wizard?edit=${projectId}`;
+    navigate(route);
+  };
+
+  const formatAssignedDate = (project) => {
+    const sourceDate = project?.updatedAt || project?.createdAt || project?.orderDate;
+    if (!sourceDate) return "today";
+    const parsed = new Date(sourceDate);
+    if (Number.isNaN(parsed.getTime())) return "today";
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   return (
     <div className="dashboard-container">
       {/* Page Content Header */}
@@ -245,6 +313,44 @@ const Dashboard = ({
         </h1>
         <p className="dashboard-subtitle">Here's your project overview.</p>
       </div>
+
+      {leadPendingAssignmentProjects.length > 0 && (
+        <section className="lead-new-order-banner" role="alert" aria-live="assertive">
+          <div className="lead-new-order-banner-header">
+            <span className="lead-new-order-badge">New Order Alert</span>
+            <h2>
+              {leadPendingAssignmentProjects.length} pending lead assignment
+              {leadPendingAssignmentProjects.length === 1 ? "" : "s"}
+            </h2>
+            <p>
+              This alert stays visible until each project is fully accepted.
+            </p>
+          </div>
+          <div className="lead-new-order-list">
+            {leadPendingAssignmentProjects.map((project) => (
+              <article key={project._id} className="lead-new-order-item">
+                <div className="lead-new-order-content">
+                  <p className="lead-new-order-id">
+                    {project.orderId || "New Order"}
+                  </p>
+                  <h3>{project.details?.projectName || "Untitled Project"}</h3>
+                  <p className="lead-new-order-meta">
+                    Assigned {formatAssignedDate(project)}
+                    {project.details?.client ? ` - ${project.details.client}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="lead-new-order-action"
+                  onClick={() => handleAcceptPendingProject(project)}
+                >
+                  Accept Project
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Stats Grid */}
       <div className="stats-grid">
