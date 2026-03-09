@@ -130,6 +130,21 @@ const cleanupUploadedFilesSafely = async (req) => {
   }
 };
 
+const MOCKUP_UPLOADER_POPULATE_FIELDS = "firstName lastName department";
+const populateMockupUploaders = (query) =>
+  query
+    .populate("mockup.uploadedBy", MOCKUP_UPLOADER_POPULATE_FIELDS)
+    .populate("mockup.versions.uploadedBy", MOCKUP_UPLOADER_POPULATE_FIELDS);
+const buildProjectResponseQuery = (projectId) =>
+  populateMockupUploaders(
+    Project.findById(projectId)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email")
+      .populate("endOfDayUpdateBy", "firstName lastName department")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+  );
+
 const canManageBilling = (user) => {
   if (!user) return false;
   if (user.role === "admin") return true;
@@ -3755,13 +3770,15 @@ const getProjects = async (req, res) => {
     const collapseRevisions =
       String(req.query.collapseRevisions || "true").toLowerCase() !== "false";
 
-    const projects = await Project.find(query)
-      .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName")
-      .populate("assistantLeadId", "firstName lastName employeeId email")
-      .populate("endOfDayUpdateBy", "firstName lastName department")
-      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
-      .sort({ createdAt: -1 });
+    const projects = await populateMockupUploaders(
+      Project.find(query)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName")
+        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("endOfDayUpdateBy", "firstName lastName department")
+        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+        .sort({ createdAt: -1 }),
+    );
 
     if (groupByOrder) {
       const groups = buildOrderGroups(projects, { collapseRevisions });
@@ -3898,12 +3915,14 @@ const getOrderGroups = async (req, res) => {
     const collapseRevisions =
       String(req.query.collapseRevisions || "true").toLowerCase() !== "false";
 
-    const projects = await Project.find(query)
-      .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName")
-      .populate("assistantLeadId", "firstName lastName employeeId email")
-      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
-      .sort({ createdAt: -1 });
+    const projects = await populateMockupUploaders(
+      Project.find(query)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName")
+        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+        .sort({ createdAt: -1 }),
+    );
 
     const groups = buildOrderGroups(projects, { collapseRevisions });
     res.json(groups);
@@ -3933,12 +3952,14 @@ const getOrderGroupByNumber = async (req, res) => {
     const scopedQuery = conditions.length === 1 ? conditions[0] : { $and: conditions };
 
     const findGroupedProjects = (criteria) =>
-      Project.find(criteria)
-        .populate("createdBy", "firstName lastName")
-        .populate("projectLeadId", "firstName lastName")
-        .populate("assistantLeadId", "firstName lastName employeeId email")
-        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
-        .sort({ createdAt: -1 });
+      populateMockupUploaders(
+        Project.find(criteria)
+          .populate("createdBy", "firstName lastName")
+          .populate("projectLeadId", "firstName lastName")
+          .populate("assistantLeadId", "firstName lastName employeeId email")
+          .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+          .sort({ createdAt: -1 }),
+      );
 
     const accessibleProjects = await findGroupedProjects(scopedQuery);
 
@@ -4044,11 +4065,13 @@ const getUserStats = async (req, res) => {
 // @access  Private
 const getProjectById = async (req, res) => {
   try {
-    const project = await Project.findById(req.params.id)
-      .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName employeeId email")
-      .populate("assistantLeadId", "firstName lastName employeeId email")
-      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone");
+    const project = await populateMockupUploaders(
+      Project.findById(req.params.id)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName employeeId email")
+        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+    );
 
     if (project) {
       // Access Check: Admin OR Project Lead
@@ -6678,7 +6701,8 @@ const uploadProjectMockup = async (req, res) => {
       version: nextVersion,
     });
 
-    res.json(project);
+    const populatedProject = await buildProjectResponseQuery(project._id);
+    res.json(populatedProject || project);
   } catch (error) {
     console.error("Error uploading mockup:", error);
     res.status(500).json({ message: "Server Error" });
@@ -6866,7 +6890,8 @@ const approveProjectMockup = async (req, res) => {
       version: requestedVersion,
     });
 
-    res.json(project);
+    const populatedProject = await buildProjectResponseQuery(project._id);
+    res.json(populatedProject || project);
   } catch (error) {
     console.error("Error approving mockup:", error);
     res.status(500).json({ message: "Server Error" });
@@ -7047,7 +7072,8 @@ const rejectProjectMockup = async (req, res) => {
       rejectionReason,
     });
 
-    res.json(project);
+    const populatedProject = await buildProjectResponseQuery(project._id);
+    res.json(populatedProject || project);
   } catch (error) {
     console.error("Error rejecting mockup:", error);
     res.status(500).json({ message: "Server Error" });

@@ -80,6 +80,134 @@ const QUOTE_REQUIREMENT_KEYS = [
   "sampleProduction",
   "bidSubmission",
 ];
+
+const ORDER_WORKFLOW_STEPS = [
+  {
+    key: "scope",
+    label: "Scope",
+    statuses: [
+      "Order Confirmed",
+      "Pending Scope Approval",
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+    ],
+  },
+  {
+    key: "mockup",
+    label: "Mockup",
+    statuses: ["Pending Mockup", "Mockup Completed"],
+  },
+  {
+    key: "production",
+    label: "Production",
+    statuses: [
+      "Pending Proof Reading",
+      "Proof Reading Completed",
+      "Pending Production",
+      "Production Completed",
+      "Pending Quality Control",
+      "Quality Control Completed",
+      "Pending Photography",
+      "Photography Completed",
+      "Pending Packaging",
+      "Packaging Completed",
+    ],
+  },
+  {
+    key: "billing",
+    label: "Billing",
+    statuses: [
+      "Pending Production",
+      "Production Completed",
+      "Pending Quality Control",
+      "Quality Control Completed",
+      "Pending Photography",
+      "Photography Completed",
+      "Pending Packaging",
+      "Packaging Completed",
+      "Pending Delivery/Pickup",
+    ],
+  },
+  {
+    key: "delivery",
+    label: "Delivery",
+    statuses: [
+      "Pending Delivery/Pickup",
+      "Delivered",
+      "Pending Feedback",
+      "Feedback Completed",
+      "Completed",
+      "Finished",
+    ],
+  },
+];
+
+const QUOTE_WORKFLOW_STEPS = [
+  {
+    key: "scope",
+    label: "Scope",
+    statuses: [
+      "Order Confirmed",
+      "Pending Scope Approval",
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+    ],
+  },
+  {
+    key: "requirements",
+    label: "Requirements",
+    statuses: ["Pending Quote Request", "Quote Request Completed"],
+  },
+  {
+    key: "response",
+    label: "Response",
+    statuses: ["Pending Send Response", "Response Sent"],
+  },
+  {
+    key: "decision",
+    label: "Decision",
+    statuses: [
+      "Response Sent",
+      "Pending Feedback",
+      "Feedback Completed",
+      "Completed",
+      "Finished",
+    ],
+  },
+  {
+    key: "convert",
+    label: "Convert",
+    statuses: ["Completed", "Finished"],
+  },
+];
+
+const resolveWorkflowJourney = (status = "", isQuoteProject = false) => {
+  const steps = isQuoteProject ? QUOTE_WORKFLOW_STEPS : ORDER_WORKFLOW_STEPS;
+  const activeIndex = steps.findIndex((step) => step.statuses.includes(status));
+  const normalizedIndex = activeIndex >= 0 ? activeIndex : 0;
+
+  return steps.map((step, index) => ({
+    ...step,
+    state:
+      index < normalizedIndex
+        ? "complete"
+        : index === normalizedIndex
+          ? "active"
+          : "upcoming",
+  }));
+};
+
+const isImageAsset = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+
+  const normalizedUrl = String(fileUrl || "").toLowerCase();
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"].some(
+    (extension) => normalizedUrl.includes(extension),
+  );
+};
 const QUOTE_REQUIREMENT_LABELS = {
   cost: "Cost",
   mockup: "Mockup",
@@ -354,6 +482,30 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
+const toDepartmentList = (department) => {
+  if (Array.isArray(department)) {
+    return department.map((entry) => String(entry || "").trim()).filter(Boolean);
+  }
+  const normalized = String(department || "").trim();
+  return normalized ? [normalized] : [];
+};
+
+const isGraphicsDepartmentValue = (department) =>
+  toDepartmentList(department).some((entry) => {
+    const normalized = entry.toLowerCase();
+    return (
+      normalized === "graphics/design" ||
+      normalized === "graphics" ||
+      normalized === "design" ||
+      normalized.includes("graphics")
+    );
+  });
+
+const isGraphicsUploader = (uploader) => {
+  if (!uploader || typeof uploader !== "object") return false;
+  return isGraphicsDepartmentValue(uploader.department);
+};
+
 const getMockupVersions = (mockup = {}) => {
   const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
   const normalized = rawVersions
@@ -370,6 +522,7 @@ const getMockupVersions = (mockup = {}) => {
         fileName: String(entry?.fileName || "").trim(),
         fileType: String(entry?.fileType || "").trim(),
         note: String(entry?.note || "").trim(),
+        uploadedBy: entry?.uploadedBy || null,
         uploadedAt: entry?.uploadedAt || null,
         clientApproval: {
           status: decisionStatus,
@@ -381,9 +534,13 @@ const getMockupVersions = (mockup = {}) => {
         },
       };
     })
-    .filter((entry) => entry.fileUrl);
+    .filter((entry) => entry.fileUrl && isGraphicsUploader(entry.uploadedBy));
 
-  if (normalized.length === 0 && mockup?.fileUrl) {
+  if (
+    normalized.length === 0 &&
+    mockup?.fileUrl &&
+    isGraphicsUploader(mockup?.uploadedBy)
+  ) {
     const parsedVersion = Number.parseInt(mockup?.version, 10);
     const version =
       Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
@@ -394,6 +551,7 @@ const getMockupVersions = (mockup = {}) => {
       fileName: String(mockup.fileName || "").trim(),
       fileType: String(mockup.fileType || "").trim(),
       note: String(mockup.note || "").trim(),
+      uploadedBy: mockup?.uploadedBy || null,
       uploadedAt: mockup.uploadedAt || null,
       clientApproval: {
         status: decisionStatus,
@@ -508,6 +666,10 @@ const OrderActions = () => {
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
   const [quoteConversionSubmitting, setQuoteConversionSubmitting] =
     useState(false);
+  const [focusedWorkflowStep, setFocusedWorkflowStep] = useState("");
+  const [billingPanelOpen, setBillingPanelOpen] = useState(false);
+  const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
+  const [mockupLightboxVersion, setMockupLightboxVersion] = useState(null);
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -721,6 +883,60 @@ const OrderActions = () => {
     !isQuoteProject && project?.quoteDetails?.decision?.convertedAt
       ? project.quoteDetails.decision.convertedAt
       : null;
+  const workflowJourney = useMemo(
+    () => resolveWorkflowJourney(project?.status, isQuoteProject),
+    [project?.status, isQuoteProject],
+  );
+  const activeJourneyStep = workflowJourney.find((item) => item.state === "active");
+
+  useEffect(() => {
+    if (workflowJourney.length === 0) return;
+    const defaultStepKey = (activeJourneyStep || workflowJourney[0])?.key || "";
+    setFocusedWorkflowStep((previous) => {
+      if (!previous) return defaultStepKey;
+      const stillExists = workflowJourney.some((item) => item.key === previous);
+      return stillExists ? previous : defaultStepKey;
+    });
+  }, [workflowJourney, activeJourneyStep]);
+
+  useEffect(() => {
+    if (mockupVersions.length === 0) {
+      setMockupCarouselIndex(0);
+      return;
+    }
+
+    setMockupCarouselIndex((previous) =>
+      Math.min(Math.max(previous, 0), mockupVersions.length - 1),
+    );
+  }, [mockupVersions.length]);
+
+  const focusedJourneyStep =
+    workflowJourney.find((item) => item.key === focusedWorkflowStep) ||
+    activeJourneyStep ||
+    workflowJourney[0] ||
+    null;
+  const mentionablePeople = useMemo(() => {
+    const people = [];
+    const pushPerson = (value) => {
+      const name = String(value || "").trim();
+      if (!name) return;
+      if (people.some((item) => item.toLowerCase() === name.toLowerCase())) return;
+      people.push(name);
+    };
+
+    const leadName = `${project?.projectLeadId?.firstName || ""} ${project?.projectLeadId?.lastName || ""}`.trim();
+    pushPerson(leadName);
+    pushPerson(project?.projectLeadId?.email);
+    pushPerson(currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName || ""}`.trim() : "");
+    pushPerson(currentUser?.email);
+    return people.slice(0, 4);
+  }, [project?.projectLeadId, currentUser]);
+  const mockupCarouselVersions = useMemo(
+    () => mockupVersions.slice().reverse(),
+    [mockupVersions],
+  );
+  const activeMockupVersion =
+    mockupCarouselVersions[mockupCarouselIndex] || mockupCarouselVersions[0] || null;
 
   const getFrontDeskCommandMessage = (targetStatus) => {
     if (targetStatus === "Mockup Completed") {
@@ -964,10 +1180,6 @@ const OrderActions = () => {
     });
 
   const recentUpdates = useMemo(() => projectUpdates || [], [projectUpdates]);
-  const latestUpdatePreview = useMemo(
-    () => (recentUpdates.length > 0 ? recentUpdates[0] : null),
-    [recentUpdates],
-  );
 
   const getUpdateAuthorName = (update) => {
     if (!update?.author || typeof update.author === "string") {
@@ -1662,6 +1874,26 @@ const OrderActions = () => {
     });
   };
 
+  const addMentionToComposer = (person) => {
+    const normalized = String(person || "").trim();
+    if (!normalized) return;
+    const mentionToken = `@${normalized.replace(/\s+/g, "_")}`;
+    setUpdateContent((previous) => {
+      const safePrevious = String(previous || "");
+      if (safePrevious.includes(mentionToken)) return safePrevious;
+      const spacer = safePrevious.trim().length > 0 ? " " : "";
+      return `${safePrevious}${spacer}${mentionToken} `;
+    });
+  };
+
+  const jumpToSection = (sectionId) => {
+    if (!sectionId) return;
+    const target = document.getElementById(sectionId);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const pendingProductionMissing =
     project && !isQuoteProject
       ? getPendingProductionBillingMissing({ invoiceSent, paymentTypes })
@@ -1728,6 +1960,47 @@ const OrderActions = () => {
               : ""
       }`
     : "";
+  const workflowAttentionItems = [
+    isQuoteProject &&
+    requiredQuoteRequirementItems.length > 0 &&
+    !allQuoteRequirementsCompleted
+      ? "Required quote requirements are still pending completion."
+      : "",
+    isQuoteProject && project?.status === "Response Sent" && !quoteDecisionTaken
+      ? "Client quote decision is pending validation."
+      : "",
+    showPendingProductionWarning
+      ? "Confirm invoice and payment before production can proceed."
+      : "",
+    showSampleApprovalWarning
+      ? "Confirm production sample approval before completing production."
+      : "",
+    showPendingDeliveryWarning
+      ? "Confirm full payment or authorization before delivery can proceed."
+      : "",
+    mockupApprovalPending && latestMockupVersion
+      ? `Confirm client approval for ${latestMockupVersionLabel}.`
+      : "",
+    mockupApprovalRejected && latestMockupVersion
+      ? `Client rejected ${latestMockupVersionLabel}. Upload revised mockup.`
+      : "",
+  ].filter(Boolean);
+  const statusBadgeTone = [
+    "Pending Scope Approval",
+    "Pending Mockup",
+    "Pending Proof Reading",
+    "Pending Production",
+    "Pending Delivery/Pickup",
+    "Pending Quote Request",
+    "Pending Send Response",
+    "Pending Feedback",
+  ].includes(project?.status)
+    ? "pending"
+    : ["Delivered", "Feedback Completed", "Completed", "Finished"].includes(
+          project?.status,
+        )
+      ? "complete"
+      : "active";
 
   useEffect(() => {
     if (!project || isQuoteProject || billingGuardModal.open) return;
@@ -1823,6 +2096,24 @@ const OrderActions = () => {
   const lastOrderRevisionLabel = currentUser?.department?.includes("Front Desk")
     ? "Last updated by Front Desk"
     : "Last updated";
+  const activeMockupDecision = getMockupApprovalStatus(
+    activeMockupVersion?.clientApproval || {},
+  );
+  const activeMockupFileName = activeMockupVersion
+    ? activeMockupVersion.fileName ||
+      activeMockupVersion.fileUrl?.split("/").pop() ||
+      `Mockup v${activeMockupVersion.version}`
+    : "";
+  const activeMockupIsImage = activeMockupVersion
+    ? isImageAsset(activeMockupVersion.fileUrl, activeMockupVersion.fileType)
+    : false;
+  const activeMockupIsLatest =
+    activeMockupVersion &&
+    Number(activeMockupVersion.version) === Number(latestMockupVersion?.version);
+  const canDecideOnMockupVersions =
+    canManageMockupApproval &&
+    (project?.status === "Pending Mockup" ||
+      (isQuoteProject && project?.status === "Pending Quote Request"));
 
   if (loading) {
     return (
@@ -1846,163 +2137,94 @@ const OrderActions = () => {
         <div className={`toast-message ${toast.type}`}>{toast.message}</div>
       )}
 
-      <div className="page-header order-actions-header">
-        <div>
-          <h1>Order Actions</h1>
-          <p className="subtitle">
-            {project.orderId || project._id} - {project.details?.projectName || "Untitled"}
-          </p>
+      <header className="order-actions-topbar">
+        <div className="order-actions-topbar-main">
+          <p className="order-actions-ref">{project.orderId || project._id}</p>
+          <h1>{project.details?.projectName || "Untitled Project"}</h1>
+          <span className={`order-actions-status-pill ${statusBadgeTone}`}>
+            {formatProjectStatusForDisplay(project.status, isQuoteProject)}
+          </span>
         </div>
         <button className="action-btn" onClick={() => navigate("/new-orders")}>
           Back to Orders
         </button>
-      </div>
+      </header>
 
-      <div className="orders-list-container">
-        <div className="order-summary">
-          <div>
-            <p>
-              <strong>Client:</strong> {project.details?.client || "-"}
-            </p>
-            <p>
-              <strong>Packaging Type:</strong>{" "}
-              {project.details?.packagingType || "-"}
-            </p>
-            <p>
-              <strong>Status:</strong>{" "}
-              {formatProjectStatusForDisplay(project.status, isQuoteProject)}
-            </p>
-            <p>
-              <strong>Created:</strong> {formatDate(project.createdAt)}
-            </p>
-          </div>
-          <div className="status-tags">
-            {latestMockupVersion && (
-              <span className="status-tag mockup">
-                Mockup {latestMockupVersionLabel}
-              </span>
-            )}
-            {mockupApprovalConfirmed && latestMockupVersion && (
-              <span className="status-tag invoice">
-                {latestMockupVersionLabel} Client Approved
-              </span>
-            )}
-            {mockupApprovalPending && latestMockupVersion && (
-              <span className="status-tag caution">
-                {latestMockupVersionLabel} Pending Client Approval
-              </span>
-            )}
-            {mockupApprovalRejected && latestMockupVersion && (
-              <span className="status-tag rejection">
-                {latestMockupVersionLabel} Rejected by Client
-              </span>
-            )}
-            {invoiceSent && (
-              <span className="status-tag invoice">{billingDocumentLabel} Sent</span>
-            )}
-            {sampleRequirementEnabled && (
-              <span
-                className={`status-tag ${
-                  sampleApprovalConfirmed ? "invoice" : "caution"
-                }`}
-              >
-                {sampleApprovalConfirmed
-                  ? "Sample Approved"
-                  : "Sample Approval Pending"}
-              </span>
-            )}
-            {!isQuoteProject &&
-              Array.from(paymentTypes).map((type) => (
-                <span key={type} className="status-tag payment">
-                  {paymentLabels[type] || type}
-                </span>
-              ))}
-            {!isQuoteProject && convertedFromQuoteAt && (
-              <span className="status-tag payment">
-                Converted from Quote ({formatDate(convertedFromQuoteAt)})
-              </span>
-            )}
-            {isQuoteProject &&
-              requiredQuoteRequirementItems.length > 0 &&
-              !allQuoteRequirementsCompleted && (
-                <span className="status-tag caution">
-                  Quote Requirements Pending
-                </span>
-              )}
-            {isQuoteProject && project.status === "Response Sent" && (
-              <span
-                className={`status-tag ${
-                  quoteDecisionStatus === "go_ahead"
-                    ? "invoice"
-                    : quoteDecisionStatus === "declined"
-                      ? "rejection"
-                      : "caution"
-                }`}
-              >
-                Quote Decision: {formatQuoteDecisionStatus(quoteDecisionStatus)}
-              </span>
-            )}
-            {showPendingProductionWarning && (
-              <span className="status-tag caution">
-                Pending Production Blocked: {pendingProductionMissingLabels.join(", ")}
-              </span>
-            )}
-            {showPendingDeliveryWarning && (
-              <span className="status-tag caution">
-                Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
-              </span>
-            )}
-          </div>
-        </div>
+      <div className="orders-list-container order-actions-workspace">
+        <div className="order-actions-layout">
+          <main className="order-actions-main">
+            <section className="workflow-journey-section">
+              <div className="workflow-journey-head">
+                <div>
+                  <h2>Order Journey</h2>
+                  <p>Move through each stage with contextual actions.</p>
+                </div>
+                <button
+                  type="button"
+                  className="action-btn"
+                  onClick={() => {
+                    if (!focusedJourneyStep) return;
+                    if (
+                      focusedJourneyStep.key === "mockup" ||
+                      focusedJourneyStep.key === "requirements"
+                    ) {
+                      jumpToSection("order-actions-mockup");
+                      return;
+                    }
+                    if (focusedJourneyStep.key === "billing") {
+                      setBillingPanelOpen(true);
+                      jumpToSection("order-actions-billing");
+                      return;
+                    }
+                    if (
+                      focusedJourneyStep.key === "delivery" ||
+                      focusedJourneyStep.key === "decision"
+                    ) {
+                      jumpToSection("order-actions-updates");
+                      return;
+                    }
+                    openFullOrderRevision();
+                  }}
+                >
+                  {focusedJourneyStep?.key === "billing"
+                    ? "Open Billing"
+                    : focusedJourneyStep?.key === "mockup" ||
+                        focusedJourneyStep?.key === "requirements"
+                      ? "Open Mockup"
+                      : focusedJourneyStep?.key === "delivery" ||
+                          focusedJourneyStep?.key === "decision"
+                        ? "Open Activity"
+                        : "Review Scope"}
+                </button>
+              </div>
+              <div className="workflow-stepper">
+                {workflowJourney.map((step, index) => (
+                  <button
+                    key={step.key}
+                    type="button"
+                    className={`workflow-step ${step.state} ${
+                      focusedJourneyStep?.key === step.key ? "focused" : ""
+                    }`}
+                    onClick={() => setFocusedWorkflowStep(step.key)}
+                  >
+                    <span className="workflow-step-index">{index + 1}</span>
+                    <span className="workflow-step-label">{step.label}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-        {isQuoteProject &&
-          requiredQuoteRequirementItems.length > 0 &&
-          !allQuoteRequirementsCompleted && (
-            <div className="warning-banner critical">
-              Required quote requirements are still pending completion.
-            </div>
-          )}
+            {workflowAttentionItems.length > 0 && (
+              <section className="workflow-alert-stack">
+                {workflowAttentionItems.map((item, index) => (
+                  <div key={`${item}-${index}`} className="warning-banner critical">
+                    {item}
+                  </div>
+                ))}
+              </section>
+            )}
 
-        {isQuoteProject &&
-          project.status === "Response Sent" &&
-          !quoteDecisionTaken && (
-            <div className="warning-banner critical">
-              Client quote decision is pending. Front Desk must validate client
-              decision before this quote can be finished.
-            </div>
-          )}
-
-        {showPendingProductionWarning && (
-          <div className="warning-banner critical">
-            Confirm invoice and payment now before production can proceed.
-          </div>
-        )}
-        {showSampleApprovalWarning && (
-          <div className="warning-banner critical">
-            Confirm client sample approval now before production completion can
-            proceed.
-          </div>
-        )}
-
-        {showPendingDeliveryWarning && (
-          <div className="warning-banner critical">
-            Confirm full payment or authorization now before delivery can proceed.
-          </div>
-        )}
-        {mockupApprovalPending && latestMockupVersion && (
-          <div className="warning-banner critical">
-            Confirm client approval for mockup {latestMockupVersionLabel} now
-            before mockup completion can proceed.
-          </div>
-        )}
-        {mockupApprovalRejected && latestMockupVersion && (
-          <div className="warning-banner critical">
-            Client rejected mockup {latestMockupVersionLabel}. Request Graphics
-            to upload a revised version before mockup completion.
-          </div>
-        )}
-
-        <div className="action-grid">
+            <div className="action-grid">
           {!isQuoteProject && (
             <div className="action-card">
               <h3>Delivery</h3>
@@ -2043,14 +2265,22 @@ const OrderActions = () => {
             </button>
           </div>
 
-          <div className="action-card">
+          <div className="action-card billing-card" id="order-actions-billing">
             <h3>Billing</h3>
-              <p>
-                {isQuoteProject
-                  ? "Confirm quote response sent."
-                  : "Confirm invoice and payment milestones."}
-              </p>
-              <div className="billing-actions">
+            <p>
+              {isQuoteProject
+                ? "Confirm quote response and decision milestones."
+                : "Manage invoice and payment checkpoints."}
+            </p>
+            <button
+              type="button"
+              className="action-btn update-submit-btn billing-command-trigger"
+              onClick={() => setBillingPanelOpen((previous) => !previous)}
+            >
+              {billingPanelOpen ? "Hide Billing Controls" : "Update Billing Status"}
+            </button>
+            {billingPanelOpen && (
+              <div className="billing-actions billing-command-panel">
                 {!invoiceSent ? (
                   <button
                     className="action-btn"
@@ -2105,12 +2335,13 @@ const OrderActions = () => {
                   </div>
                 )}
               </div>
-              {isQuoteProject && !allQuoteRequirementsCompleted && (
-                <p className="mockup-approval-meta">
-                  Complete required quote requirements before sending the quote.
-                </p>
-              )}
-            </div>
+            )}
+            {isQuoteProject && !allQuoteRequirementsCompleted && (
+              <p className="mockup-approval-meta">
+                Complete required quote requirements before sending the quote.
+              </p>
+            )}
+          </div>
 
           {isQuoteProject && (
             <div className="action-card">
@@ -2386,218 +2617,317 @@ const OrderActions = () => {
           )}
         </div>
 
-        <section className="mockup-standalone-section">
+        <section className="mockup-standalone-section" id="order-actions-mockup">
           <div className="action-card mockup-standalone-card">
-            <h3>Mockup Approval</h3>
+            <h3>Mockup Workbench</h3>
             <p>
               {isQuoteProject
-                ? "Review uploaded mockups with client and record approval or revision request."
+                ? "Review Graphics-uploaded mockups with client and record approval or revision request."
                 : "Confirm client approval before Mockup stage can be marked complete."}
             </p>
-
-              {!latestMockupVersion ? (
-                <div className="mockup-empty-state">
-                  No mockup has been uploaded yet.
-                </div>
-              ) : (
-                <>
-                  <div
-                    className={`mockup-approval-status ${
-                      mockupApprovalConfirmed
-                        ? "approved"
-                        : mockupApprovalRejected
-                          ? "rejected"
-                          : "pending"
-                    }`}
-                  >
-                    Latest: {latestMockupVersionLabel}{" "}
-                    {mockupApprovalConfirmed
-                      ? "Client Approved"
+            {!activeMockupVersion ? (
+              <div className="mockup-empty-state">
+                No Graphics mockup has been uploaded yet.
+              </div>
+            ) : (
+              <>
+                <div
+                  className={`mockup-approval-status ${
+                    mockupApprovalConfirmed
+                      ? "approved"
                       : mockupApprovalRejected
-                        ? "Client Rejected"
-                        : "Pending Client Approval"}
-                  </div>
+                        ? "rejected"
+                        : "pending"
+                  }`}
+                >
+                  Latest: {latestMockupVersionLabel}{" "}
+                  {mockupApprovalConfirmed
+                    ? "Client Approved"
+                    : mockupApprovalRejected
+                      ? "Client Rejected"
+                      : "Pending Client Approval"}
+                </div>
 
-                  {mockupApprovalConfirmed &&
-                    latestMockupVersion.clientApproval?.approvedAt && (
-                      <p className="mockup-approval-meta">
-                        Approved:{" "}
-                        {formatDateTime(
-                          latestMockupVersion.clientApproval.approvedAt,
-                        )}
-                      </p>
+                <div className="mockup-carousel">
+                  <button
+                    type="button"
+                    className="mockup-carousel-nav"
+                    onClick={() =>
+                      setMockupCarouselIndex((previous) =>
+                        Math.max(previous - 1, 0),
+                      )
+                    }
+                    disabled={mockupCarouselIndex === 0}
+                    aria-label="Previous mockup"
+                  >
+                    {"<"}
+                  </button>
+                  <button
+                    type="button"
+                    className={`mockup-carousel-frame ${
+                      activeMockupIsImage ? "is-image" : "is-file"
+                    }`}
+                    onClick={() => {
+                      if (activeMockupIsImage) {
+                        setMockupLightboxVersion(activeMockupVersion);
+                        return;
+                      }
+                      window.open(activeMockupVersion.fileUrl, "_blank");
+                    }}
+                  >
+                    {activeMockupIsImage ? (
+                      <img
+                        src={activeMockupVersion.fileUrl}
+                        alt={activeMockupFileName}
+                      />
+                    ) : (
+                      <span>Preview unavailable for this file type</span>
                     )}
-                  {mockupApprovalRejected &&
-                    latestMockupVersion.clientApproval?.rejectedAt && (
-                      <p className="mockup-approval-meta rejection">
-                        Rejected:{" "}
-                        {formatDateTime(
-                          latestMockupVersion.clientApproval.rejectedAt,
-                        )}
-                      </p>
-                    )}
-                  {mockupApprovalRejected &&
-                    latestMockupVersion.clientApproval?.rejectionReason && (
-                      <p className="mockup-approval-meta rejection">
-                        Reason:{" "}
-                        {latestMockupVersion.clientApproval.rejectionReason}
-                      </p>
-                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="mockup-carousel-nav"
+                    onClick={() =>
+                      setMockupCarouselIndex((previous) =>
+                        Math.min(previous + 1, mockupCarouselVersions.length - 1),
+                      )
+                    }
+                    disabled={mockupCarouselIndex >= mockupCarouselVersions.length - 1}
+                    aria-label="Next mockup"
+                  >
+                    {">"}
+                  </button>
+                </div>
 
-                  <div className="mockup-version-list">
-                    {mockupVersions
-                      .slice()
-                      .reverse()
-                      .map((version) => {
-                        const fileName =
-                          version.fileName ||
-                          version.fileUrl.split("/").pop() ||
-                          `Mockup v${version.version}`;
-                        const decision = getMockupApprovalStatus(
-                          version.clientApproval || {},
-                        );
-                        const isLatestVersion =
-                          Number(version.version) ===
-                          Number(latestMockupVersion?.version);
-                        const canDecideOnVersions =
-                          canManageMockupApproval &&
-                          (project.status === "Pending Mockup" ||
-                            (isQuoteProject &&
-                              project.status === "Pending Quote Request"));
-                        const approveHidden = decision === "rejected";
-                        const approveDisabled =
-                          !isLatestVersion || decision === "approved";
-                        const rejectDisabled =
-                          !isLatestVersion || decision === "rejected";
-                        return (
-                          <div
-                            key={`mockup-version-${version.version}`}
-                            className="mockup-version-item"
-                          >
-                            <div className="mockup-version-main">
-                              <strong>v{version.version}</strong>
-                              <span>
-                                {decision === "approved"
-                                  ? "Approved"
-                                  : decision === "rejected"
-                                    ? "Rejected"
-                                    : "Pending Approval"}
-                              </span>
-                            </div>
-                            <div className="mockup-version-links">
-                              <a
-                                href={version.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                View
-                              </a>
-                              <a href={version.fileUrl} download>
-                                Download
-                              </a>
-                            </div>
-                            <div className="mockup-version-meta">
-                              <span>{fileName}</span>
-                              {version.uploadedAt && (
-                                <span>
-                                  Uploaded: {formatDateTime(version.uploadedAt)}
-                                </span>
-                              )}
-                              {decision === "rejected" &&
-                                version.clientApproval?.rejectedAt && (
-                                  <span>
-                                    Rejected:{" "}
-                                    {formatDateTime(
-                                      version.clientApproval.rejectedAt,
-                                    )}
-                                  </span>
-                                )}
-                              {decision === "rejected" &&
-                                version.clientApproval?.rejectionReason && (
-                                  <span>
-                                    Reason:{" "}
-                                    {version.clientApproval.rejectionReason}
-                                  </span>
-                                )}
-                            </div>
-                            {canDecideOnVersions && (
-                              <div className="mockup-version-actions">
-                                {!approveHidden && (
-                                  <button
-                                    className="action-btn complete-btn"
-                                    onClick={() => openMockupApprovalModal(version)}
-                                    disabled={approveDisabled}
-                                    title={
-                                      !isLatestVersion
-                                        ? "Only latest version can be approved."
-                                        : decision === "approved"
-                                          ? "Already approved."
-                                          : `Confirm client approval for v${version.version}`
-                                    }
-                                  >
-                                    {decision === "approved"
-                                      ? `Approved (v${version.version})`
-                                      : `Confirm Approval (v${version.version})`}
-                                  </button>
-                                )}
-                                <button
-                                  className="action-btn undo-btn"
-                                  onClick={() => openMockupRejectionModal(version)}
-                                  disabled={rejectDisabled}
-                                  title={
-                                    !isLatestVersion
-                                      ? "Only latest version can be rejected."
-                                      : decision === "rejected"
-                                        ? "Already rejected."
-                                        : `Mark v${version.version} as rejected`
-                                  }
-                                >
-                                  {decision === "rejected"
-                                    ? `Rejected (v${version.version})`
-                                    : `Mark Rejected (v${version.version})`}
-                                </button>
-                                {!isLatestVersion && (
-                                  <span className="mockup-version-actions-note">
-                                    Latest version only
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                  {!canManageMockupApproval && (
-                    <p className="mockup-approval-meta">
-                      Front Desk or Admin must confirm client decision.
-                    </p>
+                <div className="mockup-carousel-caption">
+                  <strong>v{activeMockupVersion.version}</strong>
+                  <span>{activeMockupFileName}</span>
+                  {activeMockupVersion.uploadedAt && (
+                    <span>Uploaded: {formatDateTime(activeMockupVersion.uploadedAt)}</span>
                   )}
-                </>
-              )}
+                  {activeMockupDecision === "rejected" &&
+                    activeMockupVersion.clientApproval?.rejectionReason && (
+                      <span className="mockup-approval-meta rejection">
+                        Reason: {activeMockupVersion.clientApproval.rejectionReason}
+                      </span>
+                    )}
+                </div>
+
+                <div className="mockup-version-links">
+                  <a
+                    href={activeMockupVersion.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View
+                  </a>
+                  <a href={activeMockupVersion.fileUrl} download>
+                    Download
+                  </a>
+                </div>
+
+                {canDecideOnMockupVersions && (
+                  <div className="mockup-version-actions">
+                    {activeMockupDecision !== "rejected" && (
+                      <button
+                        className="action-btn complete-btn"
+                        onClick={() => openMockupApprovalModal(activeMockupVersion)}
+                        disabled={!activeMockupIsLatest || activeMockupDecision === "approved"}
+                      >
+                        {activeMockupDecision === "approved"
+                          ? `Approved (v${activeMockupVersion.version})`
+                          : `Confirm Approval (v${activeMockupVersion.version})`}
+                      </button>
+                    )}
+                    <button
+                      className="action-btn undo-btn"
+                      onClick={() => openMockupRejectionModal(activeMockupVersion)}
+                      disabled={!activeMockupIsLatest || activeMockupDecision === "rejected"}
+                    >
+                      {activeMockupDecision === "rejected"
+                        ? `Rejected (v${activeMockupVersion.version})`
+                        : `Mark Rejected (v${activeMockupVersion.version})`}
+                    </button>
+                    {!activeMockupIsLatest && (
+                      <span className="mockup-version-actions-note">
+                        Only latest version can be approved or rejected.
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="mockup-carousel-track">
+                  {mockupCarouselVersions.map((version, index) => {
+                    const decision = getMockupApprovalStatus(version.clientApproval || {});
+                    return (
+                      <button
+                        key={`mockup-version-tab-${version.version}`}
+                        type="button"
+                        className={`mockup-carousel-tab ${
+                          mockupCarouselIndex === index ? "active" : ""
+                        }`}
+                        onClick={() => setMockupCarouselIndex(index)}
+                      >
+                        v{version.version}{" "}
+                        {decision === "approved"
+                          ? "Approved"
+                          : decision === "rejected"
+                            ? "Rejected"
+                            : "Pending"}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!canManageMockupApproval && (
+                  <p className="mockup-approval-meta">
+                    Front Desk or Admin must confirm client decision.
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </section>
 
-
-        <section className="updates-standalone-section">
+        <section className="updates-standalone-section" id="order-actions-updates">
           <div className="updates-standalone-header">
             <div>
-              <h3>Project Updates</h3>
-              <p>Share project-specific updates with the team.</p>
+              <h3>Activity Feed</h3>
+              <p>System events and team comments in one timeline.</p>
             </div>
-            <span className="updates-count-badge">
-              {projectUpdates.length} updates
-            </span>
+            <span className="updates-count-badge">{projectUpdates.length} updates</span>
           </div>
 
-          <div className="updates-standalone-body">
-            <div className="updates-inline-form-container">
-              <h4>Add Update</h4>
-              <div className="updates-inline-form">
+          <div className="activity-feed-shell">
+            <div className="activity-feed-list">
+              {updatesLoading ? (
+                <>
+                  <div className="activity-feed-item skeleton" />
+                  <div className="activity-feed-item skeleton" />
+                  <div className="activity-feed-item skeleton" />
+                </>
+              ) : recentUpdates.length === 0 ? (
+                <div className="updates-preview-empty">No updates yet.</div>
+              ) : (
+                recentUpdates.map((update) => {
+                  const isSystemUpdate =
+                    !update?.author || typeof update.author === "string";
+                  const isEditing = editingUpdateId === update._id;
+                  return (
+                    <article
+                      className={`activity-feed-item ${
+                        isSystemUpdate ? "is-system" : "is-human"
+                      }`}
+                      key={update._id}
+                    >
+                      <div className="activity-feed-dot" />
+                      <div className="activity-feed-content">
+                        <div className="updates-preview-meta">
+                          <span>{getUpdateAuthorName(update)}</span>
+                          <span>{formatDateTime(update.createdAt)}</span>
+                        </div>
+                        <div className="updates-preview-category-row">
+                          <div className="updates-preview-category">
+                            {normalizeUpdateCategory(update.category)}
+                          </div>
+                          {canManageUpdate(update) && (
+                            <div className="updates-preview-actions">
+                              {isEditing ? (
+                                <button
+                                  className="action-btn updates-preview-action"
+                                  onClick={handleCancelEditUpdate}
+                                  disabled={updateEditSubmitting}
+                                >
+                                  Cancel
+                                </button>
+                              ) : (
+                                <button
+                                  className="action-btn updates-preview-action"
+                                  onClick={() => handleStartEditUpdate(update)}
+                                  disabled={updateDeleteSubmittingId === update._id}
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              <button
+                                className="action-btn undo-btn updates-preview-action"
+                                onClick={() => handleDeleteUpdate(update)}
+                                disabled={updateDeleteSubmittingId === update._id}
+                              >
+                                {updateDeleteSubmittingId === update._id
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {isEditing ? (
+                          <div className="updates-preview-edit-form">
+                            <label htmlFor={`update-edit-category-${update._id}`}>
+                              Category
+                            </label>
+                            <select
+                              id={`update-edit-category-${update._id}`}
+                              value={editUpdateCategory}
+                              onChange={(event) =>
+                                setEditUpdateCategory(event.target.value)
+                              }
+                              disabled={updateEditSubmitting}
+                            >
+                              {UPDATE_CATEGORY_OPTIONS.map((category) => (
+                                <option key={category} value={category}>
+                                  {category}
+                                </option>
+                              ))}
+                            </select>
+                            <label htmlFor={`update-edit-content-${update._id}`}>
+                              Content
+                            </label>
+                            <textarea
+                              id={`update-edit-content-${update._id}`}
+                              rows="3"
+                              value={editUpdateContent}
+                              onChange={(event) =>
+                                setEditUpdateContent(event.target.value)
+                              }
+                              disabled={updateEditSubmitting}
+                            />
+                            <div className="updates-preview-edit-actions">
+                              <button
+                                className="action-btn"
+                                onClick={handleCancelEditUpdate}
+                                disabled={updateEditSubmitting}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                className="action-btn update-submit-btn"
+                                onClick={() => handleSaveEditUpdate(update._id)}
+                                disabled={
+                                  updateEditSubmitting ||
+                                  editUpdateContent.trim().length === 0
+                                }
+                              >
+                                {updateEditSubmitting ? "Saving..." : "Save Changes"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="updates-preview-content">{update.content}</p>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="activity-composer">
+              <div className="activity-composer-head">
                 <label htmlFor="order-update-category">Category</label>
                 <select
                   id="order-update-category"
                   value={updateCategory}
-                  onChange={(e) => setUpdateCategory(e.target.value)}
+                  onChange={(event) => setUpdateCategory(event.target.value)}
                   disabled={!canShareUpdates || updateSubmitting}
                 >
                   {UPDATE_CATEGORY_OPTIONS.map((category) => (
@@ -2606,17 +2936,31 @@ const OrderActions = () => {
                     </option>
                   ))}
                 </select>
-
-                <label htmlFor="order-update-content">Update Details</label>
-                <textarea
-                  id="order-update-content"
-                  rows="3"
-                  value={updateContent}
-                  onChange={(e) => setUpdateContent(e.target.value)}
-                  placeholder="Share what changed on this project..."
-                  disabled={!canShareUpdates || updateSubmitting}
-                />
-
+              </div>
+              {mentionablePeople.length > 0 && (
+                <div className="activity-mention-row">
+                  {mentionablePeople.map((person) => (
+                    <button
+                      key={person}
+                      type="button"
+                      className="activity-mention-chip"
+                      onClick={() => addMentionToComposer(person)}
+                      disabled={!canShareUpdates || updateSubmitting}
+                    >
+                      @{person}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <textarea
+                id="order-update-content"
+                rows="3"
+                value={updateContent}
+                onChange={(event) => setUpdateContent(event.target.value)}
+                placeholder="Post an update, tag teammates, and keep everyone aligned..."
+                disabled={!canShareUpdates || updateSubmitting}
+              />
+              <div className="activity-composer-actions">
                 <button
                   className="action-btn update-submit-btn"
                   onClick={handlePostUpdate}
@@ -2630,155 +2974,173 @@ const OrderActions = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+          </main>
 
-            <div className="updates-preview">
-              <h4>Latest Update Preview</h4>
-              {updatesLoading ? (
-                <div className="updates-preview-empty">Loading updates...</div>
-              ) : !latestUpdatePreview ? (
-                <div className="updates-preview-empty">No updates yet.</div>
-              ) : (
-                <div className="updates-preview-item" key={latestUpdatePreview._id}>
-                  <div className="updates-preview-meta">
-                    <span>{getUpdateAuthorName(latestUpdatePreview)}</span>
-                    <span>{formatDateTime(latestUpdatePreview.createdAt)}</span>
-                  </div>
-                  <div className="updates-preview-category-row">
-                    <div className="updates-preview-category">
-                      {normalizeUpdateCategory(latestUpdatePreview.category)}
-                    </div>
-                    {canManageUpdate(latestUpdatePreview) && (
-                      <div className="updates-preview-actions">
-                        {editingUpdateId === latestUpdatePreview._id ? (
-                          <button
-                            className="action-btn updates-preview-action"
-                            onClick={handleCancelEditUpdate}
-                            disabled={updateEditSubmitting}
-                          >
-                            Cancel
-                          </button>
-                        ) : (
-                          <button
-                            className="action-btn updates-preview-action"
-                            onClick={() => handleStartEditUpdate(latestUpdatePreview)}
-                            disabled={
-                              updateDeleteSubmittingId === latestUpdatePreview._id
-                            }
-                          >
-                            Edit
-                          </button>
-                        )}
-                        <button
-                          className="action-btn undo-btn updates-preview-action"
-                          onClick={() => handleDeleteUpdate(latestUpdatePreview)}
-                          disabled={updateDeleteSubmittingId === latestUpdatePreview._id}
-                        >
-                          {updateDeleteSubmittingId === latestUpdatePreview._id
-                            ? "Deleting..."
-                            : "Delete"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+          <aside className="order-actions-sidebar">
+            <section className="order-summary order-context-card">
+              <h3>Order Context</h3>
+              <p>
+                <strong>Client:</strong> {project.details?.client || "-"}
+              </p>
+              <p>
+                <strong>Packaging Type:</strong> {project.details?.packagingType || "-"}
+              </p>
+              <p>
+                <strong>Status:</strong>{" "}
+                {formatProjectStatusForDisplay(project.status, isQuoteProject)}
+              </p>
+              <p>
+                <strong>Created:</strong> {formatDate(project.createdAt)}
+              </p>
+              <div className="status-tags">
+                {latestMockupVersion && (
+                  <span className="status-tag mockup">Mockup {latestMockupVersionLabel}</span>
+                )}
+                {mockupApprovalConfirmed && latestMockupVersion && (
+                  <span className="status-tag invoice">
+                    {latestMockupVersionLabel} Client Approved
+                  </span>
+                )}
+                {mockupApprovalPending && latestMockupVersion && (
+                  <span className="status-tag caution">
+                    {latestMockupVersionLabel} Pending Client Approval
+                  </span>
+                )}
+                {mockupApprovalRejected && latestMockupVersion && (
+                  <span className="status-tag rejection">
+                    {latestMockupVersionLabel} Rejected by Client
+                  </span>
+                )}
+                {invoiceSent && (
+                  <span className="status-tag invoice">{billingDocumentLabel} Sent</span>
+                )}
+                {sampleRequirementEnabled && (
+                  <span
+                    className={`status-tag ${
+                      sampleApprovalConfirmed ? "invoice" : "caution"
+                    }`}
+                  >
+                    {sampleApprovalConfirmed ? "Sample Approved" : "Sample Approval Pending"}
+                  </span>
+                )}
+                {!isQuoteProject &&
+                  Array.from(paymentTypes).map((type) => (
+                    <span key={type} className="status-tag payment">
+                      {paymentLabels[type] || type}
+                    </span>
+                  ))}
+                {!isQuoteProject && convertedFromQuoteAt && (
+                  <span className="status-tag payment">
+                    Converted from Quote ({formatDate(convertedFromQuoteAt)})
+                  </span>
+                )}
+                {isQuoteProject &&
+                  requiredQuoteRequirementItems.length > 0 &&
+                  !allQuoteRequirementsCompleted && (
+                    <span className="status-tag caution">Quote Requirements Pending</span>
+                  )}
+                {isQuoteProject && project.status === "Response Sent" && (
+                  <span
+                    className={`status-tag ${
+                      quoteDecisionStatus === "go_ahead"
+                        ? "invoice"
+                        : quoteDecisionStatus === "declined"
+                          ? "rejection"
+                          : "caution"
+                    }`}
+                  >
+                    Quote Decision: {formatQuoteDecisionStatus(quoteDecisionStatus)}
+                  </span>
+                )}
+                {showPendingProductionWarning && (
+                  <span className="status-tag caution">
+                    Pending Production Blocked: {pendingProductionMissingLabels.join(", ")}
+                  </span>
+                )}
+                {showPendingDeliveryWarning && (
+                  <span className="status-tag caution">
+                    Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
+                  </span>
+                )}
+              </div>
+            </section>
 
-                  {editingUpdateId === latestUpdatePreview._id ? (
-                    <div className="updates-preview-edit-form">
-                      <label
-                        htmlFor={`update-edit-category-${latestUpdatePreview._id}`}
-                      >
-                        Category
-                      </label>
-                      <select
-                        id={`update-edit-category-${latestUpdatePreview._id}`}
-                        value={editUpdateCategory}
-                        onChange={(e) => setEditUpdateCategory(e.target.value)}
-                        disabled={updateEditSubmitting}
-                      >
-                        {UPDATE_CATEGORY_OPTIONS.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-
-                      <label htmlFor={`update-edit-content-${latestUpdatePreview._id}`}>
-                        Content
-                      </label>
-                      <textarea
-                        id={`update-edit-content-${latestUpdatePreview._id}`}
-                        rows="3"
-                        value={editUpdateContent}
-                        onChange={(e) => setEditUpdateContent(e.target.value)}
-                        disabled={updateEditSubmitting}
-                      />
-
-                      <div className="updates-preview-edit-actions">
-                        <button
-                          className="action-btn"
-                          onClick={handleCancelEditUpdate}
-                          disabled={updateEditSubmitting}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          className="action-btn update-submit-btn"
-                          onClick={() => handleSaveEditUpdate(latestUpdatePreview._id)}
-                          disabled={
-                            updateEditSubmitting || editUpdateContent.trim().length === 0
-                          }
-                        >
-                          {updateEditSubmitting ? "Saving..." : "Save Changes"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="updates-preview-content">{latestUpdatePreview.content}</p>
+            <section className="order-revision-section">
+              <div className="updates-standalone-header">
+                <div>
+                  <h3>Order Revision</h3>
+                  <p>
+                    Open the full order form to revise project details using the same
+                    fields available during New Order creation.
+                  </p>
+                  {lastOrderRevisionUpdatedAt && (
+                    <p className="order-revision-last-updated">
+                      {lastOrderRevisionLabel}: {formatDateTime(lastOrderRevisionUpdatedAt)}
+                    </p>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        </section>
-        <section className="order-revision-section">
-          <div className="updates-standalone-header">
-            <div>
-              <h3>Order Revision</h3>
-              <p>
-                Open the full order form to revise project details using the same
-                fields available during New Order creation.
-              </p>
-              {lastOrderRevisionUpdatedAt && (
-                <p className="order-revision-last-updated">
-                  {lastOrderRevisionLabel}: {formatDateTime(lastOrderRevisionUpdatedAt)}
-                </p>
-              )}
-            </div>
-          </div>
+              </div>
+              <div className="order-revision-body">
+                {!canManageOrderRevision && (
+                  <p className="order-revision-note">
+                    Only Front Desk and Admin can revise full order details.
+                  </p>
+                )}
+                {canManageOrderRevision && isOrderRevisionLocked && (
+                  <p className="order-revision-note">
+                    Revision is locked because this project is completed. Reopen it to
+                    create a new revision.
+                  </p>
+                )}
+                <div className="order-revision-actions">
+                  <button
+                    className="action-btn update-submit-btn"
+                    onClick={openFullOrderRevision}
+                    disabled={!canManageOrderRevision || isOrderRevisionLocked}
+                  >
+                    Open Full Revision Form
+                  </button>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
 
-          <div className="order-revision-body">
-            {!canManageOrderRevision && (
-              <p className="order-revision-note">
-                Only Front Desk and Admin can revise full order details.
-              </p>
-            )}
-            {canManageOrderRevision && isOrderRevisionLocked && (
-              <p className="order-revision-note">
-                Revision is locked because this project is completed. Reopen it to
-                create a new revision.
-              </p>
-            )}
-            <div className="order-revision-actions">
+      {mockupLightboxVersion && (
+        <div
+          className="feedback-modal-overlay mockup-lightbox-overlay"
+          onClick={() => setMockupLightboxVersion(null)}
+        >
+          <div
+            className="feedback-modal mockup-lightbox"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="feedback-modal-header">
+              <div>
+                <h3>Mockup v{mockupLightboxVersion.version}</h3>
+                <p>{mockupLightboxVersion.fileName || "Mockup preview"}</p>
+              </div>
               <button
-                className="action-btn update-submit-btn"
-                onClick={openFullOrderRevision}
-                disabled={!canManageOrderRevision || isOrderRevisionLocked}
+                type="button"
+                className="feedback-modal-close"
+                onClick={() => setMockupLightboxVersion(null)}
+                aria-label="Close preview"
               >
-                Open Full Revision Form
+                ×
               </button>
             </div>
+            <div className="mockup-lightbox-body">
+              <img
+                src={mockupLightboxVersion.fileUrl}
+                alt={mockupLightboxVersion.fileName || "Mockup preview"}
+              />
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      )}
 
       {billingGuardModal.open && (
         <div className="confirm-modal-overlay">
