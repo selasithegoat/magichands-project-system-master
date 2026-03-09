@@ -53,17 +53,30 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0;
-  background: transparent;
+  width: clamp(320px, 36vw, 420px);
+  max-width: 100%;
+  gap: 0.58rem;
+  padding: 0.58rem 1.2rem;
+  border-radius: 18px;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  background:
+    radial-gradient(
+      150% 120% at 20% 12%,
+      rgba(147, 197, 253, 0.26) 0%,
+      rgba(147, 197, 253, 0) 45%
+    ),
+    linear-gradient(145deg, #153a6a 0%, #0d2446 100%);
+  box-shadow:
+    0 14px 26px rgba(8, 26, 55, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .delivery-countdown-badge .delivery-countdown-title {
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: #166534;
+  color: rgba(248, 250, 252, 0.88);
 }
 
 .delivery-countdown-badge.is-delivered {
@@ -71,6 +84,7 @@
   border-radius: 12px;
   border: 1px solid rgba(34, 197, 94, 0.38);
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  box-shadow: none;
   align-items: flex-start;
   gap: 0.25rem;
 }
@@ -86,120 +100,112 @@
   color: #14532d;
 }
 
-.delivery-countdown-flip {
+.delivery-countdown-rings {
   display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
 }
 
-.delivery-countdown-unit {
+.delivery-countdown-ring-unit {
+  flex: 0 0 auto;
+}
+
+.delivery-countdown-ring-shell {
+  position: relative;
+  width: clamp(74px, 6.8vw, 90px);
+  height: clamp(74px, 6.8vw, 90px);
+}
+
+.delivery-countdown-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-95deg);
+}
+
+.delivery-countdown-ring-track,
+.delivery-countdown-ring-progress {
+  fill: none;
+  stroke-width: 4;
+}
+
+.delivery-countdown-ring-track {
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+.delivery-countdown-ring-progress {
+  stroke: #f8fafc;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 280ms ease;
+}
+
+.delivery-countdown-ring-content {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  min-width: 62px;
-}
-
-.delivery-countdown-card {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  width: clamp(64px, 5.2vw, 78px);
-  height: clamp(66px, 5.8vw, 82px);
-  border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    #f0fdf4 0%,
-    #dcfce7 49.5%,
-    #bbf7d0 50%,
-    #f0fdf4 100%
-  );
-  box-shadow:
-    0 6px 16px rgba(22, 101, 52, 0.2),
-    inset 0 0 0 1px rgba(34, 197, 94, 0.42);
-  font-size: clamp(2rem, 3vw, 2.8rem);
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  color: #14532d;
+  gap: 0.12rem;
 }
 
-.delivery-countdown-card::before {
-  content: "";
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  top: 50%;
-  border-top: 1px solid rgba(21, 128, 61, 0.34);
-  transform: translateY(-50%);
-}
-
-.delivery-countdown-card.is-flipping {
-  transform-origin: 50% 50%;
-  backface-visibility: hidden;
-  will-change: transform, filter;
-  animation: deliveryCountdownFlip 520ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes deliveryCountdownFlip {
-  0% {
-    transform: perspective(520px) rotateX(0deg);
-    filter: brightness(1);
-  }
-  40% {
-    transform: perspective(520px) rotateX(-88deg);
-    filter: brightness(0.82);
-  }
-  41% {
-    transform: perspective(520px) rotateX(88deg);
-    filter: brightness(0.82);
-  }
-  100% {
-    transform: perspective(520px) rotateX(0deg);
-    filter: brightness(1);
-  }
-}
-
-.delivery-countdown-label {
-  font-size: 0.66rem;
+.delivery-countdown-ring-value {
+  font-size: clamp(1.5rem, 1.9vw, 2.05rem);
   font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #15803d;
+  line-height: 1;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
 }
 
+.delivery-countdown-ring-label {
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(248, 250, 252, 0.9);
+  line-height: 1;
+  text-transform: lowercase;
+}
+
+.delivery-countdown-badge.is-near-delivery .delivery-countdown-title,
 .delivery-countdown-badge.is-overdue .delivery-countdown-title {
-  color: #991b1b;
+  color: #fee2e2;
 }
 
-.delivery-countdown-badge.is-overdue .delivery-countdown-card {
-  background: linear-gradient(
-    180deg,
-    #fff8f8 0%,
-    #feecec 49.5%,
-    #fbd5d5 50%,
-    #fff8f8 100%
-  );
+.delivery-countdown-badge.is-near-delivery,
+.delivery-countdown-badge.is-overdue {
+  border-color: rgba(248, 113, 113, 0.78);
+  background:
+    radial-gradient(
+      150% 120% at 20% 12%,
+      rgba(248, 113, 113, 0.48) 0%,
+      rgba(248, 113, 113, 0) 44%
+    ),
+    linear-gradient(145deg, #991b1b 0%, #7f1d1d 100%);
   box-shadow:
-    0 6px 16px rgba(127, 29, 29, 0.2),
-    inset 0 0 0 1px rgba(248, 113, 113, 0.45);
-  color: #7f1d1d;
+    0 14px 26px rgba(127, 29, 29, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
-.delivery-countdown-badge.is-overdue .delivery-countdown-card::before {
-  border-top: 1px solid rgba(127, 29, 29, 0.34);
+.delivery-countdown-badge.is-near-delivery .delivery-countdown-ring-track,
+.delivery-countdown-badge.is-overdue .delivery-countdown-ring-track {
+  stroke: rgba(254, 202, 202, 0.3);
 }
 
-.delivery-countdown-badge.is-overdue .delivery-countdown-label {
-  color: #9f1239;
+.delivery-countdown-badge.is-near-delivery .delivery-countdown-ring-progress,
+.delivery-countdown-badge.is-overdue .delivery-countdown-ring-progress {
+  stroke: #fee2e2;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .delivery-countdown-card.is-flipping {
-    animation: none;
-  }
+.delivery-countdown-badge.is-near-delivery .delivery-countdown-ring-value,
+.delivery-countdown-badge.is-overdue .delivery-countdown-ring-value {
+  color: #fff1f2;
+}
+
+.delivery-countdown-badge.is-near-delivery .delivery-countdown-ring-label,
+.delivery-countdown-badge.is-overdue .delivery-countdown-ring-label {
+  color: #fecdd3;
 }
 
 .header-top-actions {
@@ -438,18 +444,27 @@
     padding: 1rem;
   }
 
-  .delivery-countdown-flip {
-    gap: 0.55rem;
+  .delivery-countdown-badge {
+    padding: 0.52rem 0.8rem;
+    width: min(100%, 340px);
   }
 
-  .delivery-countdown-unit {
-    min-width: 56px;
+  .delivery-countdown-rings {
+    gap: 0.35rem;
+    justify-content: space-between;
   }
 
-  .delivery-countdown-card {
-    width: 64px;
-    height: 68px;
-    font-size: 2rem;
+  .delivery-countdown-ring-shell {
+    width: 72px;
+    height: 72px;
+  }
+
+  .delivery-countdown-ring-value {
+    font-size: 1.45rem;
+  }
+
+  .delivery-countdown-ring-label {
+    font-size: 0.48rem;
   }
 
   .edit-link {
