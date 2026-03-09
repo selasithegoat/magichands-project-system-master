@@ -4,6 +4,8 @@ import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 
+const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+
 const resolveProjectTypeKey = (project) => {
   if (project?.projectType === "Emergency" || project?.priority === "Urgent") {
     return "emergency";
@@ -38,6 +40,35 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
     return "approved";
   }
   return "pending";
+};
+
+const normalizeReferencePath = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "object") {
+    if (typeof value.url === "string") return value.url.trim();
+    if (typeof value.fileUrl === "string") return value.fileUrl.trim();
+    if (typeof value.path === "string") return value.path.trim();
+  }
+  return "";
+};
+
+const getProjectReferenceImage = (project) => {
+  const sampleImage = normalizeReferencePath(
+    project?.sampleImage || project?.details?.sampleImage,
+  );
+  if (sampleImage) return sampleImage;
+
+  const attachments = [
+    ...(Array.isArray(project?.attachments) ? project.attachments : []),
+    ...(Array.isArray(project?.details?.attachments) ? project.details.attachments : []),
+  ];
+
+  const firstImage = attachments
+    .map((attachment) => normalizeReferencePath(attachment))
+    .find((path) => IMAGE_FILE_EXTENSIONS.test(path.split("?")[0].trim()));
+
+  return firstImage || "";
 };
 
 const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
@@ -131,13 +162,13 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const getProjectTypeInfo = (typeKey) => {
     switch (typeKey) {
       case "emergency":
-        return { label: "EMERGENCY", color: "#e74c3c", bg: "#fef2f2" };
+        return { label: "EMERGENCY" };
       case "corporate":
-        return { label: "CORPORATE", color: "#42a165", bg: "#f0fdf4" };
+        return { label: "CORPORATE" };
       case "quote":
-        return { label: "QUOTE", color: "#f39c12", bg: "#fffbeb" };
+        return { label: "QUOTE" };
       default:
-        return { label: "STANDARD", color: "#3498db", bg: "#eff6ff" };
+        return { label: "STANDARD" };
     }
   };
 
@@ -230,7 +261,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     sampleApprovalPending ? "Sample Approval Required" : "",
   ]
     .filter(Boolean)
-    .join(" • ");
+    .join(" | ");
+  const referenceImage = getProjectReferenceImage(project);
   return (
     <div
       className={`project-card-new project-type-${projectTypeKey} ${
@@ -245,9 +277,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
       <div className="card-header">
         {/* Project Thumbnail / Avatar */}
         <div className="project-thumbnail-wrapper">
-          {project.sampleImage || project.details?.sampleImage ? (
+          {referenceImage ? (
             <img
-              src={`${project.sampleImage || project.details.sampleImage}`}
+              src={referenceImage}
               alt="Project"
               className="project-card-image"
             />
@@ -258,14 +290,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           )}
         </div>
         <div className="card-badge-container">
-          <span
-            className="type-badge"
-            style={{
-              backgroundColor: projectTypeInfo.bg,
-              color: projectTypeInfo.color,
-              border: `1px solid ${projectTypeInfo.color}40`,
-            }}
-          >
+          <span className={`type-badge type-${projectTypeKey}`}>
             {projectTypeInfo.label}
           </span>
           <span className={`status-badge ${statusInfo.class}`}>
@@ -385,3 +410,4 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 };
 
 export default ProjectCard;
+
