@@ -376,7 +376,9 @@ const getUsers = async (req, res) => {
           }
         : { _id: req.user._id };
 
-    const users = await User.find(query).select("_id firstName lastName name").lean();
+    const users = await User.find(query)
+      .select("_id firstName lastName name role department position avatarUrl")
+      .lean();
 
     const sanitizedUsers = (Array.isArray(users) ? users : [])
       .map((user) => ({
@@ -384,6 +386,14 @@ const getUsers = async (req, res) => {
         firstName: String(user.firstName || "").trim(),
         lastName: String(user.lastName || "").trim(),
         name: getDisplayName(user),
+        role: String(user.role || "").trim(),
+        position: String(user.position || "").trim(),
+        avatarUrl: String(user.avatarUrl || "").trim(),
+        department: Array.isArray(user.department)
+          ? user.department.map((dept) => String(dept || "").trim()).filter(Boolean)
+          : user.department
+            ? [String(user.department || "").trim()].filter(Boolean)
+            : [],
       }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 

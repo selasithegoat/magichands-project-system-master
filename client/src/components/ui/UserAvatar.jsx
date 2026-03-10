@@ -15,6 +15,7 @@ const getInitials = (name) => {
 
 const UserAvatar = ({
   name = "",
+  src = "",
   width = "24px",
   height = "24px",
   backgroundColor = "#fbbf24",
@@ -25,6 +26,7 @@ const UserAvatar = ({
   const size = Math.min(widthNum, heightNum);
   const fontSize = Math.max(10, Math.round(size * 0.45));
   const initials = getInitials(name);
+  const imageSrc = typeof src === "string" ? src.trim() : "";
 
   return (
     <div
@@ -43,11 +45,25 @@ const UserAvatar = ({
         textTransform: "uppercase",
         lineHeight: 1,
         flexShrink: 0,
+        overflow: "hidden",
       }}
       aria-label={name || "User"}
       title={name || "User"}
     >
-      {initials}
+      {imageSrc ? (
+        <img
+          src={imageSrc}
+          alt={name || "User"}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : (
+        initials
+      )}
     </div>
   );
 };

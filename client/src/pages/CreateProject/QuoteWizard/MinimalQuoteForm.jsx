@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
 import TrashIcon from "../../../components/icons/TrashIcon";
 import FolderIcon from "../../../components/icons/FolderIcon";
+import PersonIcon from "../../../components/icons/PersonIcon";
+import MailIcon from "../../../components/icons/MailIcon";
+import PhoneIcon from "../../../components/icons/PhoneIcon";
+import UploadIcon from "../../../components/icons/UploadIcon";
 import Input from "../../../components/ui/Input";
 import Select from "../../../components/ui/Select";
 import UserAvatar from "../../../components/ui/UserAvatar";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
 import ClockIcon from "../../../components/icons/ClockIcon";
-import FolderIconStd from "../../../components/icons/FolderIcon"; // Renamed to avoid collision if any
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 import "./MinimalQuoteForm.css";
 
@@ -31,6 +34,18 @@ const normalizeTimeForInput = (value) => {
   }
 
   return "";
+};
+
+const formatFileSize = (bytes) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(size) / Math.log(1024)),
+  );
+  const value = size / 1024 ** exponent;
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 };
 
 const MinimalQuoteForm = () => {
@@ -120,9 +135,22 @@ const MinimalQuoteForm = () => {
           const data = await res.json();
           const formatted = data.map((u) => {
             const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+            const departments = Array.isArray(u.department)
+              ? u.department.filter(Boolean)
+              : u.department
+                ? [u.department]
+                : [];
+            const primaryDepartment = departments[0] || "";
+            const roleLabel =
+              u.position ||
+              (u.role === "admin" ? "Admin" : "Team Member");
             return {
               value: u._id,
               label: fullName || u.name || "Unnamed User",
+              roleLabel,
+              department: primaryDepartment,
+              avatarUrl: u.avatarUrl || "",
+              role: u.role || "user",
             };
           });
           setLeads(formatted);
@@ -203,6 +231,29 @@ const MinimalQuoteForm = () => {
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
+  const moveItem = (index, direction) => {
+    setFormData((prev) => {
+      const nextItems = [...prev.items];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= nextItems.length) {
+        return prev;
+      }
+      const [moved] = nextItems.splice(index, 1);
+      nextItems.splice(targetIndex, 0, moved);
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const adjustItemQty = (index, delta) => {
+    setFormData((prev) => {
+      const nextItems = [...prev.items];
+      const currentQty = Number(nextItems[index]?.qty || 1);
+      const nextQty = Math.max(1, currentQty + delta);
+      nextItems[index] = { ...nextItems[index], qty: nextQty };
+      return { ...prev, items: nextItems };
+    });
+  };
+
   const triggerToast = (message, type = "success") => {
     setShowToast({ show: true, message, type });
     setIsToastFading(false);
@@ -214,6 +265,45 @@ const MinimalQuoteForm = () => {
       }, 500);
     }, 4500);
   };
+
+  const renderLeadOption = (option) => (
+    <div className="lead-option">
+      <span
+        className={`lead-status ${option.role === "admin" ? "admin" : "staff"}`}
+      />
+      <UserAvatar
+        name={option.label}
+        src={option.avatarUrl}
+        width="34px"
+        height="34px"
+      />
+      <div className="lead-meta">
+        <span className="lead-name">{option.label}</span>
+        <span className="lead-role">
+          {option.roleLabel}
+          {option.department ? ` - ${option.department}` : ""}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderLeadValue = (option) => (
+    <div className="lead-value">
+      <UserAvatar
+        name={option.label}
+        src={option.avatarUrl}
+        width="30px"
+        height="30px"
+      />
+      <div className="lead-meta">
+        <span className="lead-name">{option.label}</span>
+        <span className="lead-role">
+          {option.roleLabel}
+          {option.department ? ` - ${option.department}` : ""}
+        </span>
+      </div>
+    </div>
+  );
 
   const removeFile = (indexToRemove) => {
     setSelectedFiles((prev) =>
@@ -351,16 +441,35 @@ const MinimalQuoteForm = () => {
         </div>
       )}
       <div className="page-header">
-        <h1>{editingId ? "Edit Reopened Quote" : "Create New Quote"}</h1>
-        <p className="subtitle">Front Desk entry for new quote requests</p>
+        <div className="page-header-brand">
+          <img
+            src="/mhlogo.png"
+            alt="Magic Hands"
+            className="page-logo"
+            draggable="false"
+          />
+          <div>
+            <h1>{editingId ? "Edit Reopened Quote" : "Create New Quote"}</h1>
+            <p className="subtitle">Front Desk entry for new quote requests</p>
+          </div>
+        </div>
       </div>
 
       <div className="minimal-quote-form-card">
         <form onSubmit={handleSubmit}>
-          {/* Basic Info */}
-          <div className="minimal-quote-form-section">
-            <h3 className="section-subtitle">Basic Information</h3>
-            <div className="minimal-quote-grid">
+          <div className="quote-meta-card">
+            <div className="quote-meta-head">
+              <div>
+                <span className="quote-meta-eyebrow">Quote Snapshot</span>
+                <h2 className="quote-meta-title">
+                  {formData.projectName || "Quote Request"}
+                </h2>
+                <p className="quote-meta-subtitle">
+                  Capture the core identifiers before filling the details.
+                </p>
+              </div>
+            </div>
+            <div className="quote-meta-grid">
               <Input
                 label="Quote Number"
                 value={formData.quoteNumber}
@@ -369,110 +478,9 @@ const MinimalQuoteForm = () => {
                     target: { name: "quoteNumber", value: e.target.value },
                   })
                 }
+                icon={<span className="text-icon">#</span>}
                 required
               />
-
-              <Select
-                label="Assigned Lead"
-                options={leads}
-                value={leads.find((l) => l.value === formData.projectLeadId)}
-                onChange={(option) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    projectLeadId: option.value,
-                    assistantLeadId:
-                      option.value === prev.assistantLeadId
-                        ? ""
-                        : prev.assistantLeadId,
-                  }))
-                }
-                placeholder="Select Lead"
-                renderValue={(option) => (
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span>{option.label}</span>
-                  </div>
-                )}
-                renderOption={(option) => (
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span>{option.label}</span>
-                  </div>
-                )}
-              />
-
-              <Select
-                label="Assistant Lead (Optional)"
-                options={leads.filter(
-                  (l) => l.value !== formData.projectLeadId,
-                )}
-                value={leads.find((l) => l.value === formData.assistantLeadId)}
-                onChange={(option) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    assistantLeadId: option.value,
-                  }))
-                }
-                placeholder="Select Assistant"
-                renderValue={(option) => (
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span>{option.label}</span>
-                  </div>
-                )}
-                renderOption={(option) => (
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span>{option.label}</span>
-                  </div>
-                )}
-              />
-            </div>
-
-            <div className="minimal-quote-grid">
-              <Input
-                label="Project / Item Name"
-                placeholder="e.g. Annual Report Print"
-                value={formData.projectName}
-                onChange={(e) =>
-                  handleChange({
-                    target: { name: "projectName", value: e.target.value },
-                  })
-                }
-                icon={<FolderIconStd />}
-              />
-
-              <Input
-                label="Client Name"
-                placeholder="e.g. MagicHands Corp"
-                value={formData.clientName}
-                onChange={(e) =>
-                  handleChange({
-                    target: { name: "clientName", value: e.target.value },
-                  })
-                }
-              />
-
-              <Input
-                label="Client Email"
-                placeholder="e.g. contact@client.com"
-                value={formData.clientEmail}
-                onChange={(e) =>
-                  handleChange({
-                    target: { name: "clientEmail", value: e.target.value },
-                  })
-                }
-              />
-
-              <Input
-                label="Client Phone"
-                placeholder="e.g. +1234567890"
-                value={formData.clientPhone}
-                onChange={(e) =>
-                  handleChange({
-                    target: { name: "clientPhone", value: e.target.value },
-                  })
-                }
-              />
-            </div>
-
-            <div className="minimal-quote-grid">
               <Input
                 type="date"
                 label="Requested Completion Date"
@@ -495,6 +503,100 @@ const MinimalQuoteForm = () => {
                 }
                 icon={<ClockIcon />}
                 required
+              />
+            </div>
+          </div>
+
+          {/* Basic Info */}
+          <div className="minimal-quote-form-section">
+            <h3 className="section-subtitle">Leadership & Contact</h3>
+            <div className="minimal-quote-grid">
+              <Select
+                label="Assigned Lead"
+                options={leads}
+                value={leads.find((l) => l.value === formData.projectLeadId)}
+                onChange={(option) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    projectLeadId: option.value,
+                    assistantLeadId:
+                      option.value === prev.assistantLeadId
+                        ? ""
+                        : prev.assistantLeadId,
+                  }))
+                }
+                placeholder="Select Lead"
+                renderValue={renderLeadValue}
+                renderOption={renderLeadOption}
+              />
+
+              <Select
+                label="Assistant Lead (Optional)"
+                options={leads.filter(
+                  (l) => l.value !== formData.projectLeadId,
+                )}
+                value={leads.find((l) => l.value === formData.assistantLeadId)}
+                onChange={(option) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    assistantLeadId: option.value,
+                  }))
+                }
+                placeholder="Select Assistant"
+                renderValue={renderLeadValue}
+                renderOption={renderLeadOption}
+              />
+            </div>
+
+            <div className="minimal-quote-grid">
+              <Input
+                label="Project / Item Name"
+                placeholder="e.g. Annual Report Print"
+                value={formData.projectName}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "projectName", value: e.target.value },
+                  })
+                }
+                icon={<FolderIcon />}
+              />
+            </div>
+
+            <div className="contact-grid">
+              <Input
+                label="Client Name"
+                placeholder="e.g. MagicHands Corp"
+                value={formData.clientName}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "clientName", value: e.target.value },
+                  })
+                }
+                icon={<PersonIcon />}
+              />
+
+              <Input
+                label="Client Email"
+                placeholder="e.g. contact@client.com"
+                value={formData.clientEmail}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "clientEmail", value: e.target.value },
+                  })
+                }
+                icon={<MailIcon />}
+              />
+
+              <Input
+                label="Client Phone"
+                placeholder="e.g. +1234567890"
+                value={formData.clientPhone}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "clientPhone", value: e.target.value },
+                  })
+                }
+                icon={<PhoneIcon />}
               />
             </div>
 
@@ -526,44 +628,93 @@ const MinimalQuoteForm = () => {
             <h3 className="section-subtitle">Order Items</h3>
             <div className="minimal-quote-items-container">
               {formData.items.map((item, index) => (
-                <div key={index} className="minimal-quote-item-row">
-                  <div className="item-field description" style={{ flex: 3 }}>
-                    <Input
-                      placeholder="Description"
-                      value={item.description}
-                      onChange={(e) =>
-                        updateItem(index, "description", e.target.value)
-                      }
-                    />
-                  </div>{" "}
-                  <br />
-                  <div className="item-field details" style={{ flex: 2 }}>
-                    <Input
-                      placeholder="Details (Optional)"
-                      value={item.breakdown}
-                      onChange={(e) =>
-                        updateItem(index, "breakdown", e.target.value)
-                      }
-                    />
+                <div key={index} className="item-card">
+                  <div className="item-card-header">
+                    <div className="item-card-title">
+                      <span className="item-grip" aria-hidden="true" />
+                      <span className="item-index">Item {index + 1}</span>
+                    </div>
+                    <div className="item-card-actions">
+                      <button
+                        type="button"
+                        className="item-move-btn"
+                        onClick={() => moveItem(index, -1)}
+                        disabled={index === 0}
+                        title="Move up"
+                      >
+                        <span className="arrow up" />
+                      </button>
+                      <button
+                        type="button"
+                        className="item-move-btn"
+                        onClick={() => moveItem(index, 1)}
+                        disabled={index === formData.items.length - 1}
+                        title="Move down"
+                      >
+                        <span className="arrow down" />
+                      </button>
+                      {formData.items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="minimal-quote-remove-btn"
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="item-field qty" style={{ flex: "0 0 100px" }}>
-                    <Input
-                      type="number"
-                      placeholder="Qty"
-                      value={item.qty}
-                      onChange={(e) => updateItem(index, "qty", e.target.value)}
-                      min="1"
-                    />
+                  <div className="item-card-body">
+                    <div className="item-input-group main">
+                      <label>Description</label>
+                      <Input
+                        placeholder="Description"
+                        value={item.description}
+                        onChange={(e) =>
+                          updateItem(index, "description", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="item-input-group details">
+                      <label>Details (Optional)</label>
+                      <Input
+                        placeholder="Details (Optional)"
+                        value={item.breakdown}
+                        onChange={(e) =>
+                          updateItem(index, "breakdown", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="item-input-group qty">
+                      <label>Quantity</label>
+                      <div className="qty-stepper">
+                        <button
+                          type="button"
+                          onClick={() => adjustItemQty(index, -1)}
+                          aria-label="Decrease quantity"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          placeholder="Qty"
+                          value={item.qty}
+                          onChange={(e) =>
+                            updateItem(index, "qty", e.target.value)
+                          }
+                          min="1"
+                          className="form-input"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => adjustItemQty(index, 1)}
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  {formData.items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="minimal-quote-remove-btn"
-                    >
-                      <TrashIcon />
-                    </button>
-                  )}
                 </div>
               ))}
               <button
@@ -632,7 +783,11 @@ const MinimalQuoteForm = () => {
 
           {/* Reference Materials */}
           <div className="minimal-quote-form-section">
-            <h3 className="section-subtitle">Reference Materials</h3>
+            <h3 className="section-subtitle">Reference Lab</h3>
+            <p className="section-hint">
+              Add artwork, briefs, images, or production references for this
+              quote.
+            </p>
             <input
               type="file"
               multiple
@@ -651,30 +806,35 @@ const MinimalQuoteForm = () => {
               !existingSampleImage &&
               existingAttachments.length === 0 && (
                 <div
-                  className="minimal-quote-file-dropzone"
+                  className="reference-dropzone"
                   onClick={() =>
                     document.getElementById("quote-attachments").click()
                   }
                   style={{ cursor: "pointer" }}
                 >
-                  <FolderIcon />
-                  <p>Click to upload reference files</p>
-                  <span>Any file type (images, PDFs, audio, video)</span>
+                  <div className="dropzone-icon">
+                    <UploadIcon />
+                  </div>
+                  <div>
+                    <p>Drop files here, or click to upload</p>
+                    <span>Images, PDFs, Docs, ZIP, and design files</span>
+                  </div>
                 </div>
               )}
 
             {(selectedFiles.length > 0 ||
               existingSampleImage ||
               existingAttachments.length > 0) && (
-              <div className="minimal-quote-files-grid">
+              <div className="reference-files-grid">
                 {/* Existing Sample Image */}
                 {existingSampleImage && (
-                  <div className="minimal-quote-file-tile existing">
+                  <div className="reference-file-tile existing">
                     <div className="file-icon">
                       <img src={existingSampleImage} alt="existing sample" />
                     </div>
                     <div className="file-info" title="Sample Image (Original)">
-                      Sample Image
+                      <span className="file-name">Sample Image</span>
+                      <span className="file-size">Original</span>
                     </div>
                     <button
                       type="button"
@@ -690,7 +850,7 @@ const MinimalQuoteForm = () => {
                 {existingAttachments.map((path, idx) => (
                   <div
                     key={`exist-${idx}`}
-                    className="minimal-quote-file-tile existing"
+                    className="reference-file-tile existing"
                   >
                     <div className="file-icon">
                       {path.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
@@ -700,7 +860,8 @@ const MinimalQuoteForm = () => {
                       )}
                     </div>
                     <div className="file-info" title={path.split("/").pop()}>
-                      {path.split("/").pop()}
+                      <span className="file-name">{path.split("/").pop()}</span>
+                      <span className="file-size">Saved</span>
                     </div>
                     <button
                       type="button"
@@ -714,7 +875,7 @@ const MinimalQuoteForm = () => {
 
                 {/* New Files */}
                 {selectedFiles.map((file, idx) => (
-                  <div key={idx} className="minimal-quote-file-tile">
+                  <div key={idx} className="reference-file-tile">
                     <div className="file-icon">
                       {file.type.startsWith("image/") ? (
                         <img src={URL.createObjectURL(file)} alt="preview" />
@@ -723,7 +884,10 @@ const MinimalQuoteForm = () => {
                       )}
                     </div>
                     <div className="file-info" title={file.name}>
-                      {file.name}
+                      <span className="file-name">{file.name}</span>
+                      <span className="file-size">
+                        {formatFileSize(file.size)}
+                      </span>
                     </div>
                     <button
                       type="button"
@@ -735,7 +899,7 @@ const MinimalQuoteForm = () => {
                   </div>
                 ))}
                 <div
-                  className="minimal-quote-file-add-tile"
+                  className="reference-file-add-tile"
                   onClick={() =>
                     document.getElementById("quote-attachments").click()
                   }

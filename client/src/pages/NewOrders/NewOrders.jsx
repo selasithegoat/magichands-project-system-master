@@ -2,7 +2,16 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
+import CalendarIcon from "../../components/icons/CalendarIcon";
+import ClockIcon from "../../components/icons/ClockIcon";
+import PersonIcon from "../../components/icons/PersonIcon";
+import LocationIcon from "../../components/icons/LocationIcon";
+import UploadIcon from "../../components/icons/UploadIcon";
+import PackageIcon from "../../components/icons/PackageIcon";
+import MailIcon from "../../components/icons/MailIcon";
+import PhoneIcon from "../../components/icons/PhoneIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
+import Select from "../../components/ui/Select";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import "./NewOrders.css";
 
@@ -12,6 +21,18 @@ const REVISION_LOCKED_STATUSES = new Set([
   "Feedback Completed",
   "Finished",
 ]);
+
+const formatFileSize = (bytes) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(size) / Math.log(1024)),
+  );
+  const value = size / 1024 ** exponent;
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+};
 
 const NewOrders = () => {
   const location = useLocation();
@@ -82,9 +103,22 @@ const NewOrders = () => {
           const data = await res.json();
           const formatted = data.map((u) => {
             const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+            const departments = Array.isArray(u.department)
+              ? u.department.filter(Boolean)
+              : u.department
+                ? [u.department]
+                : [];
+            const primaryDepartment = departments[0] || "";
+            const roleLabel =
+              u.position ||
+              (u.role === "admin" ? "Admin" : "Team Member");
             return {
               value: u._id,
               label: fullName || u.name || "Unnamed User",
+              roleLabel,
+              department: primaryDepartment,
+              avatarUrl: u.avatarUrl || "",
+              role: u.role || "user",
             };
           });
           setLeads(formatted);
@@ -128,6 +162,45 @@ const NewOrders = () => {
       }, 500);
     }, 4500);
   };
+
+  const renderLeadOption = (option) => (
+    <div className="lead-option">
+      <span
+        className={`lead-status ${option.role === "admin" ? "admin" : "staff"}`}
+      />
+      <UserAvatar
+        name={option.label}
+        src={option.avatarUrl}
+        width="34px"
+        height="34px"
+      />
+      <div className="lead-meta">
+        <span className="lead-name">{option.label}</span>
+        <span className="lead-role">
+          {option.roleLabel}
+          {option.department ? ` - ${option.department}` : ""}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderLeadValue = (option) => (
+    <div className="lead-value">
+      <UserAvatar
+        name={option.label}
+        src={option.avatarUrl}
+        width="30px"
+        height="30px"
+      />
+      <div className="lead-meta">
+        <span className="lead-name">{option.label}</span>
+        <span className="lead-role">
+          {option.roleLabel}
+          {option.department ? ` - ${option.department}` : ""}
+        </span>
+      </div>
+    </div>
+  );
 
   const toDateTimeLocal = (value) => {
     if (!value) return "";
@@ -261,6 +334,29 @@ const NewOrders = () => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
     setFormData({ ...formData, items: newItems });
+  };
+
+  const moveItem = (index, direction) => {
+    setFormData((prev) => {
+      const nextItems = [...prev.items];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= nextItems.length) {
+        return prev;
+      }
+      const [moved] = nextItems.splice(index, 1);
+      nextItems.splice(targetIndex, 0, moved);
+      return { ...prev, items: nextItems };
+    });
+  };
+
+  const adjustItemQty = (index, delta) => {
+    setFormData((prev) => {
+      const nextItems = [...prev.items];
+      const currentQty = Number(nextItems[index]?.qty || 1);
+      const nextQty = Math.max(1, currentQty + delta);
+      nextItems[index] = { ...nextItems[index], qty: nextQty };
+      return { ...prev, items: nextItems };
+    });
   };
 
   const removeFile = (index) => {
@@ -442,26 +538,36 @@ const NewOrders = () => {
       )}
 
       <div className="page-header">
-        <h1>
-          {editingId
-            ? isRevisionMode
-              ? "Order Revision"
-              : "Edit Reopened Order"
-            : "Create New Order"}
-        </h1>
-        <p className="subtitle">
-          {editingId
-            ? "Update project information with the complete order form."
-            : "Fill in the details for the "}
-          {!editingId && (
-            <>
-              <span style={{ color: isCorporate ? "#42a165" : "inherit" }}>
-                {formData.projectType}
-              </span>{" "}
-              job
-            </>
-          )}
-        </p>
+        <div className="page-header-brand">
+          <img
+            src="/mhlogo.png"
+            alt="Magic Hands"
+            className="page-logo"
+            draggable="false"
+          />
+          <div>
+            <h1>
+              {editingId
+                ? isRevisionMode
+                  ? "Order Revision"
+                  : "Edit Reopened Order"
+                : "Create New Order"}
+            </h1>
+            <p className="subtitle">
+              {editingId
+                ? "Update project information with the complete order form."
+                : "Fill in the details for the "}
+              {!editingId && (
+                <>
+                  <span style={{ color: isCorporate ? "#42a165" : "inherit" }}>
+                    {formData.projectType}
+                  </span>{" "}
+                  job
+                </>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="form-card-container">
@@ -495,12 +601,38 @@ const NewOrders = () => {
 
         <div className="form-card">
           <form onSubmit={handleSubmit}>
-            <div className="form-section">
-              <h2 className="section-title">Order Information</h2>
-              <div className="form-row">
-                <div className="form-group">
+            <div className="order-meta-card">
+              <div className="order-meta-head">
+                <div>
+                  <span className="order-meta-eyebrow">Order Snapshot</span>
+                  <h2 className="order-meta-title">
+                    {formData.projectName || "New Order"}
+                  </h2>
+                  <p className="order-meta-subtitle">
+                    Confirm the essentials before assigning the project lead.
+                  </p>
+                </div>
+                <div className="order-meta-badges">
+                  <span
+                    className={`order-meta-pill ${
+                      isEmergency ? "urgent" : ""
+                    }`}
+                  >
+                    {formData.projectType}
+                  </span>
+                  <span
+                    className={`order-meta-pill ${
+                      isCorporate ? "corporate" : ""
+                    }`}
+                  >
+                    {formData.priority}
+                  </span>
+                </div>
+              </div>
+              <div className="order-meta-grid">
+                <div className="order-meta-field">
                   <label htmlFor="orderNumber">Order Number</label>
-                  <div className="input-wrapper">
+                  <div className="input-wrapper meta-input">
                     <input
                       type="text"
                       id="orderNumber"
@@ -521,67 +653,78 @@ const NewOrders = () => {
                   </datalist>
                   <small className="field-help-text">
                     {canEditOrderNumber
-                      ? "Use an existing order number to create another project under the same order."
+                      ? "Use an existing order number to group projects under the same order."
                       : "Only Front Desk and Admin can change order numbers."}
                   </small>
                 </div>
-                <div className="form-group">
+                <div className="order-meta-field">
                   <label htmlFor="orderDate">Date/Time Placed</label>
-                  <input
-                    type="datetime-local"
-                    id="orderDate"
-                    name="orderDate"
-                    value={formData.orderDate}
-                    onChange={handleChange}
-                    className="form-input"
-                    required
-                  />
+                  <div className="input-wrapper meta-input">
+                    <input
+                      type="datetime-local"
+                      id="orderDate"
+                      name="orderDate"
+                      value={formData.orderDate}
+                      onChange={handleChange}
+                      className="form-input"
+                      required
+                    />
+                    <span className="input-icon">
+                      <CalendarIcon />
+                    </span>
+                  </div>
                 </div>
               </div>
+            </div>
+
+            <div className="form-section">
+              <h2 className="section-title">Order Leadership</h2>
               <div className="form-row">
                 <div className="form-group">
-                  <label htmlFor="projectLeadId">
-                    Project Lead <span style={{ color: "red" }}>*</span>
-                  </label>
-                  <select
-                    id="projectLeadId"
-                    name="projectLeadId"
-                    value={formData.projectLeadId}
-                    onChange={handleChange}
-                    className="form-input"
-                    required
-                  >
-                    <option value="">Select a Project Lead</option>
-                    {leads.map((lead) => (
-                      <option key={lead.value} value={lead.value}>
-                        {lead.label}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    label={
+                      <>
+                        Project Lead <span style={{ color: "red" }}>*</span>
+                      </>
+                    }
+                    options={leads}
+                    value={leads.find(
+                      (lead) => lead.value === formData.projectLeadId,
+                    )}
+                    onChange={(option) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        projectLeadId: option?.value || "",
+                        assistantLeadId:
+                          option?.value === prev.assistantLeadId
+                            ? ""
+                            : prev.assistantLeadId,
+                      }))
+                    }
+                    placeholder="Select a Project Lead"
+                    renderOption={renderLeadOption}
+                    renderValue={renderLeadValue}
+                  />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="assistantLeadId">
-                    Assistant Lead{" "}
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      (Optional)
-                    </span>
-                  </label>
-                  <select
-                    id="assistantLeadId"
-                    name="assistantLeadId"
-                    value={formData.assistantLeadId}
-                    onChange={handleChange}
-                    className="form-input"
-                  >
-                    <option value="">Select an Assistant Lead</option>
-                    {leads
-                      .filter((lead) => lead.value !== formData.projectLeadId)
-                      .map((lead) => (
-                        <option key={lead.value} value={lead.value}>
-                          {lead.label}
-                        </option>
-                      ))}
-                  </select>
+                  <Select
+                    label="Assistant Lead (Optional)"
+                    options={leads.filter(
+                      (lead) => lead.value !== formData.projectLeadId,
+                    )}
+                    value={leads.find(
+                      (lead) => lead.value === formData.assistantLeadId,
+                    )}
+                    onChange={(option) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        assistantLeadId: option?.value || "",
+                      }))
+                    }
+                    placeholder="Select an Assistant Lead"
+                    renderOption={renderLeadOption}
+                    renderValue={renderLeadValue}
+                  />
                 </div>
               </div>
             </div>
@@ -590,44 +733,62 @@ const NewOrders = () => {
 
             <div className="form-section">
               <h2 className="section-title">Client & Project Details</h2>
-              <div className="form-row">
+              <div className="contact-grid">
                 <div className="form-group">
                   <label htmlFor="clientName">Client Name</label>
-                  <input
-                    type="text"
-                    id="clientName"
-                    name="clientName"
-                    value={formData.clientName}
-                    onChange={handleChange}
-                    className="form-input"
-                    placeholder="e.g. Acme Corp"
-                    required
-                  />
+                  <div className="input-wrapper">
+                    <input
+                      type="text"
+                      id="clientName"
+                      name="clientName"
+                      value={formData.clientName}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. Acme Corp"
+                      required
+                    />
+                    <span className="input-icon">
+                      <PersonIcon />
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="clientEmail">Client Email</label>
-                  <input
-                    type="email"
-                    id="clientEmail"
-                    name="clientEmail"
-                    value={formData.clientEmail}
-                    onChange={handleChange}
-                    className="form-input"
-                    placeholder="e.g. contact@client.com"
-                  />
+                  <div className="input-wrapper">
+                    <input
+                      type="email"
+                      id="clientEmail"
+                      name="clientEmail"
+                      value={formData.clientEmail}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. contact@client.com"
+                    />
+                    <span className="input-icon">
+                      <MailIcon />
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="clientPhone">Client Phone</label>
-                  <input
-                    type="tel"
-                    id="clientPhone"
-                    name="clientPhone"
-                    value={formData.clientPhone}
-                    onChange={handleChange}
-                    className="form-input"
-                    placeholder="e.g. +1234567890"
-                  />
+                  <div className="input-wrapper">
+                    <input
+                      type="tel"
+                      id="clientPhone"
+                      name="clientPhone"
+                      value={formData.clientPhone}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. +1234567890"
+                    />
+                    <span className="input-icon">
+                      <PhoneIcon />
+                    </span>
+                  </div>
                 </div>
+              </div>
+
+              <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="contactType">Contact Type</label>
                   <select
@@ -645,56 +806,76 @@ const NewOrders = () => {
                 </div>
                 <div className="form-group">
                   <label htmlFor="packagingType">Type of Packaging</label>
-                  <input
-                    type="text"
-                    id="packagingType"
-                    name="packagingType"
-                    value={formData.packagingType}
-                    onChange={handleChange}
-                    className="form-input"
-                    placeholder="e.g. Carton box with bubble wrap"
-                  />
+                  <div className="input-wrapper">
+                    <input
+                      type="text"
+                      id="packagingType"
+                      name="packagingType"
+                      value={formData.packagingType}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. Carton box with bubble wrap"
+                    />
+                    <span className="input-icon">
+                      <PackageIcon />
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="deliveryLocation">Delivery Location</label>
-                  <input
-                    type="text"
-                    id="deliveryLocation"
-                    name="deliveryLocation"
-                    value={formData.deliveryLocation}
-                    onChange={handleChange}
-                    className="form-input"
-                    placeholder="e.g. 123 Main St, City"
-                    required
-                  />
+                  <div className="input-wrapper">
+                    <input
+                      type="text"
+                      id="deliveryLocation"
+                      name="deliveryLocation"
+                      value={formData.deliveryLocation}
+                      onChange={handleChange}
+                      className="form-input"
+                      placeholder="e.g. 123 Main St, City"
+                      required
+                    />
+                    <span className="input-icon">
+                      <LocationIcon />
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="deliveryDate">
                     Delivery Date / Time (Optional)
                   </label>
-                  <input
-                    type="datetime-local"
-                    id="deliveryDate"
-                    name="deliveryDate"
-                    value={formData.deliveryDate}
-                    onChange={handleChange}
-                    className="form-input"
-                  />
+                  <div className="input-wrapper">
+                    <input
+                      type="datetime-local"
+                      id="deliveryDate"
+                      name="deliveryDate"
+                      value={formData.deliveryDate}
+                      onChange={handleChange}
+                      className="form-input"
+                    />
+                    <span className="input-icon">
+                      <ClockIcon />
+                    </span>
+                  </div>
                 </div>
               </div>
 
               <div className="form-group">
                 <label htmlFor="projectName">Order / Project Name</label>
-                <input
-                  type="text"
-                  id="projectName"
-                  name="projectName"
-                  value={formData.projectName}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="e.g. Annual Conference Banners"
-                  required
-                />
+                <div className="input-wrapper">
+                  <input
+                    type="text"
+                    id="projectName"
+                    name="projectName"
+                    value={formData.projectName}
+                    onChange={handleChange}
+                    className="form-input"
+                    placeholder="e.g. Annual Conference Banners"
+                    required
+                  />
+                  <span className="input-icon">
+                    <FolderIcon />
+                  </span>
+                </div>
               </div>
 
               <div className="form-group">
@@ -709,64 +890,57 @@ const NewOrders = () => {
                   rows="2"
                 ></textarea>
               </div>
+            </div>
 
-              {formData.projectType === "Corporate Job" && (
-                <div className="form-group corporate-emergency-group">
-                  <label className="corporate-emergency-control">
-                    <input
-                      type="checkbox"
-                      name="corporateEmergency"
-                      checked={Boolean(formData.corporateEmergency)}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          corporateEmergency: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Mark this Corporate Job as Corporate Emergency</span>
-                  </label>
-                  <small className="field-help-text">
-                    Use this for urgent corporate projects that need emergency
-                    visibility.
-                  </small>
-                </div>
-              )}
+            <div className="divider soft"></div>
 
-              <div className="form-group sample-requirement-group">
-                <label className="sample-requirement-control">
-                  <input
-                    type="checkbox"
-                    name="sampleRequired"
-                    checked={Boolean(formData.sampleRequired)}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        sampleRequired: e.target.checked,
-                      }))
-                    }
-                    disabled={Boolean(editingId)}
-                  />
-                  <span>
-                    Require client sample approval before Production can be
-                    completed
-                  </span>
-                </label>
-                <small className="field-help-text">
-                  Enable when client must approve a production sample before mass
-                  production.
-                </small>
-              </div>
-
-              <div className="form-group">
-                <label>Order Items</label>
-                <div className="items-container">
-                  {formData.items.map((item, index) => (
-                    <div key={index} className="item-row">
+            <div className="form-section order-items-section">
+              <h2 className="section-title">Order Items & Workflow</h2>
+              <div className="items-container">
+                {formData.items.map((item, index) => (
+                  <div key={index} className="item-card">
+                    <div className="item-card-header">
+                      <div className="item-card-title">
+                        <span className="item-grip" aria-hidden="true" />
+                        <span className="item-index">Item {index + 1}</span>
+                      </div>
+                      <div className="item-card-actions">
+                        <button
+                          type="button"
+                          className="item-move-btn"
+                          onClick={() => moveItem(index, -1)}
+                          disabled={index === 0}
+                          title="Move up"
+                        >
+                          <span className="arrow up" />
+                        </button>
+                        <button
+                          type="button"
+                          className="item-move-btn"
+                          onClick={() => moveItem(index, 1)}
+                          disabled={index === formData.items.length - 1}
+                          title="Move down"
+                        >
+                          <span className="arrow down" />
+                        </button>
+                        {formData.items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="remove-item-btn"
+                            title="Remove Item"
+                          >
+                            <TrashIcon width="16" height="16" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="item-card-body">
                       <div className="item-input-group main">
+                        <label>Description</label>
                         <input
                           type="text"
-                          placeholder="Description (e.g. Rollup Banner)"
+                          placeholder="e.g. Rollup Banner"
                           value={item.description}
                           onChange={(e) =>
                             updateItem(index, "description", e.target.value)
@@ -774,11 +948,12 @@ const NewOrders = () => {
                           className="form-input"
                           required
                         />
-                      </div> <br/>
+                      </div>
                       <div className="item-input-group details">
+                        <label>Details (Optional)</label>
                         <input
                           type="text"
-                          placeholder="Details (Optional)"
+                          placeholder="Finish, size, or material details"
                           value={item.breakdown}
                           onChange={(e) =>
                             updateItem(index, "breakdown", e.target.value)
@@ -787,59 +962,126 @@ const NewOrders = () => {
                         />
                       </div>
                       <div className="item-input-group qty">
-                        <input
-                          type="number"
-                          placeholder="Qty"
-                          value={item.qty}
-                          onChange={(e) =>
-                            updateItem(index, "qty", e.target.value)
-                          }
-                          className="form-input"
-                          min="1"
-                          required
-                        />
+                        <label>Quantity</label>
+                        <div className="qty-stepper">
+                          <button
+                            type="button"
+                            onClick={() => adjustItemQty(index, -1)}
+                            aria-label="Decrease quantity"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            value={item.qty}
+                            onChange={(e) =>
+                              updateItem(index, "qty", e.target.value)
+                            }
+                            className="form-input"
+                            min="1"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => adjustItemQty(index, 1)}
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
-                      {formData.items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="remove-item-btn"
-                          title="Remove Item"
-                        >
-                          <TrashIcon width="16" height="16" />
-                        </button>
-                      )}
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={addItem}
-                    className="add-item-link"
-                  >
-                    + Add Another Item
-                  </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="add-item-link"
+                >
+                  + Add Another Item
+                </button>
+              </div>
+
+              <div className="workflow-stack">
+                <div className="workflow-card">
+                  <label className="workflow-control">
+                    <input
+                      type="checkbox"
+                      name="sampleRequired"
+                      checked={Boolean(formData.sampleRequired)}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          sampleRequired: e.target.checked,
+                        }))
+                      }
+                      disabled={Boolean(editingId)}
+                    />
+                    <span>
+                      Require client sample approval before Production can be
+                      completed
+                    </span>
+                  </label>
+                  <small className="field-help-text">
+                    Enable when client must approve a production sample before
+                    mass production.
+                  </small>
                 </div>
+
+                {formData.projectType === "Corporate Job" && (
+                  <div className="workflow-card accent-corporate">
+                    <label className="workflow-control">
+                      <input
+                        type="checkbox"
+                        name="corporateEmergency"
+                        checked={Boolean(formData.corporateEmergency)}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            corporateEmergency: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        Mark this Corporate Job as Corporate Emergency
+                      </span>
+                    </label>
+                    <small className="field-help-text">
+                      Use this for urgent corporate projects that need emergency
+                      visibility.
+                    </small>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="divider"></div>
 
             <div className="form-section">
-              <h2 className="section-title">Reference Materials</h2>
+              <h2 className="section-title">Reference Lab</h2>
+              <p className="section-hint">
+                Add artwork, briefs, images, or production references for this
+                order.
+              </p>
 
               {selectedFiles.length === 0 &&
                 !existingSampleImage &&
                 existingAttachments.length === 0 && (
                   <div
-                    className="minimal-quote-file-dropzone"
+                    className="reference-dropzone"
                     onClick={() =>
                       document.getElementById("new-order-attachments").click()
                     }
                     style={{ cursor: "pointer" }}
                   >
-                    <FolderIcon />
-                    <p>Click to upload reference files</p>
-                    <span>Images, PDFs, Documents</span>
+                    <div className="dropzone-icon">
+                      <UploadIcon />
+                    </div>
+                    <div>
+                      <p>Drop files here, or click to upload</p>
+                      <span>Images, PDFs, Docs, ZIP, and design files</span>
+                    </div>
                   </div>
                 )}
 
@@ -860,18 +1102,16 @@ const NewOrders = () => {
               {(selectedFiles.length > 0 ||
                 existingSampleImage ||
                 existingAttachments.length > 0) && (
-                <div className="minimal-quote-files-grid">
+                <div className="reference-files-grid">
                   {/* Existing Sample Image */}
                   {existingSampleImage && (
-                    <div className="minimal-quote-file-tile existing">
+                    <div className="reference-file-tile existing">
                       <div className="file-icon">
                         <img src={existingSampleImage} alt="existing sample" />
                       </div>
-                      <div
-                        className="file-info"
-                        title="Sample Image (Original)"
-                      >
-                        Sample Image
+                      <div className="file-info" title="Sample Image (Original)">
+                        <span className="file-name">Sample Image</span>
+                        <span className="file-size">Original</span>
                       </div>
                       <button
                         type="button"
@@ -887,7 +1127,7 @@ const NewOrders = () => {
                   {existingAttachments.map((path, idx) => (
                     <div
                       key={`exist-${idx}`}
-                      className="minimal-quote-file-tile existing"
+                      className="reference-file-tile existing"
                     >
                       <div className="file-icon">
                         {path.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
@@ -897,7 +1137,8 @@ const NewOrders = () => {
                         )}
                       </div>
                       <div className="file-info" title={path.split("/").pop()}>
-                        {path.split("/").pop()}
+                        <span className="file-name">{path.split("/").pop()}</span>
+                        <span className="file-size">Saved</span>
                       </div>
                       <button
                         type="button"
@@ -911,7 +1152,7 @@ const NewOrders = () => {
 
                   {/* New Files */}
                   {selectedFiles.map((file, idx) => (
-                    <div key={idx} className="minimal-quote-file-tile">
+                    <div key={idx} className="reference-file-tile">
                       <div className="file-icon">
                         {file.type.startsWith("image/") ? (
                           <img src={URL.createObjectURL(file)} alt="preview" />
@@ -920,7 +1161,10 @@ const NewOrders = () => {
                         )}
                       </div>
                       <div className="file-info" title={file.name}>
-                        {file.name}
+                        <span className="file-name">{file.name}</span>
+                        <span className="file-size">
+                          {formatFileSize(file.size)}
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -932,7 +1176,7 @@ const NewOrders = () => {
                     </div>
                   ))}
                   <div
-                    className="minimal-quote-file-add-tile"
+                    className="reference-file-add-tile"
                     onClick={() =>
                       document.getElementById("new-order-attachments").click()
                     }
