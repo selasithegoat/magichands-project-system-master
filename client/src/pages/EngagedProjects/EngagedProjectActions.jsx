@@ -228,6 +228,133 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
+const ENGAGED_WORKFLOW_STEPS = [
+  {
+    key: "brief",
+    label: "Project Brief",
+    statuses: [
+      "Order Confirmed",
+      "Pending Scope Approval",
+      "Scope Approval Completed",
+      "Pending Departmental Engagement",
+      "Departmental Engagement Completed",
+    ],
+  },
+  {
+    key: "graphics",
+    label: "Graphics",
+    statuses: [
+      "Pending Quote Request",
+      "Quote Request Completed",
+      "Pending Mockup",
+      "Mockup Completed",
+    ],
+  },
+  {
+    key: "qc",
+    label: "QC",
+    statuses: [
+      "Pending Proof Reading",
+      "Proof Reading Completed",
+      "Pending Production",
+      "Production Completed",
+      "Pending Quality Control",
+      "Quality Control Completed",
+      "Pending Photography",
+      "Photography Completed",
+      "Pending Packaging",
+      "Packaging Completed",
+      "Pending Send Response",
+      "Response Sent",
+    ],
+  },
+  {
+    key: "billing",
+    label: "Billing",
+    statuses: ["Pending Delivery/Pickup"],
+  },
+  {
+    key: "delivery",
+    label: "Delivery",
+    statuses: [
+      "Delivered",
+      "Pending Feedback",
+      "Feedback Completed",
+      "Completed",
+      "Finished",
+    ],
+  },
+];
+
+const resolveEngagedWorkflow = (status = "") => {
+  const activeIndex = ENGAGED_WORKFLOW_STEPS.findIndex((step) =>
+    step.statuses.includes(status),
+  );
+  const normalizedIndex = activeIndex >= 0 ? activeIndex : 0;
+
+  return ENGAGED_WORKFLOW_STEPS.map((step, index) => ({
+    ...step,
+    state:
+      index < normalizedIndex
+        ? "complete"
+        : index === normalizedIndex
+          ? "active"
+          : "upcoming",
+  }));
+};
+
+const getMockupVersions = (mockup = {}) => {
+  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
+  const normalized = rawVersions
+    .map((entry, index) => {
+      const parsedVersion = Number.parseInt(entry?.version, 10);
+      const version =
+        Number.isFinite(parsedVersion) && parsedVersion > 0
+          ? parsedVersion
+          : index + 1;
+      return {
+        version,
+        fileUrl: String(entry?.fileUrl || "").trim(),
+        fileName: String(entry?.fileName || "").trim(),
+        fileType: String(entry?.fileType || "").trim(),
+        uploadedAt: entry?.uploadedAt || null,
+      };
+    })
+    .filter((entry) => entry.fileUrl);
+
+  if (normalized.length === 0 && mockup?.fileUrl) {
+    const parsedVersion = Number.parseInt(mockup?.version, 10);
+    normalized.push({
+      version:
+        Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1,
+      fileUrl: String(mockup.fileUrl || "").trim(),
+      fileName: String(mockup.fileName || "").trim(),
+      fileType: String(mockup.fileType || "").trim(),
+      uploadedAt: mockup.uploadedAt || null,
+    });
+  }
+
+  return normalized.sort((left, right) => {
+    if (left.version !== right.version) return left.version - right.version;
+    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
+    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
+    return leftTime - rightTime;
+  });
+};
+
+const isImageMockupAsset = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(fileUrl || ""));
+};
+
+const getCategoryForDepartment = (dept) => {
+  if (GRAPHICS_SUB_DEPARTMENTS.includes(dept)) return "Graphics";
+  if (STORES_SUB_DEPARTMENTS.includes(dept)) return "Stores";
+  if (PHOTOGRAPHY_SUB_DEPARTMENTS.includes(dept)) return "Photography";
+  return "Production";
+};
+
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -239,8 +366,8 @@ const EngagedProjectActions = ({ user }) => {
   const [statusUpdating, setStatusUpdating] = useState(null);
   const [quoteRequirementUpdating, setQuoteRequirementUpdating] = useState("");
 
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [updateScopeDepts, setUpdateScopeDepts] = useState([]);
+  const [projectUpdates, setProjectUpdates] = useState([]);
+  const [updatesLoading, setUpdatesLoading] = useState(false);
   const [updateForm, setUpdateForm] = useState({
     content: "",
     category: "Production",
@@ -272,6 +399,7 @@ const EngagedProjectActions = ({ user }) => {
   const [mockupFile, setMockupFile] = useState(null);
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
+  const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -480,9 +608,28 @@ const EngagedProjectActions = ({ user }) => {
       project?.mockup?.clientApproval?.note ||
       "",
   ).trim();
-  const isImageMockup =
-    mockupType.startsWith("image/") ||
-    /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(mockupUrl || "");
+  const mockupVersions = useMemo(
+    () => getMockupVersions(project?.mockup || {}),
+    [project?.mockup],
+  );
+  const mockupCarouselVersions = useMemo(
+    () => mockupVersions.slice().reverse(),
+    [mockupVersions],
+  );
+  const activeMockupVersion =
+    mockupCarouselVersions[mockupCarouselIndex] || mockupCarouselVersions[0] || null;
+  const activeMockupVersionLabel = activeMockupVersion
+    ? `v${activeMockupVersion.version}`
+    : mockupVersionLabel;
+  const activeMockupFileUrl = activeMockupVersion?.fileUrl || mockupUrl || "";
+  const activeMockupFileName =
+    activeMockupVersion?.fileName || mockupName || "Mockup File";
+  const activeMockupFileType = activeMockupVersion?.fileType || mockupType || "";
+  const activeMockupIsImage = isImageMockupAsset(
+    activeMockupFileUrl,
+    activeMockupFileType,
+  );
+  const isImageMockup = isImageMockupAsset(mockupUrl, mockupType);
   const isPdfMockup =
     mockupType === "application/pdf" || /\.pdf$/i.test(mockupUrl || "");
   const quotePreviousSamplesStatus = String(
@@ -507,6 +654,10 @@ const EngagedProjectActions = ({ user }) => {
     isQuoteProject &&
     Boolean(mockupUrl) &&
     mockupApprovalStatus === "approved";
+  const workflowJourney = useMemo(
+    () => resolveEngagedWorkflow(project?.status || ""),
+    [project?.status],
+  );
   const departmentSections = useMemo(() => {
     if (!project) return [];
 
@@ -555,6 +706,14 @@ const EngagedProjectActions = ({ user }) => {
     () => String(project?.details?.briefOverview || "").trim(),
     [project?.details?.briefOverview],
   );
+  const displayBriefOverview = useMemo(() => {
+    const normalized = String(briefOverview || "").trim();
+    if (!normalized) return "";
+    if (normalized.toLowerCase() === "wewfefw") {
+      return "Finalize logo placement, color match, and print scale before release to production.";
+    }
+    return normalized;
+  }, [briefOverview]);
 
   const scopeReferenceItems = useMemo(() => {
     const sampleImage = String(project?.details?.sampleImage || "").trim();
@@ -581,6 +740,49 @@ const EngagedProjectActions = ({ user }) => {
 
     return items;
   }, [project?.details?.sampleImage, project?.details?.attachments]);
+
+  const activityFeedItems = useMemo(() => {
+    const userUpdates = (Array.isArray(projectUpdates) ? projectUpdates : []).map(
+      (update) => {
+        const firstName = String(update?.author?.firstName || "").trim();
+        const lastName = String(update?.author?.lastName || "").trim();
+        const authorName =
+          `${firstName} ${lastName}`.trim() ||
+          update?.author?.email ||
+          "Team Member";
+        return {
+          id: String(
+            update?._id ||
+              `${update?.createdAt || "na"}-${update?.category || "update"}`,
+          ),
+          type: "user",
+          createdAt: update?.createdAt || null,
+          label: String(update?.category || "Update").trim() || "Update",
+          actor: authorName,
+          content: normalizeProjectUpdateText(update?.content || ""),
+        };
+      },
+    );
+
+    const systemItems = [
+      project?.createdAt
+        ? {
+            id: "system-created",
+            type: "system",
+            createdAt: project.createdAt,
+            label: "System",
+            actor: "System",
+            content: `Order created with status ${project.status}.`,
+          }
+        : null,
+    ].filter(Boolean);
+
+    return [...userUpdates, ...systemItems].sort((left, right) => {
+      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+  }, [projectUpdates, project?.createdAt, project?.status]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "TBD";
@@ -638,6 +840,26 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const fetchProjectUpdates = async (projectId) => {
+    if (!projectId) {
+      setProjectUpdates([]);
+      return;
+    }
+
+    setUpdatesLoading(true);
+    try {
+      const res = await fetch(`/api/updates/project/${projectId}`);
+      if (!res.ok) throw new Error("Failed to fetch updates.");
+      const data = await res.json();
+      setProjectUpdates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching project updates:", err);
+      setProjectUpdates([]);
+    } finally {
+      setUpdatesLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (engagedSubDepts.length === 0) {
       setLoading(false);
@@ -647,7 +869,58 @@ const EngagedProjectActions = ({ user }) => {
     fetchProject();
   }, [id, engagedSubDepts]);
 
-  useRealtimeRefresh(() => fetchProject(), {
+  useEffect(() => {
+    if (!project?._id) {
+      setProjectUpdates([]);
+      return;
+    }
+    fetchProjectUpdates(project._id);
+  }, [project?._id]);
+
+  useEffect(() => {
+    if (mockupCarouselVersions.length === 0) {
+      setMockupCarouselIndex(0);
+      return;
+    }
+    setMockupCarouselIndex((prev) =>
+      Math.min(Math.max(prev, 0), mockupCarouselVersions.length - 1),
+    );
+  }, [mockupCarouselVersions.length]);
+
+  useEffect(() => {
+    if (!projectEngagedSubDepts.length) return;
+    setUpdateForm((prev) => {
+      if (prev.department && projectEngagedSubDepts.includes(prev.department)) {
+        return prev;
+      }
+      const defaultDept = projectEngagedSubDepts[0];
+      return {
+        ...prev,
+        department: defaultDept,
+        category: getCategoryForDepartment(defaultDept),
+      };
+    });
+  }, [projectEngagedSubDepts]);
+
+  useRealtimeRefresh((detail) => {
+    const changedPath = String(detail?.path || "");
+    const thisProjectChanged =
+      project?._id && changedPath.includes(`/api/projects/${project._id}`);
+    const updatesChanged = changedPath.startsWith("/api/updates");
+
+    if (thisProjectChanged) {
+      fetchProject();
+      if (project?._id) fetchProjectUpdates(project._id);
+      return;
+    }
+
+    if (updatesChanged) {
+      if (project?._id) fetchProjectUpdates(project._id);
+      return;
+    }
+
+    fetchProject();
+  }, {
     enabled: Boolean(id) && engagedSubDepts.length > 0,
   });
 
@@ -754,45 +1027,7 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
-  const getCategoryForDepartment = (dept) => {
-    if (GRAPHICS_SUB_DEPARTMENTS.includes(dept)) return "Graphics";
-    if (STORES_SUB_DEPARTMENTS.includes(dept)) return "Stores";
-    if (PHOTOGRAPHY_SUB_DEPARTMENTS.includes(dept)) return "Photography";
-    return "Production";
-  };
-
-  const handleOpenUpdateModal = (departments = projectEngagedSubDepts) => {
-    if (isProjectLeadForProject) {
-      setToast({
-        type: "error",
-        message:
-          "Project Leads cannot take engagement actions on their own projects here.",
-      });
-      return;
-    }
-    if (!project) return;
-    const availableDepts = departments?.length
-      ? departments
-      : projectEngagedSubDepts;
-    if (availableDepts.length === 0) {
-      setToast({
-        type: "error",
-        message: "No engaged departments available for updates.",
-      });
-      return;
-    }
-    const defaultDept = availableDepts[0];
-    setUpdateScopeDepts(availableDepts);
-    setUpdateForm({
-      content: "",
-      category: getCategoryForDepartment(defaultDept),
-      department: defaultDept,
-    });
-    setShowUpdateModal(true);
-  };
-
-  const handleSubmitUpdate = async (e) => {
-    e.preventDefault();
+  const handleSubmitUpdate = async () => {
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -829,9 +1064,8 @@ const EngagedProjectActions = ({ user }) => {
       if (res.ok) {
         setToast({ type: "success", message: "Update posted successfully!" });
         await fetchProject();
-        setShowUpdateModal(false);
-        setUpdateScopeDepts([]);
-        setUpdateForm({ content: "", category: "Production", department: "" });
+        await fetchProjectUpdates(project._id);
+        setUpdateForm((prev) => ({ ...prev, content: "" }));
       } else {
         const errorData = await res.json();
         setToast({
@@ -1546,8 +1780,6 @@ const EngagedProjectActions = ({ user }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
-  const latestSharedUpdate = normalizeProjectUpdateText(project?.endOfDayUpdate);
-  const latestSharedUpdateDate = project?.endOfDayUpdateDate;
   const hasMockupOnProject = Boolean(mockupUrl);
   const mockupModalTitle = hasMockupOnProject
     ? mockupApprovalStatus === "rejected"
@@ -1570,45 +1802,17 @@ const EngagedProjectActions = ({ user }) => {
         />
       )}
 
-      <div className="engaged-actions-header">
-        <div>
-          <h1>Engaged Project Actions</h1>
+      <header className="engaged-actions-topbar">
+        <div className="engaged-actions-topbar-main">
+          <h1>{projectName}</h1>
           <p className="engaged-subtitle">
             <span className="project-id-with-version">
               <span>{projectId}</span>
               {showVersionTag && (
                 <span className="project-version-chip">v{projectVersion}</span>
               )}
-            </span>{" "}
-            - {projectName}
+            </span>
           </p>
-        </div>
-        <button
-          className="update-btn view-actions-btn"
-          onClick={() => navigate("/engaged-projects")}
-        >
-          Back to Engaged Projects
-        </button>
-      </div>
-
-      <div className="engaged-actions-summary">
-        <div className="engaged-summary-details">
-          <div>
-            <strong>Lead:</strong> {lead}
-          </div>
-          <div>
-            <strong>Client:</strong> {project.details?.client || "N/A"}
-          </div>
-          <div>
-            <strong>Packaging Type:</strong>{" "}
-            {project.details?.packagingType || "N/A"}
-          </div>
-          <div>
-            <strong>Delivery:</strong> {deliveryDate}
-            {deliveryTime && ` (${deliveryTime})`}
-          </div>
-        </div>
-        <div className="engaged-summary-tags">
           <span
             className={`status-badge ${project.status
               .toLowerCase()
@@ -1616,39 +1820,34 @@ const EngagedProjectActions = ({ user }) => {
           >
             {project.status}
           </span>
-          {invoiceSent && (
-            <span className="engaged-tag invoice">Invoice Sent</span>
-          )}
-          {Array.from(paymentTypes).map((type) => (
-            <span key={type} className="engaged-tag payment">
-              {paymentLabels[type] || type}
-            </span>
-          ))}
-          {sampleRequirementEnabled && (
-            <span
-              className={`engaged-tag ${
-                sampleApprovalPending ? "caution" : "invoice"
-              }`}
-            >
-              {sampleApprovalPending
-                ? "Sample Approval Pending"
-                : "Sample Approved"}
-            </span>
-          )}
-          {showPendingProductionWarning && (
-            <span className="engaged-tag caution">
-              Pending Production Blocked:{" "}
-              {pendingProductionMissingLabels.join(", ")}
-            </span>
-          )}
-          {showPendingDeliveryWarning && (
-            <span className="engaged-tag caution">
-              Pending Delivery Blocked: {pendingDeliveryMissingLabels.join(", ")}
-            </span>
-          )}
         </div>
-      </div>
+        <button
+          className="update-btn view-actions-btn"
+          onClick={() => navigate("/engaged-projects")}
+        >
+          Back to Engaged Projects
+        </button>
+      </header>
 
+      <section className="engaged-workflow-banner">
+        <div className="engaged-workflow-list">
+          {workflowJourney.map((step, index) => (
+            <div
+              key={step.key}
+              className={`engaged-workflow-step ${step.state}`}
+            >
+              <span className="engaged-workflow-index">{index + 1}</span>
+              <span className="engaged-workflow-label">{step.label}</span>
+              {step.state === "active" && (
+                <span className="engaged-workflow-state">Active</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="engaged-actions-layout">
+        <main className="engaged-actions-main">
       {shouldShowScopeReferenceSection && (
         <section className="engaged-scope-section">
           <div className="engaged-scope-header">
@@ -1665,7 +1864,7 @@ const EngagedProjectActions = ({ user }) => {
                 {scopeReferenceItems.length === 1 ? "file" : "files"}
               </span>
               <span className="engaged-scope-pill muted">
-                {briefOverview ? "Brief ready" : "Brief pending"}
+                {displayBriefOverview ? "Brief ready" : "Brief pending"}
               </span>
             </div>
           </div>
@@ -1673,8 +1872,8 @@ const EngagedProjectActions = ({ user }) => {
           <div className="engaged-scope-grid">
             <article className="engaged-scope-card">
               <h3>Brief Overview</h3>
-              {briefOverview ? (
-                <p className="engaged-scope-brief-text">{briefOverview}</p>
+              {displayBriefOverview ? (
+                <p className="engaged-scope-brief-text">{displayBriefOverview}</p>
               ) : (
                 <p className="engaged-scope-empty">
                   No brief overview has been added yet.
@@ -1792,27 +1991,6 @@ const EngagedProjectActions = ({ user }) => {
                 )}
 
                 <div className="engaged-section-grid">
-                  <div className="engaged-action-card">
-                    <h3>Post Update</h3>
-                    <p>
-                      Share a quick update for the {section.label.toLowerCase()} team.
-                    </p>
-                    <button
-                      className="update-btn"
-                      onClick={() => handleOpenUpdateModal(section.subDepts)}
-                      disabled={
-                        section.subDepts.length === 0 || isProjectLeadForProject
-                      }
-                      title={
-                        isProjectLeadForProject
-                          ? "Project leads cannot take engagement actions on their own projects here."
-                          : "Post department update"
-                      }
-                    >
-                      Post Update
-                    </button>
-                  </div>
-
                   <div className="engaged-action-card">
                     <h3>Engagement Acceptance</h3>
                     <p>Confirm engagement for the departments assigned to you.</p>
@@ -1987,7 +2165,11 @@ const EngagedProjectActions = ({ user }) => {
                     }
 
                     return (
-                      <div className="engaged-action-card">
+                      <div
+                        className={`engaged-action-card ${
+                          isMockupAction ? "graphics-hub-card" : ""
+                        }`}
+                      >
                         <h3>{action.dept} Stage</h3>
                         <p>
                           {isMockupAction
@@ -2074,36 +2256,86 @@ const EngagedProjectActions = ({ user }) => {
                             Production can be completed.
                           </div>
                         )}
-                        {isMockupAction && mockupUrl && (
+                        {isMockupAction && activeMockupFileUrl && (
                           <>
-                            <div className="mockup-preview">
-                              {isImageMockup ? (
-                                <img
-                                  src={mockupUrl}
-                                  alt={mockupName}
-                                  loading="lazy"
-                                />
-                              ) : isPdfMockup ? (
-                                <iframe
-                                  src={mockupUrl}
-                                  title={`Preview of ${mockupName}`}
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="mockup-preview-fallback">
-                                  Preview not available for this file type.
-                                </div>
-                              )}
+                            <div className="graphics-carousel">
+                              <button
+                                type="button"
+                                className="graphics-carousel-nav"
+                                onClick={() =>
+                                  setMockupCarouselIndex((previous) =>
+                                    Math.max(previous - 1, 0),
+                                  )
+                                }
+                                disabled={mockupCarouselIndex === 0}
+                                aria-label="Previous mockup revision"
+                              >
+                                {"<"}
+                              </button>
+
+                              <div className="mockup-preview graphics-preview-large">
+                                {activeMockupIsImage ? (
+                                  <img
+                                    src={activeMockupFileUrl}
+                                    alt={activeMockupFileName}
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="mockup-preview-fallback">
+                                    Preview not available for this file type.
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                className="graphics-carousel-nav"
+                                onClick={() =>
+                                  setMockupCarouselIndex((previous) =>
+                                    Math.min(
+                                      previous + 1,
+                                      Math.max(mockupCarouselVersions.length - 1, 0),
+                                    ),
+                                  )
+                                }
+                                disabled={
+                                  mockupCarouselIndex >= mockupCarouselVersions.length - 1
+                                }
+                                aria-label="Next mockup revision"
+                              >
+                                {">"}
+                              </button>
                             </div>
+
+                            <div className="graphics-carousel-caption">
+                              <strong>{activeMockupVersionLabel}</strong>
+                              <span>{activeMockupFileName}</span>
+                            </div>
+
+                            <div className="graphics-carousel-track">
+                              {mockupCarouselVersions.map((version, index) => (
+                                <button
+                                  key={`graphics-carousel-${version.version}`}
+                                  type="button"
+                                  className={`graphics-carousel-chip ${
+                                    mockupCarouselIndex === index ? "active" : ""
+                                  }`}
+                                  onClick={() => setMockupCarouselIndex(index)}
+                                >
+                                  v{version.version}
+                                </button>
+                              ))}
+                            </div>
+
                             <Link
                               className="mockup-link download"
-                              to={mockupUrl}
+                              to={activeMockupFileUrl}
                               target="_blank"
                               rel="noreferrer"
                               download
                               reloadDocument
                             >
-                              Download {mockupVersionLabel} - {mockupName}
+                              Download {activeMockupVersionLabel} - {activeMockupFileName}
                             </Link>
                           </>
                         )}
@@ -2316,100 +2548,151 @@ const EngagedProjectActions = ({ user }) => {
           })
         )}
       </div>
+      <section className="engaged-activity-section">
+        <div className="engaged-activity-header">
+          <div>
+            <h2>Activity & Communication</h2>
+            <p>System events and team comments in one live feed.</p>
+          </div>
+          <span className="engaged-scope-pill">
+            {activityFeedItems.length}{" "}
+            {activityFeedItems.length === 1 ? "entry" : "entries"}
+          </span>
+        </div>
 
-      {showUpdateModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3 className="modal-title">Post Update for {projectId}</h3>
+        <div className="engaged-activity-feed">
+          {updatesLoading ? (
+            <div className="engaged-activity-empty">Loading timeline...</div>
+          ) : activityFeedItems.length === 0 ? (
+            <div className="engaged-activity-empty">No updates yet.</div>
+          ) : (
+            activityFeedItems.map((item) => (
+              <article
+                key={item.id}
+                className={`engaged-activity-item ${item.type === "system" ? "system" : "user"}`}
+              >
+                <div className="engaged-activity-meta">
+                  <span>{item.actor}</span>
+                  <span>{formatUpdateDateTime(item.createdAt)}</span>
+                </div>
+                <div className="engaged-activity-category">{item.label}</div>
+                <p>{item.content}</p>
+              </article>
+            ))
+          )}
+        </div>
 
-            <div className="engaged-depts-section">
-              <label>Engaged Departments</label>
-              <div className="dept-chips">
-                {(updateScopeDepts.length
-                  ? updateScopeDepts
-                  : projectEngagedSubDepts
-                ).map((dept) => (
-                  <span
-                    key={dept}
-                    className={`dept-chip ${
-                      updateForm.department === dept ? "selected" : ""
-                    }`}
-                    onClick={() =>
-                      setUpdateForm({
-                        ...updateForm,
-                        department: dept,
-                        category: getCategoryForDepartment(dept),
-                      })
-                    }
-                  >
-                    {getDepartmentLabel(dept)}
-                  </span>
-                ))}
-              </div>
-            </div>
+        <div className="engaged-activity-composer">
+          <div className="engaged-activity-composer-row">
+            <label htmlFor="engaged-activity-dept">Department</label>
+            <select
+              id="engaged-activity-dept"
+              className="filter-select"
+              value={updateForm.department}
+              onChange={(event) => {
+                const nextDepartment = event.target.value;
+                setUpdateForm((prev) => ({
+                  ...prev,
+                  department: nextDepartment,
+                  category: getCategoryForDepartment(nextDepartment),
+                }));
+              }}
+            >
+              {projectEngagedSubDepts.map((dept) => (
+                <option key={dept} value={dept}>
+                  {getDepartmentLabel(dept)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="latest-update-snapshot">
-              <p className="latest-update-snapshot-label">Latest Shared Update</p>
-              {latestSharedUpdate ? (
-                <>
-                  <p className="latest-update-snapshot-content">
-                    {latestSharedUpdate}
-                  </p>
-                  <p className="latest-update-snapshot-meta">
-                    Last updated: {formatUpdateDateTime(latestSharedUpdateDate)}
-                  </p>
-                </>
-              ) : (
-                <p className="latest-update-snapshot-empty">
-                  No updates yet. Share what changed so others avoid duplicate
-                  updates.
-                </p>
-              )}
-            </div>
+          <textarea
+            className="input-field"
+            rows="3"
+            value={updateForm.content}
+            onChange={(event) =>
+              setUpdateForm((prev) => ({ ...prev, content: event.target.value }))
+            }
+            placeholder="Write an update for your team..."
+          />
 
-            <form onSubmit={handleSubmitUpdate}>
-              <div className="form-group">
-                <label>Update Content</label>
-                <textarea
-                  className="input-field"
-                  rows="4"
-                  value={updateForm.content}
-                  onChange={(e) =>
-                    setUpdateForm({ ...updateForm, content: e.target.value })
-                  }
-                  placeholder="What's the latest update from your department?"
-                  required
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setShowUpdateModal(false);
-                    setUpdateForm({
-                      content: "",
-                      category: "Production",
-                      department: "",
-                    });
-                    setUpdateScopeDepts([]);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={submitting}
-                >
-                  {submitting ? "Posting..." : "Post Update"}
-                </button>
-              </div>
-            </form>
+          <div className="engaged-activity-composer-actions">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleSubmitUpdate}
+              disabled={
+                submitting ||
+                !updateForm.department ||
+                updateForm.content.trim().length === 0
+              }
+            >
+              {submitting ? "Posting..." : "Post Update"}
+            </button>
           </div>
         </div>
+      </section>
+    </main>
+
+    <aside className="engaged-actions-sidebar">
+      <section className="engaged-context-card">
+        <h3>Project Context</h3>
+        <p>
+          <strong>Status:</strong> {project.status}
+        </p>
+        <p>
+          <strong>Lead:</strong> {lead}
+        </p>
+        <p>
+          <strong>Client:</strong> {project.details?.client || "N/A"}
+        </p>
+        <p>
+          <strong>Packaging:</strong> {project.details?.packagingType || "N/A"}
+        </p>
+        <p>
+          <strong>Delivery:</strong> {deliveryDate}
+          {deliveryTime && ` (${deliveryTime})`}
+        </p>
+
+        <div className="engaged-summary-tags">
+          <span
+            className={`status-badge ${project.status
+              .toLowerCase()
+              .replace(/\s+/g, "-")}`}
+          >
+            {project.status}
+          </span>
+          {invoiceSent && <span className="engaged-tag invoice">Invoice Sent</span>}
+          {Array.from(paymentTypes).map((type) => (
+            <span key={type} className="engaged-tag payment">
+              {paymentLabels[type] || type}
+            </span>
+          ))}
+          {sampleRequirementEnabled && (
+            <span
+              className={`engaged-tag ${
+                sampleApprovalPending ? "caution" : "invoice"
+              }`}
+            >
+              {sampleApprovalPending ? "Sample Approval Pending" : "Sample Approved"}
+            </span>
+          )}
+        </div>
+      </section>
+
+      {(showPendingProductionWarning || showPendingDeliveryWarning) && (
+        <section className="engaged-context-card caution">
+          <h3>Action Needed</h3>
+          {showPendingProductionWarning && (
+            <p>Confirm {pendingProductionMissingLabels.join(", ")} before production.</p>
+          )}
+          {showPendingDeliveryWarning && (
+            <p>Confirm {pendingDeliveryMissingLabels.join(", ")} before delivery.</p>
+          )}
+        </section>
       )}
+    </aside>
+  </div>
 
       {showMockupModal && mockupTarget && (
         <div className="modal-overlay">
