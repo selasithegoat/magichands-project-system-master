@@ -20,6 +20,7 @@ const Clients = lazy(() => import("./pages/Clients/Clients"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
+import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import {
   BrowserRouter as Router,
   Routes,
@@ -207,6 +208,7 @@ function App() {
           />
         </Routes>
       </Suspense>
+      {user && <GlobalSmsPrompt user={user} />}
       <Toaster
         position="top-right"
         reverseOrder={false}

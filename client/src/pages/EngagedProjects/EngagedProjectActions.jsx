@@ -406,7 +406,6 @@ const EngagedProjectActions = ({ user }) => {
     : user?.department
       ? [user.department]
       : [];
-
   const hasProductionParent = userDepartments.includes("Production");
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");
@@ -860,6 +859,7 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+
   useEffect(() => {
     if (engagedSubDepts.length === 0) {
       setLoading(false);
@@ -876,6 +876,7 @@ const EngagedProjectActions = ({ user }) => {
     }
     fetchProjectUpdates(project._id);
   }, [project?._id]);
+
 
   useEffect(() => {
     if (mockupCarouselVersions.length === 0) {

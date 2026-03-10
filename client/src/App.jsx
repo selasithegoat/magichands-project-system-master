@@ -4,6 +4,7 @@ import Layout from "./components/layout/Layout";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth load
 import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for Suspense fallback
+import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import {
@@ -606,6 +607,7 @@ function App() {
         />
         </Routes>
       </Suspense>
+      {user && <GlobalSmsPrompt user={user} />}
       <ConfirmDialog
         isOpen={isLogoutDialogOpen}
         title="Confirm Sign Out"

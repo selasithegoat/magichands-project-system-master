@@ -19,6 +19,11 @@ const {
   uploadProjectMockup,
   approveProjectMockup,
   rejectProjectMockup,
+  getPendingSmsPrompts,
+  getProjectSmsPrompts,
+  createProjectSmsPrompt,
+  updateProjectSmsPrompt,
+  sendProjectSmsPrompt,
   addFeedbackToProject,
   deleteFeedbackFromProject,
   addChallengeToProject,
@@ -145,6 +150,7 @@ router.get("/orders", protect, getOrderGroups);
 router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
 router.get("/bottlenecks/stage", protect, getStageBottlenecks);
+router.get("/sms-prompts/pending", protect, getPendingSmsPrompts);
 router.post(
   "/ai/production-risk-suggestions",
   protect,
@@ -199,6 +205,12 @@ router.delete(
   enforceProjectNotOnHold,
   deleteFeedbackFromProject,
 );
+
+// SMS Prompts
+router.get("/:id/sms-prompts", protect, getProjectSmsPrompts);
+router.post("/:id/sms-prompts", protect, createProjectSmsPrompt);
+router.patch("/:id/sms-prompts/:promptId", protect, updateProjectSmsPrompt);
+router.post("/:id/sms-prompts/:promptId/send", protect, sendProjectSmsPrompt);
 
 // Production Risks
 router.post(

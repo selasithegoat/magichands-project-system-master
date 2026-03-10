@@ -3,6 +3,7 @@ const Project = require("../models/Project");
 const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
 const ProjectUpdate = require("../models/ProjectUpdate");
+const SmsPrompt = require("../models/SmsPrompt");
 const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
@@ -26,6 +27,12 @@ const {
   SAMPLE_APPROVED_BY_CLIENT_UPDATE_TEXT,
   normalizeProjectUpdateContent,
 } = require("../utils/projectUpdateText");
+const {
+  resolveProgressPercent,
+  buildStatusSmsMessage,
+  buildFeedbackSmsMessage,
+} = require("../utils/smsPromptService");
+const { sendSms } = require("../utils/arkeselSmsClient");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -102,6 +109,36 @@ const FEEDBACK_COMPLETION_GATE_STATUSES = new Set([
   "Pending Feedback",
   "Delivered",
 ]);
+const SMS_APPRECIATION_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+const SMS_STATUS_STAGE_STATUSES = {
+  start: new Set([
+    "Pending Scope Approval",
+    "Scope Approval Completed",
+    "Pending Departmental Engagement",
+    "Departmental Engagement Completed",
+    "In Progress",
+  ]),
+  mockup: new Set(["Pending Mockup", "Mockup Completed"]),
+  production: new Set(["Pending Production", "Production Completed"]),
+  delivery: new Set([
+    "Photography Completed",
+    "Pending Delivery/Pickup",
+    "Delivered",
+  ]),
+};
+const SMS_DEDUPE_WINDOW_MS_RAW = Number.parseInt(
+  process.env.NOTIFICATION_DEDUPE_WINDOW_MS,
+  10,
+);
+const SMS_DEDUPE_WINDOW_MS = Number.isFinite(SMS_DEDUPE_WINDOW_MS_RAW)
+  ? SMS_DEDUPE_WINDOW_MS_RAW
+  : 20000;
 const REVISION_LOCKED_STATUSES = new Set([
   "Completed",
   "Delivered",
@@ -978,6 +1015,90 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const isFrontDeskUser = (user) =>
+  toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .includes("front desk");
+const canManageSmsForRequest = (req) => {
+  if (!req?.user) return false;
+  const isAdmin = req.user.role === "admin";
+  const requestSource = String(req?.query?.source || "").trim().toLowerCase();
+  if (requestSource === "frontdesk") return isFrontDeskUser(req.user);
+  if (isAdminPortalRequest(req)) return isAdmin;
+  if (isFrontDeskUser(req.user)) return true;
+  if (isEngagedPortalRequest(req)) return false;
+  return false;
+};
+const resolveStatusSmsStage = (status = "") => {
+  const normalized = toText(status);
+  if (!normalized) return "";
+  for (const [stage, statuses] of Object.entries(SMS_STATUS_STAGE_STATUSES)) {
+    if (statuses.has(normalized)) return stage;
+  }
+  return "";
+};
+const findExistingStatusSmsPrompt = async (projectId, stage) => {
+  const statuses = SMS_STATUS_STAGE_STATUSES[stage];
+  if (!projectId || !statuses) return null;
+  return SmsPrompt.findOne({
+    project: projectId,
+    type: "status_update",
+    projectStatus: { $in: Array.from(statuses) },
+  }).sort({ createdAt: -1 });
+};
+const resolveSmsPromptDedupeWindowStart = () =>
+  SMS_DEDUPE_WINDOW_MS > 0
+    ? new Date(Date.now() - SMS_DEDUPE_WINDOW_MS)
+    : null;
+const findRecentSmsPrompt = async (criteria = {}) => {
+  const windowStart = resolveSmsPromptDedupeWindowStart();
+  if (!windowStart) return null;
+  return SmsPrompt.findOne({
+    ...criteria,
+    createdAt: { $gte: windowStart },
+  }).sort({ createdAt: -1 });
+};
+const createSmsPrompt = async ({
+  project,
+  actorId,
+  type = "status_update",
+  message = "",
+  title = "",
+  status = "",
+  progressPercent,
+}) => {
+  const trimmedMessage = toText(message);
+  const projectId = project?._id;
+  if (!projectId || !trimmedMessage) return null;
+
+  if (type !== "custom") {
+    const dedupeQuery = {
+      project: projectId,
+      type,
+    };
+    if (status) dedupeQuery.projectStatus = status;
+    const existing = await findRecentSmsPrompt(dedupeQuery);
+    if (existing) return existing;
+  }
+
+  const fallbackStatus = toText(status) || toText(project?.status);
+  const resolvedProgress =
+    typeof progressPercent === "number" && Number.isFinite(progressPercent)
+      ? progressPercent
+      : resolveProgressPercent(fallbackStatus, toText(project?.projectType));
+
+  return SmsPrompt.create({
+    project: projectId,
+    projectStatus: fallbackStatus,
+    progressPercent: resolvedProgress,
+    type,
+    state: "pending",
+    message: trimmedMessage,
+    title: toText(title),
+    originalMessage: trimmedMessage,
+    createdBy: actorId || null,
+  });
+};
 const PROJECT_TYPE_VALUES = new Set([
   "Standard",
   "Emergency",
@@ -5108,6 +5229,35 @@ const updateProjectStatus = async (req, res) => {
         "Project Status Updated",
         `Project #${project.orderId || project._id} status changed to ${finalStatus} by ${req.user.firstName}`,
       );
+
+      if (!isQuoteProject(project)) {
+        try {
+          const smsStage = resolveStatusSmsStage(finalStatus);
+          if (smsStage) {
+            const existingStagePrompt = await findExistingStatusSmsPrompt(
+              project._id,
+              smsStage,
+            );
+            if (!existingStagePrompt) {
+              const { message, progressPercent, title } = buildStatusSmsMessage({
+                project,
+                status: finalStatus,
+              });
+              await createSmsPrompt({
+                project,
+                actorId: req.user._id || req.user.id,
+                type: "status_update",
+                message,
+                title,
+                status: finalStatus,
+                progressPercent,
+              });
+            }
+          }
+        } catch (smsError) {
+          console.error("Failed to create SMS prompt:", smsError);
+        }
+      }
     }
 
     // Notify Lead when mockup is marked complete
@@ -7163,6 +7313,29 @@ const addFeedbackToProject = async (req, res) => {
       `Feedback (${type}) added to project #${updatedProject.orderId || updatedProject._id} by ${req.user.firstName}`,
     );
 
+    if (
+      type === "Positive" &&
+      !isQuoteProject(updatedProject) &&
+      SMS_APPRECIATION_STATUSES.has(updatedProject.status)
+    ) {
+      try {
+        const message = buildFeedbackSmsMessage({ project: updatedProject });
+        await createSmsPrompt({
+          project: updatedProject,
+          actorId: req.user._id || req.user.id,
+          type: "feedback_appreciation",
+          message,
+          status: updatedProject.status,
+          progressPercent: resolveProgressPercent(
+            updatedProject.status,
+            toText(updatedProject.projectType),
+          ),
+        });
+      } catch (smsError) {
+        console.error("Failed to create appreciation SMS prompt:", smsError);
+      }
+    }
+
     res.json(updatedProject);
   } catch (error) {
     await cleanupUploadedFilesSafely(req);
@@ -9137,6 +9310,306 @@ const undoAcknowledgeProject = async (req, res) => {
   }
 };
 
+// @desc    Get SMS prompts for a project
+// @route   GET /api/projects/:id/sms-prompts
+// @access  Private (Front Desk / Admin)
+const getProjectSmsPrompts = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
+    if (!canManageSmsForRequest(req)) {
+      return res.status(403).json({
+        message: "Not authorized to manage SMS prompts for this project.",
+      });
+    }
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "SMS prompts are not available for quote projects.",
+      });
+    }
+
+    const prompts = await SmsPrompt.find({ project: project._id })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(prompts);
+  } catch (error) {
+    console.error("Error fetching SMS prompts:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get pending SMS prompts across projects
+// @route   GET /api/projects/sms-prompts/pending
+// @access  Private (Front Desk / Admin)
+const getPendingSmsPrompts = async (req, res) => {
+  try {
+    if (!canManageSmsForRequest(req)) {
+      return res.status(403).json({
+        message: "Not authorized to manage SMS prompts.",
+      });
+    }
+
+    const prompts = await SmsPrompt.find({
+      state: { $in: ["pending", "failed"] },
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate({
+        path: "project",
+        select:
+          "orderId status projectType details.client details.clientName details.clientPhone details.projectName orderRef",
+        populate: {
+          path: "orderRef",
+          select: "clientPhone client orderNumber",
+        },
+      })
+      .lean();
+
+    const filtered = prompts.filter(
+      (prompt) =>
+        prompt.project && toText(prompt.project.projectType) !== "Quote",
+    );
+    res.json(filtered);
+  } catch (error) {
+    console.error("Error fetching pending SMS prompts:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Create a custom SMS prompt for a project
+// @route   POST /api/projects/:id/sms-prompts
+// @access  Private (Front Desk / Admin)
+const createProjectSmsPrompt = async (req, res) => {
+  try {
+    const { message } = req.body || {};
+    const trimmedMessage = toText(message);
+    if (!trimmedMessage) {
+      return res.status(400).json({ message: "Message is required." });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
+    if (!canManageSmsForRequest(req)) {
+      return res.status(403).json({
+        message: "Not authorized to manage SMS prompts for this project.",
+      });
+    }
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "SMS prompts are not available for quote projects.",
+      });
+    }
+
+    const created = await createSmsPrompt({
+      project,
+      actorId: req.user._id || req.user.id,
+      type: "custom",
+      message: trimmedMessage,
+      status: project.status,
+      progressPercent: resolveProgressPercent(
+        project.status,
+        toText(project.projectType),
+      ),
+    });
+
+    if (!created) {
+      return res.status(400).json({ message: "Unable to create SMS prompt." });
+    }
+
+    res.status(201).json(created);
+  } catch (error) {
+    console.error("Error creating SMS prompt:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update an SMS prompt (edit or skip)
+// @route   PATCH /api/projects/:id/sms-prompts/:promptId
+// @access  Private (Front Desk / Admin)
+const updateProjectSmsPrompt = async (req, res) => {
+  try {
+    const { message, state } = req.body || {};
+    const trimmedMessage = toText(message);
+    const clientNameProvided = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "clientName",
+    );
+    const clientPhoneProvided = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "clientPhone",
+    );
+    const trimmedClientName = toText(req.body?.clientName);
+    const trimmedClientPhone = toText(req.body?.clientPhone);
+
+    if (
+      !trimmedMessage &&
+      !state &&
+      !clientNameProvided &&
+      !clientPhoneProvided
+    ) {
+      return res.status(400).json({ message: "No updates provided." });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
+    if (!canManageSmsForRequest(req)) {
+      return res.status(403).json({
+        message: "Not authorized to manage SMS prompts for this project.",
+      });
+    }
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "SMS prompts are not available for quote projects.",
+      });
+    }
+
+    const prompt = await SmsPrompt.findOne({
+      _id: req.params.promptId,
+      project: project._id,
+    });
+    if (!prompt) {
+      return res.status(404).json({ message: "SMS prompt not found." });
+    }
+    if (prompt.state === "sent") {
+      return res
+        .status(400)
+        .json({ message: "Sent SMS prompts cannot be edited." });
+    }
+
+    if (trimmedMessage) {
+      prompt.message = trimmedMessage;
+      if (!prompt.originalMessage) {
+        prompt.originalMessage = trimmedMessage;
+      }
+    }
+
+    if (clientNameProvided) {
+      prompt.overrideClientName = trimmedClientName;
+    }
+
+    if (clientPhoneProvided) {
+      prompt.overrideClientPhone = trimmedClientPhone;
+    }
+
+    if (state === "skipped") {
+      prompt.state = "skipped";
+      prompt.skippedAt = new Date();
+    }
+
+    if (state === "pending") {
+      prompt.state = "pending";
+      prompt.skippedAt = null;
+    }
+
+    prompt.updatedBy = req.user._id || req.user.id;
+    await prompt.save();
+
+    res.json(prompt);
+  } catch (error) {
+    console.error("Error updating SMS prompt:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Send an SMS prompt via Arkesel
+// @route   POST /api/projects/:id/sms-prompts/:promptId/send
+// @access  Private (Front Desk / Admin)
+const sendProjectSmsPrompt = async (req, res) => {
+  try {
+    const { message } = req.body || {};
+    const project = await Project.findById(req.params.id).populate(
+      "orderRef",
+      "clientPhone",
+    );
+    if (!ensureProjectMutationAccess(req, res, project, "feedback")) return;
+    if (!canManageSmsForRequest(req)) {
+      return res.status(403).json({
+        message: "Not authorized to manage SMS prompts for this project.",
+      });
+    }
+    if (isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "SMS prompts are not available for quote projects.",
+      });
+    }
+
+    const prompt = await SmsPrompt.findOne({
+      _id: req.params.promptId,
+      project: project._id,
+    });
+    if (!prompt) {
+      return res.status(404).json({ message: "SMS prompt not found." });
+    }
+    if (prompt.state === "sent") {
+      return res.status(400).json({ message: "SMS has already been sent." });
+    }
+
+    const resolvedMessage = toText(message) || toText(prompt.message);
+    if (!resolvedMessage) {
+      return res.status(400).json({ message: "SMS message is required." });
+    }
+
+    const clientNameProvided = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "clientName",
+    );
+    const clientPhoneProvided =
+      Object.prototype.hasOwnProperty.call(req.body || {}, "clientPhone") ||
+      Object.prototype.hasOwnProperty.call(req.body || {}, "to");
+    const overrideClientName = toText(req.body?.clientName);
+    const overridePhone = toText(req.body?.clientPhone || req.body?.to);
+
+    if (clientNameProvided) {
+      prompt.overrideClientName = overrideClientName;
+    }
+    if (clientPhoneProvided) {
+      prompt.overrideClientPhone = overridePhone;
+    }
+
+    const clientPhone =
+      overridePhone ||
+      toText(prompt.overrideClientPhone) ||
+      toText(project?.details?.clientPhone) ||
+      toText(project?.orderRef?.clientPhone);
+    if (!clientPhone) {
+      return res.status(400).json({
+        message: "Client phone number is missing for this project.",
+      });
+    }
+
+    try {
+      const response = await sendSms({
+        to: clientPhone,
+        message: resolvedMessage,
+      });
+
+      prompt.message = resolvedMessage;
+      prompt.state = "sent";
+      prompt.sentAt = new Date();
+      prompt.lastError = "";
+      prompt.providerResponse = response;
+      prompt.updatedBy = req.user._id || req.user.id;
+      await prompt.save();
+
+      res.json({ prompt, response });
+    } catch (error) {
+      prompt.state = "failed";
+      prompt.lastError = toText(error?.message) || "Failed to send SMS.";
+      prompt.providerResponse = error?.response || null;
+      prompt.updatedBy = req.user._id || req.user.id;
+      await prompt.save();
+
+      res.status(500).json({
+        message: prompt.lastError || "Failed to send SMS.",
+        response: error?.response || null,
+      });
+    }
+  } catch (error) {
+    console.error("Error sending SMS prompt:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -9165,6 +9638,11 @@ module.exports = {
   uploadProjectMockup,
   approveProjectMockup,
   rejectProjectMockup,
+  getPendingSmsPrompts,
+  getProjectSmsPrompts,
+  createProjectSmsPrompt,
+  updateProjectSmsPrompt,
+  sendProjectSmsPrompt,
   addFeedbackToProject,
   deleteFeedbackFromProject,
   addChallengeToProject,

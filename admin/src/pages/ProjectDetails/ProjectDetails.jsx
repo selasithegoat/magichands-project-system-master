@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import "./ProjectDetails.css";
 import {
@@ -16,6 +17,7 @@ import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCance
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/ProjectTypeChangeModal";
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
+import Modal from "../../components/Modal/Modal";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -75,6 +77,17 @@ const BILLING_REQUIREMENT_LABELS = {
   payment_verification_any: "Payment method verification",
   full_payment_or_authorized:
     "Full payment or authorization verification",
+};
+const SMS_TYPE_LABELS = {
+  status_update: "Status Update",
+  custom: "Custom Message",
+  feedback_appreciation: "Appreciation",
+};
+const SMS_STATE_LABELS = {
+  pending: "Pending",
+  sent: "Sent",
+  skipped: "Skipped",
+  failed: "Failed",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
 const QUOTE_REQUIREMENT_KEYS = [
@@ -444,6 +457,17 @@ const ProjectDetails = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [orderGroupProjects, setOrderGroupProjects] = useState([]);
   const [updates, setUpdates] = useState([]); // New state for updates
+  const [smsPrompts, setSmsPrompts] = useState([]);
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [smsModal, setSmsModal] = useState({
+    open: false,
+    mode: "custom",
+    prompt: null,
+    message: "",
+  });
+  const [smsSubmitting, setSmsSubmitting] = useState(false);
+  const [smsSendingId, setSmsSendingId] = useState("");
+  const [smsSkippingId, setSmsSkippingId] = useState("");
   const [undoingDept, setUndoingDept] = useState(null);
   const [isTogglingHold, setIsTogglingHold] = useState(false);
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
@@ -485,6 +509,8 @@ const ProjectDetails = ({ user }) => {
   const isLeadUser = Boolean(
     currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
   );
+  const canManageSms =
+    user?.role === "admin" && project?.projectType !== "Quote";
   const groupedLeadRows = useMemo(
     () =>
       getGroupedLeadDisplayRows(
@@ -1089,6 +1115,27 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
+  const fetchSmsPrompts = async () => {
+    if (!canManageSms) {
+      setSmsPrompts([]);
+      return;
+    }
+    try {
+      setSmsLoading(true);
+      const res = await fetch(`/api/projects/${id}/sms-prompts`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch SMS prompts.");
+      const data = await res.json();
+      setSmsPrompts(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching SMS prompts:", err);
+      setSmsPrompts([]);
+    } finally {
+      setSmsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const stateProject = location.state?.project;
     if (
@@ -1103,6 +1150,7 @@ const ProjectDetails = ({ user }) => {
     }
 
     fetchUpdates();
+    fetchSmsPrompts();
 
     // Fetch users for Lead Edit
     const fetchUsers = async () => {
@@ -1125,6 +1173,7 @@ const ProjectDetails = ({ user }) => {
     () => {
       fetchProject();
       fetchUpdates();
+      fetchSmsPrompts();
     },
     { enabled: Boolean(id) },
   );
@@ -1144,6 +1193,140 @@ const ProjectDetails = ({ user }) => {
       );
     }
   }, [project]);
+
+  const openSmsModal = (mode, prompt = null) => {
+    setSmsModal({
+      open: true,
+      mode,
+      prompt,
+      message: prompt?.message || "",
+    });
+  };
+
+  const closeSmsModal = () => {
+    setSmsModal({
+      open: false,
+      mode: "custom",
+      prompt: null,
+      message: "",
+    });
+  };
+
+  const handleSaveSmsPrompt = async ({ sendAfterSave = false } = {}) => {
+    if (!project?._id) return;
+    const trimmedMessage = smsModal.message.trim();
+    if (!trimmedMessage) {
+      toast.error("SMS message cannot be empty.");
+      return;
+    }
+
+    setSmsSubmitting(true);
+    try {
+      let promptId = smsModal.prompt?._id || "";
+      if (smsModal.mode === "custom") {
+        const res = await fetch(`/api/projects/${project._id}/sms-prompts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ message: trimmedMessage }),
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to create SMS prompt.");
+        }
+        const created = await res.json();
+        promptId = created?._id || "";
+      } else if (smsModal.mode === "edit" && smsModal.prompt?._id) {
+        const res = await fetch(
+          `/api/projects/${project._id}/sms-prompts/${smsModal.prompt._id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ message: trimmedMessage }),
+          },
+        );
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to update SMS prompt.");
+        }
+        const updated = await res.json();
+        promptId = updated?._id || promptId;
+      }
+
+      if (sendAfterSave && promptId) {
+        await handleSendSmsPrompt(promptId, trimmedMessage);
+      } else {
+        await fetchSmsPrompts();
+        toast.success("SMS prompt saved.");
+      }
+
+      closeSmsModal();
+    } catch (err) {
+      console.error("Error saving SMS prompt:", err);
+      toast.error(err.message || "Failed to save SMS prompt.");
+      await fetchSmsPrompts();
+    } finally {
+      setSmsSubmitting(false);
+    }
+  };
+
+  const handleSendSmsPrompt = async (promptId, messageOverride = "") => {
+    if (!project?._id || !promptId) return;
+    setSmsSendingId(promptId);
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/sms-prompts/${promptId}/send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(
+            messageOverride ? { message: messageOverride } : {},
+          ),
+        },
+      );
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to send SMS.");
+      }
+      await fetchSmsPrompts();
+      toast.success("SMS sent successfully.");
+    } catch (err) {
+      console.error("Error sending SMS:", err);
+      toast.error(err.message || "Failed to send SMS.");
+      await fetchSmsPrompts();
+    } finally {
+      setSmsSendingId("");
+    }
+  };
+
+  const handleSkipSmsPrompt = async (promptId) => {
+    if (!project?._id || !promptId) return;
+    setSmsSkippingId(promptId);
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/sms-prompts/${promptId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ state: "skipped" }),
+        },
+      );
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to skip SMS.");
+      }
+      await fetchSmsPrompts();
+      toast.success("SMS prompt skipped.");
+    } catch (err) {
+      console.error("Error skipping SMS:", err);
+      toast.error(err.message || "Failed to skip SMS.");
+    } finally {
+      setSmsSkippingId("");
+    }
+  };
 
   const handleSaveLead = async () => {
     if (!ensureProjectIsEditable()) return;
@@ -3073,6 +3256,104 @@ const ProjectDetails = ({ user }) => {
 
           {activeContentTab === "updates" && (
             <>
+          {canManageSms && (
+            <div className="detail-card sms-prompts-card">
+              <div className="sms-prompts-header">
+                <div>
+                  <h3 className="card-title sms-prompts-title">Client SMS Prompts</h3>
+                  <p className="sms-prompts-subtitle">
+                    Review progress updates and choose whether to send them.
+                  </p>
+                </div>
+                <div className="sms-prompts-actions">
+                  <span className="sms-prompts-count">
+                    {smsPrompts.length}{" "}
+                    {smsPrompts.length === 1 ? "prompt" : "prompts"}
+                  </span>
+                  <button
+                    type="button"
+                    className="sms-action-btn outline"
+                    onClick={() => openSmsModal("custom")}
+                  >
+                    Draft Custom SMS
+                  </button>
+                </div>
+              </div>
+
+              <div className="sms-prompts-list">
+                {smsLoading ? (
+                  <div className="sms-prompts-empty">Loading SMS prompts...</div>
+                ) : smsPrompts.length === 0 ? (
+                  <div className="sms-prompts-empty">No SMS prompts yet.</div>
+                ) : (
+                  smsPrompts.map((prompt) => {
+                    const stateLabel =
+                      SMS_STATE_LABELS[prompt.state] || "Pending";
+                    const typeLabel =
+                      SMS_TYPE_LABELS[prompt.type] || "Status Update";
+                    const titleLabel = prompt.title || typeLabel;
+                    const isSending = smsSendingId === prompt._id;
+                    const canSend = prompt.state !== "sent";
+                    const canEdit = prompt.state !== "sent";
+                    return (
+                      <div
+                        key={prompt._id}
+                        className={`sms-prompt-item ${prompt.state || "pending"}`}
+                      >
+                        <div className="sms-prompt-header">
+                          <div>
+                            <strong>{titleLabel}</strong>
+                            <span className="sms-prompt-meta">
+                              Status: {prompt.projectStatus || project.status}
+                            </span>
+                          </div>
+                          <span
+                            className={`sms-prompt-status ${prompt.state || "pending"}`}
+                          >
+                            {stateLabel}
+                          </span>
+                        </div>
+                        <p className="sms-prompt-message">
+                          {prompt.message || "No message drafted yet."}
+                        </p>
+                        <div className="sms-prompt-meta-row">
+                          <span>
+                            Progress: {Number(prompt.progressPercent || 0)}%
+                          </span>
+                          <span>
+                            Created: {formatLastUpdated(prompt.createdAt)}
+                          </span>
+                        </div>
+                        {prompt.lastError && (
+                          <div className="sms-prompt-error">
+                            Last error: {prompt.lastError}
+                          </div>
+                        )}
+                        <div className="sms-prompt-actions">
+                          <button
+                            type="button"
+                            className="sms-action-btn primary"
+                            onClick={() => handleSendSmsPrompt(prompt._id)}
+                            disabled={!canSend || isSending}
+                          >
+                            {isSending ? "Sending..." : "Send SMS"}
+                          </button>
+                          <button
+                            type="button"
+                            className="sms-action-btn outline"
+                            onClick={() => openSmsModal("edit", prompt)}
+                            disabled={!canEdit || isSending}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
           {/* Project Updates */}
           <div className="detail-card">
             <h3 className="card-title">Project Updates</h3>
@@ -3550,8 +3831,70 @@ const ProjectDetails = ({ user }) => {
               )}
             </div>
           )}
-        </div>
       </div>
+      </div>
+
+      <Modal
+        isOpen={smsModal.open}
+        onClose={closeSmsModal}
+        title={smsModal.mode === "custom" ? "Draft Custom SMS" : "Edit SMS Prompt"}
+        maxWidth="560px"
+      >
+        <div className="sms-modal-body">
+          <div className="sms-modal-field">
+            <label>Client</label>
+            <div className="sms-modal-value">
+              {project?.details?.client || "N/A"}
+            </div>
+          </div>
+          <div className="sms-modal-field">
+            <label>Phone</label>
+            <div className="sms-modal-value">
+              {project?.details?.clientPhone ||
+                project?.orderRef?.clientPhone ||
+                "No phone on file"}
+            </div>
+          </div>
+          <div className="sms-modal-field">
+            <label>Message</label>
+            <textarea
+              className="sms-textarea"
+              rows="4"
+              value={smsModal.message}
+              onChange={(event) =>
+                setSmsModal((prev) => ({ ...prev, message: event.target.value }))
+              }
+              placeholder="Write a message to the client..."
+            />
+          </div>
+          <div className="sms-modal-actions">
+            <button
+              type="button"
+              className="sms-action-btn muted"
+              onClick={closeSmsModal}
+              disabled={smsSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="sms-action-btn outline"
+              onClick={() => handleSaveSmsPrompt({ sendAfterSave: false })}
+              disabled={smsSubmitting}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="sms-action-btn primary"
+              onClick={() => handleSaveSmsPrompt({ sendAfterSave: true })}
+              disabled={smsSubmitting}
+            >
+              {smsSubmitting ? "Saving..." : "Save & Send"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <BillingGuardModal
         isOpen={billingGuardModal.open}
