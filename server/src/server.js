@@ -38,6 +38,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const ADMIN_HOST = (process.env.ADMIN_HOST || "").toLowerCase();
 const CLIENT_HOST = (process.env.CLIENT_HOST || "").toLowerCase();
 const OPS_HOST = (process.env.OPS_HOST || "").toLowerCase();
+const INVENTORY_HOST = (process.env.INVENTORY_HOST || "").toLowerCase();
 
 const normalizeOrigin = (value) => {
   if (!value || typeof value !== "string") return "";
@@ -72,6 +73,7 @@ const ALLOWED_CORS_ORIGINS = new Set([
   ...buildHostBasedOrigins(CLIENT_HOST),
   ...buildHostBasedOrigins(ADMIN_HOST),
   ...buildHostBasedOrigins(OPS_HOST),
+  ...buildHostBasedOrigins(INVENTORY_HOST),
 ]);
 
 const getRequestOrigin = (req) => {
@@ -204,7 +206,13 @@ const isOpsHost = (req) => {
   return getRequestHost(req) === OPS_HOST;
 };
 
-const isClientHost = (req) => !isAdminHost(req) && !isOpsHost(req);
+const isInventoryHost = (req) => {
+  if (!INVENTORY_HOST) return false;
+  return getRequestHost(req) === INVENTORY_HOST;
+};
+
+const isClientHost = (req) =>
+  !isAdminHost(req) && !isOpsHost(req) && !isInventoryHost(req);
 
 const FORCE_DOWNLOAD_UPLOAD_EXTENSIONS = new Set([
   ".html",
@@ -368,9 +376,14 @@ app.use("/api/inventory", inventoryRoutes);
 const clientDistPath = path.resolve(__dirname, "../../client/dist");
 const adminDistPath = path.resolve(__dirname, "../../admin/dist");
 const opsDistPath = path.resolve(__dirname, "../../opsportal/dist");
+const inventoryDistPath = path.resolve(
+  __dirname,
+  "../../inventoryportal/dist",
+);
 const hasClientBuild = fs.existsSync(clientDistPath);
 const hasAdminBuild = fs.existsSync(adminDistPath);
 const hasOpsBuild = fs.existsSync(opsDistPath);
+const hasInventoryBuild = fs.existsSync(inventoryDistPath);
 
 if (hasAdminBuild) {
   const adminStatic = express.static(adminDistPath);
@@ -392,6 +405,16 @@ if (hasOpsBuild) {
   });
 }
 
+if (hasInventoryBuild) {
+  const inventoryStatic = express.static(inventoryDistPath);
+  app.use((req, res, next) => {
+    if (isInventoryHost(req)) {
+      return inventoryStatic(req, res, next);
+    }
+    return next();
+  });
+}
+
 // Mobile/IP fallback: allow /admin on non-admin hosts to serve admin app
 if (hasAdminBuild) {
   app.use("/admin", express.static(adminDistPath));
@@ -400,6 +423,10 @@ if (hasAdminBuild) {
 // Fallback path for ops wallboard
 if (hasOpsBuild) {
   app.use("/ops", express.static(opsDistPath));
+}
+
+if (hasInventoryBuild) {
+  app.use("/inventory", express.static(inventoryDistPath));
 }
 
 if (hasClientBuild) {
@@ -413,7 +440,7 @@ if (hasClientBuild) {
 }
 
 // SPA fallbacks
-if (hasAdminBuild || hasClientBuild || hasOpsBuild) {
+if (hasAdminBuild || hasClientBuild || hasOpsBuild || hasInventoryBuild) {
   app.get(/^\/admin(\/.*)?$/, (req, res, next) => {
     if (!isAdminHost(req) && hasAdminBuild) {
       return res.sendFile(path.join(adminDistPath, "index.html"));
@@ -428,12 +455,22 @@ if (hasAdminBuild || hasClientBuild || hasOpsBuild) {
     return next();
   });
 
+  app.get(/^\/inventory(\/.*)?$/, (req, res, next) => {
+    if (hasInventoryBuild) {
+      return res.sendFile(path.join(inventoryDistPath, "index.html"));
+    }
+    return next();
+  });
+
   app.get(/^\/(?!api|uploads).*/, (req, res, next) => {
     if (isAdminHost(req) && hasAdminBuild) {
       return res.sendFile(path.join(adminDistPath, "index.html"));
     }
     if (isOpsHost(req) && hasOpsBuild) {
       return res.sendFile(path.join(opsDistPath, "index.html"));
+    }
+    if (isInventoryHost(req) && hasInventoryBuild) {
+      return res.sendFile(path.join(inventoryDistPath, "index.html"));
     }
     if (isClientHost(req) && hasClientBuild) {
       return res.sendFile(path.join(clientDistPath, "index.html"));

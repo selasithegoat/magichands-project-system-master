@@ -1,7 +1,12 @@
 const ClientInventoryItem = require("../models/ClientInventoryItem");
 const PurchasingOrder = require("../models/PurchasingOrder");
 
-const STORES_DEPARTMENTS = new Set(["stores", "stock", "packaging"]);
+const STORES_DEPARTMENTS = new Set([
+  "stores",
+  "stock",
+  "packaging",
+  "front desk",
+]);
 
 const normalizeDepartments = (departments) => {
   if (Array.isArray(departments)) return departments;

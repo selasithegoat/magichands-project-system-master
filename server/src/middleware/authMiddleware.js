@@ -3,6 +3,12 @@ const User = require("../models/User");
 const { resolveCookieOptions } = require("../utils/cookieOptions");
 
 const ADMIN_DEPARTMENT_KEY = "administration";
+const INVENTORY_ALLOWED_DEPARTMENTS = new Set([
+  "front desk",
+  "stores",
+  "stock",
+  "packaging",
+]);
 
 const toLowerTrimmed = (value) => String(value || "").trim().toLowerCase();
 
@@ -16,6 +22,15 @@ const hasAdministrationDepartment = (user) =>
 
 const hasAdminPortalAccess = (user) =>
   user?.role === "admin" && hasAdministrationDepartment(user);
+
+const hasInventoryPortalAccess = (user) => {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+
+  return normalizeDepartmentValues(user?.department).some((dept) =>
+    INVENTORY_ALLOWED_DEPARTMENTS.has(dept),
+  );
+};
 
 const getRequestHost = (req) => {
   const hostHeader =
@@ -67,6 +82,24 @@ const isOpsPortalRequest = (req) => {
     originalUrl.startsWith("/api/ops") ||
     refererPath === "/ops" ||
     refererPath.startsWith("/ops/")
+  );
+};
+
+const isInventoryPortalRequest = (req) => {
+  const refererPath = readRefererPath(req);
+  const originalUrl = String(req?.originalUrl || "").toLowerCase();
+  const baseUrl = String(req?.baseUrl || "").toLowerCase();
+  const requestHost = getRequestHost(req);
+  const inventoryHost = (process.env.INVENTORY_HOST || "").toLowerCase();
+  const source = toLowerTrimmed(req?.query?.source);
+
+  return (
+    (inventoryHost && requestHost === inventoryHost) ||
+    baseUrl.startsWith("/api/inventory") ||
+    originalUrl.startsWith("/api/inventory") ||
+    source === "inventory" ||
+    refererPath === "/inventory" ||
+    refererPath.startsWith("/inventory/")
   );
 };
 
@@ -126,6 +159,13 @@ const protect = async (req, res, next) => {
         });
       }
 
+      if (isInventoryPortalRequest(req) && !hasInventoryPortalAccess(req.user)) {
+        return res.status(403).json({
+          message:
+            "Access denied: inventory portal is restricted to Admin, Front Desk, and Stores users.",
+        });
+      }
+
       // Decide which cookie updated
       // If user is admin, refresh token_admin. Else token_client.
       const cookieName =
@@ -170,6 +210,11 @@ const checkAuth = async (req, res, next) => {
         return next();
       }
 
+      if (isInventoryPortalRequest(req) && !hasInventoryPortalAccess(req.user)) {
+        req.user = null;
+        return next();
+      }
+
       // Sliding Expiration (keep session alive)
       const cookieName =
         req.user.role === "admin" ? "token_admin" : "token_client";
@@ -197,6 +242,8 @@ module.exports = {
   checkAuth,
   requireRole,
   hasAdminPortalAccess,
+  hasInventoryPortalAccess,
   isAdminPortalRequest,
+  isInventoryPortalRequest,
   isEngagedPortalRequest,
 };

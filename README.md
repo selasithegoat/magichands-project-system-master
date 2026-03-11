@@ -44,6 +44,7 @@ git log HEAD..upstream/master --oneline
 - Client portal: dashboard, project list, history, engaged projects, profile, and notifications.
 - Admin portal: dashboards, project details, team management, and client overview.
 - Operations wallboard portal: full-screen manager overview of live orders, deadlines, team capacity, and risk signals.
+- Inventory portal: inventory dashboard, records, purchasing orders, and stock activity.
 - Project creation wizards (standard and quote workflows).
 - Departmental engagement + acknowledgements (including production sub-departments).
 - Real-time refresh via polling/realtime hooks.
@@ -63,6 +64,7 @@ git log HEAD..upstream/master --oneline
 - `client/` - Client portal (Vite + React)
 - `admin/` - Admin portal (Vite + React)
 - `opsportal/` - Operations wallboard portal (Vite + React)
+- `inventoryportal/` - Inventory portal (Vite + React)
 - `server/` - Express API, MongoDB models, auth, notifications
 - `scripts/` - Helper scripts
 
@@ -87,6 +89,7 @@ HOST=0.0.0.0
 ADMIN_HOST=admin.magichandsproject.lan
 CLIENT_HOST=magichandsproject.lan
 OPS_HOST=ops.magichandsproject.lan
+INVENTORY_HOST=inventory.magichandsproject.lan
 
 # Smart email notification links (LAN/mobile fallback)
 CLIENT_PORTAL_FALLBACK_URL=http://192.168.100.203
@@ -114,6 +117,7 @@ If you use subdomains locally, map them in your hosts file.
 - `magichandsproject.lan`
 - `admin.magichandsproject.lan`
 - `ops.magichandsproject.lan`
+- `inventory.magichandsproject.lan`
 
 Then set `ADMIN_HOST`, `CLIENT_HOST`, and `OPS_HOST` to match.
 
@@ -165,12 +169,19 @@ cd opsportal
 npm run dev
 ```
 
+```bash
+# 5) Inventory portal
+cd ../inventoryportal
+npm run dev
+```
+
 Default ports:
 
 - API: `http://localhost:5000`
 - Client: `http://localhost:5173`
 - Admin: `http://localhost:3000`
 - Ops wallboard: `http://localhost:3002`
+- Inventory: `http://localhost:3003`
 
 All frontends proxy `/api` (and `/uploads` for client) to the API server.
 
@@ -187,6 +198,12 @@ npm run build
 
 # Build ops wallboard
 cd ../opsportal
+npm run build
+```
+
+```bash
+# Build inventory portal
+cd ../inventoryportal
 npm run build
 ```
 
