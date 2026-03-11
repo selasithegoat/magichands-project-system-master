@@ -5,6 +5,7 @@
   height: 100vh;
   width: var(--sidebar-collapsed);
   background: var(--bg-alt);
+  border-radius: 0;
   padding: 24px 20px;
   box-shadow: var(--shadow);
   display: flex;

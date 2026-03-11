@@ -8,10 +8,17 @@ const InventoryLayout = ({
   onLogout,
   onQuickAction,
   notificationCount,
+  activeKey,
+  onNavigate,
   children,
 }) => (
   <div className="inventory-app">
-    <Sidebar navItems={navItems} onLogout={onLogout} />
+    <Sidebar
+      navItems={navItems}
+      onLogout={onLogout}
+      activeKey={activeKey}
+      onNavigate={onNavigate}
+    />
     <main className="main">
       <Topbar
         user={user}

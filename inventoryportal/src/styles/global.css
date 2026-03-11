@@ -17,9 +17,9 @@
   --border: #e2e8f0;
   --shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
   --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
-  --radius-lg: 0;
-  --radius-md: 0;
-  --radius-sm: 0;
+  --radius-lg: 10px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
   --sidebar-collapsed: 84px;
   --sidebar-expanded: 280px;
   font-family: "Manrope", sans-serif;
@@ -31,21 +31,18 @@
   box-sizing: border-box;
 }
 
-*::before,
-*::after,
-* {
-  border-radius: 0 !important;
-}
-
 body {
   margin: 0;
   min-height: 100vh;
+  background: #ffffff;
   color: var(--ink);
 }
 
 button,
-input {
+input,
+select {
   font-family: inherit;
+  border-radius: 0;
 }
 
 #root {
@@ -65,6 +62,7 @@ input {
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
+  border-radius: 0;
 }
 
 .primary-button {
@@ -173,6 +171,7 @@ input {
   box-shadow: var(--shadow);
   border: 1px solid rgba(226, 232, 240, 0.7);
   padding: 20px;
+  border-radius: var(--radius-md);
 }
 
 .modal-header {

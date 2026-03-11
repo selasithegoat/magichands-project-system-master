@@ -4,6 +4,14 @@ import InventoryLayout from "../layouts/InventoryLayout";
 import Dashboard from "../pages/Dashboard/Dashboard";
 import LoadingScreen from "../components/feedback/LoadingScreen";
 import Login from "../pages/Login/Login";
+import StockTransactions from "../pages/StockTransactions/StockTransactions";
+import InventoryTypes from "../pages/InventoryTypes/InventoryTypes";
+import InventoryRecords from "../pages/InventoryRecords/InventoryRecords";
+import ClientItems from "../pages/ClientItems/ClientItems";
+import Suppliers from "../pages/Suppliers/Suppliers";
+import PurchaseOrders from "../pages/PurchaseOrders/PurchaseOrders";
+import Reports from "../pages/Reports/Reports";
+import Settings from "../pages/Settings/Settings";
 import {
   ClientIcon,
   DashboardIcon,
@@ -21,15 +29,15 @@ import { quickActions } from "../data/quickActions";
 const APP_NAME = "MagicHands Inventory";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: DashboardIcon, active: true },
-  { label: "Inventory Types", icon: LayersIcon },
-  { label: "Inventory Records", icon: RecordsIcon },
-  { label: "Stock Transactions", icon: SwapIcon },
-  { label: "Client Items", icon: ClientIcon },
-  { label: "Suppliers", icon: SuppliersIcon },
-  { label: "Purchase Orders", icon: PurchaseOrderIcon },
-  { label: "Reports", icon: ReportIcon },
-  { label: "Settings", icon: SettingsIcon },
+  { key: "dashboard", label: "Dashboard", icon: DashboardIcon },
+  { key: "inventory-types", label: "Inventory Types", icon: LayersIcon },
+  { key: "inventory-records", label: "Inventory Records", icon: RecordsIcon },
+  { key: "stock-transactions", label: "Stock Transactions", icon: SwapIcon },
+  { key: "client-items", label: "Client Items", icon: ClientIcon },
+  { key: "suppliers", label: "Suppliers", icon: SuppliersIcon },
+  { key: "purchase-orders", label: "Purchase Orders", icon: PurchaseOrderIcon },
+  { key: "reports", label: "Reports", icon: ReportIcon },
+  { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 const App = () => {
@@ -38,6 +46,7 @@ const App = () => {
   const [loginError, setLoginError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
+  const [activePage, setActivePage] = useState("dashboard");
 
   useEffect(() => {
     const checkSession = async () => {
@@ -143,6 +152,31 @@ const App = () => {
     );
   }
 
+  const renderActivePage = () => {
+    switch (activePage) {
+      case "dashboard":
+        return <Dashboard />;
+      case "stock-transactions":
+        return <StockTransactions />;
+      case "inventory-types":
+        return <InventoryTypes />;
+      case "inventory-records":
+        return <InventoryRecords />;
+      case "client-items":
+        return <ClientItems />;
+      case "suppliers":
+        return <Suppliers />;
+      case "purchase-orders":
+        return <PurchaseOrders />;
+      case "reports":
+        return <Reports />;
+      case "settings":
+        return <Settings />;
+      default:
+        return <Dashboard />;
+    }
+  };
+
   return (
     <>
       <InventoryLayout
@@ -151,8 +185,10 @@ const App = () => {
         onLogout={logout}
         onQuickAction={() => setQuickActionOpen(true)}
         notificationCount={3}
+        activeKey={activePage}
+        onNavigate={setActivePage}
       >
-        <Dashboard />
+        {renderActivePage()}
       </InventoryLayout>
       <QuickActionModal
         isOpen={quickActionOpen}

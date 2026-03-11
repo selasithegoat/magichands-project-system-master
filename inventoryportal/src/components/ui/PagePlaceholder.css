@@ -1,0 +1,20 @@
+.page-placeholder {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 40px 24px;
+  text-align: center;
+  border-radius: var(--radius-md);
+}
+
+.page-placeholder h2 {
+  margin: 0 0 8px;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.page-placeholder p {
+  margin: 0;
+  color: var(--ink-soft);
+}

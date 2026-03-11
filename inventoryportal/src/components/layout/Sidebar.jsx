@@ -1,7 +1,7 @@
 import { LogoutIcon, PlusIcon } from "../icons/Icons";
 import "./Sidebar.css";
 
-const Sidebar = ({ navItems, onLogout }) => (
+const Sidebar = ({ navItems, onLogout, activeKey, onNavigate }) => (
   <aside className="sidebar">
     <div className="brand">
       <img src="/mhlogo.png" alt="MagicHands Logo" />
@@ -14,13 +14,15 @@ const Sidebar = ({ navItems, onLogout }) => (
     <nav className="nav">
       {navItems.map((item) => {
         const Icon = item.icon;
+        const isActive = item.key === activeKey;
         return (
           <button
-            key={item.label}
+            key={item.key}
             type="button"
-            className={`nav-item ${item.active ? "active" : ""}`}
+            className={`nav-item ${isActive ? "active" : ""}`}
             aria-label={item.label}
             title={item.label}
+            onClick={() => onNavigate?.(item.key)}
           >
             <Icon className="nav-icon" />
             <span className="nav-text">{item.label}</span>

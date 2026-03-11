@@ -267,3 +267,27 @@ export const ChevronDownIcon = ({ className }) => (
     <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
   </IconBase>
 );
+
+export const DownloadIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M12 4v10"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="M8 10l4 4 4-4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M5 18h14"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </IconBase>
+);

@@ -34,6 +34,7 @@
   padding: 16px 18px;
   box-shadow: var(--shadow-soft);
   border: 1px solid rgba(226, 232, 240, 0.7);
+  border-radius: var(--radius-md);
   animation: rise 0.6s ease;
 }
 
@@ -164,6 +165,7 @@
   padding: 18px 20px;
   box-shadow: var(--shadow);
   border: 1px solid rgba(226, 232, 240, 0.7);
+  border-radius: var(--radius-md);
   animation: rise 0.8s ease;
 }
 
@@ -194,6 +196,7 @@
   overflow: hidden;
   background: #f8fafc;
   padding: 12px;
+  border-radius: var(--radius-sm);
 }
 
 .line-chart-grid {
