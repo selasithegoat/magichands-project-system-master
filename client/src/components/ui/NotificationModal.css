@@ -121,7 +121,6 @@
   opacity: 0.5;
 }
 
-
 /* List */
 .notif-list-container {
   flex: 1;
@@ -333,9 +332,9 @@
 
   .notif-modal-content {
     position: absolute;
-    width: 95%;
+    width: 93%;
     max-width: 420px;
     max-height: 85vh;
-    top: 0;
+    top: 3%;
   }
 }

@@ -4,11 +4,8 @@
   max-width: 1600px;
   margin: 0 auto;
   min-height: 100vh;
-  background: #f5f7fb;
   isolation: isolate;
 }
-
-
 
 @media (max-width: 768px) {
   .history-container {
@@ -34,7 +31,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(
+  background:
+    radial-gradient(
       circle at top right,
       rgba(59, 130, 246, 0.2),
       transparent 60%

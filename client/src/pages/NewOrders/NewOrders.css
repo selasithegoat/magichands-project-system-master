@@ -2942,6 +2942,20 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.2rem;
+  min-width: 0;
+}
+
+.order-meta-field {
+  min-width: 0;
+}
+
+.new-orders-page .form-group,
+.new-orders-page .input-wrapper {
+  min-width: 0;
+}
+
+.new-orders-page .form-input {
+  max-width: 100%;
 }
 
 .order-meta-field label {
@@ -3141,6 +3155,19 @@
   gap: 1rem;
 }
 
+.item-card-body .item-input-group {
+  min-width: 0;
+}
+
+.item-card-body .item-input-group.qty {
+  max-width: none;
+}
+
+.item-card-body .form-input {
+  width: 100%;
+  max-width: 100%;
+}
+
 .item-card-body label {
   font-size: 0.75rem;
   font-weight: 600;
@@ -3152,7 +3179,8 @@
 .qty-stepper {
   display: flex;
   align-items: center;
-  width: 200px;
+  width: 100%;
+  max-width: 220px;
   gap: 0.4rem;
 }
 
@@ -3172,7 +3200,9 @@
 }
 
 .qty-stepper input {
-  width: 70px;
+  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: center;
 }
 
@@ -3200,6 +3230,11 @@
   gap: 0.6rem;
   font-weight: 600;
   color: #0f172a;
+}
+
+.workflow-control span {
+  flex: 1;
+  min-width: 0;
 }
 
 .workflow-control input {
@@ -3415,6 +3450,21 @@
   }
 
   .new-orders-page .contact-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .order-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .new-orders-page .input-wrapper .form-input {
+    padding-right: 2.25rem;
+  }
+
+  .item-card-body {
     grid-template-columns: 1fr;
   }
 }
