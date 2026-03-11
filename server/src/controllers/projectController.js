@@ -3894,8 +3894,11 @@ const getProjects = async (req, res) => {
     const projects = await populateMockupUploaders(
       Project.find(query)
         .populate("createdBy", "firstName lastName")
-        .populate("projectLeadId", "firstName lastName")
-        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("projectLeadId", "firstName lastName avatarUrl")
+        .populate(
+          "assistantLeadId",
+          "firstName lastName employeeId email avatarUrl",
+        )
         .populate("endOfDayUpdateBy", "firstName lastName department")
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
         .sort({ createdAt: -1 }),
@@ -4039,8 +4042,11 @@ const getOrderGroups = async (req, res) => {
     const projects = await populateMockupUploaders(
       Project.find(query)
         .populate("createdBy", "firstName lastName")
-        .populate("projectLeadId", "firstName lastName")
-        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("projectLeadId", "firstName lastName avatarUrl")
+        .populate(
+          "assistantLeadId",
+          "firstName lastName employeeId email avatarUrl",
+        )
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
         .sort({ createdAt: -1 }),
     );
@@ -4076,8 +4082,11 @@ const getOrderGroupByNumber = async (req, res) => {
       populateMockupUploaders(
         Project.find(criteria)
           .populate("createdBy", "firstName lastName")
-          .populate("projectLeadId", "firstName lastName")
-          .populate("assistantLeadId", "firstName lastName employeeId email")
+          .populate("projectLeadId", "firstName lastName avatarUrl")
+          .populate(
+            "assistantLeadId",
+            "firstName lastName employeeId email avatarUrl",
+          )
           .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
           .sort({ createdAt: -1 }),
       );
@@ -4189,8 +4198,14 @@ const getProjectById = async (req, res) => {
     const project = await populateMockupUploaders(
       Project.findById(req.params.id)
         .populate("createdBy", "firstName lastName")
-        .populate("projectLeadId", "firstName lastName employeeId email")
-        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate(
+          "projectLeadId",
+          "firstName lastName employeeId email avatarUrl",
+        )
+        .populate(
+          "assistantLeadId",
+          "firstName lastName employeeId email avatarUrl",
+        )
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
     );
 

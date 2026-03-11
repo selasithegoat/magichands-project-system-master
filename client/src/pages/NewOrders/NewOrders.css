@@ -2826,15 +2826,6 @@
   flex-wrap: wrap;
 }
 
-.page-logo {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 118, 110, 0.25);
-  padding: 6px;
-  background: #ffffff;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
-}
 
 .new-orders-page .page-header h1 {
   font-family: var(--order-font-display);
@@ -3383,6 +3374,16 @@
 .new-orders-page .order-meta-card,
 .new-orders-page .form-section {
   animation: orderLift 0.55s ease both;
+  position: relative;
+  z-index: 1;
+}
+
+.new-orders-page .form-section:focus-within {
+  z-index: 5;
+}
+
+.new-orders-page .form-section.select-open {
+  z-index: 20;
 }
 
 @media (max-width: 900px) {

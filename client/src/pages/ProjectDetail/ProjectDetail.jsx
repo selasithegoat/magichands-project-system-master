@@ -29,7 +29,11 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { getGroupedLeadDisplayRows, getLeadDisplay } from "../../utils/leadDisplay";
+import {
+  getGroupedLeadDisplayRows,
+  getLeadAvatarUrl,
+  getLeadDisplay,
+} from "../../utils/leadDisplay";
 import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
@@ -1212,6 +1216,7 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
       ? groupedLeadRows
       : [{ key: "fallback", name: lead, display: lead }];
   const primaryLeadName = leadRows[0]?.name || lead;
+  const primaryLeadAvatar = getLeadAvatarUrl(project);
   const leadSectionTitle =
     leadRows.length > 1 ? "ORDER GROUP LEADS" : "PROJECT LEAD";
   const briefOverview = String(details.briefOverview || "").trim();
@@ -1286,7 +1291,12 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
         <div className="info-item">
           <h4>{leadSectionTitle}</h4>
           <div className="lead-profile">
-            <UserAvatar name={primaryLeadName} width="32px" height="32px" />
+            <UserAvatar
+              name={primaryLeadName}
+              width="32px"
+              height="32px"
+              src={primaryLeadAvatar}
+            />
             <div className="lead-group-list">
               {leadRows.map((entry) => (
                 <span key={entry.key || entry.display} className="lead-group-line">

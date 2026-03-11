@@ -4,6 +4,7 @@
   gap: var(--spacing-xs);
   width: 100%;
   position: relative;
+  z-index: 1;
 }
 
 .select-label {
@@ -24,6 +25,7 @@
   transition: all 0.2s;
   position: relative;
   min-height: 44px;
+  z-index: 1;
 }
 
 .select-container:hover {
@@ -43,6 +45,7 @@
 .select-container.open {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  z-index: 20;
 }
 
 .select-value {
@@ -73,7 +76,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 50;
+  z-index: 200;
   max-height: 200px;
   overflow-y: auto;
 }

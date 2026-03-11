@@ -20,7 +20,7 @@ import Toast from "../../components/ui/Toast";
 import UserAvatar from "../../components/ui/UserAvatar";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { playNotificationSound } from "../../utils/notificationSound";
-import { getLeadDisplay } from "../../utils/leadDisplay";
+import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 
 const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
 const OVERDUE_EXCLUDED_STATUSES = new Set([
@@ -286,7 +286,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [projectViewMode, setProjectViewMode] = useState("list");
+  const [projectViewMode, setProjectViewMode] = useState("grid");
   const [pipelineView, setPipelineView] = useState("acceptance");
   const [selectedWorkloadDept, setSelectedWorkloadDept] = useState("");
   const [activeTimelineEvent, setActiveTimelineEvent] = useState(null);
@@ -706,7 +706,8 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
       project?.details?.deliveryDate,
       project?.details?.deliveryTime,
     );
-    const leadDisplay = getLeadDisplay(project, "Unassigned");
+  const leadDisplay = getLeadDisplay(project, "Unassigned");
+  const leadAvatarUrl = getLeadAvatarUrl(project);
     const departments = getProjectDepartmentIds(project);
     const visibleDepartments = departments.slice(0, 2);
     const extraDepartmentCount = Math.max(0, departments.length - visibleDepartments.length);
@@ -834,6 +835,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
               width="24px"
               height="24px"
               backgroundColor="#0f172a"
+              src={leadAvatarUrl}
             />
             <span>{leadDisplay}</span>
           </div>

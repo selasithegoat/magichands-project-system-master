@@ -2,7 +2,7 @@ import "./ProjectCard.css";
 import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
-import { getLeadDisplay } from "../../utils/leadDisplay";
+import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
@@ -223,6 +223,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const progress = progressMap[project.status] ?? 5;
   const leadDisplay = getLeadDisplay(project, "Unassigned");
   const avatarName = getLeadDisplay(project, "U");
+  const leadAvatarUrl = getLeadAvatarUrl(project);
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
@@ -372,6 +373,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               width="24px"
               height="24px"
               name={avatarName}
+              src={leadAvatarUrl}
             />
             <span className="lead-name">{leadDisplay}</span>
           </div>

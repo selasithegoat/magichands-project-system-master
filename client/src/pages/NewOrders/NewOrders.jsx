@@ -539,12 +539,6 @@ const NewOrders = () => {
 
       <div className="page-header">
         <div className="page-header-brand">
-          <img
-            src="/mhlogo.png"
-            alt="Magic Hands"
-            className="page-logo"
-            draggable="false"
-          />
           <div>
             <h1>
               {editingId

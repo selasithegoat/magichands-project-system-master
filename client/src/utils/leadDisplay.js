@@ -96,6 +96,29 @@ export const getLeadDisplay = (project, fallback = "Unassigned") => {
   return fallback;
 };
 
+const getAvatarFromSource = (source) => {
+  if (!source || typeof source !== "object") return "";
+  const candidate =
+    source.avatarUrl ||
+    source.avatar ||
+    source.photoUrl ||
+    source.photo ||
+    source.profileImage;
+  return typeof candidate === "string" ? candidate.trim() : "";
+};
+
+export const getLeadAvatarUrl = (project = {}) => {
+  const leadSource = project?.projectLeadId || project?.details?.lead;
+  const assistantSource =
+    project?.assistantLeadId || project?.details?.assistantLead;
+
+  const leadAvatar = getAvatarFromSource(leadSource);
+  if (leadAvatar) return leadAvatar;
+
+  const assistantAvatar = getAvatarFromSource(assistantSource);
+  return assistantAvatar;
+};
+
 export const getLeadSearchText = (project = {}) => {
   const tokens = [];
 
