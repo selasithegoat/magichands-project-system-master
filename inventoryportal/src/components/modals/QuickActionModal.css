@@ -1,0 +1,20 @@
+.quick-actions {
+  display: grid;
+  gap: 14px;
+}
+
+.quick-action-card {
+  border: 1px solid var(--border);
+  padding: 16px;
+  background: #f8fafc;
+}
+
+.quick-action-card h4 {
+  margin: 0 0 6px;
+}
+
+.quick-action-card p {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}

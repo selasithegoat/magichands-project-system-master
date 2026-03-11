@@ -148,6 +148,36 @@ export const SettingsIcon = ({ className }) => (
   </IconBase>
 );
 
+export const LogoutIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M5 6a2 2 0 0 1 2-2h4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="M5 18a2 2 0 0 0 2 2h4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="M14 8l4 4-4 4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 12h10"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </IconBase>
+);
+
 export const SearchIcon = ({ className }) => (
   <IconBase className={className}>
     <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6" />

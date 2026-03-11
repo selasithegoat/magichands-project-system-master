@@ -1,0 +1,38 @@
+.inventory-app {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.inventory-app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+
+  background-size: 32px 32px;
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.main {
+  margin-left: calc(var(--sidebar-collapsed) + 12px);
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  position: relative;
+  z-index: 1;
+  transition: margin-left 0.2s ease;
+}
+
+.inventory-app:has(.sidebar:hover) .main,
+.inventory-app:has(.sidebar:focus-within) .main {
+  margin-left: calc(var(--sidebar-expanded) + 12px);
+}
+
+@media (max-width: 900px) {
+  .main {
+    margin-left: 0;
+  }
+}
