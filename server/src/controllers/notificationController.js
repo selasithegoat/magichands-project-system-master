@@ -6,8 +6,15 @@ const Notification = require("../models/Notification");
 const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ recipient: req.user._id })
-      .populate("sender", "firstName lastName name")
-      .populate("project", "orderId details")
+      .populate("sender", "firstName lastName name avatarUrl")
+      .populate({
+        path: "project",
+        select: "orderId details projectLeadId assistantLeadId departments",
+        populate: [
+          { path: "projectLeadId", select: "firstName lastName name avatarUrl" },
+          { path: "assistantLeadId", select: "firstName lastName name avatarUrl" },
+        ],
+      })
       .sort({ createdAt: -1 })
       .limit(50);
 

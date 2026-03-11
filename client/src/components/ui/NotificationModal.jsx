@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { PRODUCTION_SUB_DEPARTMENTS } from "../../constants/departments";
 import "./NotificationModal.css";
 import XIcon from "../icons/XIcon";
 import ClipboardListIcon from "../icons/ClipboardListIcon";
@@ -56,13 +57,107 @@ const NotificationModal = ({
   onMarkAllRead,
   onClearAll,
   onMarkRead,
+  currentUser,
 }) => {
-  if (!isOpen) return null;
+  const toEntityId = (value) => {
+    if (!value) return "";
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value);
+    }
+    if (typeof value === "object") {
+      if (value._id) return toEntityId(value._id);
+      if (value.id) return String(value.id);
+    }
+    return "";
+  };
 
-  const unreadNotifications = notifications.filter((n) => !n.isRead);
-  const readNotifications = notifications.filter((n) => n.isRead);
+  const getUserLabel = (user) => {
+    if (!user || typeof user !== "object") return "";
+    if (user.name) return user.name;
+    const full = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+    return full || "";
+  };
+
+  const getProjectLabel = (project) => {
+    if (!project || typeof project !== "object") return "";
+    const name =
+      project?.details?.projectName ||
+      project?.details?.title ||
+      project?.details?.projectTitle ||
+      "";
+    const orderId = project?.orderId || "";
+    if (name && orderId) return `${name} · ${orderId}`;
+    return name || orderId;
+  };
+
+  const userId = toEntityId(currentUser?._id || currentUser?.id);
+  const departments = Array.isArray(currentUser?.department)
+    ? currentUser.department
+    : currentUser?.department
+      ? [currentUser.department]
+      : [];
+  const isFrontDesk = departments.includes("Front Desk");
+  const isProduction =
+    departments.includes("Production") ||
+    departments.some((dept) => PRODUCTION_SUB_DEPARTMENTS.includes(dept));
+  const hasScopedTabs = isFrontDesk || isProduction;
+  const [activeTab, setActiveTab] = useState(hasScopedTabs ? "mine" : "all");
+
+  useEffect(() => {
+    if (!hasScopedTabs) {
+      setActiveTab("all");
+      return;
+    }
+    setActiveTab((prev) => (prev === "team" || prev === "mine" ? prev : "mine"));
+  }, [hasScopedTabs]);
+
+  const mineNotifications = useMemo(() => {
+    if (!userId && !isProduction) return [];
+    return notifications.filter((n) => {
+      let isAssignedLead = false;
+      if (userId) {
+        const leadId = toEntityId(
+          n?.project?.projectLeadId?._id || n?.project?.projectLeadId,
+        );
+        isAssignedLead = Boolean(leadId && leadId === userId);
+      }
+
+      if (isAssignedLead) return true;
+
+      if (!isProduction) return false;
+
+      const projectDepartments = Array.isArray(n?.project?.departments)
+        ? n.project.departments
+        : [];
+
+      if (!projectDepartments.length) return false;
+
+      if (departments.includes("Production")) {
+        return projectDepartments.some((dept) =>
+          PRODUCTION_SUB_DEPARTMENTS.includes(dept),
+        );
+      }
+
+      return projectDepartments.some((dept) => departments.includes(dept));
+    });
+  }, [departments, isProduction, notifications, userId]);
+
+  const teamNotifications = useMemo(() => notifications, [notifications]);
+
+  const visibleNotifications = useMemo(() => {
+    if (!isFrontDesk) return notifications;
+    return activeTab === "mine" ? mineNotifications : teamNotifications;
+  }, [activeTab, isFrontDesk, mineNotifications, notifications, teamNotifications]);
+
+  const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
+  const readNotifications = visibleNotifications.filter((n) => n.isRead);
   const unreadCount = unreadNotifications.length;
-  const totalCount = notifications.length;
+  const totalCount = visibleNotifications.length;
+
+  const mineCount = mineNotifications.length;
+  const teamCount = teamNotifications.length;
+
+  if (!isOpen) return null;
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
@@ -73,6 +168,24 @@ const NotificationModal = ({
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h`;
     return date.toLocaleDateString();
+  };
+
+  const renderMeta = (notification) => {
+    const project = notification?.project;
+    const leadId = toEntityId(project?.projectLeadId?._id || project?.projectLeadId);
+    const leadName = getUserLabel(project?.projectLeadId);
+    const leadLabel = leadId && userId && leadId === userId ? "You" : leadName;
+    const projectLabel = getProjectLabel(project);
+    if (!leadLabel && !projectLabel) return null;
+
+    return (
+      <div className="notif-meta">
+        {leadLabel && <span className="notif-meta-pill">For: {leadLabel}</span>}
+        {projectLabel && (
+          <span className="notif-meta-pill subtle">Project: {projectLabel}</span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -98,6 +211,31 @@ const NotificationModal = ({
             </button>
           </div>
         </div>
+
+        {hasScopedTabs && (
+          <div className="notif-tabs" role="tablist" aria-label="Notification view">
+            <button
+              type="button"
+              className={`notif-tab ${activeTab === "mine" ? "active" : ""}`}
+              onClick={() => setActiveTab("mine")}
+              role="tab"
+              aria-selected={activeTab === "mine"}
+            >
+              Mine
+              <span className="notif-tab-count">{mineCount}</span>
+            </button>
+            <button
+              type="button"
+              className={`notif-tab ${activeTab === "team" ? "active" : ""}`}
+              onClick={() => setActiveTab("team")}
+              role="tab"
+              aria-selected={activeTab === "team"}
+            >
+              Team/All
+              <span className="notif-tab-count">{teamCount}</span>
+            </button>
+          </div>
+        )}
 
         <div className="notif-list-container">
           {unreadNotifications.length > 0 && (
@@ -129,6 +267,7 @@ const NotificationModal = ({
                         <span className="notif-time">{formatTime(n.createdAt)}</span>
                       </div>
                       <p className="notif-item-desc">{n.message}</p>
+                      {renderMeta(n)}
                     </div>
                   </div>
                 );
@@ -159,6 +298,7 @@ const NotificationModal = ({
                         <span className="notif-time">{formatTime(n.createdAt)}</span>
                       </div>
                       <p className="notif-item-desc">{n.message}</p>
+                      {renderMeta(n)}
                     </div>
                   </div>
                 );
@@ -166,9 +306,9 @@ const NotificationModal = ({
             </div>
           )}
 
-          {notifications.length === 0 && (
+          {totalCount === 0 && (
             <div className="notif-empty">
-              <p>No notifications yet.</p>
+              <p>No notifications in this view.</p>
             </div>
           )}
         </div>

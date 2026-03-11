@@ -564,6 +564,7 @@ const Layout = ({
         onMarkAllRead={handleMarkAllAsRead}
         onClearAll={handleClearNotifications}
         onMarkRead={handleMarkSingleRead}
+        currentUser={user}
       />
 
       <ReminderAlertModal
