@@ -152,6 +152,23 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const avatarInputRef = useRef(null);
   const avatarMenuRef = useRef(null);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+  const [isAvatarCropOpen, setIsAvatarCropOpen] = useState(false);
+  const [avatarCropSrc, setAvatarCropSrc] = useState("");
+  const [avatarCropZoom, setAvatarCropZoom] = useState(1);
+  const [avatarCropOffset, setAvatarCropOffset] = useState({ x: 0, y: 0 });
+  const avatarCropImgRef = useRef(null);
+  const avatarCropScaleRef = useRef(1);
+  const avatarCropSizeRef = useRef({ width: 0, height: 0 });
+  const avatarCropStageRef = useRef(null);
+  const avatarDragRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+    pointerId: null,
+  });
+  const [isAvatarViewerOpen, setIsAvatarViewerOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -168,6 +185,13 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
       URL.revokeObjectURL(avatarPreviewUrl);
     };
   }, [avatarPreviewUrl]);
+
+  useEffect(() => {
+    if (!avatarCropSrc) return undefined;
+    return () => {
+      URL.revokeObjectURL(avatarCropSrc);
+    };
+  }, [avatarCropSrc]);
 
   useEffect(() => {
     if (!isAvatarMenuOpen) return undefined;
@@ -425,6 +449,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
     setAvatarError("");
     setMessage(null);
+    setIsFadingOut(false);
 
     if (!file.type || !file.type.startsWith("image/")) {
       setAvatarError("Please select a valid image file.");
@@ -438,12 +463,29 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     }
 
     const localPreview = URL.createObjectURL(file);
-    setAvatarPreviewUrl(localPreview);
+    setAvatarCropSrc(localPreview);
+    setAvatarCropZoom(1);
+    setAvatarCropOffset({ x: 0, y: 0 });
+    avatarCropScaleRef.current = 1;
+    avatarCropSizeRef.current = { width: 0, height: 0 };
+    setIsAvatarCropOpen(true);
+  };
 
+  const resetAvatarCrop = () => {
+    setIsAvatarCropOpen(false);
+    setAvatarCropZoom(1);
+    setAvatarCropOffset({ x: 0, y: 0 });
+    setAvatarCropSrc("");
+    avatarCropScaleRef.current = 1;
+    avatarCropSizeRef.current = { width: 0, height: 0 };
+    avatarDragRef.current.active = false;
+  };
+
+  const uploadAvatarBlob = async (blob) => {
     try {
       setAvatarUploading(true);
       const payload = new FormData();
-      payload.append("avatar", file);
+      payload.append("avatar", blob, "avatar.jpg");
 
       const res = await fetch("/api/auth/profile/avatar", {
         method: "POST",
@@ -481,12 +523,124 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     }
   };
 
+  const clampAvatarOffset = (nextOffset, zoomValue) => {
+    const { width, height } = avatarCropSizeRef.current;
+    if (!width || !height) return nextOffset;
+    const stageSize = avatarCropStageRef.current?.clientWidth || 320;
+    const scale = avatarCropScaleRef.current * zoomValue;
+    const maxX = Math.max(0, (width * scale - stageSize) / 2);
+    const maxY = Math.max(0, (height * scale - stageSize) / 2);
+    return {
+      x: Math.min(maxX, Math.max(-maxX, nextOffset.x)),
+      y: Math.min(maxY, Math.max(-maxY, nextOffset.y)),
+    };
+  };
+
+  const handleCropImageLoad = (event) => {
+    const img = event.currentTarget;
+    const width = img.naturalWidth || 0;
+    const height = img.naturalHeight || 0;
+    avatarCropSizeRef.current = { width, height };
+    const stageSize = avatarCropStageRef.current?.clientWidth || 320;
+    avatarCropScaleRef.current = Math.max(stageSize / width, stageSize / height);
+    setAvatarCropOffset({ x: 0, y: 0 });
+  };
+
+  const handleCropPointerDown = (event) => {
+    if (avatarUploading) return;
+    avatarDragRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: avatarCropOffset.x,
+      originY: avatarCropOffset.y,
+      pointerId: event.pointerId,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleCropPointerMove = (event) => {
+    if (!avatarDragRef.current.active) return;
+    const dx = event.clientX - avatarDragRef.current.startX;
+    const dy = event.clientY - avatarDragRef.current.startY;
+    const nextOffset = clampAvatarOffset(
+      {
+        x: avatarDragRef.current.originX + dx,
+        y: avatarDragRef.current.originY + dy,
+      },
+      avatarCropZoom,
+    );
+    setAvatarCropOffset(nextOffset);
+  };
+
+  const handleCropPointerUp = (event) => {
+    if (!avatarDragRef.current.active) return;
+    avatarDragRef.current.active = false;
+    if (avatarDragRef.current.pointerId !== null) {
+      event.currentTarget.releasePointerCapture?.(avatarDragRef.current.pointerId);
+    }
+  };
+
+  const handleCropZoomChange = (event) => {
+    const nextZoom = Number(event.target.value);
+    const clamped = clampAvatarOffset(avatarCropOffset, nextZoom);
+    setAvatarCropZoom(nextZoom);
+    setAvatarCropOffset(clamped);
+  };
+
+  const handleCropConfirm = async () => {
+    if (!avatarCropImgRef.current) return;
+    const stageSize = avatarCropStageRef.current?.clientWidth || 320;
+    const outputSize = 420;
+    const { width, height } = avatarCropSizeRef.current;
+    const scale = avatarCropScaleRef.current * avatarCropZoom;
+    const center = stageSize / 2;
+    const imgLeft = center + avatarCropOffset.x - (width * scale) / 2;
+    const imgTop = center + avatarCropOffset.y - (height * scale) / 2;
+    const cropX = (0 - imgLeft) / scale;
+    const cropY = (0 - imgTop) / scale;
+    const cropSize = stageSize / scale;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(
+      avatarCropImgRef.current,
+      cropX,
+      cropY,
+      cropSize,
+      cropSize,
+      0,
+      0,
+      outputSize,
+      outputSize,
+    );
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob((result) => resolve(result), "image/jpeg", 0.92);
+    });
+
+    if (!blob) {
+      setAvatarError("Failed to crop image. Please try again.");
+      return;
+    }
+
+    const preview = URL.createObjectURL(blob);
+    setAvatarPreviewUrl(preview);
+    resetAvatarCrop();
+    await uploadAvatarBlob(blob);
+  };
+
   const handleRemoveAvatar = async () => {
     if (avatarUploading) return;
 
     setAvatarError("");
     setMessage(null);
     setIsFadingOut(false);
+    setIsAvatarViewerOpen(false);
 
     try {
       setAvatarUploading(true);
@@ -648,6 +802,103 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
   return (
     <div className="profile-container">
+      {isAvatarCropOpen && avatarCropSrc && (
+        <div
+          className="avatar-crop-overlay"
+          onClick={() => resetAvatarCrop()}
+        >
+          <div
+            className="avatar-crop-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="avatar-crop-header">
+              <div>
+                <h3>Crop your photo</h3>
+                <p>Drag to reposition. Use zoom to fit.</p>
+              </div>
+              <button
+                className="avatar-crop-close"
+                type="button"
+                onClick={() => resetAvatarCrop()}
+              >
+                Close
+              </button>
+            </div>
+            <div
+              className="avatar-crop-stage"
+              ref={avatarCropStageRef}
+              onPointerDown={handleCropPointerDown}
+              onPointerMove={handleCropPointerMove}
+              onPointerUp={handleCropPointerUp}
+              onPointerLeave={handleCropPointerUp}
+            >
+              <img
+                ref={avatarCropImgRef}
+                src={avatarCropSrc}
+                alt="Crop preview"
+                className="avatar-crop-image"
+                onLoad={handleCropImageLoad}
+                style={{
+                  transform: `translate(-50%, -50%) translate(${avatarCropOffset.x}px, ${avatarCropOffset.y}px) scale(${
+                    avatarCropScaleRef.current * avatarCropZoom
+                  })`,
+                }}
+              />
+              <div className="avatar-crop-frame"></div>
+            </div>
+            <div className="avatar-crop-controls">
+              <label htmlFor="avatar-zoom">Zoom</label>
+              <input
+                id="avatar-zoom"
+                type="range"
+                min="1"
+                max="3"
+                step="0.01"
+                value={avatarCropZoom}
+                onChange={handleCropZoomChange}
+              />
+            </div>
+            <div className="avatar-crop-actions">
+              <button type="button" onClick={() => resetAvatarCrop()}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={handleCropConfirm}
+                disabled={avatarUploading}
+              >
+                {avatarUploading ? "Saving..." : "Save photo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isAvatarViewerOpen && avatarDisplaySrc && (
+        <div
+          className="avatar-view-overlay"
+          onClick={() => setIsAvatarViewerOpen(false)}
+        >
+          <div
+            className="avatar-view-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img src={avatarDisplaySrc} alt="Profile" />
+            <div className="avatar-view-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setIsAvatarViewerOpen(false)}
+              >
+                Close
+              </button>
+              <a href={avatarDisplaySrc} target="_blank" rel="noreferrer">
+                Open full size
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="profile-top-grid">
         <div className="profile-header-card">
           <div className="profile-wrapper">
@@ -689,6 +940,17 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   {avatarDisplaySrc && (
                     <button
                       type="button"
+                      onClick={() => {
+                        setIsAvatarViewerOpen(true);
+                        setIsAvatarMenuOpen(false);
+                      }}
+                    >
+                      View photo
+                    </button>
+                  )}
+                  {avatarDisplaySrc && (
+                    <button
+                      type="button"
                       className="danger"
                       onClick={handleRemoveAvatar}
                       disabled={avatarUploading}
@@ -717,7 +979,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               <p className="avatar-helper-text">
                 {avatarUploading
                   ? "Uploading avatar..."
-                  : `Upload a JPG/PNG image up to ${MAX_AVATAR_SIZE_MB}MB.`}
+                  : `Upload a JPG/PNG image up to ${MAX_AVATAR_SIZE_MB}MB. Crop before saving.`}
               </p>
               {avatarError && <p className="field-error avatar-error">{avatarError}</p>}
 
