@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const path = require("path");
+const fs = require("fs");
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
 const {
@@ -346,6 +348,39 @@ const uploadProfileAvatar = async (req, res) => {
   }
 };
 
+// @desc    Remove profile avatar
+// @route   DELETE /api/auth/profile/avatar
+// @access  Private
+const removeProfileAvatar = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const previousAvatar = String(user.avatarUrl || "").trim();
+    user.avatarUrl = "";
+    const updatedUser = await user.save();
+
+    if (previousAvatar.startsWith("/uploads/")) {
+      const filename = path.basename(previousAvatar);
+      const uploadDir =
+        process.env.UPLOAD_DIR ||
+        path.join(__dirname, "../../../../magichands-uploads");
+      const filePath = path.join(uploadDir, filename);
+      fs.promises.unlink(filePath).catch(() => {});
+    }
+
+    return res.json({
+      _id: updatedUser._id,
+      avatarUrl: updatedUser.avatarUrl,
+    });
+  } catch (error) {
+    console.error("Error removing avatar:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Get all users (for dropdowns)
 // @route   GET /api/auth/users
 // @access  Private
@@ -412,5 +447,6 @@ module.exports = {
   updateProfile,
   changePassword,
   uploadProfileAvatar,
+  removeProfileAvatar,
   getUsers, // [NEW]
 };

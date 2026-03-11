@@ -66,6 +66,13 @@
   .profile-wrapper {
     grid-template-columns: 1fr;
     text-align: center;
+    justify-items: center;
+  }
+
+  .avatar-menu {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
   }
 }
 
@@ -94,6 +101,11 @@
   display: block;
 }
 
+.profile-avatar-stack {
+  position: relative;
+  width: fit-content;
+}
+
 .edit-avatar-btn {
   position: absolute;
   bottom: 6px;
@@ -120,6 +132,53 @@
 
 .edit-avatar-btn:hover {
   transform: translateY(-2px);
+}
+
+.avatar-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 160px;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  z-index: 2;
+}
+
+.avatar-menu button {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.avatar-menu button:hover {
+  background: #f8fafc;
+}
+
+.avatar-menu button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.avatar-menu button.danger {
+  color: #b91c1c;
+}
+
+.avatar-menu button.danger:hover {
+  background: #fff1f2;
 }
 
 .profile-info-main {

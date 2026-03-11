@@ -511,6 +511,9 @@ const Layout = ({
     return `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.name;
   };
 
+  const avatarAlt = `${getFullName()} avatar`;
+  const avatarUrl = user?.avatarUrl || "";
+
   const userDepartments = Array.isArray(user?.department)
     ? user.department
     : user?.department
@@ -754,7 +757,13 @@ const Layout = ({
                 }}
                 style={{ cursor: "pointer" }}
               >
-                <div className="user-profile-mini">{getInitials()}</div>
+                <div className={`user-profile-mini ${avatarUrl ? "has-image" : ""}`}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={avatarAlt} />
+                  ) : (
+                    getInitials()
+                  )}
+                </div>
                 <div className="drawer-user-info">
                   <span className="user-name">{getFullName()}</span>
                   <span className="user-role">

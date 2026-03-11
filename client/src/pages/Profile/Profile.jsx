@@ -150,6 +150,8 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [avatarError, setAvatarError] = useState("");
   const avatarInputRef = useRef(null);
+  const avatarMenuRef = useRef(null);
+  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -166,6 +168,20 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
       URL.revokeObjectURL(avatarPreviewUrl);
     };
   }, [avatarPreviewUrl]);
+
+  useEffect(() => {
+    if (!isAvatarMenuOpen) return undefined;
+
+    const handleClickAway = (event) => {
+      if (!avatarMenuRef.current) return;
+      if (!avatarMenuRef.current.contains(event.target)) {
+        setIsAvatarMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickAway);
+    return () => document.removeEventListener("mousedown", handleClickAway);
+  }, [isAvatarMenuOpen]);
 
   useEffect(() => {
     if (!user) return;
@@ -397,6 +413,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
   const openAvatarSelector = () => {
     if (avatarUploading) return;
+    setIsAvatarMenuOpen(false);
     avatarInputRef.current?.click();
   };
 
@@ -461,6 +478,49 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
       setMessage({ type: "error", text: errorMessage });
     } finally {
       setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (avatarUploading) return;
+
+    setAvatarError("");
+    setMessage(null);
+    setIsFadingOut(false);
+
+    try {
+      setAvatarUploading(true);
+      const res = await fetch("/api/auth/profile/avatar", {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to remove avatar.");
+      }
+
+      setAvatarPreviewUrl("");
+      setFormData((prev) => ({ ...prev, avatarUrl: "" }));
+      setInitialSnapshot((prev) =>
+        prev
+          ? { ...prev, avatarUrl: "" }
+          : buildComparableProfileState(
+              { ...formData, avatarUrl: "" },
+              emailNotif,
+              pushNotif,
+              soundNotif,
+            ),
+      );
+      setMessage({ type: "success", text: "Avatar removed." });
+      if (onUpdateProfile) onUpdateProfile();
+    } catch (error) {
+      const errorMessage = error.message || "Failed to remove avatar.";
+      setAvatarError(errorMessage);
+      setMessage({ type: "error", text: errorMessage });
+    } finally {
+      setAvatarUploading(false);
+      setIsAvatarMenuOpen(false);
     }
   };
 
@@ -582,34 +642,62 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   if (loading) return <div className="profile-container">Loading...</div>;
 
   const avatarDisplaySrc = avatarPreviewUrl || formData.avatarUrl;
+  const avatarInitials = `${formData.firstName ? formData.firstName[0] : "U"}${
+    formData.lastName ? formData.lastName[0] : ""
+  }`;
 
   return (
     <div className="profile-container">
       <div className="profile-top-grid">
         <div className="profile-header-card">
           <div className="profile-wrapper">
-            <div className="profile-avatar-large">
-              {avatarDisplaySrc ? (
-                <img
-                  src={avatarDisplaySrc}
-                  alt={`${formData.firstName} ${formData.lastName}`.trim() || "User avatar"}
-                  className="profile-avatar-image"
-                />
-              ) : (
-                <>
-                  {formData.firstName ? formData.firstName[0] : "U"}
-                  {formData.lastName ? formData.lastName[0] : ""}
-                </>
-              )}
+            <div className="profile-avatar-stack" ref={avatarMenuRef}>
+              <div className="profile-avatar-large">
+                {avatarDisplaySrc ? (
+                  <img
+                    src={avatarDisplaySrc}
+                    alt={
+                      `${formData.firstName} ${formData.lastName}`.trim() ||
+                      "User avatar"
+                    }
+                    className="profile-avatar-image"
+                  />
+                ) : (
+                  avatarInitials
+                )}
+              </div>
               <button
                 className="edit-avatar-btn"
                 type="button"
-                onClick={openAvatarSelector}
+                onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
                 disabled={avatarUploading}
-                title="Upload avatar"
+                title="Edit avatar"
+                aria-haspopup="true"
+                aria-expanded={isAvatarMenuOpen}
               >
                 <EditIcon width="12" height="12" />
               </button>
+              {isAvatarMenuOpen && (
+                <div className="avatar-menu" role="menu">
+                  <button
+                    type="button"
+                    onClick={openAvatarSelector}
+                    disabled={avatarUploading}
+                  >
+                    Change photo
+                  </button>
+                  {avatarDisplaySrc && (
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={handleRemoveAvatar}
+                      disabled={avatarUploading}
+                    >
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+              )}
               <input
                 ref={avatarInputRef}
                 type="file"

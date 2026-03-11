@@ -8,6 +8,7 @@ const {
   updateProfile,
   changePassword,
   uploadProfileAvatar,
+  removeProfileAvatar,
   getUsers, // [NEW]
 } = require("../controllers/authController");
 const { protect, admin, checkAuth } = require("../middleware/authMiddleware");
@@ -51,6 +52,7 @@ router.get("/me", checkAuth, getMe);
 router.put("/profile", protect, updateProfile);
 router.put("/profile/password", protect, changePassword);
 router.post("/profile/avatar", protect, avatarUploadHandler, uploadProfileAvatar);
+router.delete("/profile/avatar", protect, removeProfileAvatar);
 router.get("/users", protect, getUsers); // [NEW]
 router.post("/logout", logoutUser);
 

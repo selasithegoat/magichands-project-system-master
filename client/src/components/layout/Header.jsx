@@ -33,6 +33,14 @@ const Header = ({
     return (f + l).toUpperCase() || "U";
   };
 
+  const getAvatarAlt = () => {
+    if (!user) return "User avatar";
+    const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+    return name ? `${name} avatar` : "User avatar";
+  };
+
+  const avatarUrl = user?.avatarUrl || "";
+
   const userDepartments = Array.isArray(user?.department)
     ? user.department
     : user?.department
@@ -189,11 +197,15 @@ const Header = ({
             {notificationCount > 0 && <span className="notif-dot"></span>}
           </button>
           <div
-            className="user-profile-mini"
+            className={`user-profile-mini ${avatarUrl ? "has-image" : ""}`}
             onClick={onNavigateProfile}
             style={{ cursor: "pointer" }}
           >
-            {getInitials()}
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={getAvatarAlt()} />
+            ) : (
+              getInitials()
+            )}
           </div>
         </div>
       </div>
