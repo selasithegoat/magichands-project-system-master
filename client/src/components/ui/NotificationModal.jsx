@@ -61,6 +61,8 @@ const NotificationModal = ({
 
   const unreadNotifications = notifications.filter((n) => !n.isRead);
   const readNotifications = notifications.filter((n) => n.isRead);
+  const unreadCount = unreadNotifications.length;
+  const totalCount = notifications.length;
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
@@ -77,13 +79,24 @@ const NotificationModal = ({
     <div className="notif-modal-overlay" onClick={onClose}>
       <div className="notif-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="notif-header">
-          <button className="notif-close-btn" onClick={onClose}>
-            <XIcon width="20" height="20" />
-          </button>
-          <h2 className="notif-title">Notifications</h2>
-          <button className="notif-mark-read" onClick={onMarkAllRead}>
-            Mark all as read
-          </button>
+          <div className="notif-title-group">
+            <h2 className="notif-title">Notifications</h2>
+            {totalCount > 0 && (
+              <span className="notif-count-pill">{unreadCount} unread</span>
+            )}
+          </div>
+          <div className="notif-header-actions">
+            <button
+              className="notif-mark-read"
+              onClick={onMarkAllRead}
+              disabled={unreadCount === 0}
+            >
+              Mark all read
+            </button>
+            <button className="notif-close-btn" onClick={onClose}>
+              <XIcon width="18" height="18" />
+            </button>
+          </div>
         </div>
 
         <div className="notif-list-container">
