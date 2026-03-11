@@ -135,6 +135,42 @@
   flex-direction: column;
 }
 
+.clients-pagination {
+  padding: 0.9rem 1.5rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  border-top: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.clients-page-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clients-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clients-page-btn:not(:disabled):hover {
+  border-color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.clients-page-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
 .client-card {
   border-bottom: 1px solid var(--border-color);
 }

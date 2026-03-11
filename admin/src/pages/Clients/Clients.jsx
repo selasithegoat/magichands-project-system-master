@@ -12,6 +12,8 @@ const Clients = ({ user }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [expandedClients, setExpandedClients] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const fetchClients = async () => {
     try {
@@ -125,6 +127,15 @@ const Clients = ({ user }) => {
       return client.name.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, projectStatusFilter, clients.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const pagedClients = filteredClients.slice(startIndex, startIndex + pageSize);
+
   return (
     <div className="clients-page">
       <div className="clients-header">
@@ -193,7 +204,7 @@ const Clients = ({ user }) => {
           </div>
         ) : (
           <div className="clients-list">
-            {filteredClients.map((client) => (
+            {pagedClients.map((client) => (
               <div key={client.name} className="client-card">
                 <div
                   className="client-header"
@@ -283,6 +294,32 @@ const Clients = ({ user }) => {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {!loading && filteredClients.length > 0 && totalPages > 1 && (
+          <div className="clients-pagination">
+            <button
+              type="button"
+              className="clients-page-btn"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={safePage === 1}
+            >
+              Previous
+            </button>
+            <span className="clients-page-info">
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="clients-page-btn"
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+              }
+              disabled={safePage === totalPages}
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

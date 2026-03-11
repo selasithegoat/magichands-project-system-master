@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
@@ -63,6 +63,8 @@ const NewOrders = () => {
   const [existingAttachments, setExistingAttachments] = useState([]);
   const [leads, setLeads] = useState([]);
   const [existingOrderNumbers, setExistingOrderNumbers] = useState([]);
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [toast, setToast] = useState({
     show: false,
@@ -146,9 +148,35 @@ const NewOrders = () => {
       }
     };
 
+    const fetchClientSuggestions = async () => {
+      try {
+        const res = await fetch("/api/projects/clients", {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const map = new Map();
+        (Array.isArray(data) ? data : [])
+          .map((client) => formatClientName(client?.name || ""))
+          .filter(Boolean)
+          .forEach((name) => {
+            const key = normalizeClientName(name);
+            if (!key) return;
+            if (!map.has(key)) {
+              map.set(key, name);
+            }
+          });
+        const names = Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+        setClientSuggestions(names);
+      } catch (e) {
+        console.error("Failed to fetch clients", e);
+      }
+    };
+
     fetchCurrentUser();
     fetchUsers();
     fetchExistingOrders();
+    fetchClientSuggestions();
   }, []);
 
   const showToast = (message, type = "success") => {
@@ -208,6 +236,43 @@ const NewOrders = () => {
     if (Number.isNaN(parsed.getTime())) return "";
     const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
+  };
+
+  const normalizeClientName = (value = "") =>
+    String(value).trim().replace(/\s+/g, " ").toLowerCase();
+
+  const formatClientName = (value = "") =>
+    String(value).trim().replace(/\s+/g, " ");
+
+  const clientSuggestionMap = useMemo(() => {
+    const map = {};
+    clientSuggestions.forEach((name) => {
+      const key = normalizeClientName(name);
+      if (key) map[key] = name;
+    });
+    return map;
+  }, [clientSuggestions]);
+
+  const resolveClientName = (value = "") => {
+    const key = normalizeClientName(value);
+    if (!key) return "";
+    return clientSuggestionMap[key] || formatClientName(value);
+  };
+
+  const filteredClientSuggestions = useMemo(() => {
+    const query = normalizeClientName(formData.clientName);
+    if (!query) return clientSuggestions;
+    return clientSuggestions.filter((name) =>
+      normalizeClientName(name).includes(query),
+    );
+  }, [clientSuggestions, formData.clientName]);
+
+  const showClientDropdown =
+    isClientDropdownOpen && filteredClientSuggestions.length > 0;
+
+  const handleClientSuggestionSelect = (name) => {
+    setFormData((prev) => ({ ...prev, clientName: name }));
+    setIsClientDropdownOpen(false);
   };
 
   const applyProjectToForm = (project) => {
@@ -402,7 +467,8 @@ const NewOrders = () => {
     const formPayload = new FormData();
     formPayload.append("orderId", formData.orderNumber);
     formPayload.append("orderDate", formData.orderDate);
-    formPayload.append("client", formData.clientName);
+    const canonicalClientName = resolveClientName(formData.clientName);
+    formPayload.append("client", canonicalClientName);
     formPayload.append("clientEmail", formData.clientEmail);
     formPayload.append("clientPhone", formData.clientPhone);
     formPayload.append("contactType", formData.contactType);
@@ -594,7 +660,7 @@ const NewOrders = () => {
         )}
 
         <div className="form-card">
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="off">
             <div className="order-meta-card">
               <div className="order-meta-head">
                 <div>
@@ -730,13 +796,30 @@ const NewOrders = () => {
               <div className="contact-grid">
                 <div className="form-group">
                   <label htmlFor="clientName">Client Name</label>
-                  <div className="input-wrapper">
+                  <div className="input-wrapper client-suggestion-wrapper">
                     <input
                       type="text"
                       id="clientName"
                       name="clientName"
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-form-type="other"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       value={formData.clientName}
                       onChange={handleChange}
+                      onFocus={() => setIsClientDropdownOpen(true)}
+                      onBlur={(event) => {
+                        const canonicalName = resolveClientName(event.target.value);
+                        if (canonicalName && canonicalName !== event.target.value) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            clientName: canonicalName,
+                          }));
+                        }
+                        setTimeout(() => setIsClientDropdownOpen(false), 120);
+                      }}
                       className="form-input"
                       placeholder="e.g. Acme Corp"
                       required
@@ -744,6 +827,23 @@ const NewOrders = () => {
                     <span className="input-icon">
                       <PersonIcon />
                     </span>
+                    {showClientDropdown && (
+                      <div className="client-suggestions" role="listbox">
+                        {filteredClientSuggestions.map((name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            className="client-suggestion-item"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              handleClientSuggestionSelect(name);
+                            }}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="form-group">

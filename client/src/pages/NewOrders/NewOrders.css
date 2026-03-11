@@ -2998,6 +2998,43 @@
   padding-right: 2.75rem;
 }
 
+.client-suggestion-wrapper {
+  position: relative;
+}
+
+.client-suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 12px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+  z-index: 30;
+  padding: 0.3rem;
+}
+
+.client-suggestion-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 0.88rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.client-suggestion-item:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
 .new-orders-page .input-icon {
   position: absolute;
   right: 12px;
