@@ -433,15 +433,13 @@
 
 /* --- Quote Create Redesign --- */
 .minimal-quote-container {
-  --quote-font-display:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-  --quote-font-body:
-    "Avenir Next", "Trebuchet MS", "Candara", "Noto Sans", sans-serif;
+  --quote-font-display: inherit;
+  --quote-font-body: inherit;
   --quote-ink: #0f172a;
   --quote-muted: #475569;
   --quote-line: rgba(148, 163, 184, 0.4);
   --quote-primary: #0f766e;
-  font-family: var(--quote-font-body);
+  font-family: inherit;
   background: linear-gradient(140deg, #f8fafc 0%, #ffffff 40%, #f1f5f9 100%);
   position: relative;
   overflow: hidden;
@@ -455,7 +453,7 @@
 }
 
 .minimal-quote-container .page-header h1 {
-  font-family: var(--quote-font-display);
+  font-family: inherit;
   color: var(--quote-ink);
 }
 
@@ -519,7 +517,7 @@
 
 .quote-meta-title {
   margin: 0.4rem 0 0.3rem;
-  font-family: var(--quote-font-display);
+  font-family: inherit;
   font-size: 1.55rem;
   color: var(--quote-ink);
 }

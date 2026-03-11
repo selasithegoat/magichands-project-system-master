@@ -2760,10 +2760,8 @@
 
 /* --- Create Order Redesign --- */
 .new-orders-page {
-  --order-font-display:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-  --order-font-body:
-    "Avenir Next", "Trebuchet MS", "Candara", "Noto Sans", sans-serif;
+  --order-font-display: inherit;
+  --order-font-body: inherit;
   --order-ink: #0f172a;
   --order-muted: #475569;
   --order-line: rgba(148, 163, 184, 0.4);
@@ -2771,7 +2769,7 @@
   --order-primary: #0f766e;
   --order-primary-soft: rgba(20, 184, 166, 0.12);
   --order-accent: #f59e0b;
-  font-family: var(--order-font-body);
+  font-family: inherit;
   padding: 2.5rem 2rem 3rem;
   position: relative;
   overflow: hidden;
@@ -2828,7 +2826,7 @@
 
 
 .new-orders-page .page-header h1 {
-  font-family: var(--order-font-display);
+  font-family: inherit;
   font-size: clamp(1.8rem, 2.6vw, 2.6rem);
   letter-spacing: -0.02em;
   color: var(--order-ink);
@@ -2850,7 +2848,7 @@
 }
 
 .new-orders-page .section-title {
-  font-family: var(--order-font-display);
+  font-family: inherit;
   font-size: 1.15rem;
   color: var(--order-ink);
   margin-bottom: 1.2rem;
