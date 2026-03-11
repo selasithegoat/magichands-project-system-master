@@ -28,7 +28,7 @@ const getProjectTypeLabel = (typeKey) => {
   }
 };
 
-const HistoryProjectCard = ({ project, onViewDetails }) => {
+const HistoryProjectCard = ({ project, onViewDetails, animationDelay = 0 }) => {
   const details = project.details || {};
   const projectTypeKey = resolveProjectTypeKey(project);
   const projectTypeLabel = getProjectTypeLabel(projectTypeKey);
@@ -49,7 +49,7 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
     sampleRequirementEnabled ? "Sample Approval Required" : "",
   ]
     .filter(Boolean)
-    .join(" • ");
+    .join(" | ");
 
   // Format Date
   const formatDate = (dateString) => {
@@ -66,45 +66,47 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
       className={`history-card history-card-${projectTypeKey} ${
         hasSpecialRequirementTag ? "has-special-awareness" : ""
       }`}
+      style={{ "--delay": `${animationDelay}ms` }}
     >
       {hasSpecialRequirementTag && (
         <div className="special-requirement-watermark" aria-hidden="true">
           {specialRequirementWatermark}
         </div>
       )}
-      <div className="card-top-row">
-        <div className="order-meta-tags">
-          <span className={`project-type-tag ${projectTypeKey}`}>
+      <div className="history-card-header">
+        <div className="history-card-tags">
+          <span className={`project-type-pill ${projectTypeKey}`}>
             {projectTypeLabel}
           </span>
-          <span className="order-id-tag">{project.orderId || "NO-ID"}</span>
+          <span className="order-id-pill">{project.orderId || "NO-ID"}</span>
           {showVersionTag && <span className="version-tag">v{projectVersion}</span>}
         </div>
-        <span className="status-badge delivered">
+        <span className="status-pill delivered">
           <CheckCircleIcon width="16" height="16" /> {project.status}
         </span>
       </div>
 
-      <h3 className="card-title">
-        {details.projectName || "Untitled Project"}
-      </h3>
+      <div className="history-card-title-row">
+        <h3 className="history-card-title">
+          {details.projectName || "Untitled Project"}
+        </h3>
+        {hasSpecialRequirementTag && (
+          <div className="special-requirements-row">
+            {corporateEmergencyEnabled && (
+              <span className="special-requirement-tag corporate">
+                Corporate Emergency
+              </span>
+            )}
+            {sampleRequirementEnabled && (
+              <span className="special-requirement-tag sample">
+                Sample Approval Required
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
-      {hasSpecialRequirementTag && (
-        <div className="special-requirements-row">
-          {corporateEmergencyEnabled && (
-            <span className="special-requirement-tag corporate">
-              Corporate Emergency
-            </span>
-          )}
-          {sampleRequirementEnabled && (
-            <span className="special-requirement-tag sample">
-              Sample Approval Required
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="card-info-grid">
+      <div className="history-card-info">
         <div className="info-item">
           <div className="info-icon">
             <BuildingIcon />
@@ -124,7 +126,7 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
             <CalendarIcon />
           </div>
           <div className="info-content">
-            <span className="info-label">Delivered On</span>
+            <span className="info-label">Delivered</span>
             <span className="info-value">
               {formatDate(details.deliveryDate)}
             </span>
@@ -132,10 +134,9 @@ const HistoryProjectCard = ({ project, onViewDetails }) => {
         </div>
       </div>
 
-      <div className="card-actions">
+      <div className="history-card-footer">
         <button
-          className="action-btn btn-secondary"
-          style={{ width: "100%" }}
+          className="history-card-button"
           onClick={() => onViewDetails(project._id)}
         >
           <EyeIcon /> View Details

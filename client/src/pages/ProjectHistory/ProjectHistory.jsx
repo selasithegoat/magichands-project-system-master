@@ -49,26 +49,30 @@ const ProjectHistory = ({ onBack }) => {
     return d && !isNaN(d.getTime()) ? d : null;
   };
 
-  const matchesFilter = (project) => {
-    if (filter === "All") return true;
-
+  const getDateBucket = (project) => {
     const projectDate = getProjectDate(project);
-    if (!projectDate) return false;
+    if (!projectDate) return "unknown";
 
     const now = new Date();
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const thisMonthStart = thisMonth;
 
-    if (filter === "This Month") {
-      return projectDate >= thisMonthStart && projectDate < nextMonth;
+    if (projectDate >= thisMonthStart && projectDate < nextMonth) {
+      return "thisMonth";
     }
-    if (filter === "Last Month") {
-      return projectDate >= lastMonthStart && projectDate < thisMonthStart;
+    if (projectDate >= lastMonthStart && projectDate < thisMonthStart) {
+      return "lastMonth";
     }
-    // Older
-    return projectDate < lastMonthStart;
+    return "older";
+  };
+
+  const matchesFilter = (project) => {
+    if (filter === "All") return true;
+    const bucket = getDateBucket(project);
+    if (filter === "This Month") return bucket === "thisMonth";
+    if (filter === "Last Month") return bucket === "lastMonth";
+    return bucket === "older";
   };
 
   const matchesSearch = (project) => {
@@ -96,82 +100,144 @@ const ProjectHistory = ({ onBack }) => {
     (project) => matchesFilter(project) && matchesSearch(project),
   );
 
+  const totalCount = projects.length;
+  const bucketCounts = projects.reduce(
+    (acc, project) => {
+      const bucket = getDateBucket(project);
+      if (bucket === "thisMonth") acc.thisMonth += 1;
+      if (bucket === "lastMonth") acc.lastMonth += 1;
+      if (bucket === "older") acc.older += 1;
+      if (bucket === "unknown") acc.unknown += 1;
+      return acc;
+    },
+    { thisMonth: 0, lastMonth: 0, older: 0, unknown: 0 },
+  );
+
+  const latestDeliveryDate = projects
+    .map(getProjectDate)
+    .filter(Boolean)
+    .sort((a, b) => b - a)[0];
+  const latestDeliveryLabel = latestDeliveryDate
+    ? latestDeliveryDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "N/A";
+
   return (
     <div className="history-container">
-      {/* Header */}
-      <div className="history-header">
-        <button className="history-back-btn" onClick={onBack}>
-          <ChevronLeftIcon />
-        </button>
-        <h1 className="history-title">Project History</h1>
-        <div style={{ width: 32 }}></div> {/* Spacer */}
-      </div>
-
-      {/* Search */}
-      <div className="history-search-bar">
-        <SearchIcon className="text-gray-400" />
-        <input
-          type="text"
-          className="search-input"
-          placeholder="Search by Order #, Client, or Project Name..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <FilterIcon className="filter-icon" />
-      </div>
-
-      {/* Filters */}
-      <div className="history-filters">
-        {["All", "This Month", "Last Month", "Older"].map((f) => (
-          <button
-            key={f}
-            className={`filter-pill ${filter === f ? "active" : "inactive"}`}
-            onClick={() => setFilter(f)}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            paddingTop: "4rem",
-          }}
-        >
-          <LoadingSpinner />
-        </div>
-      ) : projects.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
-          <p>No finished projects found.</p>
-        </div>
-      ) : filteredProjects.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
-          <p>No projects match your search or filter.</p>
-        </div>
-      ) : (
-        <div className="month-section">
-          <div className="month-header">
-            <span className="month-label">History</span>
-            <span className="project-count">
-              {filteredProjects.length} Projects
+      <section className="history-hero">
+        <div className="history-hero-left">
+          <div className="history-hero-top">
+            <button
+              className="history-back-btn"
+              onClick={onBack}
+              aria-label="Back"
+            >
+              <ChevronLeftIcon />
+            </button>
+            <span className="history-hero-kicker">Project History</span>
+          </div>
+          <h1 className="history-title">Delivered work, organized.</h1>
+          <p className="history-subtitle">
+            Review every completed project, track delivery cadence, and jump
+            straight to any finished order when you need context.
+          </p>
+          <div className="history-hero-meta">
+            <span className="history-meta-pill">
+              Latest delivery: {latestDeliveryLabel}
             </span>
-          </div>
-
-          <div className="history-cards-grid">
-            {filteredProjects.map((project) => (
-              <HistoryProjectCard
-                key={project._id}
-                project={project}
-                onViewDetails={handleViewDetails}
-              />
-            ))}
+            <span className="history-meta-pill subtle">Live updates</span>
           </div>
         </div>
-      )}
+        <div className="history-hero-stats">
+          <div className="history-stat-card">
+            <span className="history-stat-label">Total Completed</span>
+            <span className="history-stat-value">{totalCount}</span>
+          </div>
+          <div className="history-stat-card">
+            <span className="history-stat-label">This Month</span>
+            <span className="history-stat-value">{bucketCounts.thisMonth}</span>
+          </div>
+          <div className="history-stat-card">
+            <span className="history-stat-label">Last Month</span>
+            <span className="history-stat-value">{bucketCounts.lastMonth}</span>
+          </div>
+          <div className="history-stat-card">
+            <span className="history-stat-label">Older</span>
+            <span className="history-stat-value">{bucketCounts.older}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="history-toolbar">
+        <div className="history-search-bar">
+          <SearchIcon className="text-gray-400" />
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search by Order #, Client, or Project Name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <FilterIcon className="filter-icon" />
+        </div>
+
+        <div className="history-filters">
+          {["All", "This Month", "Last Month", "Older"].map((f) => (
+            <button
+              key={f}
+              className={`filter-pill ${filter === f ? "active" : "inactive"}`}
+              onClick={() => setFilter(f)}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="history-results">
+        {loading ? (
+          <div className="history-loading">
+            <LoadingSpinner />
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="history-empty-state">
+            <p>No finished projects found.</p>
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="history-empty-state">
+            <p>No projects match your search or filter.</p>
+          </div>
+        ) : (
+          <>
+            <div className="history-results-header">
+              <div className="history-results-title">
+                <span className="history-results-label">Showing</span>
+                <span className="history-results-count">
+                  {filteredProjects.length}
+                </span>
+                <span className="history-results-total">
+                  of {totalCount} projects
+                </span>
+              </div>
+              <div className="history-results-meta">Newest first</div>
+            </div>
+
+            <div className="history-cards-grid">
+              {filteredProjects.map((project, index) => (
+                <HistoryProjectCard
+                  key={project._id}
+                  project={project}
+                  onViewDetails={handleViewDetails}
+                  animationDelay={index * 60}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 };
