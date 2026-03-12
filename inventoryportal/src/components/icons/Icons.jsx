@@ -291,3 +291,67 @@ export const DownloadIcon = ({ className }) => (
     />
   </IconBase>
 );
+
+export const BuildingIcon = ({ className }) => (
+  <IconBase className={className}>
+    <rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M8 7h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M14 7h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M8 11h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M14 11h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M10 21v-4h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const EditIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M4 20h4l10.5-10.5a1.6 1.6 0 0 0 0-2.3l-1.7-1.7a1.6 1.6 0 0 0-2.3 0L4 16v4Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <path d="M12.5 7.5l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const MoreVerticalIcon = ({ className }) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="5" r="1.6" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="12" cy="19" r="1.6" fill="currentColor" />
+  </IconBase>
+);
+
+export const FileTextIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M7 3h7l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M8 12h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M8 16h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const ClockIcon = ({ className }) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const ShieldCheckIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M12 3l7 3v5c0 5.2-3.2 9-7 10-3.8-1-7-4.8-7-10V6l7-3Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <path d="M9 12.5l2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);

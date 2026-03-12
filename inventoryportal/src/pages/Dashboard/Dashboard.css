@@ -6,7 +6,7 @@
 }
 
 .page-header h2 {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 28px;
   margin: 8px 0 6px;
 }
@@ -47,7 +47,7 @@
 }
 
 .stat-value {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 24px;
   margin: 8px 0 12px;
 }
@@ -177,7 +177,7 @@
 }
 
 .panel-header h3 {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Inter", sans-serif;
   margin: 0 0 4px;
 }
 
