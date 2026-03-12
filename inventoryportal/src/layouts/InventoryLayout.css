@@ -26,13 +26,31 @@
   transition: margin-left 0.2s ease;
 }
 
-.inventory-app:has(.sidebar:hover) .main,
-.inventory-app:has(.sidebar:focus-within) .main {
-  margin-left: calc(var(--sidebar-expanded) + 12px);
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 15;
+}
+
+.sidebar-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (min-width: 901px) {
+  .inventory-app:has(.sidebar:hover) .main,
+  .inventory-app:has(.sidebar:focus-within) .main {
+    margin-left: calc(var(--sidebar-expanded) + 12px);
+  }
 }
 
 @media (max-width: 900px) {
   .main {
     margin-left: 0;
+    padding: 10px;
   }
 }

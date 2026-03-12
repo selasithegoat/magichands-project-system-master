@@ -98,6 +98,40 @@
   gap: 12px;
 }
 
+.mobile-profile {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+}
+
+.mobile-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mobile-profile span {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.mobile-profile strong {
+  font-size: 14px;
+}
+
+.mobile-theme-toggle {
+  justify-content: center;
+}
+
 .full-width {
   width: 100%;
   justify-content: center;
@@ -123,16 +157,23 @@
 
 @media (max-width: 900px) {
   .sidebar {
-    position: relative;
-    top: auto;
-    left: auto;
-    width: 100%;
-    height: auto;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(280px, 85vw);
+    height: 100vh;
+    transform: translateX(-110%);
+    transition: transform 0.2s ease;
+    z-index: 20;
   }
 
   .sidebar:hover,
   .sidebar:focus-within {
-    width: 100%;
+    width: min(280px, 85vw);
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
   }
 
   .sidebar .brand-text {
@@ -144,6 +185,10 @@
     display: inline !important;
   }
 
+  .mobile-profile {
+    display: flex;
+  }
+
   .sidebar .nav-item,
   .sidebar .sidebar-footer .primary-button,
   .sidebar .sidebar-footer .ghost-button {
@@ -152,8 +197,17 @@
     padding-right: 12px;
   }
 
-  .nav {
-    flex-direction: row;
-    flex-wrap: wrap;
+  .sidebar:not(:hover):not(:focus-within) .brand-text,
+  .sidebar:not(:hover):not(:focus-within) .nav-text,
+  .sidebar:not(:hover):not(:focus-within) .button-text {
+    display: inline !important;
+  }
+
+  .sidebar:not(:hover):not(:focus-within) .nav-item,
+  .sidebar:not(:hover):not(:focus-within) .sidebar-footer .primary-button,
+  .sidebar:not(:hover):not(:focus-within) .sidebar-footer .ghost-button {
+    justify-content: flex-start;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 }

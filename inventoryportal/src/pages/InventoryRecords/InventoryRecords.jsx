@@ -192,25 +192,27 @@ const InventoryRecords = () => {
             <div className="table-body">
               {records.map((record) => (
                 <div className="table-row" key={record.id}>
-                  <div className="cell checkbox-cell">
+                  <div className="cell checkbox-cell" data-label="Select">
                     <input type="checkbox" />
                   </div>
-                  <div className="cell item-cell">
+                  <div className="cell item-cell" data-label="Item Name">
                     <div className="item-thumb">
                       <img src={record.image} alt={record.item} />
                     </div>
                     <div>
-                      <strong>{record.item}</strong>
+                      <strong>{record.item}</strong> <br></br>
                       <span className="muted">{record.subtext}</span>
                     </div>
                   </div>
-                  <div className="cell mono">{record.sku}</div>
-                  <div className="cell">
+                  <div className="cell mono" data-label="SKU">
+                    {record.sku}
+                  </div>
+                  <div className="cell" data-label="Category">
                     <span className={`category-pill ${record.categoryTone}`}>
                       {record.category}
                     </span>
                   </div>
-                  <div className="cell qty-cell">
+                  <div className="cell qty-cell" data-label="Quantity">
                     <div className="qty-line">
                       <span>{record.qtyLabel}</span>
                       <span className={`qty-flag ${record.qtyState}`}>
@@ -223,15 +225,21 @@ const InventoryRecords = () => {
                       />
                     </div>
                   </div>
-                  <div className="cell price">{record.price}</div>
-                  <div className="cell value">{record.value}</div>
-                  <div className="cell muted">{record.location}</div>
-                  <div className="cell">
+                  <div className="cell price" data-label="Price">
+                    {record.price}
+                  </div>
+                  <div className="cell value" data-label="Value">
+                    {record.value}
+                  </div>
+                  <div className="cell muted" data-label="Location">
+                    {record.location}
+                  </div>
+                  <div className="cell" data-label="Status">
                     <span className={`status-pill ${record.statusTone}`}>
                       {record.status}
                     </span>
                   </div>
-                  <div className="cell actions-cell">
+                  <div className="cell actions-cell" data-label="Actions">
                     {record.reorder ? (
                       <button type="button" className="reorder-button">
                         Reorder
