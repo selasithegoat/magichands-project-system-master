@@ -240,11 +240,6 @@ const InventoryRecords = () => {
                     </span>
                   </div>
                   <div className="cell actions-cell" data-label="Actions">
-                    {record.reorder ? (
-                      <button type="button" className="reorder-button">
-                        Reorder
-                      </button>
-                    ) : null}
                     <button type="button" className="action-button">
                       <EditIcon />
                     </button>
