@@ -75,14 +75,14 @@
 }
 
 .nav-item.active {
-  background: #f1f5ff;
-  border-color: #dbe7ff;
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
   color: var(--accent-strong);
   box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.08);
 }
 
 .nav-item:hover {
-  border-color: #dbe7ff;
+  border-color: var(--accent-border);
   color: var(--accent-strong);
 }
 

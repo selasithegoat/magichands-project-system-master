@@ -27,6 +27,22 @@ import { hasInventoryPortalAccess } from "../utils/access";
 import { quickActions } from "../data/quickActions";
 
 const APP_NAME = "MagicHands Inventory";
+const THEME_STORAGE_KEY = "inventory-portal-theme";
+
+const getPreferredTheme = () => {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: DashboardIcon },
@@ -47,6 +63,7 @@ const App = () => {
   const [accessDenied, setAccessDenied] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
+  const [theme, setTheme] = useState(() => getPreferredTheme());
 
   useEffect(() => {
     const checkSession = async () => {
@@ -78,6 +95,19 @@ const App = () => {
 
     checkSession();
   }, []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prevTheme) => (prevTheme === "dark" ? "light" : "dark"));
+  };
 
   const logout = async () => {
     setUser(null);
@@ -187,6 +217,8 @@ const App = () => {
         notificationCount={3}
         activeKey={activePage}
         onNavigate={setActivePage}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       >
         {renderActivePage()}
       </InventoryLayout>

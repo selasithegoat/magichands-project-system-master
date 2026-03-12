@@ -10,6 +10,8 @@ const InventoryLayout = ({
   notificationCount,
   activeKey,
   onNavigate,
+  theme,
+  onToggleTheme,
   children,
 }) => (
   <div className="inventory-app">
@@ -24,6 +26,8 @@ const InventoryLayout = ({
         user={user}
         onQuickAction={onQuickAction}
         notificationCount={notificationCount}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
       />
       {children}
     </main>

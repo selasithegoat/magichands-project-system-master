@@ -10,7 +10,7 @@
   background: var(--bg-alt);
   padding: 28px;
   box-shadow: var(--shadow);
-  border: 1px solid rgba(226, 232, 240, 0.7);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
 }
 

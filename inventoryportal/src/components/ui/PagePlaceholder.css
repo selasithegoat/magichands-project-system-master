@@ -2,8 +2,8 @@
   min-height: 420px;
   display: grid;
   place-items: center;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: var(--bg-alt);
+  border: 1px solid var(--border-soft);
   padding: 40px 24px;
   text-align: center;
   border-radius: var(--radius-md);

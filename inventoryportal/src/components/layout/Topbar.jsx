@@ -1,8 +1,22 @@
-import { BellIcon, BoltIcon, ChevronDownIcon, SearchIcon, UserIcon } from "../icons/Icons";
+import {
+  BellIcon,
+  BoltIcon,
+  ChevronDownIcon,
+  MoonIcon,
+  SearchIcon,
+  SunIcon,
+  UserIcon,
+} from "../icons/Icons";
 import { formatUserName } from "../../utils/user";
 import "./Topbar.css";
 
-const Topbar = ({ user, onQuickAction, notificationCount = 0 }) => (
+const Topbar = ({
+  user,
+  onQuickAction,
+  notificationCount = 0,
+  theme,
+  onToggleTheme,
+}) => (
   <header className="topbar">
     <div className="search">
       <SearchIcon className="search-icon" />
@@ -17,6 +31,16 @@ const Topbar = ({ user, onQuickAction, notificationCount = 0 }) => (
       >
         <BoltIcon className="button-icon" />
         Quick Action
+      </button>
+      <button
+        type="button"
+        className="icon-button theme-toggle"
+        onClick={() => onToggleTheme?.()}
+        aria-label={
+          theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+        }
+      >
+        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
       </button>
       <button type="button" className="icon-button" aria-label="Notifications">
         <BellIcon />

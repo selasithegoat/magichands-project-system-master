@@ -2,19 +2,24 @@
 
 :root {
   color-scheme: light;
-  --bg: #f3f6fb;
+  --bg: #ffffff;
   --bg-alt: #ffffff;
+  --surface-alt: #f8fafc;
+  --surface-muted: #f1f5f9;
   --ink: #0f172a;
   --ink-soft: #475569;
   --ink-muted: #94a3b8;
   --accent: #1d4ed8;
   --accent-strong: #1e3a8a;
   --accent-soft: #dbeafe;
+  --accent-border: #c7d2fe;
   --warning: #f59e0b;
   --warning-soft: #fef3c7;
   --success: #10b981;
   --success-soft: #dcfce7;
   --border: #e2e8f0;
+  --border-soft: rgba(226, 232, 240, 0.8);
+  --border-soft-2: rgba(226, 232, 240, 0.6);
   --shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
   --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
   --radius-lg: 16px;
@@ -27,6 +32,28 @@
   background: var(--bg);
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --bg-alt: #111827;
+  --surface-alt: #0f172a;
+  --surface-muted: #1f2937;
+  --ink: #e2e8f0;
+  --ink-soft: #cbd5f5;
+  --ink-muted: #94a3b8;
+  --accent: #60a5fa;
+  --accent-strong: #93c5fd;
+  --accent-soft: #1e3a8a;
+  --accent-border: #1e40af;
+  --warning-soft: rgba(245, 158, 11, 0.2);
+  --success-soft: rgba(16, 185, 129, 0.2);
+  --border: #283548;
+  --border-soft: rgba(148, 163, 184, 0.2);
+  --border-soft-2: rgba(148, 163, 184, 0.12);
+  --shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+  --shadow-soft: 0 12px 30px rgba(2, 6, 23, 0.35);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -34,7 +61,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: #ffffff;
+  background: var(--bg);
   color: var(--ink);
   font-family: inherit;
   -webkit-font-smoothing: antialiased;
@@ -80,8 +107,8 @@ select {
 }
 
 .ghost-button {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: var(--surface-alt);
+  border-color: var(--border);
   color: var(--ink);
 }
 
@@ -145,6 +172,12 @@ select {
   background: var(--success-soft);
 }
 
+:root[data-theme="dark"] .alert.warning {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
 .alert-content {
   display: flex;
   flex-direction: column;
@@ -174,7 +207,7 @@ select {
   width: min(720px, 96vw);
   background: var(--bg-alt);
   box-shadow: var(--shadow);
-  border: 1px solid rgba(226, 232, 240, 0.7);
+  border: 1px solid var(--border-soft);
   padding: 20px;
   border-radius: var(--radius-md);
 }

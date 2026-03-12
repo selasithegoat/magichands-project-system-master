@@ -60,7 +60,7 @@
 .user-avatar {
   width: 36px;
   height: 36px;
-  background: #e0e7ff;
+  background: var(--accent-soft);
   display: grid;
   place-items: center;
   color: var(--accent);

@@ -315,6 +315,31 @@ export const AlertCircleIcon = ({ className }) => (
   </IconBase>
 );
 
+export const SunIcon = ({ className }) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M12 3v2.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M12 18.8V21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M4.5 4.5l1.6 1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M17.9 17.9l1.6 1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M3 12h2.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M18.8 12H21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M4.5 19.5l1.6-1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M17.9 6.1l1.6-1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const MoonIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M20 14.5A8 8 0 0 1 9.5 4a6.5 6.5 0 1 0 10.5 10.5Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+  </IconBase>
+);
+
 export const BuildingIcon = ({ className }) => (
   <IconBase className={className}>
     <rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
