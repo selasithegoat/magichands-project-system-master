@@ -348,6 +348,16 @@ export const MenuIcon = ({ className }) => (
   </IconBase>
 );
 
+export const TrashIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path d="M4 7h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M9 7V5h6v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <rect x="6" y="7" width="12" height="13" rx="2" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M10 11v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M14 11v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
 export const BuildingIcon = ({ className }) => (
   <IconBase className={className}>
     <rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
