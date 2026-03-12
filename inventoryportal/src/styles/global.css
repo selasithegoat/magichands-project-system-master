@@ -17,9 +17,9 @@
   --border: #e2e8f0;
   --shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
   --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
-  --radius-lg: 10px;
-  --radius-md: 8px;
-  --radius-sm: 6px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
   --sidebar-collapsed: 84px;
   --sidebar-expanded: 280px;
   font-family: "Manrope", sans-serif;
@@ -42,7 +42,7 @@ button,
 input,
 select {
   font-family: inherit;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 #root {
@@ -62,7 +62,7 @@ select {
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .primary-button {
@@ -114,6 +114,7 @@ select {
   padding: 12px 14px;
   border: 1px solid transparent;
   background: #fff7ed;
+  border-radius: var(--radius-sm);
 }
 
 .alert.warning {

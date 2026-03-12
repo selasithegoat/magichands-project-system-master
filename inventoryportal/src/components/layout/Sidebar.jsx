@@ -4,7 +4,7 @@ import "./Sidebar.css";
 const Sidebar = ({ navItems, onLogout, activeKey, onNavigate }) => (
   <aside className="sidebar">
     <div className="brand">
-      <img src="/mhlogo.png" alt="MagicHands Logo" />
+      <img src="/icon-192.png" alt="MagicHands Logo" />
       <div className="brand-text">
         <span className="brand-title">MagicHands</span>
         <span className="brand-subtitle">Inventory Portal</span>

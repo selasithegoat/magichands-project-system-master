@@ -10,7 +10,7 @@ const Login = ({
   <div className="login-shell">
     <div className="login-card">
       <div className="login-brand">
-        <img src="/mhlogo.png" alt="MagicHands Logo" />
+        <img src="/icon-192.png" alt="MagicHands Logo" />
         <div>
           <h1>{appName}</h1>
           <p>Enterprise Inventory Portal</p>
