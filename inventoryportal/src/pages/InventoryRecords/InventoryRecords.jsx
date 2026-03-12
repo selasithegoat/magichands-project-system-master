@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertCircleIcon,
   CheckIcon,
@@ -11,10 +11,12 @@ import {
   WarningIcon,
 } from "../../components/icons/Icons";
 import { inventoryRecords } from "../../data/inventoryRecords";
+import NewInventoryRecordModal from "../../components/modals/NewInventoryRecordModal";
 import "./InventoryRecords.css";
 
 const InventoryRecords = () => {
   const records = useMemo(() => inventoryRecords, []);
+  const [isNewRecordOpen, setIsNewRecordOpen] = useState(false);
 
   return (
     <section className="inventory-records">
@@ -28,7 +30,11 @@ const InventoryRecords = () => {
             <DownloadIcon className="button-icon" />
             Export
           </button>
-          <button type="button" className="primary-button">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setIsNewRecordOpen(true)}
+          >
             <PlusIcon className="button-icon" />
             Add New Record
           </button>
@@ -265,6 +271,12 @@ const InventoryRecords = () => {
           </div>
         </div>
       </div>
+
+      <NewInventoryRecordModal
+        isOpen={isNewRecordOpen}
+        onClose={() => setIsNewRecordOpen(false)}
+        onSave={() => setIsNewRecordOpen(false)}
+      />
     </section>
   );
 };

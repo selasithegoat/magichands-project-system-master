@@ -201,6 +201,21 @@ select {
   place-items: center;
   z-index: 10;
   padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.modal-overlay.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-overlay--side {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
 }
 
 .modal-card {
@@ -210,6 +225,54 @@ select {
   border: 1px solid var(--border-soft);
   padding: 20px;
   border-radius: var(--radius-md);
+  transform: translateY(12px) scale(0.98);
+  opacity: 0;
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease;
+}
+
+.modal-overlay.is-active .modal-card {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.modal-card--side {
+  width: min(460px, 96vw);
+  height: 100%;
+  border-radius: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(32px);
+  opacity: 0;
+}
+
+.modal-overlay.is-active .modal-card--side {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.modal-card--side .modal-header,
+.modal-card--side .modal-body,
+.modal-card--side .modal-footer {
+  padding: 20px;
+}
+
+.modal-card--side .modal-header {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.modal-card--side .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 0;
+}
+
+.modal-card--side .modal-footer {
+  margin-top: 0;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-alt);
 }
 
 .modal-header {
