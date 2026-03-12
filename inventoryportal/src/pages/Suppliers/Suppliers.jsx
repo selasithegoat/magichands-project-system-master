@@ -75,7 +75,7 @@ const Suppliers = () => {
         </div>
       </div>
 
-      <div className="suppliers-table">
+      <div className="suppliers-table mobile-card-table">
         <div className="table-header">
           <span>Supplier Name</span>
           <span>Contact Person</span>
@@ -87,7 +87,10 @@ const Suppliers = () => {
         <div className="table-body">
           {rows.map((supplier) => (
             <div className="table-row" key={supplier.id}>
-              <div className="supplier-cell supplier-name">
+              <div
+                className="supplier-cell cell supplier-name full"
+                data-label="Supplier"
+              >
                 <div className={`supplier-icon ${supplier.tone}`}>
                   <BuildingIcon />
                 </div>
@@ -96,15 +99,18 @@ const Suppliers = () => {
                   <span className="muted">{supplier.code}</span>
                 </div>
               </div>
-              <div className="supplier-cell">
+              <div className="supplier-cell cell" data-label="Contact">
                 <strong>{supplier.contactPerson}</strong>
                 <span className="muted">{supplier.role}</span>
               </div>
-              <div className="supplier-cell">
+              <div className="supplier-cell cell" data-label="Contact Info">
                 <span>{supplier.phone}</span>
                 <span className="muted">{supplier.email}</span>
               </div>
-              <div className="supplier-cell supplier-tags">
+              <div
+                className="supplier-cell cell supplier-tags full"
+                data-label="Products"
+              >
                 {supplier.products.map((product) => (
                   <span
                     key={product.label}
@@ -114,12 +120,15 @@ const Suppliers = () => {
                   </span>
                 ))}
               </div>
-              <div className="supplier-cell">
+              <div className="supplier-cell cell" data-label="Open POs">
                 <span className={getStatusClass(supplier.openPO.status)}>
                   {supplier.openPO.label}
                 </span>
               </div>
-              <div className="supplier-cell supplier-actions">
+              <div
+                className="supplier-cell cell supplier-actions full"
+                data-label="Actions"
+              >
                 <button
                   type="button"
                   className="action-button"

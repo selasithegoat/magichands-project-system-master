@@ -227,7 +227,7 @@
   border-color: var(--accent);
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1200px) and (min-width: 1001px) {
   .filters-row {
     grid-template-columns: 1fr 140px 140px 44px;
   }
@@ -238,32 +238,9 @@
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1000px) {
   .filters-row {
     grid-template-columns: 1fr;
-  }
-
-  .table-header,
-  .table-row {
-    grid-template-columns: 1fr;
-  }
-
-  .table-header span {
-    display: none;
-  }
-
-  .table-row {
-    gap: 6px;
-  }
-
-  .cell {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .cell.item {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .table-footer {

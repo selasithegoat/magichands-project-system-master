@@ -238,7 +238,7 @@ const InventoryTypes = () => {
         </button>
       </header>
 
-      <div className="types-table">
+      <div className="types-table mobile-card-table">
         <div className="table-header">
           <span>Inventory Type Name</span>
           <span>Description</span>
@@ -255,19 +255,25 @@ const InventoryTypes = () => {
               key={row.id}
               onClick={() => setSelectedTypeId(row.id)}
             >
-              <div className="cell type-name">
+              <div className="cell type-name full" data-label="Type">
                 <strong>{row.name}</strong>
               </div>
-              <div className="cell muted">{row.description}</div>
-              <div className="cell">
+              <div className="cell muted full" data-label="Description">
+                {row.description}
+              </div>
+              <div className="cell" data-label="Fields">
                 <span className="count-pill">
                   {row.fields}
                   <span>Fields</span>
                 </span>
               </div>
-              <div className="cell">{row.records}</div>
-              <div className="cell muted">{row.created}</div>
-              <div className="cell actions-cell">
+              <div className="cell" data-label="Records">
+                {row.records}
+              </div>
+              <div className="cell muted" data-label="Created">
+                {row.created}
+              </div>
+              <div className="cell actions-cell full" data-label="Actions">
                 <button type="button" className="action-button" aria-label="Edit">
                   <EditIcon />
                 </button>
@@ -308,7 +314,7 @@ const InventoryTypes = () => {
 
         {builderOpen ? (
           <>
-            <div className="builder-table">
+            <div className="builder-table mobile-card-table">
               <div className="table-header">
                 <span />
                 <span>Field Name</span>
@@ -325,7 +331,7 @@ const InventoryTypes = () => {
                     onDragOver={handleDragOver(field.id)}
                     onDrop={handleDrop(field.id)}
                   >
-                    <div className="cell drag-cell">
+                    <div className="cell drag-cell full" data-label="Reorder">
                       <span
                         className="drag-handle"
                         draggable
@@ -334,10 +340,10 @@ const InventoryTypes = () => {
                         aria-label="Reorder field"
                         title="Drag to reorder"
                       >
-                        ⋮⋮
+                        ::
                       </span>
                     </div>
-                    <div className="cell">
+                    <div className="cell full" data-label="Field Name">
                       <input
                         type="text"
                         className="field-input"
@@ -348,7 +354,7 @@ const InventoryTypes = () => {
                         }
                       />
                     </div>
-                    <div className="cell">
+                    <div className="cell" data-label="Field Type">
                       <select
                         className="field-select"
                         value={field.type}
@@ -363,7 +369,7 @@ const InventoryTypes = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="cell">
+                    <div className="cell" data-label="Required">
                       <input
                         type="checkbox"
                         className="required-checkbox"
@@ -373,8 +379,10 @@ const InventoryTypes = () => {
                         }
                       />
                     </div>
-                    <div className="cell">{renderDefaultInput(field)}</div>
-                    <div className="cell actions-cell">
+                    <div className="cell full" data-label="Default Value">
+                      {renderDefaultInput(field)}
+                    </div>
+                    <div className="cell actions-cell full" data-label="Actions">
                       <button
                         type="button"
                         className="action-button"

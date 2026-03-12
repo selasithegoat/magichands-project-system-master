@@ -343,3 +343,52 @@ select {
     transform: translateY(0);
   }
 }
+
+@media (max-width: 1000px) {
+  .mobile-card-table.mobile-card-table {
+    border: none;
+    background: transparent;
+  }
+
+  .mobile-card-table.mobile-card-table .table-header {
+    display: none;
+  }
+
+  .mobile-card-table.mobile-card-table .table-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .mobile-card-table.mobile-card-table .table-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: var(--bg-alt);
+    border-top: none;
+  }
+
+  .mobile-card-table.mobile-card-table .cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .mobile-card-table.mobile-card-table .cell::before {
+    content: attr(data-label);
+    flex-basis: 100%;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+  }
+
+  .mobile-card-table.mobile-card-table .cell.full {
+    grid-column: 1 / -1;
+  }
+}

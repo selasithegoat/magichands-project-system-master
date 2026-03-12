@@ -51,7 +51,7 @@ const StockTransactions = () => {
         </div>
       </div>
 
-      <div className="table-card">
+      <div className="table-card mobile-card-table">
         <div className="table-header">
           <span>TXID</span>
           <span>Item</span>
@@ -66,27 +66,39 @@ const StockTransactions = () => {
         <div className="table-body">
           {rows.map((row) => (
             <div className="table-row" key={row.txid}>
-              <div className="cell mono">{row.txid}</div>
-              <div className="cell item">
+              <div className="cell mono txid" data-label="Txid">
+                {row.txid}
+              </div>
+              <div className="cell item full" data-label="Item">
                 <div className="item-avatar">{row.item.charAt(0)}</div>
                 <div>
                   <strong>{row.item}</strong>
                   <span className="muted">{row.sku}</span>
                 </div>
               </div>
-              <div className="cell">
+              <div className="cell" data-label="Type">
                 <span className={getTypeClass(row.type)}>{row.type}</span>
               </div>
-              <div className="cell">
+              <div className="cell" data-label="Qty">
                 <span className={getQtyClass(row.qty)}>
                   {row.qty > 0 ? `+${row.qty}` : row.qty}
                 </span>
               </div>
-              <div className="cell muted">{row.source}</div>
-              <div className="cell muted">{row.destination}</div>
-              <div className="cell muted">{row.date}</div>
-              <div className="cell staff">{row.staff}</div>
-              <div className="cell muted">{row.notes}</div>
+              <div className="cell muted" data-label="Source">
+                {row.source}
+              </div>
+              <div className="cell muted" data-label="Destination">
+                {row.destination}
+              </div>
+              <div className="cell muted" data-label="Date">
+                {row.date}
+              </div>
+              <div className="cell staff" data-label="Staff">
+                {row.staff}
+              </div>
+              <div className="cell muted notes full" data-label="Notes">
+                {row.notes}
+              </div>
             </div>
           ))}
         </div>
