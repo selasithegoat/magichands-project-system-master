@@ -292,6 +292,29 @@ export const DownloadIcon = ({ className }) => (
   </IconBase>
 );
 
+export const SortIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path d="M7 6h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M7 12h7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M7 18h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const ColumnsIcon = ({ className }) => (
+  <IconBase className={className}>
+    <rect x="4" y="5" width="6" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+    <rect x="14" y="5" width="6" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+  </IconBase>
+);
+
+export const AlertCircleIcon = ({ className }) => (
+  <IconBase className={className}>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M12 7v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <circle cx="12" cy="17" r="1" fill="currentColor" />
+  </IconBase>
+);
+
 export const BuildingIcon = ({ className }) => (
   <IconBase className={className}>
     <rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
