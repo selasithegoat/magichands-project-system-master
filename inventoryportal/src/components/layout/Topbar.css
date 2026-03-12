@@ -49,13 +49,20 @@
   gap: 12px;
 }
 
+.topbar-icons .icon-button svg {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+.topbar-icons .icon-button {
+  width: 52px;
+  height: 52px;
+}
+
 .menu-button {
   display: none !important;
 }
 
-.profile-avatar-button {
-  display: none;
-}
 
 .user-pill {
   display: flex;
@@ -126,14 +133,18 @@
   }
 
   .topbar-actions .theme-toggle,
-  .topbar-actions .user-pill,
-  .topbar-actions .profile-avatar-button {
+  .topbar-actions .user-pill {
     display: none !important;
   }
 
   .icon-button {
     width: 36px;
     height: 36px;
+  }
+
+  .topbar-icons .icon-button {
+    width: 48px;
+    height: 48px;
   }
 
   .user-avatar {

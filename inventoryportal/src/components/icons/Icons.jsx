@@ -185,8 +185,8 @@ export const SearchIcon = ({ className }) => (
   </IconBase>
 );
 
-export const BellIcon = ({ className }) => (
-  <IconBase className={className}>
+export const BellIcon = ({ className, size }) => (
+  <IconBase className={className} size={size}>
     <path
       d="M6.5 9a5.5 5.5 0 0 1 11 0v4.2l1.6 2.3H4.9l1.6-2.3V9Z"
       stroke="currentColor"
@@ -315,8 +315,8 @@ export const AlertCircleIcon = ({ className }) => (
   </IconBase>
 );
 
-export const SunIcon = ({ className }) => (
-  <IconBase className={className}>
+export const SunIcon = ({ className, size }) => (
+  <IconBase className={className} size={size}>
     <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.6" />
     <path d="M12 3v2.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     <path d="M12 18.8V21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -329,8 +329,8 @@ export const SunIcon = ({ className }) => (
   </IconBase>
 );
 
-export const MoonIcon = ({ className }) => (
-  <IconBase className={className}>
+export const MoonIcon = ({ className, size }) => (
+  <IconBase className={className} size={size}>
     <path
       d="M20 14.5A8 8 0 0 1 9.5 4a6.5 6.5 0 1 0 10.5 10.5Z"
       stroke="currentColor"

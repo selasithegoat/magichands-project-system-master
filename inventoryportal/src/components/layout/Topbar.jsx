@@ -53,20 +53,13 @@ const Topbar = ({
             theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
           }
         >
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-        </button>
-        <button type="button" className="icon-button" aria-label="Notifications">
-          <BellIcon />
-          {notificationCount > 0 ? <span className="icon-badge" /> : null}
-        </button>
-      </div>
-      <button
-        type="button"
-        className="icon-button profile-avatar-button"
-        aria-label="Profile"
-      >
-        <UserIcon />
+        {theme === "dark" ? <SunIcon size={40} /> : <MoonIcon size={40} />}
       </button>
+      <button type="button" className="icon-button" aria-label="Notifications">
+        <BellIcon size={40} />
+        {notificationCount > 0 ? <span className="icon-badge" /> : null}
+      </button>
+      </div>
       <div className="user-pill">
         <div className="user-avatar">
           <UserIcon />
