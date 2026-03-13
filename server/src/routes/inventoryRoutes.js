@@ -15,6 +15,7 @@ const {
   updateSupplier,
   deleteSupplier,
   getInventoryRecords,
+  getInventoryRecordCategories,
   createInventoryRecord,
   updateInventoryRecord,
   deleteInventoryRecord,
@@ -64,6 +65,7 @@ router
   .route("/inventory-records")
   .get(getInventoryRecords)
   .post(createInventoryRecord);
+router.route("/inventory-records/categories").get(getInventoryRecordCategories);
 router
   .route("/inventory-records/:id")
   .put(updateInventoryRecord)

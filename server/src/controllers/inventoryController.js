@@ -35,6 +35,41 @@ const ensureInventoryAccess = (req, res) => {
 
 const parseStringValue = (value) => String(value || "").trim();
 
+const parseListParam = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => parseStringValue(entry)).filter(Boolean);
+  }
+  const normalized = parseStringValue(value);
+  if (!normalized) return [];
+  return normalized
+    .split(",")
+    .map((entry) => parseStringValue(entry))
+    .filter(Boolean);
+};
+
+const parseCurrencyNumber = (value) => {
+  const raw = parseStringValue(value);
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^0-9.,-]/g, "");
+  const numeric = Number.parseFloat(cleaned.replace(/,/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const CATEGORY_TONES = ["blue", "indigo", "slate", "amber"];
+const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
+
+const pickRandomTone = (tones) =>
+  tones[Math.floor(Math.random() * tones.length)];
+
+const computeQtyMeta = (qtyState) => {
+  const normalized = parseStringValue(qtyState).toLowerCase();
+  if (normalized === "critical") return "12%";
+  if (normalized === "low") return "35%";
+  if (normalized === "full") return "100%";
+  if (normalized === "good") return "82%";
+  return "";
+};
+
 const parseDateValue = (value, fieldName, { required = false } = {}) => {
   if (value === undefined || value === null || value === "") {
     if (required) {
@@ -806,7 +841,17 @@ const getInventoryRecords = async (req, res) => {
 
     const sortResult = parseSortParam(
       req,
-      ["createdAt", "item", "sku", "category", "status"],
+      [
+        "createdAt",
+        "item",
+        "sku",
+        "category",
+        "status",
+        "location",
+        "warehouse",
+        "priceValue",
+        "qtyState",
+      ],
       { createdAt: -1 },
     );
     if (sortResult.error) {
@@ -814,14 +859,73 @@ const getInventoryRecords = async (req, res) => {
     }
 
     const filter = {};
-    const status = parseStringValue(req.query.status);
-    const category = parseStringValue(req.query.category);
+    const statusList = parseListParam(req.query.status);
+    const categoryList = parseListParam(req.query.category);
+    const qtyStateList = parseListParam(req.query.qtyState);
+    const warehouse = parseStringValue(req.query.warehouse);
+    const location = parseStringValue(req.query.location);
+    const reorderRaw = req.query.reorder;
     const search = buildSearchRegex(req.query.search);
+    const andFilters = [];
 
-    if (status) filter.status = status;
-    if (category) filter.category = category;
+    if (statusList.length) filter.status = { $in: statusList };
+    if (categoryList.length) filter.category = { $in: categoryList };
+    if (qtyStateList.length) filter.qtyState = { $in: qtyStateList };
+    if (warehouse) {
+      const warehouseRegex = new RegExp(
+        warehouse.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i",
+      );
+      andFilters.push({
+        $or: [{ warehouse: warehouseRegex }, { subtext: warehouseRegex }],
+      });
+    }
+    if (location) {
+      filter.location = location;
+    }
+    if (reorderRaw !== undefined && reorderRaw !== null && reorderRaw !== "") {
+      const normalized = String(reorderRaw).trim().toLowerCase();
+      if (normalized === "true" || normalized === "false") {
+        filter.reorder = normalized === "true";
+      }
+    }
     if (search) {
-      filter.$or = [{ item: search }, { sku: search }, { location: search }];
+      andFilters.push({
+        $or: [
+          { item: search },
+          { sku: search },
+          { location: search },
+          { subtext: search },
+          { warehouse: search },
+        ],
+      });
+    }
+
+    if (andFilters.length) {
+      filter.$and = andFilters;
+    }
+
+    const priceMinResult = parseNumberValue(req.query.priceMin, "priceMin", {
+      min: 0,
+    });
+    if (priceMinResult.error) {
+      return res.status(400).json({ message: priceMinResult.error });
+    }
+    const priceMaxResult = parseNumberValue(req.query.priceMax, "priceMax", {
+      min: 0,
+    });
+    if (priceMaxResult.error) {
+      return res.status(400).json({ message: priceMaxResult.error });
+    }
+
+    if (priceMinResult.value !== null || priceMaxResult.value !== null) {
+      filter.priceValue = {};
+      if (priceMinResult.value !== null) {
+        filter.priceValue.$gte = priceMinResult.value;
+      }
+      if (priceMaxResult.value !== null) {
+        filter.priceValue.$lte = priceMaxResult.value;
+      }
     }
 
     const [records, total] = await Promise.all([
@@ -848,12 +952,31 @@ const getInventoryRecords = async (req, res) => {
   }
 };
 
+const getInventoryRecordCategories = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const categories = await InventoryRecord.distinct("category", {
+      category: { $ne: "" },
+    });
+    const sorted = categories
+      .map((value) => parseStringValue(value))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    res.json({ data: sorted });
+  } catch (error) {
+    console.error("Error fetching inventory categories:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const createInventoryRecord = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
     const item = parseStringValue(req.body.item);
     const sku = parseStringValue(req.body.sku);
+    const warehouse = parseStringValue(req.body.warehouse || req.body.subtext);
     if (!item) {
       return res.status(400).json({ message: "item is required." });
     }
@@ -861,21 +984,26 @@ const createInventoryRecord = async (req, res) => {
       return res.status(400).json({ message: "sku is required." });
     }
 
+    const qtyState = parseStringValue(req.body.qtyState) || "good";
+    const qtyMeta = computeQtyMeta(qtyState);
+
     const record = await InventoryRecord.create({
       item,
-      subtext: parseStringValue(req.body.subtext),
+      subtext: warehouse,
+      warehouse,
       sku,
       category: parseStringValue(req.body.category),
-      categoryTone: parseStringValue(req.body.categoryTone),
+      categoryTone: pickRandomTone(CATEGORY_TONES),
       qtyLabel: parseStringValue(req.body.qtyLabel),
-      qtyMeta: parseStringValue(req.body.qtyMeta),
-      qtyState: parseStringValue(req.body.qtyState),
-      qtyFill: parseStringValue(req.body.qtyFill),
+      qtyMeta,
+      qtyState,
       price: parseStringValue(req.body.price),
+      priceValue: parseCurrencyNumber(req.body.price),
       value: parseStringValue(req.body.value),
+      valueValue: parseCurrencyNumber(req.body.value),
       location: parseStringValue(req.body.location),
       status: parseStringValue(req.body.status),
-      statusTone: parseStringValue(req.body.statusTone),
+      statusTone: pickRandomTone(STATUS_TONES),
       reorder: parseBooleanValue(req.body.reorder, false),
       image: parseStringValue(req.body.image),
       createdBy: req.user._id,
@@ -900,19 +1028,12 @@ const updateInventoryRecord = async (req, res) => {
 
     const updatableFields = [
       "item",
-      "subtext",
       "sku",
       "category",
-      "categoryTone",
       "qtyLabel",
-      "qtyMeta",
       "qtyState",
-      "qtyFill",
-      "price",
-      "value",
       "location",
       "status",
-      "statusTone",
       "image",
     ];
 
@@ -921,6 +1042,45 @@ const updateInventoryRecord = async (req, res) => {
         record[field] = parseStringValue(req.body[field]);
       }
     });
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "warehouse")) {
+      const nextWarehouse = parseStringValue(req.body.warehouse);
+      record.warehouse = nextWarehouse;
+      record.subtext = nextWarehouse;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "subtext")) {
+      const nextWarehouse = parseStringValue(req.body.subtext);
+      record.subtext = nextWarehouse;
+      record.warehouse = nextWarehouse;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
+      record.category = parseStringValue(req.body.category);
+      record.categoryTone = pickRandomTone(CATEGORY_TONES);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "qtyState")) {
+      record.qtyState = parseStringValue(req.body.qtyState);
+      record.qtyMeta = computeQtyMeta(record.qtyState);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
+      record.status = parseStringValue(req.body.status);
+      record.statusTone = pickRandomTone(STATUS_TONES);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "price")) {
+      const nextPrice = parseStringValue(req.body.price);
+      record.price = nextPrice;
+      record.priceValue = parseCurrencyNumber(nextPrice);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "value")) {
+      const nextValue = parseStringValue(req.body.value);
+      record.value = nextValue;
+      record.valueValue = parseCurrencyNumber(nextValue);
+    }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "reorder")) {
       record.reorder = parseBooleanValue(req.body.reorder, record.reorder);
@@ -1242,6 +1402,7 @@ module.exports = {
   updateSupplier,
   deleteSupplier,
   getInventoryRecords,
+  getInventoryRecordCategories,
   createInventoryRecord,
   updateInventoryRecord,
   deleteInventoryRecord,

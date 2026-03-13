@@ -7,6 +7,11 @@ const InventoryRecordSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    warehouse: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     subtext: {
       type: String,
       trim: true,
@@ -42,20 +47,23 @@ const InventoryRecordSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
-    qtyFill: {
-      type: String,
-      trim: true,
-      default: "",
-    },
     price: {
       type: String,
       trim: true,
       default: "",
     },
+    priceValue: {
+      type: Number,
+      default: null,
+    },
     value: {
       type: String,
       trim: true,
       default: "",
+    },
+    valueValue: {
+      type: Number,
+      default: null,
     },
     location: {
       type: String,

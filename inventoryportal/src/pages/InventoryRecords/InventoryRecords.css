@@ -254,6 +254,10 @@
   justify-content: center;
 }
 
+.filters-panel .modal-help {
+  margin-top: -4px;
+}
+
 .system-update {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
@@ -282,7 +286,7 @@
   background: var(--bg-alt);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .records-toolbar {
@@ -327,6 +331,79 @@
   color: var(--ink-muted);
 }
 
+.records-search {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+
+.records-tools .input-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.records-tools .input-shell input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--ink);
+  width: 100%;
+}
+
+.records-tools .input-shell .search-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-muted);
+}
+
+.sort-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--ink-soft);
+}
+
+.sort-select select {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+  cursor: pointer;
+}
+
+.columns-menu-wrapper {
+  position: relative;
+}
+
+.columns-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  min-width: 180px;
+  z-index: 5;
+}
+
+.columns-menu .check-row {
+  font-size: 12px;
+}
+
 .records-total {
   font-weight: 600;
 }
@@ -334,7 +411,10 @@
 .records-table .table-header,
 .records-table .table-row {
   display: grid;
-  grid-template-columns: 48px 2fr 1fr 1fr 1.2fr 0.8fr 0.9fr 0.8fr 0.8fr 1fr;
+  grid-template-columns: var(
+    --records-columns,
+    48px 2fr 1fr 1fr 1.2fr 0.8fr 0.9fr 0.8fr 0.8fr 1fr
+  );
   gap: 12px;
   align-items: center;
   padding: 12px 18px;
@@ -393,6 +473,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.item-fallback {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 
 .mono {
@@ -570,6 +656,66 @@
   color: #c2410c;
 }
 
+.status-pill.blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-pill.green {
+  background: #dcfce7;
+  color: #047857;
+}
+
+.status-pill.amber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-pill.rose {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.status-pill.indigo {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.status-pill.slate {
+  background: var(--surface-muted);
+  color: #475569;
+}
+
+:root[data-theme="dark"] .status-pill.blue {
+  background: rgba(96, 165, 250, 0.2);
+  color: #bfdbfe;
+}
+
+:root[data-theme="dark"] .status-pill.green {
+  background: rgba(16, 185, 129, 0.2);
+  color: #bbf7d0;
+}
+
+:root[data-theme="dark"] .status-pill.amber {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+}
+
+:root[data-theme="dark"] .status-pill.rose {
+  background: rgba(244, 63, 94, 0.2);
+  color: #fecdd3;
+}
+
+:root[data-theme="dark"] .status-pill.indigo {
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+}
+
+:root[data-theme="dark"] .status-pill.slate {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
 .actions-cell {
   flex-direction: row;
   align-items: center;
@@ -601,6 +747,34 @@
   border-top: 1px solid var(--border-soft);
   font-size: 12px;
   color: var(--ink-muted);
+}
+
+.upload-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.upload-preview.single {
+  grid-template-columns: minmax(140px, 200px);
+}
+
+.preview-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  background: var(--surface-alt);
+}
+
+.preview-item img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
 }
 
 .pagination {

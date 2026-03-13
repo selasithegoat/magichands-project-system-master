@@ -21,6 +21,28 @@ const parseDate = (value) => {
   return parsed;
 };
 
+const parseCurrencyNumber = (value) => {
+  if (!value) return null;
+  const cleaned = String(value).replace(/[^0-9.,-]/g, "");
+  const numeric = Number.parseFloat(cleaned.replace(/,/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const CATEGORY_TONES = ["blue", "indigo", "slate", "amber"];
+const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
+
+const pickRandomTone = (tones) =>
+  tones[Math.floor(Math.random() * tones.length)];
+
+const computeQtyMeta = (qtyState) => {
+  const normalized = String(qtyState || '').toLowerCase();
+  if (normalized == 'critical') return '12%';
+  if (normalized == 'low') return '35%';
+  if (normalized == 'full') return '100%';
+  if (normalized == 'good') return '82%';
+  return '';
+};
+
 const ensureSeedUser = async () => {
   let user = await User.findOne({ role: "admin" });
   if (user) return user;
@@ -287,76 +309,84 @@ const suppliers = [
 const inventoryRecords = [
   {
     item: "Pro-G Wireless Mouse",
-    subtext: "Warehouse A, R4",
+    warehouse: "Warehouse A",
+    subtext: "Warehouse A",
     sku: "MS-G903-BK",
     category: "Electronics",
-    categoryTone: "blue",
+    categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "458 Units",
-    qtyMeta: "82%",
+    qtyMeta: computeQtyMeta("good"),
     qtyState: "good",
-    qtyFill: "p82",
     price: "$89.99",
     value: "$41,215",
+    priceValue: parseCurrencyNumber("$89.99"),
+    valueValue: parseCurrencyNumber("$41,215"),
     location: "A-04-12",
     status: "In Stock",
-    statusTone: "in-stock",
+    statusTone: pickRandomTone(STATUS_TONES),
     reorder: false,
     image:
       "https://images.unsplash.com/photo-1527814050087-3793815479db?q=80&w=200&auto=format&fit=crop",
   },
   {
     item: "Kinesis TKL Mechanical",
-    subtext: "Warehouse B, L12",
+    warehouse: "Warehouse B",
+    subtext: "Warehouse B",
     sku: "KB-TK780-SL",
     category: "Peripherals",
-    categoryTone: "slate",
+    categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "12 Units",
-    qtyMeta: "Low",
+    qtyMeta: computeQtyMeta("critical"),
     qtyState: "critical",
-    qtyFill: "p12",
     price: "$149.50",
     value: "$1,794",
+    priceValue: parseCurrencyNumber("$149.50"),
+    valueValue: parseCurrencyNumber("$1,794"),
     location: "B-12-04",
     status: "Critical",
-    statusTone: "critical",
+    statusTone: pickRandomTone(STATUS_TONES),
     reorder: true,
     image:
       "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?q=80&w=200&auto=format&fit=crop",
   },
   {
     item: "UltraConnect Hub",
-    subtext: "Warehouse A, R1",
+    warehouse: "Warehouse A",
+    subtext: "Warehouse A",
     sku: "HB-UC10-GR",
     category: "Accessories",
-    categoryTone: "indigo",
+    categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "1,102 Units",
-    qtyMeta: "Full",
+    qtyMeta: computeQtyMeta("full"),
     qtyState: "full",
-    qtyFill: "p100",
     price: "$45.00",
     value: "$49,590",
+    priceValue: parseCurrencyNumber("$45.00"),
+    valueValue: parseCurrencyNumber("$49,590"),
     location: "A-01-02",
     status: "Oversupply",
-    statusTone: "oversupply",
+    statusTone: pickRandomTone(STATUS_TONES),
     reorder: false,
     image:
       "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=200&auto=format&fit=crop",
   },
   {
     item: "Dual Monitor Stand",
-    subtext: "Warehouse C, Shelf 2",
+    warehouse: "Warehouse C",
+    subtext: "Warehouse C",
     sku: "ST-DU100-ST",
     category: "Office",
-    categoryTone: "amber",
+    categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "84 Units",
-    qtyMeta: "35%",
+    qtyMeta: computeQtyMeta("low"),
     qtyState: "low",
-    qtyFill: "p35",
     price: "$120.00",
     value: "$10,080",
+    priceValue: parseCurrencyNumber("$120.00"),
+    valueValue: parseCurrencyNumber("$10,080"),
     location: "C-02-09",
     status: "Low Stock",
-    statusTone: "low-stock",
+    statusTone: pickRandomTone(STATUS_TONES),
     reorder: false,
     image:
       "https://images.unsplash.com/photo-1527443154391-507e9dc6c5cc?q=80&w=200&auto=format&fit=crop",
