@@ -6,6 +6,7 @@ import {
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
@@ -13,6 +14,13 @@ import {
   parseListResponse,
 } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import {
+  formatCurrencyPlaceholder,
+  formatCurrencyValue,
+  getCurrencyPrefix,
+  parseCurrencyValue,
+  useInventoryCurrency,
+} from "../../utils/currency";
 import "./PurchaseOrders.css";
 
 const getStatusClass = (status) =>
@@ -54,6 +62,9 @@ const PurchaseOrders = () => {
   });
   const [actionError, setActionError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const currency = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -76,9 +87,11 @@ const PurchaseOrders = () => {
         const normalized = parsed.data.map((order, index) => {
           const supplier = order.supplierName || order.supplier || "";
           const items = Array.isArray(order.items) ? order.items : [];
+          const primaryItemName = items[0]?.name || "";
           return {
             id: order._id || order.id || `${index}`,
             poNumber: order.poNumber || order.orderNo || order.id || "",
+            itemName: primaryItemName,
             supplier,
             supplierInitials:
               order.supplierInitials || buildInitials(supplier),
@@ -162,6 +175,17 @@ const PurchaseOrders = () => {
     if (meta.totalPages && nextPage > meta.totalPages) return;
     setPage(nextPage);
   };
+
+  const currencyPlaceholder = formatCurrencyPlaceholder(currency);
+  const currencyLabel = getCurrencyPrefix(currency);
+  const totalSpending = orders.reduce(
+    (sum, order) => sum + parseCurrencyValue(order.total),
+    0,
+  );
+  const pendingCount = orders.filter((order) => order.status === "Pending")
+    .length;
+  const orderedCount = orders.filter((order) => order.status === "Ordered")
+    .length;
 
   const openCreateModal = () => {
     setEditingOrder(null);
@@ -281,20 +305,27 @@ const PurchaseOrders = () => {
     }
   };
 
-  const handleDelete = async (order) => {
-    if (!order?.id) return;
-    const confirmed = window.confirm(
-      `Delete ${order.poNumber}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const requestDelete = (order) => {
+    setDeleteTarget(order);
+  };
 
+  const closeDelete = () => {
+    setDeleteTarget(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget?.id || isDeleting) return;
+    setIsDeleting(true);
     try {
-      await fetchInventory(`/api/inventory/purchase-orders/${order.id}`, {
+      await fetchInventory(`/api/inventory/purchase-orders/${deleteTarget.id}`, {
         method: "DELETE",
       });
       triggerRefresh();
     } catch (err) {
       setError(err?.message || "Unable to delete purchase order.");
+    } finally {
+      setIsDeleting(false);
+      closeDelete();
     }
   };
 
@@ -346,6 +377,7 @@ const PurchaseOrders = () => {
       <div className="orders-table-card mobile-card-table">
         <div className="table-header">
           <span>PO Number</span>
+          <span>Item Name</span>
           <span>Supplier</span>
           <span>Items Ordered</span>
           <span>Total Cost</span>
@@ -358,6 +390,9 @@ const PurchaseOrders = () => {
             <div className="table-row" key={order.id}>
               <div className="cell mono" data-label="PO Number">
                 {order.poNumber}
+              </div>
+              <div className="cell" data-label="Item Name">
+                <strong>{order.itemName || "-"}</strong>
               </div>
               <div className="cell supplier-cell full" data-label="Supplier">
                 <div className={`supplier-avatar ${order.supplierTone}`}>
@@ -386,7 +421,7 @@ const PurchaseOrders = () => {
                 </span>
               </div>
               <div className="cell total-cost" data-label="Total Cost">
-                {order.total}
+                {formatCurrencyValue(order.total, currency)}
               </div>
               <div className="cell" data-label="Status">
                 <select
@@ -419,7 +454,7 @@ const PurchaseOrders = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Delete ${order.id}`}
-                  onClick={() => handleDelete(order)}
+                  onClick={() => requestDelete(order)}
                 >
                   <TrashIcon />
                 </button>
@@ -472,18 +507,26 @@ const PurchaseOrders = () => {
 
       <div className="orders-summary">
         <article className="summary-card">
-          <span className="summary-label">Total Spending (MTD)</span>
-          <div className="summary-value">$142,500.20</div>
-          <div className="summary-meta positive">+12.5%</div>
+          <span className="summary-label">Total Spending (Loaded)</span>
+          <div className="summary-value">
+            {formatCurrencyValue(totalSpending, currency)}
+          </div>
+          <div className="summary-meta">
+            {orders.length ? `${orders.length} orders` : "No orders loaded"}
+          </div>
         </article>
         <article className="summary-card">
           <span className="summary-label">Pending Approvals</span>
-          <div className="summary-value">08</div>
+          <div className="summary-value">
+            {String(pendingCount).padStart(2, "0")}
+          </div>
           <div className="summary-meta">Requires action</div>
         </article>
         <article className="summary-card">
           <span className="summary-label">In Transit</span>
-          <div className="summary-value">14</div>
+          <div className="summary-value">
+            {String(orderedCount).padStart(2, "0")}
+          </div>
           <div className="summary-meta">Incoming POs</div>
         </article>
       </div>
@@ -518,12 +561,12 @@ const PurchaseOrders = () => {
               />
             </label>
             <label className="modal-field">
-              <span>Total Cost</span>
+              <span>Total Cost ({currencyLabel})</span>
               <input
                 type="text"
                 value={formData.total}
                 onChange={updateField("total")}
-                placeholder="$0.00"
+                placeholder={currencyPlaceholder}
               />
             </label>
             <label className="modal-field">
@@ -593,6 +636,20 @@ const PurchaseOrders = () => {
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Purchase Order"
+        message={
+          deleteTarget
+            ? `Delete ${deleteTarget.poNumber}? This cannot be undone.`
+            : "Delete this purchase order?"
+        }
+        confirmText={isDeleting ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onClose={closeDelete}
+      />
     </section>
   );
 };

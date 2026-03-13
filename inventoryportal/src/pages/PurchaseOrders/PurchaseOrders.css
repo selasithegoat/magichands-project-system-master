@@ -89,7 +89,7 @@
 .orders-table-card .table-header,
 .orders-table-card .table-row {
   display: grid;
-  grid-template-columns: 1fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 0.4fr;
+  grid-template-columns: 1fr 1.2fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 0.4fr;
   gap: 12px;
   align-items: center;
   padding: 12px 18px;
@@ -103,7 +103,7 @@
   letter-spacing: 0.08em;
 }
 
-.orders-table-card .table-header span:nth-child(2) {
+.orders-table-card .table-header span:nth-child(3) {
   padding-left: 38px;
 }
 
@@ -368,7 +368,7 @@
 @media (max-width: 1100px) and (min-width: 1001px) {
   .orders-table-card .table-header,
   .orders-table-card .table-row {
-    grid-template-columns: 1fr 1.4fr 1fr 0.9fr 0.9fr 1fr 0.4fr;
+    grid-template-columns: 1fr 1.1fr 1.4fr 1fr 0.9fr 0.9fr 1fr 0.4fr;
   }
 }
 

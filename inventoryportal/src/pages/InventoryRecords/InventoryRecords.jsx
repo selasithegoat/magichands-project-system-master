@@ -10,9 +10,16 @@ import {
   TrashIcon,
   WarningIcon,
 } from "../../components/icons/Icons";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import Modal from "../../components/ui/Modal";
 import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import {
+  formatCurrencyPlaceholder,
+  formatCurrencyValue,
+  getCurrencyPrefix,
+  useInventoryCurrency,
+} from "../../utils/currency";
 import "./InventoryRecords.css";
 
 const DEFAULT_RECORD_FORM = {
@@ -49,6 +56,9 @@ const InventoryRecords = () => {
   const [formData, setFormData] = useState(DEFAULT_RECORD_FORM);
   const [actionError, setActionError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const currency = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -119,6 +129,9 @@ const InventoryRecords = () => {
     if (meta.totalPages && nextPage > meta.totalPages) return;
     setPage(nextPage);
   };
+
+  const currencyPlaceholder = formatCurrencyPlaceholder(currency);
+  const currencyLabel = getCurrencyPrefix(currency);
 
   const openCreateModal = () => {
     setEditingRecord(null);
@@ -213,20 +226,27 @@ const InventoryRecords = () => {
     }
   };
 
-  const handleDelete = async (record) => {
-    if (!record?.id) return;
-    const confirmed = window.confirm(
-      `Delete ${record.item}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const requestDelete = (record) => {
+    setDeleteTarget(record);
+  };
 
+  const closeDelete = () => {
+    setDeleteTarget(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget?.id || isDeleting) return;
+    setIsDeleting(true);
     try {
-      await fetchInventory(`/api/inventory/inventory-records/${record.id}`, {
+      await fetchInventory(`/api/inventory/inventory-records/${deleteTarget.id}`, {
         method: "DELETE",
       });
       triggerRefresh();
     } catch (err) {
       setError(err?.message || "Unable to delete inventory record.");
+    } finally {
+      setIsDeleting(false);
+      closeDelete();
     }
   };
 
@@ -440,10 +460,10 @@ const InventoryRecords = () => {
                     </div>
                   </div>
                   <div className="cell price" data-label="Price">
-                    {record.price}
+                    {formatCurrencyValue(record.price, currency)}
                   </div>
                   <div className="cell value" data-label="Value">
-                    {record.value}
+                    {formatCurrencyValue(record.value, currency)}
                   </div>
                   <div className="cell muted" data-label="Location">
                     {record.location}
@@ -464,7 +484,7 @@ const InventoryRecords = () => {
                     <button
                       type="button"
                       className="action-button"
-                      onClick={() => handleDelete(record)}
+                      onClick={() => requestDelete(record)}
                     >
                       <TrashIcon />
                     </button>
@@ -621,21 +641,21 @@ const InventoryRecords = () => {
               </select>
             </label>
             <label className="modal-field">
-              <span>Price</span>
+              <span>Price ({currencyLabel})</span>
               <input
                 type="text"
                 value={formData.price}
                 onChange={updateField("price")}
-                placeholder="$0.00"
+                placeholder={currencyPlaceholder}
               />
             </label>
             <label className="modal-field">
-              <span>Value</span>
+              <span>Value ({currencyLabel})</span>
               <input
                 type="text"
                 value={formData.value}
                 onChange={updateField("value")}
-                placeholder="$0.00"
+                placeholder={currencyPlaceholder}
               />
             </label>
             <label className="modal-field">
@@ -689,6 +709,21 @@ const InventoryRecords = () => {
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Inventory Record"
+        message={
+          deleteTarget
+            ? `Delete ${deleteTarget.item}? This cannot be undone.`
+            : "Delete this inventory record?"
+        }
+        confirmText={isDeleting ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onClose={closeDelete}
+        variant="center"
+      />
     </section>
   );
 };

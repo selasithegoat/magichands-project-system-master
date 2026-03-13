@@ -8,6 +8,7 @@ import {
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
@@ -51,6 +52,8 @@ const ClientItems = () => {
   const [formData, setFormData] = useState(DEFAULT_FORM);
   const [actionError, setActionError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -196,20 +199,27 @@ const ClientItems = () => {
     }
   };
 
-  const handleDelete = async (item) => {
-    if (!item?.id) return;
-    const confirmed = window.confirm(
-      `Delete the record for ${item.client}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const requestDelete = (item) => {
+    setDeleteTarget(item);
+  };
 
+  const closeDelete = () => {
+    setDeleteTarget(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget?.id || isDeleting) return;
+    setIsDeleting(true);
     try {
-      await fetchInventory(`/api/inventory/client-items/${item.id}`, {
+      await fetchInventory(`/api/inventory/client-items/${deleteTarget.id}`, {
         method: "DELETE",
       });
       triggerRefresh();
     } catch (err) {
       setError(err?.message || "Unable to delete client item.");
+    } finally {
+      setIsDeleting(false);
+      closeDelete();
     }
   };
 
@@ -323,7 +333,7 @@ const ClientItems = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Delete ${item.client}`}
-                  onClick={() => handleDelete(item)}
+                  onClick={() => requestDelete(item)}
                 >
                   <TrashIcon />
                 </button>
@@ -463,6 +473,20 @@ const ClientItems = () => {
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Client Item"
+        message={
+          deleteTarget
+            ? `Delete the record for ${deleteTarget.client}? This cannot be undone.`
+            : "Delete this record?"
+        }
+        confirmText={isDeleting ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onClose={closeDelete}
+      />
     </section>
   );
 };

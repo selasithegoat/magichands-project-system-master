@@ -7,6 +7,7 @@ import {
   UserIcon,
   WarningIcon,
 } from "../../components/icons/Icons";
+import { formatCurrencyValue, useInventoryCurrency } from "../../utils/currency";
 import "./Dashboard.css";
 
 const activityFeed = [
@@ -40,8 +41,11 @@ const activityFeed = [
   },
 ];
 
-const Dashboard = () => (
-  <>
+const Dashboard = () => {
+  const currency = useInventoryCurrency();
+
+  return (
+    <>
     <div className="page-header">
       <div>
         <div className="breadcrumb">System / Dashboard</div>
@@ -99,7 +103,9 @@ const Dashboard = () => (
           <span>Inventory Value</span>
           <span className="delta positive">+5.1%</span>
         </div>
-        <div className="stat-value">$1.24M</div>
+        <div className="stat-value">
+          {formatCurrencyValue("1.24M", currency)}
+        </div>
         <div className="stat-chart value">
           <div className="value-tag">Growth trend</div>
         </div>
@@ -217,6 +223,7 @@ const Dashboard = () => (
       </div>
     </section>
   </>
-);
+  );
+};
 
 export default Dashboard;

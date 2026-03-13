@@ -77,6 +77,9 @@ const Settings = () => {
       const merged = { ...DEFAULT_SETTINGS, ...updated };
       setSettings(merged);
       setSavedSettings(merged);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("inventory-currency", merged.currency);
+      }
       setStatusMessage("Settings saved.");
     } catch (err) {
       setStatusMessage(err?.message || "Unable to save settings.");

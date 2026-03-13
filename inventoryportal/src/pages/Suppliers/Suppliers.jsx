@@ -10,6 +10,7 @@ import {
   ShieldCheckIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import Modal from "../../components/ui/Modal";
 import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
@@ -46,6 +47,8 @@ const Suppliers = () => {
   });
   const [actionError, setActionError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -211,20 +214,27 @@ const Suppliers = () => {
     }
   };
 
-  const handleDelete = async (supplier) => {
-    if (!supplier?.id) return;
-    const confirmed = window.confirm(
-      `Delete ${supplier.name}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const requestDelete = (supplier) => {
+    setDeleteTarget(supplier);
+  };
 
+  const closeDelete = () => {
+    setDeleteTarget(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget?.id || isDeleting) return;
+    setIsDeleting(true);
     try {
-      await fetchInventory(`/api/inventory/suppliers/${supplier.id}`, {
+      await fetchInventory(`/api/inventory/suppliers/${deleteTarget.id}`, {
         method: "DELETE",
       });
       triggerRefresh();
     } catch (err) {
       setError(err?.message || "Unable to delete supplier.");
+    } finally {
+      setIsDeleting(false);
+      closeDelete();
     }
   };
 
@@ -354,7 +364,7 @@ const Suppliers = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Delete ${supplier.name}`}
-                  onClick={() => handleDelete(supplier)}
+                  onClick={() => requestDelete(supplier)}
                 >
                   <TrashIcon />
                 </button>
@@ -550,6 +560,20 @@ const Suppliers = () => {
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Supplier"
+        message={
+          deleteTarget
+            ? `Delete ${deleteTarget.name}? This cannot be undone.`
+            : "Delete this supplier?"
+        }
+        confirmText={isDeleting ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onClose={closeDelete}
+      />
     </section>
   );
 };
