@@ -1,31 +1,90 @@
 const mongoose = require("mongoose");
 
-const PurchasingOrderSchema = new mongoose.Schema(
+const PurchasingOrderItemSchema = new mongoose.Schema(
   {
-    orderNo: {
+    name: {
       type: String,
-      required: true,
       trim: true,
+      default: "",
     },
-    dept: {
+    image: {
       type: String,
-      required: true,
       trim: true,
-    },
-    description: {
-      type: String,
-      required: true,
-      trim: true,
+      default: "",
     },
     qty: {
       type: Number,
-      required: true,
-      min: 1,
+      min: 0,
+      default: 0,
     },
-    requestStatus: {
+  },
+  { _id: false },
+);
+
+const PurchasingOrderSchema = new mongoose.Schema(
+  {
+    poNumber: {
       type: String,
       required: true,
       trim: true,
+    },
+    supplierName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    supplierInitials: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    supplierTone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    items: {
+      type: [PurchasingOrderItemSchema],
+      default: [],
+    },
+    itemsCount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    total: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    status: {
+      type: String,
+      trim: true,
+      default: "Pending",
+    },
+    dateRequestPlaced: {
+      type: Date,
+      required: true,
+    },
+    dept: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    qty: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    requestStatus: {
+      type: String,
+      trim: true,
+      default: "",
     },
     qtyReceivedBrought: {
       type: Number,
@@ -40,10 +99,6 @@ const PurchasingOrderSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
-    },
-    dateRequestPlaced: {
-      type: Date,
-      required: true,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

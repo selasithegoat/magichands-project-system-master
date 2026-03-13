@@ -1,5 +1,10 @@
 const ClientInventoryItem = require("../models/ClientInventoryItem");
 const PurchasingOrder = require("../models/PurchasingOrder");
+const Supplier = require("../models/Supplier");
+const InventoryRecord = require("../models/InventoryRecord");
+const StockTransaction = require("../models/StockTransaction");
+const InventoryReport = require("../models/InventoryReport");
+const InventorySettings = require("../models/InventorySettings");
 
 const STORES_DEPARTMENTS = new Set([
   "stores",
@@ -32,6 +37,8 @@ const ensureInventoryAccess = (req, res) => {
   }
   return true;
 };
+
+const parseStringValue = (value) => String(value || "").trim();
 
 const parseDateValue = (value, fieldName, { required = false } = {}) => {
   if (value === undefined || value === null || value === "") {
@@ -67,12 +74,46 @@ const parseNumberValue = (
   return { value: parsed };
 };
 
+const parseOptionalDate = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
+const parseBooleanValue = (value, defaultValue = false) => {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value === "boolean") return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return defaultValue;
+};
+
+const buildInitials = (value) => {
+  const words = parseStringValue(value).split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  return words
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join("");
+};
+
+const normalizeItems = (items) => {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    name: parseStringValue(item?.name),
+    image: parseStringValue(item?.image),
+    qty: Number.isFinite(Number(item?.qty)) ? Number(item.qty) : 0,
+  }));
+};
+
 const getClientItems = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
     const records = await ClientInventoryItem.find({})
-      .sort({ dateReceived: -1, createdAt: -1 })
+      .sort({ receivedAt: -1, createdAt: -1 })
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
 
@@ -87,50 +128,56 @@ const createClientItem = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const orderNo = String(req.body.orderNo || "").trim();
-    const jobLead = String(req.body.jobLead || "").trim();
-    const itemDescription = String(req.body.itemDescription || "").trim();
-    const production = String(req.body.production || "").trim();
+    const clientName = parseStringValue(req.body.clientName || req.body.client);
+    const clientPhone = parseStringValue(
+      req.body.clientPhone || req.body.phone,
+    );
+    const itemName = parseStringValue(req.body.itemName || req.body.item);
+    const serialNumber = parseStringValue(
+      req.body.serialNumber || req.body.serial,
+    );
+    const warehouse = parseStringValue(req.body.warehouse);
+    const status = parseStringValue(req.body.status) || "Received";
+    const notes = parseStringValue(req.body.notes);
+    const receivedAtResult = parseDateValue(
+      req.body.receivedAt || req.body.received || req.body.dateReceived,
+      "receivedAt",
+      { required: true },
+    );
 
-    if (!orderNo) {
-      return res.status(400).json({ message: "orderNo is required." });
+    if (!clientName) {
+      return res.status(400).json({ message: "clientName is required." });
     }
-
-    if (!itemDescription) {
-      return res.status(400).json({ message: "itemDescription is required." });
+    if (!itemName) {
+      return res.status(400).json({ message: "itemName is required." });
+    }
+    if (receivedAtResult.error) {
+      return res.status(400).json({ message: receivedAtResult.error });
     }
 
     const quantityResult = parseNumberValue(req.body.quantity, "quantity", {
-      required: true,
-      min: 1,
+      min: 0,
     });
     if (quantityResult.error) {
       return res.status(400).json({ message: quantityResult.error });
     }
 
-    const dateReceivedResult = parseDateValue(req.body.dateReceived, "dateReceived", {
-      required: true,
-    });
-    if (dateReceivedResult.error) {
-      return res.status(400).json({ message: dateReceivedResult.error });
-    }
-
-    const deliveryResult = parseDateValue(
-      req.body.deliveryDateTime,
-      "deliveryDateTime",
-    );
-    if (deliveryResult.error) {
-      return res.status(400).json({ message: deliveryResult.error });
-    }
-
     const record = await ClientInventoryItem.create({
-      orderNo,
-      jobLead,
-      dateReceived: dateReceivedResult.value,
-      itemDescription,
-      quantity: quantityResult.value,
-      production,
-      deliveryDateTime: deliveryResult.value,
+      clientName,
+      clientPhone,
+      itemName,
+      serialNumber,
+      receivedAt: receivedAtResult.value,
+      warehouse,
+      status,
+      notes,
+      orderNo: parseStringValue(req.body.orderNo),
+      jobLead: parseStringValue(req.body.jobLead),
+      dateReceived: receivedAtResult.value,
+      itemDescription: parseStringValue(req.body.itemDescription),
+      quantity: quantityResult.value ?? 0,
+      production: parseStringValue(req.body.production),
+      deliveryDateTime: parseOptionalDate(req.body.deliveryDateTime),
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
@@ -155,62 +202,63 @@ const updateClientItem = async (req, res) => {
       return res.status(404).json({ message: "Client inventory item not found." });
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "orderNo")) {
-      const orderNo = String(req.body.orderNo || "").trim();
-      if (!orderNo) {
-        return res.status(400).json({ message: "orderNo cannot be empty." });
+    if (Object.prototype.hasOwnProperty.call(req.body, "clientName")) {
+      const clientName = parseStringValue(req.body.clientName);
+      if (!clientName) {
+        return res.status(400).json({ message: "clientName cannot be empty." });
       }
-      record.orderNo = orderNo;
+      record.clientName = clientName;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "jobLead")) {
-      record.jobLead = String(req.body.jobLead || "").trim();
+    if (Object.prototype.hasOwnProperty.call(req.body, "clientPhone")) {
+      record.clientPhone = parseStringValue(req.body.clientPhone);
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "itemDescription")) {
-      const itemDescription = String(req.body.itemDescription || "").trim();
-      if (!itemDescription) {
-        return res
-          .status(400)
-          .json({ message: "itemDescription cannot be empty." });
+    if (Object.prototype.hasOwnProperty.call(req.body, "itemName")) {
+      const itemName = parseStringValue(req.body.itemName);
+      if (!itemName) {
+        return res.status(400).json({ message: "itemName cannot be empty." });
       }
-      record.itemDescription = itemDescription;
+      record.itemName = itemName;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "production")) {
-      record.production = String(req.body.production || "").trim();
+    if (Object.prototype.hasOwnProperty.call(req.body, "serialNumber")) {
+      record.serialNumber = parseStringValue(req.body.serialNumber);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "receivedAt")) {
+      const receivedAtResult = parseDateValue(
+        req.body.receivedAt,
+        "receivedAt",
+        { required: true },
+      );
+      if (receivedAtResult.error) {
+        return res.status(400).json({ message: receivedAtResult.error });
+      }
+      record.receivedAt = receivedAtResult.value;
+      record.dateReceived = receivedAtResult.value;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "warehouse")) {
+      record.warehouse = parseStringValue(req.body.warehouse);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
+      record.status = parseStringValue(req.body.status);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "notes")) {
+      record.notes = parseStringValue(req.body.notes);
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "quantity")) {
       const quantityResult = parseNumberValue(req.body.quantity, "quantity", {
-        required: true,
-        min: 1,
+        min: 0,
       });
       if (quantityResult.error) {
         return res.status(400).json({ message: quantityResult.error });
       }
-      record.quantity = quantityResult.value;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "dateReceived")) {
-      const dateReceivedResult = parseDateValue(req.body.dateReceived, "dateReceived", {
-        required: true,
-      });
-      if (dateReceivedResult.error) {
-        return res.status(400).json({ message: dateReceivedResult.error });
-      }
-      record.dateReceived = dateReceivedResult.value;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "deliveryDateTime")) {
-      const deliveryResult = parseDateValue(
-        req.body.deliveryDateTime,
-        "deliveryDateTime",
-      );
-      if (deliveryResult.error) {
-        return res.status(400).json({ message: deliveryResult.error });
-      }
-      record.deliveryDateTime = deliveryResult.value;
+      record.quantity = quantityResult.value ?? 0;
     }
 
     record.updatedBy = req.user._id;
@@ -262,71 +310,66 @@ const createPurchasingOrder = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const orderNo = String(req.body.orderNo || "").trim();
-    const dept = String(req.body.dept || "").trim();
-    const description = String(req.body.description || "").trim();
-    const requestStatus = String(req.body.requestStatus || "").trim();
-    const receivedBy = String(req.body.receivedBy || "").trim();
+    const poNumber =
+      parseStringValue(req.body.poNumber) ||
+      parseStringValue(req.body.orderNo) ||
+      parseStringValue(req.body.id);
+    const supplierName =
+      parseStringValue(req.body.supplierName) ||
+      parseStringValue(req.body.supplier);
+    const supplierInitials =
+      parseStringValue(req.body.supplierInitials) || buildInitials(supplierName);
+    const supplierTone = parseStringValue(req.body.supplierTone);
+    const total = parseStringValue(req.body.total);
+    const status =
+      parseStringValue(req.body.status) ||
+      parseStringValue(req.body.requestStatus) ||
+      "Pending";
+    const items = normalizeItems(req.body.items);
+    const itemsCountValue =
+      Number.isFinite(Number(req.body.itemsCount))
+        ? Number(req.body.itemsCount)
+        : items.length;
+    const dateRequestPlaced =
+      parseOptionalDate(req.body.dateRequestPlaced) ||
+      parseOptionalDate(req.body.createdAt) ||
+      parseOptionalDate(req.body.created) ||
+      new Date();
 
-    if (!orderNo) {
-      return res.status(400).json({ message: "orderNo is required." });
+    if (!poNumber) {
+      return res.status(400).json({ message: "poNumber is required." });
     }
-    if (!dept) {
-      return res.status(400).json({ message: "dept is required." });
+    if (!supplierName) {
+      return res.status(400).json({ message: "supplierName is required." });
     }
-    if (!description) {
-      return res.status(400).json({ message: "description is required." });
-    }
-    if (!requestStatus) {
-      return res.status(400).json({ message: "requestStatus is required." });
+    if (!total) {
+      return res.status(400).json({ message: "total is required." });
     }
 
-    const qtyResult = parseNumberValue(req.body.qty, "qty", {
-      required: true,
-      min: 1,
-    });
+    const qtyResult = parseNumberValue(req.body.qty, "qty", { min: 0 });
     if (qtyResult.error) {
       return res.status(400).json({ message: qtyResult.error });
     }
 
-    const qtyReceivedResult = parseNumberValue(
-      req.body.qtyReceivedBrought,
-      "qtyReceivedBrought",
-      {
-        min: 0,
-      },
-    );
-    if (qtyReceivedResult.error) {
-      return res.status(400).json({ message: qtyReceivedResult.error });
-    }
-
-    const dateRequestPlacedResult = parseDateValue(
-      req.body.dateRequestPlaced,
-      "dateRequestPlaced",
-      { required: true },
-    );
-    if (dateRequestPlacedResult.error) {
-      return res.status(400).json({ message: dateRequestPlacedResult.error });
-    }
-
-    const dateItemReceivedResult = parseDateValue(
-      req.body.dateItemReceived,
-      "dateItemReceived",
-    );
-    if (dateItemReceivedResult.error) {
-      return res.status(400).json({ message: dateItemReceivedResult.error });
-    }
-
     const record = await PurchasingOrder.create({
-      orderNo,
-      dept,
-      description,
-      qty: qtyResult.value,
-      requestStatus,
-      qtyReceivedBrought: qtyReceivedResult.value,
-      dateItemReceived: dateItemReceivedResult.value,
-      receivedBy,
-      dateRequestPlaced: dateRequestPlacedResult.value,
+      poNumber,
+      supplierName,
+      supplierInitials,
+      supplierTone,
+      items,
+      itemsCount: itemsCountValue,
+      total,
+      status,
+      dateRequestPlaced,
+      dept: parseStringValue(req.body.dept),
+      description: parseStringValue(req.body.description),
+      qty: qtyResult.value ?? 0,
+      requestStatus: parseStringValue(req.body.requestStatus) || status,
+      qtyReceivedBrought: Number.isFinite(Number(req.body.qtyReceivedBrought))
+        ? Number(req.body.qtyReceivedBrought)
+        : null,
+      dateItemReceived: parseOptionalDate(req.body.dateItemReceived),
+      receivedBy: parseStringValue(req.body.receivedBy),
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
@@ -351,86 +394,79 @@ const updatePurchasingOrder = async (req, res) => {
       return res.status(404).json({ message: "Purchasing order not found." });
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "orderNo")) {
-      const orderNo = String(req.body.orderNo || "").trim();
-      if (!orderNo) {
-        return res.status(400).json({ message: "orderNo cannot be empty." });
+    if (Object.prototype.hasOwnProperty.call(req.body, "poNumber")) {
+      const poNumber = parseStringValue(req.body.poNumber);
+      if (!poNumber) {
+        return res.status(400).json({ message: "poNumber cannot be empty." });
       }
-      record.orderNo = orderNo;
+      record.poNumber = poNumber;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "dept")) {
-      const dept = String(req.body.dept || "").trim();
-      if (!dept) {
-        return res.status(400).json({ message: "dept cannot be empty." });
+    if (Object.prototype.hasOwnProperty.call(req.body, "supplierName")) {
+      const supplierName = parseStringValue(req.body.supplierName);
+      if (!supplierName) {
+        return res
+          .status(400)
+          .json({ message: "supplierName cannot be empty." });
       }
-      record.dept = dept;
+      record.supplierName = supplierName;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "description")) {
-      const description = String(req.body.description || "").trim();
-      if (!description) {
-        return res.status(400).json({ message: "description cannot be empty." });
+    if (Object.prototype.hasOwnProperty.call(req.body, "supplierInitials")) {
+      record.supplierInitials = parseStringValue(req.body.supplierInitials);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "supplierTone")) {
+      record.supplierTone = parseStringValue(req.body.supplierTone);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "items")) {
+      const items = normalizeItems(req.body.items);
+      record.items = items;
+      record.itemsCount = items.length;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "itemsCount")) {
+      const itemsCountResult = parseNumberValue(
+        req.body.itemsCount,
+        "itemsCount",
+        { min: 0 },
+      );
+      if (itemsCountResult.error) {
+        return res.status(400).json({ message: itemsCountResult.error });
       }
-      record.description = description;
+      record.itemsCount = itemsCountResult.value ?? 0;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "total")) {
+      const total = parseStringValue(req.body.total);
+      if (!total) {
+        return res.status(400).json({ message: "total cannot be empty." });
+      }
+      record.total = total;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
+      record.status = parseStringValue(req.body.status);
+      if (!record.requestStatus) {
+        record.requestStatus = record.status;
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "requestStatus")) {
-      const requestStatus = String(req.body.requestStatus || "").trim();
-      if (!requestStatus) {
-        return res.status(400).json({ message: "requestStatus cannot be empty." });
-      }
-      record.requestStatus = requestStatus;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "receivedBy")) {
-      record.receivedBy = String(req.body.receivedBy || "").trim();
-    }
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "qty")) {
-      const qtyResult = parseNumberValue(req.body.qty, "qty", {
-        required: true,
-        min: 1,
-      });
-      if (qtyResult.error) {
-        return res.status(400).json({ message: qtyResult.error });
-      }
-      record.qty = qtyResult.value;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "qtyReceivedBrought")) {
-      const qtyReceivedResult = parseNumberValue(
-        req.body.qtyReceivedBrought,
-        "qtyReceivedBrought",
-        { min: 0 },
-      );
-      if (qtyReceivedResult.error) {
-        return res.status(400).json({ message: qtyReceivedResult.error });
-      }
-      record.qtyReceivedBrought = qtyReceivedResult.value;
+      record.requestStatus = parseStringValue(req.body.requestStatus);
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "dateRequestPlaced")) {
-      const dateRequestPlacedResult = parseDateValue(
+      const dateResult = parseDateValue(
         req.body.dateRequestPlaced,
         "dateRequestPlaced",
         { required: true },
       );
-      if (dateRequestPlacedResult.error) {
-        return res.status(400).json({ message: dateRequestPlacedResult.error });
+      if (dateResult.error) {
+        return res.status(400).json({ message: dateResult.error });
       }
-      record.dateRequestPlaced = dateRequestPlacedResult.value;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(req.body, "dateItemReceived")) {
-      const dateItemReceivedResult = parseDateValue(
-        req.body.dateItemReceived,
-        "dateItemReceived",
-      );
-      if (dateItemReceivedResult.error) {
-        return res.status(400).json({ message: dateItemReceivedResult.error });
-      }
-      record.dateItemReceived = dateItemReceivedResult.value;
+      record.dateRequestPlaced = dateResult.value;
     }
 
     record.updatedBy = req.user._id;
@@ -462,6 +498,429 @@ const deletePurchasingOrder = async (req, res) => {
   }
 };
 
+const getSuppliers = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const records = await Supplier.find({})
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "firstName lastName employeeId")
+      .populate("updatedBy", "firstName lastName employeeId");
+    res.json(records);
+  } catch (error) {
+    console.error("Error fetching suppliers:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const createSupplier = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const name = parseStringValue(req.body.name);
+    if (!name) {
+      return res.status(400).json({ message: "name is required." });
+    }
+
+    const record = await Supplier.create({
+      code: parseStringValue(req.body.code),
+      name,
+      contactPerson: parseStringValue(req.body.contactPerson),
+      role: parseStringValue(req.body.role),
+      phone: parseStringValue(req.body.phone),
+      email: parseStringValue(req.body.email),
+      products: Array.isArray(req.body.products) ? req.body.products : [],
+      openPO: req.body.openPO || {},
+      tone: parseStringValue(req.body.tone),
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
+    });
+
+    res.status(201).json(record);
+  } catch (error) {
+    console.error("Error creating supplier:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const updateSupplier = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const record = await Supplier.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Supplier not found." });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "code")) {
+      record.code = parseStringValue(req.body.code);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "name")) {
+      const name = parseStringValue(req.body.name);
+      if (!name) {
+        return res.status(400).json({ message: "name cannot be empty." });
+      }
+      record.name = name;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "contactPerson")) {
+      record.contactPerson = parseStringValue(req.body.contactPerson);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "role")) {
+      record.role = parseStringValue(req.body.role);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "phone")) {
+      record.phone = parseStringValue(req.body.phone);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "email")) {
+      record.email = parseStringValue(req.body.email);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "products")) {
+      record.products = Array.isArray(req.body.products)
+        ? req.body.products
+        : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "openPO")) {
+      record.openPO = req.body.openPO || {};
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "tone")) {
+      record.tone = parseStringValue(req.body.tone);
+    }
+
+    record.updatedBy = req.user._id;
+    await record.save();
+    res.json(record);
+  } catch (error) {
+    console.error("Error updating supplier:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const deleteSupplier = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const deleted = await Supplier.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Supplier not found." });
+    }
+    res.json({ message: "Supplier deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting supplier:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const getInventoryRecords = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const records = await InventoryRecord.find({})
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "firstName lastName employeeId")
+      .populate("updatedBy", "firstName lastName employeeId");
+    res.json(records);
+  } catch (error) {
+    console.error("Error fetching inventory records:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const createInventoryRecord = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const item = parseStringValue(req.body.item);
+    const sku = parseStringValue(req.body.sku);
+    if (!item) {
+      return res.status(400).json({ message: "item is required." });
+    }
+    if (!sku) {
+      return res.status(400).json({ message: "sku is required." });
+    }
+
+    const record = await InventoryRecord.create({
+      item,
+      subtext: parseStringValue(req.body.subtext),
+      sku,
+      category: parseStringValue(req.body.category),
+      categoryTone: parseStringValue(req.body.categoryTone),
+      qtyLabel: parseStringValue(req.body.qtyLabel),
+      qtyMeta: parseStringValue(req.body.qtyMeta),
+      qtyState: parseStringValue(req.body.qtyState),
+      qtyFill: parseStringValue(req.body.qtyFill),
+      price: parseStringValue(req.body.price),
+      value: parseStringValue(req.body.value),
+      location: parseStringValue(req.body.location),
+      status: parseStringValue(req.body.status),
+      statusTone: parseStringValue(req.body.statusTone),
+      reorder: parseBooleanValue(req.body.reorder, false),
+      image: parseStringValue(req.body.image),
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
+    });
+
+    res.status(201).json(record);
+  } catch (error) {
+    console.error("Error creating inventory record:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const updateInventoryRecord = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const record = await InventoryRecord.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Inventory record not found." });
+    }
+
+    const updatableFields = [
+      "item",
+      "subtext",
+      "sku",
+      "category",
+      "categoryTone",
+      "qtyLabel",
+      "qtyMeta",
+      "qtyState",
+      "qtyFill",
+      "price",
+      "value",
+      "location",
+      "status",
+      "statusTone",
+      "image",
+    ];
+
+    updatableFields.forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        record[field] = parseStringValue(req.body[field]);
+      }
+    });
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "reorder")) {
+      record.reorder = parseBooleanValue(req.body.reorder, record.reorder);
+    }
+
+    record.updatedBy = req.user._id;
+    await record.save();
+    res.json(record);
+  } catch (error) {
+    console.error("Error updating inventory record:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const deleteInventoryRecord = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const deleted = await InventoryRecord.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Inventory record not found." });
+    }
+    res.json({ message: "Inventory record deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting inventory record:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const getStockTransactions = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const records = await StockTransaction.find({})
+      .sort({ date: -1, createdAt: -1 })
+      .populate("createdBy", "firstName lastName employeeId")
+      .populate("updatedBy", "firstName lastName employeeId");
+    res.json(records);
+  } catch (error) {
+    console.error("Error fetching stock transactions:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const createStockTransaction = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const item = parseStringValue(req.body.item);
+    const type = parseStringValue(req.body.type);
+    const qtyResult = parseNumberValue(req.body.qty, "qty", {
+      required: true,
+    });
+
+    if (!item) {
+      return res.status(400).json({ message: "item is required." });
+    }
+    if (!type) {
+      return res.status(400).json({ message: "type is required." });
+    }
+    if (qtyResult.error) {
+      return res.status(400).json({ message: qtyResult.error });
+    }
+
+    const txid =
+      parseStringValue(req.body.txid) ||
+      `TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const date =
+      parseOptionalDate(req.body.date) ||
+      parseOptionalDate(req.body.createdAt) ||
+      new Date();
+
+    const record = await StockTransaction.create({
+      txid,
+      item,
+      sku: parseStringValue(req.body.sku),
+      type,
+      qty: qtyResult.value,
+      source: parseStringValue(req.body.source),
+      destination: parseStringValue(req.body.destination),
+      date,
+      staff: parseStringValue(req.body.staff),
+      notes: parseStringValue(req.body.notes),
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
+    });
+
+    res.status(201).json(record);
+  } catch (error) {
+    console.error("Error creating stock transaction:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const getReports = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const records = await InventoryReport.find({})
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "firstName lastName employeeId");
+    res.json(records);
+  } catch (error) {
+    console.error("Error fetching inventory reports:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const createReport = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const name = parseStringValue(req.body.name);
+    if (!name) {
+      return res.status(400).json({ message: "name is required." });
+    }
+
+    const report = await InventoryReport.create({
+      name,
+      createdAtOverride: parseOptionalDate(req.body.createdAt),
+      generatedBy: parseStringValue(req.body.generatedBy),
+      status: parseStringValue(req.body.status) || "Ready",
+      downloads: Array.isArray(req.body.downloads)
+        ? req.body.downloads
+        : ["PDF", "CSV", "EXCEL"],
+      createdBy: req.user._id,
+    });
+
+    res.status(201).json(report);
+  } catch (error) {
+    console.error("Error creating inventory report:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const deleteReport = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const deleted = await InventoryReport.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Report not found." });
+    }
+    res.json({ message: "Report deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting inventory report:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const getInventorySettings = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    let settings = await InventorySettings.findOne({});
+    if (!settings) {
+      settings = await InventorySettings.create({});
+    }
+    res.json(settings);
+  } catch (error) {
+    console.error("Error fetching inventory settings:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const updateInventorySettings = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    let settings = await InventorySettings.findOne({});
+    if (!settings) {
+      settings = await InventorySettings.create({});
+    }
+
+    const updatableFields = [
+      "organizationName",
+      "primaryContactEmail",
+      "currency",
+      "timezone",
+      "dateFormat",
+      "numberFormat",
+      "notifyLowStock",
+      "notifyPurchaseOrders",
+      "notifyWeeklySummary",
+      "defaultWarehouse",
+      "lowStockThreshold",
+      "unitOfMeasure",
+      "autoReorder",
+      "theme",
+      "tableDensity",
+      "defaultExportFormat",
+      "posErpConnection",
+      "dataRetention",
+      "auditLogAccess",
+    ];
+
+    updatableFields.forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        if (
+          field === "notifyLowStock" ||
+          field === "notifyPurchaseOrders" ||
+          field === "notifyWeeklySummary" ||
+          field === "autoReorder"
+        ) {
+          settings[field] = parseBooleanValue(req.body[field], settings[field]);
+        } else if (field === "lowStockThreshold") {
+          const parsed = Number(req.body[field]);
+          settings[field] = Number.isFinite(parsed) ? parsed : settings[field];
+        } else {
+          settings[field] = parseStringValue(req.body[field]);
+        }
+      }
+    });
+
+    settings.updatedBy = req.user._id;
+    await settings.save();
+    res.json(settings);
+  } catch (error) {
+    console.error("Error updating inventory settings:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   getClientItems,
   createClientItem,
@@ -471,4 +930,19 @@ module.exports = {
   createPurchasingOrder,
   updatePurchasingOrder,
   deletePurchasingOrder,
+  getSuppliers,
+  createSupplier,
+  updateSupplier,
+  deleteSupplier,
+  getInventoryRecords,
+  createInventoryRecord,
+  updateInventoryRecord,
+  deleteInventoryRecord,
+  getStockTransactions,
+  createStockTransaction,
+  getReports,
+  createReport,
+  deleteReport,
+  getInventorySettings,
+  updateInventorySettings,
 };

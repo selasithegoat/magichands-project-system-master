@@ -10,6 +10,21 @@ const {
   createPurchasingOrder,
   updatePurchasingOrder,
   deletePurchasingOrder,
+  getSuppliers,
+  createSupplier,
+  updateSupplier,
+  deleteSupplier,
+  getInventoryRecords,
+  createInventoryRecord,
+  updateInventoryRecord,
+  deleteInventoryRecord,
+  getStockTransactions,
+  createStockTransaction,
+  getReports,
+  createReport,
+  deleteReport,
+  getInventorySettings,
+  updateInventorySettings,
 } = require("../controllers/inventoryController");
 
 router.use(protect);
@@ -18,6 +33,7 @@ router.route("/client-items").get(getClientItems).post(createClientItem);
 router
   .route("/client-items/:id")
   .put(updateClientItem)
+  .patch(updateClientItem)
   .delete(deleteClientItem);
 
 router
@@ -27,6 +43,41 @@ router
 router
   .route("/purchasing-orders/:id")
   .put(updatePurchasingOrder)
+  .patch(updatePurchasingOrder)
   .delete(deletePurchasingOrder);
+
+router.route("/purchase-orders").get(getPurchasingOrders).post(createPurchasingOrder);
+router
+  .route("/purchase-orders/:id")
+  .put(updatePurchasingOrder)
+  .patch(updatePurchasingOrder)
+  .delete(deletePurchasingOrder);
+
+router.route("/suppliers").get(getSuppliers).post(createSupplier);
+router
+  .route("/suppliers/:id")
+  .put(updateSupplier)
+  .patch(updateSupplier)
+  .delete(deleteSupplier);
+
+router
+  .route("/inventory-records")
+  .get(getInventoryRecords)
+  .post(createInventoryRecord);
+router
+  .route("/inventory-records/:id")
+  .put(updateInventoryRecord)
+  .patch(updateInventoryRecord)
+  .delete(deleteInventoryRecord);
+
+router
+  .route("/stock-transactions")
+  .get(getStockTransactions)
+  .post(createStockTransaction);
+
+router.route("/reports").get(getReports).post(createReport);
+router.route("/reports/:id").delete(deleteReport);
+
+router.route("/settings").get(getInventorySettings).patch(updateInventorySettings);
 
 module.exports = router;

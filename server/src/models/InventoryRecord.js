@@ -1,32 +1,63 @@
 const mongoose = require("mongoose");
 
-const ClientInventoryItemSchema = new mongoose.Schema(
+const InventoryRecordSchema = new mongoose.Schema(
   {
-    clientName: {
+    item: {
       type: String,
       required: true,
       trim: true,
     },
-    clientPhone: {
+    subtext: {
       type: String,
       trim: true,
       default: "",
     },
-    itemName: {
+    sku: {
       type: String,
       required: true,
       trim: true,
     },
-    serialNumber: {
+    category: {
       type: String,
       trim: true,
       default: "",
     },
-    receivedAt: {
-      type: Date,
-      required: true,
+    categoryTone: {
+      type: String,
+      trim: true,
+      default: "",
     },
-    warehouse: {
+    qtyLabel: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    qtyMeta: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    qtyState: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    qtyFill: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    price: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    value: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    location: {
       type: String,
       trim: true,
       default: "",
@@ -34,60 +65,34 @@ const ClientInventoryItemSchema = new mongoose.Schema(
     status: {
       type: String,
       trim: true,
-      default: "Received",
+      default: "",
     },
-    notes: {
+    statusTone: {
       type: String,
       trim: true,
       default: "",
     },
-    orderNo: {
+    reorder: {
+      type: Boolean,
+      default: false,
+    },
+    image: {
       type: String,
       trim: true,
       default: "",
-    },
-    jobLead: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    dateReceived: {
-      type: Date,
-      default: null,
-    },
-    itemDescription: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    quantity: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
-    production: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    deliveryDateTime: {
-      type: Date,
-      default: null,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
     },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
     },
   },
   { timestamps: true },
 );
 
-ClientInventoryItemSchema.index({ receivedAt: -1, createdAt: -1 });
+InventoryRecordSchema.index({ item: 1, sku: 1 });
 
-module.exports = mongoose.model("ClientInventoryItem", ClientInventoryItemSchema);
+module.exports = mongoose.model("InventoryRecord", InventoryRecordSchema);
