@@ -39,6 +39,16 @@ const ADMIN_HOST = (process.env.ADMIN_HOST || "").toLowerCase();
 const CLIENT_HOST = (process.env.CLIENT_HOST || "").toLowerCase();
 const OPS_HOST = (process.env.OPS_HOST || "").toLowerCase();
 const INVENTORY_HOST = (process.env.INVENTORY_HOST || "").toLowerCase();
+const CORS_ALLOW_ALL =
+  String(process.env.CORS_ALLOW_ALL || "").toLowerCase() === "true";
+const CORS_ALLOWED_ORIGINS_RAW = String(
+  process.env.CORS_ALLOWED_ORIGINS || "",
+);
+const CORS_HAS_WILDCARD = CORS_ALLOWED_ORIGINS_RAW
+  .split(",")
+  .map((entry) => entry.trim())
+  .some((entry) => entry === "*");
+const ALLOW_ANY_ORIGIN = CORS_ALLOW_ALL || CORS_HAS_WILDCARD;
 
 const normalizeOrigin = (value) => {
   if (!value || typeof value !== "string") return "";
@@ -92,6 +102,7 @@ const getRequestOrigin = (req) => {
 const isTrustedOrigin = (origin, req) => {
   const normalized = normalizeOrigin(origin);
   if (!normalized) return false;
+  if (ALLOW_ANY_ORIGIN) return true;
   if (ALLOWED_CORS_ORIGINS.has(normalized)) return true;
   return normalized === getRequestOrigin(req);
 };

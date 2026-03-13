@@ -249,11 +249,18 @@ const InventoryTypes = () => {
         </div>
         <div className="table-body">
           {typeRows.map((row) => (
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               className={`table-row ${row.id === selectedTypeId ? "active" : ""}`}
               key={row.id}
               onClick={() => setSelectedTypeId(row.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedTypeId(row.id);
+                }
+              }}
             >
               <div className="cell type-name full" data-label="Type">
                 <strong>{row.name}</strong>
@@ -274,20 +281,40 @@ const InventoryTypes = () => {
                 {row.created}
               </div>
               <div className="cell actions-cell full" data-label="Actions">
-                <button type="button" className="action-button" aria-label="Edit">
+                <button
+                  type="button"
+                  className="action-button"
+                  aria-label="Edit"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <EditIcon />
                 </button>
-                <button type="button" className="action-button" aria-label="Duplicate">
+                <button
+                  type="button"
+                  className="action-button"
+                  aria-label="Duplicate"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <ColumnsIcon />
                 </button>
-                <button type="button" className="action-button" aria-label="Archive">
+                <button
+                  type="button"
+                  className="action-button"
+                  aria-label="Archive"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <TrashIcon />
                 </button>
-                <button type="button" className="action-button" aria-label="More">
+                <button
+                  type="button"
+                  className="action-button"
+                  aria-label="More"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <MoreVerticalIcon />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>

@@ -5,25 +5,52 @@ import {
   ColumnsIcon,
   DownloadIcon,
   EditIcon,
-  MoreVerticalIcon,
   PlusIcon,
   SortIcon,
+  TrashIcon,
   WarningIcon,
 } from "../../components/icons/Icons";
+import Modal from "../../components/ui/Modal";
 import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
-import NewInventoryRecordModal from "../../components/modals/NewInventoryRecordModal";
+import { buildPaginationRange } from "../../utils/pagination";
 import "./InventoryRecords.css";
+
+const DEFAULT_RECORD_FORM = {
+  item: "",
+  subtext: "",
+  sku: "",
+  category: "",
+  categoryTone: "blue",
+  qtyLabel: "",
+  qtyMeta: "",
+  qtyState: "good",
+  qtyFill: "p82",
+  price: "",
+  value: "",
+  location: "",
+  status: "In Stock",
+  statusTone: "in-stock",
+  image: "",
+  reorder: false,
+};
 
 const InventoryRecords = () => {
   const [records, setRecords] = useState([]);
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    page: 1,
     limit: 4,
     total: 0,
     totalPages: 0,
   });
   const [error, setError] = useState("");
-  const [isNewRecordOpen, setIsNewRecordOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [formData, setFormData] = useState(DEFAULT_RECORD_FORM);
+  const [actionError, setActionError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
   useEffect(() => {
     let isMounted = true;
@@ -31,7 +58,7 @@ const InventoryRecords = () => {
     const loadRecords = async () => {
       try {
         const payload = await fetchInventory(
-          `/api/inventory/inventory-records?limit=${meta.limit}`,
+          `/api/inventory/inventory-records?page=${page}&limit=${meta.limit}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((record, index) => ({
@@ -55,9 +82,12 @@ const InventoryRecords = () => {
         }));
 
         if (!isMounted) return;
+        if (parsed.totalPages && page > parsed.totalPages) {
+          setPage(parsed.totalPages);
+          return;
+        }
         setRecords(normalized);
         setMeta({
-          page: parsed.page,
           limit: parsed.limit || meta.limit,
           total: parsed.total,
           totalPages: parsed.totalPages,
@@ -75,11 +105,130 @@ const InventoryRecords = () => {
     return () => {
       isMounted = false;
     };
-  }, [meta.limit]);
+  }, [meta.limit, page, refreshKey]);
 
   const total = meta.total || records.length;
-  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
   const endIndex = total ? Math.min(startIndex + records.length - 1, total) : 0;
+  const pagination = buildPaginationRange(page, meta.totalPages);
+  const isPrevDisabled = page <= 1;
+  const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage < 1) return;
+    if (meta.totalPages && nextPage > meta.totalPages) return;
+    setPage(nextPage);
+  };
+
+  const openCreateModal = () => {
+    setEditingRecord(null);
+    setFormData(DEFAULT_RECORD_FORM);
+    setActionError("");
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (record) => {
+    setEditingRecord(record);
+    setFormData({
+      item: record.item || "",
+      subtext: record.subtext || "",
+      sku: record.sku || "",
+      category: record.category || "",
+      categoryTone: record.categoryTone || "blue",
+      qtyLabel: record.qtyLabel || "",
+      qtyMeta: record.qtyMeta || "",
+      qtyState: record.qtyState || "good",
+      qtyFill: record.qtyFill || "p82",
+      price: record.price || "",
+      value: record.value || "",
+      location: record.location || "",
+      status: record.status || "In Stock",
+      statusTone: record.statusTone || "in-stock",
+      image: record.image || "",
+      reorder: Boolean(record.reorder),
+    });
+    setActionError("");
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingRecord(null);
+    setActionError("");
+  };
+
+  const updateField = (field) => (event) => {
+    const value =
+      event?.target?.type === "checkbox"
+        ? event.target.checked
+        : event.target.value;
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    if (!formData.item || !formData.sku) {
+      setActionError("Item name and SKU are required.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        item: formData.item,
+        subtext: formData.subtext,
+        sku: formData.sku,
+        category: formData.category,
+        categoryTone: formData.categoryTone,
+        qtyLabel: formData.qtyLabel,
+        qtyMeta: formData.qtyMeta,
+        qtyState: formData.qtyState,
+        qtyFill: formData.qtyFill,
+        price: formData.price,
+        value: formData.value,
+        location: formData.location,
+        status: formData.status,
+        statusTone: formData.statusTone,
+        image: formData.image,
+        reorder: formData.reorder,
+      };
+
+      const endpoint = editingRecord
+        ? `/api/inventory/inventory-records/${editingRecord.id}`
+        : "/api/inventory/inventory-records";
+
+      await fetchInventory(endpoint, {
+        method: editingRecord ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      closeModal();
+      if (!editingRecord) {
+        setPage(1);
+      }
+      triggerRefresh();
+    } catch (err) {
+      setActionError(err?.message || "Unable to save inventory record.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (record) => {
+    if (!record?.id) return;
+    const confirmed = window.confirm(
+      `Delete ${record.item}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await fetchInventory(`/api/inventory/inventory-records/${record.id}`, {
+        method: "DELETE",
+      });
+      triggerRefresh();
+    } catch (err) {
+      setError(err?.message || "Unable to delete inventory record.");
+    }
+  };
 
   return (
     <section className="inventory-records">
@@ -96,7 +245,7 @@ const InventoryRecords = () => {
           <button
             type="button"
             className="primary-button"
-            onClick={() => setIsNewRecordOpen(true)}
+            onClick={openCreateModal}
           >
             <PlusIcon className="button-icon" />
             Add New Record
@@ -305,11 +454,19 @@ const InventoryRecords = () => {
                     </span>
                   </div>
                   <div className="cell actions-cell" data-label="Actions">
-                    <button type="button" className="action-button">
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => openEditModal(record)}
+                    >
                       <EditIcon />
                     </button>
-                    <button type="button" className="action-button">
-                      <MoreVerticalIcon />
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => handleDelete(record)}
+                    >
+                      <TrashIcon />
                     </button>
                   </div>
                 </div>
@@ -324,19 +481,36 @@ const InventoryRecords = () => {
                 : `Showing ${startIndex}-${endIndex} of ${total} results`}
             </span>
             <div className="pagination">
-              <button type="button" className="ghost-button">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => handlePageChange(page - 1)}
+                disabled={isPrevDisabled}
+              >
                 Previous
               </button>
-              <button type="button" className="page active">
-                1
-              </button>
-              <button type="button" className="page">
-                2
-              </button>
-              <button type="button" className="page">
-                3
-              </button>
-              <button type="button" className="ghost-button">
+              {pagination.map((pageItem, index) =>
+                pageItem === "ellipsis" ? (
+                  <span className="page-ellipsis" key={`ellipsis-${index}`}>
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    key={`page-${pageItem}`}
+                    className={`page ${pageItem === page ? "active" : ""}`}
+                    onClick={() => handlePageChange(pageItem)}
+                  >
+                    {pageItem}
+                  </button>
+                ),
+              )}
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => handlePageChange(page + 1)}
+                disabled={isNextDisabled}
+              >
                 Next
               </button>
             </div>
@@ -344,11 +518,177 @@ const InventoryRecords = () => {
         </div>
       </div>
 
-      <NewInventoryRecordModal
-        isOpen={isNewRecordOpen}
-        onClose={() => setIsNewRecordOpen(false)}
-        onSave={() => setIsNewRecordOpen(false)}
-      />
+      <Modal
+        isOpen={isModalOpen}
+        title={editingRecord ? "Edit Inventory Record" : "Add Inventory Record"}
+        subtitle="Update item details, quantities, and status."
+        primaryText={isSaving ? "Saving..." : "Save"}
+        secondaryText="Cancel"
+        onConfirm={handleSave}
+        onClose={closeModal}
+        variant="side"
+      >
+        <form className="modal-form">
+          <div className="modal-grid">
+            <label className="modal-field">
+              <span>Item Name</span>
+              <input
+                type="text"
+                value={formData.item}
+                onChange={updateField("item")}
+                placeholder="Item name"
+              />
+            </label>
+            <label className="modal-field">
+              <span>SKU</span>
+              <input
+                type="text"
+                value={formData.sku}
+                onChange={updateField("sku")}
+                placeholder="SKU"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Subtext</span>
+              <input
+                type="text"
+                value={formData.subtext}
+                onChange={updateField("subtext")}
+                placeholder="Warehouse A, R4"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Category</span>
+              <input
+                type="text"
+                value={formData.category}
+                onChange={updateField("category")}
+                placeholder="Electronics"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Category Tone</span>
+              <select
+                value={formData.categoryTone}
+                onChange={updateField("categoryTone")}
+              >
+                <option value="blue">Blue</option>
+                <option value="indigo">Indigo</option>
+                <option value="slate">Slate</option>
+                <option value="amber">Amber</option>
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Quantity Label</span>
+              <input
+                type="text"
+                value={formData.qtyLabel}
+                onChange={updateField("qtyLabel")}
+                placeholder="458 Units"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Quantity Meta</span>
+              <input
+                type="text"
+                value={formData.qtyMeta}
+                onChange={updateField("qtyMeta")}
+                placeholder="82%"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Quantity State</span>
+              <select
+                value={formData.qtyState}
+                onChange={updateField("qtyState")}
+              >
+                <option value="good">Good</option>
+                <option value="low">Low</option>
+                <option value="critical">Critical</option>
+                <option value="full">Full</option>
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Quantity Fill</span>
+              <select
+                value={formData.qtyFill}
+                onChange={updateField("qtyFill")}
+              >
+                <option value="p12">12%</option>
+                <option value="p35">35%</option>
+                <option value="p82">82%</option>
+                <option value="p100">100%</option>
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Price</span>
+              <input
+                type="text"
+                value={formData.price}
+                onChange={updateField("price")}
+                placeholder="$0.00"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Value</span>
+              <input
+                type="text"
+                value={formData.value}
+                onChange={updateField("value")}
+                placeholder="$0.00"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Location</span>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={updateField("location")}
+                placeholder="A-01-02"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Status</span>
+              <input
+                type="text"
+                value={formData.status}
+                onChange={updateField("status")}
+                placeholder="In Stock"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Status Tone</span>
+              <select
+                value={formData.statusTone}
+                onChange={updateField("statusTone")}
+              >
+                <option value="in-stock">In Stock</option>
+                <option value="low-stock">Low Stock</option>
+                <option value="critical">Critical</option>
+                <option value="oversupply">Oversupply</option>
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Image URL</span>
+              <input
+                type="text"
+                value={formData.image}
+                onChange={updateField("image")}
+                placeholder="https://"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Reorder</span>
+              <input
+                type="checkbox"
+                checked={formData.reorder}
+                onChange={updateField("reorder")}
+              />
+            </label>
+          </div>
+          {actionError ? <span className="modal-help">{actionError}</span> : null}
+        </form>
+      </Modal>
     </section>
   );
 };

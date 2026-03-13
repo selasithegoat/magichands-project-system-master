@@ -6,11 +6,13 @@ import {
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
+import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
   formatShortDate,
   parseListResponse,
 } from "../../utils/inventoryApi";
+import { buildPaginationRange } from "../../utils/pagination";
 import "./PurchaseOrders.css";
 
 const getStatusClass = (status) =>
@@ -29,13 +31,38 @@ const buildInitials = (value) =>
 
 const PurchaseOrders = () => {
   const [orders, setOrders] = useState([]);
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    page: 1,
     limit: DEFAULT_LIMIT,
     total: 0,
     totalPages: 0,
   });
   const [error, setError] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [formData, setFormData] = useState({
+    poNumber: "",
+    supplierName: "",
+    supplierTone: "blue",
+    total: "",
+    status: "Pending",
+    dateRequestPlaced: "",
+    itemsCount: "",
+    itemNames: "",
+    itemImages: "",
+  });
+  const [actionError, setActionError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
+
+  const formatDateInput = (value) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toISOString().slice(0, 10);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -43,7 +70,7 @@ const PurchaseOrders = () => {
     const loadOrders = async () => {
       try {
         const payload = await fetchInventory(
-          `/api/inventory/purchase-orders?limit=${DEFAULT_LIMIT}`,
+          `/api/inventory/purchase-orders?page=${page}&limit=${DEFAULT_LIMIT}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((order, index) => {
@@ -66,6 +93,8 @@ const PurchaseOrders = () => {
               : items.length,
             total: order.total || "",
             status: order.status || order.requestStatus || "Pending",
+            dateRequestPlaced:
+              order.dateRequestPlaced || order.createdAt || order.created,
             created: formatShortDate(
               order.dateRequestPlaced || order.createdAt || order.created,
             ),
@@ -73,9 +102,12 @@ const PurchaseOrders = () => {
         });
 
         if (!isMounted) return;
+        if (parsed.totalPages && page > parsed.totalPages) {
+          setPage(parsed.totalPages);
+          return;
+        }
         setOrders(normalized);
         setMeta({
-          page: parsed.page,
           limit: parsed.limit || DEFAULT_LIMIT,
           total: parsed.total,
           totalPages: parsed.totalPages,
@@ -93,7 +125,7 @@ const PurchaseOrders = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [page, refreshKey]);
 
   const handleStatusChange = async (orderId, nextStatus) => {
     const previousStatus = orders.find((order) => order.id === orderId)?.status;
@@ -119,8 +151,152 @@ const PurchaseOrders = () => {
   };
 
   const total = meta.total || orders.length;
-  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
   const endIndex = total ? Math.min(startIndex + orders.length - 1, total) : 0;
+  const pagination = buildPaginationRange(page, meta.totalPages);
+  const isPrevDisabled = page <= 1;
+  const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage < 1) return;
+    if (meta.totalPages && nextPage > meta.totalPages) return;
+    setPage(nextPage);
+  };
+
+  const openCreateModal = () => {
+    setEditingOrder(null);
+    setFormData({
+      poNumber: "",
+      supplierName: "",
+      supplierTone: "blue",
+      total: "",
+      status: "Pending",
+      dateRequestPlaced: "",
+      itemsCount: "",
+      itemNames: "",
+      itemImages: "",
+    });
+    setActionError("");
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (order) => {
+    const itemNames = order.items
+      .map((item) => item.name)
+      .filter(Boolean)
+      .join(", ");
+    const itemImages = order.items
+      .map((item) => item.image)
+      .filter(Boolean)
+      .join(", ");
+
+    setEditingOrder(order);
+    setFormData({
+      poNumber: order.poNumber || "",
+      supplierName: order.supplier || "",
+      supplierTone: order.supplierTone || "blue",
+      total: order.total || "",
+      status: order.status || "Pending",
+      dateRequestPlaced: formatDateInput(order.dateRequestPlaced),
+      itemsCount:
+        Number.isFinite(order.itemsCount) && order.itemsCount
+          ? String(order.itemsCount)
+          : "",
+      itemNames,
+      itemImages,
+    });
+    setActionError("");
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingOrder(null);
+    setActionError("");
+  };
+
+  const updateField = (field) => (event) => {
+    setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    if (!formData.poNumber || !formData.supplierName || !formData.total) {
+      setActionError("PO number, supplier name, and total are required.");
+      return;
+    }
+    if (!formData.dateRequestPlaced) {
+      setActionError("Created date is required.");
+      return;
+    }
+
+    const names = formData.itemNames
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const images = formData.itemImages
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const items = names.map((name, index) => ({
+      name,
+      image: images[index] || "",
+    }));
+    const parsedCount = Number.parseInt(formData.itemsCount, 10);
+    const itemsCount = Number.isFinite(parsedCount)
+      ? parsedCount
+      : items.length;
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        poNumber: formData.poNumber,
+        supplierName: formData.supplierName,
+        supplierInitials: buildInitials(formData.supplierName),
+        supplierTone: formData.supplierTone,
+        items,
+        itemsCount,
+        total: formData.total,
+        status: formData.status,
+        dateRequestPlaced: formData.dateRequestPlaced,
+      };
+
+      const endpoint = editingOrder
+        ? `/api/inventory/purchase-orders/${editingOrder.id}`
+        : "/api/inventory/purchase-orders";
+
+      await fetchInventory(endpoint, {
+        method: editingOrder ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      closeModal();
+      if (!editingOrder) {
+        setPage(1);
+      }
+      triggerRefresh();
+    } catch (err) {
+      setActionError(err?.message || "Unable to save purchase order.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (order) => {
+    if (!order?.id) return;
+    const confirmed = window.confirm(
+      `Delete ${order.poNumber}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await fetchInventory(`/api/inventory/purchase-orders/${order.id}`, {
+        method: "DELETE",
+      });
+      triggerRefresh();
+    } catch (err) {
+      setError(err?.message || "Unable to delete purchase order.");
+    }
+  };
 
   return (
     <section className="purchase-orders-page">
@@ -138,7 +314,11 @@ const PurchaseOrders = () => {
             <DownloadIcon className="button-icon" />
             Export
           </button>
-          <button type="button" className="primary-button">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={openCreateModal}
+          >
             <PlusIcon className="button-icon" />
             Create PO
           </button>
@@ -191,7 +371,13 @@ const PurchaseOrders = () => {
                 <div className="item-stack" aria-hidden="true">
                   {order.items.map((item) => (
                     <span key={item.id} className="item-avatar">
-                      <img src={item.image} alt={item.name} />
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} />
+                      ) : (
+                        <span className="item-fallback">
+                          {(item.name || "?").charAt(0)}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -225,6 +411,7 @@ const PurchaseOrders = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Edit ${order.id}`}
+                  onClick={() => openEditModal(order)}
                 >
                   <EditIcon />
                 </button>
@@ -232,6 +419,7 @@ const PurchaseOrders = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Delete ${order.id}`}
+                  onClick={() => handleDelete(order)}
                 >
                   <TrashIcon />
                 </button>
@@ -246,23 +434,36 @@ const PurchaseOrders = () => {
               : `Showing ${startIndex} to ${endIndex} of ${total} orders`}
           </span>
           <div className="pagination">
-            <button type="button" className="ghost-button">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handlePageChange(page - 1)}
+              disabled={isPrevDisabled}
+            >
               Previous
             </button>
-            <button type="button" className="page active">
-              1
-            </button>
-            <button type="button" className="page">
-              2
-            </button>
-            <button type="button" className="page">
-              3
-            </button>
-            <span className="page-ellipsis">...</span>
-            <button type="button" className="page">
-              9
-            </button>
-            <button type="button" className="ghost-button">
+            {pagination.map((pageItem, index) =>
+              pageItem === "ellipsis" ? (
+                <span className="page-ellipsis" key={`ellipsis-${index}`}>
+                  ...
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  key={`page-${pageItem}`}
+                  className={`page ${pageItem === page ? "active" : ""}`}
+                  onClick={() => handlePageChange(pageItem)}
+                >
+                  {pageItem}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handlePageChange(page + 1)}
+              disabled={isNextDisabled}
+            >
               Next
             </button>
           </div>
@@ -286,6 +487,112 @@ const PurchaseOrders = () => {
           <div className="summary-meta">Incoming POs</div>
         </article>
       </div>
+
+      <Modal
+        isOpen={isModalOpen}
+        title={editingOrder ? "Edit Purchase Order" : "Create Purchase Order"}
+        subtitle="Enter purchase order details and item counts."
+        primaryText={isSaving ? "Saving..." : "Save"}
+        secondaryText="Cancel"
+        onConfirm={handleSave}
+        onClose={closeModal}
+      >
+        <form className="modal-form">
+          <div className="modal-grid">
+            <label className="modal-field">
+              <span>PO Number</span>
+              <input
+                type="text"
+                value={formData.poNumber}
+                onChange={updateField("poNumber")}
+                placeholder="PO-2024-0001"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Supplier Name</span>
+              <input
+                type="text"
+                value={formData.supplierName}
+                onChange={updateField("supplierName")}
+                placeholder="Supplier name"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Total Cost</span>
+              <input
+                type="text"
+                value={formData.total}
+                onChange={updateField("total")}
+                placeholder="$0.00"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Status</span>
+              <select value={formData.status} onChange={updateField("status")}>
+                <option>Pending</option>
+                <option>Ordered</option>
+                <option>Received</option>
+                <option>Cancelled</option>
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Created Date</span>
+              <input
+                type="date"
+                value={formData.dateRequestPlaced}
+                onChange={updateField("dateRequestPlaced")}
+              />
+            </label>
+            <label className="modal-field">
+              <span>Supplier Tone</span>
+              <select
+                value={formData.supplierTone}
+                onChange={updateField("supplierTone")}
+              >
+                <option value="blue">Blue</option>
+                <option value="amber">Amber</option>
+                <option value="green">Green</option>
+                <option value="slate">Slate</option>
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Item Names</span>
+              <input
+                type="text"
+                value={formData.itemNames}
+                onChange={updateField("itemNames")}
+                placeholder="Server Chassis, Rack Switch"
+              />
+              <span className="modal-help">
+                Separate item names with commas.
+              </span>
+            </label>
+            <label className="modal-field">
+              <span>Item Image URLs</span>
+              <input
+                type="text"
+                value={formData.itemImages}
+                onChange={updateField("itemImages")}
+                placeholder="https://..."
+              />
+              <span className="modal-help">
+                Optional. Comma-separated URLs.
+              </span>
+            </label>
+            <label className="modal-field">
+              <span>Items Count</span>
+              <input
+                type="number"
+                min="0"
+                value={formData.itemsCount}
+                onChange={updateField("itemsCount")}
+                placeholder="0"
+              />
+            </label>
+          </div>
+          {actionError ? <span className="modal-help">{actionError}</span> : null}
+        </form>
+      </Modal>
     </section>
   );
 };

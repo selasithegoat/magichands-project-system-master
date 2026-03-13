@@ -14,6 +14,7 @@ import {
   formatShortDateTime,
   parseListResponse,
 } from "../../utils/inventoryApi";
+import { buildPaginationRange } from "../../utils/pagination";
 import "./Reports.css";
 
 const cardIconMap = {
@@ -30,8 +31,8 @@ const getStatusClass = (status) =>
 const Reports = () => {
   const cards = useMemo(() => reportCards, []);
   const [reports, setReports] = useState([]);
+  const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({
-    page: 1,
     limit: 4,
     total: 0,
     totalPages: 0,
@@ -44,7 +45,7 @@ const Reports = () => {
     const loadReports = async () => {
       try {
         const payload = await fetchInventory(
-          `/api/inventory/reports?limit=${meta.limit}`,
+          `/api/inventory/reports?page=${page}&limit=${meta.limit}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((report, index) => ({
@@ -61,9 +62,12 @@ const Reports = () => {
         }));
 
         if (!isMounted) return;
+        if (parsed.totalPages && page > parsed.totalPages) {
+          setPage(parsed.totalPages);
+          return;
+        }
         setReports(normalized);
         setMeta({
-          page: parsed.page,
           limit: parsed.limit || meta.limit,
           total: parsed.total,
           totalPages: parsed.totalPages,
@@ -81,11 +85,20 @@ const Reports = () => {
     return () => {
       isMounted = false;
     };
-  }, [meta.limit]);
+  }, [meta.limit, page]);
 
   const total = meta.total || reports.length;
-  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
   const endIndex = total ? Math.min(startIndex + reports.length - 1, total) : 0;
+  const pagination = buildPaginationRange(page, meta.totalPages);
+  const isPrevDisabled = page <= 1;
+  const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage < 1) return;
+    if (meta.totalPages && nextPage > meta.totalPages) return;
+    setPage(nextPage);
+  };
 
   return (
     <section className="reports-page">
@@ -188,10 +201,36 @@ const Reports = () => {
               : `Showing ${startIndex} to ${endIndex} of ${total} reports`}
           </span>
           <div className="pagination">
-            <button type="button" className="ghost-button">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handlePageChange(page - 1)}
+              disabled={isPrevDisabled}
+            >
               Previous
             </button>
-            <button type="button" className="ghost-button">
+            {pagination.map((pageItem, index) =>
+              pageItem === "ellipsis" ? (
+                <span className="page-ellipsis" key={`ellipsis-${index}`}>
+                  ...
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  key={`page-${pageItem}`}
+                  className={`page ${pageItem === page ? "active" : ""}`}
+                  onClick={() => handlePageChange(pageItem)}
+                >
+                  {pageItem}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handlePageChange(page + 1)}
+              disabled={isNextDisabled}
+            >
               Next
             </button>
           </div>

@@ -8,24 +8,58 @@ import {
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
+import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
   formatShortDate,
   parseListResponse,
 } from "../../utils/inventoryApi";
+import { buildPaginationRange } from "../../utils/pagination";
 import "./ClientItems.css";
 
 const DEFAULT_LIMIT = 6;
+const DEFAULT_FORM = {
+  clientName: "",
+  clientPhone: "",
+  itemName: "",
+  serialNumber: "",
+  receivedAt: "",
+  warehouse: "",
+  status: "Received",
+  notes: "",
+};
+const STATUS_OPTIONS = [
+  "Received",
+  "Inspection",
+  "In Progress",
+  "Awaiting Parts",
+  "Completed",
+];
 
 const ClientItems = () => {
   const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    page: 1,
     limit: DEFAULT_LIMIT,
     total: 0,
     totalPages: 0,
   });
   const [error, setError] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [formData, setFormData] = useState(DEFAULT_FORM);
+  const [actionError, setActionError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
+
+  const formatDateInput = (value) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toISOString().slice(0, 10);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -33,7 +67,7 @@ const ClientItems = () => {
     const loadItems = async () => {
       try {
         const payload = await fetchInventory(
-          `/api/inventory/client-items?limit=${DEFAULT_LIMIT}`,
+          `/api/inventory/client-items?page=${page}&limit=${DEFAULT_LIMIT}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((item, index) => ({
@@ -42,16 +76,22 @@ const ClientItems = () => {
           phone: item.clientPhone || item.phone || "",
           item: item.itemName || item.item || "",
           serial: item.serialNumber || item.serial || "",
+          receivedAt: item.receivedAt || item.received || item.dateReceived,
           received: formatShortDate(
             item.receivedAt || item.received || item.dateReceived,
           ),
           warehouse: item.warehouse || "",
+          status: item.status || "Received",
+          notes: item.notes || "",
         }));
 
         if (!isMounted) return;
+        if (parsed.totalPages && page > parsed.totalPages) {
+          setPage(parsed.totalPages);
+          return;
+        }
         setItems(normalized);
         setMeta({
-          page: parsed.page,
           limit: parsed.limit || DEFAULT_LIMIT,
           total: parsed.total,
           totalPages: parsed.totalPages,
@@ -69,11 +109,109 @@ const ClientItems = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [page, refreshKey]);
 
   const total = meta.total || items.length;
-  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
   const endIndex = total ? Math.min(startIndex + items.length - 1, total) : 0;
+  const pagination = buildPaginationRange(page, meta.totalPages);
+  const isPrevDisabled = page <= 1;
+  const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage < 1) return;
+    if (meta.totalPages && nextPage > meta.totalPages) return;
+    setPage(nextPage);
+  };
+
+  const openCreateModal = () => {
+    setEditingItem(null);
+    setFormData(DEFAULT_FORM);
+    setActionError("");
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (item) => {
+    setEditingItem(item);
+    setFormData({
+      clientName: item.client || "",
+      clientPhone: item.phone || "",
+      itemName: item.item || "",
+      serialNumber: item.serial || "",
+      receivedAt: formatDateInput(item.receivedAt),
+      warehouse: item.warehouse || "",
+      status: item.status || "Received",
+      notes: item.notes || "",
+    });
+    setActionError("");
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingItem(null);
+    setFormData(DEFAULT_FORM);
+    setActionError("");
+  };
+
+  const updateField = (field) => (event) => {
+    setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    if (!formData.clientName || !formData.itemName || !formData.receivedAt) {
+      setActionError("Client name, item name, and received date are required.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        clientName: formData.clientName,
+        clientPhone: formData.clientPhone,
+        itemName: formData.itemName,
+        serialNumber: formData.serialNumber,
+        receivedAt: formData.receivedAt,
+        warehouse: formData.warehouse,
+        status: formData.status,
+        notes: formData.notes,
+      };
+      const endpoint = editingItem
+        ? `/api/inventory/client-items/${editingItem.id}`
+        : "/api/inventory/client-items";
+      await fetchInventory(endpoint, {
+        method: editingItem ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      closeModal();
+      if (!editingItem) {
+        setPage(1);
+      }
+      triggerRefresh();
+    } catch (err) {
+      setActionError(err?.message || "Unable to save client item.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (item) => {
+    if (!item?.id) return;
+    const confirmed = window.confirm(
+      `Delete the record for ${item.client}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await fetchInventory(`/api/inventory/client-items/${item.id}`, {
+        method: "DELETE",
+      });
+      triggerRefresh();
+    } catch (err) {
+      setError(err?.message || "Unable to delete client item.");
+    }
+  };
 
   return (
     <section className="client-items-page">
@@ -87,7 +225,11 @@ const ClientItems = () => {
           </p>
         </div>
         <div className="client-items-actions">
-          <button type="button" className="primary-button">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={openCreateModal}
+          >
             <PlusIcon className="button-icon" />
             New Intake
           </button>
@@ -173,6 +315,7 @@ const ClientItems = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Edit ${item.client}`}
+                  onClick={() => openEditModal(item)}
                 >
                   <EditIcon />
                 </button>
@@ -180,6 +323,7 @@ const ClientItems = () => {
                   type="button"
                   className="action-button"
                   aria-label={`Delete ${item.client}`}
+                  onClick={() => handleDelete(item)}
                 >
                   <TrashIcon />
                 </button>
@@ -194,24 +338,131 @@ const ClientItems = () => {
               : `Showing ${startIndex} to ${endIndex} of ${total} items`}
           </span>
           <div className="pagination">
-            <button type="button" className="ghost-button">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handlePageChange(page - 1)}
+              disabled={isPrevDisabled}
+            >
               Previous
             </button>
-            <button type="button" className="page active">
-              1
-            </button>
-            <button type="button" className="page">
-              2
-            </button>
-            <button type="button" className="page">
-              3
-            </button>
-            <button type="button" className="ghost-button">
+            {pagination.map((pageItem, index) =>
+              pageItem === "ellipsis" ? (
+                <span className="page-ellipsis" key={`ellipsis-${index}`}>
+                  ...
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  key={`page-${pageItem}`}
+                  className={`page ${pageItem === page ? "active" : ""}`}
+                  onClick={() => handlePageChange(pageItem)}
+                >
+                  {pageItem}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handlePageChange(page + 1)}
+              disabled={isNextDisabled}
+            >
               Next
             </button>
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={isModalOpen}
+        title={editingItem ? "Edit Client Item" : "New Client Item"}
+        subtitle="Capture client item details for service intake."
+        primaryText={isSaving ? "Saving..." : "Save"}
+        secondaryText="Cancel"
+        onConfirm={handleSave}
+        onClose={closeModal}
+      >
+        <form className="modal-form">
+          <div className="modal-grid">
+            <label className="modal-field">
+              <span>Client Name</span>
+              <input
+                type="text"
+                value={formData.clientName}
+                onChange={updateField("clientName")}
+                placeholder="Client name"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Client Phone</span>
+              <input
+                type="text"
+                value={formData.clientPhone}
+                onChange={updateField("clientPhone")}
+                placeholder="+1 (555) 555-1234"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Item Name</span>
+              <input
+                type="text"
+                value={formData.itemName}
+                onChange={updateField("itemName")}
+                placeholder="Item name"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Serial Number</span>
+              <input
+                type="text"
+                value={formData.serialNumber}
+                onChange={updateField("serialNumber")}
+                placeholder="Serial number"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Received Date</span>
+              <input
+                type="date"
+                value={formData.receivedAt}
+                onChange={updateField("receivedAt")}
+              />
+            </label>
+            <label className="modal-field">
+              <span>Status</span>
+              <select
+                value={formData.status}
+                onChange={updateField("status")}
+              >
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>Warehouse</span>
+              <input
+                type="text"
+                value={formData.warehouse}
+                onChange={updateField("warehouse")}
+                placeholder="Warehouse"
+              />
+            </label>
+          </div>
+          <label className="modal-field">
+            <span>Notes</span>
+            <textarea
+              value={formData.notes}
+              onChange={updateField("notes")}
+              placeholder="Intake notes"
+            />
+          </label>
+          {actionError ? <span className="modal-help">{actionError}</span> : null}
+        </form>
+      </Modal>
     </section>
   );
 };

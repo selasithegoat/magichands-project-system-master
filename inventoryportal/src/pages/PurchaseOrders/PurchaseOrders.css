@@ -220,6 +220,15 @@
   display: block;
 }
 
+.item-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
 .total-cost {
   font-weight: 600;
 }
