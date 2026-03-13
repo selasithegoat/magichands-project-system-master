@@ -17,6 +17,11 @@ const InventorySettingsSchema = new mongoose.Schema(
       trim: true,
       default: "GHS",
     },
+    currencyRate: {
+      type: Number,
+      min: 0,
+      default: 1,
+    },
     timezone: {
       type: String,
       trim: true,

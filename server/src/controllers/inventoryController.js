@@ -1178,6 +1178,7 @@ const updateInventorySettings = async (req, res) => {
       "organizationName",
       "primaryContactEmail",
       "currency",
+      "currencyRate",
       "timezone",
       "dateFormat",
       "numberFormat",
@@ -1208,6 +1209,10 @@ const updateInventorySettings = async (req, res) => {
         } else if (field === "lowStockThreshold") {
           const parsed = Number(req.body[field]);
           settings[field] = Number.isFinite(parsed) ? parsed : settings[field];
+        } else if (field === "currencyRate") {
+          const parsed = Number(req.body[field]);
+          settings[field] =
+            Number.isFinite(parsed) && parsed > 0 ? parsed : settings[field];
         } else {
           settings[field] = parseStringValue(req.body[field]);
         }

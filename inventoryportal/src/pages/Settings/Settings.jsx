@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   organizationName: "MagicHands Logistics",
   primaryContactEmail: "ops@magichands.io",
   currency: "GHS",
+  currencyRate: 1,
   timezone: "Africa/Accra",
   dateFormat: "DD MMM, YYYY",
   numberFormat: "1,234.56",
@@ -69,6 +70,9 @@ const Settings = () => {
         lowStockThreshold: Number.isFinite(Number(settings.lowStockThreshold))
           ? Number(settings.lowStockThreshold)
           : settings.lowStockThreshold,
+        currencyRate: Number.isFinite(Number(settings.currencyRate))
+          ? Number(settings.currencyRate)
+          : settings.currencyRate,
       };
       const updated = await fetchInventory("/api/inventory/settings", {
         method: "PATCH",
@@ -79,6 +83,10 @@ const Settings = () => {
       setSavedSettings(merged);
       if (typeof window !== "undefined") {
         window.localStorage.setItem("inventory-currency", merged.currency);
+        window.localStorage.setItem(
+          "inventory-currency-rate",
+          String(merged.currencyRate ?? 1),
+        );
       }
       setStatusMessage("Settings saved.");
     } catch (err) {
@@ -146,6 +154,16 @@ const Settings = () => {
                 <option value="GHS">GHS (Default)</option>
                 <option value="USD">USD</option>
               </select>
+            </label>
+            <label className="settings-field">
+              <span>Conversion Rate (GHS per USD)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={settings.currencyRate}
+                onChange={updateField("currencyRate")}
+              />
             </label>
             <label className="settings-field">
               <span>Timezone</span>

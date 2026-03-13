@@ -524,6 +524,7 @@ const seedInventory = async () => {
         organizationName: "MagicHands Logistics",
         primaryContactEmail: "ops@magichands.io",
         currency: "GHS",
+        currencyRate: 1,
         timezone: "Africa/Accra",
         dateFormat: "DD MMM, YYYY",
         numberFormat: "1,234.56",

@@ -133,6 +133,7 @@ const AUTH_RATE_LIMIT_MAX_REQUESTS = toPositiveInt(
   process.env.AUTH_RATE_LIMIT_MAX_REQUESTS,
   20,
 );
+const BODY_LIMIT_MB = toPositiveInt(process.env.UPLOAD_MAX_MB, 50);
 
 const normalizeAuthIdentifier = (value) =>
   String(value || "")
@@ -295,7 +296,8 @@ app.use(
   }),
 );
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: `${BODY_LIMIT_MB}mb` }));
+app.use(express.urlencoded({ extended: true, limit: `${BODY_LIMIT_MB}mb` }));
 app.use("/api", (req, res, next) => {
   const requestOrigin = req.headers.origin;
   if (!requestOrigin) return next();

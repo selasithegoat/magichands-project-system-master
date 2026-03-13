@@ -42,7 +42,7 @@ const activityFeed = [
 ];
 
 const Dashboard = () => {
-  const currency = useInventoryCurrency();
+  const { currency, rate } = useInventoryCurrency();
 
   return (
     <>
@@ -104,7 +104,7 @@ const Dashboard = () => {
           <span className="delta positive">+5.1%</span>
         </div>
         <div className="stat-value">
-          {formatCurrencyValue("1.24M", currency)}
+          {formatCurrencyValue("1.24M", currency, rate)}
         </div>
         <div className="stat-chart value">
           <div className="value-tag">Growth trend</div>

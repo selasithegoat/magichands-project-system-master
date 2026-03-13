@@ -28,6 +28,7 @@ import { quickActions } from "../data/quickActions";
 
 const APP_NAME = "MagicHands Inventory";
 const THEME_STORAGE_KEY = "inventory-portal-theme";
+const PAGE_STORAGE_KEY = "inventory-portal-active-page";
 
 const getPreferredTheme = () => {
   if (typeof window === "undefined") {
@@ -62,7 +63,10 @@ const App = () => {
   const [loginError, setLoginError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
-  const [activePage, setActivePage] = useState("dashboard");
+  const [activePage, setActivePage] = useState(() => {
+    if (typeof window === "undefined") return "dashboard";
+    return window.localStorage.getItem(PAGE_STORAGE_KEY) || "dashboard";
+  });
   const [theme, setTheme] = useState(() => getPreferredTheme());
 
   useEffect(() => {
@@ -104,6 +108,12 @@ const App = () => {
       window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(PAGE_STORAGE_KEY, activePage);
+    }
+  }, [activePage]);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === "dark" ? "light" : "dark"));

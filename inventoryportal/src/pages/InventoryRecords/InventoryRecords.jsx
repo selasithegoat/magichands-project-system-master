@@ -58,7 +58,7 @@ const InventoryRecords = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const currency = useInventoryCurrency();
+  const { currency, rate } = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -460,10 +460,10 @@ const InventoryRecords = () => {
                     </div>
                   </div>
                   <div className="cell price" data-label="Price">
-                    {formatCurrencyValue(record.price, currency)}
+                    {formatCurrencyValue(record.price, currency, rate)}
                   </div>
                   <div className="cell value" data-label="Value">
-                    {formatCurrencyValue(record.value, currency)}
+                    {formatCurrencyValue(record.value, currency, rate)}
                   </div>
                   <div className="cell muted" data-label="Location">
                     {record.location}

@@ -3,6 +3,7 @@ import {
   DownloadIcon,
   EditIcon,
   PlusIcon,
+  SearchIcon,
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
@@ -27,6 +28,17 @@ const getStatusClass = (status) =>
   `status-${String(status || "").toLowerCase().replace(/\s+/g, "-")}`;
 
 const DEFAULT_LIMIT = 5;
+const SUPPLIER_TONES = [
+  "blue",
+  "amber",
+  "green",
+  "slate",
+  "indigo",
+  "violet",
+  "rose",
+  "teal",
+  "orange",
+];
 
 const buildInitials = (value) =>
   String(value || "")
@@ -36,6 +48,27 @@ const buildInitials = (value) =>
     .slice(0, 2)
     .map((word) => word.charAt(0).toUpperCase())
     .join("");
+
+const pickTone = (seed) => {
+  if (!seed) {
+    return SUPPLIER_TONES[Math.floor(Math.random() * SUPPLIER_TONES.length)];
+  }
+  const hash = String(seed)
+    .split("")
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return SUPPLIER_TONES[hash % SUPPLIER_TONES.length];
+};
+
+const formatTime = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 
 const PurchaseOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -47,55 +80,68 @@ const PurchaseOrders = () => {
     totalPages: 0,
   });
   const [error, setError] = useState("");
+  const [activeStatus, setActiveStatus] = useState("All");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [formData, setFormData] = useState({
     poNumber: "",
     supplierName: "",
-    supplierTone: "blue",
     total: "",
     status: "Pending",
-    dateRequestPlaced: "",
+    createdDate: "",
+    createdTime: "",
     itemsCount: "",
     itemNames: "",
-    itemImages: "",
+    itemImages: [],
   });
   const [actionError, setActionError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const currency = useInventoryCurrency();
+  const { currency, rate } = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
-  const formatDateInput = (value) => {
-    if (!value) return "";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "";
-    return parsed.toISOString().slice(0, 10);
-  };
 
   useEffect(() => {
     let isMounted = true;
 
     const loadOrders = async () => {
       try {
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", String(DEFAULT_LIMIT));
+        if (activeStatus !== "All") {
+          params.set("status", activeStatus);
+        }
+        if (searchTerm.trim()) {
+          params.set("search", searchTerm.trim());
+        }
+        if (supplierFilter.trim()) {
+          params.set("supplier", supplierFilter.trim());
+        }
+
         const payload = await fetchInventory(
-          `/api/inventory/purchase-orders?page=${page}&limit=${DEFAULT_LIMIT}`,
+          `/api/inventory/purchase-orders?${params.toString()}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((order, index) => {
           const supplier = order.supplierName || order.supplier || "";
           const items = Array.isArray(order.items) ? order.items : [];
           const primaryItemName = items[0]?.name || "";
+          const primaryItemImage = items[0]?.image || "";
           return {
             id: order._id || order.id || `${index}`,
             poNumber: order.poNumber || order.orderNo || order.id || "",
             itemName: primaryItemName,
+            itemImage: primaryItemImage,
             supplier,
             supplierInitials:
               order.supplierInitials || buildInitials(supplier),
-            supplierTone: order.supplierTone || "blue",
+            supplierTone: order.supplierTone || pickTone(supplier || order.id),
             items: items.map((item, itemIndex) => ({
               id: item._id || item.id || `${order._id || index}-${itemIndex}`,
               name: item.name || "",
@@ -108,9 +154,15 @@ const PurchaseOrders = () => {
             status: order.status || order.requestStatus || "Pending",
             dateRequestPlaced:
               order.dateRequestPlaced || order.createdAt || order.created,
-            created: formatShortDate(
+            updatedAt: order.updatedAt || order.updated || null,
+            createdDate: formatShortDate(
               order.dateRequestPlaced || order.createdAt || order.created,
             ),
+            createdTime: formatTime(
+              order.dateRequestPlaced || order.createdAt || order.created,
+            ),
+            updatedDate: formatShortDate(order.updatedAt || order.updated),
+            updatedTime: formatTime(order.updatedAt || order.updated),
           };
         });
 
@@ -138,7 +190,7 @@ const PurchaseOrders = () => {
     return () => {
       isMounted = false;
     };
-  }, [page, refreshKey]);
+  }, [page, refreshKey, activeStatus, searchTerm, supplierFilter]);
 
   const handleStatusChange = async (orderId, nextStatus) => {
     const previousStatus = orders.find((order) => order.id === orderId)?.status;
@@ -153,6 +205,9 @@ const PurchaseOrders = () => {
         method: "PATCH",
         body: JSON.stringify({ status: nextStatus }),
       });
+      if (activeStatus !== "All" && nextStatus !== activeStatus) {
+        triggerRefresh();
+      }
     } catch (err) {
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
@@ -176,6 +231,65 @@ const PurchaseOrders = () => {
     setPage(nextPage);
   };
 
+  const handleTabChange = (status) => {
+    setActiveStatus(status);
+    setPage(1);
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+    setPage(1);
+  };
+
+  const handleSupplierChange = (event) => {
+    setSupplierFilter(event.target.value);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setSupplierFilter("");
+    setPage(1);
+  };
+
+  const handleExport = () => {
+    if (!orders.length) return;
+    const rows = orders.map((order) => ({
+      "PO Number": order.poNumber,
+      "Item Name": order.itemName || "",
+      Supplier: order.supplier,
+      "Items Ordered": order.itemsCount,
+      "Total Cost": formatCurrencyValue(order.total, currency, rate),
+      Status: order.status,
+      "Created Date": `${order.createdDate} ${order.createdTime}`.trim(),
+    }));
+
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) =>
+        headers
+          .map((header) => {
+            const cell = String(row[header] ?? "");
+            return `"${cell.replace(/"/g, '""')}"`;
+          })
+          .join(","),
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `purchase-orders-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const currencyPlaceholder = formatCurrencyPlaceholder(currency);
   const currencyLabel = getCurrencyPrefix(currency);
   const totalSpending = orders.reduce(
@@ -192,13 +306,13 @@ const PurchaseOrders = () => {
     setFormData({
       poNumber: "",
       supplierName: "",
-      supplierTone: "blue",
       total: "",
       status: "Pending",
-      dateRequestPlaced: "",
+      createdDate: "",
+      createdTime: "",
       itemsCount: "",
       itemNames: "",
-      itemImages: "",
+      itemImages: [],
     });
     setActionError("");
     setIsModalOpen(true);
@@ -211,17 +325,16 @@ const PurchaseOrders = () => {
       .join(", ");
     const itemImages = order.items
       .map((item) => item.image)
-      .filter(Boolean)
-      .join(", ");
+      .filter(Boolean);
 
     setEditingOrder(order);
     setFormData({
       poNumber: order.poNumber || "",
       supplierName: order.supplier || "",
-      supplierTone: order.supplierTone || "blue",
       total: order.total || "",
       status: order.status || "Pending",
-      dateRequestPlaced: formatDateInput(order.dateRequestPlaced),
+      createdDate: order.createdDate || "",
+      createdTime: order.createdTime || "",
       itemsCount:
         Number.isFinite(order.itemsCount) && order.itemsCount
           ? String(order.itemsCount)
@@ -243,25 +356,50 @@ const PurchaseOrders = () => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
+  const handleImagesSelected = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+          }),
+      ),
+    ).then((results) => {
+      const cleaned = results.filter(Boolean);
+      if (!cleaned.length) return;
+      setFormData((prev) => ({
+        ...prev,
+        itemImages: [...prev.itemImages, ...cleaned],
+      }));
+    });
+  };
+
+  const removeImage = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      itemImages: prev.itemImages.filter((_, idx) => idx !== index),
+    }));
+  };
+
   const handleSave = async () => {
     if (isSaving) return;
     if (!formData.poNumber || !formData.supplierName || !formData.total) {
       setActionError("PO number, supplier name, and total are required.");
       return;
     }
-    if (!formData.dateRequestPlaced) {
-      setActionError("Created date is required.");
-      return;
-    }
-
     const names = formData.itemNames
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    const images = formData.itemImages
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const images = Array.isArray(formData.itemImages)
+      ? formData.itemImages
+      : [];
     const items = names.map((name, index) => ({
       name,
       image: images[index] || "",
@@ -273,17 +411,21 @@ const PurchaseOrders = () => {
 
     setIsSaving(true);
     try {
-      const payload = {
-        poNumber: formData.poNumber,
-        supplierName: formData.supplierName,
-        supplierInitials: buildInitials(formData.supplierName),
-        supplierTone: formData.supplierTone,
-        items,
-        itemsCount,
-        total: formData.total,
-        status: formData.status,
-        dateRequestPlaced: formData.dateRequestPlaced,
-      };
+    const payload = {
+      poNumber: formData.poNumber,
+      supplierName: formData.supplierName,
+      supplierInitials: buildInitials(formData.supplierName),
+      items,
+      itemsCount,
+      total: formData.total,
+      status: formData.status,
+      ...(editingOrder
+        ? {}
+        : {
+            dateRequestPlaced: new Date().toISOString(),
+            supplierTone: pickTone(formData.supplierName),
+          }),
+    };
 
       const endpoint = editingOrder
         ? `/api/inventory/purchase-orders/${editingOrder.id}`
@@ -337,11 +479,15 @@ const PurchaseOrders = () => {
           <h2>Purchase Orders</h2>
         </div>
         <div className="purchase-orders-actions">
-          <button type="button" className="ghost-button">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setFiltersOpen((prev) => !prev)}
+          >
             <SortIcon className="button-icon" />
             Filter
           </button>
-          <button type="button" className="ghost-button">
+          <button type="button" className="ghost-button" onClick={handleExport}>
             <DownloadIcon className="button-icon" />
             Export
           </button>
@@ -357,22 +503,72 @@ const PurchaseOrders = () => {
       </header>
 
       <div className="orders-tabs">
-        <button type="button" className="tab active">
+        <button
+          type="button"
+          className={`tab ${activeStatus === "All" ? "active" : ""}`}
+          onClick={() => handleTabChange("All")}
+        >
           All Orders <span className="tab-count">{total || 0}</span>
         </button>
-        <button type="button" className="tab">
+        <button
+          type="button"
+          className={`tab ${activeStatus === "Pending" ? "active" : ""}`}
+          onClick={() => handleTabChange("Pending")}
+        >
           Pending
         </button>
-        <button type="button" className="tab">
+        <button
+          type="button"
+          className={`tab ${activeStatus === "Ordered" ? "active" : ""}`}
+          onClick={() => handleTabChange("Ordered")}
+        >
           Ordered
         </button>
-        <button type="button" className="tab">
+        <button
+          type="button"
+          className={`tab ${activeStatus === "Received" ? "active" : ""}`}
+          onClick={() => handleTabChange("Received")}
+        >
           Received
         </button>
-        <button type="button" className="tab">
+        <button
+          type="button"
+          className={`tab ${activeStatus === "Cancelled" ? "active" : ""}`}
+          onClick={() => handleTabChange("Cancelled")}
+        >
           Cancelled
         </button>
       </div>
+
+      {filtersOpen ? (
+        <div className="orders-filters">
+          <div className="filters-row">
+            <div className="input-shell">
+              <SearchIcon className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search PO number, supplier, or item..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+              />
+            </div>
+            <input
+              className="filter-input"
+              type="text"
+              placeholder="Filter by supplier"
+              value={supplierFilter}
+              onChange={handleSupplierChange}
+            />
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleClearFilters}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="orders-table-card mobile-card-table">
         <div className="table-header">
@@ -391,7 +587,16 @@ const PurchaseOrders = () => {
               <div className="cell mono" data-label="PO Number">
                 {order.poNumber}
               </div>
-              <div className="cell" data-label="Item Name">
+              <div className="cell item-name-cell full" data-label="Item Name">
+                <span className="item-avatar">
+                  {order.itemImage ? (
+                    <img src={order.itemImage} alt={order.itemName} />
+                  ) : (
+                    <span className="item-fallback">
+                      {(order.itemName || "?").charAt(0)}
+                    </span>
+                  )}
+                </span>
                 <strong>{order.itemName || "-"}</strong>
               </div>
               <div className="cell supplier-cell full" data-label="Supplier">
@@ -403,25 +608,12 @@ const PurchaseOrders = () => {
                 </div>
               </div>
               <div className="cell items-cell full" data-label="Items Ordered">
-                <div className="item-stack" aria-hidden="true">
-                  {order.items.map((item) => (
-                    <span key={item.id} className="item-avatar">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} />
-                      ) : (
-                        <span className="item-fallback">
-                          {(item.name || "?").charAt(0)}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </div>
                 <span className="muted items-count">
                   {order.itemsCount} items
                 </span>
               </div>
               <div className="cell total-cost" data-label="Total Cost">
-                {formatCurrencyValue(order.total, currency)}
+                {formatCurrencyValue(order.total, currency, rate)}
               </div>
               <div className="cell" data-label="Status">
                 <select
@@ -439,7 +631,16 @@ const PurchaseOrders = () => {
                 </select>
               </div>
               <div className="cell muted" data-label="Created Date">
-                {order.created}
+                <div>{order.createdDate}</div>
+                {order.createdTime ? (
+                  <span className="time-muted">{order.createdTime}</span>
+                ) : null}
+                {order.updatedAt &&
+                order.updatedAt !== order.dateRequestPlaced ? (
+                  <span className="time-muted update">
+                    Last update {order.updatedDate} {order.updatedTime}
+                  </span>
+                ) : null}
               </div>
               <div className="cell actions-cell" data-label="Actions">
                 <button
@@ -509,7 +710,7 @@ const PurchaseOrders = () => {
         <article className="summary-card">
           <span className="summary-label">Total Spending (Loaded)</span>
           <div className="summary-value">
-            {formatCurrencyValue(totalSpending, currency)}
+            {formatCurrencyValue(totalSpending, currency, rate)}
           </div>
           <div className="summary-meta">
             {orders.length ? `${orders.length} orders` : "No orders loaded"}
@@ -579,24 +780,16 @@ const PurchaseOrders = () => {
               </select>
             </label>
             <label className="modal-field">
-              <span>Created Date</span>
+              <span>Created Date &amp; Time</span>
               <input
-                type="date"
-                value={formData.dateRequestPlaced}
-                onChange={updateField("dateRequestPlaced")}
+                type="text"
+                value={
+                  editingOrder
+                    ? `${formData.createdDate || ""} ${formData.createdTime || ""}`.trim()
+                    : `${formatShortDate(new Date())} ${formatTime(new Date())}`
+                }
+                readOnly
               />
-            </label>
-            <label className="modal-field">
-              <span>Supplier Tone</span>
-              <select
-                value={formData.supplierTone}
-                onChange={updateField("supplierTone")}
-              >
-                <option value="blue">Blue</option>
-                <option value="amber">Amber</option>
-                <option value="green">Green</option>
-                <option value="slate">Slate</option>
-              </select>
             </label>
             <label className="modal-field">
               <span>Item Names</span>
@@ -611,15 +804,15 @@ const PurchaseOrders = () => {
               </span>
             </label>
             <label className="modal-field">
-              <span>Item Image URLs</span>
+              <span>Item Images</span>
               <input
-                type="text"
-                value={formData.itemImages}
-                onChange={updateField("itemImages")}
-                placeholder="https://..."
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImagesSelected}
               />
               <span className="modal-help">
-                Optional. Comma-separated URLs.
+                Upload images in the same order as item names.
               </span>
             </label>
             <label className="modal-field">
@@ -633,6 +826,22 @@ const PurchaseOrders = () => {
               />
             </label>
           </div>
+          {formData.itemImages?.length ? (
+            <div className="upload-preview">
+              {formData.itemImages.map((image, index) => (
+                <div className="preview-item" key={`${image}-${index}`}>
+                  <img src={image} alt={`Item ${index + 1}`} />
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => removeImage(index)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>
