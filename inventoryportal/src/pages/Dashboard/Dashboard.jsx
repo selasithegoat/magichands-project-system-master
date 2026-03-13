@@ -7,7 +7,11 @@ import {
   UserIcon,
   WarningIcon,
 } from "../../components/icons/Icons";
-import { formatCurrencyValue, useInventoryCurrency } from "../../utils/currency";
+import {
+  formatCurrencyPair,
+  formatCurrencyValue,
+  useInventoryCurrency,
+} from "../../utils/currency";
 import "./Dashboard.css";
 
 const activityFeed = [
@@ -103,7 +107,13 @@ const Dashboard = () => {
           <span>Inventory Value</span>
           <span className="delta positive">+5.1%</span>
         </div>
-        <div className="stat-value">
+        <div
+          className="stat-value tooltip-anchor"
+          data-tooltip={
+            formatCurrencyPair("1.24M", currency, rate).alternateValue ||
+            undefined
+          }
+        >
           {formatCurrencyValue("1.24M", currency, rate)}
         </div>
         <div className="stat-chart value">

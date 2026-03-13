@@ -64,6 +64,32 @@ export const formatCurrencyValue = (
   return prefix === "$" ? `${prefix}${formatted}` : `${prefix} ${formatted}`;
 };
 
+export const formatCurrencyPair = (
+  value,
+  currencyCode,
+  currencyRate = DEFAULT_CURRENCY_RATE,
+  baseCurrency = DEFAULT_CURRENCY,
+) => {
+  const displayValue = formatCurrencyValue(
+    value,
+    currencyCode,
+    currencyRate,
+    baseCurrency,
+  );
+  const otherCurrency = String(currencyCode || DEFAULT_CURRENCY).toUpperCase() ===
+    "USD"
+    ? "GHS"
+    : "USD";
+  const alternateValue = formatCurrencyValue(
+    value,
+    otherCurrency,
+    currencyRate,
+    baseCurrency,
+  );
+
+  return { displayValue, alternateValue, otherCurrency };
+};
+
 export const parseCurrencyValue = (value) => {
   if (value === null || value === undefined || value === "") return 0;
   const raw = String(value).trim();

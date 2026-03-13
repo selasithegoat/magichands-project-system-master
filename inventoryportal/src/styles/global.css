@@ -25,6 +25,10 @@
   --scrollbar-thumb-hover: #a5b4fc;
   --shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
   --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --tooltip-bg: #0f172a;
+  --tooltip-ink: #f8fafc;
+  --tooltip-border: rgba(15, 23, 42, 0.4);
+  --tooltip-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
@@ -58,6 +62,10 @@
   --scrollbar-thumb-hover: #475569;
   --shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
   --shadow-soft: 0 12px 30px rgba(2, 6, 23, 0.35);
+  --tooltip-bg: #0f172a;
+  --tooltip-ink: #e2e8f0;
+  --tooltip-border: rgba(148, 163, 184, 0.35);
+  --tooltip-shadow: 0 18px 36px rgba(2, 6, 23, 0.55);
 }
 
 * {
@@ -444,6 +452,64 @@ select {
   font-size: 12px;
   color: var(--ink-muted);
   padding: 0 4px;
+}
+
+.tooltip-anchor {
+  position: relative;
+  z-index: 1;
+}
+
+.tooltip-anchor[data-tooltip] {
+  cursor: help;
+}
+
+.tooltip-anchor[data-tooltip]::before,
+.tooltip-anchor[data-tooltip]::after {
+  position: absolute;
+  left: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.tooltip-anchor[data-tooltip]::after {
+  content: attr(data-tooltip);
+  bottom: calc(100% + 10px);
+  transform: translate(-50%, 6px);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  border: 1px solid var(--tooltip-border);
+  box-shadow: var(--tooltip-shadow);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tooltip-anchor[data-tooltip]::before {
+  content: "";
+  bottom: calc(100% + 4px);
+  transform: translate(-50%, 6px);
+  border: 6px solid transparent;
+  border-top-color: var(--tooltip-bg);
+}
+
+.tooltip-anchor[data-tooltip]:hover::before,
+.tooltip-anchor[data-tooltip]:hover::after,
+.tooltip-anchor[data-tooltip]:focus-within::before,
+.tooltip-anchor[data-tooltip]:focus-within::after,
+.tooltip-anchor[data-tooltip]:focus-visible::before,
+.tooltip-anchor[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.tooltip-field {
+  display: block;
+  width: 100%;
 }
 
 .modal-footer .primary-button:disabled,

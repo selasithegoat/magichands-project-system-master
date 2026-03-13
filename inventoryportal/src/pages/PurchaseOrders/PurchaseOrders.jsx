@@ -17,6 +17,7 @@ import {
 import { buildPaginationRange } from "../../utils/pagination";
 import {
   formatCurrencyPlaceholder,
+  formatCurrencyPair,
   formatCurrencyValue,
   getCurrencyPrefix,
   parseCurrencyValue,
@@ -613,7 +614,15 @@ const PurchaseOrders = () => {
                 </span>
               </div>
               <div className="cell total-cost" data-label="Total Cost">
-                {formatCurrencyValue(order.total, currency, rate)}
+                <span
+                  className="tooltip-anchor"
+                  data-tooltip={
+                    formatCurrencyPair(order.total, currency, rate)
+                      .alternateValue || undefined
+                  }
+                >
+                  {formatCurrencyValue(order.total, currency, rate)}
+                </span>
               </div>
               <div className="cell" data-label="Status">
                 <select
@@ -709,7 +718,13 @@ const PurchaseOrders = () => {
       <div className="orders-summary">
         <article className="summary-card">
           <span className="summary-label">Total Spending (Loaded)</span>
-          <div className="summary-value">
+          <div
+            className="summary-value tooltip-anchor"
+            data-tooltip={
+              formatCurrencyPair(totalSpending, currency, rate).alternateValue ||
+              undefined
+            }
+          >
             {formatCurrencyValue(totalSpending, currency, rate)}
           </div>
           <div className="summary-meta">
@@ -763,12 +778,22 @@ const PurchaseOrders = () => {
             </label>
             <label className="modal-field">
               <span>Total Cost ({currencyLabel})</span>
-              <input
-                type="text"
-                value={formData.total}
-                onChange={updateField("total")}
-                placeholder={currencyPlaceholder}
-              />
+              <div
+                className="tooltip-anchor tooltip-field"
+                data-tooltip={
+                  formData.total
+                    ? formatCurrencyPair(formData.total, currency, rate)
+                        .alternateValue
+                    : undefined
+                }
+              >
+                <input
+                  type="text"
+                  value={formData.total}
+                  onChange={updateField("total")}
+                  placeholder={currencyPlaceholder}
+                />
+              </div>
             </label>
             <label className="modal-field">
               <span>Status</span>

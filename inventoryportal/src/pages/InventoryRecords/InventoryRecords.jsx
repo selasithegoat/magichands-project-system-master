@@ -16,6 +16,7 @@ import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
 import {
   formatCurrencyPlaceholder,
+  formatCurrencyPair,
   formatCurrencyValue,
   getCurrencyPrefix,
   useInventoryCurrency,
@@ -460,10 +461,26 @@ const InventoryRecords = () => {
                     </div>
                   </div>
                   <div className="cell price" data-label="Price">
-                    {formatCurrencyValue(record.price, currency, rate)}
+                    <span
+                      className="tooltip-anchor"
+                      data-tooltip={
+                        formatCurrencyPair(record.price, currency, rate)
+                          .alternateValue || undefined
+                      }
+                    >
+                      {formatCurrencyValue(record.price, currency, rate)}
+                    </span>
                   </div>
                   <div className="cell value" data-label="Value">
-                    {formatCurrencyValue(record.value, currency, rate)}
+                    <span
+                      className="tooltip-anchor"
+                      data-tooltip={
+                        formatCurrencyPair(record.value, currency, rate)
+                          .alternateValue || undefined
+                      }
+                    >
+                      {formatCurrencyValue(record.value, currency, rate)}
+                    </span>
                   </div>
                   <div className="cell muted" data-label="Location">
                     {record.location}
@@ -642,21 +659,41 @@ const InventoryRecords = () => {
             </label>
             <label className="modal-field">
               <span>Price ({currencyLabel})</span>
-              <input
-                type="text"
-                value={formData.price}
-                onChange={updateField("price")}
-                placeholder={currencyPlaceholder}
-              />
+              <div
+                className="tooltip-anchor tooltip-field"
+                data-tooltip={
+                  formData.price
+                    ? formatCurrencyPair(formData.price, currency, rate)
+                        .alternateValue
+                    : undefined
+                }
+              >
+                <input
+                  type="text"
+                  value={formData.price}
+                  onChange={updateField("price")}
+                  placeholder={currencyPlaceholder}
+                />
+              </div>
             </label>
             <label className="modal-field">
               <span>Value ({currencyLabel})</span>
-              <input
-                type="text"
-                value={formData.value}
-                onChange={updateField("value")}
-                placeholder={currencyPlaceholder}
-              />
+              <div
+                className="tooltip-anchor tooltip-field"
+                data-tooltip={
+                  formData.value
+                    ? formatCurrencyPair(formData.value, currency, rate)
+                        .alternateValue
+                    : undefined
+                }
+              >
+                <input
+                  type="text"
+                  value={formData.value}
+                  onChange={updateField("value")}
+                  placeholder={currencyPlaceholder}
+                />
+              </div>
             </label>
             <label className="modal-field">
               <span>Location</span>
