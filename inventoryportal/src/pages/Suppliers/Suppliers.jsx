@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import {
   BuildingIcon,
   ChevronDownIcon,
@@ -10,14 +10,72 @@ import {
   PlusIcon,
   ShieldCheckIcon,
 } from "../../components/icons/Icons";
-import { suppliers } from "../../data/suppliers";
+import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import "./Suppliers.css";
 
 const getStatusClass = (status) =>
   `po-pill ${String(status || "").toLowerCase()}`;
 
+const DEFAULT_LIMIT = 4;
+
 const Suppliers = () => {
-  const rows = useMemo(() => suppliers, []);
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: DEFAULT_LIMIT,
+    total: 0,
+    totalPages: 0,
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSuppliers = async () => {
+      try {
+        const payload = await fetchInventory(
+          `/api/inventory/suppliers?limit=${DEFAULT_LIMIT}`,
+        );
+        const parsed = parseListResponse(payload);
+        const normalized = parsed.data.map((supplier, index) => ({
+          id: supplier._id || supplier.id || `${index}`,
+          code: supplier.code || "",
+          name: supplier.name || "",
+          contactPerson: supplier.contactPerson || "",
+          role: supplier.role || "",
+          phone: supplier.phone || "",
+          email: supplier.email || "",
+          products: Array.isArray(supplier.products) ? supplier.products : [],
+          openPO: supplier.openPO || { label: "-", status: "" },
+          tone: supplier.tone || "blue",
+        }));
+
+        if (!isMounted) return;
+        setRows(normalized);
+        setMeta({
+          page: parsed.page,
+          limit: parsed.limit || DEFAULT_LIMIT,
+          total: parsed.total,
+          totalPages: parsed.totalPages,
+        });
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+        setRows([]);
+        setMeta((prev) => ({ ...prev, total: 0, totalPages: 0 }));
+        setError(err?.message || "Unable to load suppliers.");
+      }
+    };
+
+    loadSuppliers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const total = meta.total || rows.length;
+  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const endIndex = total ? Math.min(startIndex + rows.length - 1, total) : 0;
 
   return (
     <section className="suppliers-page">
@@ -148,7 +206,11 @@ const Suppliers = () => {
           ))}
         </div>
         <div className="table-footer">
-          <span>Showing 1-4 of 42 suppliers</span>
+          <span>
+            {error
+              ? error
+              : `Showing ${startIndex}-${endIndex} of ${total} suppliers`}
+          </span>
           <div className="pagination">
             <button type="button" className="ghost-button">Previous</button>
             <button type="button" className="page active">1</button>

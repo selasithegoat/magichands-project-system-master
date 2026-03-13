@@ -1,7 +1,97 @@
+import { useEffect, useState } from "react";
+import { fetchInventory } from "../../utils/inventoryApi";
 import "./Settings.css";
 
-const Settings = () => (
-  <section className="settings-page">
+const DEFAULT_SETTINGS = {
+  organizationName: "MagicHands Logistics",
+  primaryContactEmail: "ops@magichands.io",
+  currency: "GHS",
+  timezone: "Africa/Accra",
+  dateFormat: "DD MMM, YYYY",
+  numberFormat: "1,234.56",
+  notifyLowStock: true,
+  notifyPurchaseOrders: true,
+  notifyWeeklySummary: false,
+  defaultWarehouse: "Central Warehouse",
+  lowStockThreshold: 18,
+  unitOfMeasure: "Pieces",
+  autoReorder: false,
+  theme: "System",
+  tableDensity: "Comfortable",
+  defaultExportFormat: "CSV",
+  posErpConnection: "Not connected",
+  dataRetention: "24 months",
+  auditLogAccess: "Admins only",
+};
+
+const Settings = () => {
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [savedSettings, setSavedSettings] = useState(DEFAULT_SETTINGS);
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSettings = async () => {
+      try {
+        const payload = await fetchInventory("/api/inventory/settings");
+        if (!isMounted) return;
+        const merged = { ...DEFAULT_SETTINGS, ...payload };
+        setSettings(merged);
+        setSavedSettings(merged);
+        setStatusMessage("");
+      } catch (err) {
+        if (!isMounted) return;
+        setStatusMessage(err?.message || "Unable to load settings.");
+      }
+    };
+
+    loadSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const updateField = (field) => (event) => {
+    const value =
+      event?.target?.type === "checkbox"
+        ? event.target.checked
+        : event.target.value;
+    setSettings((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const payload = {
+        ...settings,
+        lowStockThreshold: Number.isFinite(Number(settings.lowStockThreshold))
+          ? Number(settings.lowStockThreshold)
+          : settings.lowStockThreshold,
+      };
+      const updated = await fetchInventory("/api/inventory/settings", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      const merged = { ...DEFAULT_SETTINGS, ...updated };
+      setSettings(merged);
+      setSavedSettings(merged);
+      setStatusMessage("Settings saved.");
+    } catch (err) {
+      setStatusMessage(err?.message || "Unable to save settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setSettings(savedSettings);
+    setStatusMessage("Changes discarded.");
+  };
+
+  return (
+    <section className="settings-page">
     <header className="settings-header">
       <div>
         <div className="breadcrumb">System / Settings</div>
@@ -30,22 +120,36 @@ const Settings = () => (
           <div className="settings-grid">
             <label className="settings-field">
               <span>Organization Name</span>
-              <input type="text" defaultValue="MagicHands Logistics" />
+              <input
+                type="text"
+                value={settings.organizationName}
+                onChange={updateField("organizationName")}
+              />
             </label>
             <label className="settings-field">
               <span>Primary Contact Email</span>
-              <input type="email" defaultValue="ops@magichands.io" />
+              <input
+                type="email"
+                value={settings.primaryContactEmail}
+                onChange={updateField("primaryContactEmail")}
+              />
             </label>
             <label className="settings-field">
               <span>Currency</span>
-              <select defaultValue="GHS">
+              <select
+                value={settings.currency}
+                onChange={updateField("currency")}
+              >
                 <option value="GHS">GHS (Default)</option>
                 <option value="USD">USD</option>
               </select>
             </label>
             <label className="settings-field">
               <span>Timezone</span>
-              <select defaultValue="Africa/Accra">
+              <select
+                value={settings.timezone}
+                onChange={updateField("timezone")}
+              >
                 <option value="Africa/Accra">Africa/Accra (GMT+00:00)</option>
                 <option value="America/New_York">
                   America/New_York (GMT-05:00)
@@ -58,7 +162,10 @@ const Settings = () => (
             </label>
             <label className="settings-field">
               <span>Date Format</span>
-              <select defaultValue="DD MMM, YYYY">
+              <select
+                value={settings.dateFormat}
+                onChange={updateField("dateFormat")}
+              >
                 <option>DD MMM, YYYY</option>
                 <option>MM/DD/YYYY</option>
                 <option>YYYY-MM-DD</option>
@@ -66,7 +173,10 @@ const Settings = () => (
             </label>
             <label className="settings-field">
               <span>Number Format</span>
-              <select defaultValue="1,234.56">
+              <select
+                value={settings.numberFormat}
+                onChange={updateField("numberFormat")}
+              >
                 <option>1,234.56</option>
                 <option>1.234,56</option>
                 <option>1234.56</option>
@@ -87,7 +197,11 @@ const Settings = () => (
                 <p>Notify when items hit the minimum threshold.</p>
               </div>
               <label className="switch">
-                <input type="checkbox" defaultChecked />
+                <input
+                  type="checkbox"
+                  checked={settings.notifyLowStock}
+                  onChange={updateField("notifyLowStock")}
+                />
                 <span className="slider" />
               </label>
             </div>
@@ -97,7 +211,11 @@ const Settings = () => (
                 <p>Send updates when POs are approved or received.</p>
               </div>
               <label className="switch">
-                <input type="checkbox" defaultChecked />
+                <input
+                  type="checkbox"
+                  checked={settings.notifyPurchaseOrders}
+                  onChange={updateField("notifyPurchaseOrders")}
+                />
                 <span className="slider" />
               </label>
             </div>
@@ -107,7 +225,11 @@ const Settings = () => (
                 <p>Deliver a digest every Monday morning.</p>
               </div>
               <label className="switch">
-                <input type="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={settings.notifyWeeklySummary}
+                  onChange={updateField("notifyWeeklySummary")}
+                />
                 <span className="slider" />
               </label>
             </div>
@@ -122,7 +244,10 @@ const Settings = () => (
           <div className="settings-grid">
             <label className="settings-field">
               <span>Default Warehouse</span>
-              <select defaultValue="Central Warehouse">
+              <select
+                value={settings.defaultWarehouse}
+                onChange={updateField("defaultWarehouse")}
+              >
                 <option>Central Warehouse</option>
                 <option>Main Hub</option>
                 <option>East Branch</option>
@@ -130,11 +255,18 @@ const Settings = () => (
             </label>
             <label className="settings-field">
               <span>Low Stock Threshold</span>
-              <input type="number" defaultValue="18" />
+              <input
+                type="number"
+                value={settings.lowStockThreshold}
+                onChange={updateField("lowStockThreshold")}
+              />
             </label>
             <label className="settings-field">
               <span>Unit of Measure</span>
-              <select defaultValue="Pieces">
+              <select
+                value={settings.unitOfMeasure}
+                onChange={updateField("unitOfMeasure")}
+              >
                 <option>Pieces</option>
                 <option>Packs</option>
                 <option>Kilograms</option>
@@ -148,7 +280,11 @@ const Settings = () => (
                 <p>Automatically create draft POs when stock is critical.</p>
               </div>
               <label className="switch">
-                <input type="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={settings.autoReorder}
+                  onChange={updateField("autoReorder")}
+                />
                 <span className="slider" />
               </label>
             </div>
@@ -163,7 +299,10 @@ const Settings = () => (
           <div className="settings-grid">
             <label className="settings-field">
               <span>Theme</span>
-              <select defaultValue="System">
+              <select
+                value={settings.theme}
+                onChange={updateField("theme")}
+              >
                 <option>System</option>
                 <option>Light</option>
                 <option>Dark</option>
@@ -171,7 +310,10 @@ const Settings = () => (
             </label>
             <label className="settings-field">
               <span>Table Density</span>
-              <select defaultValue="Comfortable">
+              <select
+                value={settings.tableDensity}
+                onChange={updateField("tableDensity")}
+              >
                 <option>Comfortable</option>
                 <option>Compact</option>
               </select>
@@ -187,7 +329,10 @@ const Settings = () => (
           <div className="settings-grid">
             <label className="settings-field">
               <span>Default Export Format</span>
-              <select defaultValue="CSV">
+              <select
+                value={settings.defaultExportFormat}
+                onChange={updateField("defaultExportFormat")}
+              >
                 <option>CSV</option>
                 <option>PDF</option>
                 <option>XLSX</option>
@@ -195,7 +340,11 @@ const Settings = () => (
             </label>
             <label className="settings-field">
               <span>POS/ERP Connection</span>
-              <input type="text" defaultValue="Not connected" />
+              <input
+                type="text"
+                value={settings.posErpConnection}
+                onChange={updateField("posErpConnection")}
+              />
             </label>
           </div>
         </section>
@@ -208,7 +357,10 @@ const Settings = () => (
           <div className="settings-grid">
             <label className="settings-field">
               <span>Data Retention</span>
-              <select defaultValue="24 months">
+              <select
+                value={settings.dataRetention}
+                onChange={updateField("dataRetention")}
+              >
                 <option>12 months</option>
                 <option>24 months</option>
                 <option>36 months</option>
@@ -217,7 +369,10 @@ const Settings = () => (
             </label>
             <label className="settings-field">
               <span>Audit Log Access</span>
-              <select defaultValue="Admins only">
+              <select
+                value={settings.auditLogAccess}
+                onChange={updateField("auditLogAccess")}
+              >
                 <option>Admins only</option>
                 <option>Admins + Managers</option>
                 <option>All staff</option>
@@ -236,13 +391,18 @@ const Settings = () => (
 
         <div className="settings-footer">
           <div className="footer-note">
-            Changes will apply to all users in your organization.
+            {statusMessage || "Changes will apply to all users in your organization."}
           </div>
           <div className="footer-actions">
-            <button type="button" className="ghost-button">
+            <button type="button" className="ghost-button" onClick={handleCancel}>
               Cancel
             </button>
-            <button type="button" className="primary-button">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
               Save Changes
             </button>
           </div>
@@ -250,6 +410,7 @@ const Settings = () => (
       </div>
     </div>
   </section>
-);
+  );
+};
 
 export default Settings;

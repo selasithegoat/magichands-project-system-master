@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircleIcon,
   CheckIcon,
@@ -10,13 +10,76 @@ import {
   SortIcon,
   WarningIcon,
 } from "../../components/icons/Icons";
-import { inventoryRecords } from "../../data/inventoryRecords";
+import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import NewInventoryRecordModal from "../../components/modals/NewInventoryRecordModal";
 import "./InventoryRecords.css";
 
 const InventoryRecords = () => {
-  const records = useMemo(() => inventoryRecords, []);
+  const [records, setRecords] = useState([]);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: 4,
+    total: 0,
+    totalPages: 0,
+  });
+  const [error, setError] = useState("");
   const [isNewRecordOpen, setIsNewRecordOpen] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRecords = async () => {
+      try {
+        const payload = await fetchInventory(
+          `/api/inventory/inventory-records?limit=${meta.limit}`,
+        );
+        const parsed = parseListResponse(payload);
+        const normalized = parsed.data.map((record, index) => ({
+          id: record._id || record.id || `${index}`,
+          item: record.item || "",
+          subtext: record.subtext || "",
+          sku: record.sku || "",
+          category: record.category || "",
+          categoryTone: record.categoryTone || "slate",
+          qtyLabel: record.qtyLabel || "",
+          qtyMeta: record.qtyMeta || "",
+          qtyState: record.qtyState || "",
+          qtyFill: record.qtyFill || "",
+          price: record.price || "",
+          value: record.value || "",
+          location: record.location || "",
+          status: record.status || "",
+          statusTone: record.statusTone || "",
+          reorder: Boolean(record.reorder),
+          image: record.image || "",
+        }));
+
+        if (!isMounted) return;
+        setRecords(normalized);
+        setMeta({
+          page: parsed.page,
+          limit: parsed.limit || meta.limit,
+          total: parsed.total,
+          totalPages: parsed.totalPages,
+        });
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+        setRecords([]);
+        setMeta((prev) => ({ ...prev, total: 0, totalPages: 0 }));
+        setError(err?.message || "Unable to load inventory records.");
+      }
+    };
+
+    loadRecords();
+    return () => {
+      isMounted = false;
+    };
+  }, [meta.limit]);
+
+  const total = meta.total || records.length;
+  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const endIndex = total ? Math.min(startIndex + records.length - 1, total) : 0;
 
   return (
     <section className="inventory-records">
@@ -170,7 +233,9 @@ const InventoryRecords = () => {
                 <ColumnsIcon className="button-icon" />
                 Columns
               </button>
-              <span className="records-total">1,248 items total</span>
+              <span className="records-total">
+                {total ? `${total} items total` : "0 items total"}
+              </span>
             </div>
           </div>
 
@@ -253,7 +318,11 @@ const InventoryRecords = () => {
           </div>
 
           <div className="table-footer">
-            <span>Showing 1-4 of 1,248 results</span>
+            <span>
+              {error
+                ? error
+                : `Showing ${startIndex}-${endIndex} of ${total} results`}
+            </span>
             <div className="pagination">
               <button type="button" className="ghost-button">
                 Previous

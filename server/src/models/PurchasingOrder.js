@@ -115,5 +115,7 @@ const PurchasingOrderSchema = new mongoose.Schema(
 );
 
 PurchasingOrderSchema.index({ dateRequestPlaced: -1, createdAt: -1 });
+PurchasingOrderSchema.index({ poNumber: 1 });
+PurchasingOrderSchema.index({ supplierName: 1 });
 
 module.exports = mongoose.model("PurchasingOrder", PurchasingOrderSchema);

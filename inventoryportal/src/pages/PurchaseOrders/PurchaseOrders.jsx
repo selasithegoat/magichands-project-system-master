@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DownloadIcon,
   EditIcon,
@@ -6,23 +6,121 @@ import {
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
-import { purchaseOrders } from "../../data/purchaseOrders";
+import {
+  fetchInventory,
+  formatShortDate,
+  parseListResponse,
+} from "../../utils/inventoryApi";
 import "./PurchaseOrders.css";
 
 const getStatusClass = (status) =>
   `status-${String(status || "").toLowerCase().replace(/\s+/g, "-")}`;
 
-const PurchaseOrders = () => {
-  const initialOrders = useMemo(() => purchaseOrders, []);
-  const [orders, setOrders] = useState(initialOrders);
+const DEFAULT_LIMIT = 5;
 
-  const handleStatusChange = (orderId, nextStatus) => {
+const buildInitials = (value) =>
+  String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join("");
+
+const PurchaseOrders = () => {
+  const [orders, setOrders] = useState([]);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: DEFAULT_LIMIT,
+    total: 0,
+    totalPages: 0,
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadOrders = async () => {
+      try {
+        const payload = await fetchInventory(
+          `/api/inventory/purchase-orders?limit=${DEFAULT_LIMIT}`,
+        );
+        const parsed = parseListResponse(payload);
+        const normalized = parsed.data.map((order, index) => {
+          const supplier = order.supplierName || order.supplier || "";
+          const items = Array.isArray(order.items) ? order.items : [];
+          return {
+            id: order._id || order.id || `${index}`,
+            poNumber: order.poNumber || order.orderNo || order.id || "",
+            supplier,
+            supplierInitials:
+              order.supplierInitials || buildInitials(supplier),
+            supplierTone: order.supplierTone || "blue",
+            items: items.map((item, itemIndex) => ({
+              id: item._id || item.id || `${order._id || index}-${itemIndex}`,
+              name: item.name || "",
+              image: item.image || "",
+            })),
+            itemsCount: Number.isFinite(order.itemsCount)
+              ? order.itemsCount
+              : items.length,
+            total: order.total || "",
+            status: order.status || order.requestStatus || "Pending",
+            created: formatShortDate(
+              order.dateRequestPlaced || order.createdAt || order.created,
+            ),
+          };
+        });
+
+        if (!isMounted) return;
+        setOrders(normalized);
+        setMeta({
+          page: parsed.page,
+          limit: parsed.limit || DEFAULT_LIMIT,
+          total: parsed.total,
+          totalPages: parsed.totalPages,
+        });
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+        setOrders([]);
+        setMeta((prev) => ({ ...prev, total: 0, totalPages: 0 }));
+        setError(err?.message || "Unable to load purchase orders.");
+      }
+    };
+
+    loadOrders();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleStatusChange = async (orderId, nextStatus) => {
+    const previousStatus = orders.find((order) => order.id === orderId)?.status;
     setOrders((prevOrders) =>
       prevOrders.map((order) =>
         order.id === orderId ? { ...order, status: nextStatus } : order,
       ),
     );
+
+    try {
+      await fetchInventory(`/api/inventory/purchase-orders/${orderId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+    } catch (err) {
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === orderId ? { ...order, status: previousStatus } : order,
+        ),
+      );
+      setError(err?.message || "Unable to update status.");
+    }
   };
+
+  const total = meta.total || orders.length;
+  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const endIndex = total ? Math.min(startIndex + orders.length - 1, total) : 0;
 
   return (
     <section className="purchase-orders-page">
@@ -49,7 +147,7 @@ const PurchaseOrders = () => {
 
       <div className="orders-tabs">
         <button type="button" className="tab active">
-          All Orders <span className="tab-count">42</span>
+          All Orders <span className="tab-count">{total || 0}</span>
         </button>
         <button type="button" className="tab">
           Pending
@@ -79,7 +177,7 @@ const PurchaseOrders = () => {
           {orders.map((order) => (
             <div className="table-row" key={order.id}>
               <div className="cell mono" data-label="PO Number">
-                {order.id}
+                {order.poNumber}
               </div>
               <div className="cell supplier-cell full" data-label="Supplier">
                 <div className={`supplier-avatar ${order.supplierTone}`}>
@@ -107,8 +205,8 @@ const PurchaseOrders = () => {
               <div className="cell" data-label="Status">
                 <select
                   className={`status-select ${getStatusClass(order.status)}`}
-                  defaultValue={order.status}
-                  aria-label={`Status for ${order.id}`}
+                  value={order.status}
+                  aria-label={`Status for ${order.poNumber}`}
                   onChange={(event) =>
                     handleStatusChange(order.id, event.target.value)
                   }
@@ -142,7 +240,11 @@ const PurchaseOrders = () => {
           ))}
         </div>
         <div className="table-footer">
-          <span>Showing 1 to 5 of 42 orders</span>
+          <span>
+            {error
+              ? error
+              : `Showing ${startIndex} to ${endIndex} of ${total} orders`}
+          </span>
           <div className="pagination">
             <button type="button" className="ghost-button">
               Previous
@@ -156,7 +258,7 @@ const PurchaseOrders = () => {
             <button type="button" className="page">
               3
             </button>
-            <span className="page-ellipsis">…</span>
+            <span className="page-ellipsis">...</span>
             <button type="button" className="page">
               9
             </button>

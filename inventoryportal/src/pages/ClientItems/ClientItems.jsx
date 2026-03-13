@@ -1,19 +1,79 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import {
   ClockIcon,
   DownloadIcon,
   EditIcon,
-  MoreVerticalIcon,
   PlusIcon,
   SearchIcon,
   SortIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
-import { clientItems } from "../../data/clientItems";
+import {
+  fetchInventory,
+  formatShortDate,
+  parseListResponse,
+} from "../../utils/inventoryApi";
 import "./ClientItems.css";
 
+const DEFAULT_LIMIT = 6;
+
 const ClientItems = () => {
-  const items = useMemo(() => clientItems, []);
+  const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: DEFAULT_LIMIT,
+    total: 0,
+    totalPages: 0,
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadItems = async () => {
+      try {
+        const payload = await fetchInventory(
+          `/api/inventory/client-items?limit=${DEFAULT_LIMIT}`,
+        );
+        const parsed = parseListResponse(payload);
+        const normalized = parsed.data.map((item, index) => ({
+          id: item._id || item.id || `${index}`,
+          client: item.clientName || item.client || "",
+          phone: item.clientPhone || item.phone || "",
+          item: item.itemName || item.item || "",
+          serial: item.serialNumber || item.serial || "",
+          received: formatShortDate(
+            item.receivedAt || item.received || item.dateReceived,
+          ),
+          warehouse: item.warehouse || "",
+        }));
+
+        if (!isMounted) return;
+        setItems(normalized);
+        setMeta({
+          page: parsed.page,
+          limit: parsed.limit || DEFAULT_LIMIT,
+          total: parsed.total,
+          totalPages: parsed.totalPages,
+        });
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+        setItems([]);
+        setMeta((prev) => ({ ...prev, total: 0, totalPages: 0 }));
+        setError(err?.message || "Unable to load client items.");
+      }
+    };
+
+    loadItems();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const total = meta.total || items.length;
+  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const endIndex = total ? Math.min(startIndex + items.length - 1, total) : 0;
 
   return (
     <section className="client-items-page">
@@ -91,7 +151,7 @@ const ClientItems = () => {
             <div className="table-row" key={item.id}>
               <div className="cell client-cell full" data-label="Client">
                 <div className="client-avatar">
-                  {item.client.charAt(0)}
+                  {(item.client || "?").charAt(0)}
                 </div>
                 <div className="client-info">
                   <strong>{item.client}</strong>
@@ -128,7 +188,11 @@ const ClientItems = () => {
           ))}
         </div>
         <div className="table-footer">
-          <span>Showing 1 to 6 of 24 items</span>
+          <span>
+            {error
+              ? error
+              : `Showing ${startIndex} to ${endIndex} of ${total} items`}
+          </span>
           <div className="pagination">
             <button type="button" className="ghost-button">
               Previous

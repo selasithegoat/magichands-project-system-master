@@ -5,6 +5,8 @@
   "main": "server.js",
   "scripts": {
     "watch": "nodemon src/server.js",
+    "seed:inventory": "node scripts/seed-inventory.js",
+    "seed:inventory:reset": "node scripts/seed-inventory.js --reset",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

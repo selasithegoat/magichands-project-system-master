@@ -6,12 +6,7 @@ const StockTransaction = require("../models/StockTransaction");
 const InventoryReport = require("../models/InventoryReport");
 const InventorySettings = require("../models/InventorySettings");
 
-const STORES_DEPARTMENTS = new Set([
-  "stores",
-  "stock",
-  "packaging",
-  "front desk",
-]);
+const STORES_DEPARTMENTS = new Set(["stores", "front desk"]);
 
 const normalizeDepartments = (departments) => {
   if (Array.isArray(departments)) return departments;
@@ -68,8 +63,13 @@ const parseNumberValue = (
   }
 
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < min) {
-    return { error: `${fieldName} must be a number greater than or equal to ${min}.` };
+  if (!Number.isFinite(parsed)) {
+    return { error: `${fieldName} must be a valid number.` };
+  }
+  if (Number.isFinite(min) && parsed < min) {
+    return {
+      error: `${fieldName} must be a number greater than or equal to ${min}.`,
+    };
   }
   return { value: parsed };
 };
@@ -108,16 +108,122 @@ const normalizeItems = (items) => {
   }));
 };
 
+const DEFAULT_LIMIT = 25;
+const MAX_LIMIT = 100;
+
+const parsePaginationParams = (
+  req,
+  { defaultLimit = DEFAULT_LIMIT, maxLimit = MAX_LIMIT } = {},
+) => {
+  const pageRaw = req?.query?.page;
+  const limitRaw = req?.query?.limit;
+
+  let page = 1;
+  let limit = defaultLimit;
+
+  if (pageRaw !== undefined) {
+    const parsedPage = Number.parseInt(pageRaw, 10);
+    if (!Number.isFinite(parsedPage) || parsedPage < 1) {
+      return { error: "page must be a positive integer." };
+    }
+    page = parsedPage;
+  }
+
+  if (limitRaw !== undefined) {
+    const parsedLimit = Number.parseInt(limitRaw, 10);
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
+      return { error: "limit must be a positive integer." };
+    }
+    if (parsedLimit > maxLimit) {
+      return { error: `limit must be ${maxLimit} or less.` };
+    }
+    limit = parsedLimit;
+  }
+
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+const parseSortParam = (req, allowedFields, fallbackSort) => {
+  const raw = parseStringValue(req?.query?.sort);
+  if (!raw) return { sort: fallbackSort };
+
+  const direction = raw.startsWith("-") ? -1 : 1;
+  const field = raw.replace(/^-/, "");
+  if (!allowedFields.includes(field)) {
+    return {
+      error: `sort must be one of: ${allowedFields.join(", ")}`,
+    };
+  }
+
+  return { sort: { [field]: direction } };
+};
+
+const buildPagedResponse = ({ data, total, page, limit }) => ({
+  data,
+  total,
+  page,
+  limit,
+  totalPages: limit ? Math.ceil(total / limit) : 0,
+});
+
+const buildSearchRegex = (value) => {
+  const term = parseStringValue(value);
+  if (!term) return null;
+  return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+};
+
 const getClientItems = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const records = await ClientInventoryItem.find({})
-      .sort({ receivedAt: -1, createdAt: -1 })
-      .populate("createdBy", "firstName lastName employeeId")
-      .populate("updatedBy", "firstName lastName employeeId");
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
 
-    res.json(records);
+    const sortResult = parseSortParam(
+      req,
+      ["receivedAt", "createdAt", "clientName", "itemName", "status", "warehouse"],
+      { receivedAt: -1, createdAt: -1 },
+    );
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const status = parseStringValue(req.query.status);
+    const warehouse = parseStringValue(req.query.warehouse);
+    const search = buildSearchRegex(req.query.search);
+
+    if (status) filter.status = status;
+    if (warehouse) filter.warehouse = warehouse;
+    if (search) {
+      filter.$or = [
+        { clientName: search },
+        { clientPhone: search },
+        { itemName: search },
+        { serialNumber: search },
+      ];
+    }
+
+    const [records, total] = await Promise.all([
+      ClientInventoryItem.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("createdBy", "firstName lastName employeeId")
+        .populate("updatedBy", "firstName lastName employeeId"),
+      ClientInventoryItem.countDocuments(filter),
+    ]);
+
+    res.json(
+      buildPagedResponse({
+        data: records,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
   } catch (error) {
     console.error("Error fetching client inventory items:", error);
     res.status(500).json({ message: "Server Error" });
@@ -294,12 +400,53 @@ const getPurchasingOrders = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const records = await PurchasingOrder.find({})
-      .sort({ dateRequestPlaced: -1, createdAt: -1 })
-      .populate("createdBy", "firstName lastName employeeId")
-      .populate("updatedBy", "firstName lastName employeeId");
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
 
-    res.json(records);
+    const sortResult = parseSortParam(
+      req,
+      ["dateRequestPlaced", "createdAt", "supplierName", "status", "poNumber"],
+      { dateRequestPlaced: -1, createdAt: -1 },
+    );
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const status = parseStringValue(req.query.status);
+    const supplier = parseStringValue(req.query.supplier);
+    const search = buildSearchRegex(req.query.search);
+
+    if (status) filter.status = status;
+    if (supplier) filter.supplierName = supplier;
+    if (search) {
+      filter.$or = [
+        { supplierName: search },
+        { poNumber: search },
+        { description: search },
+      ];
+    }
+
+    const [records, total] = await Promise.all([
+      PurchasingOrder.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("createdBy", "firstName lastName employeeId")
+        .populate("updatedBy", "firstName lastName employeeId"),
+      PurchasingOrder.countDocuments(filter),
+    ]);
+
+    res.json(
+      buildPagedResponse({
+        data: records,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
   } catch (error) {
     console.error("Error fetching purchasing orders:", error);
     res.status(500).json({ message: "Server Error" });
@@ -502,11 +649,49 @@ const getSuppliers = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const records = await Supplier.find({})
-      .sort({ createdAt: -1 })
-      .populate("createdBy", "firstName lastName employeeId")
-      .populate("updatedBy", "firstName lastName employeeId");
-    res.json(records);
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
+
+    const sortResult = parseSortParam(
+      req,
+      ["createdAt", "name", "code"],
+      { createdAt: -1 },
+    );
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const search = buildSearchRegex(req.query.search);
+    if (search) {
+      filter.$or = [
+        { name: search },
+        { contactPerson: search },
+        { email: search },
+        { phone: search },
+      ];
+    }
+
+    const [records, total] = await Promise.all([
+      Supplier.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("createdBy", "firstName lastName employeeId")
+        .populate("updatedBy", "firstName lastName employeeId"),
+      Supplier.countDocuments(filter),
+    ]);
+
+    res.json(
+      buildPagedResponse({
+        data: records,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
   } catch (error) {
     console.error("Error fetching suppliers:", error);
     res.status(500).json({ message: "Server Error" });
@@ -614,11 +799,49 @@ const getInventoryRecords = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const records = await InventoryRecord.find({})
-      .sort({ createdAt: -1 })
-      .populate("createdBy", "firstName lastName employeeId")
-      .populate("updatedBy", "firstName lastName employeeId");
-    res.json(records);
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
+
+    const sortResult = parseSortParam(
+      req,
+      ["createdAt", "item", "sku", "category", "status"],
+      { createdAt: -1 },
+    );
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const status = parseStringValue(req.query.status);
+    const category = parseStringValue(req.query.category);
+    const search = buildSearchRegex(req.query.search);
+
+    if (status) filter.status = status;
+    if (category) filter.category = category;
+    if (search) {
+      filter.$or = [{ item: search }, { sku: search }, { location: search }];
+    }
+
+    const [records, total] = await Promise.all([
+      InventoryRecord.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("createdBy", "firstName lastName employeeId")
+        .populate("updatedBy", "firstName lastName employeeId"),
+      InventoryRecord.countDocuments(filter),
+    ]);
+
+    res.json(
+      buildPagedResponse({
+        data: records,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
   } catch (error) {
     console.error("Error fetching inventory records:", error);
     res.status(500).json({ message: "Server Error" });
@@ -731,11 +954,53 @@ const getStockTransactions = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const records = await StockTransaction.find({})
-      .sort({ date: -1, createdAt: -1 })
-      .populate("createdBy", "firstName lastName employeeId")
-      .populate("updatedBy", "firstName lastName employeeId");
-    res.json(records);
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
+
+    const sortResult = parseSortParam(
+      req,
+      ["date", "createdAt", "item", "type", "staff"],
+      { date: -1, createdAt: -1 },
+    );
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const type = parseStringValue(req.query.type);
+    const search = buildSearchRegex(req.query.search);
+
+    if (type) filter.type = type;
+    if (search) {
+      filter.$or = [
+        { item: search },
+        { sku: search },
+        { staff: search },
+        { source: search },
+        { destination: search },
+      ];
+    }
+
+    const [records, total] = await Promise.all([
+      StockTransaction.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("createdBy", "firstName lastName employeeId")
+        .populate("updatedBy", "firstName lastName employeeId"),
+      StockTransaction.countDocuments(filter),
+    ]);
+
+    res.json(
+      buildPagedResponse({
+        data: records,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
   } catch (error) {
     console.error("Error fetching stock transactions:", error);
     res.status(500).json({ message: "Server Error" });
@@ -750,6 +1015,7 @@ const createStockTransaction = async (req, res) => {
     const type = parseStringValue(req.body.type);
     const qtyResult = parseNumberValue(req.body.qty, "qty", {
       required: true,
+      min: null,
     });
 
     if (!item) {
@@ -796,10 +1062,46 @@ const getReports = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const records = await InventoryReport.find({})
-      .sort({ createdAt: -1 })
-      .populate("createdBy", "firstName lastName employeeId");
-    res.json(records);
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
+
+    const sortResult = parseSortParam(
+      req,
+      ["createdAt", "name", "status"],
+      { createdAt: -1 },
+    );
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const status = parseStringValue(req.query.status);
+    const search = buildSearchRegex(req.query.search);
+
+    if (status) filter.status = status;
+    if (search) {
+      filter.$or = [{ name: search }, { generatedBy: search }];
+    }
+
+    const [records, total] = await Promise.all([
+      InventoryReport.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("createdBy", "firstName lastName employeeId"),
+      InventoryReport.countDocuments(filter),
+    ]);
+
+    res.json(
+      buildPagedResponse({
+        data: records,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
   } catch (error) {
     console.error("Error fetching inventory reports:", error);
     res.status(500).json({ message: "Server Error" });

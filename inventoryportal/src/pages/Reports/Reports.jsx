@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircleIcon,
   DownloadIcon,
@@ -8,7 +8,12 @@ import {
   SuppliersIcon,
   SwapIcon,
 } from "../../components/icons/Icons";
-import { recentReports, reportCards } from "../../data/reports";
+import { reportCards } from "../../data/reports";
+import {
+  fetchInventory,
+  formatShortDateTime,
+  parseListResponse,
+} from "../../utils/inventoryApi";
 import "./Reports.css";
 
 const cardIconMap = {
@@ -24,7 +29,63 @@ const getStatusClass = (status) =>
 
 const Reports = () => {
   const cards = useMemo(() => reportCards, []);
-  const reports = useMemo(() => recentReports, []);
+  const [reports, setReports] = useState([]);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: 4,
+    total: 0,
+    totalPages: 0,
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadReports = async () => {
+      try {
+        const payload = await fetchInventory(
+          `/api/inventory/reports?limit=${meta.limit}`,
+        );
+        const parsed = parseListResponse(payload);
+        const normalized = parsed.data.map((report, index) => ({
+          id: report._id || report.id || `${index}`,
+          name: report.name || "",
+          created: formatShortDateTime(
+            report.createdAtOverride || report.createdAt || report.created,
+          ),
+          generatedBy: report.generatedBy || "",
+          status: report.status || "Ready",
+          downloads: Array.isArray(report.downloads)
+            ? report.downloads
+            : ["PDF", "CSV", "EXCEL"],
+        }));
+
+        if (!isMounted) return;
+        setReports(normalized);
+        setMeta({
+          page: parsed.page,
+          limit: parsed.limit || meta.limit,
+          total: parsed.total,
+          totalPages: parsed.totalPages,
+        });
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+        setReports([]);
+        setMeta((prev) => ({ ...prev, total: 0, totalPages: 0 }));
+        setError(err?.message || "Unable to load reports.");
+      }
+    };
+
+    loadReports();
+    return () => {
+      isMounted = false;
+    };
+  }, [meta.limit]);
+
+  const total = meta.total || reports.length;
+  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const endIndex = total ? Math.min(startIndex + reports.length - 1, total) : 0;
 
   return (
     <section className="reports-page">
@@ -121,7 +182,11 @@ const Reports = () => {
         </div>
 
         <div className="table-footer">
-          <span>Showing 1 to 4 of 28 reports</span>
+          <span>
+            {error
+              ? error
+              : `Showing ${startIndex} to ${endIndex} of ${total} reports`}
+          </span>
           <div className="pagination">
             <button type="button" className="ghost-button">
               Previous

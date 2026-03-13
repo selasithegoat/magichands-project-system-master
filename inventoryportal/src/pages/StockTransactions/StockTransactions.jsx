@@ -1,6 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { DownloadIcon, SearchIcon } from "../../components/icons/Icons";
-import { stockTransactions } from "../../data/stockTransactions";
+import {
+  fetchInventory,
+  formatShortDate,
+  parseListResponse,
+} from "../../utils/inventoryApi";
 import "./StockTransactions.css";
 
 const getTypeClass = (type) =>
@@ -10,7 +14,67 @@ const getQtyClass = (qty) =>
   qty > 0 ? "qty positive" : qty < 0 ? "qty negative" : "qty";
 
 const StockTransactions = () => {
-  const rows = useMemo(() => stockTransactions, []);
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: 5,
+    total: 0,
+    totalPages: 0,
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTransactions = async () => {
+      try {
+        const payload = await fetchInventory(
+          `/api/inventory/stock-transactions?limit=${meta.limit}`,
+        );
+        const parsed = parseListResponse(payload);
+        const normalized = parsed.data.map((row, index) => {
+          const qtyValue = Number(row.qty);
+          return {
+            id: row._id || row.txid || `${index}`,
+            txid: row.txid || "",
+            item: row.item || "",
+            sku: row.sku || "",
+            type: row.type || "",
+            qty: Number.isFinite(qtyValue) ? qtyValue : 0,
+            source: row.source || "",
+            destination: row.destination || "",
+            date: formatShortDate(row.date || row.createdAt),
+            staff: row.staff || "",
+            notes: row.notes || "",
+          };
+        });
+
+        if (!isMounted) return;
+        setRows(normalized);
+        setMeta({
+          page: parsed.page,
+          limit: parsed.limit || meta.limit,
+          total: parsed.total,
+          totalPages: parsed.totalPages,
+        });
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+        setRows([]);
+        setMeta((prev) => ({ ...prev, total: 0, totalPages: 0 }));
+        setError(err?.message || "Unable to load transactions.");
+      }
+    };
+
+    loadTransactions();
+    return () => {
+      isMounted = false;
+    };
+  }, [meta.limit]);
+
+  const total = meta.total || rows.length;
+  const startIndex = total ? (meta.page - 1) * meta.limit + 1 : 0;
+  const endIndex = total ? Math.min(startIndex + rows.length - 1, total) : 0;
 
   return (
     <section className="stock-transactions">
@@ -65,7 +129,7 @@ const StockTransactions = () => {
         </div>
         <div className="table-body">
           {rows.map((row) => (
-            <div className="table-row" key={row.txid}>
+            <div className="table-row" key={row.id}>
               <div className="cell mono txid" data-label="Txid">
                 {row.txid}
               </div>
@@ -103,7 +167,11 @@ const StockTransactions = () => {
           ))}
         </div>
         <div className="table-footer">
-          <span>Showing 1 to 5 of 1,284 transactions</span>
+          <span>
+            {error
+              ? error
+              : `Showing ${startIndex} to ${endIndex} of ${total} transactions`}
+          </span>
           <div className="pagination">
             <button type="button" className="ghost-button">Previous</button>
             <button type="button" className="page active">1</button>
