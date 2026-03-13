@@ -1,5 +1,36 @@
 const mongoose = require("mongoose");
 
+const InventoryVariantSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    color: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    sku: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    qtyValue: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+    qtyLabel: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+  },
+  { _id: false },
+);
+
 const InventoryRecordSchema = new mongoose.Schema(
   {
     item: {
@@ -42,12 +73,17 @@ const InventoryRecordSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
-    qtyMeta: {
-      type: String,
-      trim: true,
-      default: "",
+    qtyValue: {
+      type: Number,
+      min: 0,
+      default: null,
     },
-    qtyState: {
+    maxQty: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+    qtyMeta: {
       type: String,
       trim: true,
       default: "",
@@ -61,6 +97,10 @@ const InventoryRecordSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    variants: {
+      type: [InventoryVariantSchema],
+      default: [],
     },
     price: {
       type: String,

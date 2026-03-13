@@ -35,13 +35,45 @@ const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
 const pickRandomTone = (tones) =>
   tones[Math.floor(Math.random() * tones.length)];
 
-const computeQtyMeta = (qtyState) => {
-  const normalized = String(qtyState || '').toLowerCase();
-  if (normalized == 'critical') return '12%';
-  if (normalized == 'low') return '35%';
-  if (normalized == 'full') return '100%';
-  if (normalized == 'good') return '82%';
-  return '';
+const computeQtyMetaFromCapacity = (qtyValue, maxQty) => {
+  if (!Number.isFinite(qtyValue) || !Number.isFinite(maxQty) || maxQty <= 0) {
+    return "";
+  }
+  const ratio = Math.round((qtyValue / maxQty) * 100);
+  return `${ratio}%`;
+};
+
+const formatVariantQtyLabel = (value) => {
+  if (!Number.isFinite(value)) return "";
+  const normalized = Number.isInteger(value)
+    ? value
+    : Number(value.toFixed(2));
+  return `${normalized.toLocaleString("en-US")} Units`;
+};
+
+const buildVariant = ({ name, color, sku, qtyValue }) => ({
+  name,
+  color,
+  sku,
+  qtyValue,
+  qtyLabel: formatVariantQtyLabel(qtyValue),
+});
+
+const buildQtyLabelFromVariants = (variants) => {
+  const values = variants
+    .map((variant) => variant.qtyValue)
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return "";
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return formatVariantQtyLabel(total);
+};
+
+const sumVariantQty = (variants) => {
+  const values = variants
+    .map((variant) => variant.qtyValue)
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0);
 };
 
 const ensureSeedUser = async () => {
@@ -331,6 +363,66 @@ const inventoryCategories = [
   },
 ];
 
+const mouseVariants = [
+  buildVariant({
+    name: "Wireless",
+    color: "Black",
+    sku: "MS-G903-BK-BK",
+    qtyValue: 300,
+  }),
+  buildVariant({
+    name: "Wireless",
+    color: "Graphite",
+    sku: "MS-G903-BK-GR",
+    qtyValue: 158,
+  }),
+];
+
+const keyboardVariants = [
+  buildVariant({
+    name: "Tenkeyless",
+    color: "Slate",
+    sku: "KB-TK780-SL",
+    qtyValue: 8,
+  }),
+  buildVariant({
+    name: "Tenkeyless",
+    color: "Silver",
+    sku: "KB-TK780-SV",
+    qtyValue: 4,
+  }),
+];
+
+const hubVariants = [
+  buildVariant({
+    name: "10-Port",
+    color: "Gray",
+    sku: "HB-UC10-GR",
+    qtyValue: 702,
+  }),
+  buildVariant({
+    name: "USB-C",
+    color: "Midnight",
+    sku: "HB-UC10-MD",
+    qtyValue: 400,
+  }),
+];
+
+const standVariants = [
+  buildVariant({
+    name: "Dual Arm",
+    color: "Black",
+    sku: "ST-DU100-ST",
+    qtyValue: 54,
+  }),
+  buildVariant({
+    name: "Dual Arm",
+    color: "Matte Black",
+    sku: "ST-DU100-MB",
+    qtyValue: 30,
+  }),
+];
+
 const inventoryRecords = [
   {
     item: "Pro-G Wireless Mouse",
@@ -340,11 +432,16 @@ const inventoryRecords = [
     brand: "Logitech",
     category: "Electronics",
     categoryTone: pickRandomTone(CATEGORY_TONES),
-    qtyLabel: "458 Units",
-    qtyMeta: computeQtyMeta("good"),
-    qtyState: "good",
+    qtyLabel: buildQtyLabelFromVariants(mouseVariants),
+    qtyValue: sumVariantQty(mouseVariants),
+    maxQty: 600,
+    qtyMeta: computeQtyMetaFromCapacity(
+      sumVariantQty(mouseVariants),
+      600,
+    ),
     variations: "Wireless, Ergonomic",
     colors: "Black, Graphite",
+    variants: mouseVariants,
     price: "$89.99",
     value: "$41,215",
     priceValue: parseCurrencyNumber("$89.99"),
@@ -364,11 +461,16 @@ const inventoryRecords = [
     brand: "Kinesis",
     category: "Peripherals",
     categoryTone: pickRandomTone(CATEGORY_TONES),
-    qtyLabel: "12 Units",
-    qtyMeta: computeQtyMeta("critical"),
-    qtyState: "critical",
+    qtyLabel: buildQtyLabelFromVariants(keyboardVariants),
+    qtyValue: sumVariantQty(keyboardVariants),
+    maxQty: 40,
+    qtyMeta: computeQtyMetaFromCapacity(
+      sumVariantQty(keyboardVariants),
+      40,
+    ),
     variations: "Tenkeyless",
     colors: "Slate",
+    variants: keyboardVariants,
     price: "$149.50",
     value: "$1,794",
     priceValue: parseCurrencyNumber("$149.50"),
@@ -388,11 +490,13 @@ const inventoryRecords = [
     brand: "Anker",
     category: "Accessories",
     categoryTone: pickRandomTone(CATEGORY_TONES),
-    qtyLabel: "1,102 Units",
-    qtyMeta: computeQtyMeta("full"),
-    qtyState: "full",
+    qtyLabel: buildQtyLabelFromVariants(hubVariants),
+    qtyValue: sumVariantQty(hubVariants),
+    maxQty: 1500,
+    qtyMeta: computeQtyMetaFromCapacity(sumVariantQty(hubVariants), 1500),
     variations: "10-Port, USB-C",
     colors: "Gray",
+    variants: hubVariants,
     price: "$45.00",
     value: "$49,590",
     priceValue: parseCurrencyNumber("$45.00"),
@@ -412,11 +516,13 @@ const inventoryRecords = [
     brand: "Mount-It",
     category: "Office",
     categoryTone: pickRandomTone(CATEGORY_TONES),
-    qtyLabel: "84 Units",
-    qtyMeta: computeQtyMeta("low"),
-    qtyState: "low",
+    qtyLabel: buildQtyLabelFromVariants(standVariants),
+    qtyValue: sumVariantQty(standVariants),
+    maxQty: 150,
+    qtyMeta: computeQtyMetaFromCapacity(sumVariantQty(standVariants), 150),
     variations: "Dual Arm",
     colors: "Black",
+    variants: standVariants,
     price: "$120.00",
     value: "$10,080",
     priceValue: parseCurrencyNumber("$120.00"),

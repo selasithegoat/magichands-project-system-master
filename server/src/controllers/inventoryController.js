@@ -62,13 +62,87 @@ const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
 const pickRandomTone = (tones) =>
   tones[Math.floor(Math.random() * tones.length)];
 
-const computeQtyMeta = (qtyState) => {
-  const normalized = parseStringValue(qtyState).toLowerCase();
-  if (normalized === "critical") return "12%";
-  if (normalized === "low") return "35%";
-  if (normalized === "full") return "100%";
-  if (normalized === "good") return "82%";
-  return "";
+const computeQtyMetaFromCapacity = (qtyValue, maxQty) => {
+  if (!Number.isFinite(qtyValue) || !Number.isFinite(maxQty) || maxQty <= 0) {
+    return "";
+  }
+  const ratio = Math.round((qtyValue / maxQty) * 100);
+  return `${ratio}%`;
+};
+
+const parseVariantQuantity = (value) => {
+  const raw = parseStringValue(value);
+  if (!raw) return null;
+  const numeric = Number.parseFloat(raw.replace(/,/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseQtyValue = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number.parseFloat(String(value).replace(/,/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseQtyValueFromLabel = (value) => {
+  const raw = parseStringValue(value);
+  if (!raw) return null;
+  const numeric = Number.parseFloat(raw.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseMaxQty = (value) => {
+  const numeric = parseQtyValue(value);
+  if (numeric === null) return null;
+  return numeric < 0 ? 0 : numeric;
+};
+
+const formatVariantQtyLabel = (value) => {
+  if (!Number.isFinite(value)) return "";
+  const normalized = Number.isInteger(value)
+    ? value
+    : Number(value.toFixed(2));
+  return `${normalized.toLocaleString("en-US")} Units`;
+};
+
+const parseVariants = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((variant) => {
+      const qtyValue = parseVariantQuantity(variant?.qtyValue);
+      return {
+        name: parseStringValue(
+          variant?.name || variant?.variantName || variant?.variation,
+        ),
+        color: parseStringValue(variant?.color),
+        sku: parseStringValue(variant?.sku),
+        qtyValue,
+        qtyLabel: formatVariantQtyLabel(qtyValue),
+      };
+    })
+    .filter(
+      (variant) =>
+        variant.name ||
+        variant.color ||
+        variant.sku ||
+        Number.isFinite(variant.qtyValue),
+    );
+};
+
+const buildQtyLabelFromVariants = (variants) => {
+  const values = variants
+    .map((variant) => variant?.qtyValue)
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return "";
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return formatVariantQtyLabel(total);
+};
+
+const sumVariantQty = (variants) => {
+  const values = variants
+    .map((variant) => variant?.qtyValue)
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0);
 };
 
 const parseDateValue = (value, fieldName, { required = false } = {}) => {
@@ -1024,7 +1098,6 @@ const getInventoryRecords = async (req, res) => {
         "location",
         "warehouse",
         "priceValue",
-        "qtyState",
       ],
       { createdAt: -1 },
     );
@@ -1035,7 +1108,6 @@ const getInventoryRecords = async (req, res) => {
     const filter = {};
     const statusList = parseListParam(req.query.status);
     const categoryList = parseListParam(req.query.category);
-    const qtyStateList = parseListParam(req.query.qtyState);
     const warehouse = parseStringValue(req.query.warehouse);
     const location = parseStringValue(req.query.location);
     const reorderRaw = req.query.reorder;
@@ -1044,7 +1116,6 @@ const getInventoryRecords = async (req, res) => {
 
     if (statusList.length) filter.status = { $in: statusList };
     if (categoryList.length) filter.category = { $in: categoryList };
-    if (qtyStateList.length) filter.qtyState = { $in: qtyStateList };
     if (warehouse) {
       const warehouseRegex = new RegExp(
         warehouse.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
@@ -1072,6 +1143,9 @@ const getInventoryRecords = async (req, res) => {
           { location: search },
           { subtext: search },
           { warehouse: search },
+          { "variants.name": search },
+          { "variants.color": search },
+          { "variants.sku": search },
         ],
       });
     }
@@ -1142,8 +1216,24 @@ const createInventoryRecord = async (req, res) => {
       return res.status(400).json({ message: "sku is required." });
     }
 
-    const qtyState = parseStringValue(req.body.qtyState) || "good";
-    const qtyMeta = computeQtyMeta(qtyState);
+    const maxQty = parseMaxQty(req.body.maxQty);
+    const variants = parseVariants(req.body.variants);
+    const rawQtyValue =
+      parseQtyValue(req.body.qtyValue) ??
+      parseQtyValueFromLabel(req.body.qtyLabel);
+    const derivedQtyValue = variants.length
+      ? sumVariantQty(variants) ?? rawQtyValue
+      : rawQtyValue;
+    const derivedLabel = variants.length
+      ? buildQtyLabelFromVariants(variants) ||
+        formatVariantQtyLabel(derivedQtyValue)
+      : formatVariantQtyLabel(derivedQtyValue);
+    const qtyMeta = computeQtyMetaFromCapacity(derivedQtyValue, maxQty);
+    const priceValue = parseCurrencyNumber(req.body.price);
+    const computedValue =
+      Number.isFinite(priceValue) && Number.isFinite(derivedQtyValue)
+        ? Number((priceValue * derivedQtyValue).toFixed(2))
+        : null;
 
     const record = await InventoryRecord.create({
       item,
@@ -1153,15 +1243,17 @@ const createInventoryRecord = async (req, res) => {
       brand: parseStringValue(req.body.brand),
       category: parseStringValue(req.body.category),
       categoryTone: pickRandomTone(CATEGORY_TONES),
-      qtyLabel: parseStringValue(req.body.qtyLabel),
+      qtyLabel: derivedLabel,
+      qtyValue: derivedQtyValue,
+      maxQty,
       qtyMeta,
-      qtyState,
       variations: parseStringValue(req.body.variations),
       colors: parseStringValue(req.body.colors),
+      variants,
       price: parseStringValue(req.body.price),
-      priceValue: parseCurrencyNumber(req.body.price),
-      value: parseStringValue(req.body.value),
-      valueValue: parseCurrencyNumber(req.body.value),
+      priceValue,
+      value: computedValue !== null ? computedValue.toFixed(2) : "",
+      valueValue: computedValue,
       location: parseStringValue(req.body.location),
       status: parseStringValue(req.body.status),
       statusTone: pickRandomTone(STATUS_TONES),
@@ -1192,8 +1284,6 @@ const updateInventoryRecord = async (req, res) => {
       "sku",
       "brand",
       "category",
-      "qtyLabel",
-      "qtyState",
       "variations",
       "colors",
       "location",
@@ -1224,9 +1314,16 @@ const updateInventoryRecord = async (req, res) => {
       record.categoryTone = pickRandomTone(CATEGORY_TONES);
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "qtyState")) {
-      record.qtyState = parseStringValue(req.body.qtyState);
-      record.qtyMeta = computeQtyMeta(record.qtyState);
+    if (Object.prototype.hasOwnProperty.call(req.body, "qtyValue")) {
+      record.qtyValue = parseQtyValue(req.body.qtyValue);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "maxQty")) {
+      record.maxQty = parseMaxQty(req.body.maxQty);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "variants")) {
+      record.variants = parseVariants(req.body.variants);
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
@@ -1240,15 +1337,45 @@ const updateInventoryRecord = async (req, res) => {
       record.priceValue = parseCurrencyNumber(nextPrice);
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "value")) {
-      const nextValue = parseStringValue(req.body.value);
-      record.value = nextValue;
-      record.valueValue = parseCurrencyNumber(nextValue);
-    }
-
     if (Object.prototype.hasOwnProperty.call(req.body, "reorder")) {
       record.reorder = parseBooleanValue(req.body.reorder, record.reorder);
     }
+
+    const variants = Array.isArray(record.variants) ? record.variants : [];
+    if (variants.length) {
+      const totalQty = sumVariantQty(variants);
+      const derivedLabel =
+        buildQtyLabelFromVariants(variants) ||
+        formatVariantQtyLabel(totalQty);
+      if (totalQty !== null) {
+        record.qtyValue = totalQty;
+      }
+      if (derivedLabel) {
+        record.qtyLabel = derivedLabel;
+      }
+      record.qtyMeta = computeQtyMetaFromCapacity(
+        record.qtyValue,
+        record.maxQty,
+      );
+    } else {
+      if (
+        Object.prototype.hasOwnProperty.call(req.body, "qtyValue") ||
+        Object.prototype.hasOwnProperty.call(req.body, "maxQty")
+      ) {
+        record.qtyLabel = formatVariantQtyLabel(record.qtyValue);
+        record.qtyMeta = computeQtyMetaFromCapacity(
+          record.qtyValue,
+          record.maxQty,
+        );
+      }
+    }
+
+    const computedValue =
+      Number.isFinite(record.priceValue) && Number.isFinite(record.qtyValue)
+        ? Number((record.priceValue * record.qtyValue).toFixed(2))
+        : null;
+    record.valueValue = computedValue;
+    record.value = computedValue !== null ? computedValue.toFixed(2) : "";
 
     record.updatedBy = req.user._id;
     await record.save();

@@ -20,6 +20,7 @@ import {
   formatCurrencyPair,
   formatCurrencyValue,
   getCurrencyPrefix,
+  parseCurrencyValue,
   useInventoryCurrency,
 } from "../../utils/currency";
 import "./InventoryRecords.css";
@@ -31,9 +32,11 @@ const DEFAULT_RECORD_FORM = {
   brand: "",
   category: "",
   qtyLabel: "",
-  qtyState: "good",
+  qtyValue: "",
+  maxQty: "",
   variations: "",
   colors: "",
+  variants: [],
   price: "",
   value: "",
   location: "",
@@ -88,21 +91,103 @@ const SORT_OPTIONS = [
 
 const TAB_OPTIONS = ["All Items", "Low Stock", "In Warehouse"];
 
-const computeQtyMeta = (qtyState) => {
-  const normalized = String(qtyState || "").toLowerCase();
-  if (normalized === "critical") return "12%";
-  if (normalized === "low") return "35%";
-  if (normalized === "full") return "100%";
-  if (normalized === "good") return "82%";
-  return "";
+const computeQtyMeta = (qtyValue, maxQty) => {
+  if (!Number.isFinite(qtyValue) || !Number.isFinite(maxQty) || maxQty <= 0) {
+    return "";
+  }
+  const ratio = Math.round((qtyValue / maxQty) * 100);
+  return `${ratio}%`;
 };
 
-const getQtyFillClass = (qtyState) => {
-  const normalized = String(qtyState || "").toLowerCase();
-  if (normalized === "critical") return "p12";
-  if (normalized === "low") return "p35";
-  if (normalized === "full") return "p100";
-  return "p82";
+const formatQtyLabel = (value) => {
+  if (!Number.isFinite(value)) return "";
+  const normalized = Number.isInteger(value)
+    ? value
+    : Number(value.toFixed(2));
+  return `${normalized.toLocaleString("en-US")} Units`;
+};
+
+const parseQtyValue = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+  const numeric = Number.parseFloat(String(value).replace(/,/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parsePriceValue = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+  const numeric = parseCurrencyValue(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const buildQtyLabelFromVariants = (variants) => {
+  const values = variants
+    .map((variant) => Number(variant?.qtyValue))
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return "";
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return formatQtyLabel(total);
+};
+
+const sumVariantQty = (variants) => {
+  const values = variants
+    .map((variant) => Number(variant?.qtyValue))
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0);
+};
+
+const buildVariantSummary = (variants, fallback, type) => {
+  if (!variants?.length) {
+    return fallback || "—";
+  }
+  const key = type === "color" ? "color" : "name";
+  const values = Array.from(
+    new Set(variants.map((variant) => variant?.[key]).filter(Boolean)),
+  );
+  if (!values.length) {
+    return type === "color"
+      ? `${variants.length} colors`
+      : `${variants.length} variants`;
+  }
+  if (values.length === 1) {
+    return values[0];
+  }
+  return type === "color"
+    ? `${values.length} colors`
+    : `${values.length} variants`;
+};
+
+const normalizeVariants = (variants = []) =>
+  Array.isArray(variants)
+    ? variants.map((variant, index) => ({
+        id: variant._id || variant.id || `${index}`,
+        name: variant.name || variant.variantName || "",
+        color: variant.color || "",
+        sku: variant.sku || "",
+        qtyValue: Number.isFinite(variant.qtyValue)
+          ? variant.qtyValue
+          : variant.qtyValue === 0
+            ? 0
+            : "",
+      }))
+    : [];
+
+const getQtyPercent = (qtyValue, maxQty, qtyMeta) => {
+  if (Number.isFinite(qtyValue) && Number.isFinite(maxQty) && maxQty > 0) {
+    return Math.max(0, Math.min(100, Math.round((qtyValue / maxQty) * 100)));
+  }
+  if (qtyMeta) {
+    const parsed = Number.parseFloat(String(qtyMeta).replace(/[^0-9.]/g, ""));
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0;
+  }
+  return 0;
+};
+
+const getQtyTone = (percent) => {
+  if (percent >= 100) return "full";
+  if (percent <= 15) return "critical";
+  if (percent <= 40) return "low";
+  return "good";
 };
 
 const InventoryRecords = () => {
@@ -156,7 +241,14 @@ const InventoryRecords = () => {
         if (filters.categories.length) {
           params.set("category", filters.categories.join(","));
         }
-        if (filters.stockLevel && filters.stockLevel !== "All Stock Levels") {
+        if (activeTab === "Low Stock") {
+          params.set("status", "Low Stock,Critical,Out of Stock");
+        } else if (activeTab === "In Warehouse") {
+          params.set("status", "In Stock,Oversupply");
+        } else if (
+          filters.stockLevel &&
+          filters.stockLevel !== "All Stock Levels"
+        ) {
           params.set("status", filters.stockLevel);
         }
         if (filters.warehouse && filters.warehouse !== "All Locations") {
@@ -174,42 +266,66 @@ const InventoryRecords = () => {
         if (filters.priceMax) {
           params.set("priceMax", filters.priceMax);
         }
-        if (activeTab === "Low Stock") {
-          params.set("qtyState", "low,critical");
-        }
-        if (activeTab === "In Warehouse") {
-          params.set("qtyState", "good,full");
-        }
-
         const payload = await fetchInventory(
           `/api/inventory/inventory-records?${params.toString()}`,
         );
         const parsed = parseListResponse(payload);
-        const normalized = parsed.data.map((record, index) => ({
-          id: record._id || record.id || `${index}`,
-          item: record.item || "",
-          warehouse: record.warehouse || record.subtext || "",
-          sku: record.sku || "",
-          brand: record.brand || "",
-          category: record.category || "",
-          categoryTone: record.categoryTone || "slate",
-          qtyLabel: record.qtyLabel || "",
-          qtyMeta: record.qtyMeta || computeQtyMeta(record.qtyState),
-          qtyState: record.qtyState || "good",
-          variations: record.variations || "",
-          colors: record.colors || "",
-          price: record.price || "",
-          value: record.value || "",
-          location: record.location || "",
-          status: record.status || "",
-          statusTone:
-            record.statusTone ||
-            String(record.status || "")
-              .toLowerCase()
-              .replace(/\s+/g, "-"),
-          reorder: Boolean(record.reorder),
-          image: record.image || "",
-        }));
+        const normalized = parsed.data.map((record, index) => {
+          const variants = normalizeVariants(record.variants);
+          const rawQtyValue =
+            parseQtyValue(record.qtyValue) ?? parseQtyValue(record.qtyLabel);
+          const totalVariantQty = variants.length
+            ? sumVariantQty(variants)
+            : null;
+          const derivedQtyValue =
+            variants.length && totalVariantQty !== null
+              ? totalVariantQty
+              : rawQtyValue;
+          const priceValue = parsePriceValue(record.price);
+          const computedValue =
+            Number.isFinite(priceValue) && Number.isFinite(derivedQtyValue)
+              ? priceValue * derivedQtyValue
+              : null;
+          const derivedLabel = variants.length
+            ? buildQtyLabelFromVariants(variants) ||
+              formatQtyLabel(derivedQtyValue) ||
+              record.qtyLabel
+            : formatQtyLabel(derivedQtyValue) || record.qtyLabel;
+          const maxQty = parseQtyValue(record.maxQty);
+          const derivedMeta =
+            record.qtyMeta || computeQtyMeta(derivedQtyValue, maxQty);
+          return {
+            id: record._id || record.id || `${index}`,
+            item: record.item || "",
+            warehouse: record.warehouse || record.subtext || "",
+            sku: record.sku || "",
+            brand: record.brand || "",
+            category: record.category || "",
+            categoryTone: record.categoryTone || "slate",
+            qtyLabel: derivedLabel || "",
+            qtyValue: derivedQtyValue,
+            maxQty,
+            qtyMeta: derivedMeta,
+            variations: record.variations || "",
+            colors: record.colors || "",
+            variants,
+            price: record.price || "",
+            value:
+              record.value ||
+              (Number.isFinite(computedValue)
+                ? computedValue.toFixed(2)
+                : ""),
+            location: record.location || "",
+            status: record.status || "",
+            statusTone:
+              record.statusTone ||
+              String(record.status || "")
+                .toLowerCase()
+                .replace(/\s+/g, "-"),
+            reorder: Boolean(record.reorder),
+            image: record.image || "",
+          };
+        });
 
         if (!isMounted) return;
         if (parsed.totalPages && page > parsed.totalPages) {
@@ -369,8 +485,8 @@ const InventoryRecords = () => {
       Category: record.category,
       Warehouse: record.warehouse,
       Quantity: record.qtyLabel,
-      Variations: record.variations,
-      Colors: record.colors,
+      Variations: buildVariantSummary(record.variants, record.variations, "name"),
+      Colors: buildVariantSummary(record.variants, record.colors, "color"),
       Price: formatCurrencyValue(record.price, currency, rate),
       Value: formatCurrencyValue(record.value, currency, rate),
       Location: record.location,
@@ -429,6 +545,31 @@ const InventoryRecords = () => {
 
   const currencyPlaceholder = formatCurrencyPlaceholder(currency);
   const currencyLabel = getCurrencyPrefix(currency);
+  const rawQtyValue = parseQtyValue(formData.qtyValue);
+  const totalVariantQty = formData.variants.length
+    ? sumVariantQty(formData.variants)
+    : null;
+  const derivedQtyValue =
+    formData.variants.length && totalVariantQty !== null
+      ? totalVariantQty
+      : rawQtyValue;
+  const derivedQtyLabel =
+    formData.variants.length > 0
+      ? buildQtyLabelFromVariants(formData.variants) ||
+        formatQtyLabel(derivedQtyValue)
+      : formatQtyLabel(derivedQtyValue);
+  const derivedQtyMeta = computeQtyMeta(
+    derivedQtyValue,
+    parseQtyValue(formData.maxQty),
+  );
+  const priceNumeric = parsePriceValue(formData.price);
+  const derivedValueNumeric =
+    Number.isFinite(priceNumeric) && Number.isFinite(derivedQtyValue)
+      ? priceNumeric * derivedQtyValue
+      : null;
+  const derivedValueLabel = Number.isFinite(derivedValueNumeric)
+    ? derivedValueNumeric.toFixed(2)
+    : "";
 
   const warehouseOptions = Array.from(
     new Set(
@@ -469,33 +610,32 @@ const InventoryRecords = () => {
   const columnsStyle = { "--records-columns": columnTemplate };
 
   const normalizeStatus = (value) => String(value || "").toLowerCase();
-  const normalizeQtyState = (value) => String(value || "").toLowerCase();
+  const resolveStockLevel = (record) => {
+    const status = normalizeStatus(record.status);
+    if (status) return status;
+    const percent = getQtyPercent(record.qtyValue, record.maxQty, record.qtyMeta);
+    if (percent >= 100) return "oversupply";
+    if (percent <= 15) return "critical";
+    if (percent <= 40) return "low stock";
+    return "in stock";
+  };
 
   const inStockCount = records.filter((record) => {
-    const status = normalizeStatus(record.status);
-    const qtyState = normalizeQtyState(record.qtyState);
+    const status = resolveStockLevel(record);
     return (
       status === "in stock" ||
-      status === "oversupply" ||
-      qtyState === "good" ||
-      qtyState === "full"
+      status === "oversupply"
     );
   }).length;
 
   const lowStockCount = records.filter((record) => {
-    const status = normalizeStatus(record.status);
-    const qtyState = normalizeQtyState(record.qtyState);
-    return status === "low stock" || qtyState === "low";
+    const status = resolveStockLevel(record);
+    return status === "low stock";
   }).length;
 
   const outOfStockCount = records.filter((record) => {
-    const status = normalizeStatus(record.status);
-    const qtyState = normalizeQtyState(record.qtyState);
-    return (
-      status === "critical" ||
-      status === "out of stock" ||
-      qtyState === "critical"
-    );
+    const status = resolveStockLevel(record);
+    return status === "critical" || status === "out of stock";
   }).length;
 
   const openCreateModal = () => {
@@ -514,9 +654,11 @@ const InventoryRecords = () => {
       brand: record.brand || "",
       category: record.category || "",
       qtyLabel: record.qtyLabel || "",
-      qtyState: record.qtyState || "good",
+      qtyValue: record.qtyValue ?? "",
+      maxQty: record.maxQty ?? "",
       variations: record.variations || "",
       colors: record.colors || "",
+      variants: Array.isArray(record.variants) ? record.variants : [],
       price: record.price || "",
       value: record.value || "",
       location: record.location || "",
@@ -540,6 +682,39 @@ const InventoryRecords = () => {
         ? event.target.checked
         : event.target.value;
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const addVariant = () => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: [
+        ...prev.variants,
+        {
+          id: `variant-${Date.now()}-${prev.variants.length}`,
+          name: "",
+          color: "",
+          sku: "",
+          qtyValue: "",
+        },
+      ],
+    }));
+  };
+
+  const updateVariant = (index, field) => (event) => {
+    const value = event?.target?.value ?? "";
+    setFormData((prev) => {
+      const next = [...prev.variants];
+      const current = next[index] || {};
+      next[index] = { ...current, [field]: value };
+      return { ...prev, variants: next };
+    });
+  };
+
+  const removeVariant = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: prev.variants.filter((_, itemIndex) => itemIndex !== index),
+    }));
   };
 
   const handleImageSelected = (event) => {
@@ -569,18 +744,38 @@ const InventoryRecords = () => {
 
     setIsSaving(true);
     try {
+      const variantsPayload = formData.variants
+        .map((variant) => ({
+          name: variant.name?.trim() || "",
+          color: variant.color?.trim() || "",
+          sku: variant.sku?.trim() || "",
+          qtyValue:
+            variant.qtyValue === "" || variant.qtyValue === null
+              ? null
+              : Number(variant.qtyValue),
+        }))
+        .filter(
+          (variant) =>
+            variant.name ||
+            variant.color ||
+            variant.sku ||
+            Number.isFinite(variant.qtyValue),
+        );
+
       const payload = {
         item: formData.item,
         warehouse: formData.warehouse,
         sku: formData.sku,
         brand: formData.brand,
         category: formData.category,
-        qtyLabel: formData.qtyLabel,
-        qtyState: formData.qtyState,
+        qtyLabel: derivedQtyLabel,
+        qtyValue: derivedQtyValue,
+        maxQty: formData.maxQty,
         variations: formData.variations,
         colors: formData.colors,
+        variants: variantsPayload,
         price: formData.price,
-        value: formData.value,
+        value: derivedValueLabel,
         location: formData.location,
         status: formData.status,
         image: formData.image,
@@ -835,7 +1030,7 @@ const InventoryRecords = () => {
                 <SearchIcon className="search-icon" />
                 <input
                   type="text"
-                  placeholder="Search items, SKU, warehouse, or location"
+                  placeholder="Search items, brand, SKU, warehouse, or location"
                   value={searchTerm}
                   onChange={handleSearchChange}
                 />
@@ -919,8 +1114,23 @@ const InventoryRecords = () => {
               <span>Actions</span>
             </div>
             <div className="table-body">
-              {records.map((record) => (
-                <div className="table-row" style={columnsStyle} key={record.id}>
+              {records.map((record) => {
+                const qtyPercent = getQtyPercent(
+                  record.qtyValue,
+                  record.maxQty,
+                  record.qtyMeta,
+                );
+                const hasCapacity =
+                  Number.isFinite(record.qtyValue) &&
+                  Number.isFinite(record.maxQty) &&
+                  record.maxQty > 0;
+                const qtyTone = getQtyTone(qtyPercent);
+                const qtyMetaText =
+                  record.qtyMeta ||
+                  (hasCapacity ? `${qtyPercent}%` : "—");
+
+                return (
+                  <div className="table-row" style={columnsStyle} key={record.id}>
                   <div className="cell checkbox-cell" data-label="Select">
                     <input
                       type="checkbox"
@@ -967,13 +1177,14 @@ const InventoryRecords = () => {
                     <div className="cell qty-cell" data-label="Quantity">
                       <div className="qty-line">
                         <span>{record.qtyLabel}</span>
-                        <span className={`qty-flag ${record.qtyState}`}>
-                          {record.qtyMeta || computeQtyMeta(record.qtyState)}
+                        <span className={`qty-flag ${qtyTone}`}>
+                          {qtyMetaText}
                         </span>
                       </div>
                       <div className="qty-bar">
                         <span
-                          className={`qty-fill ${record.qtyState} ${getQtyFillClass(record.qtyState)}`}
+                          className={`qty-fill ${qtyTone}`}
+                          style={{ width: `${qtyPercent}%` }}
                         />
                       </div>
                     </div>
@@ -981,13 +1192,23 @@ const InventoryRecords = () => {
                   {visibleColumns.variations ? (
                     <div className="cell" data-label="Variations">
                       <span className="muted">
-                        {record.variations || "—"}
+                        {buildVariantSummary(
+                          record.variants,
+                          record.variations,
+                          "name",
+                        )}
                       </span>
                     </div>
                   ) : null}
                   {visibleColumns.colors ? (
                     <div className="cell" data-label="Colors">
-                      <span className="muted">{record.colors || "—"}</span>
+                      <span className="muted">
+                        {buildVariantSummary(
+                          record.variants,
+                          record.colors,
+                          "color",
+                        )}
+                      </span>
                     </div>
                   ) : null}
                   {visibleColumns.price ? (
@@ -1045,7 +1266,8 @@ const InventoryRecords = () => {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1152,52 +1374,94 @@ const InventoryRecords = () => {
               />
             </label>
             <label className="modal-field">
-              <span>Quantity Label</span>
+              <span>Current Quantity</span>
               <input
-                type="text"
-                value={formData.qtyLabel}
-                onChange={updateField("qtyLabel")}
-                placeholder="458 Units"
+                type="number"
+                min="0"
+                value={
+                  formData.variants.length > 0
+                    ? derivedQtyValue ?? ""
+                    : formData.qtyValue
+                }
+                onChange={updateField("qtyValue")}
+                placeholder="0"
+                readOnly={formData.variants.length > 0}
+              />
+            </label>
+            <label className="modal-field">
+              <span>Max Quantity</span>
+              <input
+                type="number"
+                min="0"
+                value={formData.maxQty}
+                onChange={updateField("maxQty")}
+                placeholder="0"
               />
             </label>
             <label className="modal-field">
               <span>Quantity Meta (Auto)</span>
-              <input
-                type="text"
-                value={computeQtyMeta(formData.qtyState)}
-                readOnly
-              />
+              <input type="text" value={derivedQtyMeta} readOnly />
             </label>
-            <label className="modal-field">
-              <span>Quantity State</span>
-              <select
-                value={formData.qtyState}
-                onChange={updateField("qtyState")}
-              >
-                <option value="good">Good</option>
-                <option value="low">Low</option>
-                <option value="critical">Critical</option>
-                <option value="full">Full</option>
-              </select>
-            </label>
-            <label className="modal-field">
-              <span>Variations</span>
-              <input
-                type="text"
-                value={formData.variations}
-                onChange={updateField("variations")}
-                placeholder="Size, Model, etc."
-              />
-            </label>
-            <label className="modal-field">
-              <span>Colors</span>
-              <input
-                type="text"
-                value={formData.colors}
-                onChange={updateField("colors")}
-                placeholder="Black, Silver"
-              />
-            </label>
+            <div className="variant-builder">
+              <div className="variant-header">
+                <div>
+                  <strong>Variants</strong>
+                  <p className="muted">
+                    Track quantity by variation and color.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={addVariant}
+                >
+                  Add Variant
+                </button>
+              </div>
+              {formData.variants.length ? (
+                <div className="variant-list">
+                  {formData.variants.map((variant, index) => (
+                    <div className="variant-row" key={variant.id || index}>
+                      <input
+                        type="text"
+                        placeholder="Variation"
+                        value={variant.name}
+                        onChange={updateVariant(index, "name")}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Color"
+                        value={variant.color}
+                        onChange={updateVariant(index, "color")}
+                      />
+                      <input
+                        type="text"
+                        placeholder="SKU"
+                        value={variant.sku}
+                        onChange={updateVariant(index, "sku")}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Qty"
+                        value={variant.qtyValue}
+                        onChange={updateVariant(index, "qtyValue")}
+                      />
+                      <button
+                        type="button"
+                        className="action-button"
+                        onClick={() => removeVariant(index)}
+                        aria-label="Remove variant"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="muted">No variants added yet.</span>
+              )}
+            </div>
             <label className="modal-field">
               <span>Price ({currencyLabel})</span>
               <div
@@ -1222,17 +1486,17 @@ const InventoryRecords = () => {
               <div
                 className="tooltip-anchor tooltip-field"
                 data-tooltip={
-                  formData.value
-                    ? formatCurrencyPair(formData.value, currency, rate)
+                  derivedValueLabel
+                    ? formatCurrencyPair(derivedValueLabel, currency, rate)
                         .alternateValue
                     : undefined
                 }
               >
                 <input
                   type="text"
-                  value={formData.value}
-                  onChange={updateField("value")}
+                  value={derivedValueLabel}
                   placeholder={currencyPlaceholder}
+                  readOnly
                 />
               </div>
             </label>

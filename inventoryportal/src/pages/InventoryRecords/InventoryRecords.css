@@ -413,7 +413,7 @@
   display: grid;
   grid-template-columns: var(
     --records-columns,
-    48px 2fr 1fr 1fr 1.2fr 0.8fr 0.9fr 0.8fr 0.8fr 1fr
+    48px 2fr 1fr 1fr 1fr 1.2fr 1fr 0.9fr 0.8fr 0.9fr 0.8fr 0.8fr 1fr
   );
   gap: 12px;
   align-items: center;
@@ -777,6 +777,61 @@
   border-radius: var(--radius-sm);
 }
 
+.variant-builder {
+  grid-column: 1 / -1;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--bg-alt);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.variant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.variant-header p {
+  margin: 4px 0 0;
+}
+
+.variant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variant-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 0.7fr 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.variant-row input,
+.variant-row select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--ink);
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.variant-row input::placeholder {
+  color: var(--ink-muted);
+}
+
+.variant-row .action-button {
+  width: 34px;
+  height: 34px;
+}
+
 .pagination {
   display: flex;
   align-items: center;
@@ -877,6 +932,10 @@
   .records-table .table-row > .cell:last-child {
     border-bottom: none;
     padding-bottom: 0;
+  }
+
+  .variant-row {
+    grid-template-columns: 1fr;
   }
 
   .table-footer {
