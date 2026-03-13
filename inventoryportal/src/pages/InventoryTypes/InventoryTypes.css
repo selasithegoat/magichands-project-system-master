@@ -32,7 +32,7 @@
 .types-table .table-header,
 .types-table .table-row {
   display: grid;
-  grid-template-columns: 1.2fr 2fr 0.8fr 0.8fr 0.9fr 0.8fr;
+  grid-template-columns: 1.2fr 2fr 0.8fr 0.9fr 0.6fr;
   gap: 12px;
   align-items: center;
   padding: 12px 18px;
@@ -93,6 +93,38 @@
 .actions-cell {
   display: flex;
   gap: 6px;
+}
+
+.types-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.types-toolbar .input-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  min-width: 260px;
+}
+
+.types-toolbar .input-shell input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--ink);
+  width: 100%;
+}
+
+.types-toolbar .input-shell .search-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-muted);
 }
 
 .action-button {
@@ -279,7 +311,7 @@
 @media (max-width: 1100px) and (min-width: 1001px) {
   .types-table .table-header,
   .types-table .table-row {
-    grid-template-columns: 1.2fr 2fr 0.8fr 0.8fr 1fr;
+    grid-template-columns: 1.2fr 2fr 0.8fr 0.9fr 0.6fr;
   }
 
   .types-table .table-header span:last-child,

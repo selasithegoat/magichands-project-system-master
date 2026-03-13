@@ -52,6 +52,11 @@ const PurchasingOrderSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    category: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     total: {
       type: String,
       required: true,

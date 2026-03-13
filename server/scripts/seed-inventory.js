@@ -6,6 +6,7 @@ const User = require("../src/models/User");
 const ClientInventoryItem = require("../src/models/ClientInventoryItem");
 const PurchasingOrder = require("../src/models/PurchasingOrder");
 const Supplier = require("../src/models/Supplier");
+const InventoryCategory = require("../src/models/InventoryCategory");
 const InventoryRecord = require("../src/models/InventoryRecord");
 const StockTransaction = require("../src/models/StockTransaction");
 const InventoryReport = require("../src/models/InventoryReport");
@@ -161,6 +162,7 @@ const purchaseOrders = [
       },
     ],
     itemsCount: 12,
+    category: "Electronics",
     total: "$12,450.00",
     status: "Ordered",
     dateRequestPlaced: parseDate("Oct 24, 2023"),
@@ -183,6 +185,7 @@ const purchaseOrders = [
       },
     ],
     itemsCount: 4,
+    category: "Accessories",
     total: "$3,120.50",
     status: "Pending",
     dateRequestPlaced: parseDate("Oct 23, 2023"),
@@ -210,6 +213,7 @@ const purchaseOrders = [
       },
     ],
     itemsCount: 28,
+    category: "Accessories",
     total: "$45,900.00",
     status: "Received",
     dateRequestPlaced: parseDate("Oct 20, 2023"),
@@ -227,6 +231,7 @@ const purchaseOrders = [
       },
     ],
     itemsCount: 1,
+    category: "Office",
     total: "$1,450.00",
     status: "Cancelled",
     dateRequestPlaced: parseDate("Oct 18, 2023"),
@@ -244,6 +249,7 @@ const purchaseOrders = [
       },
     ],
     itemsCount: 5,
+    category: "Electronics",
     total: "$8,900.00",
     status: "Received",
     dateRequestPlaced: parseDate("Oct 15, 2023"),
@@ -306,17 +312,39 @@ const suppliers = [
   },
 ];
 
+const inventoryCategories = [
+  {
+    name: "Electronics",
+    description: "Core electronics and device components.",
+  },
+  {
+    name: "Peripherals",
+    description: "Input, output, and accessory devices.",
+  },
+  {
+    name: "Accessories",
+    description: "Add-ons, adapters, and supporting gear.",
+  },
+  {
+    name: "Office",
+    description: "Workspace and office-related items.",
+  },
+];
+
 const inventoryRecords = [
   {
     item: "Pro-G Wireless Mouse",
     warehouse: "Warehouse A",
     subtext: "Warehouse A",
     sku: "MS-G903-BK",
+    brand: "Logitech",
     category: "Electronics",
     categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "458 Units",
     qtyMeta: computeQtyMeta("good"),
     qtyState: "good",
+    variations: "Wireless, Ergonomic",
+    colors: "Black, Graphite",
     price: "$89.99",
     value: "$41,215",
     priceValue: parseCurrencyNumber("$89.99"),
@@ -333,11 +361,14 @@ const inventoryRecords = [
     warehouse: "Warehouse B",
     subtext: "Warehouse B",
     sku: "KB-TK780-SL",
+    brand: "Kinesis",
     category: "Peripherals",
     categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "12 Units",
     qtyMeta: computeQtyMeta("critical"),
     qtyState: "critical",
+    variations: "Tenkeyless",
+    colors: "Slate",
     price: "$149.50",
     value: "$1,794",
     priceValue: parseCurrencyNumber("$149.50"),
@@ -354,11 +385,14 @@ const inventoryRecords = [
     warehouse: "Warehouse A",
     subtext: "Warehouse A",
     sku: "HB-UC10-GR",
+    brand: "Anker",
     category: "Accessories",
     categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "1,102 Units",
     qtyMeta: computeQtyMeta("full"),
     qtyState: "full",
+    variations: "10-Port, USB-C",
+    colors: "Gray",
     price: "$45.00",
     value: "$49,590",
     priceValue: parseCurrencyNumber("$45.00"),
@@ -375,11 +409,14 @@ const inventoryRecords = [
     warehouse: "Warehouse C",
     subtext: "Warehouse C",
     sku: "ST-DU100-ST",
+    brand: "Mount-It",
     category: "Office",
     categoryTone: pickRandomTone(CATEGORY_TONES),
     qtyLabel: "84 Units",
     qtyMeta: computeQtyMeta("low"),
     qtyState: "low",
+    variations: "Dual Arm",
+    colors: "Black",
     price: "$120.00",
     value: "$10,080",
     priceValue: parseCurrencyNumber("$120.00"),
@@ -505,6 +542,7 @@ const seedInventory = async () => {
       ClientInventoryItem.deleteMany({}),
       PurchasingOrder.deleteMany({}),
       Supplier.deleteMany({}),
+      InventoryCategory.deleteMany({}),
       InventoryRecord.deleteMany({}),
       StockTransaction.deleteMany({}),
       InventoryReport.deleteMany({}),
@@ -530,6 +568,11 @@ const seedInventory = async () => {
     Supplier,
     suppliers.map((supplier) => ({ ...supplier, ...auditFields })),
     ["code", "name"],
+  );
+  await upsertMany(
+    InventoryCategory,
+    inventoryCategories.map((category) => ({ ...category, ...auditFields })),
+    ["name"],
   );
   await upsertMany(
     InventoryRecord,

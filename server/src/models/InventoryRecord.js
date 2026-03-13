@@ -22,6 +22,11 @@ const InventoryRecordSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    brand: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     category: {
       type: String,
       trim: true,
@@ -43,6 +48,16 @@ const InventoryRecordSchema = new mongoose.Schema(
       default: "",
     },
     qtyState: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    variations: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    colors: {
       type: String,
       trim: true,
       default: "",

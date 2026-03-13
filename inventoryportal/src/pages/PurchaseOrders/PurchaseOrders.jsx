@@ -90,6 +90,7 @@ const PurchaseOrders = () => {
   const [formData, setFormData] = useState({
     poNumber: "",
     supplierName: "",
+    category: "",
     total: "",
     status: "Pending",
     createdDate: "",
@@ -102,6 +103,7 @@ const PurchaseOrders = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const { currency, rate } = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
@@ -151,6 +153,7 @@ const PurchaseOrders = () => {
             itemsCount: Number.isFinite(order.itemsCount)
               ? order.itemsCount
               : items.length,
+            category: order.category || "",
             total: order.total || "",
             status: order.status || order.requestStatus || "Pending",
             dateRequestPlaced:
@@ -192,6 +195,31 @@ const PurchaseOrders = () => {
       isMounted = false;
     };
   }, [page, refreshKey, activeStatus, searchTerm, supplierFilter]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const payload = await fetchInventory("/api/inventory/categories/options");
+        const categories = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+            ? payload
+            : [];
+        if (!isMounted) return;
+        setCategoryOptions(categories);
+      } catch {
+        if (!isMounted) return;
+        setCategoryOptions([]);
+      }
+    };
+
+    loadCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleStatusChange = async (orderId, nextStatus) => {
     const previousStatus = orders.find((order) => order.id === orderId)?.status;
@@ -259,6 +287,7 @@ const PurchaseOrders = () => {
       "PO Number": order.poNumber,
       "Item Name": order.itemName || "",
       Supplier: order.supplier,
+      Category: order.category || "",
       "Items Ordered": order.itemsCount,
       "Total Cost": formatCurrencyValue(order.total, currency, rate),
       Status: order.status,
@@ -307,6 +336,7 @@ const PurchaseOrders = () => {
     setFormData({
       poNumber: "",
       supplierName: "",
+      category: "",
       total: "",
       status: "Pending",
       createdDate: "",
@@ -332,6 +362,7 @@ const PurchaseOrders = () => {
     setFormData({
       poNumber: order.poNumber || "",
       supplierName: order.supplier || "",
+      category: order.category || "",
       total: order.total || "",
       status: order.status || "Pending",
       createdDate: order.createdDate || "",
@@ -418,6 +449,7 @@ const PurchaseOrders = () => {
       supplierInitials: buildInitials(formData.supplierName),
       items,
       itemsCount,
+      category: formData.category,
       total: formData.total,
       status: formData.status,
       ...(editingOrder
@@ -777,6 +809,16 @@ const PurchaseOrders = () => {
               />
             </label>
             <label className="modal-field">
+              <span>Category</span>
+              <input
+                type="text"
+                value={formData.category}
+                onChange={updateField("category")}
+                list="po-category-options"
+                placeholder="Category"
+              />
+            </label>
+            <label className="modal-field">
               <span>Total Cost ({currencyLabel})</span>
               <div
                 className="tooltip-anchor tooltip-field"
@@ -867,6 +909,11 @@ const PurchaseOrders = () => {
               ))}
             </div>
           ) : null}
+          <datalist id="po-category-options">
+            {categoryOptions.map((category) => (
+              <option key={category} value={category} />
+            ))}
+          </datalist>
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>

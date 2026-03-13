@@ -14,8 +14,12 @@ const {
   createSupplier,
   updateSupplier,
   deleteSupplier,
+  getInventoryCategories,
+  getInventoryCategoryOptions,
+  createInventoryCategory,
+  updateInventoryCategory,
+  deleteInventoryCategory,
   getInventoryRecords,
-  getInventoryRecordCategories,
   createInventoryRecord,
   updateInventoryRecord,
   deleteInventoryRecord,
@@ -61,11 +65,18 @@ router
   .patch(updateSupplier)
   .delete(deleteSupplier);
 
+router.route("/categories/options").get(getInventoryCategoryOptions);
+router.route("/categories").get(getInventoryCategories).post(createInventoryCategory);
+router
+  .route("/categories/:id")
+  .put(updateInventoryCategory)
+  .patch(updateInventoryCategory)
+  .delete(deleteInventoryCategory);
+
 router
   .route("/inventory-records")
   .get(getInventoryRecords)
   .post(createInventoryRecord);
-router.route("/inventory-records/categories").get(getInventoryRecordCategories);
 router
   .route("/inventory-records/:id")
   .put(updateInventoryRecord)

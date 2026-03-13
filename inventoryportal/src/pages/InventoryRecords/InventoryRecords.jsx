@@ -28,9 +28,12 @@ const DEFAULT_RECORD_FORM = {
   item: "",
   warehouse: "",
   sku: "",
+  brand: "",
   category: "",
   qtyLabel: "",
   qtyState: "good",
+  variations: "",
+  colors: "",
   price: "",
   value: "",
   location: "",
@@ -51,8 +54,11 @@ const DEFAULT_FILTERS = {
 const DEFAULT_VISIBLE_COLUMNS = {
   item: true,
   sku: true,
+  brand: true,
   category: true,
   quantity: true,
+  variations: false,
+  colors: false,
   price: true,
   value: true,
   location: true,
@@ -184,11 +190,14 @@ const InventoryRecords = () => {
           item: record.item || "",
           warehouse: record.warehouse || record.subtext || "",
           sku: record.sku || "",
+          brand: record.brand || "",
           category: record.category || "",
           categoryTone: record.categoryTone || "slate",
           qtyLabel: record.qtyLabel || "",
           qtyMeta: record.qtyMeta || computeQtyMeta(record.qtyState),
           qtyState: record.qtyState || "good",
+          variations: record.variations || "",
+          colors: record.colors || "",
           price: record.price || "",
           value: record.value || "",
           location: record.location || "",
@@ -234,7 +243,7 @@ const InventoryRecords = () => {
     const loadCategories = async () => {
       try {
         const payload = await fetchInventory(
-          "/api/inventory/inventory-records/categories",
+          "/api/inventory/categories/options",
         );
         const categories = Array.isArray(payload?.data)
           ? payload.data
@@ -245,10 +254,7 @@ const InventoryRecords = () => {
         setCategoryOptions(categories);
       } catch {
         if (!isMounted) return;
-        const fallback = Array.from(
-          new Set(records.map((record) => record.category).filter(Boolean)),
-        ).sort((a, b) => a.localeCompare(b));
-        setCategoryOptions(fallback);
+        setCategoryOptions([]);
       }
     };
 
@@ -359,9 +365,12 @@ const InventoryRecords = () => {
     const rows = records.map((record) => ({
       Item: record.item,
       SKU: record.sku,
+      Brand: record.brand,
       Category: record.category,
       Warehouse: record.warehouse,
       Quantity: record.qtyLabel,
+      Variations: record.variations,
+      Colors: record.colors,
       Price: formatCurrencyValue(record.price, currency, rate),
       Value: formatCurrencyValue(record.value, currency, rate),
       Location: record.location,
@@ -444,8 +453,11 @@ const InventoryRecords = () => {
     "48px",
     visibleColumns.item ? "2fr" : null,
     visibleColumns.sku ? "1fr" : null,
+    visibleColumns.brand ? "1fr" : null,
     visibleColumns.category ? "1fr" : null,
     visibleColumns.quantity ? "1.2fr" : null,
+    visibleColumns.variations ? "1fr" : null,
+    visibleColumns.colors ? "0.9fr" : null,
     visibleColumns.price ? "0.8fr" : null,
     visibleColumns.value ? "0.9fr" : null,
     visibleColumns.location ? "0.8fr" : null,
@@ -499,9 +511,12 @@ const InventoryRecords = () => {
       item: record.item || "",
       warehouse: record.warehouse || "",
       sku: record.sku || "",
+      brand: record.brand || "",
       category: record.category || "",
       qtyLabel: record.qtyLabel || "",
       qtyState: record.qtyState || "good",
+      variations: record.variations || "",
+      colors: record.colors || "",
       price: record.price || "",
       value: record.value || "",
       location: record.location || "",
@@ -558,9 +573,12 @@ const InventoryRecords = () => {
         item: formData.item,
         warehouse: formData.warehouse,
         sku: formData.sku,
+        brand: formData.brand,
         category: formData.category,
         qtyLabel: formData.qtyLabel,
         qtyState: formData.qtyState,
+        variations: formData.variations,
+        colors: formData.colors,
         price: formData.price,
         value: formData.value,
         location: formData.location,
@@ -846,8 +864,11 @@ const InventoryRecords = () => {
                     {[
                       { key: "item", label: "Item Name" },
                       { key: "sku", label: "SKU" },
+                      { key: "brand", label: "Brand" },
                       { key: "category", label: "Category" },
                       { key: "quantity", label: "Quantity" },
+                      { key: "variations", label: "Variations" },
+                      { key: "colors", label: "Colors" },
                       { key: "price", label: "Price" },
                       { key: "value", label: "Value" },
                       { key: "location", label: "Location" },
@@ -886,8 +907,11 @@ const InventoryRecords = () => {
               </span>
               {visibleColumns.item ? <span>Item Name</span> : null}
               {visibleColumns.sku ? <span>SKU</span> : null}
+              {visibleColumns.brand ? <span>Brand</span> : null}
               {visibleColumns.category ? <span>Category</span> : null}
               {visibleColumns.quantity ? <span>Quantity</span> : null}
+              {visibleColumns.variations ? <span>Variations</span> : null}
+              {visibleColumns.colors ? <span>Colors</span> : null}
               {visibleColumns.price ? <span>Price</span> : null}
               {visibleColumns.value ? <span>Value</span> : null}
               {visibleColumns.location ? <span>Location</span> : null}
@@ -927,6 +951,11 @@ const InventoryRecords = () => {
                       {record.sku}
                     </div>
                   ) : null}
+                  {visibleColumns.brand ? (
+                    <div className="cell" data-label="Brand">
+                      {record.brand || "—"}
+                    </div>
+                  ) : null}
                   {visibleColumns.category ? (
                     <div className="cell" data-label="Category">
                       <span className={`category-pill ${record.categoryTone}`}>
@@ -947,6 +976,18 @@ const InventoryRecords = () => {
                           className={`qty-fill ${record.qtyState} ${getQtyFillClass(record.qtyState)}`}
                         />
                       </div>
+                    </div>
+                  ) : null}
+                  {visibleColumns.variations ? (
+                    <div className="cell" data-label="Variations">
+                      <span className="muted">
+                        {record.variations || "—"}
+                      </span>
+                    </div>
+                  ) : null}
+                  {visibleColumns.colors ? (
+                    <div className="cell" data-label="Colors">
+                      <span className="muted">{record.colors || "—"}</span>
                     </div>
                   ) : null}
                   {visibleColumns.price ? (
@@ -1083,6 +1124,15 @@ const InventoryRecords = () => {
               />
             </label>
             <label className="modal-field">
+              <span>Brand</span>
+              <input
+                type="text"
+                value={formData.brand}
+                onChange={updateField("brand")}
+                placeholder="Brand name"
+              />
+            </label>
+            <label className="modal-field">
               <span>Warehouse</span>
               <input
                 type="text"
@@ -1097,6 +1147,7 @@ const InventoryRecords = () => {
                 type="text"
                 value={formData.category}
                 onChange={updateField("category")}
+                list="inventory-category-options"
                 placeholder="Electronics"
               />
             </label>
@@ -1128,6 +1179,24 @@ const InventoryRecords = () => {
                 <option value="critical">Critical</option>
                 <option value="full">Full</option>
               </select>
+            </label>
+            <label className="modal-field">
+              <span>Variations</span>
+              <input
+                type="text"
+                value={formData.variations}
+                onChange={updateField("variations")}
+                placeholder="Size, Model, etc."
+              />
+            </label>
+            <label className="modal-field">
+              <span>Colors</span>
+              <input
+                type="text"
+                value={formData.colors}
+                onChange={updateField("colors")}
+                placeholder="Black, Silver"
+              />
             </label>
             <label className="modal-field">
               <span>Price ({currencyLabel})</span>
@@ -1215,6 +1284,11 @@ const InventoryRecords = () => {
               </div>
             </div>
           ) : null}
+          <datalist id="inventory-category-options">
+            {categoryOptions.map((category) => (
+              <option key={category} value={category} />
+            ))}
+          </datalist>
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
       </Modal>

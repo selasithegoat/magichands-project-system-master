@@ -5,7 +5,7 @@ import Dashboard from "../pages/Dashboard/Dashboard";
 import LoadingScreen from "../components/feedback/LoadingScreen";
 import Login from "../pages/Login/Login";
 import StockTransactions from "../pages/StockTransactions/StockTransactions";
-import InventoryTypes from "../pages/InventoryTypes/InventoryTypes";
+import InventoryCategories from "../pages/InventoryTypes/InventoryTypes";
 import InventoryRecords from "../pages/InventoryRecords/InventoryRecords";
 import ClientItems from "../pages/ClientItems/ClientItems";
 import Suppliers from "../pages/Suppliers/Suppliers";
@@ -47,7 +47,7 @@ const getPreferredTheme = () => {
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: DashboardIcon },
-  { key: "inventory-types", label: "Inventory Types", icon: LayersIcon },
+  { key: "inventory-types", label: "Inventory Categories", icon: LayersIcon },
   { key: "inventory-records", label: "Inventory Records", icon: RecordsIcon },
   { key: "stock-transactions", label: "Stock Transactions", icon: SwapIcon },
   { key: "client-items", label: "Client Items", icon: ClientIcon },
@@ -199,7 +199,7 @@ const App = () => {
       case "stock-transactions":
         return <StockTransactions />;
       case "inventory-types":
-        return <InventoryTypes />;
+        return <InventoryCategories />;
       case "inventory-records":
         return <InventoryRecords />;
       case "client-items":

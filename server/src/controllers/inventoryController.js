@@ -1,6 +1,7 @@
 const ClientInventoryItem = require("../models/ClientInventoryItem");
 const PurchasingOrder = require("../models/PurchasingOrder");
 const Supplier = require("../models/Supplier");
+const InventoryCategory = require("../models/InventoryCategory");
 const InventoryRecord = require("../models/InventoryRecord");
 const StockTransaction = require("../models/StockTransaction");
 const InventoryReport = require("../models/InventoryReport");
@@ -499,6 +500,7 @@ const createPurchasingOrder = async (req, res) => {
     const supplierName =
       parseStringValue(req.body.supplierName) ||
       parseStringValue(req.body.supplier);
+    const category = parseStringValue(req.body.category);
     const supplierInitials =
       parseStringValue(req.body.supplierInitials) || buildInitials(supplierName);
     const supplierTone = parseStringValue(req.body.supplierTone);
@@ -540,6 +542,7 @@ const createPurchasingOrder = async (req, res) => {
       supplierTone,
       items,
       itemsCount: itemsCountValue,
+      category,
       total,
       status,
       dateRequestPlaced,
@@ -618,6 +621,10 @@ const updatePurchasingOrder = async (req, res) => {
         return res.status(400).json({ message: itemsCountResult.error });
       }
       record.itemsCount = itemsCountResult.value ?? 0;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
+      record.category = parseStringValue(req.body.category);
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "total")) {
@@ -830,6 +837,173 @@ const deleteSupplier = async (req, res) => {
   }
 };
 
+const getInventoryCategories = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const pagination = parsePaginationParams(req);
+    if (pagination.error) {
+      return res.status(400).json({ message: pagination.error });
+    }
+
+    const sortResult = parseSortParam(req, ["createdAt", "name"], {
+      createdAt: -1,
+    });
+    if (sortResult.error) {
+      return res.status(400).json({ message: sortResult.error });
+    }
+
+    const filter = {};
+    const search = buildSearchRegex(req.query.search);
+    if (search) {
+      filter.$or = [{ name: search }, { description: search }];
+    }
+
+    const [records, total] = await Promise.all([
+      InventoryCategory.find(filter)
+        .sort(sortResult.sort)
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .lean(),
+      InventoryCategory.countDocuments(filter),
+    ]);
+
+    const names = records.map((record) => record.name).filter(Boolean);
+    let usageMap = {};
+    if (names.length) {
+      const usage = await InventoryRecord.aggregate([
+        { $match: { category: { $in: names } } },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+      ]);
+      usageMap = usage.reduce((acc, entry) => {
+        acc[entry._id] = entry.count;
+        return acc;
+      }, {});
+    }
+
+    const data = records.map((record) => ({
+      ...record,
+      usageCount: usageMap[record.name] || 0,
+    }));
+
+    res.json(
+      buildPagedResponse({
+        data,
+        total,
+        page: pagination.page,
+        limit: pagination.limit,
+      }),
+    );
+  } catch (error) {
+    console.error("Error fetching inventory categories:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const getInventoryCategoryOptions = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const categories = await InventoryCategory.distinct("name", {
+      name: { $ne: "" },
+    });
+    const sorted = categories
+      .map((value) => parseStringValue(value))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    res.json({ data: sorted });
+  } catch (error) {
+    console.error("Error fetching inventory category options:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const createInventoryCategory = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const name = parseStringValue(req.body.name);
+    const description = parseStringValue(req.body.description);
+    if (!name) {
+      return res.status(400).json({ message: "name is required." });
+    }
+
+    const exists = await InventoryCategory.findOne({
+      name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+    });
+    if (exists) {
+      return res.status(400).json({ message: "Category already exists." });
+    }
+
+    const record = await InventoryCategory.create({
+      name,
+      description,
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
+    });
+
+    res.status(201).json(record);
+  } catch (error) {
+    console.error("Error creating inventory category:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const updateInventoryCategory = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const record = await InventoryCategory.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ message: "Category not found." });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "name")) {
+      const name = parseStringValue(req.body.name);
+      if (!name) {
+        return res.status(400).json({ message: "name cannot be empty." });
+      }
+      const exists = await InventoryCategory.findOne({
+        _id: { $ne: record._id },
+        name: new RegExp(
+          `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+          "i",
+        ),
+      });
+      if (exists) {
+        return res.status(400).json({ message: "Category already exists." });
+      }
+      record.name = name;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "description")) {
+      record.description = parseStringValue(req.body.description);
+    }
+
+    record.updatedBy = req.user._id;
+    await record.save();
+    res.json(record);
+  } catch (error) {
+    console.error("Error updating inventory category:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const deleteInventoryCategory = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const deleted = await InventoryCategory.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Category not found." });
+    }
+    res.json({ message: "Category deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting inventory category:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const getInventoryRecords = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
@@ -893,6 +1067,7 @@ const getInventoryRecords = async (req, res) => {
       andFilters.push({
         $or: [
           { item: search },
+          { brand: search },
           { sku: search },
           { location: search },
           { subtext: search },
@@ -952,23 +1127,6 @@ const getInventoryRecords = async (req, res) => {
   }
 };
 
-const getInventoryRecordCategories = async (req, res) => {
-  if (!ensureInventoryAccess(req, res)) return;
-
-  try {
-    const categories = await InventoryRecord.distinct("category", {
-      category: { $ne: "" },
-    });
-    const sorted = categories
-      .map((value) => parseStringValue(value))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
-    res.json({ data: sorted });
-  } catch (error) {
-    console.error("Error fetching inventory categories:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
 
 const createInventoryRecord = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
@@ -992,11 +1150,14 @@ const createInventoryRecord = async (req, res) => {
       subtext: warehouse,
       warehouse,
       sku,
+      brand: parseStringValue(req.body.brand),
       category: parseStringValue(req.body.category),
       categoryTone: pickRandomTone(CATEGORY_TONES),
       qtyLabel: parseStringValue(req.body.qtyLabel),
       qtyMeta,
       qtyState,
+      variations: parseStringValue(req.body.variations),
+      colors: parseStringValue(req.body.colors),
       price: parseStringValue(req.body.price),
       priceValue: parseCurrencyNumber(req.body.price),
       value: parseStringValue(req.body.value),
@@ -1029,9 +1190,12 @@ const updateInventoryRecord = async (req, res) => {
     const updatableFields = [
       "item",
       "sku",
+      "brand",
       "category",
       "qtyLabel",
       "qtyState",
+      "variations",
+      "colors",
       "location",
       "status",
       "image",
@@ -1401,8 +1565,12 @@ module.exports = {
   createSupplier,
   updateSupplier,
   deleteSupplier,
+  getInventoryCategories,
+  getInventoryCategoryOptions,
+  createInventoryCategory,
+  updateInventoryCategory,
+  deleteInventoryCategory,
   getInventoryRecords,
-  getInventoryRecordCategories,
   createInventoryRecord,
   updateInventoryRecord,
   deleteInventoryRecord,

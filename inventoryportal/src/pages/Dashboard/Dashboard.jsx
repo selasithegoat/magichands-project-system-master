@@ -79,7 +79,7 @@ const Dashboard = () => {
       </div>
       <div className="stat-card">
         <div className="stat-header">
-          <span>Inventory Types</span>
+          <span>Inventory Categories</span>
           <span className="delta positive">+0.5%</span>
         </div>
         <div className="stat-value">42</div>
