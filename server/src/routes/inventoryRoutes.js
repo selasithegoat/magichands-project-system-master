@@ -25,6 +25,8 @@ const {
   deleteInventoryRecord,
   getStockTransactions,
   createStockTransaction,
+  updateStockTransaction,
+  deleteStockTransaction,
   getReports,
   createReport,
   deleteReport,
@@ -87,6 +89,11 @@ router
   .route("/stock-transactions")
   .get(getStockTransactions)
   .post(createStockTransaction);
+router
+  .route("/stock-transactions/:id")
+  .put(updateStockTransaction)
+  .patch(updateStockTransaction)
+  .delete(deleteStockTransaction);
 
 router.route("/reports").get(getReports).post(createReport);
 router.route("/reports/:id").delete(deleteReport);

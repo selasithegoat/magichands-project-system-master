@@ -1569,9 +1569,25 @@ const getStockTransactions = async (req, res) => {
 
     const filter = {};
     const type = parseStringValue(req.query.type);
+    const rangeResult = parseNumberValue(req.query.range, "range", { min: 1 });
     const search = buildSearchRegex(req.query.search);
+    const dateFrom = parseOptionalDate(req.query.dateFrom);
+    const dateTo = parseOptionalDate(req.query.dateTo);
+
+    if (rangeResult.error) {
+      return res.status(400).json({ message: rangeResult.error });
+    }
 
     if (type) filter.type = type;
+    if (dateFrom || dateTo) {
+      filter.date = {};
+      if (dateFrom) filter.date.$gte = dateFrom;
+      if (dateTo) filter.date.$lte = dateTo;
+    } else if (rangeResult.value) {
+      const start = new Date();
+      start.setDate(start.getDate() - rangeResult.value);
+      filter.date = { $gte: start };
+    }
     if (search) {
       filter.$or = [
         { item: search },
@@ -1653,6 +1669,103 @@ const createStockTransaction = async (req, res) => {
     res.status(201).json(record);
   } catch (error) {
     console.error("Error creating stock transaction:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const updateStockTransaction = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const record = await StockTransaction.findById(req.params.id);
+    if (!record) {
+      return res
+        .status(404)
+        .json({ message: "Stock transaction not found." });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "txid")) {
+      const txid = parseStringValue(req.body.txid);
+      if (txid) record.txid = txid;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "item")) {
+      const item = parseStringValue(req.body.item);
+      if (!item) {
+        return res.status(400).json({ message: "item is required." });
+      }
+      record.item = item;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "type")) {
+      const type = parseStringValue(req.body.type);
+      if (!type) {
+        return res.status(400).json({ message: "type is required." });
+      }
+      record.type = type;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "qty")) {
+      const qtyResult = parseNumberValue(req.body.qty, "qty", { min: null });
+      if (qtyResult.error) {
+        return res.status(400).json({ message: qtyResult.error });
+      }
+      record.qty = qtyResult.value;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "sku")) {
+      record.sku = parseStringValue(req.body.sku);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "source")) {
+      record.source = parseStringValue(req.body.source);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "destination")) {
+      record.destination = parseStringValue(req.body.destination);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "date")) {
+      const dateResult = parseDateValue(req.body.date, "date", {
+        required: true,
+      });
+      if (dateResult.error) {
+        return res.status(400).json({ message: dateResult.error });
+      }
+      record.date = dateResult.value;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "staff")) {
+      record.staff = parseStringValue(req.body.staff);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "notes")) {
+      record.notes = parseStringValue(req.body.notes);
+    }
+
+    record.updatedBy = req.user._id;
+    await record.save();
+
+    res.json(record);
+  } catch (error) {
+    console.error("Error updating stock transaction:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const deleteStockTransaction = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const deleted = await StockTransaction.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res
+        .status(404)
+        .json({ message: "Stock transaction not found." });
+    }
+    res.json({ message: "Stock transaction deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting stock transaction:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -1851,6 +1964,8 @@ module.exports = {
   deleteInventoryRecord,
   getStockTransactions,
   createStockTransaction,
+  updateStockTransaction,
+  deleteStockTransaction,
   getReports,
   createReport,
   deleteReport,
