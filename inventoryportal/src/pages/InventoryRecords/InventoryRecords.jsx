@@ -455,6 +455,7 @@ const InventoryRecords = () => {
     DEFAULT_VISIBLE_COLUMNS,
   );
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
   const selectAllRef = useRef(null);
   const { currency, rate } = useInventoryCurrency();
   const draftStorageKey = "inventory-records-draft";
@@ -859,6 +860,11 @@ const InventoryRecords = () => {
   const sortedWarehouseOptions = Array.from(new Set(warehouseOptions)).sort(
     (a, b) => a.localeCompare(b),
   );
+  const categoryQuery = String(formData.category || "").trim().toLowerCase();
+  const filteredCategoryOptions = categoryOptions.filter((category) =>
+    categoryQuery ? category.toLowerCase().includes(categoryQuery) : true,
+  );
+  const visibleCategoryOptions = filteredCategoryOptions.slice(0, 6);
 
   const columnTemplate = [
     "48px",
@@ -1060,6 +1066,24 @@ const InventoryRecords = () => {
         ? event.target.checked
         : event.target.value;
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCategoryFocus = () => {
+    setCategorySuggestionsOpen(true);
+  };
+
+  const handleCategoryBlur = () => {
+    setTimeout(() => setCategorySuggestionsOpen(false), 150);
+  };
+
+  const handleCategoryInput = (event) => {
+    updateField("category")(event);
+    setCategorySuggestionsOpen(true);
+  };
+
+  const selectCategorySuggestion = (value) => {
+    setFormData((prev) => ({ ...prev, category: value }));
+    setCategorySuggestionsOpen(false);
   };
 
   const addBrandGroup = () => {
@@ -1939,13 +1963,34 @@ const InventoryRecords = () => {
             </label>
             <label className="modal-field">
               <span>Category</span>
-              <input
-                type="text"
-                value={formData.category}
-                onChange={updateField("category")}
-                list="inventory-category-options"
-                placeholder="Electronics"
-              />
+              <div className="input-suggest">
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={handleCategoryInput}
+                  onFocus={handleCategoryFocus}
+                  onBlur={handleCategoryBlur}
+                  list="inventory-category-options"
+                  placeholder="Electronics"
+                />
+                {categorySuggestionsOpen && visibleCategoryOptions.length ? (
+                  <div className="suggestions-list">
+                    {visibleCategoryOptions.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className="suggestion-item"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectCategorySuggestion(category);
+                        }}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </label>
             <label className="modal-field">
               <span>Current Quantity</span>

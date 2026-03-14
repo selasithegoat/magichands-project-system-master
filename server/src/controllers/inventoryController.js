@@ -56,6 +56,22 @@ const parseCurrencyNumber = (value) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const ensureInventoryCategory = async (name, userId) => {
+  const trimmed = parseStringValue(name);
+  if (!trimmed) return null;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const existing = await InventoryCategory.findOne({
+    name: new RegExp(`^${escaped}$`, "i"),
+  });
+  if (existing) return existing;
+  return InventoryCategory.create({
+    name: trimmed,
+    description: "",
+    createdBy: userId,
+    updatedBy: userId,
+  });
+};
+
 const CATEGORY_TONES = ["blue", "indigo", "slate", "amber"];
 const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
 
@@ -1290,11 +1306,16 @@ const createInventoryRecord = async (req, res) => {
     const sku = parseStringValue(req.body.sku);
     const warehouse = parseStringValue(req.body.warehouse || req.body.subtext);
     const recordStatus = parseStringValue(req.body.status) || "In Stock";
+    const category = parseStringValue(req.body.category);
     if (!item) {
       return res.status(400).json({ message: "item is required." });
     }
     if (!sku) {
       return res.status(400).json({ message: "sku is required." });
+    }
+
+    if (category) {
+      await ensureInventoryCategory(category, req.user?._id);
     }
 
     const brandGroups = parseBrandGroups(req.body.brandGroups, recordStatus);
@@ -1336,7 +1357,7 @@ const createInventoryRecord = async (req, res) => {
       sku,
       brand: primaryBrand,
       brandGroups,
-      category: parseStringValue(req.body.category),
+      category,
       categoryTone: pickRandomTone(CATEGORY_TONES),
       qtyLabel: derivedLabel,
       qtyValue: derivedQtyValue,
@@ -1405,6 +1426,9 @@ const updateInventoryRecord = async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
       record.category = parseStringValue(req.body.category);
       record.categoryTone = pickRandomTone(CATEGORY_TONES);
+      if (record.category) {
+        await ensureInventoryCategory(record.category, req.user?._id);
+      }
     }
 
     const fallbackStatus =

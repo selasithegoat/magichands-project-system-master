@@ -104,6 +104,7 @@ const PurchaseOrders = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
   const { currency, rate } = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
@@ -322,6 +323,11 @@ const PurchaseOrders = () => {
 
   const currencyPlaceholder = formatCurrencyPlaceholder(currency);
   const currencyLabel = getCurrencyPrefix(currency);
+  const categoryQuery = String(formData.category || "").trim().toLowerCase();
+  const filteredCategoryOptions = categoryOptions.filter((category) =>
+    categoryQuery ? category.toLowerCase().includes(categoryQuery) : true,
+  );
+  const visibleCategoryOptions = filteredCategoryOptions.slice(0, 6);
   const totalSpending = orders.reduce(
     (sum, order) => sum + parseCurrencyValue(order.total),
     0,
@@ -386,6 +392,24 @@ const PurchaseOrders = () => {
 
   const updateField = (field) => (event) => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const handleCategoryFocus = () => {
+    setCategorySuggestionsOpen(true);
+  };
+
+  const handleCategoryBlur = () => {
+    setTimeout(() => setCategorySuggestionsOpen(false), 150);
+  };
+
+  const handleCategoryInput = (event) => {
+    updateField("category")(event);
+    setCategorySuggestionsOpen(true);
+  };
+
+  const selectCategorySuggestion = (value) => {
+    setFormData((prev) => ({ ...prev, category: value }));
+    setCategorySuggestionsOpen(false);
   };
 
   const handleImagesSelected = (event) => {
@@ -810,13 +834,34 @@ const PurchaseOrders = () => {
             </label>
             <label className="modal-field">
               <span>Category</span>
-              <input
-                type="text"
-                value={formData.category}
-                onChange={updateField("category")}
-                list="po-category-options"
-                placeholder="Category"
-              />
+              <div className="input-suggest">
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={handleCategoryInput}
+                  onFocus={handleCategoryFocus}
+                  onBlur={handleCategoryBlur}
+                  list="po-category-options"
+                  placeholder="Category"
+                />
+                {categorySuggestionsOpen && visibleCategoryOptions.length ? (
+                  <div className="suggestions-list">
+                    {visibleCategoryOptions.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className="suggestion-item"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectCategorySuggestion(category);
+                        }}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </label>
             <label className="modal-field">
               <span>Total Cost ({currencyLabel})</span>
