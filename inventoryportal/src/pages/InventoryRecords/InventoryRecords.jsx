@@ -29,14 +29,13 @@ const DEFAULT_RECORD_FORM = {
   item: "",
   warehouse: "",
   sku: "",
-  brand: "",
   category: "",
   qtyLabel: "",
   qtyValue: "",
   maxQty: "",
   variations: "",
   colors: "",
-  variants: [],
+  brandGroups: [],
   price: "",
   value: "",
   location: "",
@@ -172,6 +171,74 @@ const normalizeVariants = (variants = []) =>
       }))
     : [];
 
+const normalizeBrandGroups = (brandGroups = []) =>
+  Array.isArray(brandGroups)
+    ? brandGroups.map((group, index) => ({
+        id: group._id || group.id || `brand-${index}`,
+        name: group.name || group.brand || "",
+        variants: normalizeVariants(group.variants),
+      }))
+    : [];
+
+const flattenBrandGroups = (brandGroups = []) => {
+  if (!Array.isArray(brandGroups)) return [];
+  return brandGroups.reduce(
+    (acc, group) => acc.concat(group?.variants || []),
+    [],
+  );
+};
+
+const getBrandDisplay = (record) => {
+  const groups = Array.isArray(record.brandGroups)
+    ? record.brandGroups.filter((group) => group.name)
+    : [];
+  if (groups.length) {
+    const primary = groups[0]?.name || "";
+    return {
+      primary,
+      extraCount: Math.max(groups.length - 1, 0),
+    };
+  }
+  return {
+    primary: record.brand || "",
+    extraCount: 0,
+  };
+};
+
+const buildDetailBrandGroups = (record) => {
+  if (!record) return [];
+  const baseGroups =
+    Array.isArray(record.brandGroups) && record.brandGroups.length
+      ? record.brandGroups
+      : record.brand || (record.variants || []).length
+        ? [
+            {
+              name: record.brand || "Unbranded",
+              variants: record.variants || [],
+            },
+          ]
+        : [];
+
+  return baseGroups
+    .map((group) => ({
+      name: group.name || "Unbranded",
+      variants: Array.isArray(group.variants) ? group.variants : [],
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((group) => ({
+      ...group,
+      variants: [...group.variants].sort((a, b) => {
+        const nameA = String(a.name || "").toLowerCase();
+        const nameB = String(b.name || "").toLowerCase();
+        if (nameA !== nameB) return nameA.localeCompare(nameB);
+        const colorA = String(a.color || "").toLowerCase();
+        const colorB = String(b.color || "").toLowerCase();
+        if (colorA !== colorB) return colorA.localeCompare(colorB);
+        return String(a.sku || "").localeCompare(String(b.sku || ""));
+      }),
+    }));
+};
+
 const getQtyPercent = (qtyValue, maxQty, qtyMeta) => {
   if (Number.isFinite(qtyValue) && Number.isFinite(maxQty) && maxQty > 0) {
     return Math.max(0, Math.min(100, Math.round((qtyValue / maxQty) * 100)));
@@ -207,6 +274,7 @@ const InventoryRecords = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [detailsRecord, setDetailsRecord] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("-createdAt");
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -221,6 +289,7 @@ const InventoryRecords = () => {
   const [categoryOptions, setCategoryOptions] = useState([]);
   const selectAllRef = useRef(null);
   const { currency, rate } = useInventoryCurrency();
+  const draftStorageKey = "inventory-records-draft";
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -271,7 +340,10 @@ const InventoryRecords = () => {
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((record, index) => {
-          const variants = normalizeVariants(record.variants);
+          const brandGroups = normalizeBrandGroups(record.brandGroups);
+          const variants = brandGroups.length
+            ? flattenBrandGroups(brandGroups)
+            : normalizeVariants(record.variants);
           const rawQtyValue =
             parseQtyValue(record.qtyValue) ?? parseQtyValue(record.qtyLabel);
           const totalVariantQty = variants.length
@@ -299,7 +371,8 @@ const InventoryRecords = () => {
             item: record.item || "",
             warehouse: record.warehouse || record.subtext || "",
             sku: record.sku || "",
-            brand: record.brand || "",
+            brand: record.brand || brandGroups[0]?.name || "",
+            brandGroups,
             category: record.category || "",
             categoryTone: record.categoryTone || "slate",
             qtyLabel: derivedLabel || "",
@@ -481,7 +554,12 @@ const InventoryRecords = () => {
     const rows = records.map((record) => ({
       Item: record.item,
       SKU: record.sku,
-      Brand: record.brand,
+      Brand: record.brandGroups?.length
+        ? record.brandGroups
+            .map((group) => group.name)
+            .filter(Boolean)
+            .join(", ")
+        : record.brand,
       Category: record.category,
       Warehouse: record.warehouse,
       Quantity: record.qtyLabel,
@@ -546,16 +624,17 @@ const InventoryRecords = () => {
   const currencyPlaceholder = formatCurrencyPlaceholder(currency);
   const currencyLabel = getCurrencyPrefix(currency);
   const rawQtyValue = parseQtyValue(formData.qtyValue);
-  const totalVariantQty = formData.variants.length
-    ? sumVariantQty(formData.variants)
+  const formBrandVariants = flattenBrandGroups(formData.brandGroups);
+  const totalVariantQty = formBrandVariants.length
+    ? sumVariantQty(formBrandVariants)
     : null;
   const derivedQtyValue =
-    formData.variants.length && totalVariantQty !== null
+    formBrandVariants.length && totalVariantQty !== null
       ? totalVariantQty
       : rawQtyValue;
   const derivedQtyLabel =
-    formData.variants.length > 0
-      ? buildQtyLabelFromVariants(formData.variants) ||
+    formBrandVariants.length > 0
+      ? buildQtyLabelFromVariants(formBrandVariants) ||
         formatQtyLabel(derivedQtyValue)
       : formatQtyLabel(derivedQtyValue);
   const derivedQtyMeta = computeQtyMeta(
@@ -608,6 +687,17 @@ const InventoryRecords = () => {
     .filter(Boolean)
     .join(" ");
   const columnsStyle = { "--records-columns": columnTemplate };
+  const detailGroups = detailsRecord
+    ? buildDetailBrandGroups(detailsRecord)
+    : [];
+  const detailVariantTotal = detailGroups.length
+    ? sumVariantQty(flattenBrandGroups(detailGroups))
+    : null;
+  const detailQtyLabel =
+    detailsRecord?.qtyLabel ||
+    (Number.isFinite(detailVariantTotal)
+      ? formatQtyLabel(detailVariantTotal)
+      : "—");
 
   const normalizeStatus = (value) => String(value || "").toLowerCase();
   const resolveStockLevel = (record) => {
@@ -640,25 +730,85 @@ const InventoryRecords = () => {
 
   const openCreateModal = () => {
     setEditingRecord(null);
-    setFormData(DEFAULT_RECORD_FORM);
+    if (typeof window !== "undefined") {
+      const savedDraft = window.localStorage.getItem(draftStorageKey);
+      if (savedDraft) {
+        try {
+          const parsed = JSON.parse(savedDraft);
+          const nextForm = { ...DEFAULT_RECORD_FORM, ...parsed };
+          nextForm.brandGroups = Array.isArray(nextForm.brandGroups)
+            ? nextForm.brandGroups
+            : DEFAULT_RECORD_FORM.brandGroups;
+          setFormData(nextForm);
+        } catch {
+          setFormData({
+            ...DEFAULT_RECORD_FORM,
+            brandGroups: [
+              {
+                id: `brand-${Date.now()}`,
+                name: "",
+                variants: [],
+              },
+            ],
+          });
+        }
+      } else {
+        setFormData({
+          ...DEFAULT_RECORD_FORM,
+          brandGroups: [
+            {
+              id: `brand-${Date.now()}`,
+              name: "",
+              variants: [],
+            },
+          ],
+        });
+      }
+    } else {
+      setFormData({
+        ...DEFAULT_RECORD_FORM,
+        brandGroups: [
+          {
+            id: `brand-${Date.now()}`,
+            name: "",
+            variants: [],
+          },
+        ],
+      });
+    }
     setActionError("");
     setIsModalOpen(true);
+  };
+
+  const buildEditableBrandGroups = (record) => {
+    const normalizedGroups = normalizeBrandGroups(record?.brandGroups);
+    if (normalizedGroups.length) return normalizedGroups;
+    const fallbackVariants = normalizeVariants(record?.variants);
+    if (record?.brand || fallbackVariants.length) {
+      return [
+        {
+          id: `brand-${Date.now()}`,
+          name: record?.brand || "",
+          variants: fallbackVariants,
+        },
+      ];
+    }
+    return [];
   };
 
   const openEditModal = (record) => {
     setEditingRecord(record);
     setFormData({
       item: record.item || "",
-      warehouse: record.warehouse || "",
+      warehouse: record.warehouse || record.subtext || "",
       sku: record.sku || "",
-      brand: record.brand || "",
       category: record.category || "",
       qtyLabel: record.qtyLabel || "",
       qtyValue: record.qtyValue ?? "",
       maxQty: record.maxQty ?? "",
       variations: record.variations || "",
       colors: record.colors || "",
-      variants: Array.isArray(record.variants) ? record.variants : [],
+      brandGroups: buildEditableBrandGroups(record),
       price: record.price || "",
       value: record.value || "",
       location: record.location || "",
@@ -684,37 +834,83 @@ const InventoryRecords = () => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const addVariant = () => {
+  const addBrandGroup = () => {
     setFormData((prev) => ({
       ...prev,
-      variants: [
-        ...prev.variants,
+      brandGroups: [
+        ...(prev.brandGroups || []),
         {
-          id: `variant-${Date.now()}-${prev.variants.length}`,
+          id: `brand-${Date.now()}-${prev.brandGroups.length}`,
           name: "",
-          color: "",
-          sku: "",
-          qtyValue: "",
+          variants: [],
         },
       ],
     }));
   };
 
-  const updateVariant = (index, field) => (event) => {
+  const updateBrandGroupName = (groupIndex) => (event) => {
     const value = event?.target?.value ?? "";
     setFormData((prev) => {
-      const next = [...prev.variants];
-      const current = next[index] || {};
-      next[index] = { ...current, [field]: value };
-      return { ...prev, variants: next };
+      const nextGroups = [...(prev.brandGroups || [])];
+      const current = nextGroups[groupIndex] || {};
+      nextGroups[groupIndex] = { ...current, name: value };
+      return { ...prev, brandGroups: nextGroups };
     });
   };
 
-  const removeVariant = (index) => {
+  const removeBrandGroup = (groupIndex) => {
     setFormData((prev) => ({
       ...prev,
-      variants: prev.variants.filter((_, itemIndex) => itemIndex !== index),
+      brandGroups: (prev.brandGroups || []).filter(
+        (_, index) => index !== groupIndex,
+      ),
     }));
+  };
+
+  const addBrandVariant = (groupIndex) => {
+    setFormData((prev) => {
+      const nextGroups = [...(prev.brandGroups || [])];
+      const current = nextGroups[groupIndex] || { variants: [] };
+      const nextVariants = [
+        ...(current.variants || []),
+        {
+          id: `variant-${Date.now()}-${current.variants?.length || 0}`,
+          name: "",
+          color: "",
+          sku: "",
+          qtyValue: "",
+        },
+      ];
+      nextGroups[groupIndex] = { ...current, variants: nextVariants };
+      return { ...prev, brandGroups: nextGroups };
+    });
+  };
+
+  const updateBrandVariant = (groupIndex, variantIndex, field) => (event) => {
+    const value = event?.target?.value ?? "";
+    setFormData((prev) => {
+      const nextGroups = [...(prev.brandGroups || [])];
+      const currentGroup = nextGroups[groupIndex] || { variants: [] };
+      const nextVariants = [...(currentGroup.variants || [])];
+      const currentVariant = nextVariants[variantIndex] || {};
+      nextVariants[variantIndex] = { ...currentVariant, [field]: value };
+      nextGroups[groupIndex] = { ...currentGroup, variants: nextVariants };
+      return { ...prev, brandGroups: nextGroups };
+    });
+  };
+
+  const removeBrandVariant = (groupIndex, variantIndex) => {
+    setFormData((prev) => {
+      const nextGroups = [...(prev.brandGroups || [])];
+      const currentGroup = nextGroups[groupIndex] || { variants: [] };
+      nextGroups[groupIndex] = {
+        ...currentGroup,
+        variants: (currentGroup.variants || []).filter(
+          (_, index) => index !== variantIndex,
+        ),
+      };
+      return { ...prev, brandGroups: nextGroups };
+    });
   };
 
   const handleImageSelected = (event) => {
@@ -744,36 +940,43 @@ const InventoryRecords = () => {
 
     setIsSaving(true);
     try {
-      const variantsPayload = formData.variants
-        .map((variant) => ({
-          name: variant.name?.trim() || "",
-          color: variant.color?.trim() || "",
-          sku: variant.sku?.trim() || "",
-          qtyValue:
-            variant.qtyValue === "" || variant.qtyValue === null
-              ? null
-              : Number(variant.qtyValue),
-        }))
-        .filter(
-          (variant) =>
-            variant.name ||
-            variant.color ||
-            variant.sku ||
-            Number.isFinite(variant.qtyValue),
-        );
+      const brandGroupsPayload = (formData.brandGroups || [])
+        .map((group) => {
+          const variantsPayload = (group.variants || [])
+            .map((variant) => ({
+              name: variant.name?.trim() || "",
+              color: variant.color?.trim() || "",
+              sku: variant.sku?.trim() || "",
+              qtyValue:
+                variant.qtyValue === "" || variant.qtyValue === null
+                  ? null
+                  : Number(variant.qtyValue),
+            }))
+            .filter(
+              (variant) =>
+                variant.name ||
+                variant.color ||
+                variant.sku ||
+                Number.isFinite(variant.qtyValue),
+            );
+          return {
+            name: group.name?.trim() || "",
+            variants: variantsPayload,
+          };
+        })
+        .filter((group) => group.name || group.variants.length);
 
       const payload = {
         item: formData.item,
         warehouse: formData.warehouse,
         sku: formData.sku,
-        brand: formData.brand,
         category: formData.category,
         qtyLabel: derivedQtyLabel,
         qtyValue: derivedQtyValue,
         maxQty: formData.maxQty,
         variations: formData.variations,
         colors: formData.colors,
-        variants: variantsPayload,
+        brandGroups: brandGroupsPayload,
         price: formData.price,
         value: derivedValueLabel,
         location: formData.location,
@@ -794,6 +997,9 @@ const InventoryRecords = () => {
       if (!editingRecord) {
         setPage(1);
       }
+      if (!editingRecord && typeof window !== "undefined") {
+        window.localStorage.removeItem(draftStorageKey);
+      }
       triggerRefresh();
     } catch (err) {
       setActionError(err?.message || "Unable to save inventory record.");
@@ -808,6 +1014,14 @@ const InventoryRecords = () => {
 
   const closeDelete = () => {
     setDeleteTarget(null);
+  };
+
+  const openDetailsModal = (record) => {
+    setDetailsRecord(record);
+  };
+
+  const closeDetailsModal = () => {
+    setDetailsRecord(null);
   };
 
   const confirmDelete = async () => {
@@ -825,6 +1039,16 @@ const InventoryRecords = () => {
       closeDelete();
     }
   };
+
+  useEffect(() => {
+    if (!isModalOpen || editingRecord) return;
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(formData));
+    } catch {
+      // Ignore storage quota errors so the form keeps working.
+    }
+  }, [draftStorageKey, editingRecord, formData, isModalOpen]);
 
   return (
     <section className="inventory-records">
@@ -1128,15 +1352,26 @@ const InventoryRecords = () => {
                 const qtyMetaText =
                   record.qtyMeta ||
                   (hasCapacity ? `${qtyPercent}%` : "—");
+                const brandDisplay = getBrandDisplay(record);
 
                 return (
-                  <div className="table-row" style={columnsStyle} key={record.id}>
-                  <div className="cell checkbox-cell" data-label="Select">
+                  <div
+                    className="table-row is-clickable"
+                    style={columnsStyle}
+                    key={record.id}
+                    onClick={() => openDetailsModal(record)}
+                  >
+                  <div
+                    className="cell checkbox-cell"
+                    data-label="Select"
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(record.id)}
                       onChange={() => toggleSelectRow(record.id)}
                       aria-label={`Select ${record.item}`}
+                      onClick={(event) => event.stopPropagation()}
                     />
                   </div>
                   {visibleColumns.item ? (
@@ -1163,7 +1398,14 @@ const InventoryRecords = () => {
                   ) : null}
                   {visibleColumns.brand ? (
                     <div className="cell" data-label="Brand">
-                      {record.brand || "—"}
+                      <div className="brand-cell">
+                        <span>{brandDisplay.primary || "—"}</span>
+                        {brandDisplay.extraCount ? (
+                          <span className="muted">
+                            +{brandDisplay.extraCount}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                   {visibleColumns.category ? (
@@ -1253,14 +1495,20 @@ const InventoryRecords = () => {
                     <button
                       type="button"
                       className="action-button"
-                      onClick={() => openEditModal(record)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEditModal(record);
+                      }}
                     >
                       <EditIcon />
                     </button>
                     <button
                       type="button"
                       className="action-button"
-                      onClick={() => requestDelete(record)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        requestDelete(record);
+                      }}
                     >
                       <TrashIcon />
                     </button>
@@ -1346,15 +1594,6 @@ const InventoryRecords = () => {
               />
             </label>
             <label className="modal-field">
-              <span>Brand</span>
-              <input
-                type="text"
-                value={formData.brand}
-                onChange={updateField("brand")}
-                placeholder="Brand name"
-              />
-            </label>
-            <label className="modal-field">
               <span>Warehouse</span>
               <input
                 type="text"
@@ -1379,13 +1618,13 @@ const InventoryRecords = () => {
                 type="number"
                 min="0"
                 value={
-                  formData.variants.length > 0
+                  formBrandVariants.length > 0
                     ? derivedQtyValue ?? ""
                     : formData.qtyValue
                 }
                 onChange={updateField("qtyValue")}
                 placeholder="0"
-                readOnly={formData.variants.length > 0}
+                readOnly={formBrandVariants.length > 0}
               />
             </label>
             <label className="modal-field">
@@ -1402,64 +1641,125 @@ const InventoryRecords = () => {
               <span>Quantity Meta (Auto)</span>
               <input type="text" value={derivedQtyMeta} readOnly />
             </label>
-            <div className="variant-builder">
-              <div className="variant-header">
+            <div className="brand-group-builder">
+              <div className="brand-group-header">
                 <div>
-                  <strong>Variants</strong>
+                  <strong>Brand Groups</strong>
                   <p className="muted">
-                    Track quantity by variation and color.
+                    Track variants by brand, color, and variation.
                   </p>
                 </div>
                 <button
                   type="button"
                   className="ghost-button"
-                  onClick={addVariant}
+                  onClick={addBrandGroup}
                 >
-                  Add Variant
+                  Add Brand
                 </button>
               </div>
-              {formData.variants.length ? (
-                <div className="variant-list">
-                  {formData.variants.map((variant, index) => (
-                    <div className="variant-row" key={variant.id || index}>
-                      <input
-                        type="text"
-                        placeholder="Variation"
-                        value={variant.name}
-                        onChange={updateVariant(index, "name")}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Color"
-                        value={variant.color}
-                        onChange={updateVariant(index, "color")}
-                      />
-                      <input
-                        type="text"
-                        placeholder="SKU"
-                        value={variant.sku}
-                        onChange={updateVariant(index, "sku")}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Qty"
-                        value={variant.qtyValue}
-                        onChange={updateVariant(index, "qtyValue")}
-                      />
-                      <button
-                        type="button"
-                        className="action-button"
-                        onClick={() => removeVariant(index)}
-                        aria-label="Remove variant"
-                      >
-                        <TrashIcon />
-                      </button>
+              {formData.brandGroups.length ? (
+                <div className="brand-group-list">
+                  {formData.brandGroups.map((group, groupIndex) => (
+                    <div
+                      className="brand-group-card"
+                      key={group.id || groupIndex}
+                    >
+                      <div className="brand-group-title">
+                        <input
+                          type="text"
+                          placeholder="Brand name"
+                          value={group.name}
+                          onChange={updateBrandGroupName(groupIndex)}
+                        />
+                        <div className="brand-group-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => addBrandVariant(groupIndex)}
+                          >
+                            Add Variant
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => removeBrandGroup(groupIndex)}
+                          >
+                            Remove Brand
+                          </button>
+                        </div>
+                      </div>
+                      {group.variants?.length ? (
+                        <div className="variant-list">
+                          {group.variants.map((variant, variantIndex) => (
+                            <div
+                              className="variant-row"
+                              key={variant.id || variantIndex}
+                            >
+                              <input
+                                type="text"
+                                placeholder="Variation"
+                                value={variant.name}
+                                onChange={updateBrandVariant(
+                                  groupIndex,
+                                  variantIndex,
+                                  "name",
+                                )}
+                              />
+                              <input
+                                type="text"
+                                placeholder="Color"
+                                value={variant.color}
+                                onChange={updateBrandVariant(
+                                  groupIndex,
+                                  variantIndex,
+                                  "color",
+                                )}
+                              />
+                              <input
+                                type="text"
+                                placeholder="SKU"
+                                value={variant.sku}
+                                onChange={updateBrandVariant(
+                                  groupIndex,
+                                  variantIndex,
+                                  "sku",
+                                )}
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                placeholder="Qty"
+                                value={variant.qtyValue}
+                                onChange={updateBrandVariant(
+                                  groupIndex,
+                                  variantIndex,
+                                  "qtyValue",
+                                )}
+                              />
+                              <button
+                                type="button"
+                                className="action-button"
+                                onClick={() =>
+                                  removeBrandVariant(
+                                    groupIndex,
+                                    variantIndex,
+                                  )
+                                }
+                                aria-label="Remove variant"
+                              >
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="muted">No variants added yet.</span>
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <span className="muted">No variants added yet.</span>
+                <span className="muted">No brands added yet.</span>
               )}
             </div>
             <label className="modal-field">
@@ -1555,6 +1855,129 @@ const InventoryRecords = () => {
           </datalist>
           {actionError ? <span className="modal-help">{actionError}</span> : null}
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(detailsRecord)}
+        title="Inventory Details"
+        subtitle={
+          detailsRecord
+            ? `${detailsRecord.item} · ${detailsRecord.sku}`
+            : ""
+        }
+        primaryText="Close"
+        onConfirm={closeDetailsModal}
+        onClose={closeDetailsModal}
+        hideFooter
+        variant="center"
+      >
+        {detailsRecord ? (
+          <div className="record-details">
+            <div className="details-grid">
+              <div className="detail-card">
+                <span className="detail-label">Item</span>
+                <span className="detail-value">{detailsRecord.item}</span>
+                <span className="detail-sub">{detailsRecord.warehouse}</span>
+              </div>
+              <div className="detail-card">
+                <span className="detail-label">SKU</span>
+                <span className="detail-value">{detailsRecord.sku}</span>
+                <span className="detail-sub">{detailsRecord.location}</span>
+              </div>
+              <div className="detail-card">
+                <span className="detail-label">Status</span>
+                <span className="detail-value">{detailsRecord.status}</span>
+                <span className="detail-sub">{detailQtyLabel}</span>
+              </div>
+              <div className="detail-card">
+                <span className="detail-label">Price</span>
+                <span className="detail-value">
+                  {formatCurrencyValue(detailsRecord.price, currency, rate)}
+                </span>
+                <span className="detail-sub">
+                  {formatCurrencyValue(detailsRecord.value, currency, rate)}{" "}
+                  total
+                </span>
+              </div>
+            </div>
+
+            <div className="details-section">
+              <div className="details-section-header">
+                <div>
+                  <h4>Brand Breakdown</h4>
+                  <p className="muted">Variants organized by brand.</p>
+                </div>
+                <span className="detail-total">{detailQtyLabel}</span>
+              </div>
+              {detailGroups.length ? (
+                <div className="brand-detail-list">
+                  {detailGroups.map((group, groupIndex) => {
+                    const groupTotal =
+                      sumVariantQty(group.variants) ?? 0;
+                    const groupTotalLabel = Number.isFinite(groupTotal)
+                      ? formatQtyLabel(groupTotal)
+                      : "—";
+
+                    return (
+                      <div
+                        className="brand-detail-card"
+                        key={`${group.name}-${groupIndex}`}
+                      >
+                        <div className="brand-detail-header">
+                          <div>
+                            <strong>{group.name}</strong>
+                            <span className="muted">
+                              {group.variants.length
+                                ? `${group.variants.length} variants`
+                                : "No variants"}
+                            </span>
+                          </div>
+                          <span className="brand-total">
+                            {groupTotalLabel}
+                          </span>
+                        </div>
+                        {group.variants.length ? (
+                          <div className="brand-variant-table">
+                            <div className="brand-variant-row header">
+                              <span>Variation</span>
+                              <span>Color</span>
+                              <span>SKU</span>
+                              <span>Qty</span>
+                            </div>
+                            {group.variants.map((variant, variantIndex) => (
+                              <div
+                                className="brand-variant-row"
+                                key={`${groupIndex}-${variantIndex}`}
+                              >
+                                <span>{variant.name || "—"}</span>
+                                <span>{variant.color || "—"}</span>
+                                <span className="mono">
+                                  {variant.sku || "—"}
+                                </span>
+                                <span>
+                                  {variant.qtyLabel ||
+                                    (Number.isFinite(variant.qtyValue)
+                                      ? formatQtyLabel(variant.qtyValue)
+                                      : "—")}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="muted">
+                            No variants tracked for this brand.
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="muted">No brands added yet.</span>
+              )}
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       <ConfirmDialog

@@ -76,6 +76,15 @@ const sumVariantQty = (variants) => {
   return values.reduce((sum, value) => sum + value, 0);
 };
 
+const buildValueFromPriceQty = (price, qtyValue) => {
+  const priceValue = parseCurrencyNumber(price);
+  if (!Number.isFinite(priceValue) || !Number.isFinite(qtyValue)) {
+    return { value: "", valueValue: null, priceValue };
+  }
+  const computed = Number((priceValue * qtyValue).toFixed(2));
+  return { value: computed.toFixed(2), valueValue: computed, priceValue };
+};
+
 const ensureSeedUser = async () => {
   let user = await User.findOne({ role: "admin" });
   if (user) return user;

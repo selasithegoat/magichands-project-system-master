@@ -10,6 +10,7 @@ const Modal = ({
   onConfirm,
   onClose,
   variant = "center",
+  hideFooter = false,
 }) => {
   const [isVisible, setIsVisible] = useState(isOpen);
   const [isActive, setIsActive] = useState(false);
@@ -81,14 +82,20 @@ const Modal = ({
           </button>
         </header>
         <div className="modal-body">{children}</div>
-        <footer className="modal-footer">
-          <button type="button" className="ghost-button" onClick={onClose}>
-            {secondaryText}
-          </button>
-          <button type="button" className="primary-button" onClick={onConfirm}>
-            {primaryText}
-          </button>
-        </footer>
+        {!hideFooter ? (
+          <footer className="modal-footer">
+            <button type="button" className="ghost-button" onClick={onClose}>
+              {secondaryText}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={onConfirm}
+            >
+              {primaryText}
+            </button>
+          </footer>
+        ) : null}
       </div>
     </div>
   );

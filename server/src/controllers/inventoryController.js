@@ -34,7 +34,7 @@ const ensureInventoryAccess = (req, res) => {
   return true;
 };
 
-const parseStringValue = (value) => String(value || "").trim();
+const parseStringValue = (value) => String(value ?? "").trim();
 
 const parseListParam = (value) => {
   if (Array.isArray(value)) {
@@ -71,9 +71,8 @@ const computeQtyMetaFromCapacity = (qtyValue, maxQty) => {
 };
 
 const parseVariantQuantity = (value) => {
-  const raw = parseStringValue(value);
-  if (!raw) return null;
-  const numeric = Number.parseFloat(raw.replace(/,/g, ""));
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number.parseFloat(String(value).replace(/,/g, ""));
   return Number.isFinite(numeric) ? numeric : null;
 };
 
@@ -127,6 +126,22 @@ const parseVariants = (value) => {
         Number.isFinite(variant.qtyValue),
     );
 };
+
+const parseBrandGroups = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((group) => ({
+      name: parseStringValue(group?.name || group?.brand || group?.label),
+      variants: parseVariants(group?.variants || group?.items),
+    }))
+    .filter((group) => group.name || group.variants.length);
+};
+
+const flattenBrandGroups = (groups) =>
+  groups.reduce(
+    (acc, group) => acc.concat(group?.variants || []),
+    [],
+  );
 
 const buildQtyLabelFromVariants = (variants) => {
   const values = variants
@@ -1216,8 +1231,14 @@ const createInventoryRecord = async (req, res) => {
       return res.status(400).json({ message: "sku is required." });
     }
 
+    const brandGroups = parseBrandGroups(req.body.brandGroups);
+    const primaryBrand =
+      brandGroups.find((group) => group.name)?.name ||
+      parseStringValue(req.body.brand);
     const maxQty = parseMaxQty(req.body.maxQty);
-    const variants = parseVariants(req.body.variants);
+    const variants = brandGroups.length
+      ? flattenBrandGroups(brandGroups)
+      : parseVariants(req.body.variants);
     const rawQtyValue =
       parseQtyValue(req.body.qtyValue) ??
       parseQtyValueFromLabel(req.body.qtyLabel);
@@ -1240,7 +1261,8 @@ const createInventoryRecord = async (req, res) => {
       subtext: warehouse,
       warehouse,
       sku,
-      brand: parseStringValue(req.body.brand),
+      brand: primaryBrand,
+      brandGroups,
       category: parseStringValue(req.body.category),
       categoryTone: pickRandomTone(CATEGORY_TONES),
       qtyLabel: derivedLabel,
@@ -1314,6 +1336,15 @@ const updateInventoryRecord = async (req, res) => {
       record.categoryTone = pickRandomTone(CATEGORY_TONES);
     }
 
+    if (Object.prototype.hasOwnProperty.call(req.body, "brandGroups")) {
+      record.brandGroups = parseBrandGroups(req.body.brandGroups);
+      const primaryBrand = record.brandGroups.find(
+        (group) => group.name,
+      )?.name;
+      record.brand = primaryBrand || "";
+      record.variants = flattenBrandGroups(record.brandGroups);
+    }
+
     if (Object.prototype.hasOwnProperty.call(req.body, "qtyValue")) {
       record.qtyValue = parseQtyValue(req.body.qtyValue);
     }
@@ -1323,7 +1354,11 @@ const updateInventoryRecord = async (req, res) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "variants")) {
-      record.variants = parseVariants(req.body.variants);
+      if (
+        !Object.prototype.hasOwnProperty.call(req.body, "brandGroups")
+      ) {
+        record.variants = parseVariants(req.body.variants);
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "status")) {

@@ -31,6 +31,21 @@ const InventoryVariantSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const InventoryBrandGroupSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    variants: {
+      type: [InventoryVariantSchema],
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
 const InventoryRecordSchema = new mongoose.Schema(
   {
     item: {
@@ -57,6 +72,10 @@ const InventoryRecordSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    brandGroups: {
+      type: [InventoryBrandGroupSchema],
+      default: [],
     },
     category: {
       type: String,
