@@ -1829,10 +1829,18 @@ const createReport = async (req, res) => {
       return res.status(400).json({ message: "name is required." });
     }
 
+    const generatedBy =
+      parseStringValue(req.body.generatedBy) ||
+      parseStringValue(
+        [req.user?.firstName, req.user?.lastName].filter(Boolean).join(" "),
+      ) ||
+      parseStringValue(req.user?.employeeId);
+
     const report = await InventoryReport.create({
       name,
+      type: parseStringValue(req.body.type || req.body.reportType),
       createdAtOverride: parseOptionalDate(req.body.createdAt),
-      generatedBy: parseStringValue(req.body.generatedBy),
+      generatedBy,
       status: parseStringValue(req.body.status) || "Ready",
       downloads: Array.isArray(req.body.downloads)
         ? req.body.downloads

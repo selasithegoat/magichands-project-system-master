@@ -7,6 +7,11 @@ const InventoryReportSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    type: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     createdAtOverride: {
       type: Date,
       default: null,
