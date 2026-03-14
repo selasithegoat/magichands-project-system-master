@@ -12,8 +12,12 @@ const Sidebar = ({
   user,
   theme,
   onToggleTheme,
-}) => (
-  <aside className={`sidebar ${isMobileOpen ? "is-open" : ""}`}>
+}) => {
+  const avatarAlt = `${formatUserName(user) || "User"} avatar`;
+  const avatarUrl = user?.avatarUrl || "";
+
+  return (
+    <aside className={`sidebar ${isMobileOpen ? "is-open" : ""}`}>
     <div className="brand">
       <img src="/icon-192.png" alt="MagicHands Logo" />
       <div className="brand-text">
@@ -74,7 +78,7 @@ const Sidebar = ({
     </div>
      <div className="mobile-profile">
       <div className="mobile-avatar">
-        <UserIcon />
+        {avatarUrl ? <img src={avatarUrl} alt={avatarAlt} /> : <UserIcon />}
       </div>
       <div>
         <strong>{formatUserName(user)}</strong>
@@ -90,6 +94,7 @@ const Sidebar = ({
       </button>
     </div>
   </aside>
-);
+  );
+};
 
 export default Sidebar;

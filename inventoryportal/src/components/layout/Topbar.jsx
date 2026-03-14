@@ -18,8 +18,12 @@ const Topbar = ({
   theme,
   onToggleTheme,
   onMenuClick,
-}) => (
-  <header className="topbar">
+}) => {
+  const avatarAlt = `${formatUserName(user) || "User"} avatar`;
+  const avatarUrl = user?.avatarUrl || "";
+
+  return (
+    <header className="topbar">
     <div className="topbar-left">
       <button
         type="button"
@@ -62,7 +66,7 @@ const Topbar = ({
       </div>
       <div className="user-pill">
         <div className="user-avatar">
-          <UserIcon />
+          {avatarUrl ? <img src={avatarUrl} alt={avatarAlt} /> : <UserIcon />}
         </div>
         <div>
           <strong>{formatUserName(user)}</strong>
@@ -72,6 +76,7 @@ const Topbar = ({
       </div>
     </div>
   </header>
-);
+  );
+};
 
 export default Topbar;
