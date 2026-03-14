@@ -76,6 +76,22 @@ const parseVariantQuantity = (value) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const parseVariantColors = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((color) => {
+      const qtyValue = parseVariantQuantity(
+        color?.qtyValue ?? color?.qty ?? color?.quantity,
+      );
+      return {
+        name: parseStringValue(color?.name || color?.color || color?.kind),
+        qtyValue,
+        qtyLabel: formatVariantQtyLabel(qtyValue),
+      };
+    })
+    .filter((color) => color.name || Number.isFinite(color.qtyValue));
+};
+
 const parseQtyValue = (value) => {
   if (value === undefined || value === null || value === "") return null;
   const numeric = Number.parseFloat(String(value).replace(/,/g, ""));
@@ -103,17 +119,28 @@ const formatVariantQtyLabel = (value) => {
   return `${normalized.toLocaleString("en-US")} Units`;
 };
 
-const parseVariants = (value) => {
+const parseVariants = (value, fallbackStatus = "") => {
   if (!Array.isArray(value)) return [];
   return value
     .map((variant) => {
-      const qtyValue = parseVariantQuantity(variant?.qtyValue);
+      const colors = parseVariantColors(
+        variant?.colors || variant?.colorBreakdown || variant?.kinds,
+      );
+      const qtyFromColors = sumVariantQty(colors);
+      const qtyValue =
+        qtyFromColors !== null
+          ? qtyFromColors
+          : parseVariantQuantity(variant?.qtyValue);
+      const status =
+        parseStringValue(variant?.status) || parseStringValue(fallbackStatus);
       return {
         name: parseStringValue(
           variant?.name || variant?.variantName || variant?.variation,
         ),
-        color: parseStringValue(variant?.color),
+        color: parseStringValue(variant?.color) || colors[0]?.name || "",
+        colors,
         sku: parseStringValue(variant?.sku),
+        status,
         qtyValue,
         qtyLabel: formatVariantQtyLabel(qtyValue),
       };
@@ -127,12 +154,14 @@ const parseVariants = (value) => {
     );
 };
 
-const parseBrandGroups = (value) => {
+const parseBrandGroups = (value, fallbackStatus = "") => {
   if (!Array.isArray(value)) return [];
   return value
     .map((group) => ({
       name: parseStringValue(group?.name || group?.brand || group?.label),
-      variants: parseVariants(group?.variants || group?.items),
+      price: parseStringValue(group?.price),
+      priceValue: parseCurrencyNumber(group?.price),
+      variants: parseVariants(group?.variants || group?.items, fallbackStatus),
     }))
     .filter((group) => group.name || group.variants.length);
 };
@@ -142,6 +171,43 @@ const flattenBrandGroups = (groups) =>
     (acc, group) => acc.concat(group?.variants || []),
     [],
   );
+
+const computeBrandGroupTotals = (groups, fallbackQty) => {
+  if (!Array.isArray(groups) || !groups.length) {
+    return { totalValue: null, minPrice: null };
+  }
+
+  let totalValue = 0;
+  let hasValue = false;
+  const priceValues = [];
+
+  groups.forEach((group) => {
+    const priceValue = Number.isFinite(group?.priceValue)
+      ? group.priceValue
+      : parseCurrencyNumber(group?.price);
+    if (Number.isFinite(priceValue)) {
+      priceValues.push(priceValue);
+    }
+
+    const groupQty = sumVariantQty(group?.variants || []);
+    const resolvedQty =
+      Number.isFinite(groupQty)
+        ? groupQty
+        : groups.length === 1
+          ? fallbackQty
+          : null;
+
+    if (Number.isFinite(priceValue) && Number.isFinite(resolvedQty)) {
+      totalValue += priceValue * resolvedQty;
+      hasValue = true;
+    }
+  });
+
+  return {
+    totalValue: hasValue ? totalValue : null,
+    minPrice: priceValues.length ? Math.min(...priceValues) : null,
+  };
+};
 
 const buildQtyLabelFromVariants = (variants) => {
   const values = variants
@@ -1110,7 +1176,6 @@ const getInventoryRecords = async (req, res) => {
         "sku",
         "category",
         "status",
-        "location",
         "warehouse",
         "priceValue",
       ],
@@ -1123,14 +1188,17 @@ const getInventoryRecords = async (req, res) => {
     const filter = {};
     const statusList = parseListParam(req.query.status);
     const categoryList = parseListParam(req.query.category);
+    const variantStatusList = parseListParam(req.query.variantStatus);
     const warehouse = parseStringValue(req.query.warehouse);
-    const location = parseStringValue(req.query.location);
     const reorderRaw = req.query.reorder;
     const search = buildSearchRegex(req.query.search);
     const andFilters = [];
 
     if (statusList.length) filter.status = { $in: statusList };
     if (categoryList.length) filter.category = { $in: categoryList };
+    if (variantStatusList.length) {
+      filter["variants.status"] = { $in: variantStatusList };
+    }
     if (warehouse) {
       const warehouseRegex = new RegExp(
         warehouse.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
@@ -1139,9 +1207,6 @@ const getInventoryRecords = async (req, res) => {
       andFilters.push({
         $or: [{ warehouse: warehouseRegex }, { subtext: warehouseRegex }],
       });
-    }
-    if (location) {
-      filter.location = location;
     }
     if (reorderRaw !== undefined && reorderRaw !== null && reorderRaw !== "") {
       const normalized = String(reorderRaw).trim().toLowerCase();
@@ -1155,11 +1220,11 @@ const getInventoryRecords = async (req, res) => {
           { item: search },
           { brand: search },
           { sku: search },
-          { location: search },
           { subtext: search },
           { warehouse: search },
           { "variants.name": search },
           { "variants.color": search },
+          { "variants.colors.name": search },
           { "variants.sku": search },
         ],
       });
@@ -1224,6 +1289,7 @@ const createInventoryRecord = async (req, res) => {
     const item = parseStringValue(req.body.item);
     const sku = parseStringValue(req.body.sku);
     const warehouse = parseStringValue(req.body.warehouse || req.body.subtext);
+    const recordStatus = parseStringValue(req.body.status) || "In Stock";
     if (!item) {
       return res.status(400).json({ message: "item is required." });
     }
@@ -1231,14 +1297,14 @@ const createInventoryRecord = async (req, res) => {
       return res.status(400).json({ message: "sku is required." });
     }
 
-    const brandGroups = parseBrandGroups(req.body.brandGroups);
+    const brandGroups = parseBrandGroups(req.body.brandGroups, recordStatus);
     const primaryBrand =
       brandGroups.find((group) => group.name)?.name ||
       parseStringValue(req.body.brand);
     const maxQty = parseMaxQty(req.body.maxQty);
     const variants = brandGroups.length
       ? flattenBrandGroups(brandGroups)
-      : parseVariants(req.body.variants);
+      : parseVariants(req.body.variants, recordStatus);
     const rawQtyValue =
       parseQtyValue(req.body.qtyValue) ??
       parseQtyValueFromLabel(req.body.qtyLabel);
@@ -1250,11 +1316,18 @@ const createInventoryRecord = async (req, res) => {
         formatVariantQtyLabel(derivedQtyValue)
       : formatVariantQtyLabel(derivedQtyValue);
     const qtyMeta = computeQtyMetaFromCapacity(derivedQtyValue, maxQty);
-    const priceValue = parseCurrencyNumber(req.body.price);
+    const brandTotals = brandGroups.length
+      ? computeBrandGroupTotals(brandGroups, derivedQtyValue)
+      : null;
+    const priceValue = brandGroups.length
+      ? brandTotals?.minPrice
+      : parseCurrencyNumber(req.body.price);
     const computedValue =
-      Number.isFinite(priceValue) && Number.isFinite(derivedQtyValue)
-        ? Number((priceValue * derivedQtyValue).toFixed(2))
-        : null;
+      brandTotals?.totalValue !== null && brandTotals?.totalValue !== undefined
+        ? Number(brandTotals.totalValue.toFixed(2))
+        : Number.isFinite(priceValue) && Number.isFinite(derivedQtyValue)
+          ? Number((priceValue * derivedQtyValue).toFixed(2))
+          : null;
 
     const record = await InventoryRecord.create({
       item,
@@ -1272,12 +1345,11 @@ const createInventoryRecord = async (req, res) => {
       variations: parseStringValue(req.body.variations),
       colors: parseStringValue(req.body.colors),
       variants,
-      price: parseStringValue(req.body.price),
+      price: brandGroups.length ? "" : parseStringValue(req.body.price),
       priceValue,
       value: computedValue !== null ? computedValue.toFixed(2) : "",
       valueValue: computedValue,
-      location: parseStringValue(req.body.location),
-      status: parseStringValue(req.body.status),
+      status: recordStatus,
       statusTone: pickRandomTone(STATUS_TONES),
       reorder: parseBooleanValue(req.body.reorder, false),
       image: parseStringValue(req.body.image),
@@ -1308,7 +1380,6 @@ const updateInventoryRecord = async (req, res) => {
       "category",
       "variations",
       "colors",
-      "location",
       "status",
       "image",
     ];
@@ -1336,13 +1407,20 @@ const updateInventoryRecord = async (req, res) => {
       record.categoryTone = pickRandomTone(CATEGORY_TONES);
     }
 
+    const fallbackStatus =
+      parseStringValue(req.body.status) || record.status || "In Stock";
+
     if (Object.prototype.hasOwnProperty.call(req.body, "brandGroups")) {
-      record.brandGroups = parseBrandGroups(req.body.brandGroups);
+      record.brandGroups = parseBrandGroups(
+        req.body.brandGroups,
+        fallbackStatus,
+      );
       const primaryBrand = record.brandGroups.find(
         (group) => group.name,
       )?.name;
       record.brand = primaryBrand || "";
       record.variants = flattenBrandGroups(record.brandGroups);
+      record.price = "";
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "qtyValue")) {
@@ -1357,7 +1435,7 @@ const updateInventoryRecord = async (req, res) => {
       if (
         !Object.prototype.hasOwnProperty.call(req.body, "brandGroups")
       ) {
-        record.variants = parseVariants(req.body.variants);
+        record.variants = parseVariants(req.body.variants, fallbackStatus);
       }
     }
 
@@ -1405,10 +1483,21 @@ const updateInventoryRecord = async (req, res) => {
       }
     }
 
+    const hasBrandGroups =
+      Array.isArray(record.brandGroups) && record.brandGroups.length;
+    const brandTotals = hasBrandGroups
+      ? computeBrandGroupTotals(record.brandGroups, record.qtyValue)
+      : null;
+    if (hasBrandGroups) {
+      record.priceValue = brandTotals?.minPrice ?? null;
+    }
+
     const computedValue =
-      Number.isFinite(record.priceValue) && Number.isFinite(record.qtyValue)
-        ? Number((record.priceValue * record.qtyValue).toFixed(2))
-        : null;
+      brandTotals?.totalValue !== null && brandTotals?.totalValue !== undefined
+        ? Number(brandTotals.totalValue.toFixed(2))
+        : Number.isFinite(record.priceValue) && Number.isFinite(record.qtyValue)
+          ? Number((record.priceValue * record.qtyValue).toFixed(2))
+          : null;
     record.valueValue = computedValue;
     record.value = computedValue !== null ? computedValue.toFixed(2) : "";
 

@@ -413,7 +413,7 @@
   display: grid;
   grid-template-columns: var(
     --records-columns,
-    48px 2fr 1fr 1fr 1fr 1.2fr 1fr 0.9fr 0.8fr 0.9fr 0.8fr 0.8fr 1fr
+    48px 2fr 1fr 1fr 1fr 1.2fr 1fr 0.9fr 0.8fr 0.9fr 0.8fr 1fr
   );
   gap: 12px;
   align-items: center;
@@ -661,6 +661,11 @@
   color: #b91c1c;
 }
 
+.status-pill.out-of-stock {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .status-pill.oversupply {
   background: #dbeafe;
   color: #1d4ed8;
@@ -856,14 +861,41 @@
   flex-wrap: wrap;
 }
 
+.brand-group-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 220px;
+}
+
 .brand-group-title input {
-  flex: 1 1 180px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 6px 8px;
   font-size: 12px;
   background: var(--bg-alt);
   color: var(--ink);
+}
+
+.brand-price-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.brand-price-field input {
+  flex: 1 1 160px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--bg-alt);
+  color: var(--ink);
+}
+
+.brand-price-field .muted {
+  min-width: 90px;
 }
 
 .brand-group-actions {
@@ -878,9 +910,19 @@
   gap: 8px;
 }
 
+.variant-block {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  background: var(--bg-alt);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .variant-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 0.7fr 40px;
+  grid-template-columns: 1.2fr 1fr 0.9fr 0.7fr 40px;
   gap: 8px;
   align-items: center;
 }
@@ -901,6 +943,50 @@
 }
 
 .variant-row .action-button {
+  width: 34px;
+  height: 34px;
+}
+
+.variant-colors {
+  border-top: 1px dashed var(--border-soft);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variant-colors-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.variant-colors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variant-color-row {
+  display: grid;
+  grid-template-columns: 1fr 0.7fr 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.variant-color-row input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--ink);
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.variant-color-row .action-button {
   width: 34px;
   height: 34px;
 }
@@ -1017,7 +1103,7 @@
 
 .brand-variant-row {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr 1fr 0.8fr;
+  grid-template-columns: 1.2fr 0.9fr 1fr 0.8fr 0.8fr;
   gap: 8px;
   font-size: 12px;
   align-items: center;
@@ -1133,6 +1219,10 @@
   }
 
   .variant-row {
+    grid-template-columns: 1fr;
+  }
+
+  .variant-color-row {
     grid-template-columns: 1fr;
   }
 

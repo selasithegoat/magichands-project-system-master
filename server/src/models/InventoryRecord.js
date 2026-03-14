@@ -12,10 +12,40 @@ const InventoryVariantSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    colors: {
+      type: [
+        new mongoose.Schema(
+          {
+            name: {
+              type: String,
+              trim: true,
+              default: "",
+            },
+            qtyValue: {
+              type: Number,
+              min: 0,
+              default: null,
+            },
+            qtyLabel: {
+              type: String,
+              trim: true,
+              default: "",
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     sku: {
       type: String,
       trim: true,
       default: "",
+    },
+    status: {
+      type: String,
+      trim: true,
+      default: "In Stock",
     },
     qtyValue: {
       type: Number,
@@ -37,6 +67,15 @@ const InventoryBrandGroupSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    price: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    priceValue: {
+      type: Number,
+      default: null,
     },
     variants: {
       type: [InventoryVariantSchema],
@@ -138,11 +177,6 @@ const InventoryRecordSchema = new mongoose.Schema(
     valueValue: {
       type: Number,
       default: null,
-    },
-    location: {
-      type: String,
-      trim: true,
-      default: "",
     },
     status: {
       type: String,
