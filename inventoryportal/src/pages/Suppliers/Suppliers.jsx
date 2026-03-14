@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import {
   BuildingIcon,
-  ChevronDownIcon,
-  ClockIcon,
   DownloadIcon,
   EditIcon,
-  FileTextIcon,
   PlusIcon,
-  ShieldCheckIcon,
+  SearchIcon,
   TrashIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -31,6 +28,7 @@ const Suppliers = () => {
     totalPages: 0,
   });
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [formData, setFormData] = useState({
@@ -57,8 +55,14 @@ const Suppliers = () => {
 
     const loadSuppliers = async () => {
       try {
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", String(DEFAULT_LIMIT));
+        if (searchTerm.trim()) {
+          params.set("search", searchTerm.trim());
+        }
         const payload = await fetchInventory(
-          `/api/inventory/suppliers?page=${page}&limit=${DEFAULT_LIMIT}`,
+          `/api/inventory/suppliers?${params.toString()}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((supplier, index) => ({
@@ -98,7 +102,7 @@ const Suppliers = () => {
     return () => {
       isMounted = false;
     };
-  }, [page, refreshKey]);
+  }, [page, refreshKey, searchTerm]);
 
   const total = meta.total || rows.length;
   const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
@@ -111,6 +115,57 @@ const Suppliers = () => {
     if (nextPage < 1) return;
     if (meta.totalPages && nextPage > meta.totalPages) return;
     setPage(nextPage);
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setPage(1);
+  };
+
+  const handleExport = () => {
+    if (!rows.length) return;
+    const rowsForExport = rows.map((supplier) => ({
+      Supplier: supplier.name,
+      Code: supplier.code,
+      "Contact Person": supplier.contactPerson,
+      Role: supplier.role,
+      Phone: supplier.phone,
+      Email: supplier.email,
+      Products: supplier.products
+        .map((product) => product.label)
+        .filter(Boolean)
+        .join(", "),
+      "Open PO": supplier.openPO?.label || "",
+      "Open PO Status": supplier.openPO?.status || "",
+    }));
+
+    const headers = Object.keys(rowsForExport[0]);
+    const csv = [
+      headers.join(","),
+      ...rowsForExport.map((row) =>
+        headers
+          .map((header) => {
+            const cell = String(row[header] ?? "");
+            return `"${cell.replace(/"/g, '""')}"`;
+          })
+          .join(","),
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `suppliers-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   const openCreateModal = () => {
@@ -246,7 +301,7 @@ const Suppliers = () => {
           <h2>Suppliers</h2>
         </div>
         <div className="suppliers-actions">
-          <button type="button" className="ghost-button">
+          <button type="button" className="ghost-button" onClick={handleExport}>
             <DownloadIcon className="button-icon" />
             Export
           </button>
@@ -263,37 +318,21 @@ const Suppliers = () => {
 
       <div className="filters-card">
         <div className="filters-row">
-          <div className="filter-pill">
-            <span>Category:</span>
-            <select aria-label="Filter by category">
-              <option>All Products</option>
-              <option>Electronics</option>
-              <option>Logistics</option>
-              <option>Packaging</option>
-            </select>
-            <ChevronDownIcon className="chevron" />
+          <div className="input-shell">
+            <SearchIcon className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search suppliers, contacts, or email..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
           </div>
-          <div className="filter-pill">
-            <span>Status:</span>
-            <select aria-label="Filter by status">
-              <option>Active</option>
-              <option>Paused</option>
-              <option>Onboarding</option>
-            </select>
-            <ChevronDownIcon className="chevron" />
-          </div>
-          <div className="filter-pill">
-            <span>Region:</span>
-            <select aria-label="Filter by region">
-              <option>Global</option>
-              <option>North America</option>
-              <option>Europe</option>
-              <option>Asia Pacific</option>
-            </select>
-            <ChevronDownIcon className="chevron" />
-          </div>
-          <button type="button" className="clear-filters">
-            Clear all filters
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={handleClearFilters}
+          >
+            Clear
           </button>
         </div>
       </div>
@@ -412,39 +451,6 @@ const Suppliers = () => {
               Next
             </button>
           </div>
-        </div>
-      </div>
-
-      <div className="summary-grid">
-        <div className="summary-card">
-          <div className="summary-header">
-            <span>Active Contracts</span>
-            <span className="summary-icon">
-              <FileTextIcon />
-            </span>
-          </div>
-          <div className="summary-value">38</div>
-          <div className="summary-meta positive">+2 this month</div>
-        </div>
-        <div className="summary-card">
-          <div className="summary-header">
-            <span>Average Delivery Time</span>
-            <span className="summary-icon info">
-              <ClockIcon />
-            </span>
-          </div>
-          <div className="summary-value">4.2 Days</div>
-          <div className="summary-meta positive">-0.5 days avg</div>
-        </div>
-        <div className="summary-card">
-          <div className="summary-header">
-            <span>Supply Risk Level</span>
-            <span className="summary-icon success">
-              <ShieldCheckIcon />
-            </span>
-          </div>
-          <div className="summary-value">Low</div>
-          <div className="summary-meta">Stable inventory</div>
         </div>
       </div>
 
