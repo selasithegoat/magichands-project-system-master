@@ -4,6 +4,7 @@ import InventoryLayout from "../layouts/InventoryLayout";
 import Dashboard from "../pages/Dashboard/Dashboard";
 import LoadingScreen from "../components/feedback/LoadingScreen";
 import Login from "../pages/Login/Login";
+import NotificationDropdown from "../components/notifications/NotificationDropdown";
 import StockTransactions from "../pages/StockTransactions/StockTransactions";
 import InventoryCategories from "../pages/InventoryTypes/InventoryTypes";
 import InventoryRecords from "../pages/InventoryRecords/InventoryRecords";
@@ -25,6 +26,8 @@ import {
 } from "../components/icons/Icons";
 import { hasInventoryPortalAccess } from "../utils/access";
 import { quickActions } from "../data/quickActions";
+import useNotifications from "../hooks/useNotifications";
+import useRealtimeClient from "../hooks/useRealtimeClient";
 
 const APP_NAME = "MagicHands Inventory";
 const THEME_STORAGE_KEY = "inventory-portal-theme";
@@ -63,6 +66,7 @@ const App = () => {
   const [loginError, setLoginError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [activePage, setActivePage] = useState(() => {
     if (typeof window === "undefined") return "dashboard";
     return window.localStorage.getItem(PAGE_STORAGE_KEY) || "dashboard";
@@ -114,6 +118,22 @@ const App = () => {
       window.localStorage.setItem(PAGE_STORAGE_KEY, activePage);
     }
   }, [activePage]);
+
+  useRealtimeClient(Boolean(user));
+  const {
+    notifications,
+    loading: notificationsLoading,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    clearNotifications,
+  } = useNotifications({ enabled: Boolean(user), userId: user?._id });
+
+  useEffect(() => {
+    if (!user) {
+      setIsNotificationOpen(false);
+    }
+  }, [user]);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === "dark" ? "light" : "dark"));
@@ -217,6 +237,22 @@ const App = () => {
     }
   };
 
+  const notificationDropdown = (
+    <NotificationDropdown
+      onClose={() => setIsNotificationOpen(false)}
+      notifications={notifications}
+      loading={notificationsLoading}
+      markAsRead={markAsRead}
+      markAllAsRead={markAllAsRead}
+      clearNotifications={clearNotifications}
+      onNavigate={(target) => {
+        if (target) {
+          setActivePage(target);
+        }
+      }}
+    />
+  );
+
   return (
     <>
       <InventoryLayout
@@ -224,7 +260,12 @@ const App = () => {
         user={user}
         onLogout={logout}
         onQuickAction={() => setQuickActionOpen(true)}
-        notificationCount={3}
+        notificationCount={unreadCount}
+        onToggleNotification={() =>
+          setIsNotificationOpen((prev) => !prev)
+        }
+        isNotificationOpen={isNotificationOpen}
+        notificationDropdown={notificationDropdown}
         activeKey={activePage}
         onNavigate={setActivePage}
         theme={theme}

@@ -9,6 +9,9 @@ const InventoryLayout = ({
   onLogout,
   onQuickAction,
   notificationCount,
+  onToggleNotification,
+  isNotificationOpen,
+  notificationDropdown,
   activeKey,
   onNavigate,
   theme,
@@ -59,6 +62,9 @@ const InventoryLayout = ({
           user={user}
           onQuickAction={onQuickAction}
           notificationCount={notificationCount}
+          onToggleNotification={onToggleNotification}
+          isNotificationOpen={isNotificationOpen}
+          notificationDropdown={notificationDropdown}
           theme={theme}
           onToggleTheme={onToggleTheme}
           onMenuClick={() => setIsMobileNavOpen((prev) => !prev)}

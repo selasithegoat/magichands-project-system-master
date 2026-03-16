@@ -6,8 +6,11 @@ const InventoryRecord = require("../models/InventoryRecord");
 const StockTransaction = require("../models/StockTransaction");
 const InventoryReport = require("../models/InventoryReport");
 const InventorySettings = require("../models/InventorySettings");
+const User = require("../models/User");
+const { createNotification } = require("../utils/notificationService");
 
 const STORES_DEPARTMENTS = new Set(["stores", "front desk"]);
+const INVENTORY_NOTIFICATION_DEPARTMENTS = ["Front Desk", "Stores"];
 
 const normalizeDepartments = (departments) => {
   if (Array.isArray(departments)) return departments;
@@ -32,6 +35,62 @@ const ensureInventoryAccess = (req, res) => {
     return false;
   }
   return true;
+};
+
+const getInventoryNotificationRecipients = async () => {
+  const candidates = await User.find({
+    $or: [
+      { role: "admin" },
+      { department: { $in: INVENTORY_NOTIFICATION_DEPARTMENTS } },
+    ],
+  }).select("_id role department");
+
+  return candidates
+    .filter((user) => canAccessInventory(user))
+    .map((user) => user._id);
+};
+
+const notifyInventoryUsers = async (senderId, { type, title, message }) => {
+  if (!senderId || !title || !message) return;
+  const recipients = await getInventoryNotificationRecipients();
+  if (!recipients.length) return;
+
+  await Promise.allSettled(
+    recipients.map((recipientId) =>
+      createNotification(recipientId, senderId, null, type, title, message, {
+        source: "inventory",
+      }),
+    ),
+  );
+};
+
+const getInventorySettingsSnapshot = async () => {
+  try {
+    const settings = await InventorySettings.findOne({}).lean();
+    return settings || {};
+  } catch (error) {
+    console.error("Error loading inventory settings:", error);
+    return {};
+  }
+};
+
+const formatQtyForMessage = (value, unitLabel) => {
+  if (!Number.isFinite(value)) return "unknown";
+  const normalized = Number.isInteger(value) ? value : Number(value.toFixed(2));
+  const formatted = normalized.toLocaleString("en-US");
+  return `${formatted} ${unitLabel}`;
+};
+
+const shouldNotifyLowStock = (qtyValue, previousQtyValue, settings) => {
+  const notifyLowStock = settings?.notifyLowStock !== false;
+  if (!notifyLowStock || !Number.isFinite(qtyValue)) return false;
+  const threshold = Number.isFinite(settings?.lowStockThreshold)
+    ? settings.lowStockThreshold
+    : 18;
+  const isLow = qtyValue <= threshold;
+  if (!isLow) return false;
+  if (!Number.isFinite(previousQtyValue)) return true;
+  return previousQtyValue > threshold;
 };
 
 const parseStringValue = (value) => String(value ?? "").trim();
@@ -499,6 +558,14 @@ const createClientItem = async (req, res) => {
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
 
+    await notifyInventoryUsers(req.user._id, {
+      type: "SYSTEM",
+      title: "Client item received",
+      message: `${itemName} received from ${clientName}${
+        warehouse ? ` (Warehouse: ${warehouse})` : ""
+      }.`,
+    });
+
     res.status(201).json(populated);
   } catch (error) {
     console.error("Error creating client inventory item:", error);
@@ -734,6 +801,15 @@ const createPurchasingOrder = async (req, res) => {
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
 
+    const settings = await getInventorySettingsSnapshot();
+    if (settings.notifyPurchaseOrders !== false) {
+      await notifyInventoryUsers(req.user._id, {
+        type: "SYSTEM",
+        title: "Purchase order created",
+        message: `${poNumber} created for ${supplierName} (${status}).`,
+      });
+    }
+
     res.status(201).json(populated);
   } catch (error) {
     console.error("Error creating purchasing order:", error);
@@ -749,6 +825,8 @@ const updatePurchasingOrder = async (req, res) => {
     if (!record) {
       return res.status(404).json({ message: "Purchasing order not found." });
     }
+
+    const previousStatus = record.status;
 
     if (Object.prototype.hasOwnProperty.call(req.body, "poNumber")) {
       const poNumber = parseStringValue(req.body.poNumber);
@@ -835,6 +913,15 @@ const updatePurchasingOrder = async (req, res) => {
     const populated = await PurchasingOrder.findById(record._id)
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
+
+    const settings = await getInventorySettingsSnapshot();
+    if (settings.notifyPurchaseOrders !== false && previousStatus !== record.status) {
+      await notifyInventoryUsers(req.user._id, {
+        type: "UPDATE",
+        title: "Purchase order status updated",
+        message: `${record.poNumber} is now ${record.status}.`,
+      });
+    }
 
     res.json(populated);
   } catch (error) {
@@ -934,6 +1021,12 @@ const createSupplier = async (req, res) => {
       updatedBy: req.user._id,
     });
 
+    await notifyInventoryUsers(req.user._id, {
+      type: "SYSTEM",
+      title: "New supplier added",
+      message: `${name} has been added to suppliers.`,
+    });
+
     res.status(201).json(record);
   } catch (error) {
     console.error("Error creating supplier:", error);
@@ -986,6 +1079,13 @@ const updateSupplier = async (req, res) => {
 
     record.updatedBy = req.user._id;
     await record.save();
+
+    await notifyInventoryUsers(req.user._id, {
+      type: "UPDATE",
+      title: "Supplier updated",
+      message: `${record.name} supplier details were updated.`,
+    });
+
     res.json(record);
   } catch (error) {
     console.error("Error updating supplier:", error);
@@ -1378,6 +1478,25 @@ const createInventoryRecord = async (req, res) => {
       updatedBy: req.user._id,
     });
 
+    await notifyInventoryUsers(req.user._id, {
+      type: "SYSTEM",
+      title: "Inventory record created",
+      message: `${item} (${sku}) added${warehouse ? ` to ${warehouse}` : ""}.`,
+    });
+
+    const settings = await getInventorySettingsSnapshot();
+    if (shouldNotifyLowStock(record.qtyValue, null, settings)) {
+      const unitLabel = parseStringValue(settings?.unitOfMeasure) || "Units";
+      await notifyInventoryUsers(req.user._id, {
+        type: "SYSTEM",
+        title: "Low stock alert",
+        message: `${item} is low (${formatQtyForMessage(
+          record.qtyValue,
+          unitLabel,
+        )}).`,
+      });
+    }
+
     res.status(201).json(record);
   } catch (error) {
     console.error("Error creating inventory record:", error);
@@ -1393,6 +1512,9 @@ const updateInventoryRecord = async (req, res) => {
     if (!record) {
       return res.status(404).json({ message: "Inventory record not found." });
     }
+
+    const previousStatus = record.status;
+    const previousQtyValue = record.qtyValue;
 
     const updatableFields = [
       "item",
@@ -1527,6 +1649,40 @@ const updateInventoryRecord = async (req, res) => {
 
     record.updatedBy = req.user._id;
     await record.save();
+
+    const statusChanged = previousStatus !== record.status;
+    const qtyChanged =
+      Number.isFinite(previousQtyValue) || Number.isFinite(record.qtyValue)
+        ? previousQtyValue !== record.qtyValue
+        : false;
+
+    if (statusChanged || qtyChanged) {
+      await notifyInventoryUsers(req.user._id, {
+        type: "UPDATE",
+        title: "Inventory record updated",
+        message: `${record.item} (${record.sku}) updated${
+          statusChanged ? ` • Status: ${record.status}` : ""
+        }${
+          qtyChanged && Number.isFinite(record.qtyValue)
+            ? ` • Qty: ${record.qtyValue}`
+            : ""
+        }.`,
+      });
+    }
+
+    const settings = await getInventorySettingsSnapshot();
+    if (shouldNotifyLowStock(record.qtyValue, previousQtyValue, settings)) {
+      const unitLabel = parseStringValue(settings?.unitOfMeasure) || "Units";
+      await notifyInventoryUsers(req.user._id, {
+        type: "SYSTEM",
+        title: "Low stock alert",
+        message: `${record.item} is low (${formatQtyForMessage(
+          record.qtyValue,
+          unitLabel,
+        )}).`,
+      });
+    }
+
     res.json(record);
   } catch (error) {
     console.error("Error updating inventory record:", error);

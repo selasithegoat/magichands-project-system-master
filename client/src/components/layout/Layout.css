@@ -354,7 +354,7 @@
 
 /* Page Content */
 .layout-content {
-  width: 80%;
+  width: 100%;
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem 0;

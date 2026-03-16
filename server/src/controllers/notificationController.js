@@ -5,7 +5,13 @@ const Notification = require("../models/Notification");
 // @access  Private
 const getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user._id })
+    const source = String(req.query.source || "").trim();
+    const filter = { recipient: req.user._id };
+    if (source) {
+      filter.source = source;
+    }
+
+    const notifications = await Notification.find(filter)
       .populate("sender", "firstName lastName name avatarUrl")
       .populate({
         path: "project",
@@ -54,10 +60,13 @@ const markAsRead = async (req, res) => {
 // @access  Private
 const markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany(
-      { recipient: req.user._id, isRead: false },
-      { $set: { isRead: true } },
-    );
+    const source = String(req.query.source || "").trim();
+    const filter = { recipient: req.user._id, isRead: false };
+    if (source) {
+      filter.source = source;
+    }
+
+    await Notification.updateMany(filter, { $set: { isRead: true } });
 
     res.json({ message: "All notifications marked as read" });
   } catch (error) {
@@ -71,7 +80,13 @@ const markAllAsRead = async (req, res) => {
 // @access  Private
 const clearNotifications = async (req, res) => {
   try {
-    await Notification.deleteMany({ recipient: req.user._id });
+    const source = String(req.query.source || "").trim();
+    const filter = { recipient: req.user._id };
+    if (source) {
+      filter.source = source;
+    }
+
+    await Notification.deleteMany(filter);
     res.json({ message: "Notifications cleared" });
   } catch (error) {
     console.error("Error clearing notifications:", error);

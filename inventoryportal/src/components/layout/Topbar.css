@@ -49,6 +49,12 @@
   gap: 12px;
 }
 
+.notification-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .topbar-icons .icon-button svg {
   width: 40px !important;
   height: 40px !important;

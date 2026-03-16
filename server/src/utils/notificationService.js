@@ -34,6 +34,7 @@ const createNotification = async (
     const projectKey = projectId?.toString?.() || null;
     const reminderKey = deliveryOptions?.reminderId?.toString?.() || null;
     const allowSelf = Boolean(deliveryOptions?.allowSelf);
+    const sourceKey = String(deliveryOptions?.source || "").trim();
 
     if (!recipientKey || !senderKey) return null;
 
@@ -69,6 +70,7 @@ const createNotification = async (
         project: projectKey,
         title,
         message,
+        source: sourceKey,
         createdAt: { $gte: dedupeStart },
       }).lean();
       if (existing) {
@@ -82,6 +84,7 @@ const createNotification = async (
           type,
           title,
           message,
+          source: sourceKey,
         });
         createdNewNotification = true;
       }
@@ -92,6 +95,7 @@ const createNotification = async (
         path: "/api/notifications",
         method: "POST",
         source: "notification_service",
+        portal: sourceKey,
         notificationId: String(notification._id),
         recipientId: recipientKey,
         type,
