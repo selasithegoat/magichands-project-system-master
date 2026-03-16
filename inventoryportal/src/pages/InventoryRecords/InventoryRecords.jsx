@@ -12,6 +12,7 @@ import {
   WarningIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import Modal from "../../components/ui/Modal";
 import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
@@ -1410,7 +1411,7 @@ const InventoryRecords = () => {
     <section className="inventory-records">
       <header className="records-header">
         <div>
-          <div className="breadcrumb">Nexus Inv / Inventory Records</div>
+          <Breadcrumb pageKey="inventory-records" />
           <h2>Inventory Records</h2>
         </div>
         <div className="records-actions">

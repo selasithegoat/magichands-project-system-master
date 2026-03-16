@@ -8,6 +8,7 @@ import {
   TrashIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import Modal from "../../components/ui/Modal";
 import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
@@ -303,7 +304,7 @@ const Suppliers = () => {
     <section className="suppliers-page">
       <header className="suppliers-header">
         <div>
-          <div className="breadcrumb">Operations / Suppliers</div>
+          <Breadcrumb pageKey="suppliers" />
           <h2>Suppliers</h2>
         </div>
         <div className="suppliers-actions">

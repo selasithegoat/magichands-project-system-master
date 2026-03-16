@@ -8,6 +8,7 @@ import {
   TrashIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
@@ -550,7 +551,7 @@ const PurchaseOrders = () => {
     <section className="purchase-orders-page">
       <header className="purchase-orders-header">
         <div>
-          <div className="breadcrumb">Purchasing / Orders</div>
+          <Breadcrumb pageKey="purchase-orders" />
           <h2>Purchase Orders</h2>
         </div>
         <div className="purchase-orders-actions">

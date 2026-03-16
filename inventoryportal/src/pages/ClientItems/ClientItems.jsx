@@ -9,6 +9,7 @@ import {
   TrashIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
@@ -246,7 +247,7 @@ const ClientItems = () => {
     <section className="client-items-page">
       <header className="client-items-header">
         <div>
-          <div className="breadcrumb">Service Desk / Client Items</div>
+          <Breadcrumb pageKey="client-items" />
           <h2>Client Item Tracking</h2>
           <p>
             Register, monitor, and manage items received from clients for

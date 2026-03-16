@@ -6,6 +6,7 @@ import {
   TrashIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import Modal from "../../components/ui/Modal";
 import {
   fetchInventory,
@@ -208,7 +209,7 @@ const InventoryCategories = () => {
     <section className="inventory-types inventory-categories">
       <header className="types-header">
         <div>
-          <div className="breadcrumb">Inventory / Categories</div>
+          <Breadcrumb pageKey="inventory-types" />
           <h2>Inventory Categories</h2>
           <p>Organize inventory items into registered categories for faster entry.</p>
         </div>

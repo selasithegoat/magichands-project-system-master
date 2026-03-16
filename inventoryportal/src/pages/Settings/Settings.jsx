@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchInventory } from "../../utils/inventoryApi";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import "./Settings.css";
 
 const DEFAULT_SETTINGS = {
@@ -105,7 +106,7 @@ const Settings = () => {
     <section className="settings-page">
     <header className="settings-header">
       <div>
-        <div className="breadcrumb">System / Settings</div>
+        <Breadcrumb pageKey="settings" />
         <h2>Settings</h2>
         <p>Manage organization preferences, security, and portal defaults.</p>
       </div>

@@ -11,6 +11,7 @@ import {
   TrashIcon,
 } from "../../components/icons/Icons";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import { reportCards } from "../../data/reports";
 import {
   fetchInventory,
@@ -664,7 +665,7 @@ const Reports = () => {
     <section className="reports-page">
       <header className="reports-header">
         <div>
-          <div className="breadcrumb">System / Reports</div>
+          <Breadcrumb pageKey="reports" />
           <h2>Analytics &amp; Reports</h2>
         </div>
         <button

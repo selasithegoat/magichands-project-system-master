@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AlertBanner from "../../components/ui/AlertBanner";
 import NotificationItem from "../../components/ui/NotificationItem";
+import Breadcrumb from "../../components/ui/Breadcrumb";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -472,7 +473,7 @@ const Dashboard = () => {
     <>
     <div className="page-header">
       <div>
-        <div className="breadcrumb">System / Dashboard</div>
+        <Breadcrumb pageKey="dashboard" />
         <h2>Inventory Dashboard</h2>
         <p>Real-time snapshots for stock health, usage, and purchasing activity.</p>
       </div>
