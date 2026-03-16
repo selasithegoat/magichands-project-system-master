@@ -131,6 +131,19 @@ const App = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
+    const handleNavigate = (event) => {
+      const page = event?.detail?.page;
+      if (page) {
+        setActivePage(page);
+      }
+    };
+    window.addEventListener("inventory:navigate", handleNavigate);
+    return () =>
+      window.removeEventListener("inventory:navigate", handleNavigate);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
     const trimmed = String(globalSearch || "").trim();
     const timer = setTimeout(() => {
       window.dispatchEvent(
