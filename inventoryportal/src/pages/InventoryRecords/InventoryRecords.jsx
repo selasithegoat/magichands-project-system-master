@@ -43,6 +43,7 @@ const DEFAULT_RECORD_FORM = {
   variations: "",
   colors: "",
   brandGroups: [],
+  price: "",
   value: "",
   status: "In Stock",
   image: "",
@@ -255,6 +256,12 @@ const normalizeVariants = (variants = [], fallbackStatus = "In Stock") =>
             }))
           : [],
         sku: variant.sku || "",
+        price: variant.price || "",
+        priceValue: Number.isFinite(variant.priceValue)
+          ? variant.priceValue
+          : variant.price
+            ? parsePriceValue(variant.price)
+            : null,
         status: resolveVariantStatus(variant.status, fallbackStatus),
         qtyValue: Number.isFinite(variant.qtyValue)
           ? variant.qtyValue
@@ -304,21 +311,60 @@ const getBrandDisplay = (record) => {
   };
 };
 
-const getBrandPriceValues = (brandGroups = []) =>
-  brandGroups
-    .map((group) => {
-      if (Number.isFinite(group?.priceValue)) return group.priceValue;
-      if (group?.price) return parsePriceValue(group.price);
-      return null;
-    })
-    .filter((value) => Number.isFinite(value));
+const getBrandPriceValues = (brandGroups = []) => {
+  const values = [];
+  brandGroups.forEach((group) => {
+    const groupPrice = Number.isFinite(group?.priceValue)
+      ? group.priceValue
+      : group?.price
+        ? parsePriceValue(group.price)
+        : null;
+    if (Number.isFinite(groupPrice)) {
+      values.push(groupPrice);
+    }
+    const variants = Array.isArray(group?.variants) ? group.variants : [];
+    variants.forEach((variant) => {
+      const variantPrice = Number.isFinite(variant?.priceValue)
+        ? variant.priceValue
+        : variant?.price
+          ? parsePriceValue(variant.price)
+          : null;
+      if (Number.isFinite(variantPrice)) {
+        values.push(variantPrice);
+      }
+    });
+  });
+  return values.filter((value) => Number.isFinite(value));
+};
 
-const getBrandPriceRange = (brandGroups = []) => {
-  const values = getBrandPriceValues(brandGroups);
-  if (!values.length) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  return { min, max };
+const getRecordPriceInfo = (record) => {
+  if (!record) return { type: "none" };
+  const brandValues = getBrandPriceValues(record.brandGroups || []);
+  const normalizedValues = brandValues
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Number(value.toFixed(2)));
+  const distinctValues = Array.from(new Set(normalizedValues));
+  if (distinctValues.length > 1) {
+    return {
+      type: "range",
+      min: Math.min(...distinctValues),
+      max: Math.max(...distinctValues),
+    };
+  }
+  const fallbackValue =
+    distinctValues.length === 1 ? distinctValues[0] : null;
+  const recordPriceValue = Number.isFinite(record.priceValue)
+    ? record.priceValue
+    : record.price
+      ? parsePriceValue(record.price)
+      : null;
+  const resolvedValue = Number.isFinite(fallbackValue)
+    ? fallbackValue
+    : recordPriceValue;
+  if (Number.isFinite(resolvedValue)) {
+    return { type: "single", value: resolvedValue };
+  }
+  return { type: "none" };
 };
 
 const getAlternateCurrency = (currency) =>
@@ -358,6 +404,34 @@ const computeBrandGroupValue = (brandGroups = [], fallbackQty) => {
       : group?.price
         ? parsePriceValue(group.price)
         : null;
+    const variants = Array.isArray(group?.variants) ? group.variants : [];
+    if (variants.length) {
+      variants.forEach((variant) => {
+        const variantPrice = Number.isFinite(variant?.priceValue)
+          ? variant.priceValue
+          : variant?.price
+            ? parsePriceValue(variant.price)
+            : null;
+        const resolvedPrice = Number.isFinite(variantPrice)
+          ? variantPrice
+          : Number.isFinite(priceValue)
+            ? priceValue
+            : null;
+        const variantQty = sumVariantQty([variant]);
+        const resolvedQty =
+          Number.isFinite(variantQty)
+            ? variantQty
+            : variants.length === 1
+              ? fallbackQty
+              : null;
+        if (!Number.isFinite(resolvedPrice) || !Number.isFinite(resolvedQty)) {
+          return;
+        }
+        total += resolvedPrice * resolvedQty;
+        hasValue = true;
+      });
+      return;
+    }
     if (!Number.isFinite(priceValue)) return;
     const qty = getBrandGroupQty(group, fallbackQty, brandGroups.length);
     if (!Number.isFinite(qty)) return;
@@ -391,7 +465,10 @@ const buildDetailBrandGroups = (record) => {
         : group.price
           ? parsePriceValue(group.price)
           : null,
-      variants: Array.isArray(group.variants) ? group.variants : [],
+      variants: normalizeVariants(
+        Array.isArray(group.variants) ? group.variants : [],
+        record.status || "In Stock",
+      ),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((group) => ({
@@ -419,10 +496,15 @@ const getQtyPercent = (qtyValue, maxQty, qtyMeta) => {
   return 0;
 };
 
-const getQtyTone = (percent) => {
+const getQtyTone = (percent, lowThreshold = 40) => {
+  const resolvedLow =
+    Number.isFinite(lowThreshold) && lowThreshold >= 0
+      ? lowThreshold
+      : 40;
+  const criticalThreshold = Math.min(15, resolvedLow);
   if (percent >= 100) return "full";
-  if (percent <= 15) return "critical";
-  if (percent <= 40) return "low";
+  if (percent <= criticalThreshold) return "critical";
+  if (percent <= resolvedLow) return "low";
   return "good";
 };
 
@@ -431,6 +513,19 @@ const formatStatusTone = (value) =>
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "-");
+
+const normalizeCategoryOptions = (payload) => {
+  const list = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  const names = list
+    .map((entry) => (typeof entry === "string" ? entry : entry?.name))
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+};
 
 const InventoryRecords = () => {
   const [records, setRecords] = useState([]);
@@ -463,6 +558,7 @@ const InventoryRecords = () => {
   );
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [warehouseList, setWarehouseList] = useState([]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(18);
   const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
   const selectAllRef = useRef(null);
   const { currency, rate } = useInventoryCurrency();
@@ -628,11 +724,7 @@ const InventoryRecords = () => {
         const payload = await fetchInventory(
           "/api/inventory/categories/options",
         );
-        const categories = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload)
-            ? payload
-            : [];
+        const categories = normalizeCategoryOptions(payload);
         if (!isMounted) return;
         setCategoryOptions(categories);
       } catch {
@@ -646,6 +738,30 @@ const InventoryRecords = () => {
       isMounted = false;
     };
   }, [refreshKey]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSettings = async () => {
+      try {
+        const settings = await fetchInventory("/api/inventory/settings");
+        if (!isMounted) return;
+        const parsed = Number(settings?.lowStockThreshold);
+        const threshold = Number.isFinite(parsed)
+          ? Math.min(100, Math.max(0, parsed))
+          : 18;
+        setLowStockThreshold(threshold);
+      } catch {
+        if (!isMounted) return;
+        setLowStockThreshold(18);
+      }
+    };
+
+    loadSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -844,12 +960,37 @@ const InventoryRecords = () => {
     derivedQtyValue,
     parseQtyValue(formData.maxQty),
   );
-  const derivedValueNumeric = computeBrandGroupValue(
-    formData.brandGroups,
-    derivedQtyValue,
-  );
+  const hasBrandGroupData = (formData.brandGroups || []).some((group) => {
+    if (String(group?.name || "").trim()) return true;
+    const variants = Array.isArray(group?.variants) ? group.variants : [];
+    return variants.some((variant) => {
+      const variantQty = parseQtyValue(variant?.qtyValue);
+      const colors = Array.isArray(variant?.colors) ? variant.colors : [];
+      const hasColorEntries = colors.some((color) => {
+        const colorQty = parseQtyValue(color?.qtyValue);
+        return String(color?.name || "").trim() || Number.isFinite(colorQty);
+      });
+      return (
+        String(variant?.name || "").trim() ||
+        String(variant?.sku || "").trim() ||
+        String(variant?.color || "").trim() ||
+        String(variant?.price || "").trim() ||
+        Number.isFinite(variantQty) ||
+        hasColorEntries
+      );
+    });
+  });
+  const overallPriceValue = parsePriceValue(formData.price);
+  const derivedValueNumeric = hasBrandGroupData
+    ? computeBrandGroupValue(formData.brandGroups, derivedQtyValue)
+    : Number.isFinite(overallPriceValue) && Number.isFinite(derivedQtyValue)
+      ? overallPriceValue * derivedQtyValue
+      : null;
   const derivedValueLabel = Number.isFinite(derivedValueNumeric)
     ? derivedValueNumeric.toFixed(2)
+    : "";
+  const overallPriceTooltip = Number.isFinite(overallPriceValue)
+    ? formatCurrencyPair(overallPriceValue, currency, rate).alternateValue
     : "";
 
   const recordWarehouses = records
@@ -904,29 +1045,34 @@ const InventoryRecords = () => {
     (Number.isFinite(detailVariantTotal)
       ? formatQtyLabel(detailVariantTotal)
       : "—");
-  const detailPriceRange = detailsRecord
-    ? getBrandPriceRange(detailsRecord.brandGroups || [])
-    : null;
-  const detailPriceLabel = detailPriceRange
-    ? formatCurrencyRange(
-        detailPriceRange.min,
-        detailPriceRange.max,
-        currency,
-        rate,
-      )
-    : formatCurrencyValue(detailsRecord?.price, currency, rate);
+  const detailPriceInfo = detailsRecord
+    ? getRecordPriceInfo(detailsRecord)
+    : { type: "none" };
+  const detailPriceLabel =
+    detailPriceInfo.type === "range"
+      ? formatCurrencyRange(
+          detailPriceInfo.min,
+          detailPriceInfo.max,
+          currency,
+          rate,
+        )
+      : detailPriceInfo.type === "single"
+        ? formatCurrencyValue(detailPriceInfo.value, currency, rate)
+        : "";
   const detailPriceTitle =
-    detailPriceRange && detailPriceRange.min !== detailPriceRange.max
-      ? "Price Range"
-      : "Price";
-  const detailPriceTooltip = detailPriceRange
-    ? formatCurrencyRangeTooltip(
-        detailPriceRange.min,
-        detailPriceRange.max,
-        currency,
-        rate,
-      )
-    : formatCurrencyPair(detailsRecord?.price, currency, rate).alternateValue;
+    detailPriceInfo.type === "range" ? "Price Range" : "Price";
+  const detailPriceTooltip =
+    detailPriceInfo.type === "range"
+      ? formatCurrencyRangeTooltip(
+          detailPriceInfo.min,
+          detailPriceInfo.max,
+          currency,
+          rate,
+        )
+      : detailPriceInfo.type === "single"
+        ? formatCurrencyPair(detailPriceInfo.value, currency, rate)
+            .alternateValue
+        : "";
   const detailValueTooltip = formatCurrencyPair(
     detailsRecord?.value,
     currency,
@@ -934,13 +1080,18 @@ const InventoryRecords = () => {
   ).alternateValue;
 
   const normalizeStatus = (value) => String(value || "").toLowerCase();
+  const resolvedLowThreshold = Number.isFinite(lowStockThreshold)
+    ? lowStockThreshold
+    : 40;
+  const criticalThreshold = Math.min(15, resolvedLowThreshold);
+
   const resolveStockLevel = (record) => {
     const status = normalizeStatus(record.status);
     if (status) return status;
     const percent = getQtyPercent(record.qtyValue, record.maxQty, record.qtyMeta);
     if (percent >= 100) return "oversupply";
-    if (percent <= 15) return "critical";
-    if (percent <= 40) return "low stock";
+    if (percent <= criticalThreshold) return "critical";
+    if (percent <= resolvedLowThreshold) return "low stock";
     return "in stock";
   };
 
@@ -1067,6 +1218,7 @@ const InventoryRecords = () => {
       variations: record.variations || "",
       colors: record.colors || "",
       brandGroups: buildEditableBrandGroups(record),
+      price: record.price || "",
       value: record.value || "",
       status: record.status || "In Stock",
       image: record.image || "",
@@ -1163,6 +1315,7 @@ const InventoryRecords = () => {
           name: "",
           colors: [],
           sku: "",
+          price: "",
           status: prev.status || "In Stock",
           qtyValue: "",
         },
@@ -1308,6 +1461,7 @@ const InventoryRecords = () => {
                 color: colorsPayload[0]?.name || "",
                 colors: colorsPayload,
                 sku: variant.sku?.trim() || "",
+                price: String(variant.price || "").trim(),
                 status: variant.status?.trim() || "",
                 qtyValue,
               };
@@ -1318,6 +1472,7 @@ const InventoryRecords = () => {
                 variant.color ||
                 (variant.colors || []).length ||
                 variant.sku ||
+                variant.price ||
                 Number.isFinite(variant.qtyValue),
             );
           return {
@@ -1339,6 +1494,7 @@ const InventoryRecords = () => {
         variations: formData.variations,
         colors: formData.colors,
         brandGroups: brandGroupsPayload,
+        price: formData.price,
         value: derivedValueLabel,
         status: formData.status,
         image: formData.image,
@@ -1715,29 +1871,35 @@ const InventoryRecords = () => {
                   Number.isFinite(record.qtyValue) &&
                   Number.isFinite(record.maxQty) &&
                   record.maxQty > 0;
-                const qtyTone = getQtyTone(qtyPercent);
+                const qtyTone = getQtyTone(qtyPercent, resolvedLowThreshold);
                 const qtyMetaText =
                   record.qtyMeta ||
                   (hasCapacity ? `${qtyPercent}%` : "—");
                 const brandDisplay = getBrandDisplay(record);
-                const priceRange = getBrandPriceRange(record.brandGroups || []);
-                const priceLabel = priceRange
-                  ? formatCurrencyRange(
-                      priceRange.min,
-                      priceRange.max,
-                      currency,
-                      rate,
-                    )
-                  : formatCurrencyValue(record.price, currency, rate);
-                const priceTooltip = priceRange
-                  ? formatCurrencyRangeTooltip(
-                      priceRange.min,
-                      priceRange.max,
-                      currency,
-                      rate,
-                    )
-                  : formatCurrencyPair(record.price, currency, rate)
-                      .alternateValue;
+                const priceInfo = getRecordPriceInfo(record);
+                const priceLabel =
+                  priceInfo.type === "range"
+                    ? formatCurrencyRange(
+                        priceInfo.min,
+                        priceInfo.max,
+                        currency,
+                        rate,
+                      )
+                    : priceInfo.type === "single"
+                      ? formatCurrencyValue(priceInfo.value, currency, rate)
+                      : "";
+                const priceTooltip =
+                  priceInfo.type === "range"
+                    ? formatCurrencyRangeTooltip(
+                        priceInfo.min,
+                        priceInfo.max,
+                        currency,
+                        rate,
+                      )
+                    : priceInfo.type === "single"
+                      ? formatCurrencyPair(priceInfo.value, currency, rate)
+                          .alternateValue
+                      : "";
 
                 return (
                   <div
@@ -2040,6 +2202,21 @@ const InventoryRecords = () => {
               <span>Quantity Meta (Auto)</span>
               <input type="text" value={derivedQtyMeta} readOnly />
             </label>
+            <label className="modal-field">
+              <span>Overall Price ({currencyLabel})</span>
+              <div
+                className="tooltip-anchor tooltip-field"
+                data-tooltip={overallPriceTooltip || undefined}
+              >
+                <input
+                  type="text"
+                  value={formData.price}
+                  onChange={updateField("price")}
+                  placeholder={currencyPlaceholder}
+                />
+              </div>
+              <span className="muted">Optional if using brand/variant prices.</span>
+            </label>
             <div className="brand-group-builder">
               <div className="brand-group-header">
                 <div>
@@ -2151,6 +2328,16 @@ const InventoryRecords = () => {
                                       </option>
                                     ))}
                                   </select>
+                                  <input
+                                    type="text"
+                                    placeholder={`Price (${currencyLabel})`}
+                                    value={variant.price || ""}
+                                    onChange={updateBrandVariant(
+                                      groupIndex,
+                                      variantIndex,
+                                      "price",
+                                    )}
+                                  />
                                   <input
                                     type="number"
                                     min="0"
@@ -2466,6 +2653,7 @@ const InventoryRecords = () => {
                               <span>Colors/Kind</span>
                               <span>SKU</span>
                               <span>Status</span>
+                              <span>Price</span>
                               <span>Qty</span>
                             </div>
                             {group.variants.map((variant, variantIndex) => (
@@ -2473,30 +2661,77 @@ const InventoryRecords = () => {
                                 className="brand-variant-row"
                                 key={`${groupIndex}-${variantIndex}`}
                               >
-                                <span>{variant.name || "-"}</span>
-                                <span>{formatVariantColors(variant)}</span>
-                                <span className="mono">
-                                  {variant.sku || "-"}
-                                </span>
-                                <span
-                                  className={`status-pill ${formatStatusTone(
-                                    resolveVariantStatus(
-                                      variant.status,
-                                      detailsRecord.status,
-                                    ),
-                                  )}`}
-                                >
-                                  {resolveVariantStatus(
-                                    variant.status,
-                                    detailsRecord.status,
-                                  )}
-                                </span>
-                                <span>
-                                  {variant.qtyLabel ||
-                                    (Number.isFinite(getVariantQtyValue(variant))
-                                      ? formatQtyLabel(getVariantQtyValue(variant))
-                                      : "-")}
-                                </span>
+                                {(() => {
+                                  const variantPriceValue = Number.isFinite(
+                                    variant.priceValue,
+                                  )
+                                    ? variant.priceValue
+                                    : variant.price
+                                      ? parsePriceValue(variant.price)
+                                      : null;
+                                  const resolvedVariantPrice =
+                                    Number.isFinite(variantPriceValue)
+                                      ? variantPriceValue
+                                      : hasGroupPrice
+                                        ? parsePriceValue(groupPriceValue)
+                                        : null;
+                                  const priceLabel = Number.isFinite(
+                                    resolvedVariantPrice,
+                                  )
+                                    ? formatCurrencyValue(
+                                        resolvedVariantPrice,
+                                        currency,
+                                        rate,
+                                      )
+                                    : "-";
+                                  const priceTooltip = Number.isFinite(
+                                    resolvedVariantPrice,
+                                  )
+                                    ? formatCurrencyPair(
+                                        resolvedVariantPrice,
+                                        currency,
+                                        rate,
+                                      ).alternateValue
+                                    : "";
+                                  return (
+                                    <>
+                                      <span>{variant.name || "-"}</span>
+                                      <span>{formatVariantColors(variant)}</span>
+                                      <span className="mono">
+                                        {variant.sku || "-"}
+                                      </span>
+                                      <span
+                                        className={`status-pill ${formatStatusTone(
+                                          resolveVariantStatus(
+                                            variant.status,
+                                            detailsRecord.status,
+                                          ),
+                                        )}`}
+                                      >
+                                        {resolveVariantStatus(
+                                          variant.status,
+                                          detailsRecord.status,
+                                        )}
+                                      </span>
+                                      <span
+                                        className="tooltip-anchor"
+                                        data-tooltip={priceTooltip || undefined}
+                                      >
+                                        {priceLabel}
+                                      </span>
+                                      <span>
+                                        {variant.qtyLabel ||
+                                          (Number.isFinite(
+                                            getVariantQtyValue(variant),
+                                          )
+                                            ? formatQtyLabel(
+                                                getVariantQtyValue(variant),
+                                              )
+                                            : "-")}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             ))}
                           </div>

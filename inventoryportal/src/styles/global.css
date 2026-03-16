@@ -282,7 +282,7 @@ select {
 }
 
 .modal-card--side {
-  width: min(460px, 96vw);
+  width: min(650px, 96vw);
   height: 100%;
   border-radius: 0;
   padding: 0;

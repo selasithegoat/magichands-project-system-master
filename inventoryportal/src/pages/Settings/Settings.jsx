@@ -204,7 +204,7 @@ const Settings = () => {
       const payload = {
         ...settings,
         lowStockThreshold: Number.isFinite(Number(settings.lowStockThreshold))
-          ? Number(settings.lowStockThreshold)
+          ? Math.min(100, Math.max(0, Number(settings.lowStockThreshold)))
           : settings.lowStockThreshold,
         currencyRate: Number.isFinite(Number(settings.currencyRate))
           ? Number(settings.currencyRate)
@@ -633,9 +633,12 @@ const Settings = () => {
               />
             </label>
             <label className="settings-field">
-              <span>Low Stock Threshold</span>
+              <span>Low Stock Threshold (%)</span>
               <input
                 type="number"
+                min="0"
+                max="100"
+                step="1"
                 value={settings.lowStockThreshold}
                 onChange={updateField("lowStockThreshold")}
               />

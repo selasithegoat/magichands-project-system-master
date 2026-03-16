@@ -481,6 +481,7 @@ const Suppliers = () => {
         secondaryText="Cancel"
         onConfirm={handleSave}
         onClose={closeModal}
+        variant="side"
       >
         <form className="modal-form">
           <div className="modal-grid">

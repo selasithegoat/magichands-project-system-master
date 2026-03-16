@@ -72,6 +72,19 @@ const formatTime = (value) => {
   });
 };
 
+const normalizeCategoryOptions = (payload) => {
+  const list = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  const names = list
+    .map((entry) => (typeof entry === "string" ? entry : entry?.name))
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+};
+
 
 const PurchaseOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -210,11 +223,7 @@ const PurchaseOrders = () => {
     const loadCategories = async () => {
       try {
         const payload = await fetchInventory("/api/inventory/categories/options");
-        const categories = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload)
-            ? payload
-            : [];
+        const categories = normalizeCategoryOptions(payload);
         if (!isMounted) return;
         setCategoryOptions(categories);
       } catch {
@@ -830,6 +839,7 @@ const PurchaseOrders = () => {
         secondaryText="Cancel"
         onConfirm={handleSave}
         onClose={closeModal}
+        variant="side"
       >
         <form className="modal-form">
           <div className="modal-grid">

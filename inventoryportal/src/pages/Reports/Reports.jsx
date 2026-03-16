@@ -146,6 +146,16 @@ const getRecordPrice = (record) => {
   return Number.isFinite(direct) ? direct : null;
 };
 
+const getRecordPercent = (record) => {
+  const qty = getRecordQty(record);
+  const maxQty = toNumber(record?.maxQty);
+  if (Number.isFinite(qty) && Number.isFinite(maxQty) && maxQty > 0) {
+    return (qty / maxQty) * 100;
+  }
+  const meta = toNumber(record?.qtyMeta);
+  return Number.isFinite(meta) ? meta : null;
+};
+
 const buildInventorySummaryRows = (records, currency, rate) => {
   const grouped = new Map();
   records.forEach((record) => {
@@ -172,18 +182,24 @@ const buildInventorySummaryRows = (records, currency, rate) => {
 const buildLowStockRows = (records, threshold) =>
   records
     .filter((record) => {
-      const qty = getRecordQty(record);
-      return Number.isFinite(qty) && qty <= threshold;
+      const percent = getRecordPercent(record);
+      return Number.isFinite(percent) && percent <= threshold;
     })
-    .map((record) => ({
-      Item: record.item || "",
-      SKU: record.sku || "",
-      Category: record.category || "",
-      Warehouse: record.warehouse || record.subtext || "",
-      Quantity: record.qtyLabel || record.qtyValue || "",
-      Threshold: threshold,
-      Status: record.status || "",
-    }));
+    .map((record) => {
+      const percent = getRecordPercent(record);
+      return {
+        Item: record.item || "",
+        SKU: record.sku || "",
+        Category: record.category || "",
+        Warehouse: record.warehouse || record.subtext || "",
+        Quantity: record.qtyLabel || record.qtyValue || "",
+        "Capacity %": Number.isFinite(percent)
+          ? `${Math.round(percent * 10) / 10}%`
+          : "",
+        Threshold: `${threshold}%`,
+        Status: record.status || "",
+      };
+    });
 
 const buildMovementRows = (transactions) =>
   transactions.map((tx) => ({
@@ -417,7 +433,10 @@ const Reports = () => {
         fetchAllPages("/api/inventory/inventory-records"),
         fetchInventory("/api/inventory/settings").catch(() => ({})),
       ]);
-      const threshold = Number(settings?.lowStockThreshold ?? 0);
+      const thresholdRaw = Number(settings?.lowStockThreshold ?? 0);
+      const threshold = Number.isFinite(thresholdRaw)
+        ? Math.min(100, Math.max(0, thresholdRaw))
+        : 0;
       const rows = buildLowStockRows(
         records,
         Number.isFinite(threshold) ? threshold : 0,

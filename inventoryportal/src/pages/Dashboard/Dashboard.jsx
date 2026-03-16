@@ -83,6 +83,16 @@ const computeRecordQty = (record) => {
   return sumVariantQty(record?.variants || []);
 };
 
+const computeRecordPercent = (record) => {
+  const qtyValue = computeRecordQty(record);
+  const maxQty = parseNumericValue(record?.maxQty);
+  if (Number.isFinite(qtyValue) && Number.isFinite(maxQty) && maxQty > 0) {
+    return (qtyValue / maxQty) * 100;
+  }
+  const meta = parseNumericValue(record?.qtyMeta);
+  return Number.isFinite(meta) ? meta : null;
+};
+
 const computeRecordValue = (record) => {
   const directValue = parseNumericValue(record?.valueValue);
   if (directValue !== null) return directValue;
@@ -194,15 +204,16 @@ const Dashboard = () => {
         fetchAllPages("/api/inventory/stock-transactions", { range: "30" }),
       ]);
 
-      const threshold = Number.isFinite(settings?.lowStockThreshold)
-        ? settings.lowStockThreshold
+      const thresholdRaw = Number(settings?.lowStockThreshold);
+      const threshold = Number.isFinite(thresholdRaw)
+        ? Math.min(100, Math.max(0, thresholdRaw))
         : 0;
       const unitLabel = settings?.unitOfMeasure || "Units";
 
       const totalItems = records.length;
       const lowStockCount = records.filter((record) => {
-        const qtyValue = computeRecordQty(record);
-        return Number.isFinite(qtyValue) && qtyValue <= threshold;
+        const percent = computeRecordPercent(record);
+        return Number.isFinite(percent) && percent <= threshold;
       }).length;
       const inventoryValue = records.reduce((sum, record) => {
         const value = computeRecordValue(record);
@@ -441,7 +452,7 @@ const Dashboard = () => {
   const alertDescription = loading
     ? "Loading low stock summary..."
     : summary.lowStockCount
-      ? `${summary.lowStockCount} items are at or below ${summary.lowStockThreshold} ${summary.unitLabel.toLowerCase()}.`
+      ? `${summary.lowStockCount} items are at or below ${summary.lowStockThreshold}% of capacity.`
       : "All stock levels are currently healthy.";
 
   const alertVariant = summary.lowStockCount ? "warning" : "success";

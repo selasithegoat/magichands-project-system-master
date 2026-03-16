@@ -158,6 +158,15 @@ export const buildInventoryRecordExportRows = (
       }
 
       variants.forEach((variant) => {
+        const variantPriceValue =
+          parseNumber(variant?.priceValue) ??
+          parseCurrencyValue(variant?.price);
+        const rowUnitValue = Number.isFinite(variantPriceValue)
+          ? variantPriceValue
+          : unitValue;
+        const rowPriceLabel = Number.isFinite(rowUnitValue)
+          ? formatCurrencyValue(rowUnitValue, currency, rate)
+          : "";
         const variantName =
           variant?.name || variant?.variantName || variant?.variation || "";
         const variantSku = variant?.sku || "";
@@ -192,8 +201,8 @@ export const buildInventoryRecordExportRows = (
                 "Colors/Kind": colorName,
                 Quantity: formatQty(rowQty),
                 "Total Quantity": formatQty(recordQty),
-                Price: priceLabel,
-                Value: buildRowValue(rowQty, unitValue, currency, rate),
+                Price: rowPriceLabel || priceLabel,
+                Value: buildRowValue(rowQty, rowUnitValue, currency, rate),
               }),
             );
           });
@@ -211,8 +220,8 @@ export const buildInventoryRecordExportRows = (
             "Colors/Kind": "",
             Quantity: formatQty(rowQty),
             "Total Quantity": formatQty(recordQty),
-            Price: priceLabel,
-            Value: buildRowValue(rowQty, unitValue, currency, rate),
+            Price: rowPriceLabel || priceLabel,
+            Value: buildRowValue(rowQty, rowUnitValue, currency, rate),
           }),
         );
       });

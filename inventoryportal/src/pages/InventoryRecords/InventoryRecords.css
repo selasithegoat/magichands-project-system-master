@@ -967,7 +967,7 @@
 
 .variant-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 0.9fr 0.7fr 40px;
+  grid-template-columns: 1.2fr 1fr 0.9fr 0.9fr 0.7fr 40px;
   gap: 8px;
   align-items: center;
 }
@@ -1148,7 +1148,7 @@
 
 .brand-variant-row {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr 1fr 0.8fr 0.8fr;
+  grid-template-columns: 1.2fr 0.9fr 1fr 0.8fr 0.8fr 0.8fr;
   gap: 8px;
   font-size: 12px;
   align-items: center;

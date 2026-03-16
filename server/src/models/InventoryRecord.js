@@ -42,6 +42,15 @@ const InventoryVariantSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    price: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    priceValue: {
+      type: Number,
+      default: null,
+    },
     status: {
       type: String,
       trim: true,

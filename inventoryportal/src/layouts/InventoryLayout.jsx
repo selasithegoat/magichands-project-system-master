@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 import ToastStack from "../components/ui/ToastStack";
 import "./InventoryLayout.css";
 
@@ -23,6 +24,14 @@ const InventoryLayout = ({
   children,
 }) => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+
+  const handleLogoutRequest = () => setIsLogoutOpen(true);
+  const handleLogoutClose = () => setIsLogoutOpen(false);
+  const handleLogoutConfirm = () => {
+    setIsLogoutOpen(false);
+    onLogout?.();
+  };
 
   useEffect(() => {
     if (!isMobileNavOpen) return undefined;
@@ -52,7 +61,7 @@ const InventoryLayout = ({
       />
       <Sidebar
         navItems={navItems}
-        onLogout={onLogout}
+        onLogout={handleLogoutRequest}
         activeKey={activeKey}
         onNavigate={onNavigate}
         isMobileOpen={isMobileNavOpen}
@@ -79,6 +88,16 @@ const InventoryLayout = ({
         {children}
         <ToastStack />
       </main>
+      <ConfirmDialog
+        isOpen={isLogoutOpen}
+        title="Sign out"
+        message="Are you sure you want to sign out?"
+        confirmText="Sign out"
+        cancelText="Cancel"
+        onConfirm={handleLogoutConfirm}
+        onClose={handleLogoutClose}
+        variant="center"
+      />
     </div>
   );
 };

@@ -57,6 +57,7 @@ const InventorySettingsSchema = new mongoose.Schema(
     lowStockThreshold: {
       type: Number,
       min: 0,
+      max: 100,
       default: 18,
     },
     unitOfMeasure: {

@@ -110,16 +110,43 @@ const formatQtyForMessage = (value, unitLabel) => {
   return `${formatted} ${unitLabel}`;
 };
 
-const shouldNotifyLowStock = (qtyValue, previousQtyValue, settings) => {
+const computeQtyPercent = (qtyValue, maxQty, qtyMeta) => {
+  if (Number.isFinite(qtyValue) && Number.isFinite(maxQty) && maxQty > 0) {
+    return (qtyValue / maxQty) * 100;
+  }
+  const parsedMeta = parsePercentValue(qtyMeta);
+  return Number.isFinite(parsedMeta) ? parsedMeta : null;
+};
+
+const formatPercentLabel = (value) => {
+  if (!Number.isFinite(value)) return "unknown";
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded}%`;
+};
+
+const shouldNotifyLowStock = (record, previousQtyValue, settings) => {
   const notifyLowStock = settings?.notifyLowStock !== false;
-  if (!notifyLowStock || !Number.isFinite(qtyValue)) return false;
-  const threshold = Number.isFinite(settings?.lowStockThreshold)
-    ? settings.lowStockThreshold
-    : 18;
-  const isLow = qtyValue <= threshold;
+  if (!notifyLowStock) return false;
+  const thresholdRaw = parsePercentValue(settings?.lowStockThreshold);
+  const threshold = clampPercentValue(
+    Number.isFinite(thresholdRaw) ? thresholdRaw : 18,
+  );
+  const percent = computeQtyPercent(
+    record?.qtyValue,
+    record?.maxQty,
+    record?.qtyMeta,
+  );
+  if (!Number.isFinite(percent)) return false;
+  const isLow = percent <= threshold;
   if (!isLow) return false;
   if (!Number.isFinite(previousQtyValue)) return true;
-  return previousQtyValue > threshold;
+  const previousPercent = computeQtyPercent(
+    previousQtyValue,
+    record?.maxQty,
+    record?.qtyMeta,
+  );
+  if (!Number.isFinite(previousPercent)) return true;
+  return previousPercent > threshold;
 };
 
 const parseStringValue = (value) => String(value ?? "").trim();
@@ -132,6 +159,17 @@ const formatOpenPOStatusLabel = (status) => {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+};
+
+const parsePercentValue = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number.parseFloat(String(value).replace(/[^0-9.]/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const clampPercentValue = (value) => {
+  if (!Number.isFinite(value)) return null;
+  return Math.min(100, Math.max(0, value));
 };
 
 const parseListParam = (value) => {
@@ -248,6 +286,9 @@ const parseVariants = (value, fallbackStatus = "") => {
           : parseVariantQuantity(variant?.qtyValue);
       const status =
         parseStringValue(variant?.status) || parseStringValue(fallbackStatus);
+      const priceValue = Number.isFinite(variant?.priceValue)
+        ? variant.priceValue
+        : parseCurrencyNumber(variant?.price);
       return {
         name: parseStringValue(
           variant?.name || variant?.variantName || variant?.variation,
@@ -255,6 +296,8 @@ const parseVariants = (value, fallbackStatus = "") => {
         color: parseStringValue(variant?.color) || colors[0]?.name || "",
         colors,
         sku: parseStringValue(variant?.sku),
+        price: parseStringValue(variant?.price),
+        priceValue,
         status,
         qtyValue,
         qtyLabel: formatVariantQtyLabel(qtyValue),
@@ -302,6 +345,35 @@ const computeBrandGroupTotals = (groups, fallbackQty) => {
       : parseCurrencyNumber(group?.price);
     if (Number.isFinite(priceValue)) {
       priceValues.push(priceValue);
+    }
+
+    const variants = Array.isArray(group?.variants) ? group.variants : [];
+    if (variants.length) {
+      variants.forEach((variant) => {
+        const variantPriceValue = Number.isFinite(variant?.priceValue)
+          ? variant.priceValue
+          : parseCurrencyNumber(variant?.price);
+        if (Number.isFinite(variantPriceValue)) {
+          priceValues.push(variantPriceValue);
+        }
+        const resolvedPrice = Number.isFinite(variantPriceValue)
+          ? variantPriceValue
+          : Number.isFinite(priceValue)
+            ? priceValue
+            : null;
+        const variantQty = sumVariantQty([variant]);
+        const resolvedQty =
+          Number.isFinite(variantQty)
+            ? variantQty
+            : variants.length === 1
+              ? fallbackQty
+              : null;
+        if (Number.isFinite(resolvedPrice) && Number.isFinite(resolvedQty)) {
+          totalValue += resolvedPrice * resolvedQty;
+          hasValue = true;
+        }
+      });
+      return;
     }
 
     const groupQty = sumVariantQty(group?.variants || []);
@@ -1675,15 +1747,18 @@ const createInventoryRecord = async (req, res) => {
     });
 
     const settings = await getInventorySettingsSnapshot();
-    if (shouldNotifyLowStock(record.qtyValue, null, settings)) {
-      const unitLabel = parseStringValue(settings?.unitOfMeasure) || "Units";
+    if (shouldNotifyLowStock(record, null, settings)) {
+      const percent = computeQtyPercent(
+        record.qtyValue,
+        record.maxQty,
+        record.qtyMeta,
+      );
       await notifyInventoryUsersWithActor(req.user, {
         type: "SYSTEM",
         title: "Low stock alert",
-        message: `${item} is low (${formatQtyForMessage(
-          record.qtyValue,
-          unitLabel,
-        )}).`,
+        message: `${item} is low (${formatPercentLabel(
+          percent,
+        )} of capacity).`,
       });
     }
 
@@ -1861,15 +1936,18 @@ const updateInventoryRecord = async (req, res) => {
 
 
     const settings = await getInventorySettingsSnapshot();
-    if (shouldNotifyLowStock(record.qtyValue, previousQtyValue, settings)) {
-      const unitLabel = parseStringValue(settings?.unitOfMeasure) || "Units";
+    if (shouldNotifyLowStock(record, previousQtyValue, settings)) {
+      const percent = computeQtyPercent(
+        record.qtyValue,
+        record.maxQty,
+        record.qtyMeta,
+      );
       await notifyInventoryUsersWithActor(req.user, {
         type: "SYSTEM",
         title: "Low stock alert",
-        message: `${record.item} is low (${formatQtyForMessage(
-          record.qtyValue,
-          unitLabel,
-        )}).`,
+        message: `${record.item} is low (${formatPercentLabel(
+          percent,
+        )} of capacity).`,
       });
     }
 
@@ -2308,7 +2386,9 @@ const updateInventorySettings = async (req, res) => {
           settings[field] = parseBooleanValue(req.body[field], settings[field]);
         } else if (field === "lowStockThreshold") {
           const parsed = Number(req.body[field]);
-          settings[field] = Number.isFinite(parsed) ? parsed : settings[field];
+          settings[field] = Number.isFinite(parsed)
+            ? Math.min(100, Math.max(0, parsed))
+            : settings[field];
         } else if (field === "currencyRate") {
           const parsed = Number(req.body[field]);
           settings[field] =
