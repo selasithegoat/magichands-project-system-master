@@ -38,6 +38,7 @@ const STATUS_OPTIONS = [
   "Awaiting Parts",
   "Completed",
 ];
+const STATUS_TABS = ["All", ...STATUS_OPTIONS];
 
 const ClientItems = () => {
   const [items, setItems] = useState([]);
@@ -49,6 +50,13 @@ const ClientItems = () => {
     totalPages: 0,
   });
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeStatus, setActiveStatus] = useState("All");
+  const [statusCounts, setStatusCounts] = useState(() =>
+    STATUS_TABS.reduce((acc, status) => {
+      acc[status] = 0;
+      return acc;
+    }, {}),
+  );
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -83,6 +91,9 @@ const ClientItems = () => {
         });
         if (searchTerm.trim()) {
           params.set("search", searchTerm.trim());
+        }
+        if (activeStatus !== "All") {
+          params.set("status", activeStatus);
         }
 
         const payload = await fetchInventory(
@@ -128,11 +139,51 @@ const ClientItems = () => {
     return () => {
       isMounted = false;
     };
-  }, [page, refreshKey, searchTerm]);
+  }, [page, refreshKey, searchTerm, activeStatus]);
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, activeStatus]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCounts = async () => {
+      try {
+        const baseParams = new URLSearchParams({
+          page: "1",
+          limit: "1",
+        });
+        if (searchTerm.trim()) {
+          baseParams.set("search", searchTerm.trim());
+        }
+
+        const requests = STATUS_TABS.map((status) => {
+          const params = new URLSearchParams(baseParams);
+          if (status !== "All") {
+            params.set("status", status);
+          }
+          return fetchInventory(`/api/inventory/client-items?${params.toString()}`);
+        });
+
+        const responses = await Promise.all(requests);
+        if (!isMounted) return;
+        const counts = responses.reduce((acc, payload, index) => {
+          const parsed = parseListResponse(payload);
+          acc[STATUS_TABS[index]] = parsed.total || 0;
+          return acc;
+        }, {});
+        setStatusCounts(counts);
+      } catch (err) {
+        if (!isMounted) return;
+      }
+    };
+
+    loadCounts();
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshKey, searchTerm]);
 
   const total = meta.total || items.length;
   const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
@@ -145,6 +196,11 @@ const ClientItems = () => {
     if (nextPage < 1) return;
     if (meta.totalPages && nextPage > meta.totalPages) return;
     setPage(nextPage);
+  };
+
+  const handleTabChange = (status) => {
+    setActiveStatus(status);
+    setPage(1);
   };
 
   const openCreateModal = () => {
@@ -291,24 +347,16 @@ const ClientItems = () => {
           </button>
         </div>
         <div className="client-items-tabs">
-          <button type="button" className="client-tab active">
-            All Items
-          </button>
-          <button type="button" className="client-tab">
-            Received (6)
-          </button>
-          <button type="button" className="client-tab">
-            Inspection (4)
-          </button>
-          <button type="button" className="client-tab">
-            In Progress (8)
-          </button>
-          <button type="button" className="client-tab">
-            Awaiting Parts (3)
-          </button>
-          <button type="button" className="client-tab">
-            Completed (3)
-          </button>
+          {STATUS_TABS.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={`client-tab ${activeStatus === status ? "active" : ""}`}
+              onClick={() => handleTabChange(status)}
+            >
+              {status === "All" ? "All Items" : status} ({statusCounts[status] || 0})
+            </button>
+          ))}
         </div>
       </div>
 
