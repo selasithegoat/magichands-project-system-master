@@ -18,6 +18,23 @@ import "./Suppliers.css";
 const getStatusClass = (status) =>
   `po-pill ${String(status || "").toLowerCase()}`;
 
+const formatOpenPOStatusLabel = (status) => {
+  const raw = String(status || "").trim();
+  if (!raw) return "";
+  return raw
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+const resolveOpenPOLabel = (openPO) => {
+  const label = String(openPO?.label || "").trim();
+  if (label) return label;
+  const statusLabel = formatOpenPOStatusLabel(openPO?.status);
+  return statusLabel || "-";
+};
+
 const DEFAULT_LIMIT = 4;
 
 const Suppliers = () => {
@@ -37,12 +54,9 @@ const Suppliers = () => {
     name: "",
     code: "",
     contactPerson: "",
-    role: "",
     phone: "",
     email: "",
     products: "",
-    tone: "blue",
-    openPOLabel: "",
     openPOStatus: "open",
   });
   const [actionError, setActionError] = useState("");
@@ -81,7 +95,10 @@ const Suppliers = () => {
           phone: supplier.phone || "",
           email: supplier.email || "",
           products: Array.isArray(supplier.products) ? supplier.products : [],
-          openPO: supplier.openPO || { label: "-", status: "" },
+          openPO: {
+            status: supplier.openPO?.status || "",
+            label: resolveOpenPOLabel(supplier.openPO),
+          },
           tone: supplier.tone || "blue",
         }));
 
@@ -181,12 +198,9 @@ const Suppliers = () => {
       name: "",
       code: "",
       contactPerson: "",
-      role: "",
       phone: "",
       email: "",
       products: "",
-      tone: "blue",
-      openPOLabel: "0 Open",
       openPOStatus: "open",
     });
     setActionError("");
@@ -204,12 +218,9 @@ const Suppliers = () => {
       name: supplier.name || "",
       code: supplier.code || "",
       contactPerson: supplier.contactPerson || "",
-      role: supplier.role || "",
       phone: supplier.phone || "",
       email: supplier.email || "",
       products: productLabels,
-      tone: supplier.tone || "blue",
-      openPOLabel: supplier.openPO?.label || "",
       openPOStatus: supplier.openPO?.status || "open",
     });
     setActionError("");
@@ -241,18 +252,17 @@ const Suppliers = () => {
 
     setIsSaving(true);
     try {
+      const openPOStatus = formData.openPOStatus || "open";
       const payload = {
         name: formData.name,
         code: formData.code,
         contactPerson: formData.contactPerson,
-        role: formData.role,
         phone: formData.phone,
         email: formData.email,
         products,
-        tone: formData.tone,
         openPO: {
-          label: formData.openPOLabel,
-          status: formData.openPOStatus,
+          label: formatOpenPOStatusLabel(openPOStatus),
+          status: openPOStatus,
         },
       };
 
@@ -370,7 +380,9 @@ const Suppliers = () => {
               </div>
               <div className="supplier-cell cell" data-label="Contact">
                 <strong>{supplier.contactPerson}</strong>
-                <span className="muted">{supplier.role}</span>
+                {supplier.role ? (
+                  <span className="muted">{supplier.role}</span>
+                ) : null}
               </div>
               <div className="supplier-cell cell" data-label="Contact Info">
                 <span>{supplier.phone}</span>
@@ -500,15 +512,6 @@ const Suppliers = () => {
               />
             </label>
             <label className="modal-field">
-              <span>Role</span>
-              <input
-                type="text"
-                value={formData.role}
-                onChange={updateField("role")}
-                placeholder="Role"
-              />
-            </label>
-            <label className="modal-field">
               <span>Phone</span>
               <input
                 type="text"
@@ -537,25 +540,6 @@ const Suppliers = () => {
               <span className="modal-help">
                 Separate product names with commas.
               </span>
-            </label>
-            <label className="modal-field">
-              <span>Icon Tone</span>
-              <select value={formData.tone} onChange={updateField("tone")}>
-                <option value="blue">Blue</option>
-                <option value="amber">Amber</option>
-                <option value="green">Green</option>
-                <option value="indigo">Indigo</option>
-                <option value="slate">Slate</option>
-              </select>
-            </label>
-            <label className="modal-field">
-              <span>Open PO Label</span>
-              <input
-                type="text"
-                value={formData.openPOLabel}
-                onChange={updateField("openPOLabel")}
-                placeholder="0 Open"
-              />
             </label>
             <label className="modal-field">
               <span>Open PO Status</span>

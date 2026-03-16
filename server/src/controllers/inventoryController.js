@@ -6,6 +6,7 @@ const InventoryRecord = require("../models/InventoryRecord");
 const StockTransaction = require("../models/StockTransaction");
 const InventoryReport = require("../models/InventoryReport");
 const InventorySettings = require("../models/InventorySettings");
+const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { createNotification } = require("../utils/notificationService");
 
@@ -64,6 +65,34 @@ const notifyInventoryUsers = async (senderId, { type, title, message }) => {
   );
 };
 
+const getActorLabel = (user) => {
+  const name = [user?.firstName, user?.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (name) return name;
+  const employeeId = parseStringValue(user?.employeeId);
+  if (employeeId) return employeeId;
+  return "A team member";
+};
+
+const addActorToMessage = (message, user) => {
+  const actor = getActorLabel(user);
+  let base = String(message || "").trim();
+  if (base.endsWith(".")) {
+    base = base.slice(0, -1).trim();
+  }
+  if (!base) return `By ${actor}`;
+  return `${base} (by ${actor})`;
+};
+
+const notifyInventoryUsersWithActor = async (user, payload) => {
+  const senderId = user?._id;
+  if (!senderId) return;
+  const message = addActorToMessage(payload?.message, user);
+  await notifyInventoryUsers(senderId, { ...payload, message });
+};
+
 const getInventorySettingsSnapshot = async () => {
   try {
     const settings = await InventorySettings.findOne({}).lean();
@@ -94,6 +123,16 @@ const shouldNotifyLowStock = (qtyValue, previousQtyValue, settings) => {
 };
 
 const parseStringValue = (value) => String(value ?? "").trim();
+
+const formatOpenPOStatusLabel = (status) => {
+  const raw = parseStringValue(status);
+  if (!raw) return "";
+  return raw
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
 
 const parseListParam = (value) => {
   if (Array.isArray(value)) {
@@ -133,6 +172,7 @@ const ensureInventoryCategory = async (name, userId) => {
 
 const CATEGORY_TONES = ["blue", "indigo", "slate", "amber"];
 const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
+const SUPPLIER_TONES = ["blue", "indigo", "amber", "green"];
 
 const pickRandomTone = (tones) =>
   tones[Math.floor(Math.random() * tones.length)];
@@ -558,7 +598,7 @@ const createClientItem = async (req, res) => {
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
 
-    await notifyInventoryUsers(req.user._id, {
+    await notifyInventoryUsersWithActor(req.user, {
       type: "SYSTEM",
       title: "Client item received",
       message: `${itemName} received from ${clientName}${
@@ -648,6 +688,14 @@ const updateClientItem = async (req, res) => {
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
 
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "UPDATE",
+      title: "Client item updated",
+      message: `${record.itemName || "Client item"} for ${
+        record.clientName || "client"
+      } was updated.`,
+    });
+
     res.json(populated);
   } catch (error) {
     console.error("Error updating client inventory item:", error);
@@ -663,6 +711,13 @@ const deleteClientItem = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Client inventory item not found." });
     }
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "ACTIVITY",
+      title: "Client item removed",
+      message: `${deleted.itemName || "Client item"} for ${
+        deleted.clientName || "client"
+      } was removed.`,
+    });
     res.json({ message: "Client inventory item deleted successfully." });
   } catch (error) {
     console.error("Error deleting client inventory item:", error);
@@ -803,7 +858,7 @@ const createPurchasingOrder = async (req, res) => {
 
     const settings = await getInventorySettingsSnapshot();
     if (settings.notifyPurchaseOrders !== false) {
-      await notifyInventoryUsers(req.user._id, {
+      await notifyInventoryUsersWithActor(req.user, {
         type: "SYSTEM",
         title: "Purchase order created",
         message: `${poNumber} created for ${supplierName} (${status}).`,
@@ -915,12 +970,20 @@ const updatePurchasingOrder = async (req, res) => {
       .populate("updatedBy", "firstName lastName employeeId");
 
     const settings = await getInventorySettingsSnapshot();
-    if (settings.notifyPurchaseOrders !== false && previousStatus !== record.status) {
-      await notifyInventoryUsers(req.user._id, {
-        type: "UPDATE",
-        title: "Purchase order status updated",
-        message: `${record.poNumber} is now ${record.status}.`,
-      });
+    if (settings.notifyPurchaseOrders !== false) {
+      if (previousStatus !== record.status) {
+        await notifyInventoryUsersWithActor(req.user, {
+          type: "UPDATE",
+          title: "Purchase order status updated",
+          message: `${record.poNumber} is now ${record.status}.`,
+        });
+      } else {
+        await notifyInventoryUsersWithActor(req.user, {
+          type: "UPDATE",
+          title: "Purchase order updated",
+          message: `${record.poNumber} was updated.`,
+        });
+      }
     }
 
     res.json(populated);
@@ -937,6 +1000,14 @@ const deletePurchasingOrder = async (req, res) => {
     const deleted = await PurchasingOrder.findByIdAndDelete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ message: "Purchasing order not found." });
+    }
+    const settings = await getInventorySettingsSnapshot();
+    if (settings.notifyPurchaseOrders !== false) {
+      await notifyInventoryUsersWithActor(req.user, {
+        type: "ACTIVITY",
+        title: "Purchase order removed",
+        message: `${deleted.poNumber || "Purchase order"} was removed.`,
+      });
     }
     res.json({ message: "Purchasing order deleted successfully." });
   } catch (error) {
@@ -1007,6 +1078,12 @@ const createSupplier = async (req, res) => {
       return res.status(400).json({ message: "name is required." });
     }
 
+    const openPOBody = req.body.openPO || {};
+    const openPOStatus = parseStringValue(openPOBody.status) || "open";
+    const openPOLabel =
+      parseStringValue(openPOBody.label) ||
+      formatOpenPOStatusLabel(openPOStatus);
+
     const record = await Supplier.create({
       code: parseStringValue(req.body.code),
       name,
@@ -1015,13 +1092,16 @@ const createSupplier = async (req, res) => {
       phone: parseStringValue(req.body.phone),
       email: parseStringValue(req.body.email),
       products: Array.isArray(req.body.products) ? req.body.products : [],
-      openPO: req.body.openPO || {},
-      tone: parseStringValue(req.body.tone),
+      openPO: {
+        label: openPOLabel,
+        status: openPOStatus,
+      },
+      tone: pickRandomTone(SUPPLIER_TONES),
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
 
-    await notifyInventoryUsers(req.user._id, {
+    await notifyInventoryUsersWithActor(req.user, {
       type: "SYSTEM",
       title: "New supplier added",
       message: `${name} has been added to suppliers.`,
@@ -1071,16 +1151,29 @@ const updateSupplier = async (req, res) => {
         : [];
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "openPO")) {
-      record.openPO = req.body.openPO || {};
+      const openPOBody = req.body.openPO || {};
+      const openPOStatus =
+        parseStringValue(openPOBody.status) ||
+        parseStringValue(record.openPO?.status) ||
+        "open";
+      const openPOLabel =
+        parseStringValue(openPOBody.label) ||
+        formatOpenPOStatusLabel(openPOStatus) ||
+        parseStringValue(record.openPO?.label);
+      record.openPO = {
+        label: openPOLabel,
+        status: openPOStatus,
+      };
     }
-    if (Object.prototype.hasOwnProperty.call(req.body, "tone")) {
-      record.tone = parseStringValue(req.body.tone);
+
+    if (!record.tone) {
+      record.tone = pickRandomTone(SUPPLIER_TONES);
     }
 
     record.updatedBy = req.user._id;
     await record.save();
 
-    await notifyInventoryUsers(req.user._id, {
+    await notifyInventoryUsersWithActor(req.user, {
       type: "UPDATE",
       title: "Supplier updated",
       message: `${record.name} supplier details were updated.`,
@@ -1101,6 +1194,11 @@ const deleteSupplier = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Supplier not found." });
     }
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "ACTIVITY",
+      title: "Supplier removed",
+      message: `${deleted.name || "Supplier"} was removed.`,
+    });
     res.json({ message: "Supplier deleted successfully." });
   } catch (error) {
     console.error("Error deleting supplier:", error);
@@ -1189,6 +1287,80 @@ const getInventoryCategoryOptions = async (req, res) => {
   }
 };
 
+const getInventoryWarehouseOptions = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const [
+      recordWarehouses,
+      recordSubtexts,
+      clientWarehouses,
+      settings,
+    ] = await Promise.all([
+      InventoryRecord.distinct("warehouse", { warehouse: { $ne: "" } }),
+      InventoryRecord.distinct("subtext", {
+        subtext: { $ne: "" },
+        warehouse: { $in: ["", null] },
+      }),
+      ClientInventoryItem.distinct("warehouse", { warehouse: { $ne: "" } }),
+      InventorySettings.findOne({}).lean(),
+    ]);
+
+    const values = [
+      ...(recordWarehouses || []),
+      ...(recordSubtexts || []),
+      ...(clientWarehouses || []),
+      settings?.defaultWarehouse,
+    ]
+      .map((value) => parseStringValue(value))
+      .filter(Boolean);
+
+    const sorted = Array.from(new Set(values)).sort((a, b) =>
+      a.localeCompare(b),
+    );
+
+    res.json({ data: sorted });
+  } catch (error) {
+    console.error("Error fetching warehouse options:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const purgeInventoryData = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const results = await Promise.all([
+      ClientInventoryItem.deleteMany({}),
+      Supplier.deleteMany({}),
+      PurchasingOrder.deleteMany({}),
+      InventoryCategory.deleteMany({}),
+      InventoryRecord.deleteMany({}),
+      StockTransaction.deleteMany({}),
+      InventoryReport.deleteMany({}),
+      Notification.deleteMany({ source: "inventory" }),
+    ]);
+
+    res.json({
+      message: "Inventory data deleted.",
+      counts: {
+        clientItems: results[0]?.deletedCount ?? 0,
+        suppliers: results[1]?.deletedCount ?? 0,
+        purchaseOrders: results[2]?.deletedCount ?? 0,
+        categories: results[3]?.deletedCount ?? 0,
+        inventoryRecords: results[4]?.deletedCount ?? 0,
+        stockTransactions: results[5]?.deletedCount ?? 0,
+        reports: results[6]?.deletedCount ?? 0,
+        notifications: results[7]?.deletedCount ?? 0,
+      },
+    });
+
+  } catch (error) {
+    console.error("Error deleting inventory data:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const createInventoryCategory = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
@@ -1211,6 +1383,12 @@ const createInventoryCategory = async (req, res) => {
       description,
       createdBy: req.user._id,
       updatedBy: req.user._id,
+    });
+
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "SYSTEM",
+      title: "Category created",
+      message: `${name} category has been added.`,
     });
 
     res.status(201).json(record);
@@ -1253,6 +1431,13 @@ const updateInventoryCategory = async (req, res) => {
 
     record.updatedBy = req.user._id;
     await record.save();
+
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "UPDATE",
+      title: "Category updated",
+      message: `${record.name} category was updated.`,
+    });
+
     res.json(record);
   } catch (error) {
     console.error("Error updating inventory category:", error);
@@ -1268,6 +1453,11 @@ const deleteInventoryCategory = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Category not found." });
     }
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "ACTIVITY",
+      title: "Category removed",
+      message: `${deleted.name || "Category"} was removed.`,
+    });
     res.json({ message: "Category deleted successfully." });
   } catch (error) {
     console.error("Error deleting inventory category:", error);
@@ -1478,7 +1668,7 @@ const createInventoryRecord = async (req, res) => {
       updatedBy: req.user._id,
     });
 
-    await notifyInventoryUsers(req.user._id, {
+    await notifyInventoryUsersWithActor(req.user, {
       type: "SYSTEM",
       title: "Inventory record created",
       message: `${item} (${sku}) added${warehouse ? ` to ${warehouse}` : ""}.`,
@@ -1487,7 +1677,7 @@ const createInventoryRecord = async (req, res) => {
     const settings = await getInventorySettingsSnapshot();
     if (shouldNotifyLowStock(record.qtyValue, null, settings)) {
       const unitLabel = parseStringValue(settings?.unitOfMeasure) || "Units";
-      await notifyInventoryUsers(req.user._id, {
+      await notifyInventoryUsersWithActor(req.user, {
         type: "SYSTEM",
         title: "Low stock alert",
         message: `${item} is low (${formatQtyForMessage(
@@ -1655,25 +1845,25 @@ const updateInventoryRecord = async (req, res) => {
       Number.isFinite(previousQtyValue) || Number.isFinite(record.qtyValue)
         ? previousQtyValue !== record.qtyValue
         : false;
-
-    if (statusChanged || qtyChanged) {
-      await notifyInventoryUsers(req.user._id, {
-        type: "UPDATE",
-        title: "Inventory record updated",
-        message: `${record.item} (${record.sku}) updated${
-          statusChanged ? ` • Status: ${record.status}` : ""
-        }${
-          qtyChanged && Number.isFinite(record.qtyValue)
-            ? ` • Qty: ${record.qtyValue}`
-            : ""
-        }.`,
-      });
+    const detailParts = [];
+    if (statusChanged) {
+      detailParts.push(`Status: ${record.status}`);
     }
+    if (qtyChanged && Number.isFinite(record.qtyValue)) {
+      detailParts.push(`Qty: ${record.qtyValue}`);
+    }
+    const details = detailParts.length ? ` (${detailParts.join(" | ")})` : "";
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "UPDATE",
+      title: "Inventory record updated",
+      message: `${record.item} (${record.sku}) updated${details}.`,
+    });
+
 
     const settings = await getInventorySettingsSnapshot();
     if (shouldNotifyLowStock(record.qtyValue, previousQtyValue, settings)) {
       const unitLabel = parseStringValue(settings?.unitOfMeasure) || "Units";
-      await notifyInventoryUsers(req.user._id, {
+      await notifyInventoryUsersWithActor(req.user, {
         type: "SYSTEM",
         title: "Low stock alert",
         message: `${record.item} is low (${formatQtyForMessage(
@@ -1698,6 +1888,13 @@ const deleteInventoryRecord = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Inventory record not found." });
     }
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "ACTIVITY",
+      title: "Inventory record removed",
+      message: `${deleted.item || "Inventory record"}${
+        deleted.sku ? ` (${deleted.sku})` : ""
+      } was removed.`,
+    });
     res.json({ message: "Inventory record deleted successfully." });
   } catch (error) {
     console.error("Error deleting inventory record:", error);
@@ -1822,6 +2019,12 @@ const createStockTransaction = async (req, res) => {
       updatedBy: req.user._id,
     });
 
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "UPDATE",
+      title: "Stock transaction logged",
+      message: `${txid} - ${type} - ${qtyResult.value} units for ${item}.`,
+    });
+
     res.status(201).json(record);
   } catch (error) {
     console.error("Error creating stock transaction:", error);
@@ -1902,6 +2105,12 @@ const updateStockTransaction = async (req, res) => {
     record.updatedBy = req.user._id;
     await record.save();
 
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "UPDATE",
+      title: "Stock transaction updated",
+      message: `${record.txid} updated (${record.type}, ${record.qty} units).`,
+    });
+
     res.json(record);
   } catch (error) {
     console.error("Error updating stock transaction:", error);
@@ -1919,6 +2128,11 @@ const deleteStockTransaction = async (req, res) => {
         .status(404)
         .json({ message: "Stock transaction not found." });
     }
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "ACTIVITY",
+      title: "Stock transaction removed",
+      message: `${deleted.txid} was removed.`,
+    });
     res.json({ message: "Stock transaction deleted successfully." });
   } catch (error) {
     console.error("Error deleting stock transaction:", error);
@@ -2004,6 +2218,12 @@ const createReport = async (req, res) => {
       createdBy: req.user._id,
     });
 
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "SYSTEM",
+      title: "Report generated",
+      message: `${name} report was generated.`,
+    });
+
     res.status(201).json(report);
   } catch (error) {
     console.error("Error creating inventory report:", error);
@@ -2019,6 +2239,11 @@ const deleteReport = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Report not found." });
     }
+    await notifyInventoryUsersWithActor(req.user, {
+      type: "ACTIVITY",
+      title: "Report deleted",
+      message: `${deleted.name || "Report"} was deleted.`,
+    });
     res.json({ message: "Report deleted successfully." });
   } catch (error) {
     console.error("Error deleting inventory report:", error);
@@ -2068,7 +2293,6 @@ const updateInventorySettings = async (req, res) => {
       "theme",
       "tableDensity",
       "defaultExportFormat",
-      "posErpConnection",
       "dataRetention",
       "auditLogAccess",
     ];
@@ -2097,6 +2321,7 @@ const updateInventorySettings = async (req, res) => {
 
     settings.updatedBy = req.user._id;
     await settings.save();
+
     res.json(settings);
   } catch (error) {
     console.error("Error updating inventory settings:", error);
@@ -2119,9 +2344,11 @@ module.exports = {
   deleteSupplier,
   getInventoryCategories,
   getInventoryCategoryOptions,
+  getInventoryWarehouseOptions,
   createInventoryCategory,
   updateInventoryCategory,
   deleteInventoryCategory,
+  purgeInventoryData,
   getInventoryRecords,
   createInventoryRecord,
   updateInventoryRecord,

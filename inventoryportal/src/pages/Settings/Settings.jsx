@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { fetchInventory } from "../../utils/inventoryApi";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import {
+  fetchInventory,
+  formatShortDate,
+  formatShortDateTime,
+  parseListResponse,
+} from "../../utils/inventoryApi";
+import { formatCurrencyValue, useInventoryCurrency } from "../../utils/currency";
+import { getExportExtension } from "../../utils/exportFormat";
+import { buildInventoryRecordExportRows } from "../../utils/inventoryRecordExport";
 import Breadcrumb from "../../components/ui/Breadcrumb";
 import "./Settings.css";
 
@@ -21,27 +30,102 @@ const DEFAULT_SETTINGS = {
   theme: "System",
   tableDensity: "Comfortable",
   defaultExportFormat: "CSV",
-  posErpConnection: "Not connected",
   dataRetention: "24 months",
   auditLogAccess: "Admins only",
 };
 
 const Settings = () => {
+  const { currency, rate } = useInventoryCurrency();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [savedSettings, setSavedSettings] = useState(DEFAULT_SETTINGS);
+  const [warehouseOptions, setWarehouseOptions] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [isDeletingData, setIsDeletingData] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  const normalizeThemeSetting = (value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "light") return "Light";
+    if (normalized === "dark") return "Dark";
+    if (normalized === "system") return "System";
+    return value || "System";
+  };
+
+  const buildCsvContent = (rows = []) => {
+    if (!rows.length) return "";
+    const headers = Object.keys(rows[0]);
+    return [
+      headers.join(","),
+      ...rows.map((row) =>
+        headers
+          .map((header) => {
+            const cell = String(row[header] ?? "");
+            return `"${cell.replace(/"/g, '""')}"`;
+          })
+          .join(","),
+      ),
+    ].join("\n");
+  };
+
+  const downloadCsvFile = (rows, filename) => {
+    if (!rows.length) return;
+    const csv = buildCsvContent(rows);
+    if (!csv) return;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const fetchAllPages = async (endpoint) => {
+    const limit = 100;
+    let pageNumber = 1;
+    let totalPages = 1;
+    const all = [];
+
+    while (pageNumber <= totalPages) {
+      const payload = await fetchInventory(
+        `${endpoint}?page=${pageNumber}&limit=${limit}`,
+      );
+      const parsed = parseListResponse(payload);
+      all.push(...parsed.data);
+      totalPages = parsed.totalPages || 1;
+      pageNumber += 1;
+      if (!parsed.data.length && pageNumber > 1) break;
+    }
+
+    return all;
+  };
 
   useEffect(() => {
     let isMounted = true;
 
     const loadSettings = async () => {
       try {
-        const payload = await fetchInventory("/api/inventory/settings");
+        const [settingsPayload, warehousePayload] = await Promise.all([
+          fetchInventory("/api/inventory/settings"),
+          fetchInventory("/api/inventory/warehouses/options"),
+        ]);
         if (!isMounted) return;
-        const merged = { ...DEFAULT_SETTINGS, ...payload };
+        const merged = { ...DEFAULT_SETTINGS, ...settingsPayload };
+        const warehouseParsed = parseListResponse(warehousePayload);
+        const optionList = Array.isArray(warehouseParsed?.data)
+          ? warehouseParsed.data
+          : [];
+        const combined = Array.from(
+          new Set([merged.defaultWarehouse, ...optionList].filter(Boolean)),
+        ).sort((a, b) => a.localeCompare(b));
         setSettings(merged);
         setSavedSettings(merged);
+        setWarehouseOptions(combined);
         setStatusMessage("");
       } catch (err) {
         if (!isMounted) return;
@@ -55,12 +139,63 @@ const Settings = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleAppearanceChange = (event) => {
+      const nextTheme = normalizeThemeSetting(event?.detail?.theme);
+      const nextDensity = event?.detail?.tableDensity;
+      if (!nextTheme && !nextDensity) return;
+      setSettings((prev) => ({
+        ...prev,
+        ...(nextTheme ? { theme: nextTheme } : {}),
+        ...(nextDensity ? { tableDensity: nextDensity } : {}),
+      }));
+      setSavedSettings((prev) => ({
+        ...prev,
+        ...(nextTheme ? { theme: nextTheme } : {}),
+        ...(nextDensity ? { tableDensity: nextDensity } : {}),
+      }));
+    };
+    window.addEventListener(
+      "inventory:appearance-changed",
+      handleAppearanceChange,
+    );
+    return () =>
+      window.removeEventListener(
+        "inventory:appearance-changed",
+        handleAppearanceChange,
+      );
+  }, []);
+
   const updateField = (field) => (event) => {
     const value =
       event?.target?.type === "checkbox"
         ? event.target.checked
         : event.target.value;
     setSettings((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateNotificationSetting = (field) => async (event) => {
+    const nextValue = Boolean(event?.target?.checked);
+    setSettings((prev) => ({ ...prev, [field]: nextValue }));
+    setStatusMessage("");
+    setIsSavingNotifications(true);
+    try {
+      await fetchInventory("/api/inventory/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ [field]: nextValue }),
+        toast: { silent: true },
+      });
+      setSavedSettings((prev) => ({ ...prev, [field]: nextValue }));
+      setStatusMessage("Notification settings updated.");
+    } catch (err) {
+      const fallback =
+        savedSettings[field] ?? DEFAULT_SETTINGS[field] ?? false;
+      setSettings((prev) => ({ ...prev, [field]: fallback }));
+      setStatusMessage(err?.message || "Unable to update notification settings.");
+    } finally {
+      setIsSavingNotifications(false);
+    }
   };
 
   const handleSave = async () => {
@@ -78,6 +213,7 @@ const Settings = () => {
       const updated = await fetchInventory("/api/inventory/settings", {
         method: "PATCH",
         body: JSON.stringify(payload),
+        toast: { silent: true },
       });
       const merged = { ...DEFAULT_SETTINGS, ...updated };
       setSettings(merged);
@@ -87,6 +223,25 @@ const Settings = () => {
         window.localStorage.setItem(
           "inventory-currency-rate",
           String(merged.currencyRate ?? 1),
+        );
+        window.localStorage.setItem(
+          "inventory-export-format",
+          String(merged.defaultExportFormat || "CSV").toUpperCase(),
+        );
+        window.dispatchEvent(
+          new CustomEvent("inventory:appearance-changed", {
+            detail: {
+              theme: merged.theme,
+              tableDensity: merged.tableDensity,
+            },
+          }),
+        );
+        window.dispatchEvent(
+          new CustomEvent("inventory:export-format-changed", {
+            detail: {
+              format: merged.defaultExportFormat,
+            },
+          }),
         );
       }
       setStatusMessage("Settings saved.");
@@ -100,6 +255,206 @@ const Settings = () => {
   const handleCancel = () => {
     setSettings(savedSettings);
     setStatusMessage("Changes discarded.");
+  };
+
+  const handleExportData = async () => {
+    if (isExportingData) return;
+    setIsExportingData(true);
+    setStatusMessage("");
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    try {
+      const modules = [
+        {
+          key: "client-items",
+          endpoint: "/api/inventory/client-items",
+          mapRow: (item) => ({
+            Client: item.clientName || item.client || "",
+            Phone: item.clientPhone || item.phone || "",
+            Item: item.itemName || item.item || "",
+            Serial: item.serialNumber || item.serial || "",
+            Received: formatShortDate(
+              item.receivedAt || item.received || item.dateReceived,
+            ),
+            Warehouse: item.warehouse || "",
+            Status: item.status || "",
+            Notes: item.notes || "",
+          }),
+        },
+        {
+          key: "suppliers",
+          endpoint: "/api/inventory/suppliers",
+          mapRow: (supplier) => ({
+            Supplier: supplier.name || "",
+            Code: supplier.code || "",
+            "Contact Person": supplier.contactPerson || "",
+            Role: supplier.role || "",
+            Phone: supplier.phone || "",
+            Email: supplier.email || "",
+            Products: Array.isArray(supplier.products)
+              ? supplier.products
+                  .map((product) => product?.label || product?.name || "")
+                  .filter(Boolean)
+                  .join(", ")
+              : "",
+            "Open PO": supplier.openPO?.label || "",
+            "Open PO Status": supplier.openPO?.status || "",
+          }),
+        },
+        {
+          key: "purchase-orders",
+          endpoint: "/api/inventory/purchase-orders",
+          mapRow: (order) => ({
+            "PO Number": order.poNumber || order.orderNo || "",
+            Supplier: order.supplierName || order.supplier || "",
+            "Item Names": Array.isArray(order.items)
+              ? order.items
+                  .map((item) => item?.name || "")
+                  .filter(Boolean)
+                  .join(", ")
+              : "",
+            "Items Count": Number.isFinite(order.itemsCount)
+              ? order.itemsCount
+              : Array.isArray(order.items)
+                ? order.items.length
+                : "",
+            Category: order.category || "",
+            "Total Cost": formatCurrencyValue(order.total, currency, rate),
+            Status: order.status || order.requestStatus || "",
+            "Created Date": formatShortDateTime(
+              order.dateRequestPlaced || order.createdAt || order.created,
+            ),
+          }),
+        },
+        {
+          key: "inventory-records",
+          endpoint: "/api/inventory/inventory-records",
+          mapRow: (record) => ({
+            Item: record.item || "",
+            SKU: record.sku || "",
+            Brand:
+              Array.isArray(record.brandGroups) && record.brandGroups.length
+                ? record.brandGroups
+                    .map((group) => group?.name || "")
+                    .filter(Boolean)
+                    .join(", ")
+                : record.brand || "",
+            Category: record.category || "",
+            Warehouse: record.warehouse || record.subtext || "",
+            Quantity: record.qtyLabel || record.qtyValue || "",
+            Variations: record.variations || "",
+            "Colors/Kind": record.colors || "",
+            Price: formatCurrencyValue(
+              record.priceValue ?? record.price,
+              currency,
+              rate,
+            ),
+            Value: formatCurrencyValue(
+              record.valueValue ?? record.value,
+              currency,
+              rate,
+            ),
+            Status: record.status || "",
+          }),
+        },
+        {
+          key: "stock-transactions",
+          endpoint: "/api/inventory/stock-transactions",
+          mapRow: (tx) => ({
+            TXID: tx.txid || "",
+            Item: tx.item || "",
+            SKU: tx.sku || "",
+            Type: tx.type || "",
+            Qty: tx.qty || "",
+            Source: tx.source || "",
+            Destination: tx.destination || "",
+            Date: formatShortDateTime(tx.date || tx.createdAt),
+            Staff: tx.staff || "",
+            Notes: tx.notes || "",
+          }),
+        },
+        {
+          key: "inventory-categories",
+          endpoint: "/api/inventory/categories",
+          mapRow: (category) => ({
+            Category: category.name || "",
+            Description: category.description || "",
+          }),
+        },
+        {
+          key: "reports",
+          endpoint: "/api/inventory/reports",
+          mapRow: (report) => ({
+            "Report Name": report.name || "",
+            "Generated By": report.generatedBy || "",
+            Status: report.status || "",
+            "Created Date": formatShortDateTime(
+              report.createdAtOverride || report.createdAt || report.created,
+            ),
+          }),
+        },
+      ];
+
+      for (const module of modules) {
+        const data = await fetchAllPages(module.endpoint);
+        if (!data.length) continue;
+        const extension = getExportExtension(settings.defaultExportFormat);
+
+        if (module.key === "inventory-records") {
+          const rows = buildInventoryRecordExportRows(data, currency, rate);
+          if (!rows.length) continue;
+          downloadCsvFile(
+            rows,
+            `inventory-${module.key}-${dateStamp}.${extension}`,
+          );
+          continue;
+        }
+        const rows = data.map(module.mapRow);
+        downloadCsvFile(
+          rows,
+          `inventory-${module.key}-${dateStamp}.${extension}`,
+        );
+      }
+      setStatusMessage("Export complete.");
+    } catch (err) {
+      setStatusMessage(err?.message || "Unable to export data.");
+    } finally {
+      setIsExportingData(false);
+    }
+  };
+
+  const requestDeleteData = () => {
+    setShowDeleteDialog(true);
+  };
+
+  const closeDeleteData = () => {
+    if (isDeletingData) return;
+    setShowDeleteDialog(false);
+  };
+
+  const confirmDeleteData = async () => {
+    if (isDeletingData) return;
+    setIsDeletingData(true);
+    setStatusMessage("");
+    try {
+      await fetchInventory("/api/inventory/data", {
+        method: "DELETE",
+        toast: { silent: true },
+      });
+      setStatusMessage("All inventory data deleted.");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("mh:data-changed", {
+            detail: { source: "settings" },
+          }),
+        );
+      }
+    } catch (err) {
+      setStatusMessage(err?.message || "Unable to delete inventory data.");
+    } finally {
+      setIsDeletingData(false);
+      setShowDeleteDialog(false);
+    }
   };
 
   return (
@@ -222,7 +577,8 @@ const Settings = () => {
                 <input
                   type="checkbox"
                   checked={settings.notifyLowStock}
-                  onChange={updateField("notifyLowStock")}
+                  onChange={updateNotificationSetting("notifyLowStock")}
+                  disabled={isSavingNotifications}
                 />
                 <span className="slider" />
               </label>
@@ -236,7 +592,8 @@ const Settings = () => {
                 <input
                   type="checkbox"
                   checked={settings.notifyPurchaseOrders}
-                  onChange={updateField("notifyPurchaseOrders")}
+                  onChange={updateNotificationSetting("notifyPurchaseOrders")}
+                  disabled={isSavingNotifications}
                 />
                 <span className="slider" />
               </label>
@@ -250,7 +607,8 @@ const Settings = () => {
                 <input
                   type="checkbox"
                   checked={settings.notifyWeeklySummary}
-                  onChange={updateField("notifyWeeklySummary")}
+                  onChange={updateNotificationSetting("notifyWeeklySummary")}
+                  disabled={isSavingNotifications}
                 />
                 <span className="slider" />
               </label>
@@ -266,14 +624,13 @@ const Settings = () => {
           <div className="settings-grid">
             <label className="settings-field">
               <span>Default Warehouse</span>
-              <select
+              <input
+                type="text"
+                list="inventory-settings-warehouse-options"
                 value={settings.defaultWarehouse}
                 onChange={updateField("defaultWarehouse")}
-              >
-                <option>Central Warehouse</option>
-                <option>Main Hub</option>
-                <option>East Branch</option>
-              </select>
+                placeholder="Select or type warehouse"
+              />
             </label>
             <label className="settings-field">
               <span>Low Stock Threshold</span>
@@ -360,14 +717,6 @@ const Settings = () => {
                 <option>XLSX</option>
               </select>
             </label>
-            <label className="settings-field">
-              <span>POS/ERP Connection</span>
-              <input
-                type="text"
-                value={settings.posErpConnection}
-                onChange={updateField("posErpConnection")}
-              />
-            </label>
           </div>
         </section>
 
@@ -402,11 +751,21 @@ const Settings = () => {
             </label>
           </div>
           <div className="settings-actions">
-            <button type="button" className="ghost-button">
-              Export Data
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleExportData}
+              disabled={isExportingData}
+            >
+              {isExportingData ? "Exporting..." : "Export Data"}
             </button>
-            <button type="button" className="danger-button">
-              Delete Organization Data
+            <button
+              type="button"
+              className="danger-button"
+              onClick={requestDeleteData}
+              disabled={isDeletingData}
+            >
+              {isDeletingData ? "Deleting..." : "Delete Organization Data"}
             </button>
           </div>
         </section>
@@ -431,6 +790,20 @@ const Settings = () => {
         </div>
       </div>
     </div>
+    <datalist id="inventory-settings-warehouse-options">
+      {warehouseOptions.map((warehouse) => (
+        <option key={warehouse} value={warehouse} />
+      ))}
+    </datalist>
+    <ConfirmDialog
+      isOpen={showDeleteDialog}
+      title="Delete Organization Data"
+      message="This will permanently delete all inventory data, reports, and notifications in this portal. This action cannot be undone."
+      confirmText={isDeletingData ? "Deleting..." : "Delete Data"}
+      cancelText="Cancel"
+      onConfirm={confirmDeleteData}
+      onClose={closeDeleteData}
+    />
   </section>
   );
 };

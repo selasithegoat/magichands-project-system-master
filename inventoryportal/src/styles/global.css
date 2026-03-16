@@ -180,8 +180,9 @@ select {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid transparent;
-  background: #fff7ed;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-alt);
+  color: var(--ink);
   border-radius: var(--radius-sm);
 }
 
@@ -210,9 +211,15 @@ select {
 }
 
 :root[data-theme="dark"] .alert.warning {
-  color: #fcd34d;
-  background: rgba(245, 158, 11, 0.18);
-  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--ink);
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+:root[data-theme="dark"] .alert.success {
+  color: var(--ink);
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.32);
 }
 
 .alert-content {
@@ -236,7 +243,7 @@ select {
   background: rgba(15, 23, 42, 0.45);
   display: grid;
   place-items: center;
-  z-index: 10;
+  z-index: 200;
   padding: 20px;
   opacity: 0;
   pointer-events: none;
@@ -452,6 +459,25 @@ select {
   font-size: 12px;
   color: var(--ink-muted);
   padding: 0 4px;
+}
+
+:root[data-density="compact"] .table-header,
+:root[data-density="compact"] .table-row {
+  padding: 8px 12px;
+}
+
+:root[data-density="compact"] .table-body {
+  gap: 8px;
+}
+
+:root[data-density="compact"] .table-header span,
+:root[data-density="compact"] .table-row .cell {
+  font-size: 12px;
+}
+
+:root[data-density="compact"] .filters-row,
+:root[data-density="compact"] .filters-actions {
+  gap: 8px;
 }
 
 .tooltip-anchor {

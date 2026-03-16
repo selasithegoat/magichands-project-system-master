@@ -65,6 +65,7 @@ const ClientItems = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [warehouseOptions, setWarehouseOptions] = useState([]);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -142,6 +143,30 @@ const ClientItems = () => {
   }, [page, refreshKey, searchTerm, activeStatus]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadWarehouseOptions = async () => {
+      try {
+        const payload = await fetchInventory("/api/inventory/warehouses/options");
+        const parsed = parseListResponse(payload);
+        const options = Array.isArray(parsed?.data) ? parsed.data : [];
+        if (!isMounted) return;
+        const sorted = Array.from(new Set(options.filter(Boolean))).sort((a, b) =>
+          a.localeCompare(b),
+        );
+        setWarehouseOptions(sorted);
+      } catch (err) {
+        if (!isMounted) return;
+      }
+    };
+
+    loadWarehouseOptions();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     setPage(1);
   }, [searchTerm, activeStatus]);
 
@@ -191,6 +216,9 @@ const ClientItems = () => {
   const pagination = buildPaginationRange(page, meta.totalPages);
   const isPrevDisabled = page <= 1;
   const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
+  const formWarehouseOptions = Array.from(
+    new Set([...warehouseOptions, formData.warehouse].filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
 
   const handlePageChange = (nextPage) => {
     if (nextPage < 1) return;
@@ -526,9 +554,10 @@ const ClientItems = () => {
               <span>Warehouse</span>
               <input
                 type="text"
+                list="client-items-warehouse-options"
                 value={formData.warehouse}
                 onChange={updateField("warehouse")}
-                placeholder="Warehouse"
+                placeholder="Select or type warehouse"
               />
             </label>
           </div>
@@ -541,6 +570,11 @@ const ClientItems = () => {
             />
           </label>
           {actionError ? <span className="modal-help">{actionError}</span> : null}
+          <datalist id="client-items-warehouse-options">
+            {formWarehouseOptions.map((warehouse) => (
+              <option key={warehouse} value={warehouse} />
+            ))}
+          </datalist>
         </form>
       </Modal>
 

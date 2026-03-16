@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import QuickActionModal from "../components/modals/QuickActionModal";
 import InventoryLayout from "../layouts/InventoryLayout";
 import Dashboard from "../pages/Dashboard/Dashboard";
@@ -25,12 +25,17 @@ import {
   SwapIcon,
 } from "../components/icons/Icons";
 import { hasInventoryPortalAccess } from "../utils/access";
+import { fetchInventory } from "../utils/inventoryApi";
 import { quickActions } from "../data/quickActions";
 import useNotifications from "../hooks/useNotifications";
 import useRealtimeClient from "../hooks/useRealtimeClient";
+import useInactivityLogout from "../hooks/useInactivityLogout";
 
 const APP_NAME = "MagicHands Inventory";
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "inventory-portal-theme";
+const THEME_MODE_STORAGE_KEY = "inventory-portal-theme-mode";
+const DENSITY_STORAGE_KEY = "inventory-portal-density";
 const PAGE_STORAGE_KEY = "inventory-portal-active-page";
 const SEARCHABLE_PAGES = new Set([
   "inventory-records",
@@ -55,6 +60,23 @@ const getPreferredTheme = () => {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+};
+
+const resolveThemeFromSetting = (value) => {
+  if (typeof window === "undefined") return "light";
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "light") return "light";
+  if (normalized === "dark") return "dark";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
+
+const getPreferredDensity = () => {
+  if (typeof window === "undefined") return "Comfortable";
+  return (
+    window.localStorage.getItem(DENSITY_STORAGE_KEY) || "Comfortable"
+  );
 };
 
 const NAV_ITEMS = [
@@ -82,6 +104,7 @@ const App = () => {
     return window.localStorage.getItem(PAGE_STORAGE_KEY) || "dashboard";
   });
   const [theme, setTheme] = useState(() => getPreferredTheme());
+  const [tableDensity, setTableDensity] = useState(() => getPreferredDensity());
 
   useEffect(() => {
     const checkSession = async () => {
@@ -124,10 +147,84 @@ const App = () => {
   }, [theme]);
 
   useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute(
+        "data-density",
+        String(tableDensity || "Comfortable").toLowerCase(),
+      );
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        DENSITY_STORAGE_KEY,
+        String(tableDensity || "Comfortable"),
+      );
+    }
+  }, [tableDensity]);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(PAGE_STORAGE_KEY, activePage);
     }
   }, [activePage]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSettings = async () => {
+      if (!user) return;
+      try {
+        const settings = await fetchInventory("/api/inventory/settings");
+        if (!isMounted) return;
+        const storedTheme =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem(THEME_STORAGE_KEY)
+            : null;
+        const hasStoredTheme =
+          storedTheme === "light" || storedTheme === "dark";
+        const nextTheme = resolveThemeFromSetting(settings?.theme);
+        const nextDensity = String(settings?.tableDensity || "Comfortable");
+        if (!hasStoredTheme) {
+          setTheme(nextTheme);
+        }
+        setTableDensity(nextDensity);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            THEME_MODE_STORAGE_KEY,
+            String(settings?.theme || "System"),
+          );
+        }
+      } catch {
+        // Keep local preferences.
+      }
+    };
+
+    loadSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleAppearanceChange = (event) => {
+      const nextTheme = resolveThemeFromSetting(event?.detail?.theme);
+      const nextDensity = event?.detail?.tableDensity;
+      if (nextTheme) {
+        setTheme(nextTheme);
+      }
+      if (nextDensity) {
+        setTableDensity(nextDensity);
+      }
+    };
+    window.addEventListener(
+      "inventory:appearance-changed",
+      handleAppearanceChange,
+    );
+    return () =>
+      window.removeEventListener(
+        "inventory:appearance-changed",
+        handleAppearanceChange,
+      );
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -153,7 +250,25 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [globalSearch]);
 
+  const logout = useCallback(async () => {
+    setUser(null);
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      });
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  }, []);
+
   useRealtimeClient(Boolean(user));
+  useInactivityLogout({
+    enabled: Boolean(user),
+    timeout: INACTIVITY_TIMEOUT_MS,
+    onLogout: logout,
+  });
   const {
     notifications,
     loading: notificationsLoading,
@@ -170,7 +285,26 @@ const App = () => {
   }, [user]);
 
   const toggleTheme = () => {
-    setTheme((prevTheme) => (prevTheme === "dark" ? "light" : "dark"));
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    const nextMode = nextTheme === "dark" ? "Dark" : "Light";
+    setTheme(nextTheme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(THEME_MODE_STORAGE_KEY, nextMode);
+      window.dispatchEvent(
+        new CustomEvent("inventory:appearance-changed", {
+          detail: { theme: nextMode },
+        }),
+      );
+    }
+    if (user) {
+      fetchInventory("/api/inventory/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ theme: nextMode }),
+        toast: { silent: true },
+      }).catch(() => {
+        // Keep local preference even if sync fails.
+      });
+    }
   };
 
   const handleGlobalSearchSubmit = (value) => {
@@ -201,19 +335,6 @@ const App = () => {
         }),
       );
     }, 0);
-  };
-
-  const logout = async () => {
-    setUser(null);
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-        keepalive: true,
-      });
-    } catch (error) {
-      console.error("Logout failed", error);
-    }
   };
 
   const handleLogin = async (event) => {

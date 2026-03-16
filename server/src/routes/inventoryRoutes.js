@@ -16,6 +16,7 @@ const {
   deleteSupplier,
   getInventoryCategories,
   getInventoryCategoryOptions,
+  getInventoryWarehouseOptions,
   createInventoryCategory,
   updateInventoryCategory,
   deleteInventoryCategory,
@@ -23,6 +24,7 @@ const {
   createInventoryRecord,
   updateInventoryRecord,
   deleteInventoryRecord,
+  purgeInventoryData,
   getStockTransactions,
   createStockTransaction,
   updateStockTransaction,
@@ -68,6 +70,7 @@ router
   .delete(deleteSupplier);
 
 router.route("/categories/options").get(getInventoryCategoryOptions);
+router.route("/warehouses/options").get(getInventoryWarehouseOptions);
 router.route("/categories").get(getInventoryCategories).post(createInventoryCategory);
 router
   .route("/categories/:id")
@@ -99,5 +102,6 @@ router.route("/reports").get(getReports).post(createReport);
 router.route("/reports/:id").delete(deleteReport);
 
 router.route("/settings").get(getInventorySettings).patch(updateInventorySettings);
+router.delete("/data", purgeInventoryData);
 
 module.exports = router;

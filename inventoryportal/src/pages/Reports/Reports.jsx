@@ -26,6 +26,11 @@ import {
   parseCurrencyValue,
   useInventoryCurrency,
 } from "../../utils/currency";
+import {
+  getExportExtension,
+  useInventoryExportFormat,
+} from "../../utils/exportFormat";
+import { buildInventoryRecordExportRows } from "../../utils/inventoryRecordExport";
 import "./Reports.css";
 
 const cardIconMap = {
@@ -42,6 +47,8 @@ const getStatusClass = (status) =>
 const STATUS_FILTERS = ["All", "Ready", "Expired"];
 const DOWNLOAD_EXTENSION_MAP = {
   CSV: "csv",
+  PDF: "pdf",
+  XLSX: "xlsx",
 };
 const REPORT_TYPE_MAP = {
   "inventory-summary": "summary",
@@ -262,6 +269,7 @@ const Reports = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { currency, rate } = useInventoryCurrency();
+  const { format: exportFormat } = useInventoryExportFormat();
 
   useEffect(() => {
     let isMounted = true;
@@ -450,7 +458,7 @@ const Reports = () => {
         generatedBy: created?.generatedBy || "",
         status: created?.status || "Ready",
       };
-      await downloadReportData(formatted, "CSV");
+      await downloadReportData(formatted, exportFormat || "CSV");
       setPage(1);
       triggerRefresh();
     } catch (err) {
@@ -623,10 +631,23 @@ const Reports = () => {
       for (const module of modules) {
         const data = await fetchAllPages(module.endpoint);
         if (!data.length) continue;
+        if (module.key === "inventory-records") {
+          const rows = buildInventoryRecordExportRows(data, currency, rate);
+          if (!rows.length) continue;
+          downloadCsvFile(
+            rows,
+            `inventory-${module.key}-${dateStamp}.${getExportExtension(
+              exportFormat,
+            )}`,
+          );
+          continue;
+        }
         const rows = data.map(module.mapRow);
         downloadCsvFile(
           rows,
-          `inventory-${module.key}-${dateStamp}.csv`,
+          `inventory-${module.key}-${dateStamp}.${getExportExtension(
+            exportFormat,
+          )}`,
         );
       }
     } catch (err) {

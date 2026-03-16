@@ -40,7 +40,6 @@ const DEFAULT_FORM = {
   type: "Stock In",
   qty: "",
   source: "",
-  destination: "",
   date: "",
   staff: "",
   notes: "",
@@ -81,6 +80,7 @@ const StockTransactions = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [warehouseOptions, setWarehouseOptions] = useState([]);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -156,12 +156,42 @@ const StockTransactions = () => {
     };
   }, [dateRange, meta.limit, page, refreshKey, searchTerm, typeFilter]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadWarehouses = async () => {
+      try {
+        const payload = await fetchInventory(
+          "/api/inventory/warehouses/options",
+        );
+        const parsed = parseListResponse(payload);
+        const options = Array.isArray(parsed?.data) ? parsed.data : [];
+        if (!isMounted) return;
+        const sorted = Array.from(new Set(options.filter(Boolean))).sort((a, b) =>
+          a.localeCompare(b),
+        );
+        setWarehouseOptions(sorted);
+      } catch (err) {
+        if (!isMounted) return;
+        setWarehouseOptions([]);
+      }
+    };
+
+    loadWarehouses();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const total = meta.total || rows.length;
   const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
   const endIndex = total ? Math.min(startIndex + rows.length - 1, total) : 0;
   const pagination = buildPaginationRange(page, meta.totalPages);
   const isPrevDisabled = page <= 1;
   const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
+  const formWarehouseOptions = Array.from(
+    new Set([...warehouseOptions, formData.source].filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
 
   const handlePageChange = (nextPage) => {
     if (nextPage < 1) return;
@@ -254,7 +284,6 @@ const StockTransactions = () => {
       type: row.type || "Stock In",
       qty: Number.isFinite(row.qty) ? String(row.qty) : "",
       source: row.source || "",
-      destination: row.destination || "",
       date: toInputDateTime(row.dateRaw),
       staff: row.staff || "",
       notes: row.notes || "",
@@ -302,7 +331,6 @@ const StockTransactions = () => {
         type: formData.type,
         qty: qtyValue,
         source: formData.source,
-        destination: formData.destination,
         date: formData.date,
         staff: formData.staff,
         notes: formData.notes,
@@ -595,18 +623,10 @@ const StockTransactions = () => {
               <span>Source</span>
               <input
                 type="text"
+                list="stock-transactions-warehouse-options"
                 value={formData.source}
                 onChange={updateField("source")}
-                placeholder="Warehouse A"
-              />
-            </label>
-            <label className="modal-field">
-              <span>Destination</span>
-              <input
-                type="text"
-                value={formData.destination}
-                onChange={updateField("destination")}
-                placeholder="Warehouse B"
+                placeholder="Select or type warehouse"
               />
             </label>
             <label className="modal-field">
@@ -637,6 +657,11 @@ const StockTransactions = () => {
             </label>
           </div>
           {actionError ? <span className="modal-help">{actionError}</span> : null}
+          <datalist id="stock-transactions-warehouse-options">
+            {formWarehouseOptions.map((warehouse) => (
+              <option key={warehouse} value={warehouse} />
+            ))}
+          </datalist>
         </form>
       </Modal>
 

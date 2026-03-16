@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import ToastStack from "../components/ui/ToastStack";
 import "./InventoryLayout.css";
 
 const InventoryLayout = ({
@@ -76,6 +77,7 @@ const InventoryLayout = ({
           onMenuClick={() => setIsMobileNavOpen((prev) => !prev)}
         />
         {children}
+        <ToastStack />
       </main>
     </div>
   );

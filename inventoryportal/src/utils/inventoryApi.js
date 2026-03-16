@@ -1,21 +1,51 @@
+import { showToast } from "./toast";
+
 export const fetchInventory = async (path, options = {}) => {
+  const { toast, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || "GET").toUpperCase();
+  const toastOptions = toast || {};
+  const shouldToast = method !== "GET" && toastOptions.silent !== true;
+
   const response = await fetch(path, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const message = payload?.message || "Request failed.";
+    if (shouldToast) {
+      showToast({
+        type: "error",
+        title: "Update failed",
+        message: toastOptions.error || message,
+      });
+    }
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
     throw error;
+  }
+
+  if (shouldToast) {
+    const successMessage =
+      toastOptions.success ||
+      payload?.message ||
+      (method === "POST"
+        ? "Created successfully."
+        : method === "DELETE"
+          ? "Deleted successfully."
+          : "Updated successfully.");
+    showToast({
+      type: "success",
+      title: "Success",
+      message: successMessage,
+    });
   }
 
   return payload;

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchInventory } from "../utils/inventoryApi";
+import { showToast } from "../utils/toast";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -17,6 +18,8 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const knownIdsRef = useRef(new Set());
+  const hasLoadedRef = useRef(false);
 
   const syncUnreadCount = useCallback((items) => {
     const unread = items.filter((item) => !item.isRead).length;
@@ -29,6 +32,28 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
     try {
       const data = await fetchInventory("/api/notifications?source=inventory");
       const list = Array.isArray(data) ? data : [];
+      const ids = new Set();
+      list.forEach((item) => {
+        const id = toEntityId(item?._id || item?.id);
+        if (id) ids.add(id);
+      });
+
+      if (hasLoadedRef.current) {
+        const newItems = list.filter((item) => {
+          const id = toEntityId(item?._id || item?.id);
+          return id && !knownIdsRef.current.has(id);
+        });
+        newItems.forEach((item) => {
+          showToast({
+            type: "info",
+            title: item.title || "New notification",
+            message: item.message || "",
+          });
+        });
+      }
+
+      knownIdsRef.current = ids;
+      hasLoadedRef.current = true;
       setNotifications(list);
       syncUnreadCount(list);
     } catch (error) {
@@ -47,6 +72,7 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
         await fetchInventory(`/api/notifications/${normalizedId}/read`, {
           method: "PATCH",
           body: JSON.stringify({}),
+          toast: { silent: true },
         });
 
         setNotifications((prev) => {
@@ -70,6 +96,7 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
       await fetchInventory("/api/notifications/read-all?source=inventory", {
         method: "PATCH",
         body: JSON.stringify({}),
+        toast: { silent: true },
       });
 
       setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
@@ -83,6 +110,7 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
     try {
       await fetchInventory("/api/notifications?source=inventory", {
         method: "DELETE",
+        toast: { silent: true },
       });
       setNotifications([]);
       setUnreadCount(0);

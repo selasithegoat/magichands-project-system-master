@@ -25,6 +25,11 @@ import {
   parseCurrencyValue,
   useInventoryCurrency,
 } from "../../utils/currency";
+import {
+  getExportExtension,
+  useInventoryExportFormat,
+} from "../../utils/exportFormat";
+import { buildInventoryRecordExportRows } from "../../utils/inventoryRecordExport";
 import "./InventoryRecords.css";
 
 const DEFAULT_RECORD_FORM = {
@@ -457,9 +462,11 @@ const InventoryRecords = () => {
     DEFAULT_VISIBLE_COLUMNS,
   );
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [warehouseList, setWarehouseList] = useState([]);
   const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
   const selectAllRef = useRef(null);
   const { currency, rate } = useInventoryCurrency();
+  const { format: exportFormat } = useInventoryExportFormat();
   const draftStorageKey = "inventory-records-draft";
 
   useInventoryGlobalSearch((term) => {
@@ -641,6 +648,33 @@ const InventoryRecords = () => {
   }, [refreshKey]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadWarehouses = async () => {
+      try {
+        const payload = await fetchInventory(
+          "/api/inventory/warehouses/options",
+        );
+        const parsed = parseListResponse(payload);
+        const options = Array.isArray(parsed?.data) ? parsed.data : [];
+        if (!isMounted) return;
+        const sorted = Array.from(new Set(options.filter(Boolean))).sort((a, b) =>
+          a.localeCompare(b),
+        );
+        setWarehouseList(sorted);
+      } catch {
+        if (!isMounted) return;
+        setWarehouseList([]);
+      }
+    };
+
+    loadWarehouses();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     setSelectedIds([]);
   }, [records]);
 
@@ -738,39 +772,8 @@ const InventoryRecords = () => {
 
   const handleExport = () => {
     if (!records.length) return;
-    const rows = records.map((record) => ({
-      Item: record.item,
-      SKU: record.sku,
-      Brand: record.brandGroups?.length
-        ? record.brandGroups
-            .map((group) => group.name)
-            .filter(Boolean)
-            .join(", ")
-        : record.brand,
-      Category: record.category,
-      Warehouse: record.warehouse,
-      Quantity: record.qtyLabel,
-      Variations: buildVariantSummary(record.variants, record.variations, "name"),
-      "Colors/Kind": buildVariantSummary(
-        record.variants,
-        record.colors,
-        "color",
-      ),
-      Price: (() => {
-        const range = getBrandPriceRange(record.brandGroups || []);
-        if (range) {
-          return formatCurrencyRange(range.min, range.max, currency, rate);
-        }
-        return formatCurrencyValue(record.price, currency, rate);
-      })(),
-      Value: formatCurrencyValue(record.value, currency, rate),
-      Status: record.status,
-      "Variant Statuses": buildVariantStatusSummary(
-        record.variants,
-        record.status,
-      ),
-      Reorder: record.reorder ? "Yes" : "No",
-    }));
+    const rows = buildInventoryRecordExportRows(records, currency, rate);
+    if (!rows.length) return;
 
     const headers = Object.keys(rows[0]);
     const csv = [
@@ -791,7 +794,7 @@ const InventoryRecords = () => {
     link.href = url;
     link.download = `inventory-records-${new Date()
       .toISOString()
-      .slice(0, 10)}.csv`;
+      .slice(0, 10)}.${getExportExtension(exportFormat)}`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -849,24 +852,24 @@ const InventoryRecords = () => {
     ? derivedValueNumeric.toFixed(2)
     : "";
 
+  const recordWarehouses = records
+    .map((record) => record.warehouse)
+    .filter(Boolean);
   const warehouseOptions = Array.from(
-    new Set(
-      records
-        .map((record) => record.warehouse)
-        .filter(Boolean),
-    ),
-  ).concat(
+    new Set([...warehouseList, ...recordWarehouses]),
+  );
+  const filterWarehouseFallback =
     draftFilters.warehouse &&
-      draftFilters.warehouse !== "All Locations" &&
-      !records.some(
-        (record) => record.warehouse === draftFilters.warehouse,
-      )
+    draftFilters.warehouse !== "All Locations" &&
+    !warehouseOptions.includes(draftFilters.warehouse)
       ? [draftFilters.warehouse]
-      : [],
-  );
-  const sortedWarehouseOptions = Array.from(new Set(warehouseOptions)).sort(
-    (a, b) => a.localeCompare(b),
-  );
+      : [];
+  const sortedWarehouseOptions = Array.from(
+    new Set([...warehouseOptions, ...filterWarehouseFallback]),
+  ).sort((a, b) => a.localeCompare(b));
+  const formWarehouseOptions = Array.from(
+    new Set([...warehouseList, formData.warehouse].filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
   const categoryQuery = String(formData.category || "").trim().toLowerCase();
   const filteredCategoryOptions = categoryOptions.filter((category) =>
     categoryQuery ? category.toLowerCase().includes(categoryQuery) : true,
@@ -1539,17 +1542,13 @@ const InventoryRecords = () => {
 
           <div className="filter-group">
             <span className="filter-title">Warehouse</span>
-            <select
+            <input
+              type="text"
+              list="inventory-records-warehouse-options"
               value={draftFilters.warehouse}
               onChange={updateDraftFilter("warehouse")}
-            >
-              <option>All Locations</option>
-              {sortedWarehouseOptions.map((warehouse) => (
-                <option key={warehouse} value={warehouse}>
-                  {warehouse}
-                </option>
-              ))}
-            </select>
+              placeholder="All Locations"
+            />
           </div>
 
           <div className="filter-group">
@@ -1975,9 +1974,10 @@ const InventoryRecords = () => {
               <span>Warehouse</span>
               <input
                 type="text"
+                list="inventory-records-warehouse-options"
                 value={formData.warehouse}
                 onChange={updateField("warehouse")}
-                placeholder="Warehouse A"
+                placeholder="Select or type warehouse"
               />
             </label>
             <label className="modal-field">
@@ -2329,6 +2329,12 @@ const InventoryRecords = () => {
           <datalist id="inventory-category-options">
             {categoryOptions.map((category) => (
               <option key={category} value={category} />
+            ))}
+          </datalist>
+          <datalist id="inventory-records-warehouse-options">
+            <option value="All Locations" />
+            {sortedWarehouseOptions.map((warehouse) => (
+              <option key={warehouse} value={warehouse} />
             ))}
           </datalist>
           {actionError ? <span className="modal-help">{actionError}</span> : null}

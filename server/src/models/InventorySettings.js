@@ -83,11 +83,6 @@ const InventorySettingsSchema = new mongoose.Schema(
       trim: true,
       default: "CSV",
     },
-    posErpConnection: {
-      type: String,
-      trim: true,
-      default: "Not connected",
-    },
     dataRetention: {
       type: String,
       trim: true,
