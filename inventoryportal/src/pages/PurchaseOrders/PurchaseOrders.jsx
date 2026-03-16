@@ -15,6 +15,7 @@ import {
   parseListResponse,
 } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import {
   formatCurrencyPlaceholder,
   formatCurrencyPair,
@@ -108,6 +109,11 @@ const PurchaseOrders = () => {
   const { currency, rate } = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
+
+  useInventoryGlobalSearch((term) => {
+    setSearchTerm(term);
+    setPage(1);
+  });
 
 
   useEffect(() => {
@@ -354,6 +360,18 @@ const PurchaseOrders = () => {
     setActionError("");
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleQuickAction = (event) => {
+      const action = String(event?.detail?.action || "");
+      if (action !== "receive-shipment") return;
+      openCreateModal();
+    };
+    window.addEventListener("inventory:quick-action", handleQuickAction);
+    return () =>
+      window.removeEventListener("inventory:quick-action", handleQuickAction);
+  }, [openCreateModal]);
 
   const openEditModal = (order) => {
     const itemNames = order.items

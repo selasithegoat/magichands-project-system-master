@@ -12,6 +12,9 @@ const InventoryLayout = ({
   onToggleNotification,
   isNotificationOpen,
   notificationDropdown,
+  searchValue,
+  onSearchChange,
+  onSearchSubmit,
   activeKey,
   onNavigate,
   theme,
@@ -65,6 +68,9 @@ const InventoryLayout = ({
           onToggleNotification={onToggleNotification}
           isNotificationOpen={isNotificationOpen}
           notificationDropdown={notificationDropdown}
+          searchValue={searchValue}
+          onSearchChange={onSearchChange}
+          onSearchSubmit={onSearchSubmit}
           theme={theme}
           onToggleTheme={onToggleTheme}
           onMenuClick={() => setIsMobileNavOpen((prev) => !prev)}

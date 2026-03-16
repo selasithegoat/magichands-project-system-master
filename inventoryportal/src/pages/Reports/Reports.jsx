@@ -19,6 +19,7 @@ import {
   parseListResponse,
 } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import {
   formatCurrencyValue,
   parseCurrencyValue,
@@ -328,6 +329,11 @@ const Reports = () => {
   const isNextDisabled = !meta.totalPages || page >= meta.totalPages;
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
+
+  useInventoryGlobalSearch((term) => {
+    setSearchTerm(term);
+    setPage(1);
+  });
 
   const handlePageChange = (nextPage) => {
     if (nextPage < 1) return;

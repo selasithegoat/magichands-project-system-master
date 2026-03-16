@@ -18,12 +18,20 @@ const Topbar = ({
   onToggleNotification,
   isNotificationOpen = false,
   notificationDropdown,
+  searchValue = "",
+  onSearchChange,
+  onSearchSubmit,
   theme,
   onToggleTheme,
   onMenuClick,
 }) => {
   const avatarAlt = `${formatUserName(user) || "User"} avatar`;
   const avatarUrl = user?.avatarUrl || "";
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    onSearchSubmit?.(searchValue);
+  };
 
   return (
     <header className="topbar">
@@ -36,10 +44,15 @@ const Topbar = ({
         >
           <MenuIcon />
         </button>
-        <div className="search">
+        <form className="search" onSubmit={handleSearchSubmit}>
           <SearchIcon className="search-icon" />
-          <input type="text" placeholder="Search inventory, records, or SKU" />
-        </div>
+          <input
+            type="text"
+            placeholder="Search inventory, records, or SKU"
+            value={searchValue}
+            onChange={(event) => onSearchChange?.(event.target.value)}
+          />
+        </form>
       </div>
 
       <div className="topbar-actions">

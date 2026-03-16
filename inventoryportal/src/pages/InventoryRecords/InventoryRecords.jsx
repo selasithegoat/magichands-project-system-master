@@ -15,6 +15,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import Modal from "../../components/ui/Modal";
 import { fetchInventory, parseListResponse } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import {
   formatCurrencyPlaceholder,
   formatCurrencyPair,
@@ -459,6 +460,11 @@ const InventoryRecords = () => {
   const selectAllRef = useRef(null);
   const { currency, rate } = useInventoryCurrency();
   const draftStorageKey = "inventory-records-draft";
+
+  useInventoryGlobalSearch((term) => {
+    setSearchTerm(term);
+    setPage(1);
+  });
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
 
@@ -1006,6 +1012,18 @@ const InventoryRecords = () => {
     setActionError("");
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleQuickAction = (event) => {
+      const action = String(event?.detail?.action || "");
+      if (action !== "add-record") return;
+      openCreateModal();
+    };
+    window.addEventListener("inventory:quick-action", handleQuickAction);
+    return () =>
+      window.removeEventListener("inventory:quick-action", handleQuickAction);
+  }, [openCreateModal]);
 
   const buildEditableBrandGroups = (record) => {
     const fallbackStatus = record?.status || "In Stock";

@@ -16,6 +16,7 @@ import {
   parseListResponse,
 } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import "./ClientItems.css";
 
 const DEFAULT_LIMIT = 6;
@@ -46,6 +47,7 @@ const ClientItems = () => {
     total: 0,
     totalPages: 0,
   });
+  const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -56,6 +58,11 @@ const ClientItems = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
+
+  useInventoryGlobalSearch((term) => {
+    setSearchTerm(term);
+    setPage(1);
+  });
 
   const formatDateInput = (value) => {
     if (!value) return "";
@@ -69,8 +76,16 @@ const ClientItems = () => {
 
     const loadItems = async () => {
       try {
+        const params = new URLSearchParams({
+          page: String(page),
+          limit: String(DEFAULT_LIMIT),
+        });
+        if (searchTerm.trim()) {
+          params.set("search", searchTerm.trim());
+        }
+
         const payload = await fetchInventory(
-          `/api/inventory/client-items?page=${page}&limit=${DEFAULT_LIMIT}`,
+          `/api/inventory/client-items?${params.toString()}`,
         );
         const parsed = parseListResponse(payload);
         const normalized = parsed.data.map((item, index) => ({
@@ -112,7 +127,11 @@ const ClientItems = () => {
     return () => {
       isMounted = false;
     };
-  }, [page, refreshKey]);
+  }, [page, refreshKey, searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
 
   const total = meta.total || items.length;
   const startIndex = total ? (page - 1) * meta.limit + 1 : 0;
@@ -253,6 +272,8 @@ const ClientItems = () => {
             <input
               type="text"
               placeholder="Search by client, serial number, or item..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
             />
           </div>
           <button type="button" className="ghost-button">

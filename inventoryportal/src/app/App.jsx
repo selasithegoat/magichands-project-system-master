@@ -32,6 +32,15 @@ import useRealtimeClient from "../hooks/useRealtimeClient";
 const APP_NAME = "MagicHands Inventory";
 const THEME_STORAGE_KEY = "inventory-portal-theme";
 const PAGE_STORAGE_KEY = "inventory-portal-active-page";
+const SEARCHABLE_PAGES = new Set([
+  "inventory-records",
+  "inventory-types",
+  "purchase-orders",
+  "stock-transactions",
+  "suppliers",
+  "client-items",
+  "reports",
+]);
 
 const getPreferredTheme = () => {
   if (typeof window === "undefined") {
@@ -67,6 +76,7 @@ const App = () => {
   const [accessDenied, setAccessDenied] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
   const [activePage, setActivePage] = useState(() => {
     if (typeof window === "undefined") return "dashboard";
     return window.localStorage.getItem(PAGE_STORAGE_KEY) || "dashboard";
@@ -119,6 +129,17 @@ const App = () => {
     }
   }, [activePage]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const trimmed = String(globalSearch || "").trim();
+    const timer = setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("inventory:search", { detail: { term: trimmed } }),
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [globalSearch]);
+
   useRealtimeClient(Boolean(user));
   const {
     notifications,
@@ -137,6 +158,36 @@ const App = () => {
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === "dark" ? "light" : "dark"));
+  };
+
+  const handleGlobalSearchSubmit = (value) => {
+    const trimmed = String(value || "").trim();
+    if (trimmed && !SEARCHABLE_PAGES.has(activePage)) {
+      setActivePage("inventory-records");
+    }
+    if (typeof window === "undefined") return;
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("inventory:search", { detail: { term: trimmed } }),
+      );
+    }, 0);
+  };
+
+  const handleQuickAction = (action) => {
+    if (!action) return;
+    if (action.target) {
+      setActivePage(action.target);
+    }
+    setQuickActionOpen(false);
+    if (typeof window === "undefined") return;
+    const actionKey = action.key || action.title || "";
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("inventory:quick-action", {
+          detail: { action: actionKey },
+        }),
+      );
+    }, 0);
   };
 
   const logout = async () => {
@@ -266,6 +317,9 @@ const App = () => {
         }
         isNotificationOpen={isNotificationOpen}
         notificationDropdown={notificationDropdown}
+        searchValue={globalSearch}
+        onSearchChange={setGlobalSearch}
+        onSearchSubmit={handleGlobalSearchSubmit}
         activeKey={activePage}
         onNavigate={setActivePage}
         theme={theme}
@@ -277,6 +331,7 @@ const App = () => {
         isOpen={quickActionOpen}
         onClose={() => setQuickActionOpen(false)}
         actions={quickActions}
+        onAction={handleQuickAction}
       />
     </>
   );

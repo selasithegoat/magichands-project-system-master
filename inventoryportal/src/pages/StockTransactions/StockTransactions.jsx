@@ -14,6 +14,7 @@ import {
   parseListResponse,
 } from "../../utils/inventoryApi";
 import { buildPaginationRange } from "../../utils/pagination";
+import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import "./StockTransactions.css";
 
 const TYPE_OPTIONS = [
@@ -81,6 +82,11 @@ const StockTransactions = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
+
+  useInventoryGlobalSearch((term) => {
+    setSearchTerm(term);
+    setPage(1);
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -225,6 +231,18 @@ const StockTransactions = () => {
     setActionError("");
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleQuickAction = (event) => {
+      const action = String(event?.detail?.action || "");
+      if (action !== "adjust-stock") return;
+      openCreateModal();
+    };
+    window.addEventListener("inventory:quick-action", handleQuickAction);
+    return () =>
+      window.removeEventListener("inventory:quick-action", handleQuickAction);
+  }, [openCreateModal]);
 
   const openEditModal = (row) => {
     setEditingTransaction(row);

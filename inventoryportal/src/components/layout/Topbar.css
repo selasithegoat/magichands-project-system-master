@@ -22,6 +22,7 @@
   border: 1px solid var(--border);
   box-shadow: var(--shadow-soft);
   border-radius: var(--radius-sm);
+  margin: 0;
 }
 
 .search input {
