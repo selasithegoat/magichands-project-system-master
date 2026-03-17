@@ -1,13 +1,17 @@
 import { useEffect, useRef } from "react";
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_KEEPALIVE_MS = 60 * 1000;
 
 const useInactivityLogout = ({
   enabled = true,
   timeout = DEFAULT_TIMEOUT_MS,
   onLogout,
+  keepalive = true,
+  keepaliveInterval = DEFAULT_KEEPALIVE_MS,
 } = {}) => {
   const timeoutRef = useRef(null);
+  const keepaliveRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -35,19 +39,34 @@ const useInactivityLogout = ({
       }, timeout);
     };
 
+    const sendKeepalive = () => {
+      if (!keepalive) return;
+      const now = Date.now();
+      if (now - keepaliveRef.current < keepaliveInterval) return;
+      keepaliveRef.current = now;
+      fetch("/api/auth/me?source=inventory", {
+        credentials: "include",
+        cache: "no-store",
+      }).catch(() => {});
+    };
+
     const resetTimer = () => {
       startTimer();
+      sendKeepalive();
     };
 
     const events = [
       "pointerdown",
+      "pointermove",
       "mousedown",
       "mousemove",
       "keydown",
+      "click",
+      "wheel",
       "scroll",
       "touchstart",
+      "touchmove",
       "focusin",
-      "click",
     ];
 
     events.forEach((event) => {
@@ -62,6 +81,7 @@ const useInactivityLogout = ({
     document.addEventListener("visibilitychange", handleVisibility, true);
 
     startTimer();
+    sendKeepalive();
 
     return () => {
       clearTimer();
@@ -71,7 +91,7 @@ const useInactivityLogout = ({
       window.removeEventListener("focus", resetTimer, true);
       document.removeEventListener("visibilitychange", handleVisibility, true);
     };
-  }, [enabled, onLogout, timeout]);
+  }, [enabled, keepalive, keepaliveInterval, onLogout, timeout]);
 
   return null;
 };

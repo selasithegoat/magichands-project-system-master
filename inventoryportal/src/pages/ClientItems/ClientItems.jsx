@@ -338,7 +338,7 @@ const ClientItems = () => {
           <h2>Client Item Tracking</h2>
           <p>
             Register, monitor, and manage items received from clients for
-            service and repair work.
+            service.
           </p>
         </div>
         <div className="client-items-actions">

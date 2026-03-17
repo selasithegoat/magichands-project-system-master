@@ -33,6 +33,7 @@ import useInactivityLogout from "../hooks/useInactivityLogout";
 
 const APP_NAME = "MagicHands Inventory";
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+const INACTIVITY_KEEPALIVE_MS = 60 * 1000;
 const THEME_STORAGE_KEY = "inventory-portal-theme";
 const THEME_MODE_STORAGE_KEY = "inventory-portal-theme-mode";
 const DENSITY_STORAGE_KEY = "inventory-portal-density";
@@ -268,6 +269,8 @@ const App = () => {
     enabled: Boolean(user),
     timeout: INACTIVITY_TIMEOUT_MS,
     onLogout: logout,
+    keepalive: true,
+    keepaliveInterval: INACTIVITY_KEEPALIVE_MS,
   });
   const {
     notifications,
