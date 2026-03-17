@@ -40,6 +40,7 @@ const DEFAULT_FORM = {
   type: "Stock In",
   qty: "",
   source: "",
+  destination: "",
   date: "",
   staff: "",
   notes: "",
@@ -284,6 +285,7 @@ const StockTransactions = () => {
       type: row.type || "Stock In",
       qty: Number.isFinite(row.qty) ? String(row.qty) : "",
       source: row.source || "",
+      destination: row.destination || "",
       date: toInputDateTime(row.dateRaw),
       staff: row.staff || "",
       notes: row.notes || "",
@@ -331,6 +333,7 @@ const StockTransactions = () => {
         type: formData.type,
         qty: qtyValue,
         source: formData.source,
+        destination: formData.destination,
         date: formData.date,
         staff: formData.staff,
         notes: formData.notes,
@@ -627,6 +630,16 @@ const StockTransactions = () => {
                 list="stock-transactions-warehouse-options"
                 value={formData.source}
                 onChange={updateField("source")}
+                placeholder="Select or type warehouse"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Destination</span>
+              <input
+                type="text"
+                list="stock-transactions-warehouse-options"
+                value={formData.destination}
+                onChange={updateField("destination")}
                 placeholder="Select or type warehouse"
               />
             </label>
