@@ -293,9 +293,15 @@ const Layout = ({
     }
   };
 
+  const EXCLUDED_NOTIFICATION_SOURCE = "inventory";
+
   const fetchNotifications = async (isInitial = false) => {
     try {
-      const res = await fetch("/api/notifications");
+      const res = await fetch(
+        `/api/notifications?excludeSource=${encodeURIComponent(
+          EXCLUDED_NOTIFICATION_SOURCE,
+        )}`,
+      );
       if (res.ok) {
         const data = await res.json();
         setNotifications(data);
@@ -363,6 +369,10 @@ const Layout = ({
 
     const handleNotificationRealtime = (event) => {
       const recipientId = String(event?.detail?.recipientId || "");
+      const portal = String(event?.detail?.portal || "").toLowerCase();
+      if (portal === EXCLUDED_NOTIFICATION_SOURCE) {
+        return;
+      }
       if (recipientId && recipientId !== currentUserId) {
         return;
       }
@@ -403,9 +413,14 @@ const Layout = ({
 
   const handleMarkAllAsRead = async () => {
     try {
-      const res = await fetch("/api/notifications/read-all", {
+      const res = await fetch(
+        `/api/notifications/read-all?excludeSource=${encodeURIComponent(
+          EXCLUDED_NOTIFICATION_SOURCE,
+        )}`,
+        {
         method: "PATCH",
-      });
+        },
+      );
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
         setNotificationCount(0);
@@ -421,7 +436,12 @@ const Layout = ({
 
   const handleClearNotifications = async () => {
     try {
-      const res = await fetch("/api/notifications", { method: "DELETE" });
+      const res = await fetch(
+        `/api/notifications?excludeSource=${encodeURIComponent(
+          EXCLUDED_NOTIFICATION_SOURCE,
+        )}`,
+        { method: "DELETE" },
+      );
       if (res.ok) {
         setNotifications([]);
         lastIdsRef.current = new Set();

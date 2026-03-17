@@ -1,15 +1,36 @@
 const Notification = require("../models/Notification");
 
+const parseSourceList = (value) =>
+  String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const applySourceFilter = (filter, { source, excludeSource }) => {
+  const includeSources = parseSourceList(source);
+  const excludeSources = parseSourceList(excludeSource);
+
+  if (includeSources.length) {
+    filter.source =
+      includeSources.length === 1 ? includeSources[0] : { $in: includeSources };
+    return;
+  }
+
+  if (excludeSources.length) {
+    filter.source = { $nin: excludeSources };
+  }
+};
+
 // @desc    Get all notifications for logged-in user
 // @route   GET /api/notifications
 // @access  Private
 const getNotifications = async (req, res) => {
   try {
-    const source = String(req.query.source || "").trim();
     const filter = { recipient: req.user._id };
-    if (source) {
-      filter.source = source;
-    }
+    applySourceFilter(filter, {
+      source: req.query.source,
+      excludeSource: req.query.excludeSource,
+    });
 
     const notifications = await Notification.find(filter)
       .populate("sender", "firstName lastName name avatarUrl")
@@ -60,11 +81,11 @@ const markAsRead = async (req, res) => {
 // @access  Private
 const markAllAsRead = async (req, res) => {
   try {
-    const source = String(req.query.source || "").trim();
     const filter = { recipient: req.user._id, isRead: false };
-    if (source) {
-      filter.source = source;
-    }
+    applySourceFilter(filter, {
+      source: req.query.source,
+      excludeSource: req.query.excludeSource,
+    });
 
     await Notification.updateMany(filter, { $set: { isRead: true } });
 
@@ -80,11 +101,11 @@ const markAllAsRead = async (req, res) => {
 // @access  Private
 const clearNotifications = async (req, res) => {
   try {
-    const source = String(req.query.source || "").trim();
     const filter = { recipient: req.user._id };
-    if (source) {
-      filter.source = source;
-    }
+    applySourceFilter(filter, {
+      source: req.query.source,
+      excludeSource: req.query.excludeSource,
+    });
 
     await Notification.deleteMany(filter);
     res.json({ message: "Notifications cleared" });

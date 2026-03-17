@@ -19,6 +19,7 @@ const toEntityId = (value) => {
 };
 
 const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
+  const EXCLUDED_NOTIFICATION_SOURCE = "inventory";
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -76,6 +77,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     try {
       const res = await axios.get("/api/notifications", {
         withCredentials: true,
+        params: { excludeSource: EXCLUDED_NOTIFICATION_SOURCE },
       });
 
       const currentNotifications = Array.isArray(res.data) ? res.data : [];
@@ -250,6 +252,10 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
 
     const handleNotificationRealtime = (event) => {
       const recipientId = String(event?.detail?.recipientId || "");
+      const portal = String(event?.detail?.portal || "").toLowerCase();
+      if (portal === EXCLUDED_NOTIFICATION_SOURCE) {
+        return;
+      }
       if (recipientId && recipientId !== currentUserId) {
         return;
       }
@@ -291,7 +297,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
       await axios.patch(
         "/api/notifications/read-all",
         {},
-        { withCredentials: true },
+        { withCredentials: true, params: { excludeSource: EXCLUDED_NOTIFICATION_SOURCE } },
       );
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(() => {
@@ -311,6 +317,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     try {
       await axios.delete("/api/notifications", {
         withCredentials: true,
+        params: { excludeSource: EXCLUDED_NOTIFICATION_SOURCE },
       });
       setNotifications([]);
       setUnreadCount(() => {
