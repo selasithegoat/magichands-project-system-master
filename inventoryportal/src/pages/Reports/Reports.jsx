@@ -529,7 +529,7 @@ const Reports = () => {
             Client: item.clientName || item.client || "",
             Phone: item.clientPhone || item.phone || "",
             Item: item.itemName || item.item || "",
-            Serial: item.serialNumber || item.serial || "",
+            "Order Number": item.orderNo || item.serialNumber || item.serial || "",
             Received: formatShortDate(
               item.receivedAt || item.received || item.dateReceived,
             ),

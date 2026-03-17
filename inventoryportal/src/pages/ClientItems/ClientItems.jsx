@@ -25,7 +25,7 @@ const DEFAULT_FORM = {
   clientName: "",
   clientPhone: "",
   itemName: "",
-  serialNumber: "",
+  orderNo: "",
   receivedAt: "",
   warehouse: "",
   status: "Received",
@@ -109,7 +109,7 @@ const ClientItems = () => {
           client: item.clientName || item.client || "",
           phone: item.clientPhone || item.phone || "",
           item: item.itemName || item.item || "",
-          serial: item.serialNumber || item.serial || "",
+          orderNo: item.orderNo || item.serialNumber || item.serial || "",
           receivedAt: item.receivedAt || item.received || item.dateReceived,
           received: formatShortDate(
             item.receivedAt || item.received || item.dateReceived,
@@ -247,7 +247,7 @@ const ClientItems = () => {
       clientName: item.client || "",
       clientPhone: item.phone || "",
       itemName: item.item || "",
-      serialNumber: item.serial || "",
+      orderNo: item.orderNo || item.serial || "",
       receivedAt: formatDateInput(item.receivedAt),
       warehouse: item.warehouse || "",
       status: item.status || "Received",
@@ -273,11 +273,11 @@ const ClientItems = () => {
     if (
       !formData.clientName ||
       !formData.itemName ||
-      !formData.serialNumber ||
+      !formData.orderNo ||
       !formData.receivedAt
     ) {
       setActionError(
-        "Client name, item name, serial number, and received date are required.",
+        "Client name, item name, order number, and received date are required.",
       );
       return;
     }
@@ -288,7 +288,7 @@ const ClientItems = () => {
         clientName: formData.clientName,
         clientPhone: formData.clientPhone,
         itemName: formData.itemName,
-        serialNumber: formData.serialNumber,
+        orderNo: formData.orderNo,
         receivedAt: formData.receivedAt,
         warehouse: formData.warehouse,
         status: formData.status,
@@ -366,7 +366,7 @@ const ClientItems = () => {
             <SearchIcon className="search-icon" />
             <input
               type="text"
-              placeholder="Search by client, serial number, or item..."
+              placeholder="Search by client, order number, or item..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
@@ -420,7 +420,7 @@ const ClientItems = () => {
               </div>
               <div className="cell item-cell full" data-label="Item Details">
                 <strong>{item.item}</strong>
-                <span className="muted">SN: {item.serial}</span>
+                <span className="muted">Order #: {item.orderNo}</span>
                 <span className={getStatusClass(item.status)}>
                   {item.status}
                 </span>
@@ -535,12 +535,12 @@ const ClientItems = () => {
               />
             </label>
             <label className="modal-field">
-              <span>Serial Number</span>
+              <span>Order Number</span>
               <input
                 type="text"
-                value={formData.serialNumber}
-                onChange={updateField("serialNumber")}
-                placeholder="Serial number"
+                value={formData.orderNo}
+                onChange={updateField("orderNo")}
+                placeholder="Order number"
               />
             </label>
             <label className="modal-field">

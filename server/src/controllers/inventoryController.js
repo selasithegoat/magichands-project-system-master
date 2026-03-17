@@ -776,6 +776,7 @@ const getClientItems = async (req, res) => {
         { clientName: search },
         { clientPhone: search },
         { itemName: search },
+        { orderNo: search },
         { serialNumber: search },
       ];
     }
@@ -813,9 +814,10 @@ const createClientItem = async (req, res) => {
       req.body.clientPhone || req.body.phone,
     );
     const itemName = parseStringValue(req.body.itemName || req.body.item);
-    const serialNumber = parseStringValue(
-      req.body.serialNumber || req.body.serial,
+    const orderNo = parseStringValue(
+      req.body.orderNo || req.body.serialNumber || req.body.serial,
     );
+    const serialNumber = orderNo;
     const warehouse = parseStringValue(req.body.warehouse);
     const status = parseStringValue(req.body.status) || "Received";
     const notes = parseStringValue(req.body.notes);
@@ -831,8 +833,8 @@ const createClientItem = async (req, res) => {
     if (!itemName) {
       return res.status(400).json({ message: "itemName is required." });
     }
-    if (!serialNumber) {
-      return res.status(400).json({ message: "serialNumber is required." });
+    if (!orderNo) {
+      return res.status(400).json({ message: "Order number is required." });
     }
     if (receivedAtResult.error) {
       return res.status(400).json({ message: receivedAtResult.error });
@@ -884,7 +886,7 @@ const createClientItem = async (req, res) => {
       warehouse,
       status,
       notes,
-      orderNo: parseStringValue(req.body.orderNo),
+      orderNo,
       jobLead: parseStringValue(req.body.jobLead),
       dateReceived: receivedAtResult.value,
       itemDescription: parseStringValue(req.body.itemDescription),
@@ -924,30 +926,33 @@ const updateClientItem = async (req, res) => {
     }
 
     const previousItemName = record.itemName;
-    const previousSerialNumber = record.serialNumber;
+    const previousOrderNo = record.orderNo || record.serialNumber;
     const hasItemNamePayload =
       Object.prototype.hasOwnProperty.call(req.body, "itemName") ||
       Object.prototype.hasOwnProperty.call(req.body, "item");
-    const hasSerialPayload =
+    const hasOrderPayload =
+      Object.prototype.hasOwnProperty.call(req.body, "orderNo") ||
       Object.prototype.hasOwnProperty.call(req.body, "serialNumber") ||
       Object.prototype.hasOwnProperty.call(req.body, "serial");
     const nextItemName = hasItemNamePayload
       ? parseStringValue(req.body.itemName || req.body.item)
       : record.itemName;
-    const nextSerialNumber = hasSerialPayload
-      ? parseStringValue(req.body.serialNumber || req.body.serial)
-      : record.serialNumber;
+    const nextOrderNo = hasOrderPayload
+      ? parseStringValue(
+          req.body.orderNo || req.body.serialNumber || req.body.serial,
+        )
+      : record.orderNo || record.serialNumber;
 
     if (!nextItemName) {
       return res.status(400).json({ message: "itemName cannot be empty." });
     }
-    if (!nextSerialNumber) {
-      return res.status(400).json({ message: "serialNumber is required." });
+    if (!nextOrderNo) {
+      return res.status(400).json({ message: "Order number is required." });
     }
 
     const mappingConflict = await findItemIdConflict({
       itemName: nextItemName,
-      itemId: nextSerialNumber,
+      itemId: nextOrderNo,
       excludeIds: { clientItemId: record._id },
     });
     if (mappingConflict) {
@@ -956,7 +961,7 @@ const updateClientItem = async (req, res) => {
         .json({
           message: buildItemIdConflictMessage({
             inputName: nextItemName,
-            inputId: nextSerialNumber,
+            inputId: nextOrderNo,
             conflict: mappingConflict,
           }),
         });
@@ -964,13 +969,13 @@ const updateClientItem = async (req, res) => {
 
     const identityResult = await ensureInventoryItemIdentity({
       itemName: nextItemName,
-      itemId: nextSerialNumber,
+      itemId: nextOrderNo,
     });
     if (identityResult?.conflict) {
       return res.status(409).json({
         message: buildItemIdConflictMessage({
           inputName: nextItemName,
-          inputId: nextSerialNumber,
+          inputId: nextOrderNo,
           conflict: identityResult.conflict,
         }),
       });
@@ -992,8 +997,9 @@ const updateClientItem = async (req, res) => {
       record.itemName = nextItemName;
     }
 
-    if (hasSerialPayload) {
-      record.serialNumber = nextSerialNumber;
+    if (hasOrderPayload) {
+      record.orderNo = nextOrderNo;
+      record.serialNumber = nextOrderNo;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "receivedAt")) {
@@ -1036,12 +1042,12 @@ const updateClientItem = async (req, res) => {
 
     if (
       normalizeKey(previousItemName) !== normalizeKey(record.itemName) ||
-      normalizeKey(previousSerialNumber) !== normalizeKey(record.serialNumber)
+      normalizeKey(previousOrderNo) !== normalizeKey(record.orderNo)
     ) {
       try {
         await cleanupInventoryItemIdentity({
           itemName: previousItemName,
-          itemId: previousSerialNumber,
+          itemId: previousOrderNo,
         });
       } catch (error) {
         console.error("Unable to cleanup client item identity:", error);
@@ -1085,7 +1091,7 @@ const deleteClientItem = async (req, res) => {
     try {
       await cleanupInventoryItemIdentity({
         itemName: deleted.itemName,
-        itemId: deleted.serialNumber,
+        itemId: deleted.orderNo || deleted.serialNumber,
       });
     } catch (error) {
       console.error("Unable to cleanup client item identity:", error);
