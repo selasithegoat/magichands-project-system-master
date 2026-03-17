@@ -270,8 +270,15 @@ const ClientItems = () => {
 
   const handleSave = async () => {
     if (isSaving) return;
-    if (!formData.clientName || !formData.itemName || !formData.receivedAt) {
-      setActionError("Client name, item name, and received date are required.");
+    if (
+      !formData.clientName ||
+      !formData.itemName ||
+      !formData.serialNumber ||
+      !formData.receivedAt
+    ) {
+      setActionError(
+        "Client name, item name, serial number, and received date are required.",
+      );
       return;
     }
 

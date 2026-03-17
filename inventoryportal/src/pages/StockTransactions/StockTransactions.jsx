@@ -310,6 +310,10 @@ const StockTransactions = () => {
       setActionError("Item name is required.");
       return;
     }
+    if (!formData.sku.trim()) {
+      setActionError("SKU is required.");
+      return;
+    }
     if (!formData.type) {
       setActionError("Transaction type is required.");
       return;

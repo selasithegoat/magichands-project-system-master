@@ -3,6 +3,7 @@ const PurchasingOrder = require("../models/PurchasingOrder");
 const Supplier = require("../models/Supplier");
 const InventoryCategory = require("../models/InventoryCategory");
 const InventoryRecord = require("../models/InventoryRecord");
+const InventoryItemIdentity = require("../models/InventoryItemIdentity");
 const StockTransaction = require("../models/StockTransaction");
 const InventoryReport = require("../models/InventoryReport");
 const InventorySettings = require("../models/InventorySettings");
@@ -150,6 +151,16 @@ const shouldNotifyLowStock = (record, previousQtyValue, settings) => {
 };
 
 const parseStringValue = (value) => String(value ?? "").trim();
+const normalizeKey = (value) => parseStringValue(value).toLowerCase();
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const buildExactMatchRegex = (value) => {
+  const trimmed = parseStringValue(value);
+  if (!trimmed) return null;
+  return new RegExp(`^${escapeRegex(trimmed)}$`, "i");
+};
+const isDuplicateKeyError = (error) =>
+  Boolean(error && (error.code === 11000 || error.name === "MongoServerError"));
 
 const formatOpenPOStatusLabel = (status) => {
   const raw = parseStringValue(status);
@@ -195,7 +206,7 @@ const parseCurrencyNumber = (value) => {
 const ensureInventoryCategory = async (name, userId) => {
   const trimmed = parseStringValue(name);
   if (!trimmed) return null;
-  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegex(trimmed);
   const existing = await InventoryCategory.findOne({
     name: new RegExp(`^${escaped}$`, "i"),
   });
@@ -211,6 +222,191 @@ const ensureInventoryCategory = async (name, userId) => {
 const CATEGORY_TONES = ["blue", "indigo", "slate", "amber"];
 const STATUS_TONES = ["blue", "green", "amber", "rose", "indigo", "slate"];
 const SUPPLIER_TONES = ["blue", "indigo", "amber", "green"];
+
+const ITEM_ID_SOURCES = [
+  {
+    model: InventoryRecord,
+    itemField: "item",
+    idField: "sku",
+    label: "Inventory Records",
+    excludeKey: "inventoryRecordId",
+  },
+  {
+    model: ClientInventoryItem,
+    itemField: "itemName",
+    idField: "serialNumber",
+    label: "Client Items",
+    excludeKey: "clientItemId",
+  },
+  {
+    model: StockTransaction,
+    itemField: "item",
+    idField: "sku",
+    label: "Stock Transactions",
+    excludeKey: "stockTransactionId",
+  },
+];
+
+const buildRegistryConflict = ({ itemName, itemId, registry }) => {
+  if (!registry) return null;
+  const inputNameKey = normalizeKey(itemName);
+  const inputIdKey = normalizeKey(itemId);
+  const registryNameKey = normalizeKey(registry.itemName);
+  const registryIdKey = normalizeKey(registry.itemId);
+
+  if (registryNameKey === inputNameKey && registryIdKey !== inputIdKey) {
+    return {
+      type: "name",
+      source: "Inventory ID Registry",
+      existingItemName: registry.itemName,
+      existingItemId: registry.itemId,
+    };
+  }
+  if (registryIdKey === inputIdKey && registryNameKey !== inputNameKey) {
+    return {
+      type: "id",
+      source: "Inventory ID Registry",
+      existingItemName: registry.itemName,
+      existingItemId: registry.itemId,
+    };
+  }
+  return null;
+};
+
+const ensureInventoryItemIdentity = async ({ itemName, itemId }) => {
+  const itemNameKey = normalizeKey(itemName);
+  const itemIdKey = normalizeKey(itemId);
+  if (!itemNameKey || !itemIdKey) return { ok: false };
+
+  const existing = await InventoryItemIdentity.findOne({
+    $or: [{ itemNameKey }, { itemIdKey }],
+  }).lean();
+
+  if (existing) {
+    const conflict = buildRegistryConflict({
+      itemName,
+      itemId,
+      registry: existing,
+    });
+    if (conflict) return { conflict };
+    return { ok: true };
+  }
+
+  try {
+    await InventoryItemIdentity.create({
+      itemName: parseStringValue(itemName),
+      itemId: parseStringValue(itemId),
+      itemNameKey,
+      itemIdKey,
+    });
+    return { ok: true };
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      const latest = await InventoryItemIdentity.findOne({
+        $or: [{ itemNameKey }, { itemIdKey }],
+      }).lean();
+      const conflict = buildRegistryConflict({
+        itemName,
+        itemId,
+        registry: latest,
+      });
+      if (conflict) return { conflict };
+      return { ok: true };
+    }
+    throw error;
+  }
+};
+
+const hasItemIdentityInUse = async ({ itemName, itemId }) => {
+  const nameRegex = buildExactMatchRegex(itemName);
+  const idRegex = buildExactMatchRegex(itemId);
+  if (!nameRegex || !idRegex) return false;
+
+  for (const source of ITEM_ID_SOURCES) {
+    const matchCount = await source.model.countDocuments({
+      [source.itemField]: nameRegex,
+      [source.idField]: idRegex,
+    });
+    if (matchCount > 0) return true;
+  }
+  return false;
+};
+
+const cleanupInventoryItemIdentity = async ({ itemName, itemId }) => {
+  const itemNameKey = normalizeKey(itemName);
+  const itemIdKey = normalizeKey(itemId);
+  if (!itemNameKey || !itemIdKey) return;
+  const inUse = await hasItemIdentityInUse({ itemName, itemId });
+  if (inUse) return;
+  await InventoryItemIdentity.deleteOne({ itemNameKey, itemIdKey });
+};
+
+const buildItemIdConflictMessage = ({ inputName, inputId, conflict }) => {
+  if (!conflict) return "Item ID conflict detected.";
+  const safeName = parseStringValue(inputName);
+  const safeId = parseStringValue(inputId);
+  const conflictName = parseStringValue(conflict.existingItemName);
+  const conflictId = parseStringValue(conflict.existingItemId);
+  if (conflict.type === "name") {
+    return `Item "${safeName}" already uses ID "${conflictId}" (${conflict.source}). Use that ID or change the name.`;
+  }
+  if (conflict.type === "id") {
+    return `ID "${safeId}" is already assigned to "${conflictName}" (${conflict.source}). Use a different ID or rename the item.`;
+  }
+  return "Item ID conflict detected.";
+};
+
+const findItemIdConflict = async ({ itemName, itemId, excludeIds = {} }) => {
+  const normalizedName = normalizeKey(itemName);
+  const normalizedId = normalizeKey(itemId);
+  if (!normalizedName || !normalizedId) return null;
+  const nameRegex = buildExactMatchRegex(itemName);
+  const idRegex = buildExactMatchRegex(itemId);
+  if (!nameRegex || !idRegex) return null;
+
+  for (const source of ITEM_ID_SOURCES) {
+    const excludeId = excludeIds[source.excludeKey];
+    const baseFilter = excludeId ? { _id: { $ne: excludeId } } : {};
+
+    const nameMatches = await source.model
+      .find({ ...baseFilter, [source.itemField]: nameRegex })
+      .select({ [source.itemField]: 1, [source.idField]: 1 })
+      .lean();
+
+    const nameConflict = nameMatches.find((entry) => {
+      const entryId = normalizeKey(entry?.[source.idField]);
+      return entryId && entryId !== normalizedId;
+    });
+    if (nameConflict) {
+      return {
+        type: "name",
+        source: source.label,
+        existingItemName: nameConflict?.[source.itemField],
+        existingItemId: nameConflict?.[source.idField],
+      };
+    }
+
+    const idMatches = await source.model
+      .find({ ...baseFilter, [source.idField]: idRegex })
+      .select({ [source.itemField]: 1, [source.idField]: 1 })
+      .lean();
+
+    const idConflict = idMatches.find((entry) => {
+      const entryName = normalizeKey(entry?.[source.itemField]);
+      return entryName && entryName !== normalizedName;
+    });
+    if (idConflict) {
+      return {
+        type: "id",
+        source: source.label,
+        existingItemName: idConflict?.[source.itemField],
+        existingItemId: idConflict?.[source.idField],
+      };
+    }
+  }
+
+  return null;
+};
 
 const pickRandomTone = (tones) =>
   tones[Math.floor(Math.random() * tones.length)];
@@ -635,6 +831,9 @@ const createClientItem = async (req, res) => {
     if (!itemName) {
       return res.status(400).json({ message: "itemName is required." });
     }
+    if (!serialNumber) {
+      return res.status(400).json({ message: "serialNumber is required." });
+    }
     if (receivedAtResult.error) {
       return res.status(400).json({ message: receivedAtResult.error });
     }
@@ -644,6 +843,36 @@ const createClientItem = async (req, res) => {
     });
     if (quantityResult.error) {
       return res.status(400).json({ message: quantityResult.error });
+    }
+
+    const mappingConflict = await findItemIdConflict({
+      itemName,
+      itemId: serialNumber,
+    });
+    if (mappingConflict) {
+      return res
+        .status(409)
+        .json({
+          message: buildItemIdConflictMessage({
+            inputName: itemName,
+            inputId: serialNumber,
+            conflict: mappingConflict,
+          }),
+        });
+    }
+
+    const identityResult = await ensureInventoryItemIdentity({
+      itemName,
+      itemId: serialNumber,
+    });
+    if (identityResult?.conflict) {
+      return res.status(409).json({
+        message: buildItemIdConflictMessage({
+          inputName: itemName,
+          inputId: serialNumber,
+          conflict: identityResult.conflict,
+        }),
+      });
     }
 
     const record = await ClientInventoryItem.create({
@@ -694,6 +923,59 @@ const updateClientItem = async (req, res) => {
       return res.status(404).json({ message: "Client inventory item not found." });
     }
 
+    const previousItemName = record.itemName;
+    const previousSerialNumber = record.serialNumber;
+    const hasItemNamePayload =
+      Object.prototype.hasOwnProperty.call(req.body, "itemName") ||
+      Object.prototype.hasOwnProperty.call(req.body, "item");
+    const hasSerialPayload =
+      Object.prototype.hasOwnProperty.call(req.body, "serialNumber") ||
+      Object.prototype.hasOwnProperty.call(req.body, "serial");
+    const nextItemName = hasItemNamePayload
+      ? parseStringValue(req.body.itemName || req.body.item)
+      : record.itemName;
+    const nextSerialNumber = hasSerialPayload
+      ? parseStringValue(req.body.serialNumber || req.body.serial)
+      : record.serialNumber;
+
+    if (!nextItemName) {
+      return res.status(400).json({ message: "itemName cannot be empty." });
+    }
+    if (!nextSerialNumber) {
+      return res.status(400).json({ message: "serialNumber is required." });
+    }
+
+    const mappingConflict = await findItemIdConflict({
+      itemName: nextItemName,
+      itemId: nextSerialNumber,
+      excludeIds: { clientItemId: record._id },
+    });
+    if (mappingConflict) {
+      return res
+        .status(409)
+        .json({
+          message: buildItemIdConflictMessage({
+            inputName: nextItemName,
+            inputId: nextSerialNumber,
+            conflict: mappingConflict,
+          }),
+        });
+    }
+
+    const identityResult = await ensureInventoryItemIdentity({
+      itemName: nextItemName,
+      itemId: nextSerialNumber,
+    });
+    if (identityResult?.conflict) {
+      return res.status(409).json({
+        message: buildItemIdConflictMessage({
+          inputName: nextItemName,
+          inputId: nextSerialNumber,
+          conflict: identityResult.conflict,
+        }),
+      });
+    }
+
     if (Object.prototype.hasOwnProperty.call(req.body, "clientName")) {
       const clientName = parseStringValue(req.body.clientName);
       if (!clientName) {
@@ -706,16 +988,12 @@ const updateClientItem = async (req, res) => {
       record.clientPhone = parseStringValue(req.body.clientPhone);
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "itemName")) {
-      const itemName = parseStringValue(req.body.itemName);
-      if (!itemName) {
-        return res.status(400).json({ message: "itemName cannot be empty." });
-      }
-      record.itemName = itemName;
+    if (hasItemNamePayload) {
+      record.itemName = nextItemName;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "serialNumber")) {
-      record.serialNumber = parseStringValue(req.body.serialNumber);
+    if (hasSerialPayload) {
+      record.serialNumber = nextSerialNumber;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "receivedAt")) {
@@ -756,6 +1034,20 @@ const updateClientItem = async (req, res) => {
     record.updatedBy = req.user._id;
     await record.save();
 
+    if (
+      normalizeKey(previousItemName) !== normalizeKey(record.itemName) ||
+      normalizeKey(previousSerialNumber) !== normalizeKey(record.serialNumber)
+    ) {
+      try {
+        await cleanupInventoryItemIdentity({
+          itemName: previousItemName,
+          itemId: previousSerialNumber,
+        });
+      } catch (error) {
+        console.error("Unable to cleanup client item identity:", error);
+      }
+    }
+
     const populated = await ClientInventoryItem.findById(record._id)
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
@@ -790,6 +1082,14 @@ const deleteClientItem = async (req, res) => {
         deleted.clientName || "client"
       } was removed.`,
     });
+    try {
+      await cleanupInventoryItemIdentity({
+        itemName: deleted.itemName,
+        itemId: deleted.serialNumber,
+      });
+    } catch (error) {
+      console.error("Unable to cleanup client item identity:", error);
+    }
     res.json({ message: "Client inventory item deleted successfully." });
   } catch (error) {
     console.error("Error deleting client inventory item:", error);
@@ -895,6 +1195,16 @@ const createPurchasingOrder = async (req, res) => {
       return res.status(400).json({ message: "total is required." });
     }
 
+    const poNumberRegex = buildExactMatchRegex(poNumber);
+    if (poNumberRegex) {
+      const existingPo = await PurchasingOrder.findOne({ poNumber: poNumberRegex });
+      if (existingPo) {
+        return res.status(409).json({
+          message: `poNumber "${poNumber}" already exists. Use a different PO number.`,
+        });
+      }
+    }
+
     const qtyResult = parseNumberValue(req.body.qty, "qty", { min: 0 });
     if (qtyResult.error) {
       return res.status(400).json({ message: qtyResult.error });
@@ -959,6 +1269,18 @@ const updatePurchasingOrder = async (req, res) => {
       const poNumber = parseStringValue(req.body.poNumber);
       if (!poNumber) {
         return res.status(400).json({ message: "poNumber cannot be empty." });
+      }
+      const poNumberRegex = buildExactMatchRegex(poNumber);
+      if (poNumberRegex) {
+        const existingPo = await PurchasingOrder.findOne({
+          poNumber: poNumberRegex,
+          _id: { $ne: record._id },
+        });
+        if (existingPo) {
+          return res.status(409).json({
+            message: `poNumber "${poNumber}" already exists. Use a different PO number.`,
+          });
+        }
       }
       record.poNumber = poNumber;
     }
@@ -1680,6 +2002,36 @@ const createInventoryRecord = async (req, res) => {
       await ensureInventoryCategory(category, req.user?._id);
     }
 
+    const mappingConflict = await findItemIdConflict({
+      itemName: item,
+      itemId: sku,
+    });
+    if (mappingConflict) {
+      return res
+        .status(409)
+        .json({
+          message: buildItemIdConflictMessage({
+            inputName: item,
+            inputId: sku,
+            conflict: mappingConflict,
+          }),
+        });
+    }
+
+    const identityResult = await ensureInventoryItemIdentity({
+      itemName: item,
+      itemId: sku,
+    });
+    if (identityResult?.conflict) {
+      return res.status(409).json({
+        message: buildItemIdConflictMessage({
+          inputName: item,
+          inputId: sku,
+          conflict: identityResult.conflict,
+        }),
+      });
+    }
+
     const brandGroups = parseBrandGroups(req.body.brandGroups, recordStatus);
     const primaryBrand =
       brandGroups.find((group) => group.name)?.name ||
@@ -1780,6 +2132,51 @@ const updateInventoryRecord = async (req, res) => {
 
     const previousStatus = record.status;
     const previousQtyValue = record.qtyValue;
+    const previousItem = record.item;
+    const previousSku = record.sku;
+
+    const hasItemPayload = Object.prototype.hasOwnProperty.call(req.body, "item");
+    const hasSkuPayload = Object.prototype.hasOwnProperty.call(req.body, "sku");
+    const nextItem = hasItemPayload ? parseStringValue(req.body.item) : record.item;
+    const nextSku = hasSkuPayload ? parseStringValue(req.body.sku) : record.sku;
+
+    if (!nextItem) {
+      return res.status(400).json({ message: "item cannot be empty." });
+    }
+    if (!nextSku) {
+      return res.status(400).json({ message: "sku is required." });
+    }
+
+    const mappingConflict = await findItemIdConflict({
+      itemName: nextItem,
+      itemId: nextSku,
+      excludeIds: { inventoryRecordId: record._id },
+    });
+    if (mappingConflict) {
+      return res
+        .status(409)
+        .json({
+          message: buildItemIdConflictMessage({
+            inputName: nextItem,
+            inputId: nextSku,
+            conflict: mappingConflict,
+          }),
+        });
+    }
+
+    const identityResult = await ensureInventoryItemIdentity({
+      itemName: nextItem,
+      itemId: nextSku,
+    });
+    if (identityResult?.conflict) {
+      return res.status(409).json({
+        message: buildItemIdConflictMessage({
+          inputName: nextItem,
+          inputId: nextSku,
+          conflict: identityResult.conflict,
+        }),
+      });
+    }
 
     const updatableFields = [
       "item",
@@ -1951,6 +2348,20 @@ const updateInventoryRecord = async (req, res) => {
       });
     }
 
+    if (
+      normalizeKey(previousItem) !== normalizeKey(record.item) ||
+      normalizeKey(previousSku) !== normalizeKey(record.sku)
+    ) {
+      try {
+        await cleanupInventoryItemIdentity({
+          itemName: previousItem,
+          itemId: previousSku,
+        });
+      } catch (error) {
+        console.error("Unable to cleanup inventory record identity:", error);
+      }
+    }
+
     res.json(record);
   } catch (error) {
     console.error("Error updating inventory record:", error);
@@ -1973,6 +2384,14 @@ const deleteInventoryRecord = async (req, res) => {
         deleted.sku ? ` (${deleted.sku})` : ""
       } was removed.`,
     });
+    try {
+      await cleanupInventoryItemIdentity({
+        itemName: deleted.item,
+        itemId: deleted.sku,
+      });
+    } catch (error) {
+      console.error("Unable to cleanup inventory record identity:", error);
+    }
     res.json({ message: "Inventory record deleted successfully." });
   } catch (error) {
     console.error("Error deleting inventory record:", error);
@@ -2058,6 +2477,7 @@ const createStockTransaction = async (req, res) => {
 
   try {
     const item = parseStringValue(req.body.item);
+    const sku = parseStringValue(req.body.sku);
     const type = parseStringValue(req.body.type);
     const qtyResult = parseNumberValue(req.body.qty, "qty", {
       required: true,
@@ -2067,6 +2487,9 @@ const createStockTransaction = async (req, res) => {
     if (!item) {
       return res.status(400).json({ message: "item is required." });
     }
+    if (!sku) {
+      return res.status(400).json({ message: "sku is required." });
+    }
     if (!type) {
       return res.status(400).json({ message: "type is required." });
     }
@@ -2074,9 +2497,50 @@ const createStockTransaction = async (req, res) => {
       return res.status(400).json({ message: qtyResult.error });
     }
 
+    const mappingConflict = await findItemIdConflict({
+      itemName: item,
+      itemId: sku,
+    });
+    if (mappingConflict) {
+      return res
+        .status(409)
+        .json({
+          message: buildItemIdConflictMessage({
+            inputName: item,
+            inputId: sku,
+            conflict: mappingConflict,
+          }),
+        });
+    }
+
+    const identityResult = await ensureInventoryItemIdentity({
+      itemName: item,
+      itemId: sku,
+    });
+    if (identityResult?.conflict) {
+      return res.status(409).json({
+        message: buildItemIdConflictMessage({
+          inputName: item,
+          inputId: sku,
+          conflict: identityResult.conflict,
+        }),
+      });
+    }
+
     const txid =
       parseStringValue(req.body.txid) ||
       `TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const txidRegex = buildExactMatchRegex(txid);
+    if (txidRegex) {
+      const existingTx = await StockTransaction.findOne({ txid: txidRegex });
+      if (existingTx) {
+        return res
+          .status(409)
+          .json({
+            message: `txid "${txid}" already exists. Choose a different transaction ID.`,
+          });
+      }
+    }
     const date =
       parseOptionalDate(req.body.date) ||
       parseOptionalDate(req.body.createdAt) ||
@@ -2085,7 +2549,7 @@ const createStockTransaction = async (req, res) => {
     const record = await StockTransaction.create({
       txid,
       item,
-      sku: parseStringValue(req.body.sku),
+      sku,
       type,
       qty: qtyResult.value,
       source: parseStringValue(req.body.source),
@@ -2121,17 +2585,76 @@ const updateStockTransaction = async (req, res) => {
         .json({ message: "Stock transaction not found." });
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "txid")) {
-      const txid = parseStringValue(req.body.txid);
-      if (txid) record.txid = txid;
+    const previousItem = record.item;
+    const previousSku = record.sku;
+    const hasItemPayload = Object.prototype.hasOwnProperty.call(req.body, "item");
+    const hasSkuPayload = Object.prototype.hasOwnProperty.call(req.body, "sku");
+    const hasTxidPayload = Object.prototype.hasOwnProperty.call(req.body, "txid");
+    const nextItem = hasItemPayload ? parseStringValue(req.body.item) : record.item;
+    const nextSku = hasSkuPayload ? parseStringValue(req.body.sku) : record.sku;
+
+    if (!nextItem) {
+      return res.status(400).json({ message: "item is required." });
+    }
+    if (!nextSku) {
+      return res.status(400).json({ message: "sku is required." });
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "item")) {
-      const item = parseStringValue(req.body.item);
-      if (!item) {
-        return res.status(400).json({ message: "item is required." });
+    const mappingConflict = await findItemIdConflict({
+      itemName: nextItem,
+      itemId: nextSku,
+      excludeIds: { stockTransactionId: record._id },
+    });
+    if (mappingConflict) {
+      return res
+        .status(409)
+        .json({
+          message: buildItemIdConflictMessage({
+            inputName: nextItem,
+            inputId: nextSku,
+            conflict: mappingConflict,
+          }),
+        });
+    }
+
+    const identityResult = await ensureInventoryItemIdentity({
+      itemName: nextItem,
+      itemId: nextSku,
+    });
+    if (identityResult?.conflict) {
+      return res.status(409).json({
+        message: buildItemIdConflictMessage({
+          inputName: nextItem,
+          inputId: nextSku,
+          conflict: identityResult.conflict,
+        }),
+      });
+    }
+
+    if (hasTxidPayload) {
+      const txid = parseStringValue(req.body.txid);
+      if (!txid) {
+        return res.status(400).json({ message: "txid cannot be empty." });
       }
-      record.item = item;
+      const txidRegex = buildExactMatchRegex(txid);
+      if (txidRegex) {
+        const existingTx = await StockTransaction.findOne({
+          txid: txidRegex,
+          _id: { $ne: record._id },
+        });
+        if (existingTx) {
+          return res
+            .status(409)
+            .json({
+              message: `txid "${txid}" already exists. Choose a different transaction ID.`,
+            });
+        }
+      }
+      record.txid = txid;
+    }
+
+    if (hasItemPayload) {
+      record.item = nextItem;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "type")) {
@@ -2150,8 +2673,8 @@ const updateStockTransaction = async (req, res) => {
       record.qty = qtyResult.value;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "sku")) {
-      record.sku = parseStringValue(req.body.sku);
+    if (hasSkuPayload) {
+      record.sku = nextSku;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "source")) {
@@ -2189,6 +2712,20 @@ const updateStockTransaction = async (req, res) => {
       message: `${record.txid} updated (${record.type}, ${record.qty} units).`,
     });
 
+    if (
+      normalizeKey(previousItem) !== normalizeKey(record.item) ||
+      normalizeKey(previousSku) !== normalizeKey(record.sku)
+    ) {
+      try {
+        await cleanupInventoryItemIdentity({
+          itemName: previousItem,
+          itemId: previousSku,
+        });
+      } catch (error) {
+        console.error("Unable to cleanup stock transaction identity:", error);
+      }
+    }
+
     res.json(record);
   } catch (error) {
     console.error("Error updating stock transaction:", error);
@@ -2211,6 +2748,14 @@ const deleteStockTransaction = async (req, res) => {
       title: "Stock transaction removed",
       message: `${deleted.txid} was removed.`,
     });
+    try {
+      await cleanupInventoryItemIdentity({
+        itemName: deleted.item,
+        itemId: deleted.sku,
+      });
+    } catch (error) {
+      console.error("Unable to cleanup stock transaction identity:", error);
+    }
     res.json({ message: "Stock transaction deleted successfully." });
   } catch (error) {
     console.error("Error deleting stock transaction:", error);

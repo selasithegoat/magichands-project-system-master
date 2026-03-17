@@ -27,6 +27,7 @@ const PurchasingOrderSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      unique: true,
     },
     supplierName: {
       type: String,
@@ -120,7 +121,7 @@ const PurchasingOrderSchema = new mongoose.Schema(
 );
 
 PurchasingOrderSchema.index({ dateRequestPlaced: -1, createdAt: -1 });
-PurchasingOrderSchema.index({ poNumber: 1 });
+PurchasingOrderSchema.index({ poNumber: 1 }, { unique: true });
 PurchasingOrderSchema.index({ supplierName: 1 });
 
 module.exports = mongoose.model("PurchasingOrder", PurchasingOrderSchema);
