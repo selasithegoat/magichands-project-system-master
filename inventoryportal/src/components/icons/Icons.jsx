@@ -292,6 +292,33 @@ export const DownloadIcon = ({ className }) => (
   </IconBase>
 );
 
+export const ShareIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M16 8l-4-4-4 4"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 4v10"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <rect
+      x="5"
+      y="14"
+      width="14"
+      height="6"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    />
+  </IconBase>
+);
+
 export const SortIcon = ({ className }) => (
   <IconBase className={className}>
     <path d="M7 6h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

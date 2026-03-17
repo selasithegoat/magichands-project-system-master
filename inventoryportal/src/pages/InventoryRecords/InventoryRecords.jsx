@@ -7,6 +7,7 @@ import {
   EditIcon,
   PlusIcon,
   SearchIcon,
+  ShareIcon,
   SortIcon,
   TrashIcon,
   WarningIcon,
@@ -514,6 +515,18 @@ const formatStatusTone = (value) =>
     .toLowerCase()
     .replace(/\s+/g, "-");
 
+const formatShareTimestamp = (value) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const normalizeCategoryOptions = (payload) => {
   const list = Array.isArray(payload?.data)
     ? payload.data
@@ -545,6 +558,8 @@ const InventoryRecords = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [detailsRecord, setDetailsRecord] = useState(null);
+  const [shareRecord, setShareRecord] = useState(null);
+  const [shareGeneratedAt, setShareGeneratedAt] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("-createdAt");
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -561,6 +576,7 @@ const InventoryRecords = () => {
   const [lowStockThreshold, setLowStockThreshold] = useState(18);
   const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
   const selectAllRef = useRef(null);
+  const shareReportRef = useRef(null);
   const { currency, rate } = useInventoryCurrency();
   const { format: exportFormat } = useInventoryExportFormat();
   const draftStorageKey = "inventory-records-draft";
@@ -1079,6 +1095,32 @@ const InventoryRecords = () => {
     rate,
   ).alternateValue;
 
+  const shareGroups = shareRecord ? buildDetailBrandGroups(shareRecord) : [];
+  const shareVariantTotal = shareGroups.length
+    ? sumVariantQty(flattenBrandGroups(shareGroups))
+    : null;
+  const shareQtyLabel =
+    shareRecord?.qtyLabel ||
+    (Number.isFinite(shareVariantTotal)
+      ? formatQtyLabel(shareVariantTotal)
+      : "—");
+  const sharePriceInfo = shareRecord
+    ? getRecordPriceInfo(shareRecord)
+    : { type: "none" };
+  const sharePriceLabel =
+    sharePriceInfo.type === "range"
+      ? formatCurrencyRange(
+          sharePriceInfo.min,
+          sharePriceInfo.max,
+          currency,
+          rate,
+        )
+      : sharePriceInfo.type === "single"
+        ? formatCurrencyValue(sharePriceInfo.value, currency, rate)
+        : "";
+  const sharePriceTitle =
+    sharePriceInfo.type === "range" ? "Price Range" : "Price";
+
   const normalizeStatus = (value) => String(value || "").toLowerCase();
   const resolvedLowThreshold = Number.isFinite(lowStockThreshold)
     ? lowStockThreshold
@@ -1538,6 +1580,103 @@ const InventoryRecords = () => {
 
   const closeDetailsModal = () => {
     setDetailsRecord(null);
+  };
+
+  const openShareModal = (record) => {
+    setShareRecord(record);
+    setShareGeneratedAt(formatShareTimestamp());
+  };
+
+  const closeShareModal = () => {
+    setShareRecord(null);
+    setShareGeneratedAt("");
+  };
+
+  const handlePrintShareReport = () => {
+    if (!shareReportRef.current || typeof document === "undefined") return;
+    const reportHtml = shareReportRef.current.outerHTML;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.setAttribute("aria-hidden", "true");
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    const styles = `
+      <style>
+        * { box-sizing: border-box; }
+        body {
+          font-family: "Segoe UI", Arial, sans-serif;
+          color: #0f172a;
+          padding: 24px;
+        }
+        .share-report { display: flex; flex-direction: column; gap: 16px; }
+        .share-report-header { display: flex; justify-content: space-between; gap: 16px; }
+        .share-report-title { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+        .share-report-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+        .share-report-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+        .share-report-card span { display: block; font-size: 12px; color: #64748b; }
+        .share-report-card strong { font-size: 14px; color: #0f172a; }
+        .share-report-image img { width: 160px; height: 160px; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0; }
+        .share-report-table { display: grid; gap: 6px; }
+        .share-report-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 0.9fr 0.9fr 0.8fr; gap: 8px; font-size: 12px; align-items: center; }
+        .share-report-row.header { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+        .status-pill { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #0f172a; }
+        .status-pill.low-stock { background: #ffedd5; color: #c2410c; }
+        .status-pill.critical { background: #fee2e2; color: #b91c1c; }
+        .status-pill.in-stock { background: #dcfce7; color: #047857; }
+        .status-pill.oversupply { background: #dbeafe; color: #1d4ed8; }
+        @media print {
+          body { padding: 0; }
+        }
+      </style>
+    `;
+
+    doc.open();
+    doc.write(`<!doctype html><html><head><title>Inventory Record</title>${styles}</head><body>${reportHtml}</body></html>`);
+    doc.close();
+
+    const finalizePrint = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+      }, 500);
+    };
+
+    const images = Array.from(doc.images || []);
+    if (!images.length) {
+      finalizePrint();
+      return;
+    }
+
+    let loaded = 0;
+    const handleImageDone = () => {
+      loaded += 1;
+      if (loaded >= images.length) {
+        finalizePrint();
+      }
+    };
+
+    images.forEach((img) => {
+      if (img.complete) {
+        handleImageDone();
+      } else {
+        img.onload = handleImageDone;
+        img.onerror = handleImageDone;
+      }
+    });
   };
 
   const confirmDelete = async () => {
@@ -2040,6 +2179,17 @@ const InventoryRecords = () => {
                       }}
                     >
                       <EditIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openShareModal(record);
+                      }}
+                      aria-label={`Share ${record.item}`}
+                    >
+                      <ShareIcon />
                     </button>
                     <button
                       type="button"
@@ -2742,6 +2892,189 @@ const InventoryRecords = () => {
                         )}
                       </div>
                     );
+                  })}
+                </div>
+              ) : (
+                <span className="muted">No brands added yet.</span>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(shareRecord)}
+        title="Share Inventory Record"
+        subtitle="Preview the full item details before downloading."
+        primaryText="Download PDF"
+        secondaryText="Close"
+        onConfirm={handlePrintShareReport}
+        onClose={closeShareModal}
+        variant="center"
+      >
+        {shareRecord ? (
+          <div className="share-report" ref={shareReportRef}>
+            <div className="share-report-header">
+              <div>
+                <span className="share-report-kicker">Inventory Record</span>
+                <h3 className="share-report-title">{shareRecord.item}</h3>
+                <span className="muted">Generated {shareGeneratedAt}</span>
+              </div>
+              <span
+                className={`status-pill ${
+                  shareRecord.statusTone ||
+                  formatStatusTone(shareRecord.status)
+                }`}
+              >
+                {shareRecord.status}
+              </span>
+            </div>
+
+            <div className="share-report-meta">
+              <div className="share-report-card">
+                <span>SKU</span>
+                <strong>{shareRecord.sku || "-"}</strong>
+              </div>
+              <div className="share-report-card">
+                <span>Warehouse</span>
+                <strong>{shareRecord.warehouse || "-"}</strong>
+              </div>
+              <div className="share-report-card">
+                <span>Category</span>
+                <strong>{shareRecord.category || "-"}</strong>
+              </div>
+              <div className="share-report-card">
+                <span>Quantity</span>
+                <strong>{shareQtyLabel}</strong>
+                <span className="muted">{shareRecord.qtyMeta || ""}</span>
+              </div>
+              <div className="share-report-card">
+                <span>{sharePriceTitle}</span>
+                <strong>{sharePriceLabel || "-"}</strong>
+              </div>
+              <div className="share-report-card">
+                <span>Total Value</span>
+                <strong>
+                  {formatCurrencyValue(shareRecord.value, currency, rate) || "-"}
+                </strong>
+              </div>
+            </div>
+
+            {shareRecord.image ? (
+              <div className="share-report-image">
+                <img src={shareRecord.image} alt={shareRecord.item} />
+              </div>
+            ) : null}
+
+            <div className="share-report-section">
+              <div className="share-report-section-header">
+                <h4>Brand Breakdown</h4>
+                <span className="muted">{shareQtyLabel}</span>
+              </div>
+              {shareGroups.length ? (
+                <div className="share-report-table">
+                  <div className="share-report-row header">
+                    <span>Brand</span>
+                    <span>Variation</span>
+                    <span>Colors/Kind</span>
+                    <span>SKU</span>
+                    <span>Status</span>
+                    <span>Price</span>
+                    <span>Qty</span>
+                  </div>
+                  {shareGroups.map((group, groupIndex) => {
+                    const hasGroupPrice =
+                      group.price || Number.isFinite(group.priceValue);
+                    const groupPriceValue = hasGroupPrice
+                      ? group.price || group.priceValue
+                      : null;
+
+                    if (!group.variants.length) {
+                      return (
+                        <div
+                          className="share-report-row"
+                          key={`${group.name}-empty-${groupIndex}`}
+                        >
+                          <span>{group.name}</span>
+                          <span className="muted">No variants</span>
+                          <span>-</span>
+                          <span className="mono">-</span>
+                          <span
+                            className={`status-pill ${formatStatusTone(
+                              shareRecord.status,
+                            )}`}
+                          >
+                            {shareRecord.status}
+                          </span>
+                          <span>
+                            {hasGroupPrice
+                              ? formatCurrencyValue(
+                                  groupPriceValue,
+                                  currency,
+                                  rate,
+                                )
+                              : "-"}
+                          </span>
+                          <span>{shareQtyLabel}</span>
+                        </div>
+                      );
+                    }
+
+                    return group.variants.map((variant, variantIndex) => {
+                      const variantPriceValue = Number.isFinite(
+                        variant.priceValue,
+                      )
+                        ? variant.priceValue
+                        : variant.price
+                          ? parsePriceValue(variant.price)
+                          : null;
+                      const resolvedVariantPrice = Number.isFinite(
+                        variantPriceValue,
+                      )
+                        ? variantPriceValue
+                        : hasGroupPrice
+                          ? parsePriceValue(groupPriceValue)
+                          : null;
+                      const variantQty = getVariantQtyValue(variant);
+                      const variantQtyLabel =
+                        variant.qtyLabel ||
+                        (Number.isFinite(variantQty)
+                          ? formatQtyLabel(variantQty)
+                          : "-");
+                      const variantStatus = resolveVariantStatus(
+                        variant.status,
+                        shareRecord.status,
+                      );
+
+                      return (
+                        <div
+                          className="share-report-row"
+                          key={`${groupIndex}-${variantIndex}`}
+                        >
+                          <span>{group.name}</span>
+                          <span>{variant.name || "-"}</span>
+                          <span>{formatVariantColors(variant)}</span>
+                          <span className="mono">{variant.sku || "-"}</span>
+                          <span
+                            className={`status-pill ${formatStatusTone(
+                              variantStatus,
+                            )}`}
+                          >
+                            {variantStatus}
+                          </span>
+                          <span>
+                            {Number.isFinite(resolvedVariantPrice)
+                              ? formatCurrencyValue(
+                                  resolvedVariantPrice,
+                                  currency,
+                                  rate,
+                                )
+                              : "-"}
+                          </span>
+                          <span>{variantQtyLabel}</span>
+                        </div>
+                      );
+                    });
                   })}
                 </div>
               ) : (
