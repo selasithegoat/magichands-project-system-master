@@ -192,6 +192,45 @@
   width: fit-content;
 }
 
+.client-items-table .status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  width: fit-content;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+
+.client-items-table .status-pill.received {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.client-items-table .status-pill.inspection {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.client-items-table .status-pill.in-progress {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.client-items-table .status-pill.awaiting-parts {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.client-items-table .status-pill.completed {
+  background: #dcfce7;
+  color: #047857;
+}
+
 .client-items-table .actions-cell {
   flex-direction: row;
   align-items: center;

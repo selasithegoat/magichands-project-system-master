@@ -40,6 +40,9 @@ const STATUS_OPTIONS = [
 ];
 const STATUS_TABS = ["All", ...STATUS_OPTIONS];
 
+const getStatusClass = (status) =>
+  `status-pill ${String(status || "").toLowerCase().replace(/\s+/g, "-")}`;
+
 const ClientItems = () => {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -411,6 +414,9 @@ const ClientItems = () => {
               <div className="cell item-cell full" data-label="Item Details">
                 <strong>{item.item}</strong>
                 <span className="muted">SN: {item.serial}</span>
+                <span className={getStatusClass(item.status)}>
+                  {item.status}
+                </span>
               </div>
               <div className="cell muted" data-label="Received">
                 {item.received}

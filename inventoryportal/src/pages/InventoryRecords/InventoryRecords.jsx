@@ -700,7 +700,7 @@ const InventoryRecords = () => {
                 ? computedValue.toFixed(2)
                 : ""),
             status: record.status || "In Stock",
-            statusTone: record.statusTone || formatStatusTone(record.status),
+            statusTone: formatStatusTone(record.status || "In Stock"),
             reorder: Boolean(record.reorder),
             image: record.image || "",
           };
@@ -2922,7 +2922,6 @@ const InventoryRecords = () => {
               </div>
               <span
                 className={`status-pill ${
-                  shareRecord.statusTone ||
                   formatStatusTone(shareRecord.status)
                 }`}
               >
