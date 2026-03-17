@@ -50,12 +50,12 @@
 .icon-box-blue {
   width: 32px;
   height: 32px;
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-soft);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3b82f6;
+  color: var(--primary-color);
 }
 
 .card-title {
@@ -86,7 +86,7 @@
   display: block;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   margin-bottom: 0.4rem;
   letter-spacing: 0.025em;
@@ -105,8 +105,8 @@
 }
 
 .badge-yellow {
-  background: #fef3c7;
-  color: #d97706;
+  background: rgba(251, 191, 36, 0.2);
+  color: #f59e0b;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.75rem;
@@ -114,8 +114,8 @@
 }
 
 .badge-pink {
-  background: #fdf2f8;
-  color: #db2777;
+  background: rgba(236, 72, 153, 0.16);
+  color: #ec4899;
   padding: 0.2rem 0.6rem;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -123,8 +123,8 @@
 }
 
 .badge-red-small {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--danger-soft);
+  color: var(--danger);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   font-size: 0.7rem;
@@ -141,7 +141,7 @@
 
 .review-factor-item {
   padding: 0.75rem;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--surface-alt);
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
@@ -187,20 +187,20 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--surface-alt);
   border-radius: 6px;
   color: var(--text-secondary);
 }
 
 .checklist-review-item.completed {
-  background: rgba(16, 185, 129, 0.05);
-  color: #10b981;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .error-banner {
-  background: #fee2e2;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--danger);
   padding: 1rem;
   border-radius: 8px;
   margin-bottom: 1.5rem;
@@ -212,9 +212,9 @@
 .verification-section {
   margin-top: 2rem;
   padding: 1.5rem;
-  background: rgba(59, 130, 246, 0.02);
+  background: var(--primary-soft);
   border-radius: 12px;
-  border: 1px dashed #3b82f6;
+  border: 1px dashed var(--primary-color);
 }
 
 .checkbox-container {
@@ -242,7 +242,7 @@
 }
 
 .btn-primary-green {
-  background: #10b981;
+  background: var(--success);
   color: white;
   padding: 0.75rem 2.5rem;
   border-radius: 8px;
@@ -252,13 +252,13 @@
 }
 
 .btn-primary-green.disabled {
-  background: #d1d5db;
+  background: var(--text-tertiary);
   cursor: not-allowed;
 }
 
 .overview-box p {
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--surface-alt);
   border-radius: 8px;
   margin-top: 0.5rem;
 }
@@ -271,7 +271,8 @@
 }
 
 .attachment-tile-simple {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-soft);
+  color: var(--primary-color);
   padding: 0.4rem 0.75rem;
   border-radius: 6px;
   font-size: 0.85rem;

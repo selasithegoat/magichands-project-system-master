@@ -38,7 +38,7 @@
 .progress-pill {
   width: 24px;
   height: 4px;
-  background-color: #e2e8f0;
+  background-color: var(--border-color);
   border-radius: 2px;
   flex: 1; /* Make it stretch if needed, or keep fixed width but centered */
 }

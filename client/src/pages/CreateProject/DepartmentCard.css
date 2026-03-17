@@ -15,12 +15,12 @@
 
 .dept-card:hover {
   border-color: var(--primary-blue);
-  background-color: #f8fafc;
+  background-color: var(--surface-alt);
 }
 
 .dept-card.selected {
   border-color: var(--primary-blue);
-  background-color: #eff6ff; /* Very light blue */
+  background-color: var(--primary-soft);
 }
 
 .dept-icon-container {
@@ -49,7 +49,7 @@
   right: 8px;
   width: 16px;
   height: 16px;
-  background-color: #10b981; /* Success Green */
+  background-color: var(--success);
   border-radius: 50%;
   display: flex;
   align-items: center;

@@ -74,6 +74,8 @@ const Layout = ({
   projectCount, // Receive projectCount prop
   engagedCount = 0, // [New] Department engagement count
   onSignOut, // Receive onSignOut prop
+  theme,
+  onToggleTheme,
 }) => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -574,6 +576,8 @@ const Layout = ({
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
         engagedCount={engagedCount}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
       />
 
       {/* Notification Modal */}

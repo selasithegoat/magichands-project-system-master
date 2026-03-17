@@ -16,7 +16,7 @@
 }
 
 .card-option.checked {
-  background-color: #eff6ff; /* Very light blue */
+  background-color: var(--primary-soft);
   border-color: var(--primary-blue);
 }
 
@@ -48,7 +48,7 @@
   height: 20px;
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  background-color: #ffffff;
+  background-color: var(--bg-input);
   display: flex;
   align-items: center;
   justify-content: center;

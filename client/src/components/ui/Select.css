@@ -33,7 +33,7 @@
 }
 
 .select-container.disabled {
-  background-color: #f1f5f9;
+  background-color: var(--surface-alt);
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -44,7 +44,7 @@
 
 .select-container.open {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.15);
   z-index: 20;
 }
 
@@ -96,6 +96,6 @@
 }
 
 .select-option.selected {
-  background-color: #eff6ff;
-  color: var(--primary-blue);
+  background-color: var(--primary-soft);
+  color: var(--primary-color);
 }

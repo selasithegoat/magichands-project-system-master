@@ -13,24 +13,22 @@
 .minimal-quote-container .page-header h1 {
   font-size: 2.2rem;
   font-weight: 800;
-  color: #1e293b;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
   letter-spacing: -0.02em;
 }
 
 .minimal-quote-container .page-header .subtitle {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 1.1rem;
 }
 
 .minimal-quote-form-card {
-  background-color: #ffffff;
+  background-color: var(--bg-card);
   border-radius: 16px;
-  box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.05),
-    0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-md);
   padding: 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .minimal-quote-form-section {
@@ -43,7 +41,7 @@
 .section-subtitle {
   font-size: 1rem;
   font-weight: 700;
-  color: #3b82f6;
+  color: var(--primary-color);
   margin-bottom: 1.25rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -64,26 +62,26 @@
 .minimal-quote-form-group label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
 .minimal-quote-input {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 0.95rem;
-  color: #1e293b;
-  background-color: #f8fafc;
+  color: var(--text-primary);
+  background-color: var(--bg-input);
   transition: all 0.2s;
 }
 
 .minimal-quote-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  background-color: #ffffff;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  border-color: var(--border-focus);
+  background-color: var(--bg-card);
+  box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.12);
 }
 
 .minimal-quote-textarea {
@@ -93,7 +91,7 @@
 
 .divider {
   height: 1px;
-  background-color: #e2e8f0;
+  background-color: var(--border-color);
   margin: 2rem 0;
 }
 
@@ -124,7 +122,7 @@
 .minimal-quote-remove-btn {
   background: none;
   border: none;
-  color: #ef4444;
+  color: var(--danger);
   cursor: pointer;
   padding: 0.5rem;
   border-radius: 6px;
@@ -135,7 +133,7 @@
 }
 
 .minimal-quote-remove-btn:hover {
-  background: #fee2e2;
+  background: var(--danger-soft);
 }
 
 .minimal-quote-add-btn {
@@ -166,26 +164,26 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background-color: var(--surface-alt);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .checklist-item:hover {
-  background-color: #eff6ff;
-  border-color: #3b82f6;
-  color: #1e293b;
+  background-color: var(--primary-soft);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
 }
 
 .checklist-item input[type="checkbox"] {
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #3b82f6;
+  accent-color: var(--primary-color);
 }
 
 /* Reference Materials */
@@ -195,17 +193,17 @@
   align-items: center;
   justify-content: center;
   padding: 3rem 2rem;
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--border-color);
   border-radius: 12px;
-  background-color: #f8fafc;
+  background-color: var(--surface-alt);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin-top: 0.5rem;
 }
 
 .minimal-quote-file-dropzone:hover {
-  border-color: #3b82f6;
-  background-color: #eff6ff;
+  border-color: var(--primary-color);
+  background-color: var(--primary-soft);
   transform: translateY(-2px);
 }
 
@@ -213,24 +211,24 @@
   width: 48px;
   height: 48px;
   margin-bottom: 1.25rem;
-  color: #3b82f6;
+  color: var(--primary-color);
   transition: color 0.3s ease;
 }
 
 .minimal-quote-file-dropzone:hover svg {
-  color: #3b82f6;
+  color: var(--primary-color);
 }
 
 .minimal-quote-file-dropzone p {
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
   font-size: 1.1rem;
 }
 
 .minimal-quote-file-dropzone span {
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -243,27 +241,27 @@
 
 .minimal-quote-file-tile {
   position: relative;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 0.75rem;
-  background: #fff;
+  background: var(--bg-card);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .minimal-quote-file-tile:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  border-color: #bfdbfe;
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-focus);
 }
 
 .minimal-quote-file-tile.existing {
-  border-color: #3b82f633;
-  background-color: #f1f7ff;
+  border-color: rgba(var(--primary-rgb), 0.4);
+  background-color: var(--primary-soft);
 }
 
 .minimal-quote-file-tile.existing::after {
@@ -271,7 +269,7 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  background: #3b82f6;
+  background: var(--primary-color);
   color: white;
   font-size: 0.6rem;
   padding: 1px 5px;
@@ -289,8 +287,8 @@
   justify-content: center;
   border-radius: 8px;
   overflow: hidden;
-  background: #f1f5f9;
-  border: 1px solid #f1f5f9;
+  background: var(--surface-alt);
+  border: 1px solid var(--surface-alt);
 }
 
 .file-icon img {
@@ -307,14 +305,14 @@
 .file-icon svg {
   width: 36px;
   height: 36px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .file-info {
   width: 100%;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--text-primary);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -330,7 +328,7 @@
   height: 24px;
   background: #ef4444;
   color: white;
-  border: 2px solid #fff;
+  border: 2px solid var(--bg-card);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -348,7 +346,7 @@
 }
 
 .minimal-quote-file-add-tile {
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--border-color);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -357,15 +355,15 @@
   height: 100%;
   min-height: 140px;
   font-size: 2rem;
-  color: #94a3b8;
-  background: #f8fafc;
+  color: var(--text-tertiary);
+  background: var(--surface-alt);
   transition: all 0.3s ease;
 }
 
 .minimal-quote-file-add-tile:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: var(--primary-soft);
   transform: translateY(-4px);
 }
 
@@ -380,16 +378,16 @@
   flex: 1;
   padding: 0.875rem;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #475569;
+  border: 1px solid var(--border-color);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .minimal-quote-btn-cancel:hover {
-  background: #f1f5f9;
+  background: var(--bg-card);
 }
 
 .minimal-quote-btn-submit {
@@ -397,7 +395,7 @@
   padding: 0.875rem;
   border-radius: 10px;
   border: none;
-  background: #3b82f6;
+  background: var(--primary-color);
   color: white;
   font-weight: 700;
   cursor: pointer;
@@ -406,7 +404,7 @@
 }
 
 .minimal-quote-btn-submit:hover {
-  background: #2563eb;
+  background: var(--primary-color-hover);
   transform: translateY(-1px);
 }
 
@@ -435,12 +433,17 @@
 .minimal-quote-container {
   --quote-font-display: inherit;
   --quote-font-body: inherit;
-  --quote-ink: #0f172a;
-  --quote-muted: #475569;
-  --quote-line: rgba(148, 163, 184, 0.4);
+  --quote-ink: var(--text-primary);
+  --quote-muted: var(--text-secondary);
+  --quote-line: var(--border-color);
   --quote-primary: #0f766e;
   font-family: inherit;
-  background: linear-gradient(140deg, #f8fafc 0%, #ffffff 40%, #f1f5f9 100%);
+  background: linear-gradient(
+    140deg,
+    var(--bg-app) 0%,
+    var(--bg-card) 40%,
+    var(--surface-alt) 100%
+  );
   position: relative;
   overflow: hidden;
 }
@@ -470,8 +473,8 @@
   border-radius: 16px;
   border: 1px solid rgba(15, 118, 110, 0.25);
   padding: 6px;
-  background: #ffffff;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
 }
 
 .minimal-quote-form-card {
@@ -484,15 +487,15 @@
 }
 
 .minimal-quote-container .section-subtitle {
-  color: #0f766e;
+  color: var(--quote-primary);
 }
 
 .quote-meta-card {
   border-radius: 20px;
   border: 1px solid rgba(14, 116, 144, 0.2);
   background:
-    linear-gradient(120deg, rgba(14, 116, 144, 0.08), rgba(255, 255, 255, 0)),
-    #ffffff;
+    linear-gradient(120deg, rgba(14, 116, 144, 0.08), transparent),
+    var(--bg-card);
   padding: 1.6rem;
   margin-bottom: 2rem;
   box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06);
@@ -511,7 +514,7 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: #0f766e;
+  color: var(--quote-primary);
   font-weight: 700;
 }
 
@@ -539,8 +542,8 @@
   box-sizing: border-box;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
   font-size: 0.9375rem;
   transition:
     border-color 0.2s,
@@ -551,12 +554,12 @@
   outline: none;
   border-color: rgba(15, 118, 110, 0.6);
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
-  background: #ffffff;
+  background: var(--bg-card);
 }
 
 .text-icon {
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .contact-grid {
@@ -582,7 +585,7 @@
 
 .minimal-quote-container .lead-name {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 0.9rem;
   white-space: nowrap;
   overflow: hidden;
@@ -591,7 +594,7 @@
 
 .minimal-quote-container .lead-role {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .minimal-quote-container .lead-status {
@@ -614,11 +617,11 @@
 }
 
 .item-card {
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 1.1rem;
-  background: #ffffff;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
 }
 
 .item-card-header {
@@ -634,19 +637,19 @@
   align-items: center;
   gap: 0.5rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .item-index {
   font-size: 0.85rem;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .item-grip {
   width: 18px;
   height: 24px;
   border-radius: 6px;
-  background-image: radial-gradient(#94a3b8 1.2px, transparent 1.2px);
+  background-image: radial-gradient(var(--text-tertiary) 1.2px, transparent 1.2px);
   background-size: 6px 6px;
   opacity: 0.6;
 }
@@ -658,8 +661,8 @@
 }
 
 .item-move-btn {
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  background: var(--surface-alt);
   width: 30px;
   height: 30px;
   border-radius: 10px;
@@ -676,15 +679,15 @@
 }
 
 .item-move-btn:not(:disabled):hover {
-  background: #e2e8f0;
+  background: var(--bg-card);
 }
 
 .arrow {
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-right: 2px solid #475569;
-  border-bottom: 2px solid #475569;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
 }
 
 .arrow.up {
@@ -704,7 +707,7 @@
 .item-card-body label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 0.4rem;
   display: block;
 }
@@ -719,15 +722,15 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.6);
-  background: #ffffff;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
 .qty-stepper button:hover {
-  background: #f1f5f9;
+  background: var(--surface-alt);
 }
 
 .qty-stepper input {
@@ -763,14 +766,14 @@
 .reference-dropzone p {
   margin: 0;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
   font-size: 1rem;
 }
 
 .reference-dropzone span {
   display: block;
   margin-top: 0.35rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
@@ -778,7 +781,7 @@
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--bg-card);
   border: 1px solid rgba(15, 118, 110, 0.25);
   display: flex;
   align-items: center;
@@ -796,13 +799,13 @@
 .reference-file-tile {
   position: relative;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: #ffffff;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--shadow-sm);
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
@@ -810,7 +813,7 @@
 
 .reference-file-tile:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 26px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .reference-file-tile.existing {
@@ -827,7 +830,7 @@
 .file-name {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -835,26 +838,26 @@
 
 .file-size {
   font-size: 0.7rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .reference-file-add-tile {
   border-radius: 16px;
-  border: 2px dashed rgba(148, 163, 184, 0.5);
+  border: 2px dashed var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 160px;
   font-size: 2rem;
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+  background: var(--surface-alt);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .reference-file-add-tile:hover {
   border-color: rgba(15, 118, 110, 0.5);
-  color: #0f766e;
+  color: var(--quote-primary);
   background: rgba(15, 118, 110, 0.1);
 }
 

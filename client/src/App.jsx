@@ -7,6 +7,7 @@ import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for 
 import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
+import useTheme from "./hooks/useTheme";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
@@ -85,6 +86,7 @@ function App() {
   const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [showPostLoginSplash, setShowPostLoginSplash] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   // Initialize auto-logout (5 minutes)
   useInactivityLogout(5 * 60 * 1000, () => setUser(null));
@@ -286,6 +288,8 @@ function App() {
         user={user}
         projectCount={projectCount}
         engagedCount={engagedCount}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onNavigateDashboard={() => navigate("/client")}
         onNavigateProject={() => navigate("/projects")}
         onNavigateHistory={() => navigate("/history")}

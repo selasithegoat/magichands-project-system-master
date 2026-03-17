@@ -43,13 +43,13 @@
 }
 
 .badge-high {
-  background-color: #fff7ed; /* Light orange */
-  color: #c2410c; /* Dark Orange */
+  background-color: rgba(251, 146, 60, 0.16);
+  color: #fb923c;
   font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid #ffedd5;
+  border: 1px solid rgba(251, 146, 60, 0.35);
 }
 
 .risk-number {
@@ -61,10 +61,10 @@
 .add-risk-btn {
   width: 100%;
   padding: 12px;
-  border: 1px dashed #bfdbfe;
-  background-color: white; /* Design shows white outline dash */
+  border: 1px dashed rgba(var(--primary-rgb), 0.35);
+  background-color: var(--bg-card); /* Design shows white outline dash */
   border-radius: var(--radius-lg); /* More rounded */
-  color: var(--primary-blue);
+  color: var(--primary-color);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -74,8 +74,8 @@
 }
 
 .add-risk-btn:hover {
-  background-color: #f8fafc;
-  border-color: var(--primary-blue);
+  background-color: var(--surface-alt);
+  border-color: var(--primary-color);
 }
 
 .magic-ai-actions {
@@ -85,10 +85,10 @@
 .magic-ai-btn {
   width: 100%;
   padding: 12px;
-  border: 1px solid #c7d2fe;
-  background: #eef2ff;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.16);
   border-radius: var(--radius-lg);
-  color: #3730a3;
+  color: #6366f1;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -98,8 +98,8 @@
 }
 
 .magic-ai-btn:hover:not(:disabled) {
-  background: #e0e7ff;
-  border-color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.24);
+  border-color: rgba(99, 102, 241, 0.5);
 }
 
 .magic-ai-btn:disabled {
@@ -114,11 +114,11 @@
 }
 
 .magic-ai-notice.success {
-  color: #166534;
+  color: var(--success);
 }
 
 .magic-ai-notice.error {
-  color: #b91c1c;
+  color: var(--danger);
 }
 
 .magic-ai-notice.info {

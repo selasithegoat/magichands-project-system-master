@@ -4,7 +4,7 @@ const ProgressDonutIcon = ({
   width = "120",
   height = "120",
   percentage = 75,
-  color = "#2563eb",
+  color = "currentColor",
   className = "",
 }) => {
   const radius = 50;
@@ -23,8 +23,9 @@ const ProgressDonutIcon = ({
         cy="60"
         r="50"
         fill="none"
-        stroke="#e2e8f0"
+        stroke="currentColor"
         strokeWidth="10"
+        opacity="0.2"
       />
       <circle
         cx="60"
@@ -44,7 +45,7 @@ const ProgressDonutIcon = ({
         textAnchor="middle"
         fontSize="20"
         fontWeight="700"
-        fill="#1e293b"
+        fill="currentColor"
       >
         {percentage}%
       </text>
@@ -54,7 +55,8 @@ const ProgressDonutIcon = ({
         textAnchor="middle"
         fontSize="10"
         fontWeight="600"
-        fill="#64748b"
+        fill="currentColor"
+        opacity="0.7"
       >
         COMPLETE
       </text>

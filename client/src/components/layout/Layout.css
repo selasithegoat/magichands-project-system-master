@@ -2,7 +2,7 @@
 
 /* --- Main Navigation Header --- */
 .main-header {
-  background: rgba(248, 250, 252, 0.92);
+  background: var(--bg-nav);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -34,7 +34,7 @@
 .brand-name {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .main-nav {
@@ -43,14 +43,14 @@
   gap: 0.35rem;
   padding: 0.35rem;
   border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
 }
 
 .main-header .nav-item {
   text-decoration: none;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.45rem 0.9rem;
@@ -63,31 +63,31 @@
   cursor: pointer;
 }
 .main-header .nav-item:hover {
-  color: #0f172a;
-  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-primary);
+  background: var(--nav-hover-bg);
 }
 .main-header .nav-item.active {
-  color: #ffffff;
-  background: #0f172a;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.2);
+  color: var(--nav-active-text);
+  background: var(--nav-active-bg);
+  box-shadow: var(--shadow-lg);
 }
 .main-header .nav-item.active::after {
   content: none;
 }
 
 .main-header .nav-badge {
-  background: rgba(248, 250, 252, 0.2);
+  background: var(--nav-badge-bg);
   color: inherit;
   font-size: 0.7rem;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--nav-badge-border);
 }
 
 .main-header .nav-item.active .nav-badge {
-  background: rgba(248, 250, 252, 0.22);
-  border-color: rgba(248, 250, 252, 0.4);
+  background: var(--nav-badge-bg);
+  border-color: var(--nav-badge-border);
 }
 
 .header-actions {
@@ -96,9 +96,9 @@
   gap: 1rem;
 }
 .icon-btn {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.45rem;
   border-radius: 999px;
@@ -106,13 +106,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-md);
   transition: all 0.2s ease;
 }
 .icon-btn:hover {
-  color: #0f172a;
-  border-color: #cbd5f5;
+  color: var(--text-primary);
+  border-color: var(--border-focus);
   transform: translateY(-1px);
+}
+
+.icon-btn.theme-toggle {
+  background: var(--surface-alt);
+  color: var(--text-primary);
+}
+
+.icon-btn.theme-toggle:hover {
+  background: var(--bg-card);
 }
 .notif-dot {
   position: absolute;
@@ -120,9 +129,9 @@
   right: 2px;
   width: 8px;
   height: 8px;
-  background-color: #ef4444;
+  background-color: var(--danger);
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--bg-card);
 }
 .user-profile-mini {
   width: 34px;
@@ -136,8 +145,8 @@
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
-  border: 2px solid #ffffff;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+  border: 2px solid var(--bg-card);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -149,20 +158,20 @@
 }
 
 .user-profile-mini.has-image {
-  background: #e2e8f0;
+  background: var(--surface-alt);
   color: transparent;
 }
 
 /* Hamburger Button */
 .hamburger-btn {
   display: none;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 999px;
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-md);
 }
 
 /* Responsive Styles */
@@ -188,7 +197,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(15, 23, 42, 0.45);
+  background-color: var(--overlay);
   z-index: 100;
   animation: fadeIn 0.2s ease-out;
 }
@@ -199,9 +208,9 @@
   left: 0;
   width: 300px;
   height: 100%;
-  background: #f8fafc;
+  background: var(--bg-drawer);
   z-index: 101;
-  box-shadow: 12px 0 40px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   animation: slideIn 0.3s ease-out;
@@ -240,19 +249,19 @@
 }
 
 .drawer-close-btn {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  color: #475569;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.35rem;
   border-radius: 999px;
-  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-md);
   transition: all 0.2s ease;
 }
 
 .drawer-close-btn:hover {
-  border-color: #cbd5f5;
-  color: #0f172a;
+  border-color: var(--border-focus);
+  color: var(--text-primary);
 }
 
 .drawer-menu {
@@ -268,7 +277,7 @@
   align-items: center;
   gap: 1rem;
   padding: 0.7rem 1rem;
-  color: #475569;
+  color: var(--text-secondary);
   text-decoration: none;
   border-radius: 999px;
   font-weight: 600;
@@ -277,25 +286,25 @@
 
 .drawer-item:hover,
 .drawer-item.active {
-  background-color: #0f172a;
-  color: #ffffff;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.2);
+  background-color: var(--nav-active-bg);
+  color: var(--nav-active-text);
+  box-shadow: var(--shadow-lg);
 }
 
 .drawer-badge {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: var(--nav-badge-bg);
   color: inherit;
   font-size: 0.7rem;
   padding: 2px 6px;
   border-radius: 99px;
   margin-left: auto;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--nav-badge-border);
 }
 
 .drawer-footer {
   padding: 1.25rem 1.5rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
-  background: #ffffff;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
 
 .drawer-user {
@@ -305,8 +314,8 @@
   margin-bottom: 1rem;
   padding: 0.75rem;
   border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-color);
 }
 
 .drawer-user-info {
@@ -317,21 +326,21 @@
 .user-name {
   font-weight: 600;
   font-size: 0.9rem;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .user-role {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .drawer-logout {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #b91c1c;
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
   font-weight: 500;
   cursor: pointer;
   width: 100%;
@@ -341,8 +350,8 @@
 }
 
 .drawer-logout:hover {
-  background: #ffe4e6;
-  border-color: #fda4af;
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.4);
 }
 
 .layout-container {

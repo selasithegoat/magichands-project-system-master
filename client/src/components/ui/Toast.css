@@ -14,10 +14,9 @@
 .ui-toast {
   min-width: 300px;
   max-width: 400px;
-  background: white;
+  background: var(--bg-card);
   border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-md);
   padding: 16px;
   display: flex;
   flex-direction: row;
@@ -26,9 +25,10 @@
   --toast-duration: 5000ms;
   animation: toastLifecycle var(--toast-duration) ease-in-out forwards;
   pointer-events: auto;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--primary-color);
   box-sizing: border-box;
   overflow: hidden; /* Prevent spillover */
+  border: 1px solid var(--border-color);
 }
 
 /* Ensure no global styles mess with these specifics */
@@ -37,11 +37,11 @@
 }
 
 .ui-toast.success {
-  border-left-color: #22c55e;
+  border-left-color: var(--success);
 }
 
 .ui-toast.error {
-  border-left-color: #ef4444;
+  border-left-color: var(--danger);
 }
 
 .ui-toast.warning {
@@ -49,7 +49,7 @@
 }
 
 .ui-toast.info {
-  border-left-color: #3b82f6;
+  border-left-color: var(--primary-color);
 }
 
 .ui-toast-icon {
@@ -63,7 +63,7 @@
 
 .ui-toast-message {
   flex: 1;
-  color: #1e293b;
+  color: var(--text-primary);
   font-size: 0.9375rem;
   font-weight: 500;
   line-height: 1.4;
@@ -74,7 +74,7 @@
   flex-shrink: 0;
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 4px;
   display: flex;
@@ -85,9 +85,9 @@
 }
 
 .ui-toast-close:hover {
-  background-color: #f1f5f9;
+  background-color: var(--surface-alt);
   border-radius: 4px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 @keyframes toastLifecycle {
