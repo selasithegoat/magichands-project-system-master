@@ -12,12 +12,12 @@
 .page-header h1 {
   font-size: 1.8rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
 }
 
 .page-header p {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.95rem;
 }
 
@@ -25,7 +25,7 @@
 /* Retain all previous table styles, just append new button style if needed */
 
 .download-btn {
-  background-color: #4f46e5;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   padding: 0.6rem 1.2rem;
@@ -39,21 +39,21 @@
 }
 
 .download-btn:hover {
-  background-color: #4338ca;
+  background-color: var(--primary-color-hover);
 }
 
 .download-btn:disabled {
-  background-color: #94a3b8;
+  background-color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
 /* Rest of the file content... */
 .table-container {
-  background: white;
+  background: var(--bg-card);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow-x: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .update-table {
@@ -65,12 +65,12 @@
 .update-table td {
   padding: 1rem 1.5rem;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .update-table th {
-  background-color: #f8fafc;
-  color: #64748b;
+  background-color: var(--surface-alt);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.85rem;
   text-transform: uppercase;
@@ -89,16 +89,16 @@
 
 /* Row Coloring by Project Type */
 .row-emergency {
-  background-color: #fef2f2;
+  background-color: color-mix(in srgb, #ef4444 12%, var(--bg-card));
 }
 .row-corporate {
-  background-color: #f0fdf4;
+  background-color: color-mix(in srgb, #22c55e 12%, var(--bg-card));
 }
 .row-quote {
-  background-color: #fffbeb;
+  background-color: color-mix(in srgb, #f59e0b 12%, var(--bg-card));
 }
 .row-standard {
-  background-color: #eff6ff;
+  background-color: color-mix(in srgb, #3b82f6 10%, var(--bg-card));
 }
 
 .is-urgent td {
@@ -137,7 +137,7 @@
 
 .time-sub {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .order-number-cell {
@@ -148,7 +148,7 @@
 
 .order-version-sub {
   font-size: 0.74rem;
-  color: #64748b;
+  color: var(--text-secondary);
   line-height: 1.2;
 }
 
@@ -158,8 +158,8 @@
   border-radius: 9999px;
   font-size: 0.85rem;
   font-weight: 500;
-  background-color: #f1f5f9;
-  color: #475569;
+  background-color: var(--surface-alt);
+  color: var(--text-secondary);
 }
 
 .status-cell {
@@ -178,31 +178,31 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #b91c1c;
-  background-color: #fee2e2;
-  border: 1px solid #fecaca;
+  color: #fca5a5;
+  background-color: color-mix(in srgb, #ef4444 20%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, #ef4444 45%, var(--border-color));
 }
 
 /* Status Colors */
 .status-badge.completed {
-  background-color: #dcfce7;
-  color: #166534;
+  background-color: color-mix(in srgb, #22c55e 18%, var(--bg-card));
+  color: #86efac;
 }
 .status-badge.in-progress {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: color-mix(in srgb, #3b82f6 18%, var(--bg-card));
+  color: #93c5fd;
 }
 .status-badge.pending-approval {
-  background-color: #fef9c3;
-  color: #854d0e;
+  background-color: color-mix(in srgb, #f59e0b 18%, var(--bg-card));
+  color: #fcd34d;
 }
 .status-badge.on-hold {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: color-mix(in srgb, #ef4444 18%, var(--bg-card));
+  color: #fca5a5;
 }
 .status-badge.order-confirmed {
-  background-color: #e0e7ff;
-  color: #3730a3;
+  background-color: color-mix(in srgb, #6366f1 18%, var(--bg-card));
+  color: #c4b5fd;
 }
 
 .update-cell {
@@ -212,7 +212,7 @@
 .update-content p {
   margin: 0;
   font-size: 0.95rem;
-  color: #334155;
+  color: var(--text-primary);
   line-height: 1.5;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -221,21 +221,21 @@
 .update-date {
   display: block;
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   margin-top: 4px;
 }
 
 .update-source {
   display: block;
   font-size: 0.72rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 4px;
   line-height: 1.25;
 }
 
 .no-update {
   font-style: italic;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   font-size: 0.9rem;
 }
 

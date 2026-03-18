@@ -259,7 +259,7 @@ const OngoingProjects = ({
 
       {/* Search */}
       <div className="ongoing-search-wrapper">
-        <SearchIcon style={{ color: "#94a3b8" }} />
+        <SearchIcon className="ongoing-search-icon" />
         <input
           type="text"
           className="ongoing-search-input"

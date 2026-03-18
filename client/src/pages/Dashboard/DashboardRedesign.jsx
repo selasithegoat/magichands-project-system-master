@@ -106,10 +106,16 @@ const DRAWER_TRANSITION_MS = 280;
 const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
 const isPendingDeliveryProject = (project) =>
   project?.status === "Pending Delivery/Pickup";
-const isQuoteProject = (project) => project?.projectType === "Quote";
-const isCorporateProject = (project) => project?.projectType === "Corporate Job";
+const getProjectTypeValue = (project) =>
+  String(project?.projectType || "").trim().toLowerCase();
+const getProjectPriorityValue = (project) =>
+  String(project?.priority || "").trim().toLowerCase();
+const isQuoteProject = (project) => getProjectTypeValue(project).includes("quote");
+const isCorporateProject = (project) =>
+  getProjectTypeValue(project).includes("corporate");
 const isEmergencyProject = (project) =>
-  project?.projectType === "Emergency" || project?.priority === "Urgent";
+  getProjectPriorityValue(project) === "urgent" ||
+  getProjectTypeValue(project).includes("emergency");
 
 const toEntityId = (value) => {
   if (!value) return "";

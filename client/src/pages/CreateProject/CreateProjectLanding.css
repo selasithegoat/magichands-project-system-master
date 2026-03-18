@@ -1,0 +1,100 @@
+.create-project-landing-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 3rem;
+}
+
+.create-project-landing-title {
+  text-align: center;
+  margin-bottom: 3rem;
+  color: var(--text-primary);
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  font-weight: 700;
+}
+
+.project-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  justify-items: center;
+}
+
+.project-type-card {
+  --type-accent: #2563eb;
+  width: 100%;
+  max-width: 350px;
+  padding: 2rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--type-accent) 18%, var(--border-color));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--type-accent) 8%, var(--bg-card)) 0%,
+    var(--bg-card) 70%
+  );
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  text-align: center;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.project-type-card:hover,
+.project-type-card:focus-visible {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--type-accent) 45%, var(--border-color));
+  outline: none;
+}
+
+.project-type-icon {
+  font-size: 3rem;
+  margin-bottom: 0.2rem;
+}
+
+.project-type-card h2 {
+  margin: 0;
+  color: color-mix(in srgb, var(--type-accent) 80%, var(--text-primary));
+  font-size: 1.35rem;
+}
+
+.project-type-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.project-type-footer {
+  margin-top: 0.8rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--type-accent) 85%, var(--text-primary));
+}
+
+.project-type-card.standard {
+  --type-accent: #2563eb;
+}
+
+.project-type-card.emergency {
+  --type-accent: #e11d48;
+}
+
+.project-type-card.quote {
+  --type-accent: #f59e0b;
+}
+
+.project-type-card.corporate {
+  --type-accent: #10b981;
+}
+
+@media (max-width: 640px) {
+  .create-project-landing-container {
+    padding: 2rem 1.25rem 2.5rem;
+  }
+
+  .project-type-grid {
+    gap: 1.5rem;
+  }
+}

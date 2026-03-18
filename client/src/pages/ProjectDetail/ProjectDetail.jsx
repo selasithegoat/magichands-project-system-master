@@ -841,44 +841,17 @@ const ProjectDetail = ({ user }) => {
         </div>
       )}
       {isEmergency && (
-        <div
-          style={{
-            background: "#fee2e2",
-            color: "#991b1b",
-            padding: "0.5rem 1rem",
-            textAlign: "center",
-            fontWeight: "bold",
-            borderBottom: "1px solid #fca5a5",
-          }}
-        >
+        <div className="project-type-banner emergency">
           🔥 EMERGENCY PROJECT
         </div>
       )}
       {isCorporate && (
-        <div
-          style={{
-            background: "#f0fdf4",
-            color: "#166534",
-            padding: "0.5rem 1rem",
-            textAlign: "center",
-            fontWeight: "bold",
-            borderBottom: "1px solid #bbf7d0",
-          }}
-        >
+        <div className="project-type-banner corporate">
           🏢 CORPORATE JOB
         </div>
       )}
       {isQuote && (
-        <div
-          style={{
-            background: "#fffbeb",
-            color: "#b45309",
-            padding: "0.5rem 1rem",
-            textAlign: "center",
-            fontWeight: "bold",
-            borderBottom: "1px solid #fde68a",
-          }}
-        >
+        <div className="project-type-banner quote">
           📜 QUOTE REQUEST
         </div>
       )}
@@ -909,7 +882,7 @@ const ProjectDetail = ({ user }) => {
                     marginLeft: "1rem",
                     padding: "0.4rem 0.8rem",
                     fontSize: "0.75rem",
-                    backgroundColor: "#10b981",
+                    backgroundColor: "var(--success)",
                   }}
                 >
                   Mark as Finished
@@ -965,7 +938,7 @@ const ProjectDetail = ({ user }) => {
             {project && (
               <React.Suspense
                 fallback={
-                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
                     Loading PDF...
                   </span>
                 }
@@ -1042,24 +1015,12 @@ const ProjectDetail = ({ user }) => {
 
         {/* Acceptance Banner */}
         {project.status === "Order Confirmed" && (
-          <div
-            className="acceptance-banner"
-            style={{
-              backgroundColor: "#fff7ed",
-              border: "1px solid #fdba74",
-              borderRadius: "8px",
-              padding: "1rem",
-              marginTop: "1rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
+          <div className="acceptance-banner">
             <div>
-              <h3 style={{ color: "#9a3412", marginBottom: "0.25rem" }}>
+              <h3 className="acceptance-banner-title">
                 Project Waiting Acceptance
               </h3>
-              <p style={{ color: "#c2410c", fontSize: "0.875rem" }}>
+              <p className="acceptance-banner-subtitle">
                 Review the details below. You must accept this project to start
                 work.
               </p>
@@ -1279,7 +1240,7 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
     <div className="detail-card">
       <div className="card-header project-info-header">
         <h3 className="card-title">
-          <span style={{ color: "#94a3b8" }}>ⓘ</span> Project Info
+          <span className="project-info-icon">?</span> Project Info
         </h3>
         {lastUpdatedAt && (
           <span className="project-info-last-updated">
@@ -1750,7 +1711,7 @@ const DepartmentsCard = ({
             );
           })
         ) : (
-          <span style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+          <span style={{ color: "var(--text-tertiary)", fontSize: "0.875rem" }}>
             No departments assigned
           </span>
         )}
@@ -2122,7 +2083,7 @@ const OrderItemsCard = ({
         </table>
       ) : (
         !isAdding && (
-          <p style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+          <p style={{ color: "var(--text-tertiary)", fontSize: "0.875rem" }}>
             No items listed.
           </p>
         )
@@ -2353,101 +2314,44 @@ const ApprovedMockupCard = ({ project }) => {
   if (!mockupUrl) return null;
 
   return (
-    <div className="detail-card">
+    <div className="detail-card approved-mockup-card">
       <div className="card-header">
         <h3 className="card-title">
-          Approved Mockup{" "}
+          Approved Mockup
           {mockupVersionLabel && (
-            <span
-              style={{
-                fontSize: "0.75rem",
-                color: "#7c3aed",
-                fontWeight: 700,
-              }}
-            >
-              {mockupVersionLabel}
-            </span>
+            <span className="mockup-version-pill">{mockupVersionLabel}</span>
           )}
         </h3>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div className="mockup-approval-body">
         {mockupApprovalStatus === "pending" && (
-          <div
-            style={{
-              fontSize: "0.78rem",
-              color: "#9f1239",
-              background: "#fff1f2",
-              border: "1px solid #fda4af",
-              borderRadius: "8px",
-              padding: "0.45rem 0.6rem",
-            }}
-          >
+          <div className="mockup-approval-banner pending">
             Pending client approval.
           </div>
         )}
         {isClientApproved && approvedAtLabel && (
-          <div
-            style={{
-              fontSize: "0.78rem",
-              color: "#166534",
-              background: "#f0fdf4",
-              border: "1px solid #86efac",
-              borderRadius: "8px",
-              padding: "0.45rem 0.6rem",
-            }}
-          >
+          <div className="mockup-approval-banner approved">
             Client approved: {approvedAtLabel}
           </div>
         )}
         {isClientRejected && (
-          <div
-            style={{
-              fontSize: "0.78rem",
-              color: "#991b1b",
-              background: "#fef2f2",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              padding: "0.45rem 0.6rem",
-            }}
-          >
+          <div className="mockup-approval-banner rejected">
             Client rejected
             {rejectedAtLabel ? `: ${rejectedAtLabel}` : " this mockup version."}
           </div>
         )}
         {isClientRejected && rejectionReason && (
-          <div
-            style={{
-              fontSize: "0.8rem",
-              color: "#991b1b",
-            }}
-          >
+          <div className="mockup-approval-reason">
             Reason: {rejectionReason}
           </div>
         )}
-        <div
-          style={{
-            borderRadius: "8px",
-            border: "1px solid #e2e8f0",
-            padding: "0.75rem",
-            background: "#f8fafc",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "0.75rem",
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="mockup-file-row">
           <Link
             to={`${mockupUrl}`}
             target="_blank"
             rel="noopener noreferrer"
             reloadDocument
-            style={{
-              color: "#2563eb",
-              textDecoration: "none",
-              fontWeight: 600,
-              fontSize: "0.85rem",
-            }}
+            className="mockup-file-link"
           >
             {mockupName || "View Mockup"}
           </Link>
@@ -2455,25 +2359,13 @@ const ApprovedMockupCard = ({ project }) => {
             to={`${mockupUrl}`}
             download
             reloadDocument
-            style={{
-              fontSize: "0.8rem",
-              color: "#0f766e",
-              textDecoration: "none",
-              fontWeight: 600,
-            }}
+            className="mockup-download-link"
           >
             Download
           </Link>
         </div>
         {mockup.note && (
-          <div
-            style={{
-              fontSize: "0.8rem",
-              color: "#64748b",
-            }}
-          >
-            Note: {mockup.note}
-          </div>
+          <div className="mockup-approval-note">Note: {mockup.note}</div>
         )}
       </div>
     </div>
@@ -2589,12 +2481,12 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
     <div className="risk-section">
       <div className="risk-header" onClick={() => setIsOpen(!isOpen)}>
         <div className="risk-title">
-          <WarningIcon width="20" height="20" color="#991b1b" /> Uncontrollable
+          <WarningIcon width="20" height="20" color="currentColor" /> Uncontrollable
           Factors
         </div>
         <div
           className="risk-count"
-          style={{ fontSize: "0.875rem", color: "#7f1d1d" }}
+          style={{ fontSize: "0.875rem", color: "var(--danger)" }}
         >
           {risks.length} flagged items {isOpen ? "▲" : "▼"}
         </div>
@@ -2635,7 +2527,7 @@ const RisksCard = ({ risks = [], projectId, onUpdate, readOnly = false }) => {
               ))
             ) : (
               <div style={{ padding: "1.5rem", textAlign: "center" }}>
-                <p style={{ color: "#9ca3af", margin: 0 }}>
+                <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
                   No uncontrollable factors reported.
                 </p>
               </div>
@@ -2979,14 +2871,14 @@ const ProductionRisksCard = ({
       <div
         className="risk-header"
         onClick={() => setIsOpen(!isOpen)}
-        style={{ borderBottom: isOpen ? "1px solid #e2e8f0" : "none" }}
+        style={{ borderBottom: isOpen ? "1px solid var(--border-color)" : "none" }}
       >
-        <div className="risk-title" style={{ color: "#000" }}>
+        <div className="risk-title" style={{ color: "var(--text-primary)" }}>
           <span style={{ color: "#eab308" }}>⚠️</span> Production Risks
         </div>
         <div
           className="risk-count"
-          style={{ fontSize: "0.875rem", color: "#64748b" }}
+          style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}
         >
           {risks.length} flagged items {isOpen ? "▲" : "▼"}
         </div>
@@ -3030,7 +2922,7 @@ const ProductionRisksCard = ({
               ))
             ) : (
               <div style={{ padding: "1.5rem", textAlign: "center" }}>
-                <p style={{ color: "#9ca3af", margin: 0 }}>
+                <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
                   No production risks reported.
                 </p>
               </div>
@@ -3373,14 +3265,12 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
                   // Override background/border colors with specific step color
                   backgroundColor: isCompleted
                     ? stepColor
-                    : isActive
-                      ? "#fff"
-                      : "#fff",
+                    : "var(--bg-card)",
                   borderColor: isCompleted
                     ? stepColor
                     : isActive
                       ? stepColor
-                      : "#e2e8f0",
+                      : "var(--border-color)",
                   boxShadow: isActive
                     ? `0 0 0 4px ${stepColor}33` // Add a subtle glow for active
                     : "none",
@@ -3400,7 +3290,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
                   width="16"
                   height="16"
                   color={
-                    isCompleted ? "#fff" : isActive ? stepColor : "#cbd5e1"
+                    isCompleted ? "#fff" : isActive ? stepColor : "var(--text-tertiary)"
                   }
                   strokeWidth={isActive ? "2.5" : "2"}
                 />
@@ -3425,8 +3315,8 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
                       color: isActive
                         ? stepColor
                         : isCompleted
-                          ? "#1e293b"
-                          : "#94a3b8",
+                          ? "var(--text-primary)"
+                          : "var(--text-tertiary)",
                       fontWeight: isActive ? "600" : "500",
                     }}
                   >

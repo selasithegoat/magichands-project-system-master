@@ -1277,7 +1277,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   style={{
                     padding: "1rem",
                     textAlign: "center",
-                    color: "#64748b",
+                    color: "var(--text-tertiary)",
                   }}
                 >
                   Loading activity...
@@ -1300,7 +1300,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
                   style={{
                     padding: "1rem",
                     textAlign: "center",
-                    color: "#64748b",
+                    color: "var(--text-tertiary)",
                   }}
                 >
                   No recent activity

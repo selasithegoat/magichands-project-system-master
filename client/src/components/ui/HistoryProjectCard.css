@@ -77,6 +77,21 @@
   --accent-border: rgba(239, 68, 68, 0.35);
 }
 
+[data-theme="dark"] .history-card {
+  --card-shadow: rgba(2, 6, 23, 0.55);
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .history-card::before {
+  opacity: 0.6;
+}
+
+[data-theme="dark"] .history-card:hover {
+  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.7);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+}
+
 .special-requirement-watermark {
   position: absolute;
   inset: 0;
@@ -203,6 +218,18 @@
   border-color: rgba(251, 146, 60, 0.42);
 }
 
+[data-theme="dark"] .special-requirement-tag.corporate {
+  background: color-mix(in srgb, #ef4444 18%, var(--surface-alt));
+  color: #fca5a5;
+  border-color: color-mix(in srgb, #ef4444 38%, var(--border-color));
+}
+
+[data-theme="dark"] .special-requirement-tag.sample {
+  background: color-mix(in srgb, #f97316 18%, var(--surface-alt));
+  color: #fdba74;
+  border-color: color-mix(in srgb, #f97316 38%, var(--border-color));
+}
+
 .history-card-info {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -269,6 +296,57 @@
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent-strong);
+}
+
+[data-theme="dark"] .project-type-pill {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-alt));
+  color: color-mix(in srgb, var(--accent) 80%, #fff);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-color));
+}
+
+[data-theme="dark"] .order-id-pill {
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .version-tag {
+  background: color-mix(in srgb, var(--text-secondary) 18%, var(--surface-alt));
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .status-pill {
+  background: color-mix(in srgb, #22c55e 20%, var(--surface-alt));
+  color: #86efac;
+  border-color: color-mix(in srgb, #22c55e 40%, var(--border-color));
+}
+
+[data-theme="dark"] .history-card-title {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .info-icon {
+  color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .info-label {
+  color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .info-value {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .history-card-button {
+  background: var(--surface-alt);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .history-card-button:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-alt));
+  color: color-mix(in srgb, var(--accent) 80%, var(--text-primary));
 }
 
 @keyframes historyCardIn {

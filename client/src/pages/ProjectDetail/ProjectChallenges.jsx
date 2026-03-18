@@ -196,7 +196,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
       {/* Header */}
       <div className="challenges-header">
         <div className="flag-icon-wrapper">
-          <FlagIcon color="#dc2626" width="24" height="24" />{" "}
+          <FlagIcon color="currentColor" width="24" height="24" />
         </div>
         <div className="challenges-title-group">
           <h3>
@@ -205,7 +205,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
           </h3>
           <p className="challenges-subtitle">Track issues and blockers</p>
         </div>
-        <div style={{ flex: 1 }}></div> {/* Spacer */}
+        <div style={{ flex: 1 }}></div>
         <button
           className="report-challenge-btn"
           onClick={() => setIsModalOpen(true)}
@@ -250,9 +250,8 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                       }
                       onBlur={() => setActiveEditId(null)}
                       style={{
-                        border: "1px solid #cbd5e1", // Add border to look like input
+                        border: "1px solid var(--border-color)",
                         cursor: "pointer",
-                        // appearance: "auto", // Let browser decide or use distinct style
                         paddingRight: "1rem",
                         borderRadius: "12px",
                       }}
@@ -266,7 +265,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                       className={`status-pill ${item.status.toLowerCase()}`}
                       style={{
                         cursor: "default",
-                        pointerEvents: "none", // Make specific text non-interactive
+                        pointerEvents: "none",
                       }}
                     >
                       <span className="status-dot"></span>
@@ -279,15 +278,8 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                       className="btn-icon-edit"
                       onClick={() => setActiveEditId(item._id)}
                       title="Edit Status"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: "4px",
-                        display: "flex",
-                      }}
                     >
-                      <EditIcon width="16" height="16" color="#94a3b8" />
+                      <EditIcon width="16" height="16" color="currentColor" />
                     </button>
                   )}
                 </div>
@@ -310,7 +302,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                   <span className="resolved-placeholder">--</span>
                 ) : (
                   <span className="resolved-date-text">
-                    {item.resolvedDate.replace(",", "\n")}
+                    {item.resolvedDate}
                   </span>
                 )}
               </div>
@@ -320,7 +312,7 @@ const ProjectChallenges = ({ project, onUpdate }) => {
                   onClick={() => handleDeleteClick(item._id)}
                   title="Delete Challenge"
                 >
-                  <TrashIcon width="18" height="18" color="#dc2626" />
+                  <TrashIcon width="18" height="18" color="currentColor" />
                 </button>
               </div>
             </div>

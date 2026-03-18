@@ -7,11 +7,13 @@ import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 const resolveProjectTypeKey = (project) => {
-  if (project?.projectType === "Emergency" || project?.priority === "Urgent") {
+  const typeValue = String(project?.projectType || "").trim().toLowerCase();
+  const priorityValue = String(project?.priority || "").trim().toLowerCase();
+  if (priorityValue === "urgent" || typeValue.includes("emergency")) {
     return "emergency";
   }
-  if (project?.projectType === "Corporate Job") return "corporate";
-  if (project?.projectType === "Quote") return "quote";
+  if (typeValue.includes("corporate")) return "corporate";
+  if (typeValue.includes("quote")) return "quote";
   return "standard";
 };
 
@@ -394,14 +396,11 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               ? "active-finished"
               : "disabled-finished"
           }`}
+          aria-disabled={project.status !== "Completed"}
           onClick={() => {
             // Always pass the current status. The parent handler validates if it is "Delivered"
             // and then handles the update to "Completed".
             onUpdateStatus(project._id, project.status);
-          }}
-          style={{
-            opacity: project.status === "Completed" ? 1 : 0.6,
-            cursor: project.status === "Completed" ? "pointer" : "not-allowed",
           }}
         >
           Mark as Finished

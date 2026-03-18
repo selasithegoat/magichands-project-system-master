@@ -29,6 +29,31 @@
   padding: 1rem;
 }
 
+.project-type-banner {
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-weight: 700;
+  border-bottom: 1px solid transparent;
+}
+
+.project-type-banner.emergency {
+  background: #fee2e2;
+  color: #991b1b;
+  border-bottom-color: #fca5a5;
+}
+
+.project-type-banner.corporate {
+  background: #f0fdf4;
+  color: #166534;
+  border-bottom-color: #bbf7d0;
+}
+
+.project-type-banner.quote {
+  background: #fffbeb;
+  color: #b45309;
+  border-bottom-color: #fde68a;
+}
+
 /* Header */
 .project-header {
   background-color: var(--bg-card);
@@ -282,6 +307,30 @@
   width: fit-content;
 }
 
+.acceptance-banner {
+  background-color: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.acceptance-banner-title {
+  color: #9a3412;
+  margin-bottom: 0.25rem;
+  font-size: 1rem;
+}
+
+.acceptance-banner-subtitle {
+  color: #c2410c;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
 .header-left {
   display: flex;
   align-items: center;
@@ -304,6 +353,11 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.project-info-icon {
+  color: var(--text-tertiary);
+  margin-right: 0.35rem;
 }
 
 .status-badge {
@@ -536,6 +590,105 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.approved-mockup-card .card-title {
+  gap: 0.6rem;
+}
+
+.mockup-version-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  background: var(--primary-soft);
+  border: 1px solid rgba(var(--primary-rgb), 0.35);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mockup-approval-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mockup-approval-banner {
+  font-size: 0.78rem;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.mockup-approval-banner.pending {
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  border-color: rgba(var(--primary-rgb), 0.35);
+}
+
+.mockup-approval-banner.approved {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border-color));
+}
+
+.mockup-approval-banner.rejected {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.mockup-approval-reason {
+  font-size: 0.8rem;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.mockup-file-row {
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  padding: 0.75rem;
+  background: var(--surface-alt);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mockup-file-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.mockup-file-link:hover {
+  text-decoration: underline;
+}
+
+.mockup-download-link {
+  font-size: 0.8rem;
+  color: var(--success);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.mockup-download-link:hover {
+  background: color-mix(in srgb, var(--success) 14%, var(--success-soft));
+}
+
+.mockup-approval-note {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 /* Project Info Grid */
@@ -1171,6 +1324,21 @@
   bottom: -2rem; /* Cross the margin */
 }
 
+.approval-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.approval-title {
+  font-size: 0.9rem;
+}
+
+.approval-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .nudge-btn {
   border: 1px solid var(--border-color);
   background: var(--bg-card);
@@ -1655,4 +1823,110 @@ textarea.input-field {
   color: var(--text-secondary);
   font-size: 0.9rem;
   padding: 0.5rem 0;
+}
+
+/* Dark theme tuning */
+[data-theme="dark"] .project-special-watermark {
+  color: rgba(248, 250, 252, 0.05);
+}
+
+[data-theme="dark"] .project-type-banner.emergency {
+  background: color-mix(in srgb, #ef4444 18%, var(--bg-card));
+  color: #fca5a5;
+  border-bottom-color: color-mix(in srgb, #ef4444 40%, var(--border-color));
+}
+
+[data-theme="dark"] .project-type-banner.corporate {
+  background: color-mix(in srgb, var(--success) 18%, var(--bg-card));
+  color: #86efac;
+  border-bottom-color: color-mix(in srgb, var(--success) 40%, var(--border-color));
+}
+
+[data-theme="dark"] .project-type-banner.quote {
+  background: color-mix(in srgb, #f59e0b 16%, var(--bg-card));
+  color: #fdba74;
+  border-bottom-color: color-mix(in srgb, #f59e0b 40%, var(--border-color));
+}
+
+[data-theme="dark"] .delivery-countdown-badge.is-delivered {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border-color));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--success) 18%, var(--bg-card)) 0%,
+    color-mix(in srgb, var(--success) 8%, var(--bg-card)) 100%
+  );
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .delivery-countdown-badge.is-delivered .delivery-countdown-title {
+  color: #bbf7d0;
+}
+
+[data-theme="dark"] .delivery-delivered-at {
+  color: #86efac;
+}
+
+[data-theme="dark"] .billing-tag {
+  background: color-mix(in srgb, var(--primary-color) 16%, var(--surface-alt));
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+}
+
+[data-theme="dark"] .billing-tag.invoice {
+  background: color-mix(in srgb, var(--success) 16%, var(--surface-alt));
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border-color));
+}
+
+[data-theme="dark"] .billing-tag.payment {
+  background: color-mix(in srgb, #38bdf8 16%, var(--surface-alt));
+  color: #7dd3fc;
+  border-color: color-mix(in srgb, #38bdf8 30%, var(--border-color));
+}
+
+[data-theme="dark"] .billing-tag.corporate-emergency {
+  background: color-mix(in srgb, #ef4444 16%, var(--surface-alt));
+  color: #fca5a5;
+  border-color: color-mix(in srgb, #ef4444 35%, var(--border-color));
+}
+
+[data-theme="dark"] .billing-tag.sample-required {
+  background: color-mix(in srgb, #f59e0b 16%, var(--surface-alt));
+  color: #fdba74;
+  border-color: color-mix(in srgb, #f59e0b 35%, var(--border-color));
+}
+
+[data-theme="dark"] .payment-warning {
+  background: color-mix(in srgb, #f59e0b 16%, var(--surface-alt));
+  border-color: color-mix(in srgb, #f59e0b 35%, var(--border-color));
+  color: #fdba74;
+}
+
+[data-theme="dark"] .acceptance-banner {
+  background: color-mix(in srgb, #f59e0b 16%, var(--bg-card));
+  border-color: color-mix(in srgb, #f59e0b 40%, var(--border-color));
+}
+
+[data-theme="dark"] .acceptance-banner-title {
+  color: #fdba74;
+}
+
+[data-theme="dark"] .acceptance-banner-subtitle {
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .project-info-icon {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .info-item h4,
+[data-theme="dark"] .project-brief-section h4,
+[data-theme="dark"] .items-table th,
+[data-theme="dark"] .progress-header span,
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .info-subtext,
+[data-theme="dark"] .feedback-meta,
+[data-theme="dark"] .feedback-attachments-label,
+[data-theme="dark"] .feedback-attachment-name {
+  color: var(--text-secondary);
 }

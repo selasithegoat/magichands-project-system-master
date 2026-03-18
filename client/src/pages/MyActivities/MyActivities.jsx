@@ -2,7 +2,14 @@ import React, { useState, useEffect } from "react";
 import "./MyActivities.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ArrowLeftIcon from "../../components/icons/ArrowLeftIcon";
+import FolderIcon from "../../components/icons/FolderIcon";
+import EditIcon from "../../components/icons/EditIcon";
+import TrashIcon from "../../components/icons/TrashIcon";
+import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
+import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
+import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
+import SearchIcon from "../../components/icons/SearchIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { format, isToday, isYesterday } from "date-fns";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -15,6 +22,9 @@ const MyActivities = ({ onBack }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [compactView, setCompactView] = useState(false);
 
   const fetchActivities = async (pageNum) => {
     try {
@@ -96,20 +106,62 @@ const MyActivities = ({ onBack }) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  const getActivityIcon = (action) => {
-    if (action.includes("create")) return { icon: "📁", color: "blue" };
-    if (action.includes("update") || action.includes("status"))
-      return { icon: "✏️", color: "orange" };
-    if (action.includes("delete")) return { icon: "🗑️", color: "red" };
-    if (action.includes("risk") || action.includes("factor"))
-      return { icon: "⚠️", color: "red" };
-    if (action.includes("add")) return { icon: "➕", color: "green" };
-    if (action.includes("approval")) return { icon: "✅", color: "green" };
-    return { icon: "📝", color: "gray" };
+  const resolveActivityType = (action) => {
+    const actionValue = String(action || "").toLowerCase();
+    if (actionValue.includes("create")) return "create";
+    if (actionValue.includes("update") || actionValue.includes("status"))
+      return "update";
+    if (actionValue.includes("delete")) return "delete";
+    if (actionValue.includes("risk") || actionValue.includes("factor"))
+      return "risk";
+    if (actionValue.includes("add")) return "add";
+    if (actionValue.includes("approval")) return "approval";
+    return "other";
   };
 
+  const getActivityIcon = (action) => {
+    switch (resolveActivityType(action)) {
+      case "create":
+        return { icon: <FolderIcon />, color: "blue" };
+      case "update":
+        return { icon: <EditIcon />, color: "orange" };
+      case "delete":
+        return {
+          icon: <TrashIcon width={20} height={20} color="currentColor" />,
+          color: "red",
+        };
+      case "risk":
+        return { icon: <AlertTriangleIcon width="20" height="20" />, color: "red" };
+      case "add":
+        return { icon: <PlusCircleIcon />, color: "green" };
+      case "approval":
+        return { icon: <CheckCircleIcon width="20" height="20" />, color: "green" };
+      default:
+        return { icon: <ClipboardListIcon width="20" height="20" />, color: "gray" };
+    }
+  };
+
+  const filteredActivities = activities.filter((activity) => {
+    const query = searchQuery.trim().toLowerCase();
+    const typeMatch =
+      typeFilter === "all" || resolveActivityType(activity.action) === typeFilter;
+    if (!query) return typeMatch;
+    const description = String(activity.description || "").toLowerCase();
+    const projectName = String(
+      activity.project?.details?.projectName || "",
+    ).toLowerCase();
+    const orderId = String(activity.project?.orderId || activity.project?._id || "")
+      .toLowerCase();
+    return (
+      typeMatch &&
+      (description.includes(query) ||
+        projectName.includes(query) ||
+        orderId.includes(query))
+    );
+  });
+
   // Group activities by date
-  const groupedActivities = activities.reduce((groups, activity) => {
+  const groupedActivities = filteredActivities.reduce((groups, activity) => {
     const date = new Date(activity.createdAt);
     let dateLabel = format(date, "MMMM d, yyyy");
 
@@ -154,10 +206,45 @@ const MyActivities = ({ onBack }) => {
         </button>
       </div>
 
-      <div className="activity-feed">
+      <div className="activity-controls">
+        <div className="activity-search">
+          <SearchIcon className="activity-search-icon" />
+          <input
+            type="text"
+            placeholder="Search by project, order, or action..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+        <div className="activity-filter-actions">
+          <select
+            className="activity-filter-select"
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+          >
+            <option value="all">All types</option>
+            <option value="create">Created</option>
+            <option value="update">Updates</option>
+            <option value="approval">Approvals</option>
+            <option value="add">Adds</option>
+            <option value="risk">Risks</option>
+            <option value="delete">Deletes</option>
+            <option value="other">Other</option>
+          </select>
+          <button
+            type="button"
+            className={`compact-toggle ${compactView ? "active" : ""}`}
+            onClick={() => setCompactView((prev) => !prev)}
+          >
+            {compactView ? "Expanded View" : "Compact View"}
+          </button>
+        </div>
+      </div>
+
+      <div className={`activity-feed ${compactView ? "compact" : ""}`}>
         {isLoading ? (
           <LoadingSpinner />
-        ) : activities.length > 0 ? (
+        ) : filteredActivities.length > 0 ? (
           <>
             {sortedDateLabels.map((dateLabel) => (
               <div key={dateLabel} className="activity-group">
@@ -176,7 +263,7 @@ const MyActivities = ({ onBack }) => {
                             {activity.project?.details?.projectName ||
                               "Unknown Project"}
                           </span>
-                          <span className="separator">•</span>
+                          <span className="separator" aria-hidden="true" />
                           <span className="time">
                             {formatTimeAgo(activity.createdAt)}
                           </span>

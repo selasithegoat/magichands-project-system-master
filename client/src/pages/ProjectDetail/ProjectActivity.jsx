@@ -258,8 +258,7 @@ const ProjectActivity = ({ project }) => {
                 <div className="card-header">
                   <div className="user-row">
                     <div
-                      className={`history-user-initials`}
-                      style={{ backgroundColor: "#e2e8f0", color: "#64748b" }}
+                      className="history-user-initials"
                     >
                       {item.user?.firstName?.[0]}
                       {item.user?.lastName?.[0]}
@@ -281,7 +280,7 @@ const ProjectActivity = ({ project }) => {
                       <div className="status-pill-hist">
                         {item.details.statusChange.from}
                       </div>
-                      <span className="val-arrow">→</span>
+                      <span className="val-arrow">-&gt;</span>
                       <div className="status-pill-hist in-progress">
                         {item.details.statusChange.to}
                       </div>
@@ -293,7 +292,6 @@ const ProjectActivity = ({ project }) => {
                       <span className="change-label">STATUS UPDATE</span>
                       <span
                         className="val-new"
-                        style={{ fontWeight: 600, color: "#0f172a" }}
                       >
                         {item.details.newStatus}
                       </span>
@@ -306,7 +304,7 @@ const ProjectActivity = ({ project }) => {
         })}
         {activities.length === 0 && (
           <div
-            style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}
+            style={{ textAlign: "center", color: "var(--text-tertiary)", padding: "2rem" }}
           >
             No activity recorded yet.
           </div>

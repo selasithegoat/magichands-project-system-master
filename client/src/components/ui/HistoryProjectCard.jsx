@@ -7,11 +7,13 @@ import CheckCircleIcon from "../icons/CheckCircleIcon";
 import EyeIcon from "../icons/EyeIcon";
 
 const resolveProjectTypeKey = (project) => {
-  if (project?.projectType === "Emergency" || project?.priority === "Urgent") {
+  const typeValue = String(project?.projectType || "").trim().toLowerCase();
+  const priorityValue = String(project?.priority || "").trim().toLowerCase();
+  if (priorityValue === "urgent" || typeValue.includes("emergency")) {
     return "emergency";
   }
-  if (project?.projectType === "Corporate Job") return "corporate";
-  if (project?.projectType === "Quote") return "quote";
+  if (typeValue.includes("corporate")) return "corporate";
+  if (typeValue.includes("quote")) return "quote";
   return "standard";
 };
 

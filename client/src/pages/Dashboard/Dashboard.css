@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
 .dashboard-container.dashboard-redesign {
-  /* --bg: #ffffff; */
+  --bg: var(--bg-app);
   --bg-accent: #ffffff;
   --surface: #ffffff;
   --surface-alt: #f8fafc;
@@ -31,6 +31,30 @@
   color: var(--text);
   font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
   background: var(--bg);
+}
+
+[data-theme="dark"] .dashboard-container.dashboard-redesign {
+  --bg: var(--bg-app);
+  --bg-accent: var(--bg-card);
+  --surface: var(--bg-card);
+  --surface-alt: var(--surface-alt);
+  --border: var(--border-color);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --muted-strong: var(--text-secondary);
+  --primary: var(--primary-color);
+  --primary-soft: var(--primary-soft);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.16);
+  --warning: #fbbf24;
+  --success: var(--success);
+  --info: #14b8a6;
+  --shadow-soft: var(--shadow-md);
+  --shadow-hover: var(--shadow-lg);
+  --timeline-critical: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  --timeline-high: color-mix(in srgb, var(--warning) 18%, var(--surface));
+  --timeline-medium: color-mix(in srgb, var(--primary) 18%, var(--surface));
+  --timeline-normal: color-mix(in srgb, var(--muted) 12%, var(--surface));
 }
 
 .dashboard-header-v2 {
@@ -214,13 +238,16 @@
 }
 
 .dashboard-kpi-card-emergency {
+  --emergency-accent: var(--danger);
   width: 100%;
-  border: 1px solid color-mix(in srgb, var(--danger) 56%, var(--border));
+  border: 1px solid
+    color-mix(in srgb, var(--emergency-accent) 56%, var(--border));
   border-radius: 14px;
-  background: linear-gradient(
+  background-color: rgba(239, 68, 68, 0.12);
+  background-image: linear-gradient(
     122deg,
-    color-mix(in srgb, var(--danger) 26%, var(--surface)) 0%,
-    color-mix(in srgb, var(--danger) 10%, var(--surface-alt)) 100%
+    color-mix(in srgb, var(--emergency-accent) 32%, var(--surface)) 0%,
+    color-mix(in srgb, var(--emergency-accent) 14%, var(--surface-alt)) 100%
   );
   padding: 0.8rem;
   margin-bottom: 0.7rem;
@@ -235,6 +262,37 @@
   animation: dashboard-emergency-pump 2s ease-in-out infinite;
 }
 
+[data-theme="dark"] .dashboard-kpi-card-emergency {
+  --emergency-accent: #f87171;
+  border-color: color-mix(
+    in srgb,
+    var(--emergency-accent) 72%,
+    var(--border)
+  );
+  background-color: rgba(248, 113, 113, 0.24);
+  background-image: linear-gradient(
+    122deg,
+    color-mix(in srgb, var(--emergency-accent) 70%, var(--surface)) 0%,
+    color-mix(in srgb, var(--emergency-accent) 40%, var(--surface-alt)) 100%
+  );
+  animation: dashboard-emergency-pump-dark 2s ease-in-out infinite;
+}
+
+[data-theme="dark"] .dashboard-kpi-card-emergency p {
+  color: color-mix(in srgb, var(--emergency-accent) 82%, var(--text));
+}
+
+[data-theme="dark"] .dashboard-kpi-card-emergency strong {
+  color: color-mix(in srgb, var(--emergency-accent) 90%, var(--text));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.emergency {
+  background: color-mix(in srgb, var(--emergency-accent) 34%, var(--surface));
+  color: var(--emergency-accent);
+  box-shadow: 0 0 0 1px
+    color-mix(in srgb, var(--emergency-accent) 60%, var(--border));
+}
+
 .dashboard-kpi-card-emergency:hover {
   transform: translateY(-1px);
 }
@@ -247,7 +305,7 @@
 .dashboard-kpi-card-emergency p {
   margin: 0.16rem 0 0;
   font-size: 0.78rem;
-  color: color-mix(in srgb, var(--danger) 46%, var(--muted));
+  color: color-mix(in srgb, var(--emergency-accent) 52%, var(--muted));
 }
 
 .dashboard-kpi-mini-grid {
@@ -301,7 +359,7 @@
 }
 
 .dashboard-kpi-mini-card.kpi-corporate {
-  --kpi-color: #2563eb;
+  --kpi-color: #10b981;
 }
 
 .dashboard-kpi-mini-card span {
@@ -326,8 +384,8 @@
 }
 
 .dashboard-kpi-icon.emergency {
-  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
-  color: var(--danger);
+  background: color-mix(in srgb, var(--emergency-accent) 18%, var(--surface));
+  color: var(--emergency-accent);
   animation: dashboard-emergency-icon-pump 1.35s ease-in-out infinite;
 }
 
@@ -352,8 +410,76 @@
 }
 
 .dashboard-kpi-icon.corporate {
-  background: color-mix(in srgb, #2563eb 16%, var(--surface));
-  color: #2563eb;
+  background: color-mix(in srgb, #10b981 16%, var(--surface));
+  color: #10b981;
+}
+
+[data-theme="dark"] .dashboard-kpi-mini-card {
+  border-color: color-mix(in srgb, var(--kpi-color) 65%, var(--border));
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--kpi-color) 40%, var(--surface)) 0%,
+    color-mix(in srgb, var(--kpi-color) 20%, var(--surface-alt)) 100%
+  );
+  box-shadow: none;
+}
+
+[data-theme="dark"] .dashboard-kpi-mini-card span {
+  color: color-mix(in srgb, var(--kpi-color) 72%, var(--text));
+}
+
+[data-theme="dark"] .dashboard-kpi-mini-card strong {
+  color: var(--text);
+}
+
+[data-theme="dark"] .dashboard-kpi-mini-card.kpi-completed {
+  --kpi-color: #22c55e;
+  border-color: color-mix(in srgb, #22c55e 70%, var(--border));
+  box-shadow: none;
+}
+
+[data-theme="dark"] .dashboard-kpi-mini-card.kpi-completed span {
+  color: color-mix(in srgb, #22c55e 75%, var(--text));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.completed {
+  background: color-mix(in srgb, #22c55e 28%, var(--surface));
+  color: #86efac;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #22c55e 55%, var(--border));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-tertiary) 45%, transparent);
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.emergency {
+  background: color-mix(in srgb, var(--danger) 26%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.overdue {
+  background: color-mix(in srgb, var(--warning) 24%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--warning) 45%, var(--border));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.delivery {
+  background: color-mix(in srgb, var(--info) 26%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--info) 45%, var(--border));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.active {
+  background: color-mix(in srgb, var(--primary) 24%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.completed {
+  background: color-mix(in srgb, var(--success) 24%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
+[data-theme="dark"] .dashboard-kpi-icon.corporate {
+  background: color-mix(in srgb, #10b981 24%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #10b981 45%, var(--border));
 }
 
 .dashboard-kpi-mini-card:hover .dashboard-kpi-icon {
@@ -572,7 +698,7 @@
 }
 
 .dashboard-project-item.project-corporate {
-  --project-accent: #2563eb;
+  --project-accent: #10b981;
 }
 
 .dashboard-project-item.project-quote {
@@ -705,8 +831,8 @@
 }
 
 .dashboard-quick-action:hover {
-  color: var(--primary);
-  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
+  color: var(--project-accent);
+  border-color: color-mix(in srgb, var(--project-accent) 44%, var(--border));
 }
 
 .dashboard-project-badges {
@@ -797,13 +923,17 @@
   height: 8px;
   border-radius: 999px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--primary) 10%, var(--bg-accent));
+  background: color-mix(in srgb, var(--project-accent) 16%, var(--bg-accent));
 }
 
 .dashboard-project-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 85%, #fff) 0%, color-mix(in srgb, var(--primary) 60%, #38bdf8) 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--project-accent) 86%, #fff) 0%,
+    color-mix(in srgb, var(--project-accent) 60%, #38bdf8) 100%
+  );
   transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1100,15 +1230,38 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 0 color-mix(in srgb, var(--danger) 0%, transparent),
-      0 12px 24px color-mix(in srgb, var(--danger) 16%, transparent);
+      0 0 0 0 color-mix(in srgb, var(--emergency-accent) 18%, transparent),
+      0 12px 24px
+        color-mix(in srgb, var(--emergency-accent) 28%, transparent),
+      0 0 18px color-mix(in srgb, var(--emergency-accent) 18%, transparent);
   }
   50% {
     box-shadow:
-      0 0 0 5px color-mix(in srgb, var(--danger) 14%, transparent),
-      0 16px 28px color-mix(in srgb, var(--danger) 24%, transparent);
+      0 0 0 6px color-mix(in srgb, var(--emergency-accent) 30%, transparent),
+      0 16px 30px
+        color-mix(in srgb, var(--emergency-accent) 45%, transparent),
+      0 0 26px color-mix(in srgb, var(--emergency-accent) 26%, transparent);
   }
 }
+
+@keyframes dashboard-emergency-pump-dark {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--emergency-accent) 22%, transparent),
+      0 14px 26px
+        color-mix(in srgb, var(--emergency-accent) 40%, transparent),
+      0 0 22px color-mix(in srgb, var(--emergency-accent) 28%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px color-mix(in srgb, var(--emergency-accent) 40%, transparent),
+      0 18px 34px
+        color-mix(in srgb, var(--emergency-accent) 60%, transparent),
+      0 0 36px color-mix(in srgb, var(--emergency-accent) 38%, transparent);
+  }
+}
+
 
 .dashboard-drawer-backdrop {
   position: fixed;
@@ -1344,5 +1497,17 @@
   .dashboard-container.dashboard-redesign *::after {
     animation: none !important;
     transition: none !important;
+  }
+
+  .dashboard-kpi-card-emergency {
+    animation: dashboard-emergency-pump 2s ease-in-out infinite !important;
+  }
+
+  [data-theme="dark"] .dashboard-kpi-card-emergency {
+    animation: dashboard-emergency-pump-dark 2s ease-in-out infinite !important;
+  }
+
+  .dashboard-kpi-icon.emergency {
+    animation: dashboard-emergency-icon-pump 1.35s ease-in-out infinite !important;
   }
 }

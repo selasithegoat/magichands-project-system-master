@@ -105,12 +105,19 @@
   box-shadow: var(--shadow-sm);
 }
 
+.ongoing-search-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
 .ongoing-search-input {
   border: none;
   outline: none;
   font-size: 1rem;
   flex: 1;
   color: var(--text-primary);
+  background-color: transparent;
+  caret-color: var(--text-primary);
 }
 
 .ongoing-search-input::placeholder {
