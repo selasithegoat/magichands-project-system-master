@@ -170,6 +170,10 @@ const Layout = ({
       .map((item) => {
         const notificationId = toEntityId(item?._id);
         const reminderId = toEntityId(item?.reminder);
+        const projectOrderId = String(item?.project?.orderId || "").trim();
+        const projectName = String(
+          item?.project?.details?.projectName || "",
+        ).trim();
         return {
           notificationId,
           reminderId,
@@ -177,6 +181,8 @@ const Layout = ({
           message: String(item?.message || "").trim(),
           createdAt: item?.createdAt || null,
           projectId: toEntityId(item?.project?._id || item?.project),
+          projectOrderId,
+          projectName,
         };
       })
       .filter((item) => Boolean(item.notificationId && item.reminderId))
@@ -293,6 +299,21 @@ const Layout = ({
     } finally {
       setReminderActionLoading(false);
     }
+  };
+
+  const handleReminderNavigate = () => {
+    if (!activeReminderAlert) return;
+    const notificationId = toEntityId(activeReminderAlert.notificationId);
+    if (!notificationId) return;
+
+    void markNotificationReadSilently(notificationId);
+    handledReminderNotificationIdsRef.current.add(notificationId);
+    queuedReminderNotificationIdsRef.current.delete(notificationId);
+    setReminderQueue((prev) =>
+      prev.filter((item) => item.notificationId !== notificationId),
+    );
+    setActiveReminderAlert(null);
+    setReminderActionError("");
   };
 
   const EXCLUDED_NOTIFICATION_SOURCE = "inventory";
@@ -598,6 +619,7 @@ const Layout = ({
         onSnooze={() => processReminderAlertAction("snooze")}
         onStop={() => processReminderAlertAction("stop")}
         onComplete={() => processReminderAlertAction("complete")}
+        onNavigateProject={handleReminderNavigate}
       />
 
       {/* Mobile Drawer */}
