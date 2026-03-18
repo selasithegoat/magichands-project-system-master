@@ -124,6 +124,11 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.orders-table th:nth-child(4),
+.orders-table td:nth-child(4) {
+  text-align: left;
+}
+
 .orders-table td {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-color);
