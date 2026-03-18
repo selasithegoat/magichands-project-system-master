@@ -167,6 +167,7 @@ const loginUser = async (req, res) => {
         email: user.email,
         avatarUrl: user.avatarUrl,
         notificationSettings: user.notificationSettings,
+        themePreference: user.themePreference,
       });
     } else {
       res.status(401).json({ message: "Invalid credentials" });
@@ -217,6 +218,19 @@ const updateProfile = async (req, res) => {
     user.employeeType = req.body.employeeType || user.employeeType;
     user.contact = req.body.contact || user.contact;
 
+    const themePreference = String(req.body.themePreference || "")
+      .trim()
+      .toLowerCase();
+    if (themePreference) {
+      const allowedThemes = new Set(["light", "dark", "system"]);
+      if (!allowedThemes.has(themePreference)) {
+        return res
+          .status(400)
+          .json({ message: "Invalid theme preference" });
+      }
+      user.themePreference = themePreference;
+    }
+
     if (req.body.notificationSettings) {
       const email =
         req.body.notificationSettings.email !== undefined
@@ -256,6 +270,7 @@ const updateProfile = async (req, res) => {
       contact: updatedUser.contact,
       avatarUrl: updatedUser.avatarUrl,
       notificationSettings: updatedUser.notificationSettings,
+      themePreference: updatedUser.themePreference,
     });
   } else {
     res.status(404);

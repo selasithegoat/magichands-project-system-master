@@ -2,14 +2,25 @@ import { useEffect, useState } from "react";
 
 const THEME_STORAGE_KEY = "mh-client-theme";
 
-const getStoredTheme = () => {
+const getAccountStorageKey = (accountKey = "") => {
+  if (!accountKey) return "";
+  return `${THEME_STORAGE_KEY}:${accountKey}`;
+};
+
+const getStoredTheme = (storageKey) => {
   if (typeof window === "undefined") return null;
+  if (!storageKey) return null;
   try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const stored = window.localStorage.getItem(storageKey);
     return stored === "light" || stored === "dark" ? stored : null;
   } catch (error) {
     return null;
   }
+};
+
+const normalizeThemeValue = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "light" || normalized === "dark" ? normalized : null;
 };
 
 const getSystemTheme = () => {
@@ -24,12 +35,40 @@ const applyTheme = (theme) => {
   document.documentElement.dataset.theme = theme;
 };
 
-const useTheme = () => {
-  const storedTheme = getStoredTheme();
-  const [theme, setTheme] = useState(storedTheme || getSystemTheme());
-  const [hasStoredPreference, setHasStoredPreference] = useState(
-    Boolean(storedTheme),
+const useTheme = ({ accountKey = "", enabled = true, serverTheme } = {}) => {
+  const storageKey = enabled ? getAccountStorageKey(accountKey) : "";
+  const storedTheme = getStoredTheme(storageKey);
+  const normalizedServerTheme = normalizeThemeValue(serverTheme);
+  const [theme, setTheme] = useState(
+    normalizedServerTheme || storedTheme || getSystemTheme(),
   );
+  const [hasStoredPreference, setHasStoredPreference] = useState(
+    Boolean(normalizedServerTheme || storedTheme),
+  );
+
+  useEffect(() => {
+    if (!enabled || !accountKey) {
+      setTheme(getSystemTheme());
+      setHasStoredPreference(false);
+      return;
+    }
+
+    const nextServerTheme = normalizeThemeValue(serverTheme);
+    if (nextServerTheme) {
+      setTheme(nextServerTheme);
+      setHasStoredPreference(true);
+      return;
+    }
+
+    const nextStoredTheme = getStoredTheme(getAccountStorageKey(accountKey));
+    if (nextStoredTheme) {
+      setTheme(nextStoredTheme);
+      setHasStoredPreference(true);
+    } else {
+      setTheme(getSystemTheme());
+      setHasStoredPreference(false);
+    }
+  }, [accountKey, enabled, serverTheme]);
 
   useEffect(() => {
     applyTheme(theme);
@@ -37,12 +76,13 @@ const useTheme = () => {
 
   useEffect(() => {
     if (!hasStoredPreference) return;
+    if (!enabled || !accountKey) return;
     try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+      window.localStorage.setItem(getAccountStorageKey(accountKey), theme);
     } catch (error) {
       // ignore storage write errors
     }
-  }, [theme, hasStoredPreference]);
+  }, [theme, hasStoredPreference, accountKey, enabled]);
 
   useEffect(() => {
     if (hasStoredPreference) return undefined;
@@ -66,6 +106,7 @@ const useTheme = () => {
   }, [hasStoredPreference]);
 
   const toggleTheme = () => {
+    if (!enabled || !accountKey) return;
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
     setHasStoredPreference(true);
   };

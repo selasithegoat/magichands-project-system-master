@@ -65,6 +65,12 @@ const PendingAssignments = lazy(
 const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
 const APP_SPLASH_DURATION_MS = 3000;
+const THEME_STORAGE_KEY = "mh-client-theme";
+
+const normalizeThemePreference = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "light" || normalized === "dark" ? normalized : "";
+};
 
 const StartupSplash = () => (
   <div className="startup-splash" role="status" aria-live="polite">
@@ -86,11 +92,87 @@ function App() {
   const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [showPostLoginSplash, setShowPostLoginSplash] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const accountKey = String(
+    user?._id || user?.id || user?.email || "",
+  ).trim();
+  const isLoginRoute = location.pathname === "/login";
+  const { theme, toggleTheme } = useTheme({
+    accountKey,
+    enabled: Boolean(accountKey) && !isLoginRoute,
+    serverTheme: user?.themePreference,
+  });
+
+  const syncThemePreference = React.useCallback(
+    async (nextTheme, { silent = false } = {}) => {
+      if (!accountKey) return;
+      try {
+        const res = await fetch("/api/auth/profile", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ themePreference: nextTheme }),
+        });
+
+        if (!res.ok) {
+          if (!silent) {
+            const errorData = await res.json().catch(() => ({}));
+            console.error(
+              errorData.message || "Failed to update theme preference",
+            );
+          }
+          return;
+        }
+
+        const updatedUser = await res.json().catch(() => ({}));
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                themePreference:
+                  updatedUser.themePreference ||
+                  nextTheme ||
+                  prev.themePreference,
+              }
+            : prev,
+        );
+      } catch (error) {
+        if (!silent) {
+          console.error("Failed to update theme preference", error);
+        }
+      }
+    },
+    [accountKey],
+  );
+
+  const handleToggleTheme = async () => {
+    if (!accountKey) return;
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    toggleTheme();
+    await syncThemePreference(nextTheme);
+  };
 
   // Initialize auto-logout (5 minutes)
   useInactivityLogout(5 * 60 * 1000, () => setUser(null));
   useRealtimeClient(Boolean(user));
+
+  React.useEffect(() => {
+    if (!accountKey) return;
+    const serverPreference = normalizeThemePreference(user?.themePreference);
+    if (serverPreference) return;
+
+    let legacyTheme = "";
+    try {
+      legacyTheme = window.localStorage.getItem(
+        `${THEME_STORAGE_KEY}:${accountKey}`,
+      );
+    } catch (error) {
+      legacyTheme = "";
+    }
+
+    const normalizedLegacy = normalizeThemePreference(legacyTheme);
+    if (!normalizedLegacy) return;
+    syncThemePreference(normalizedLegacy, { silent: true });
+  }, [accountKey, user?.themePreference, syncThemePreference]);
 
   // Fetch project count
   const fetchProjectCount = async () => {
@@ -289,7 +371,7 @@ function App() {
         projectCount={projectCount}
         engagedCount={engagedCount}
         theme={theme}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={handleToggleTheme}
         onNavigateDashboard={() => navigate("/client")}
         onNavigateProject={() => navigate("/projects")}
         onNavigateHistory={() => navigate("/history")}

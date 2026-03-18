@@ -83,6 +83,11 @@ const UserSchema = new mongoose.Schema({
     push: { type: Boolean, default: true },
     sound: { type: Boolean, default: true },
   },
+  themePreference: {
+    type: String,
+    enum: ["light", "dark", "system"],
+    default: "system",
+  },
 });
 
 // Encrypt password using bcrypt
