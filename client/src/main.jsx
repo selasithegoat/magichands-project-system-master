@@ -10,6 +10,10 @@ import { BrowserRouter } from "react-router-dom";
 
 const resolveInitialTheme = () => {
   if (typeof window === "undefined") return "light";
+  const pathname = window.location?.pathname || "";
+  if (pathname === "/login" || pathname === "/") {
+    return "light";
+  }
   if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
     return "dark";
   }

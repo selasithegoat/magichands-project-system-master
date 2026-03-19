@@ -95,11 +95,13 @@ function App() {
   const accountKey = String(
     user?._id || user?.id || user?.email || "",
   ).trim();
-  const isLoginRoute = location.pathname === "/login";
+  const isLoginRoute =
+    location.pathname === "/login" || location.pathname === "/";
   const { theme, toggleTheme } = useTheme({
     accountKey,
     enabled: Boolean(accountKey) && !isLoginRoute,
     serverTheme: user?.themePreference,
+    forcedTheme: isLoginRoute ? "light" : "",
   });
 
   const syncThemePreference = React.useCallback(

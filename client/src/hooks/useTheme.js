@@ -35,18 +35,33 @@ const applyTheme = (theme) => {
   document.documentElement.dataset.theme = theme;
 };
 
-const useTheme = ({ accountKey = "", enabled = true, serverTheme } = {}) => {
+const useTheme = ({
+  accountKey = "",
+  enabled = true,
+  serverTheme,
+  forcedTheme,
+} = {}) => {
+  const normalizedForcedTheme = normalizeThemeValue(forcedTheme);
   const storageKey = enabled ? getAccountStorageKey(accountKey) : "";
   const storedTheme = getStoredTheme(storageKey);
   const normalizedServerTheme = normalizeThemeValue(serverTheme);
   const [theme, setTheme] = useState(
-    normalizedServerTheme || storedTheme || getSystemTheme(),
+    normalizedForcedTheme ||
+      normalizedServerTheme ||
+      storedTheme ||
+      getSystemTheme(),
   );
   const [hasStoredPreference, setHasStoredPreference] = useState(
-    Boolean(normalizedServerTheme || storedTheme),
+    Boolean(!normalizedForcedTheme && (normalizedServerTheme || storedTheme)),
   );
 
   useEffect(() => {
+    if (normalizedForcedTheme) {
+      setTheme(normalizedForcedTheme);
+      setHasStoredPreference(false);
+      return;
+    }
+
     if (!enabled || !accountKey) {
       setTheme(getSystemTheme());
       setHasStoredPreference(false);
@@ -68,7 +83,7 @@ const useTheme = ({ accountKey = "", enabled = true, serverTheme } = {}) => {
       setTheme(getSystemTheme());
       setHasStoredPreference(false);
     }
-  }, [accountKey, enabled, serverTheme]);
+  }, [accountKey, enabled, serverTheme, normalizedForcedTheme]);
 
   useEffect(() => {
     applyTheme(theme);
@@ -85,6 +100,7 @@ const useTheme = ({ accountKey = "", enabled = true, serverTheme } = {}) => {
   }, [theme, hasStoredPreference, accountKey, enabled]);
 
   useEffect(() => {
+    if (normalizedForcedTheme) return undefined;
     if (hasStoredPreference) return undefined;
     if (!window.matchMedia) return undefined;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -103,9 +119,10 @@ const useTheme = ({ accountKey = "", enabled = true, serverTheme } = {}) => {
         media.removeListener(handleChange);
       }
     };
-  }, [hasStoredPreference]);
+  }, [hasStoredPreference, normalizedForcedTheme]);
 
   const toggleTheme = () => {
+    if (normalizedForcedTheme) return;
     if (!enabled || !accountKey) return;
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
     setHasStoredPreference(true);
