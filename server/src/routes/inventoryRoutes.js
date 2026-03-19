@@ -26,6 +26,7 @@ const {
   deleteInventoryRecord,
   purgeInventoryData,
   getStockTransactions,
+  getStockTransactionsDailyReport,
   createStockTransaction,
   updateStockTransaction,
   deleteStockTransaction,
@@ -92,6 +93,9 @@ router
   .route("/stock-transactions")
   .get(getStockTransactions)
   .post(createStockTransaction);
+router
+  .route("/stock-transactions/daily-report")
+  .get(getStockTransactionsDailyReport);
 router
   .route("/stock-transactions/:id")
   .put(updateStockTransaction)

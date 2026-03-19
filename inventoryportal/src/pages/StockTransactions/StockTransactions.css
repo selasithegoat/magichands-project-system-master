@@ -33,7 +33,7 @@
 
 .filters-row {
   display: grid;
-  grid-template-columns: 1fr 160px 160px 44px;
+  grid-template-columns: 1fr 160px 160px auto 44px;
   gap: 12px;
   align-items: center;
 }
@@ -68,6 +68,17 @@
   font-size: 13px;
   color: var(--ink);
   border-radius: var(--radius-sm);
+}
+
+.daily-report-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.daily-report-group .filter-select {
+  min-width: 160px;
 }
 
 .table-card {
@@ -252,7 +263,7 @@
 
 @media (max-width: 1200px) and (min-width: 1001px) {
   .filters-row {
-    grid-template-columns: 1fr 140px 140px 44px;
+    grid-template-columns: 1fr 140px 140px auto 44px;
   }
 
   .table-header,

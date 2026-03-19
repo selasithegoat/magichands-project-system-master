@@ -2478,6 +2478,113 @@ const getStockTransactions = async (req, res) => {
   }
 };
 
+const getStockTransactionsDailyReport = async (req, res) => {
+  if (!ensureInventoryAccess(req, res)) return;
+
+  try {
+    const reportDate = parseOptionalDate(req.query.date);
+    if (!reportDate) {
+      return res.status(400).json({ message: "date is required." });
+    }
+
+    const dayStart = new Date(reportDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(reportDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const dayTransactions = await StockTransaction.find({
+      date: { $gte: dayStart, $lte: dayEnd },
+    }).lean();
+
+    if (!dayTransactions.length) {
+      return res.json({ date: dayStart.toISOString().slice(0, 10), rows: [] });
+    }
+
+    const skuSet = new Set(
+      dayTransactions
+        .map((tx) => String(tx?.sku || "").trim())
+        .filter(Boolean),
+    );
+    const skuList = Array.from(skuSet);
+
+    const [records, afterTransactions] = await Promise.all([
+      InventoryRecord.find({ sku: { $in: skuList } })
+        .select("item sku qtyValue warehouse")
+        .lean(),
+      StockTransaction.find({
+        sku: { $in: skuList },
+        date: { $gt: dayEnd },
+      })
+        .select("sku item qty")
+        .lean(),
+    ]);
+
+    const recordBySku = new Map(
+      records.map((record) => [String(record.sku), record]),
+    );
+    const afterDeltaBySku = new Map();
+    afterTransactions.forEach((tx) => {
+      const sku = String(tx?.sku || "").trim();
+      if (!sku) return;
+      const qty = Number(tx?.qty || 0);
+      afterDeltaBySku.set(sku, (afterDeltaBySku.get(sku) || 0) + qty);
+    });
+
+    const dayAgg = new Map();
+    dayTransactions.forEach((tx) => {
+      const sku = String(tx?.sku || "").trim();
+      if (!sku) return;
+      const qty = Number(tx?.qty || 0);
+      const existing = dayAgg.get(sku) || {
+        sku,
+        item: tx?.item || recordBySku.get(sku)?.item || "",
+        qtyIn: 0,
+        qtyOut: 0,
+        netChange: 0,
+        transactions: 0,
+      };
+      existing.netChange += qty;
+      if (qty > 0) existing.qtyIn += qty;
+      if (qty < 0) existing.qtyOut += Math.abs(qty);
+      existing.transactions += 1;
+      dayAgg.set(sku, existing);
+    });
+
+    const rows = Array.from(dayAgg.values()).map((entry) => {
+      const record = recordBySku.get(entry.sku);
+      const currentQty = Number(record?.qtyValue);
+      const safeCurrentQty = Number.isFinite(currentQty) ? currentQty : 0;
+      const afterDelta = afterDeltaBySku.get(entry.sku) || 0;
+      const closingQty = safeCurrentQty - afterDelta;
+      const openingQty = closingQty - entry.netChange;
+      return {
+        sku: entry.sku,
+        item: entry.item || record?.item || "",
+        warehouse: record?.warehouse || "",
+        openingQty,
+        qtyIn: entry.qtyIn,
+        qtyOut: entry.qtyOut,
+        netChange: entry.netChange,
+        closingQty,
+        transactions: entry.transactions,
+      };
+    });
+
+    rows.sort((a, b) => {
+      const itemCompare = String(a.item || "").localeCompare(
+        String(b.item || ""),
+      );
+      if (itemCompare !== 0) return itemCompare;
+      return String(a.sku || "").localeCompare(String(b.sku || ""));
+    });
+
+    return res.json({ date: dayStart.toISOString().slice(0, 10), rows });
+  } catch (error) {
+    console.error("Error fetching daily stock transaction report:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const createStockTransaction = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
@@ -2985,6 +3092,7 @@ module.exports = {
   updateInventoryRecord,
   deleteInventoryRecord,
   getStockTransactions,
+  getStockTransactionsDailyReport,
   createStockTransaction,
   updateStockTransaction,
   deleteStockTransaction,

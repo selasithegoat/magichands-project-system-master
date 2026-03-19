@@ -14,6 +14,7 @@ import {
   formatShortDateTime,
   parseListResponse,
 } from "../../utils/inventoryApi";
+import { toastError, toastInfo, toastSuccess } from "../../utils/toast";
 import { buildPaginationRange } from "../../utils/pagination";
 import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import "./StockTransactions.css";
@@ -74,6 +75,9 @@ const StockTransactions = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState(TYPE_OPTIONS[0]);
   const [dateRange, setDateRange] = useState(DATE_RANGE_OPTIONS[0].value);
+  const [dailyReportDate, setDailyReportDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM);
@@ -81,6 +85,7 @@ const StockTransactions = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDailyExporting, setIsDailyExporting] = useState(false);
   const [warehouseOptions, setWarehouseOptions] = useState([]);
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
@@ -216,21 +221,8 @@ const StockTransactions = () => {
     setPage(1);
   };
 
-  const handleExport = () => {
-    if (!rows.length) return;
-    const rowsForExport = rows.map((row) => ({
-      TXID: row.txid,
-      Item: row.item,
-      SKU: row.sku,
-      Type: row.type,
-      Qty: row.qty,
-      Source: row.source,
-      Destination: row.destination,
-      Date: row.date,
-      Staff: row.staff,
-      Notes: row.notes,
-    }));
-
+  const downloadCsv = (rowsForExport, fileName) => {
+    if (!rowsForExport.length) return;
     const headers = Object.keys(rowsForExport[0]);
     const csv = [
       headers.join(","),
@@ -248,13 +240,81 @@ const StockTransactions = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `stock-transactions-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExport = () => {
+    if (!rows.length) {
+      toastInfo("No rows to export.");
+      return;
+    }
+    const rowsForExport = rows.map((row) => ({
+      TXID: row.txid,
+      Item: row.item,
+      SKU: row.sku,
+      Type: row.type,
+      Qty: row.qty,
+      Source: row.source,
+      Destination: row.destination,
+      Date: row.date,
+      Staff: row.staff,
+      Notes: row.notes,
+    }));
+
+    downloadCsv(
+      rowsForExport,
+      `stock-transactions-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+    toastSuccess("Current view exported.");
+  };
+
+  const handleDailyExport = async () => {
+    if (!dailyReportDate) {
+      toastInfo("Select a report date first.");
+      return;
+    }
+    if (isDailyExporting) return;
+
+    setIsDailyExporting(true);
+    try {
+      const payload = await fetchInventory(
+        `/api/inventory/stock-transactions/daily-report?date=${encodeURIComponent(
+          dailyReportDate,
+        )}`,
+      );
+      const reportRows = Array.isArray(payload?.rows) ? payload.rows : [];
+      if (!reportRows.length) {
+        toastInfo(`No transactions for ${dailyReportDate}.`);
+        return;
+      }
+      const reportDateLabel = payload?.date || dailyReportDate;
+      const rowsForExport = reportRows.map((row) => ({
+        "Report Date": reportDateLabel,
+        Item: row.item,
+        SKU: row.sku,
+        Warehouse: row.warehouse,
+        "Opening Qty": row.openingQty,
+        "Qty In": row.qtyIn,
+        "Qty Out": row.qtyOut,
+        "Net Change": row.netChange,
+        "Closing Qty": row.closingQty,
+        Transactions: row.transactions,
+      }));
+
+      downloadCsv(
+        rowsForExport,
+        `stock-daily-report-${reportDateLabel}.csv`,
+      );
+      toastSuccess("Daily report exported.");
+    } catch (err) {
+      toastError(err?.message || "Unable to export daily report.");
+    } finally {
+      setIsDailyExporting(false);
+    }
   };
 
   const openCreateModal = () => {
@@ -440,10 +500,28 @@ const StockTransactions = () => {
               </option>
             ))}
           </select>
+          <div className="daily-report-group">
+            <input
+              type="date"
+              className="filter-select"
+              aria-label="Daily report date"
+              value={dailyReportDate}
+              onChange={(event) => setDailyReportDate(event.target.value)}
+            />
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleDailyExport}
+              disabled={isDailyExporting}
+            >
+              <DownloadIcon className="button-icon" />
+              {isDailyExporting ? "Exporting..." : "Daily CSV"}
+            </button>
+          </div>
           <button
             type="button"
             className="icon-button"
-            aria-label="Export"
+            aria-label="Export current view"
             onClick={handleExport}
           >
             <DownloadIcon />
