@@ -529,7 +529,11 @@ const NewOrders = () => {
 
     const getFileNote = (file) =>
       selectedFileNotes[buildFileKey(file)] || "";
-    const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
+    const shouldUseSelectedImageAsSample =
+      !editingId || !existingSampleImage;
+    const imageFile = shouldUseSelectedImageAsSample
+      ? selectedFiles.find((f) => f.type.startsWith("image/"))
+      : null;
     const attachmentFiles = imageFile
       ? selectedFiles.filter((f) => f !== imageFile)
       : selectedFiles;

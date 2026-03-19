@@ -1728,6 +1728,40 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "N/A";
+    const parsed = new Date(dateString);
+    if (Number.isNaN(parsed.getTime())) return "N/A";
+    return parsed.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const getRevisionMeta = (projectValue) => {
+    const meta = projectValue?.orderRevisionMeta || {};
+    const updatedAt = meta.updatedAt;
+    if (!updatedAt) return null;
+    const explicitName = String(meta.updatedByName || "").trim();
+    const updatedBy = meta.updatedBy || {};
+    const fallbackName = [updatedBy.firstName, updatedBy.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const updatedByName =
+      explicitName || fallbackName || updatedBy.name || "Unknown";
+    return { updatedAt, updatedByName };
+  };
+
+  const getRevisionCount = (projectValue) => {
+    const rawCount = Number(projectValue?.orderRevisionCount);
+    if (Number.isFinite(rawCount) && rawCount > 0) return rawCount;
+    return projectValue?.orderRevisionMeta?.updatedAt ? 1 : 0;
+  };
+
   const formatTime = (timeStr) => {
     if (!timeStr) return "";
     // ISO string
@@ -2078,6 +2112,8 @@ const ProjectDetails = ({ user }) => {
       if (normalized) addReferenceItem(normalized);
     },
   );
+  const revisionMeta = getRevisionMeta(project);
+  const revisionCount = getRevisionCount(project);
 
   return (
     <div
@@ -3021,7 +3057,15 @@ const ProjectDetails = ({ user }) => {
           {/* Reference Material / Image */}
           {referenceItems.length > 0 && (
             <div className="detail-card">
-              <h3 className="card-title">Reference Material</h3>
+              <div className="detail-card-header">
+                <h3 className="card-title">Reference Material</h3>
+                {revisionMeta && revisionCount > 0 && (
+                  <span className="revision-badge">
+                    Revision v{revisionCount} by {revisionMeta.updatedByName} -{" "}
+                    {formatDateTime(revisionMeta.updatedAt)}
+                  </span>
+                )}
+              </div>
               <div
                 style={{
                   display: "flex",

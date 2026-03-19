@@ -3072,6 +3072,131 @@ const getProjectDisplayRef = (project) =>
   "N/A";
 const getProjectDisplayName = (project) =>
   project?.details?.projectName || "Unnamed Project";
+const getUserDisplayName = (user) => {
+  if (!user) return "Someone";
+  const firstName = String(user.firstName || "").trim();
+  const lastName = String(user.lastName || "").trim();
+  const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
+  return fullName || user.name || user.employeeId || "Someone";
+};
+const normalizeOrderItems = (items = []) => {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    description: String(item?.description || "").trim(),
+    breakdown: String(item?.breakdown || "").trim(),
+    qty: Number.isFinite(Number(item?.qty)) ? Number(item?.qty) : 0,
+  }));
+};
+const hasItemListChanged = (previousItems = [], nextItems = []) => {
+  const normalizedPrevious = normalizeOrderItems(previousItems);
+  const normalizedNext = normalizeOrderItems(nextItems);
+  if (normalizedPrevious.length !== normalizedNext.length) return true;
+  return normalizedPrevious.some((item, index) => {
+    const next = normalizedNext[index];
+    if (!next) return true;
+    return (
+      item.description !== next.description ||
+      item.breakdown !== next.breakdown ||
+      item.qty !== next.qty
+    );
+  });
+};
+const getReviewEngagedRecipients = async (project = {}) => {
+  const projectDepartments = toDepartmentArray(project?.departments);
+  if (!projectDepartments.length) return [];
+
+  const canonicalDepartments = new Set(
+    projectDepartments.map(canonicalizeDepartment).filter(Boolean),
+  );
+  const hasProduction = canonicalDepartments.has("production");
+  const hasGraphics = canonicalDepartments.has("graphics");
+  if (!hasProduction && !hasGraphics) return [];
+
+  const departmentFilters = new Set();
+  if (hasProduction) {
+    departmentFilters.add("Production");
+    projectDepartments.forEach((dept) => {
+      if (canonicalizeDepartment(dept) === "production") {
+        departmentFilters.add(dept);
+      }
+    });
+  }
+  if (hasGraphics) {
+    departmentFilters.add("Graphics/Design");
+    projectDepartments.forEach((dept) => {
+      if (canonicalizeDepartment(dept) === "graphics") {
+        departmentFilters.add(dept);
+      }
+    });
+  }
+
+  const users = await User.find({
+    department: { $in: Array.from(departmentFilters) },
+  })
+    .select("_id department")
+    .lean();
+
+  const recipients = new Set();
+  users.forEach((user) => {
+    if (!hasDepartmentOverlap(user?.department, projectDepartments)) return;
+    const userCanonical = new Set(
+      toDepartmentArray(user?.department)
+        .map(canonicalizeDepartment)
+        .filter(Boolean),
+    );
+    const matchesProduction = hasProduction && userCanonical.has("production");
+    const matchesGraphics = hasGraphics && userCanonical.has("graphics");
+    if (!matchesProduction && !matchesGraphics) return;
+    const userId = toObjectIdString(user?._id);
+    if (userId) recipients.add(userId);
+  });
+
+  return Array.from(recipients);
+};
+const notifyReviewUpdated = async ({ project, actor, revisionParts }) => {
+  try {
+    const projectId = toObjectIdString(project?._id);
+    const actorId = toObjectIdString(actor?._id || actor?.id);
+    const normalizedParts = Array.isArray(revisionParts)
+      ? revisionParts.filter(Boolean)
+      : [];
+    if (!projectId || !actorId || normalizedParts.length === 0) return [];
+
+    const actorName = getUserDisplayName(actor);
+    const title = "Project Review";
+    const message = `Project review for ${getProjectDisplayRef(project)}, ${getProjectDisplayName(project)}, by ${actorName}`;
+
+    const directRecipients = new Set();
+    const leadId = toObjectIdString(project?.projectLeadId);
+    const assistantId = toObjectIdString(project?.assistantLeadId);
+    if (leadId) directRecipients.add(leadId);
+    if (assistantId) directRecipients.add(assistantId);
+
+    const engagedRecipients = await getReviewEngagedRecipients(project);
+    engagedRecipients.forEach((id) => directRecipients.add(id));
+
+    for (const recipientId of directRecipients) {
+      await createNotification(
+        recipientId,
+        actorId,
+        projectId,
+        "REVISION",
+        title,
+        message,
+        { source: "order_revision" },
+      );
+    }
+
+    await notifyAdmins(actorId, projectId, "REVISION", title, message, {
+      excludeUserIds: Array.from(directRecipients),
+    });
+
+    return Array.from(directRecipients);
+  } catch (error) {
+    console.error("Error sending order revision notifications:", error);
+    return [];
+  }
+};
 const formatPaymentTypeLabel = (type = "") => toText(type).replace(/_/g, " ");
 const SAMPLE_APPROVAL_BLOCK_CODE = "PRODUCTION_SAMPLE_CLIENT_APPROVAL_REQUIRED";
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
@@ -4356,6 +4481,12 @@ const addItemToProject = async (req, res) => {
     project.items.push(newItem);
     project.sectionUpdates = project.sectionUpdates || {};
     project.sectionUpdates.items = new Date();
+    project.orderRevisionMeta = {
+      updatedAt: new Date(),
+      updatedBy: req.user._id || req.user.id,
+      updatedByName: getUserDisplayName(req.user),
+    };
+    project.orderRevisionCount = Number(project.orderRevisionCount || 0) + 1;
     await project.save();
 
     await logActivity(
@@ -4365,6 +4496,14 @@ const addItemToProject = async (req, res) => {
       `Added order item: ${description} (Qty: ${qty})`,
       { item: newItem },
     );
+
+    if (canManageBilling(req.user)) {
+      await notifyReviewUpdated({
+        project,
+        actor: req.user,
+        revisionParts: ["Order Items"],
+      });
+    }
 
     // Notify Admins
     await notifyAdmins(
@@ -4395,6 +4534,14 @@ const updateItemInProject = async (req, res) => {
     );
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "manage")) return;
 
+    const revisionMetaUpdate = {
+      "orderRevisionMeta.updatedAt": new Date(),
+      "orderRevisionMeta.updatedBy": req.user._id || req.user.id,
+      "orderRevisionMeta.updatedByName": getUserDisplayName(req.user),
+    };
+
+    const revisionCountUpdate = { $inc: { orderRevisionCount: 1 } };
+
     const project = await Project.findOneAndUpdate(
       { _id: id, "items._id": itemId },
       {
@@ -4403,7 +4550,9 @@ const updateItemInProject = async (req, res) => {
           "items.$.breakdown": breakdown,
           "items.$.qty": Number(qty),
           "sectionUpdates.items": new Date(),
+          ...revisionMetaUpdate,
         },
+        ...revisionCountUpdate,
       },
       { new: true, runValidators: false },
     );
@@ -4419,6 +4568,14 @@ const updateItemInProject = async (req, res) => {
       `Updated order item: ${description}`,
       { itemId, description, qty },
     );
+
+    if (canManageBilling(req.user)) {
+      await notifyReviewUpdated({
+        project,
+        actor: req.user,
+        revisionParts: ["Order Items"],
+      });
+    }
 
     // Notify Admins
     await notifyAdmins(
@@ -4450,11 +4607,25 @@ const deleteItemFromProject = async (req, res) => {
     project.items.pull({ _id: itemId });
     project.sectionUpdates = project.sectionUpdates || {};
     project.sectionUpdates.items = new Date();
+    project.orderRevisionMeta = {
+      updatedAt: new Date(),
+      updatedBy: req.user._id || req.user.id,
+      updatedByName: getUserDisplayName(req.user),
+    };
+    project.orderRevisionCount = Number(project.orderRevisionCount || 0) + 1;
     await project.save();
 
     await logActivity(id, req.user.id, "item_delete", `Deleted order item`, {
       itemId,
     });
+
+    if (canManageBilling(req.user)) {
+      await notifyReviewUpdated({
+        project,
+        actor: req.user,
+        revisionParts: ["Order Items"],
+      });
+    }
 
     // Notify Admins
     await notifyAdmins(
@@ -8348,6 +8519,13 @@ const updateProject = async (req, res) => {
       attachments: Array.isArray(project.details?.attachments)
         ? [...project.details.attachments]
         : [],
+      items: Array.isArray(project.items)
+        ? project.items.map((item) => ({
+            description: item?.description || "",
+            breakdown: item?.breakdown || "",
+            qty: item?.qty,
+          }))
+        : [],
       orderDate: project.orderDate,
       receivedTime: project.receivedTime,
       deliveryDate: project.details?.deliveryDate,
@@ -8719,6 +8897,10 @@ const updateProject = async (req, res) => {
             normalizeAttachmentNote(next.note)
         );
       });
+    const itemsChanged = hasItemListChanged(
+      oldValues.items,
+      updatedProject.items,
+    );
 
     if (briefOverviewChanged) {
       changes.push("Brief Overview updated");
@@ -8729,8 +8911,14 @@ const updateProject = async (req, res) => {
     if (attachmentsChanged) {
       changes.push(`Reference Materials updated (${nextAttachments.length} file(s))`);
     }
+    if (itemsChanged) {
+      changes.push("Order Items updated");
+    }
     const orderRevisionChanged =
-      briefOverviewChanged || sampleImageChanged || attachmentsChanged;
+      briefOverviewChanged ||
+      sampleImageChanged ||
+      attachmentsChanged ||
+      itemsChanged;
 
     const prevLeadId = oldValues.lead ? oldValues.lead.toString() : null;
     const nextLeadId = updatedProject.projectLeadId
@@ -8845,31 +9033,29 @@ const updateProject = async (req, res) => {
       directlyNotifiedUserIds.add(nextAssistantId);
     }
 
-    // Notify current lead(s) when front desk/admin revises client brief/reference files.
+    // Notify Lead/Admin + engaged Production/Design on order revision updates.
     if (orderRevisionChanged) {
       const revisionParts = [];
       if (briefOverviewChanged) revisionParts.push("Brief Overview");
+      if (itemsChanged) revisionParts.push("Order Items");
       if (sampleImageChanged) revisionParts.push("Primary Reference Image");
       if (attachmentsChanged) revisionParts.push("Reference Materials");
-      const revisionSummary = revisionParts.join(", ");
-      const revisionRecipientIds = [
-        updatedProject.projectLeadId,
-        updatedProject.assistantLeadId,
-      ]
-        .map((value) => toObjectIdString(value))
-        .filter(Boolean);
 
-      for (const recipientId of new Set(revisionRecipientIds)) {
-        await createNotification(
-          recipientId,
-          req.user._id,
-          updatedProject._id,
-          "UPDATE",
-          "Order Revision Updated",
-          `Project #${getProjectDisplayRef(updatedProject)}: ${req.user.firstName} ${req.user.lastName} updated ${revisionSummary} for "${getProjectDisplayName(updatedProject)}".`,
-        );
-        directlyNotifiedUserIds.add(recipientId);
-      }
+      const notifiedIds = await notifyReviewUpdated({
+        project: updatedProject,
+        actor: req.user,
+        revisionParts,
+      });
+      notifiedIds.forEach((id) => directlyNotifiedUserIds.add(id));
+
+      updatedProject.orderRevisionMeta = {
+        updatedAt: new Date(),
+        updatedBy: req.user._id || req.user.id,
+        updatedByName: getUserDisplayName(req.user),
+      };
+      updatedProject.orderRevisionCount =
+        Number(updatedProject.orderRevisionCount || 0) + 1;
+      await updatedProject.save();
     }
 
     // Notify Admins of significant updates (if changes > 0)

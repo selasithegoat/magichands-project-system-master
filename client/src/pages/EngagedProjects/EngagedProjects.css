@@ -221,6 +221,14 @@
   gap: 0.5rem;
 }
 
+.project-id-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  max-width: 240px;
+}
+
 .project-version-chip {
   display: inline-flex;
   align-items: center;
@@ -236,11 +244,37 @@
 }
 
 .project-name-cell {
+  max-width: 240px;
+}
+
+.project-name-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.project-name-text {
   font-weight: 500;
   color: var(--text-primary);
-  max-width: 200px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.revision-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -510,6 +544,13 @@
 
 .engaged-actions-topbar-main {
   min-width: 0;
+}
+
+.engaged-actions-topbar-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .engaged-actions-topbar-main h1 {
@@ -1564,6 +1605,12 @@
 [data-theme="dark"] .status-badge.pending-delivery\/pickup {
   background: color-mix(in srgb, #14b8a6 18%, var(--surface-alt));
   color: #5eead4;
+}
+
+[data-theme="dark"] .revision-badge {
+  background: color-mix(in srgb, #38bdf8 18%, var(--surface-alt));
+  color: #7dd3fc;
+  border-color: color-mix(in srgb, #38bdf8 35%, var(--border-color));
 }
 
 [data-theme="dark"] .view-actions-btn {

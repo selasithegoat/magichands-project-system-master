@@ -819,6 +819,27 @@ const EngagedProjectActions = ({ user }) => {
     });
   };
 
+  const getRevisionMeta = (projectValue) => {
+    const meta = projectValue?.orderRevisionMeta || {};
+    const updatedAt = meta.updatedAt;
+    if (!updatedAt) return null;
+    const explicitName = String(meta.updatedByName || "").trim();
+    const updatedBy = meta.updatedBy || {};
+    const fallbackName = [updatedBy.firstName, updatedBy.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const updatedByName =
+      explicitName || fallbackName || updatedBy.name || "Unknown";
+    return { updatedAt, updatedByName };
+  };
+
+  const getRevisionCount = (projectValue) => {
+    const rawCount = Number(projectValue?.orderRevisionCount);
+    if (Number.isFinite(rawCount) && rawCount > 0) return rawCount;
+    return projectValue?.orderRevisionMeta?.updatedAt ? 1 : 0;
+  };
+
   const fetchProject = async () => {
     if (!id) return;
     setLoading(true);
@@ -1803,6 +1824,8 @@ const EngagedProjectActions = ({ user }) => {
       ? `Latest ${mockupVersionLabel} was rejected. Upload a revised mockup.`
       : "Upload a new revision if updates were requested."
     : "Upload the approved mockup file for review.";
+  const revisionMeta = getRevisionMeta(project);
+  const revisionCount = getRevisionCount(project);
 
   return (
     <div className="engaged-projects-container engaged-actions-page">
@@ -1825,13 +1848,15 @@ const EngagedProjectActions = ({ user }) => {
               )}
             </span>
           </p>
-          <span
-            className={`status-badge ${project.status
-              .toLowerCase()
-              .replace(/\s+/g, "-")}`}
-          >
-            {project.status}
-          </span>
+          <div className="engaged-actions-topbar-tags">
+            <span
+              className={`status-badge ${project.status
+                .toLowerCase()
+                .replace(/\s+/g, "-")}`}
+            >
+              {project.status}
+            </span>
+          </div>
         </div>
         <button
           className="update-btn view-actions-btn"
@@ -1878,6 +1903,12 @@ const EngagedProjectActions = ({ user }) => {
               <span className="engaged-scope-pill muted">
                 {displayBriefOverview ? "Brief ready" : "Brief pending"}
               </span>
+              {revisionMeta && revisionCount > 0 && (
+                <span className="revision-badge">
+                  Revision v{revisionCount} by {revisionMeta.updatedByName} -{" "}
+                  {formatUpdateDateTime(revisionMeta.updatedAt)}
+                </span>
+              )}
             </div>
           </div>
 

@@ -29,6 +29,12 @@ const getNotificationTypeMeta = (type) => {
         className: "update",
         icon: <RefreshIcon width="16" height="16" />,
       };
+    case "REVISION":
+      return {
+        label: "Revision",
+        className: "revision",
+        icon: <RefreshIcon width="16" height="16" />,
+      };
     case "ACCEPTANCE":
       return {
         label: "Accept",

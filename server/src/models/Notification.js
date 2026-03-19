@@ -28,6 +28,7 @@ const NotificationSchema = new mongoose.Schema(
         "ASSIGNMENT",
         "ACTIVITY",
         "UPDATE",
+        "REVISION",
         "ACCEPTANCE",
         "SYSTEM",
         "REMINDER",

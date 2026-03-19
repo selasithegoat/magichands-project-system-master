@@ -358,6 +358,23 @@ const ProjectSchema = new mongoose.Schema(
       feedbacks: Date,
       challenges: Date,
     },
+    orderRevisionMeta: {
+      updatedAt: Date,
+      updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      updatedByName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+    },
+    orderRevisionCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     feedbacks: [
       {
         type: {

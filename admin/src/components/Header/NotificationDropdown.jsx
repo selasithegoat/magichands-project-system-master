@@ -40,6 +40,12 @@ const getNotificationTypeMeta = (type) => {
         className: "update",
         icon: <ProjectsIcon className="notification-type-icon" />,
       };
+    case "REVISION":
+      return {
+        label: "Revision",
+        className: "revision",
+        icon: <ProjectsIcon className="notification-type-icon" />,
+      };
     case "ACCEPTANCE":
       return {
         label: "Accept",

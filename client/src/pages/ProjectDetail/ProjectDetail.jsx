@@ -2102,6 +2102,40 @@ const isImageReferenceFile = (fileUrl = "", fileType = "") => {
   return /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(String(fileUrl || ""));
 };
 
+const formatRevisionDateTime = (dateStr) => {
+  if (!dateStr) return "N/A";
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return "N/A";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const getRevisionMeta = (projectValue) => {
+  const meta = projectValue?.orderRevisionMeta || {};
+  const updatedAt = meta.updatedAt;
+  if (!updatedAt) return null;
+  const explicitName = String(meta.updatedByName || "").trim();
+  const updatedBy = meta.updatedBy || {};
+  const fallbackName = [updatedBy.firstName, updatedBy.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const updatedByName =
+    explicitName || fallbackName || updatedBy.name || "Unknown";
+  return { updatedAt, updatedByName };
+};
+
+const getRevisionCount = (projectValue) => {
+  const rawCount = Number(projectValue?.orderRevisionCount);
+  if (Number.isFinite(rawCount) && rawCount > 0) return rawCount;
+  return projectValue?.orderRevisionMeta?.updatedAt ? 1 : 0;
+};
+
 const ReferenceMaterialsCard = ({ project }) => {
   const details = project.details || {};
   const sampleImage = project.sampleImage || details.sampleImage;
@@ -2109,6 +2143,8 @@ const ReferenceMaterialsCard = ({ project }) => {
   const attachmentItems = normalizeReferenceAttachments(
     project.attachments || details.attachments || [],
   );
+  const revisionMeta = getRevisionMeta(project);
+  const revisionCount = getRevisionCount(project);
 
   if (!sampleImage && attachmentItems.length === 0) return null;
 
@@ -2116,6 +2152,12 @@ const ReferenceMaterialsCard = ({ project }) => {
     <div className="detail-card">
       <div className="card-header">
         <h3 className="card-title">📎 Reference Materials</h3>
+        {revisionMeta && revisionCount > 0 && (
+          <span className="revision-badge">
+            Revision v{revisionCount} by {revisionMeta.updatedByName} -{" "}
+            {formatRevisionDateTime(revisionMeta.updatedAt)}
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {/* Sample Image */}

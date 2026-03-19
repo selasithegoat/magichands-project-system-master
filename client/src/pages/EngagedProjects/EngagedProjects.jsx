@@ -661,6 +661,12 @@ const EngagedProjects = ({ user }) => {
     });
   };
 
+  const getRevisionCount = (project) => {
+    const rawCount = Number(project?.orderRevisionCount);
+    if (Number.isFinite(rawCount) && rawCount > 0) return rawCount;
+    return project?.orderRevisionMeta?.updatedAt ? 1 : 0;
+  };
+
   const getProjectVersion = (project) => {
     const parsedVersion = Number(project?.versionNumber);
     return Number.isFinite(parsedVersion) && parsedVersion > 0
@@ -839,6 +845,7 @@ const EngagedProjects = ({ user }) => {
                     const deliveryDate = formatDate(project.details?.deliveryDate);
                     const deliveryTime = formatTime(project.details?.deliveryTime);
                     const projectName = project.details?.projectName || "Untitled";
+                    const revisionCount = getRevisionCount(project);
                     const emergency = isEmergency(project);
                     const approaching = isApproachingDelivery(project);
                     const deptActions = getDeptActionsForProject(project);
@@ -897,7 +904,16 @@ const EngagedProjects = ({ user }) => {
                             )}
                           </div>
                         </td>
-                        <td className="project-name-cell">{projectName}</td>
+                        <td className="project-name-cell">
+                          <div className="project-name-stack">
+                            <div className="project-name-text">{projectName}</div>
+                            {revisionCount > 0 && (
+                              <div className="revision-badge">
+                                Revision v{revisionCount}
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         <td>{lead}</td>
                         <td>{client}</td>
                         <td className={approaching ? "delivery-approaching" : ""}>
@@ -977,6 +993,8 @@ const EngagedProjects = ({ user }) => {
                     const client = project.details?.client || "N/A";
                     const projectId =
                       project.orderId || project._id.slice(-6).toUpperCase();
+                    const projectName = project.details?.projectName || "Untitled";
+                    const revisionCount = getRevisionCount(project);
                     const engagedDeptsForUser = (project.departments || [])
                       .filter((dept) => engagedSubDepts.includes(dept))
                       .map((dept) => getDepartmentLabel(dept));
@@ -993,12 +1011,20 @@ const EngagedProjects = ({ user }) => {
                           className="project-id-cell"
                           onClick={() => navigate(`/detail/${project._id}`)}
                         >
-                          <div className="project-id-with-version">
-                            <span>{projectId}</span>
-                            {showVersionTag && (
-                              <span className="project-version-chip">
-                                v{projectVersion}
-                              </span>
+                          <div className="project-id-stack">
+                            <div className="project-id-with-version">
+                              <span>{projectId}</span>
+                              {showVersionTag && (
+                                <span className="project-version-chip">
+                                  v{projectVersion}
+                                </span>
+                              )}
+                            </div>
+                            <div className="project-name-text">{projectName}</div>
+                            {revisionCount > 0 && (
+                              <div className="revision-badge">
+                                Revision v{revisionCount}
+                              </div>
                             )}
                           </div>
                         </td>
