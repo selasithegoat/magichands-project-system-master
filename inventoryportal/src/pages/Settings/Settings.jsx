@@ -331,7 +331,7 @@ const Settings = () => {
           endpoint: "/api/inventory/inventory-records",
           mapRow: (record) => ({
             Item: record.item || "",
-            SKU: record.sku || "",
+            "Item ID": record.sku || "",
             Brand:
               Array.isArray(record.brandGroups) && record.brandGroups.length
                 ? record.brandGroups
@@ -363,7 +363,7 @@ const Settings = () => {
           mapRow: (tx) => ({
             TXID: tx.txid || "",
             Item: tx.item || "",
-            SKU: tx.sku || "",
+            "Item ID": tx.sku || "",
             Type: tx.type || "",
             Qty: tx.qty || "",
             Source: tx.source || "",

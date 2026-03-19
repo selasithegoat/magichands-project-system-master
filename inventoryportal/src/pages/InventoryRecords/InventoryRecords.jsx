@@ -105,7 +105,7 @@ const SORT_OPTIONS = [
   { value: "createdAt", label: "Oldest" },
   { value: "item", label: "Item A-Z" },
   { value: "-item", label: "Item Z-A" },
-  { value: "sku", label: "SKU A-Z" },
+  { value: "sku", label: "Item ID A-Z" },
   { value: "category", label: "Category A-Z" },
   { value: "status", label: "Status A-Z" },
   { value: "priceValue", label: "Price Low-High" },
@@ -545,7 +545,7 @@ const InventoryRecords = () => {
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    limit: 4,
+    limit: 10,
     total: 0,
     totalPages: 0,
   });
@@ -1469,7 +1469,7 @@ const InventoryRecords = () => {
   const handleSave = async () => {
     if (isSaving) return;
     if (!formData.item || !formData.sku) {
-      setActionError("Item name and SKU are required.");
+      setActionError("Item name and Item ID are required.");
       return;
     }
 
@@ -1918,7 +1918,7 @@ const InventoryRecords = () => {
                 <SearchIcon className="search-icon" />
                 <input
                   type="text"
-                  placeholder="Search items, brand, SKU, or warehouse"
+                  placeholder="Search items, brand, Item ID, or warehouse"
                   value={searchTerm}
                   onChange={handleSearchChange}
                 />
@@ -1946,7 +1946,7 @@ const InventoryRecords = () => {
                   <div className="columns-menu">
                     {[
                       { key: "item", label: "Item Name" },
-                      { key: "sku", label: "SKU" },
+                      { key: "sku", label: "Item ID" },
                       { key: "brand", label: "Brand" },
                       { key: "category", label: "Category" },
                       { key: "quantity", label: "Quantity" },
@@ -1988,7 +1988,7 @@ const InventoryRecords = () => {
                 />
               </span>
               {visibleColumns.item ? <span>Item Name</span> : null}
-              {visibleColumns.sku ? <span>SKU</span> : null}
+              {visibleColumns.sku ? <span>Item ID</span> : null}
               {visibleColumns.brand ? <span>Brand</span> : null}
               {visibleColumns.category ? <span>Category</span> : null}
               {visibleColumns.quantity ? <span>Quantity</span> : null}
@@ -2078,7 +2078,7 @@ const InventoryRecords = () => {
                     </div>
                   ) : null}
                   {visibleColumns.sku ? (
-                    <div className="cell mono" data-label="SKU">
+                    <div className="cell mono" data-label="Item ID">
                       {record.sku}
                     </div>
                   ) : null}
@@ -2274,12 +2274,12 @@ const InventoryRecords = () => {
               />
             </label>
             <label className="modal-field">
-              <span>SKU</span>
+              <span>Item ID</span>
               <input
                 type="text"
                 value={formData.sku}
                 onChange={updateField("sku")}
-                placeholder="SKU"
+                placeholder="Item ID"
               />
             </label>
             <label className="modal-field">
@@ -2453,7 +2453,7 @@ const InventoryRecords = () => {
                                   />
                                   <input
                                     type="text"
-                                    placeholder="SKU"
+                                    placeholder="Item ID"
                                     value={variant.sku}
                                     onChange={updateBrandVariant(
                                       groupIndex,
@@ -2701,7 +2701,7 @@ const InventoryRecords = () => {
                 <span className="detail-sub">{detailsRecord.warehouse}</span>
               </div>
               <div className="detail-card">
-                <span className="detail-label">SKU</span>
+                <span className="detail-label">Item ID</span>
                 <span className="detail-value">{detailsRecord.sku}</span>
               </div>
               <div className="detail-card">
@@ -2801,7 +2801,7 @@ const InventoryRecords = () => {
                             <div className="brand-variant-row header">
                               <span>Variation</span>
                               <span>Colors/Kind</span>
-                              <span>SKU</span>
+                              <span>Item ID</span>
                               <span>Status</span>
                               <span>Price</span>
                               <span>Qty</span>
@@ -2931,7 +2931,7 @@ const InventoryRecords = () => {
 
             <div className="share-report-meta">
               <div className="share-report-card">
-                <span>SKU</span>
+                <span>Item ID</span>
                 <strong>{shareRecord.sku || "-"}</strong>
               </div>
               <div className="share-report-card">
@@ -2976,7 +2976,7 @@ const InventoryRecords = () => {
                     <span>Brand</span>
                     <span>Variation</span>
                     <span>Colors/Kind</span>
-                    <span>SKU</span>
+                    <span>Item ID</span>
                     <span>Status</span>
                     <span>Price</span>
                     <span>Qty</span>

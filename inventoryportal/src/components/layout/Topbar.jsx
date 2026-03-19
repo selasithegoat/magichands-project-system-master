@@ -48,7 +48,7 @@ const Topbar = ({
           <SearchIcon className="search-icon" />
           <input
             type="text"
-            placeholder="Search inventory, records, or SKU"
+            placeholder="Search inventory, records, or Item ID"
             value={searchValue}
             onChange={(event) => onSearchChange?.(event.target.value)}
           />

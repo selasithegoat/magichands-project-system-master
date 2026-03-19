@@ -121,7 +121,7 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
               />
             </label>
             <label className="field">
-              SKU
+              Item ID
               <input
                 name="sku"
                 type="text"

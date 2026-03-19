@@ -2,7 +2,7 @@ export const quickActions = [
   {
     key: "add-record",
     title: "Add Inventory Item",
-    description: "Create a new SKU and assign it to a location.",
+    description: "Create a new Item ID and assign it to a location.",
     target: "inventory-records",
   },
   {

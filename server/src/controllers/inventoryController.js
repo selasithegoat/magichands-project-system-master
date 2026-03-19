@@ -655,6 +655,272 @@ const parseOptionalDate = (value) => {
   return parsed;
 };
 
+const normalizeStockTransactionQty = (type, qty) => {
+  const numericQty = Number(qty);
+  if (!Number.isFinite(numericQty)) return 0;
+  const absQty = Math.abs(numericQty);
+  const normalizedType = normalizeKey(type);
+  if (normalizedType === "stock out") return -absQty;
+  if (normalizedType === "stock in") return absQty;
+  if (normalizedType === "transfer") return 0;
+  return numericQty;
+};
+
+const resolveTransactionVariantTarget = (
+  record,
+  { brandGroup, variantName, variantSku, allowRecordLevel = false } = {},
+) => {
+  const groupValue = parseStringValue(brandGroup);
+  const nameValue = parseStringValue(variantName);
+  const skuValue = parseStringValue(variantSku);
+  const hasTarget = Boolean(groupValue || nameValue || skuValue);
+
+  const groups = Array.isArray(record?.brandGroups)
+    ? record.brandGroups
+    : [];
+  const hasBrandGroups = groups.length > 0;
+  const variants = hasBrandGroups
+    ? flattenBrandGroups(groups)
+    : Array.isArray(record?.variants)
+      ? record.variants
+      : [];
+
+  if (!variants.length) {
+    return {
+      mode: "record",
+      brandGroup: "",
+      variantName: "",
+      variantSku: "",
+    };
+  }
+
+  const normalizedGroup = normalizeKey(groupValue);
+  const normalizedName = normalizeKey(nameValue);
+  const normalizedSku = normalizeKey(skuValue);
+
+  const matchesVariant = (variant) => {
+    if (normalizedSku && normalizeKey(variant?.sku) !== normalizedSku) {
+      return false;
+    }
+    if (normalizedName && normalizeKey(variant?.name) !== normalizedName) {
+      return false;
+    }
+    return true;
+  };
+
+  if (hasTarget) {
+    if (hasBrandGroups) {
+      for (const group of groups) {
+        if (normalizedGroup && normalizeKey(group?.name) !== normalizedGroup) {
+          continue;
+        }
+        const groupVariants = Array.isArray(group?.variants)
+          ? group.variants
+          : [];
+        if (!groupVariants.length) continue;
+
+        if (!normalizedSku && !normalizedName && groupVariants.length === 1) {
+          const variant = groupVariants[0];
+          return {
+            mode: "variant",
+            group,
+            variant,
+            brandGroup: group?.name || "",
+            variantName: variant?.name || "",
+            variantSku: variant?.sku || "",
+          };
+        }
+
+        const match = groupVariants.find(matchesVariant);
+        if (match) {
+          return {
+            mode: "variant",
+            group,
+            variant: match,
+            brandGroup: group?.name || "",
+            variantName: match?.name || "",
+            variantSku: match?.sku || "",
+          };
+        }
+      }
+    } else {
+      const match = variants.find(matchesVariant);
+      if (match) {
+        return {
+          mode: "variant",
+          group: null,
+          variant: match,
+          brandGroup: groupValue || "",
+          variantName: match?.name || "",
+          variantSku: match?.sku || "",
+        };
+      }
+    }
+
+    if (allowRecordLevel) {
+      return {
+        mode: "record",
+        brandGroup: "",
+        variantName: "",
+        variantSku: "",
+      };
+    }
+
+    return { error: "Variant not found for this item." };
+  }
+
+  if (variants.length === 1) {
+    if (hasBrandGroups) {
+      for (const group of groups) {
+        const groupVariants = Array.isArray(group?.variants)
+          ? group.variants
+          : [];
+        if (groupVariants.length === 1) {
+          const variant = groupVariants[0];
+          return {
+            mode: "variant",
+            group,
+            variant,
+            brandGroup: group?.name || "",
+            variantName: variant?.name || "",
+            variantSku: variant?.sku || "",
+          };
+        }
+      }
+    }
+
+    const variant = variants[0];
+    return {
+      mode: "variant",
+      group: null,
+      variant,
+      brandGroup: groupValue || "",
+      variantName: variant?.name || "",
+      variantSku: variant?.sku || "",
+    };
+  }
+
+  if (allowRecordLevel) {
+    return {
+      mode: "record",
+      brandGroup: "",
+      variantName: "",
+      variantSku: "",
+    };
+  }
+
+  return { error: "Variant is required for this item." };
+};
+
+const syncRecordFromVariants = (record) => {
+  const hasBrandGroups =
+    Array.isArray(record?.brandGroups) && record.brandGroups.length;
+  const variants = hasBrandGroups
+    ? flattenBrandGroups(record.brandGroups)
+    : Array.isArray(record?.variants)
+      ? record.variants
+      : [];
+
+  if (hasBrandGroups) {
+    record.variants = variants;
+  }
+
+  const totalQty = sumVariantQty(variants);
+  if (totalQty !== null) {
+    record.qtyValue = totalQty;
+  }
+  record.qtyLabel =
+    buildQtyLabelFromVariants(variants) ||
+    formatVariantQtyLabel(record.qtyValue);
+  record.qtyMeta = computeQtyMetaFromCapacity(
+    record.qtyValue,
+    record.maxQty,
+  );
+
+  if (hasBrandGroups) {
+    const brandTotals = computeBrandGroupTotals(
+      record.brandGroups,
+      record.qtyValue,
+    );
+    record.priceValue = brandTotals?.minPrice ?? null;
+    const computedValue =
+      brandTotals?.totalValue !== null &&
+      brandTotals?.totalValue !== undefined
+        ? Number(brandTotals.totalValue.toFixed(2))
+        : Number.isFinite(record.priceValue) && Number.isFinite(record.qtyValue)
+          ? Number((record.priceValue * record.qtyValue).toFixed(2))
+          : null;
+    record.valueValue = computedValue;
+    record.value = computedValue !== null ? computedValue.toFixed(2) : "";
+  } else if (Number.isFinite(record.priceValue)) {
+    const computedValue = Number.isFinite(record.qtyValue)
+      ? Number((record.priceValue * record.qtyValue).toFixed(2))
+      : null;
+    record.valueValue = computedValue;
+    record.value = computedValue !== null ? computedValue.toFixed(2) : "";
+  } else {
+    record.valueValue = null;
+    record.value = "";
+  }
+};
+
+const applyInventoryQtyDelta = async (
+  record,
+  delta,
+  actorId,
+  targetOptions = {},
+) => {
+  const resolved = resolveTransactionVariantTarget(record, targetOptions);
+  if (resolved.error) {
+    return { error: resolved.error };
+  }
+
+  if (resolved.mode === "variant") {
+    const beforeQty = Number.isFinite(resolved.variant?.qtyValue)
+      ? resolved.variant.qtyValue
+      : 0;
+    const afterQty = beforeQty + delta;
+
+    if (delta !== 0) {
+      resolved.variant.qtyValue = afterQty;
+      resolved.variant.qtyLabel = formatVariantQtyLabel(afterQty);
+      syncRecordFromVariants(record);
+      record.updatedBy = actorId;
+      await record.save();
+    }
+
+    return {
+      beforeQty,
+      afterQty,
+      target: {
+        brandGroup: resolved.brandGroup,
+        variantName: resolved.variantName,
+        variantSku: resolved.variantSku,
+      },
+    };
+  }
+
+  const beforeQty = Number.isFinite(record?.qtyValue) ? record.qtyValue : 0;
+  const afterQty = beforeQty + delta;
+
+  if (delta !== 0) {
+    record.qtyValue = afterQty;
+    record.qtyLabel = formatVariantQtyLabel(afterQty);
+    record.qtyMeta = computeQtyMetaFromCapacity(afterQty, record.maxQty);
+    if (Number.isFinite(record.priceValue)) {
+      record.valueValue = Number((record.priceValue * afterQty).toFixed(2));
+      record.value = record.valueValue.toFixed(2);
+    } else {
+      record.valueValue = null;
+      record.value = "";
+    }
+    record.updatedBy = actorId;
+    await record.save();
+  }
+
+  return { beforeQty, afterQty };
+};
+
 const parseBooleanValue = (value, defaultValue = false) => {
   if (value === undefined || value === null) return defaultValue;
   if (typeof value === "boolean") return value;
@@ -1673,8 +1939,8 @@ const getInventoryCategoryOptions = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const categories = await InventoryCategory.distinct("name", {
-      name: { $ne: "" },
+    const categories = await InventoryRecord.distinct("category", {
+      category: { $ne: "" },
     });
     const sorted = categories
       .map((value) => parseStringValue(value))
@@ -2425,8 +2691,14 @@ const getStockTransactions = async (req, res) => {
 
     const filter = {};
     const type = parseStringValue(req.query.type);
+    const sku = parseStringValue(req.query.sku);
+    const item = parseStringValue(req.query.item);
+    const brandGroup = parseStringValue(req.query.brandGroup);
+    const variantName = parseStringValue(req.query.variantName);
+    const variantSku = parseStringValue(req.query.variantSku);
     const rangeResult = parseNumberValue(req.query.range, "range", { min: 1 });
     const search = buildSearchRegex(req.query.search);
+    const dailyDate = parseOptionalDate(req.query.date);
     const dateFrom = parseOptionalDate(req.query.dateFrom);
     const dateTo = parseOptionalDate(req.query.dateTo);
 
@@ -2435,7 +2707,18 @@ const getStockTransactions = async (req, res) => {
     }
 
     if (type) filter.type = type;
-    if (dateFrom || dateTo) {
+    if (sku) filter.sku = sku;
+    if (item) filter.item = item;
+    if (brandGroup) filter.brandGroup = brandGroup;
+    if (variantName) filter.variantName = variantName;
+    if (variantSku) filter.variantSku = variantSku;
+    if (dailyDate) {
+      const dayStart = new Date(dailyDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dailyDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      filter.date = { $gte: dayStart, $lte: dayEnd };
+    } else if (dateFrom || dateTo) {
       filter.date = {};
       if (dateFrom) filter.date.$gte = dateFrom;
       if (dateTo) filter.date.$lte = dateTo;
@@ -2448,6 +2731,9 @@ const getStockTransactions = async (req, res) => {
       filter.$or = [
         { item: search },
         { sku: search },
+        { brandGroup: search },
+        { variantName: search },
+        { variantSku: search },
         { staff: search },
         { source: search },
         { destination: search },
@@ -2658,13 +2944,48 @@ const createStockTransaction = async (req, res) => {
       parseOptionalDate(req.body.date) ||
       parseOptionalDate(req.body.createdAt) ||
       new Date();
+    const brandGroup = parseStringValue(req.body.brandGroup);
+    const variantName = parseStringValue(req.body.variantName);
+    const variantSku = parseStringValue(req.body.variantSku);
+
+    const normalizedQty = normalizeStockTransactionQty(type, qtyResult.value);
+    const inventoryRecord = await InventoryRecord.findOne({ sku });
+    if (!inventoryRecord) {
+      return res.status(404).json({
+        message: `Inventory record not found for Item ID "${sku}". Create the inventory record first.`,
+      });
+    }
+    const qtyResultWithTarget = await applyInventoryQtyDelta(
+      inventoryRecord,
+      normalizedQty,
+      req.user._id,
+      {
+        brandGroup,
+        variantName,
+        variantSku,
+      },
+    );
+    if (qtyResultWithTarget?.error) {
+      return res.status(400).json({ message: qtyResultWithTarget.error });
+    }
+    const { beforeQty, afterQty } = qtyResultWithTarget;
+    const resolvedTarget = qtyResultWithTarget?.target || {
+      brandGroup,
+      variantName,
+      variantSku,
+    };
 
     const record = await StockTransaction.create({
       txid,
       item,
       sku,
+      brandGroup: resolvedTarget.brandGroup || "",
+      variantName: resolvedTarget.variantName || "",
+      variantSku: resolvedTarget.variantSku || "",
       type,
-      qty: qtyResult.value,
+      qty: normalizedQty,
+      beforeQty,
+      afterQty,
       source: parseStringValue(req.body.source),
       destination: parseStringValue(req.body.destination),
       date,
@@ -2677,7 +2998,7 @@ const createStockTransaction = async (req, res) => {
     await notifyInventoryUsersWithActor(req.user, {
       type: "UPDATE",
       title: "Stock transaction logged",
-      message: `${txid} - ${type} - ${qtyResult.value} units for ${item}.`,
+      message: `${txid} - ${type} - ${normalizedQty} units for ${item}.`,
     });
 
     res.status(201).json(record);
@@ -2700,11 +3021,39 @@ const updateStockTransaction = async (req, res) => {
 
     const previousItem = record.item;
     const previousSku = record.sku;
+    const previousType = record.type;
+    const previousQty = record.qty;
+    const previousBrandGroup = record.brandGroup;
+    const previousVariantName = record.variantName;
+    const previousVariantSku = record.variantSku;
     const hasItemPayload = Object.prototype.hasOwnProperty.call(req.body, "item");
     const hasSkuPayload = Object.prototype.hasOwnProperty.call(req.body, "sku");
     const hasTxidPayload = Object.prototype.hasOwnProperty.call(req.body, "txid");
+    const hasTypePayload = Object.prototype.hasOwnProperty.call(req.body, "type");
+    const hasQtyPayload = Object.prototype.hasOwnProperty.call(req.body, "qty");
+    const hasBrandGroupPayload = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "brandGroup",
+    );
+    const hasVariantNamePayload = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "variantName",
+    );
+    const hasVariantSkuPayload = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "variantSku",
+    );
     const nextItem = hasItemPayload ? parseStringValue(req.body.item) : record.item;
     const nextSku = hasSkuPayload ? parseStringValue(req.body.sku) : record.sku;
+    const nextBrandGroup = hasBrandGroupPayload
+      ? parseStringValue(req.body.brandGroup)
+      : record.brandGroup;
+    const nextVariantName = hasVariantNamePayload
+      ? parseStringValue(req.body.variantName)
+      : record.variantName;
+    const nextVariantSku = hasVariantSkuPayload
+      ? parseStringValue(req.body.variantSku)
+      : record.variantSku;
 
     if (!nextItem) {
       return res.status(400).json({ message: "item is required." });
@@ -2770,21 +3119,20 @@ const updateStockTransaction = async (req, res) => {
       record.item = nextItem;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "type")) {
-      const type = parseStringValue(req.body.type);
-      if (!type) {
-        return res.status(400).json({ message: "type is required." });
-      }
-      record.type = type;
+    const nextType = hasTypePayload ? parseStringValue(req.body.type) : record.type;
+    if (hasTypePayload && !nextType) {
+      return res.status(400).json({ message: "type is required." });
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "qty")) {
+    let nextQtyRaw = record.qty;
+    if (hasQtyPayload) {
       const qtyResult = parseNumberValue(req.body.qty, "qty", { min: null });
       if (qtyResult.error) {
         return res.status(400).json({ message: qtyResult.error });
       }
-      record.qty = qtyResult.value;
+      nextQtyRaw = qtyResult.value;
     }
+    const normalizedQty = normalizeStockTransactionQty(nextType, nextQtyRaw);
 
     if (hasSkuPayload) {
       record.sku = nextSku;
@@ -2816,6 +3164,103 @@ const updateStockTransaction = async (req, res) => {
       record.notes = parseStringValue(req.body.notes);
     }
 
+    const previousDelta = normalizeStockTransactionQty(previousType, previousQty);
+    const nextDelta = normalizedQty;
+    const targetChanged =
+      normalizeKey(previousBrandGroup) !== normalizeKey(nextBrandGroup) ||
+      normalizeKey(previousVariantName) !== normalizeKey(nextVariantName) ||
+      normalizeKey(previousVariantSku) !== normalizeKey(nextVariantSku);
+    const impactChanged =
+      normalizeKey(previousSku) !== normalizeKey(nextSku) ||
+      previousDelta !== nextDelta ||
+      targetChanged;
+    const hasSnapshot =
+      Number.isFinite(record.beforeQty) && Number.isFinite(record.afterQty);
+
+    if (impactChanged) {
+      const previousInventoryRecord = await InventoryRecord.findOne({
+        sku: previousSku,
+      });
+      if (!previousInventoryRecord) {
+        return res.status(404).json({
+          message: `Inventory record not found for Item ID "${previousSku}".`,
+        });
+      }
+
+      let nextInventoryRecord = previousInventoryRecord;
+      if (normalizeKey(previousSku) !== normalizeKey(nextSku)) {
+        nextInventoryRecord = await InventoryRecord.findOne({ sku: nextSku });
+        if (!nextInventoryRecord) {
+          return res.status(404).json({
+            message: `Inventory record not found for Item ID "${nextSku}".`,
+          });
+        }
+      }
+
+      if (hasSnapshot && previousDelta !== 0) {
+        const revertResult = await applyInventoryQtyDelta(
+          previousInventoryRecord,
+          -previousDelta,
+          req.user._id,
+          {
+            brandGroup: previousBrandGroup,
+            variantName: previousVariantName,
+            variantSku: previousVariantSku,
+            allowRecordLevel:
+              !previousBrandGroup && !previousVariantName && !previousVariantSku,
+          },
+        );
+        if (revertResult?.error) {
+          return res.status(400).json({ message: revertResult.error });
+        }
+      }
+
+      const applyResult = await applyInventoryQtyDelta(
+        nextInventoryRecord,
+        nextDelta,
+        req.user._id,
+        {
+          brandGroup: nextBrandGroup,
+          variantName: nextVariantName,
+          variantSku: nextVariantSku,
+          allowRecordLevel:
+            !nextBrandGroup &&
+            !nextVariantName &&
+            !nextVariantSku &&
+            !hasBrandGroupPayload &&
+            !hasVariantNamePayload &&
+            !hasVariantSkuPayload,
+        },
+      );
+      if (applyResult?.error) {
+        return res.status(400).json({ message: applyResult.error });
+      }
+      record.beforeQty = applyResult.beforeQty;
+      record.afterQty = applyResult.afterQty;
+      const resolvedTarget = applyResult?.target || {
+        brandGroup: nextBrandGroup,
+        variantName: nextVariantName,
+        variantSku: nextVariantSku,
+      };
+      record.brandGroup = resolvedTarget.brandGroup || "";
+      record.variantName = resolvedTarget.variantName || "";
+      record.variantSku = resolvedTarget.variantSku || "";
+    }
+
+    if (!impactChanged) {
+      if (hasBrandGroupPayload) {
+        record.brandGroup = nextBrandGroup;
+      }
+      if (hasVariantNamePayload) {
+        record.variantName = nextVariantName;
+      }
+      if (hasVariantSkuPayload) {
+        record.variantSku = nextVariantSku;
+      }
+    }
+
+    record.type = nextType;
+    record.qty = normalizedQty;
     record.updatedBy = req.user._id;
     await record.save();
 
@@ -2855,6 +3300,38 @@ const deleteStockTransaction = async (req, res) => {
       return res
         .status(404)
         .json({ message: "Stock transaction not found." });
+    }
+
+    const deletionDelta = normalizeStockTransactionQty(
+      deleted.type,
+      deleted.qty,
+    );
+    const hasSnapshot =
+      Number.isFinite(deleted.beforeQty) && Number.isFinite(deleted.afterQty);
+    if (hasSnapshot && deletionDelta !== 0) {
+      const inventoryRecord = await InventoryRecord.findOne({ sku: deleted.sku });
+      if (inventoryRecord) {
+        const revertResult = await applyInventoryQtyDelta(
+          inventoryRecord,
+          -deletionDelta,
+          req.user._id,
+          {
+            brandGroup: deleted.brandGroup,
+            variantName: deleted.variantName,
+            variantSku: deleted.variantSku,
+            allowRecordLevel:
+              !deleted.brandGroup &&
+              !deleted.variantName &&
+              !deleted.variantSku,
+          },
+        );
+        if (revertResult?.error) {
+          console.error(
+            "Unable to revert inventory quantity for deleted transaction:",
+            revertResult.error,
+          );
+        }
+      }
     }
     await notifyInventoryUsersWithActor(req.user, {
       type: "ACTIVITY",

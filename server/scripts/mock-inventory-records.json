@@ -1,0 +1,226 @@
+[
+  {
+    "item": "Premium Cotton Tee",
+    "warehouse": "WH-A1",
+    "sku": "APP-TEE-001",
+    "category": "Apparel",
+    "maxQty": 800,
+    "status": "In Stock",
+    "brandGroups": [
+      {
+        "name": "Gildan",
+        "price": "4.50",
+        "variants": [
+          { "name": "S", "color": "Black", "sku": "APP-TEE-001-GLD-S-BLK", "qtyValue": 120 },
+          { "name": "M", "color": "Black", "sku": "APP-TEE-001-GLD-M-BLK", "qtyValue": 140 },
+          { "name": "L", "color": "White", "sku": "APP-TEE-001-GLD-L-WHT", "qtyValue": 95 }
+        ]
+      },
+      {
+        "name": "BellaCanvas",
+        "price": "5.25",
+        "variants": [
+          { "name": "S", "color": "Heather Gray", "sku": "APP-TEE-001-BEL-S-HGR", "qtyValue": 80 },
+          { "name": "M", "color": "Heather Gray", "sku": "APP-TEE-001-BEL-M-HGR", "qtyValue": 90 },
+          { "name": "L", "color": "Navy", "sku": "APP-TEE-001-BEL-L-NAV", "qtyValue": 70 }
+        ]
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Fleece Hoodie",
+    "warehouse": "WH-A1",
+    "sku": "APP-HOOD-014",
+    "category": "Apparel",
+    "maxQty": 500,
+    "status": "In Stock",
+    "brandGroups": [
+      {
+        "name": "Independent",
+        "price": "14.00",
+        "variants": [
+          { "name": "M", "color": "Black", "sku": "APP-HOOD-014-IND-M-BLK", "qtyValue": 45 },
+          { "name": "L", "color": "Black", "sku": "APP-HOOD-014-IND-L-BLK", "qtyValue": 60 },
+          { "name": "XL", "color": "Charcoal", "sku": "APP-HOOD-014-IND-XL-CHR", "qtyValue": 55 }
+        ]
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Vinyl Roll Matte Black 24in",
+    "warehouse": "WH-B2",
+    "sku": "MAT-VIN-024-BLK",
+    "category": "Materials",
+    "qtyValue": 32,
+    "maxQty": 120,
+    "status": "In Stock",
+    "price": "18.50",
+    "image": "https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Screen Print Ink - White",
+    "warehouse": "WH-B2",
+    "sku": "INK-SP-WHT-001",
+    "category": "Materials",
+    "qtyValue": 18,
+    "maxQty": 60,
+    "status": "Low Stock",
+    "price": "24.00",
+    "image": "https://images.unsplash.com/photo-1503602642458-232111445657?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Ceramic Mug 11oz",
+    "warehouse": "WH-C1",
+    "sku": "MUG-011-BASE",
+    "category": "Merch",
+    "maxQty": 400,
+    "status": "In Stock",
+    "variants": [
+      { "name": "White", "color": "White", "sku": "MUG-011-WHT", "qtyValue": 150 },
+      { "name": "Black", "color": "Black", "sku": "MUG-011-BLK", "qtyValue": 90 },
+      { "name": "Navy", "color": "Navy", "sku": "MUG-011-NAV", "qtyValue": 60 }
+    ],
+    "price": "2.75",
+    "image": "https://images.unsplash.com/photo-1503602642458-232111445657?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Structured Cap",
+    "warehouse": "WH-C1",
+    "sku": "CAP-STR-020",
+    "category": "Merch",
+    "maxQty": 350,
+    "status": "In Stock",
+    "variants": [
+      { "name": "Black", "color": "Black", "sku": "CAP-STR-020-BLK", "qtyValue": 70 },
+      { "name": "Khaki", "color": "Khaki", "sku": "CAP-STR-020-KHK", "qtyValue": 55 },
+      { "name": "Navy", "color": "Navy", "sku": "CAP-STR-020-NAV", "qtyValue": 65 }
+    ],
+    "price": "3.80",
+    "image": "https://images.unsplash.com/photo-1519682337058-a94d519337bc?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Sticker Sheets A4",
+    "warehouse": "WH-D4",
+    "sku": "STK-A4-200",
+    "category": "Print",
+    "qtyValue": 240,
+    "maxQty": 1000,
+    "status": "In Stock",
+    "price": "0.35",
+    "image": "https://images.unsplash.com/photo-1545239351-ef35f43d514b?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Poly Mailers",
+    "warehouse": "WH-D4",
+    "sku": "PKG-PM-BASE",
+    "category": "Packaging",
+    "maxQty": 900,
+    "status": "In Stock",
+    "variants": [
+      { "name": "Small", "color": "White", "sku": "PKG-PM-S", "qtyValue": 260 },
+      { "name": "Medium", "color": "White", "sku": "PKG-PM-M", "qtyValue": 190 },
+      { "name": "Large", "color": "White", "sku": "PKG-PM-L", "qtyValue": 140 }
+    ],
+    "price": "0.18",
+    "image": "https://images.unsplash.com/photo-1557825835-70d97c4aa567?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "DTF Film Sheets",
+    "warehouse": "WH-B2",
+    "sku": "DTF-FILM-A3",
+    "category": "Materials",
+    "qtyValue": 420,
+    "maxQty": 1200,
+    "status": "In Stock",
+    "price": "0.20",
+    "image": "https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Embroidery Thread",
+    "warehouse": "WH-C2",
+    "sku": "EMB-THR-BASE",
+    "category": "Materials",
+    "maxQty": 500,
+    "status": "In Stock",
+    "variants": [
+      { "name": "Red", "color": "Red", "sku": "EMB-THR-RED", "qtyValue": 80 },
+      { "name": "Blue", "color": "Blue", "sku": "EMB-THR-BLU", "qtyValue": 75 },
+      { "name": "White", "color": "White", "sku": "EMB-THR-WHT", "qtyValue": 95 }
+    ],
+    "price": "1.25",
+    "image": "https://images.unsplash.com/photo-1519682337058-a94d519337bc?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Sublimation Paper",
+    "warehouse": "WH-B1",
+    "sku": "SUB-PAPER-A4",
+    "category": "Print",
+    "qtyValue": 320,
+    "maxQty": 900,
+    "status": "In Stock",
+    "price": "0.12",
+    "image": "https://images.unsplash.com/photo-1523413651479-597eb2da0ad6?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Canvas Tote Bag",
+    "warehouse": "WH-A2",
+    "sku": "BAG-TOTE-001",
+    "category": "Merch",
+    "maxQty": 450,
+    "status": "In Stock",
+    "variants": [
+      { "name": "Natural", "color": "Natural", "sku": "BAG-TOTE-001-NAT", "qtyValue": 120 },
+      { "name": "Black", "color": "Black", "sku": "BAG-TOTE-001-BLK", "qtyValue": 85 }
+    ],
+    "price": "2.10",
+    "image": "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Safety Vest",
+    "warehouse": "WH-A3",
+    "sku": "SAF-VEST-010",
+    "category": "Workwear",
+    "maxQty": 300,
+    "status": "In Stock",
+    "brandGroups": [
+      {
+        "name": "Portwest",
+        "price": "6.90",
+        "variants": [
+          { "name": "M", "color": "Yellow", "sku": "SAF-VEST-010-PW-M-YEL", "qtyValue": 40 },
+          { "name": "L", "color": "Yellow", "sku": "SAF-VEST-010-PW-L-YEL", "qtyValue": 50 },
+          { "name": "XL", "color": "Orange", "sku": "SAF-VEST-010-PW-XL-ORG", "qtyValue": 35 }
+        ]
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "UV DTF Powder",
+    "warehouse": "WH-B3",
+    "sku": "UV-PWD-001",
+    "category": "Materials",
+    "qtyValue": 28,
+    "maxQty": 120,
+    "status": "In Stock",
+    "price": "12.00",
+    "image": "https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    "item": "Packaging Boxes",
+    "warehouse": "WH-D1",
+    "sku": "PKG-BOX-BASE",
+    "category": "Packaging",
+    "maxQty": 700,
+    "status": "In Stock",
+    "variants": [
+      { "name": "Small", "color": "Kraft", "sku": "PKG-BOX-S", "qtyValue": 210 },
+      { "name": "Medium", "color": "Kraft", "sku": "PKG-BOX-M", "qtyValue": 160 },
+      { "name": "Large", "color": "Kraft", "sku": "PKG-BOX-L", "qtyValue": 120 }
+    ],
+    "price": "0.42",
+    "image": "https://images.unsplash.com/photo-1557825835-70d97c4aa567?q=80&w=600&auto=format&fit=crop"
+  }
+]

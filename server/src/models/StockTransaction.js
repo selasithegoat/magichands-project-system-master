@@ -18,6 +18,21 @@ const StockTransactionSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    brandGroup: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    variantName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    variantSku: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     type: {
       type: String,
       required: true,
@@ -26,6 +41,14 @@ const StockTransactionSchema = new mongoose.Schema(
     qty: {
       type: Number,
       required: true,
+    },
+    beforeQty: {
+      type: Number,
+      default: null,
+    },
+    afterQty: {
+      type: Number,
+      default: null,
     },
     source: {
       type: String,

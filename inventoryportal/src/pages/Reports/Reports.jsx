@@ -189,7 +189,7 @@ const buildLowStockRows = (records, threshold) =>
       const percent = getRecordPercent(record);
       return {
         Item: record.item || "",
-        SKU: record.sku || "",
+        "Item ID": record.sku || "",
         Category: record.category || "",
         Warehouse: record.warehouse || record.subtext || "",
         Quantity: record.qtyLabel || record.qtyValue || "",
@@ -205,7 +205,7 @@ const buildMovementRows = (transactions) =>
   transactions.map((tx) => ({
     TXID: tx.txid || "",
     Item: tx.item || "",
-    SKU: tx.sku || "",
+    "Item ID": tx.sku || "",
     Type: tx.type || "",
     Qty: tx.qty ?? "",
     Source: tx.source || "",
@@ -218,7 +218,7 @@ const buildMovementRows = (transactions) =>
 const buildValuationRows = (records, currency, rate) =>
   records.map((record) => ({
     Item: record.item || "",
-    SKU: record.sku || "",
+    "Item ID": record.sku || "",
     Brand: Array.isArray(record.brandGroups) && record.brandGroups.length
       ? record.brandGroups
           .map((group) => group?.name || "")
@@ -588,7 +588,7 @@ const Reports = () => {
           endpoint: "/api/inventory/inventory-records",
           mapRow: (record) => ({
             Item: record.item || "",
-            SKU: record.sku || "",
+            "Item ID": record.sku || "",
             Brand: Array.isArray(record.brandGroups) && record.brandGroups.length
               ? record.brandGroups
                   .map((group) => group?.name || "")
@@ -615,7 +615,7 @@ const Reports = () => {
           mapRow: (tx) => ({
             TXID: tx.txid || "",
             Item: tx.item || "",
-            SKU: tx.sku || "",
+            "Item ID": tx.sku || "",
             Type: tx.type || "",
             Qty: tx.qty || "",
             Source: tx.source || "",
