@@ -21,6 +21,7 @@ import UserAvatar from "../../components/ui/UserAvatar";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
+import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 
 const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
 const OVERDUE_EXCLUDED_STATUSES = new Set([
@@ -255,19 +256,8 @@ const getProjectDepartmentIds = (project) => {
   return project.departments.map((department) => toEntityId(department)).filter(Boolean);
 };
 
-const normalizeReferencePath = (value) => {
-  if (!value) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "object") {
-    if (typeof value.url === "string") return value.url.trim();
-    if (typeof value.fileUrl === "string") return value.fileUrl.trim();
-    if (typeof value.path === "string") return value.path.trim();
-  }
-  return "";
-};
-
 const getProjectReferenceImage = (project) => {
-  const sampleImage = normalizeReferencePath(
+  const sampleImage = getReferenceFileUrl(
     project?.sampleImage || project?.details?.sampleImage,
   );
   if (sampleImage) return sampleImage;
@@ -278,7 +268,7 @@ const getProjectReferenceImage = (project) => {
   ];
 
   const firstImage = attachments
-    .map((attachment) => normalizeReferencePath(attachment))
+    .map((attachment) => getReferenceFileUrl(attachment))
     .find((path) => {
       const cleanPath = path.split("?")[0].trim();
       return IMAGE_FILE_EXTENSIONS.test(cleanPath);

@@ -1975,14 +1975,109 @@ const ProjectDetails = ({ user }) => {
       isProjectOnHold,
   );
 
+  const normalizeReferenceFileUrl = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "object") {
+      return String(
+        value.fileUrl ||
+          value.url ||
+          value.path ||
+          value.location ||
+          value.filename ||
+          "",
+      ).trim();
+    }
+    return "";
+  };
+
   const normalizeAttachment = (value) => {
     if (!value) return null;
-    if (typeof value === "string") return value;
+    if (typeof value === "string") {
+      const fileUrl = value.trim();
+      return fileUrl
+        ? {
+            fileUrl,
+            fileName: "",
+            fileType: "",
+            note: "",
+          }
+        : null;
+    }
     if (typeof value === "object") {
-      return value.url || value.path || value.location || value.filename || null;
+      const fileUrl = normalizeReferenceFileUrl(value);
+      if (!fileUrl) return null;
+      return {
+        fileUrl,
+        fileName:
+          typeof value.fileName === "string"
+            ? value.fileName
+            : typeof value.name === "string"
+              ? value.name
+              : "",
+        fileType:
+          typeof value.fileType === "string"
+            ? value.fileType
+            : typeof value.type === "string"
+              ? value.type
+              : "",
+        note: typeof value.note === "string" ? value.note : "",
+      };
     }
     return null;
   };
+
+  const getReferenceFileName = (attachment = {}) => {
+    const explicitName = String(attachment.fileName || "").trim();
+    if (explicitName) return explicitName;
+    const url = String(attachment.fileUrl || "").split("?")[0];
+    const segments = url.split("/").filter(Boolean);
+    return segments[segments.length - 1] || "File";
+  };
+
+  const isImageReferenceFile = (fileUrl, fileType) => {
+    const normalizedType = String(fileType || "").toLowerCase();
+    if (normalizedType.startsWith("image/")) return true;
+    if (typeof fileUrl !== "string") return false;
+    const path = fileUrl.split("?")[0];
+    return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(path);
+  };
+
+  const sampleImageValue = project.sampleImage || details.sampleImage;
+  const sampleImageNote = String(details.sampleImageNote || "").trim();
+  const sampleAttachment = sampleImageValue
+    ? normalizeAttachment(sampleImageValue)
+    : null;
+  const referenceItems = [];
+  const referenceIndex = new Map();
+  const addReferenceItem = (item) => {
+    if (!item || !item.fileUrl) return;
+    const key = item.fileUrl;
+    const existingIndex = referenceIndex.get(key);
+    if (existingIndex === undefined) {
+      referenceIndex.set(key, referenceItems.length);
+      referenceItems.push({ ...item });
+      return;
+    }
+    const existing = referenceItems[existingIndex];
+    if (!existing.note && item.note) existing.note = item.note;
+    if (!existing.fileName && item.fileName) existing.fileName = item.fileName;
+    if (!existing.fileType && item.fileType) existing.fileType = item.fileType;
+  };
+
+  if (sampleAttachment) {
+    addReferenceItem({
+      ...sampleAttachment,
+      note: sampleImageNote || sampleAttachment.note || "",
+    });
+  }
+
+  [...(project.attachments || []), ...(details.attachments || [])].forEach(
+    (attachment) => {
+      const normalized = normalizeAttachment(attachment);
+      if (normalized) addReferenceItem(normalized);
+    },
+  );
 
   return (
     <div
@@ -2924,10 +3019,7 @@ const ProjectDetails = ({ user }) => {
           {activeContentTab === "order" && (
             <>
           {/* Reference Material / Image */}
-          {(project.sampleImage ||
-            details.sampleImage ||
-            (project.attachments && project.attachments.length > 0) ||
-            (details.attachments && details.attachments.length > 0)) && (
+          {referenceItems.length > 0 && (
             <div className="detail-card">
               <h3 className="card-title">Reference Material</h3>
               <div
@@ -2948,125 +3040,107 @@ const ProjectDetails = ({ user }) => {
                       gap: "1rem",
                     }}
                   >
-                    {[
-                      // Combine sampleImage (if exists) + all attachments
-                      ...(project.sampleImage || details.sampleImage
-                        ? [project.sampleImage || details.sampleImage]
-                        : []),
-                      ...(project.attachments || []),
-                      ...(details.attachments || []),
-                    ]
-                      .map(normalizeAttachment)
-                      .filter(Boolean)
-                      // Filter out duplicates if any (by path string)
-                      .filter(
-                        (value, index, self) => self.indexOf(value) === index,
-                      )
-                      .map((path, idx) => {
-                        const isImage =
-                          typeof path === "string" &&
-                          /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
-                        // Safe check for path being a string before split
-                        const fileName =
-                          typeof path === "string"
-                            ? path.split("/").pop()
-                            : "File";
+                    {referenceItems.map((attachment, idx) => {
+                      const fileUrl = attachment.fileUrl;
+                      const fileName = getReferenceFileName(attachment);
+                      const note = String(attachment.note || "").trim();
+                      const isImage = isImageReferenceFile(
+                        fileUrl,
+                        attachment.fileType,
+                      );
 
-                        // Debug log for path issues if any
-                        // console.log("Rendering attachment path:", path);
-
-                          return (
-                            <div
-                              key={idx}
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "0.4rem",
-                              }}
-                            >
-                              <Link
-                                to={path}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                reloadDocument
+                      return (
+                        <div
+                          key={fileUrl || idx}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.4rem",
+                          }}
+                        >
+                          <Link
+                            to={fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            reloadDocument
+                            style={{
+                              position: "relative",
+                              aspectRatio: "1",
+                              border: "1px solid var(--border-color)",
+                              borderRadius: "10px",
+                              overflow: "hidden",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "rgba(255, 255, 255, 0.03)",
+                              textDecoration: "none",
+                              transition: "transform 0.2s",
+                            }}
+                            onMouseOver={(e) =>
+                              (e.currentTarget.style.transform = "scale(1.02)")
+                            }
+                            onMouseOut={(e) =>
+                              (e.currentTarget.style.transform = "scale(1)")
+                            }
+                            title={fileName}
+                          >
+                            {isImage ? (
+                              <img
+                                src={fileUrl}
+                                alt={fileName || "attachment"}
                                 style={{
-                                  position: "relative",
-                                  aspectRatio: "1",
-                                  border: "1px solid var(--border-color)",
-                                  borderRadius: "10px",
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  textAlign: "center",
+                                  padding: "0.75rem",
+                                  color: "var(--text-secondary)",
+                                  width: "100%",
                                   overflow: "hidden",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  background: "rgba(255, 255, 255, 0.03)",
-                                  textDecoration: "none",
-                                  transition: "transform 0.2s",
-                                }}
-                                onMouseOver={(e) =>
-                                  (e.currentTarget.style.transform =
-                                    "scale(1.02)")
-                                }
-                                onMouseOut={(e) =>
-                                  (e.currentTarget.style.transform = "scale(1)")
-                                }
-                                title={fileName}
-                              >
-                                {isImage ? (
-                                  <img
-                                    src={path}
-                                    alt="attachment"
-                                    style={{
-                                      width: "100%",
-                                      height: "100%",
-                                      objectFit: "cover",
-                                    }}
-                                  />
-                                ) : (
-                                  <div
-                                    style={{
-                                      textAlign: "center",
-                                      padding: "0.75rem",
-                                      color: "var(--text-secondary)",
-                                      width: "100%",
-                                      overflow: "hidden",
-                                    }}
-                                  >
-                                    <FolderIcon width="28" height="28" />
-                                    <div
-                                      style={{
-                                        marginTop: "0.5rem",
-                                        fontSize: "0.75rem",
-                                        whiteSpace: "nowrap",
-                                        textOverflow: "ellipsis",
-                                        overflow: "hidden",
-                                        color: "#f8fafc",
-                                      }}
-                                    >
-                                      {fileName}
-                                    </div>
-                                  </div>
-                                )}
-                              </Link>
-                              <Link
-                                to={path}
-                                download
-                                reloadDocument
-                                style={{
-                                  fontSize: "0.75rem",
-                                  color: "#38bdf8",
-                                  textDecoration: "none",
-                                  fontWeight: 600,
                                 }}
                               >
-                                Download
-                              </Link>
-                            </div>
-                          );
-                        })}
-                    </div>
+                                <FolderIcon width="28" height="28" />
+                                <div
+                                  style={{
+                                    marginTop: "0.5rem",
+                                    fontSize: "0.75rem",
+                                    whiteSpace: "nowrap",
+                                    textOverflow: "ellipsis",
+                                    overflow: "hidden",
+                                    color: "#f8fafc",
+                                  }}
+                                >
+                                  {fileName}
+                                </div>
+                              </div>
+                            )}
+                          </Link>
+                          <Link
+                            to={fileUrl}
+                            download
+                            reloadDocument
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "#38bdf8",
+                              textDecoration: "none",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Download
+                          </Link>
+                          {note && <div className="reference-note">{note}</div>}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
+            </div>
           )}
 
           {mockupUrl && (

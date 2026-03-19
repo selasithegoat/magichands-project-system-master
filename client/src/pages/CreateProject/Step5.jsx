@@ -7,6 +7,7 @@ import DollarIcon from "../../components/icons/DollarIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
 
 import "./Step5.css";
 
@@ -67,6 +68,12 @@ const formatContactType = (value) => {
   return String(value || "").trim();
 };
 
+const isImageReference = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+  return /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(String(fileUrl || ""));
+};
+
 const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -105,16 +112,14 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
       }
 
       // Add Attachments
-      if (formData.attachments && Array.isArray(formData.attachments)) {
-        formData.attachments.forEach((path) => {
-          if (
-            typeof path === "string" &&
-            path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-          ) {
-            pathsToFetch.push(path);
-          }
-        });
-      }
+      const attachmentItems = normalizeReferenceAttachments(
+        formData.attachments || [],
+      );
+      attachmentItems.forEach((attachment) => {
+        if (isImageReference(attachment.fileUrl, attachment.fileType)) {
+          pathsToFetch.push(attachment.fileUrl);
+        }
+      });
 
       if (pathsToFetch.length === 0) return;
 

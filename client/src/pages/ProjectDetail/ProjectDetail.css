@@ -1930,3 +1930,11 @@ textarea.input-field {
 [data-theme="dark"] .feedback-attachment-name {
   color: var(--text-secondary);
 }
+
+.reference-note {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}

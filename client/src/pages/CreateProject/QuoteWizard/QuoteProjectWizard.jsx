@@ -9,6 +9,7 @@ import QuoteStep4 from "./QuoteStep4";
 import QuoteStep5 from "./QuoteStep5";
 import "../WizardLayout.css";
 import "./QuoteProjectWizard.css";
+import { normalizeReferenceAttachments } from "../../../utils/referenceAttachments";
 
 const QuoteProjectWizard = () => {
   const navigate = useNavigate();
@@ -95,6 +96,8 @@ const QuoteProjectWizard = () => {
     deliveryDate: "",
     client: "", // [NEW]
     briefOverview: "", // [NEW]
+    sampleImage: "",
+    sampleImageNote: "",
     attachments: [], // [NEW] Existing attachments
 
     // Quote Specific Fields
@@ -225,7 +228,11 @@ const QuoteProjectWizard = () => {
             receivedTime: data.receivedTime || prev.receivedTime,
             client: data.details?.client || "",
             briefOverview: data.details?.briefOverview || "",
-            attachments: data.details?.attachments || [],
+            sampleImage: data.details?.sampleImage || "",
+            sampleImageNote: data.details?.sampleImageNote || "",
+            attachments: normalizeReferenceAttachments(
+              data.details?.attachments || [],
+            ),
             status: data.status || prev.status,
             // Step 2 & 3 & 4
             departments: data.departments || [],
@@ -374,8 +381,13 @@ const QuoteProjectWizard = () => {
           lead: resolvedLeadLabel,
           deliveryDate: formData.deliveryDate,
           briefOverview: formData.briefOverview,
+          sampleImage: formData.sampleImage,
+          sampleImageNote: formData.sampleImageNote,
           attachments: formData.attachments,
         },
+        existingSampleImage: formData.sampleImage,
+        sampleImageNote: formData.sampleImageNote,
+        existingAttachments: formData.attachments,
         projectLeadId: formData.lead,
         assistantLeadId: formData.assistantLeadId,
       };

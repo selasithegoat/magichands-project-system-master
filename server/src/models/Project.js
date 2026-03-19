@@ -142,7 +142,14 @@ const ProjectSchema = new mongoose.Schema(
       sampleImage: {
         type: String, // Path to the uploaded image
       },
-      attachments: [String], // Multiple reference files
+      sampleImageNote: {
+        type: String,
+        default: "",
+      },
+      attachments: {
+        type: [mongoose.Schema.Types.Mixed], // Legacy strings + new attachment objects with notes
+        default: [],
+      },
     },
     departments: [String], // Step 2: List of department IDs
     items: [

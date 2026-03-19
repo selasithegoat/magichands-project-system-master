@@ -38,6 +38,10 @@ import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
 } from "../../utils/productionRiskAi";
+import {
+  normalizeReferenceAttachments,
+  getReferenceFileName,
+} from "../../utils/referenceAttachments";
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
 // Lazy Load PDF Component
@@ -2092,12 +2096,21 @@ const OrderItemsCard = ({
   );
 };
 
+const isImageReferenceFile = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+  return /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(String(fileUrl || ""));
+};
+
 const ReferenceMaterialsCard = ({ project }) => {
   const details = project.details || {};
   const sampleImage = project.sampleImage || details.sampleImage;
-  const attachments = project.attachments || details.attachments || [];
+  const sampleImageNote = String(details.sampleImageNote || "").trim();
+  const attachmentItems = normalizeReferenceAttachments(
+    project.attachments || details.attachments || [],
+  );
 
-  if (!sampleImage && (!attachments || attachments.length === 0)) return null;
+  if (!sampleImage && attachmentItems.length === 0) return null;
 
   return (
     <div className="detail-card">
@@ -2159,11 +2172,14 @@ const ReferenceMaterialsCard = ({ project }) => {
               >
                 Download
               </Link>
+              {sampleImageNote && (
+                <div className="reference-note">{sampleImageNote}</div>
+              )}
             </div>
           )}
 
         {/* Attachments */}
-        {attachments.length > 0 && (
+        {attachmentItems.length > 0 && (
           <div>
             <h4
               style={{
@@ -2174,7 +2190,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                 textTransform: "uppercase",
               }}
             >
-              Attachments ({attachments.length})
+              Attachments ({attachmentItems.length})
             </h4>
               <div
                 style={{
@@ -2183,12 +2199,17 @@ const ReferenceMaterialsCard = ({ project }) => {
                   gap: "0.5rem",
                 }}
               >
-                {attachments.map((path, idx) => {
-                  const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                  const fileName = path.split("/").pop();
+                {attachmentItems.map((attachment, idx) => {
+                  const fileUrl = attachment.fileUrl;
+                  const fileName = getReferenceFileName(attachment);
+                  const note = String(attachment.note || "").trim();
+                  const isImage = isImageReferenceFile(
+                    fileUrl,
+                    attachment.fileType,
+                  );
                   return (
                     <div
-                      key={idx}
+                      key={fileUrl || idx}
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -2196,7 +2217,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                       }}
                     >
                       <Link
-                        to={`${path}`}
+                        to={`${fileUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         reloadDocument
@@ -2215,7 +2236,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                       >
                         {isImage ? (
                           <img
-                            src={`${path}`}
+                            src={`${fileUrl}`}
                             alt="attachment"
                             style={{
                               width: "100%",
@@ -2250,7 +2271,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                         )}
                       </Link>
                       <Link
-                        to={`${path}`}
+                        to={`${fileUrl}`}
                         download
                         reloadDocument
                         style={{
@@ -2262,6 +2283,7 @@ const ReferenceMaterialsCard = ({ project }) => {
                       >
                         Download
                       </Link>
+                      {note && <div className="reference-note">{note}</div>}
                     </div>
                   );
                 })}

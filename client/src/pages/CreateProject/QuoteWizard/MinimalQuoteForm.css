@@ -841,6 +841,22 @@
   color: var(--text-secondary);
 }
 
+.reference-file-note {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  resize: vertical;
+  min-height: 46px;
+}
+
+.reference-file-note::placeholder {
+  color: var(--text-tertiary);
+}
+
 .reference-file-add-tile {
   border-radius: 16px;
   border: 2px dashed var(--border-color);

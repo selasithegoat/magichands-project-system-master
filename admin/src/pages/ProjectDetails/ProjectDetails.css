@@ -493,6 +493,14 @@
   margin-bottom: 1.5rem;
 }
 
+.reference-note {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 .sms-prompts-card .card-title {
   margin-bottom: 0.35rem;
   padding-bottom: 0;

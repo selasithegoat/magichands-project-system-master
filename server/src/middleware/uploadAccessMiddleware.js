@@ -242,6 +242,8 @@ const findProjectForFileUrl = async (relativePath) => {
     $or: [
       { "details.sampleImage": { $in: candidateUrls } },
       { "details.attachments": { $in: candidateUrls } },
+      { "details.attachments.fileUrl": { $in: candidateUrls } },
+      { "details.attachments.url": { $in: candidateUrls } },
       { "mockup.fileUrl": { $in: candidateUrls } },
       { "feedbacks.attachments.fileUrl": { $in: candidateUrls } },
     ],

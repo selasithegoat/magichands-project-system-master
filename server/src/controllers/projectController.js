@@ -146,6 +146,85 @@ const REVISION_LOCKED_STATUSES = new Set([
   "Finished",
 ]);
 
+const normalizeAttachmentNote = (value) =>
+  String(value || "").trim();
+
+const resolveAttachmentUrl = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "object") {
+    if (typeof value.fileUrl === "string") return value.fileUrl.trim();
+    if (typeof value.url === "string") return value.url.trim();
+    if (typeof value.path === "string") return value.path.trim();
+  }
+  return "";
+};
+
+const resolveAttachmentName = (value, fallbackUrl = "") => {
+  if (value && typeof value === "object") {
+    if (typeof value.fileName === "string" && value.fileName.trim()) {
+      return value.fileName.trim();
+    }
+    if (typeof value.name === "string" && value.name.trim()) {
+      return value.name.trim();
+    }
+  }
+  const url = fallbackUrl || resolveAttachmentUrl(value);
+  if (!url) return "";
+  const rawName = url.split("?")[0].split("/").pop() || url;
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+};
+
+const resolveAttachmentType = (value) => {
+  if (value && typeof value === "object") {
+    if (typeof value.fileType === "string") return value.fileType.trim();
+    if (typeof value.type === "string") return value.type.trim();
+  }
+  return "";
+};
+
+const normalizeAttachmentItem = (value) => {
+  const fileUrl = resolveAttachmentUrl(value);
+  if (!fileUrl) return null;
+  return {
+    fileUrl,
+    fileName: resolveAttachmentName(value, fileUrl),
+    fileType: resolveAttachmentType(value),
+    note: normalizeAttachmentNote(value?.note || value?.notes || ""),
+  };
+};
+
+const normalizeAttachmentList = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeAttachmentItem).filter(Boolean);
+};
+
+const normalizeAttachmentNotes = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeAttachmentNote(entry));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed)
+          ? parsed.map((entry) => normalizeAttachmentNote(entry))
+          : [];
+      } catch {
+        return [];
+      }
+    }
+    return [normalizeAttachmentNote(trimmed)];
+  }
+  return [];
+};
+
 const mapFeedbackAttachments = (req, userId) => {
   const files = Array.isArray(req.files) ? req.files : [];
   return files
@@ -3635,9 +3714,11 @@ const createProject = async (req, res) => {
       existingAttachments = [existingAttachments];
     }
 
-    let attachmentPaths = Array.isArray(existingAttachments)
-      ? existingAttachments
-      : [];
+    const normalizedExistingAttachments = normalizeAttachmentList(
+      existingAttachments,
+    );
+    const attachmentNotes = normalizeAttachmentNotes(req.body.attachmentNotes);
+    const rawSampleImageNote = req.body.sampleImageNote;
 
     if (req.files) {
       // Handle 'sampleImage' (single file)
@@ -3647,15 +3728,22 @@ const createProject = async (req, res) => {
 
       // Handle 'attachments' (multiple files)
       if (req.files.attachments && req.files.attachments.length > 0) {
-        const newAttachments = req.files.attachments.map(
-          (file) => `/uploads/${file.filename}`,
-        );
-        attachmentPaths = [...attachmentPaths, ...newAttachments];
+        const newAttachments = req.files.attachments.map((file, index) => ({
+          fileUrl: `/uploads/${file.filename}`,
+          fileName: file.originalname || file.filename || "",
+          fileType: file.mimetype || "",
+          note: normalizeAttachmentNote(attachmentNotes[index]),
+        }));
+        normalizedExistingAttachments.push(...newAttachments);
       }
     } else if (req.file) {
       // Fallback for single file upload middleware (if used elsewhere)
       sampleImagePath = `/uploads/${req.file.filename}`;
     }
+
+    const resolvedSampleImageNote = sampleImagePath
+      ? normalizeAttachmentNote(rawSampleImageNote)
+      : "";
 
     // [NEW] Extract time from deliveryDate if deliveryTime is missing
     let finalDeliveryTime = getValue(deliveryTime);
@@ -3757,7 +3845,8 @@ const createProject = async (req, res) => {
         supplySource: normalizedSupplySource,
         packagingType: normalizedPackagingType,
         sampleImage: sampleImagePath, // [NEW]
-        attachments: attachmentPaths, // [NEW]
+        sampleImageNote: resolvedSampleImageNote, // [NEW]
+        attachments: normalizedExistingAttachments, // [NEW]
       },
       departments: departments || [],
       items: finalItems || [], // [NEW] Use parsed items
@@ -8162,6 +8251,8 @@ const updateProject = async (req, res) => {
       attachments, // Existing attachments (urls)
       existingAttachments, // Backward-compatible alias for attachments
       existingSampleImage, // Preserve or clear sample image when no new upload
+      sampleImageNote,
+      attachmentNotes,
       quoteDetails, // [NEW]
       projectType, // [NEW]
       priority, // [NEW]
@@ -8199,6 +8290,11 @@ const updateProject = async (req, res) => {
       : Array.isArray(existingAttachments)
         ? existingAttachments
         : null;
+    const normalizedAttachmentNotes = normalizeAttachmentNotes(attachmentNotes);
+    const hasSampleImageNoteUpdate = sampleImageNote !== undefined;
+    const normalizedSampleImageNote = hasSampleImageNoteUpdate
+      ? normalizeAttachmentNote(sampleImageNote)
+      : "";
 
     const project = await Project.findById(id);
     if (!canManageBilling(req.user)) {
@@ -8248,6 +8344,7 @@ const updateProject = async (req, res) => {
       clientPhone: project.details?.clientPhone,
       briefOverview: project.details?.briefOverview || "",
       sampleImage: project.details?.sampleImage || "",
+      sampleImageNote: project.details?.sampleImageNote || "",
       attachments: Array.isArray(project.details?.attachments)
         ? [...project.details.attachments]
         : [],
@@ -8360,37 +8457,66 @@ const updateProject = async (req, res) => {
     }
 
     // Handle Files
+    const hasAttachmentListUpdate = Array.isArray(normalizedAttachments);
+    const normalizedAttachmentItems = hasAttachmentListUpdate
+      ? normalizeAttachmentList(normalizedAttachments)
+      : null;
+
     if (req.files) {
       if (req.files.sampleImage && req.files.sampleImage[0]) {
         project.details.sampleImage = `/uploads/${req.files.sampleImage[0].filename}`;
+        project.details.sampleImageNote = hasSampleImageNoteUpdate
+          ? normalizedSampleImageNote
+          : "";
         detailsChanged = true;
       } else if (existingSampleImage !== undefined) {
         project.details.sampleImage = existingSampleImage || "";
+        project.details.sampleImageNote =
+          existingSampleImage && hasSampleImageNoteUpdate
+            ? normalizedSampleImageNote
+            : existingSampleImage
+              ? project.details.sampleImageNote || ""
+              : "";
+        detailsChanged = true;
+      } else if (hasSampleImageNoteUpdate) {
+        project.details.sampleImageNote = normalizedSampleImageNote;
         detailsChanged = true;
       }
 
       const newAttachments = req.files.attachments
-        ? req.files.attachments.map((file) => `/uploads/${file.filename}`)
+        ? req.files.attachments.map((file, index) => ({
+            fileUrl: `/uploads/${file.filename}`,
+            fileName: file.originalname || file.filename || "",
+            fileType: file.mimetype || "",
+            note: normalizeAttachmentNote(normalizedAttachmentNotes[index]),
+          }))
         : [];
 
       // Combine existing and new attachments
       // If 'attachments' is sent in body, use it as the base (allows deletion)
       // If not sent, keep existing
-      if (normalizedAttachments && Array.isArray(normalizedAttachments)) {
-        project.details.attachments = [...normalizedAttachments, ...newAttachments];
+      if (hasAttachmentListUpdate) {
+        project.details.attachments = [
+          ...(normalizedAttachmentItems || []),
+          ...newAttachments,
+        ];
         detailsChanged = true;
       } else if (newAttachments.length > 0) {
-        // If only new files sent and no body list, just append?
-        // Or if attachments body is missing, do we assume no logical change to existing?
+        const existingAttachmentItems = normalizeAttachmentList(
+          project.details.attachments || [],
+        );
         project.details.attachments = [
-          ...(project.details.attachments || []),
+          ...existingAttachmentItems,
           ...newAttachments,
         ];
         detailsChanged = true;
       }
-    } else if (normalizedAttachments && Array.isArray(normalizedAttachments)) {
-      // Case: No new files, but attachments list updated (e.g. deletion)
-      project.details.attachments = normalizedAttachments;
+    } else if (hasAttachmentListUpdate) {
+      // Case: No new files, but attachments list updated (e.g. deletion or note change)
+      project.details.attachments = normalizedAttachmentItems || [];
+      detailsChanged = true;
+    } else if (hasSampleImageNoteUpdate) {
+      project.details.sampleImageNote = normalizedSampleImageNote;
       detailsChanged = true;
     }
 
@@ -8568,17 +8694,31 @@ const updateProject = async (req, res) => {
 
     const previousSampleImage = String(oldValues.sampleImage || "").trim();
     const nextSampleImage = String(updatedProject.details?.sampleImage || "").trim();
-    const sampleImageChanged = previousSampleImage !== nextSampleImage;
+    const previousSampleImageNote = String(
+      oldValues.sampleImageNote || "",
+    ).trim();
+    const nextSampleImageNote = String(
+      updatedProject.details?.sampleImageNote || "",
+    ).trim();
+    const sampleImageNoteChanged = previousSampleImageNote !== nextSampleImageNote;
+    const sampleImageChanged =
+      previousSampleImage !== nextSampleImage || sampleImageNoteChanged;
 
-    const previousAttachments = Array.isArray(oldValues.attachments)
-      ? oldValues.attachments
-      : [];
-    const nextAttachments = Array.isArray(updatedProject.details?.attachments)
-      ? updatedProject.details.attachments
-      : [];
+    const previousAttachments = normalizeAttachmentList(oldValues.attachments);
+    const nextAttachments = normalizeAttachmentList(
+      updatedProject.details?.attachments,
+    );
     const attachmentsChanged =
       previousAttachments.length !== nextAttachments.length ||
-      previousAttachments.some((item, index) => item !== nextAttachments[index]);
+      previousAttachments.some((item, index) => {
+        const next = nextAttachments[index];
+        if (!next) return true;
+        return (
+          String(item.fileUrl || "") !== String(next.fileUrl || "") ||
+          normalizeAttachmentNote(item.note) !==
+            normalizeAttachmentNote(next.note)
+        );
+      });
 
     if (briefOverviewChanged) {
       changes.push("Brief Overview updated");

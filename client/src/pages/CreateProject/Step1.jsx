@@ -14,6 +14,13 @@ import PersonIcon from "../../components/icons/PersonIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
+import {
+  buildFileKey,
+  normalizeReferenceAttachments,
+  getReferenceFileName,
+  getReferenceFileUrl,
+  getReferenceFileNote,
+} from "../../utils/referenceAttachments";
 
 const normalizeSupplySourceSelection = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -88,6 +95,27 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
     formData.supplySource,
   );
   const selectedContactType = normalizeContactTypeSelection(formData.contactType);
+  const existingAttachments = normalizeReferenceAttachments(
+    formData.attachments || [],
+  );
+  const existingReferenceItems = [
+    ...(formData.sampleImage
+      ? [
+          {
+            fileUrl: getReferenceFileUrl(formData.sampleImage),
+            fileName:
+              getReferenceFileName(formData.sampleImage) || "Sample Image",
+            note: formData.sampleImageNote || "",
+            isSample: true,
+          },
+        ]
+      : []),
+    ...existingAttachments.map((attachment, index) => ({
+      ...attachment,
+      isSample: false,
+      attachmentIndex: index,
+    })),
+  ].filter((item) => item.fileUrl);
 
   // Fetch users for generic dropdown
   React.useEffect(() => {
@@ -477,86 +505,128 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   gap: "1rem",
                 }}
               >
-                {formData.files.map((file, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      position: "relative",
-                      aspectRatio: "1",
-                      borderRadius: "8px",
-                      overflow: "hidden",
-                      border: "1px solid var(--border-color)",
-                      background: "#f8fafc",
-                    }}
-                  >
-                    {file.type.startsWith("image/") ? (
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt="Preview"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          height: "100%",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "0.5rem",
-                          textAlign: "center",
-                        }}
-                      >
-                        <FolderIcon width="24" height="24" color="#64748b" />
-                        <span
-                          style={{
-                            fontSize: "0.7rem",
-                            marginTop: "0.25rem",
-                            wordBreak: "break-all",
-                          }}
-                        >
-                          {file.name}
-                        </span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const remaining = formData.files.filter(
-                          (_, i) => i !== idx,
-                        );
-                        handleChange("files", remaining);
-                      }}
+                {formData.files.map((file, idx) => {
+                  const fileKey = buildFileKey(file);
+                  const noteValue =
+                    (formData.fileNotes || {})[fileKey] || "";
+                  return (
+                    <div
+                      key={fileKey || idx}
                       style={{
-                        position: "absolute",
-                        top: "4px",
-                        right: "4px",
-                        background: "rgba(239, 68, 68, 0.9)",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "50%",
-                        width: "20px",
-                        height: "20px",
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        fontSize: "12px",
+                        flexDirection: "column",
+                        gap: "0.5rem",
                       }}
                     >
-                      &times;
-                    </button>
-                  </div>
-                ))}
+                      <div
+                        style={{
+                          position: "relative",
+                          aspectRatio: "1",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          border: "1px solid var(--border-color)",
+                          background: "#f8fafc",
+                        }}
+                      >
+                        {file.type.startsWith("image/") ? (
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt="Preview"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              height: "100%",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "0.5rem",
+                              textAlign: "center",
+                            }}
+                          >
+                            <FolderIcon width="24" height="24" color="#64748b" />
+                            <span
+                              style={{
+                                fontSize: "0.7rem",
+                                marginTop: "0.25rem",
+                                wordBreak: "break-all",
+                              }}
+                            >
+                              {file.name}
+                            </span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const remaining = formData.files.filter(
+                              (_, i) => i !== idx,
+                            );
+                            const nextNotes = { ...(formData.fileNotes || {}) };
+                            delete nextNotes[fileKey];
+                            setFormData({
+                              files: remaining,
+                              fileNotes: nextNotes,
+                            });
+                          }}
+                          style={{
+                            position: "absolute",
+                            top: "4px",
+                            right: "4px",
+                            background: "rgba(239, 68, 68, 0.9)",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "50%",
+                            width: "20px",
+                            height: "20px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                          }}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                      <textarea
+                        placeholder="Add note for this reference..."
+                        value={noteValue}
+                        readOnly
+                        onChange={(e) =>
+                          setFormData({
+                            fileNotes: {
+                              ...(formData.fileNotes || {}),
+                              [fileKey]: e.target.value,
+                            },
+                          })
+                        }
+                        rows="2"
+                        style={{
+                          width: "100%",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          padding: "0.4rem 0.5rem",
+                          fontSize: "0.75rem",
+                          color: "var(--text-primary)",
+                          background: "var(--bg-input)",
+                          resize: "vertical",
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {/* Unified Existing Reference Materials (Attachments & Sample Image) */}
-            {(formData.attachments?.length > 0 || formData.sampleImage) && (
+            {existingReferenceItems.length > 0 && (
               <div
                 style={{
                   marginTop: "1rem",
@@ -565,71 +635,106 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   gap: "0.5rem",
                 }}
               >
-                {/* Prepare a unified list of existing files */}
-                {[
-                  ...(formData.sampleImage ? [formData.sampleImage] : []),
-                  ...(formData.attachments || []),
-                ].map((path, idx) => {
-                  const isImage = path.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                  const fileName = path.split("/").pop();
+                {existingReferenceItems.map((item, idx) => {
+                  const fileUrl = item.fileUrl;
+                  const isImage = fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                  const fileName = item.fileName || getReferenceFileName(fileUrl);
                   return (
-                    <Link
-                      key={`exist-${idx}`}
-                      to={`${path}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      reloadDocument
+                    <div
+                      key={`${item.isSample ? "sample" : "attach"}-${fileUrl || idx}`}
                       style={{
-                        position: "relative",
-                        aspectRatio: "1",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "8px",
-                        overflow: "hidden",
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        background: "rgba(0,0,0,0.1)",
-                        textDecoration: "none",
+                        flexDirection: "column",
+                        gap: "0.35rem",
                       }}
-                      title={fileName}
                     >
-                      {isImage ? (
-                        <img
-                          src={`${path}`}
-                          alt="reference"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            textAlign: "center",
-                            padding: "0.5rem",
-                            fontSize: "0.8rem",
-                            color: "var(--text-secondary)",
-                            overflow: "hidden",
-                            width: "100%",
-                          }}
-                        >
-                          <FolderIcon width="24" height="24" />
+                      <Link
+                        to={`${fileUrl}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        reloadDocument
+                        style={{
+                          position: "relative",
+                          aspectRatio: "1",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "rgba(0,0,0,0.1)",
+                          textDecoration: "none",
+                        }}
+                        title={fileName}
+                      >
+                        {isImage ? (
+                          <img
+                            src={`${fileUrl}`}
+                            alt="reference"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
                           <div
                             style={{
-                              marginTop: "0.25rem",
-                              whiteSpace: "nowrap",
+                              textAlign: "center",
+                              padding: "0.5rem",
+                              fontSize: "0.8rem",
+                              color: "var(--text-secondary)",
                               overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              color: "var(--text-primary)",
-                              fontSize: "0.75rem",
+                              width: "100%",
                             }}
                           >
-                            {fileName}
+                            <FolderIcon width="24" height="24" />
+                            <div
+                              style={{
+                                marginTop: "0.25rem",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                color: "var(--text-primary)",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              {fileName}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </Link>
+                        )}
+                      </Link>
+                      <textarea
+                        placeholder="Add note for this reference..."
+                        value={item.note || ""}
+                        readOnly
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (item.isSample) {
+                            setFormData({ sampleImageNote: value });
+                            return;
+                          }
+                          const nextAttachments = existingAttachments.map(
+                            (attachment, index) =>
+                              index === item.attachmentIndex
+                                ? { ...attachment, note: value }
+                                : attachment,
+                          );
+                          setFormData({ attachments: nextAttachments });
+                        }}
+                        rows="2"
+                        style={{
+                          width: "100%",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "8px",
+                          padding: "0.35rem 0.5rem",
+                          fontSize: "0.75rem",
+                          color: "var(--text-primary)",
+                          background: "var(--bg-input)",
+                          resize: "vertical",
+                        }}
+                      />
+                    </div>
                   );
                 })}
               </div>

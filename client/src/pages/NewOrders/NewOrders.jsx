@@ -13,6 +13,13 @@ import PhoneIcon from "../../components/icons/PhoneIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
 import Select from "../../components/ui/Select";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import {
+  buildFileKey,
+  normalizeReferenceAttachments,
+  getReferenceFileName,
+  getReferenceFileUrl,
+  getReferenceFileNote,
+} from "../../utils/referenceAttachments";
 import "./NewOrders.css";
 
 const REVISION_LOCKED_STATUSES = new Set([
@@ -59,7 +66,9 @@ const NewOrders = () => {
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedFileNotes, setSelectedFileNotes] = useState({});
   const [existingSampleImage, setExistingSampleImage] = useState("");
+  const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
   const [leads, setLeads] = useState([]);
   const [existingOrderNumbers, setExistingOrderNumbers] = useState([]);
@@ -307,7 +316,10 @@ const NewOrders = () => {
       sampleRequired: Boolean(project.sampleRequirement?.isRequired),
     });
     setExistingSampleImage(project.details?.sampleImage || "");
-    setExistingAttachments(project.details?.attachments || []);
+    setExistingSampleImageNote(String(project.details?.sampleImageNote || ""));
+    setExistingAttachments(
+      normalizeReferenceAttachments(project.details?.attachments || []),
+    );
   };
 
   useEffect(() => {
@@ -425,6 +437,15 @@ const NewOrders = () => {
   };
 
   const removeFile = (index) => {
+    const fileToRemove = selectedFiles[index];
+    if (fileToRemove) {
+      const key = buildFileKey(fileToRemove);
+      setSelectedFileNotes((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -434,6 +455,7 @@ const NewOrders = () => {
 
   const removeExistingSampleImage = () => {
     setExistingSampleImage("");
+    setExistingSampleImageNote("");
   };
 
   const handleSubmit = (e) => {
@@ -499,29 +521,38 @@ const NewOrders = () => {
     }
 
     // Handle Existing Files
-    if (existingSampleImage) {
-      formPayload.append("existingSampleImage", existingSampleImage);
-    }
-    if (existingAttachments.length > 0) {
-      formPayload.append(
-        "existingAttachments",
-        JSON.stringify(existingAttachments),
-      );
+    formPayload.append("existingSampleImage", existingSampleImage || "");
+    formPayload.append(
+      "existingAttachments",
+      JSON.stringify(existingAttachments || []),
+    );
+
+    const getFileNote = (file) =>
+      selectedFileNotes[buildFileKey(file)] || "";
+    const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
+    const attachmentFiles = imageFile
+      ? selectedFiles.filter((f) => f !== imageFile)
+      : selectedFiles;
+
+    attachmentFiles.forEach((file) => {
+      formPayload.append("attachments", file);
+    });
+
+    if (attachmentFiles.length > 0) {
+      const attachmentNotes = attachmentFiles.map((file) => getFileNote(file));
+      formPayload.append("attachmentNotes", JSON.stringify(attachmentNotes));
     }
 
-    const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
     if (imageFile) {
       formPayload.append("sampleImage", imageFile);
-      selectedFiles
-        .filter((f) => f !== imageFile)
-        .forEach((file) => {
-          formPayload.append("attachments", file);
-        });
-    } else {
-      selectedFiles.forEach((file) => {
-        formPayload.append("attachments", file);
-      });
     }
+
+    const sampleNote = imageFile
+      ? getFileNote(imageFile)
+      : existingSampleImage
+        ? existingSampleImageNote
+        : "";
+    formPayload.append("sampleImageNote", sampleNote);
 
     try {
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
@@ -561,7 +592,9 @@ const NewOrders = () => {
             sampleRequired: false,
           });
           setSelectedFiles([]);
+          setSelectedFileNotes({});
           setExistingSampleImage("");
+          setExistingSampleImageNote("");
           setExistingAttachments([]);
         }
 
@@ -1207,6 +1240,15 @@ const NewOrders = () => {
                         <span className="file-name">Sample Image</span>
                         <span className="file-size">Original</span>
                       </div>
+                      <textarea
+                        className="reference-file-note"
+                        placeholder="Add note for this reference..."
+                        value={existingSampleImageNote}
+                        onChange={(e) =>
+                          setExistingSampleImageNote(e.target.value)
+                        }
+                        rows="2"
+                      />
                       <button
                         type="button"
                         onClick={removeExistingSampleImage}
@@ -1218,22 +1260,40 @@ const NewOrders = () => {
                   )}
 
                   {/* Existing Attachments */}
-                  {existingAttachments.map((path, idx) => (
+                  {existingAttachments.map((attachment, idx) => {
+                    const attachmentUrl = getReferenceFileUrl(attachment);
+                    const fileName = getReferenceFileName(attachment);
+                    const noteValue = getReferenceFileNote(attachment);
+                    return (
                     <div
-                      key={`exist-${idx}`}
+                      key={`exist-${attachmentUrl || idx}`}
                       className="reference-file-tile existing"
                     >
                       <div className="file-icon">
-                        {path.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                          <img src={path} alt="attachment" />
+                        {attachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                          <img src={attachmentUrl} alt="attachment" />
                         ) : (
                           <FolderIcon />
                         )}
                       </div>
-                      <div className="file-info" title={path.split("/").pop()}>
-                        <span className="file-name">{path.split("/").pop()}</span>
+                      <div className="file-info" title={fileName}>
+                        <span className="file-name">{fileName}</span>
                         <span className="file-size">Saved</span>
                       </div>
+                      <textarea
+                        className="reference-file-note"
+                        placeholder="Add note for this reference..."
+                        value={noteValue}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setExistingAttachments((prev) =>
+                            prev.map((item, i) =>
+                              i === idx ? { ...item, note: value } : item,
+                            ),
+                          );
+                        }}
+                        rows="2"
+                      />
                       <button
                         type="button"
                         onClick={() => removeExistingAttachment(idx)}
@@ -1242,11 +1302,14 @@ const NewOrders = () => {
                         &times;
                       </button>
                     </div>
-                  ))}
+                  );
+                  })}
 
                   {/* New Files */}
-                  {selectedFiles.map((file, idx) => (
-                    <div key={idx} className="reference-file-tile">
+                  {selectedFiles.map((file, idx) => {
+                    const fileKey = buildFileKey(file);
+                    return (
+                    <div key={fileKey || idx} className="reference-file-tile">
                       <div className="file-icon">
                         {file.type.startsWith("image/") ? (
                           <img src={URL.createObjectURL(file)} alt="preview" />
@@ -1260,6 +1323,18 @@ const NewOrders = () => {
                           {formatFileSize(file.size)}
                         </span>
                       </div>
+                      <textarea
+                        className="reference-file-note"
+                        placeholder="Add note for this reference..."
+                        value={selectedFileNotes[fileKey] || ""}
+                        onChange={(e) =>
+                          setSelectedFileNotes((prev) => ({
+                            ...prev,
+                            [fileKey]: e.target.value,
+                          }))
+                        }
+                        rows="2"
+                      />
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
@@ -1268,7 +1343,8 @@ const NewOrders = () => {
                         &times;
                       </button>
                     </div>
-                  ))}
+                  );
+                  })}
                   <div
                     className="reference-file-add-tile"
                     onClick={() =>

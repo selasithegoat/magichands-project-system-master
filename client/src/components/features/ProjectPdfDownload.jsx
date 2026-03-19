@@ -2,6 +2,15 @@ import React, { useState, useEffect, useMemo } from "react";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ProjectSummaryPDF from "../../pages/CreateProject/ProjectSummaryPDF";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import {
+  normalizeReferenceAttachments,
+} from "../../utils/referenceAttachments";
+
+const isImageAttachment = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+  return /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(String(fileUrl || ""));
+};
 
 const ProjectPdfDownload = ({ project }) => {
   const [imageUrls, setImageUrls] = useState({});
@@ -20,17 +29,14 @@ const ProjectPdfDownload = ({ project }) => {
       nextPaths.push(sampleImg);
     }
 
-    const attachments = project.attachments || details.attachments;
-    if (Array.isArray(attachments)) {
-      attachments.forEach((path) => {
-        if (
-          typeof path === "string" &&
-          path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-        ) {
-          nextPaths.push(path);
-        }
-      });
-    }
+    const attachments = normalizeReferenceAttachments(
+      project.attachments || details.attachments || [],
+    );
+    attachments.forEach((attachment) => {
+      if (isImageAttachment(attachment.fileUrl, attachment.fileType)) {
+        nextPaths.push(attachment.fileUrl);
+      }
+    });
 
     return [...new Set(nextPaths)];
   }, [project, details]);
@@ -127,15 +133,17 @@ const ProjectPdfDownload = ({ project }) => {
   const pdfFormData = useMemo(() => {
     if (!project) return {};
 
-    const allAttachments = project.attachments || details.attachments || [];
-    const imageAttachments = allAttachments.filter(
-      (path) =>
-        typeof path === "string" && path.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i),
+    const normalizedAttachments = normalizeReferenceAttachments(
+      project.attachments || details.attachments || [],
+    );
+    const imageAttachments = normalizedAttachments.filter((attachment) =>
+      isImageAttachment(attachment.fileUrl, attachment.fileType),
     );
     const sampleApprovalRequired = Boolean(project?.sampleRequirement?.isRequired);
     const corporateEmergencyEnabled =
       project?.projectType === "Corporate Job" &&
       Boolean(project?.corporateEmergency?.isEnabled);
+    const sampleImageNote = String(details?.sampleImageNote || "").trim();
 
     return {
       projectName: details.projectName || project.projectName,
@@ -159,6 +167,7 @@ const ProjectPdfDownload = ({ project }) => {
       productionRisks: project.productionRisks,
       attachments: imageAttachments,
       sampleImage: project.sampleImage || details.sampleImage,
+      sampleImageNote,
       details,
       sampleRequired: sampleApprovalRequired,
       corporateEmergency: corporateEmergencyEnabled,

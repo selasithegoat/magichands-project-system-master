@@ -11,6 +11,10 @@ import UserAvatar from "../../../components/ui/UserAvatar";
 import Spinner from "../../../components/ui/Spinner";
 import ProgressBar from "../../../components/ui/ProgressBar";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
+import {
+  normalizeReferenceAttachments,
+  getReferenceFileName,
+} from "../../../utils/referenceAttachments";
 import "./QuoteStep5.css"; // We'll create this or use Step5.css if shared
 
 const QuoteStep5 = ({
@@ -31,6 +35,14 @@ const QuoteStep5 = ({
   });
   const [isToastFading, setIsToastFading] = useState(false);
   const [error, setError] = useState("");
+  const attachmentItems = normalizeReferenceAttachments(formData.attachments || []);
+  const sampleImage =
+    formData.sampleImage || (formData.details && formData.details.sampleImage) || "";
+  const sampleImageNote = String(
+    formData.sampleImageNote ||
+      (formData.details && formData.details.sampleImageNote) ||
+      "",
+  ).trim();
 
   const handleFinish = () => {
     if (!isChecked) {
@@ -334,22 +346,42 @@ const QuoteStep5 = ({
               <label>Brief Overview</label>
               <p>{formData.briefOverview || "No overview provided."}</p>
             </div>
-            {formData.attachments?.length > 0 && (
+            {(sampleImage || attachmentItems.length > 0) && (
               <div className="attachments-review-list">
                 <label>Attachments</label>
                 <div className="attachments-grid-simple">
-                  {formData.attachments.map((file, idx) => (
-                    <div key={idx} className="attachment-tile-simple">
+                  {sampleImage && (
+                    <div className="attachment-tile-simple">
+                      <span className="attachment-tag">Sample Image</span>
                       <Link
-                        to={file}
+                        to={sampleImage}
                         target="_blank"
                         rel="noopener noreferrer"
                         reloadDocument
                       >
-                        {file.split("/").pop()}
+                        {getReferenceFileName(sampleImage)}
                       </Link>
+                      {sampleImageNote && (
+                        <div className="attachment-note">{sampleImageNote}</div>
+                      )}
                     </div>
-                  ))}
+                  )}
+                  {attachmentItems.map((file) => {
+                    const note = String(file.note || "").trim();
+                    return (
+                      <div key={file.fileUrl} className="attachment-tile-simple">
+                        <Link
+                          to={file.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          reloadDocument
+                        >
+                          {getReferenceFileName(file)}
+                        </Link>
+                        {note && <div className="attachment-note">{note}</div>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

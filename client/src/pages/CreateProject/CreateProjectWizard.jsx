@@ -7,6 +7,10 @@ import Step4 from "./Step4";
 import Step5 from "./Step5";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import "./WizardLayout.css";
+import {
+  buildFileKey,
+  normalizeReferenceAttachments,
+} from "../../utils/referenceAttachments";
 
 const normalizeSupplySourceSelection = (value) => {
   if (Array.isArray(value)) {
@@ -153,6 +157,11 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       assistantLeadId: "", // Optional assistant lead
       sampleRequired: false,
       corporateEmergency: false,
+      files: [],
+      attachments: [],
+      sampleImage: "",
+      sampleImageNote: "",
+      fileNotes: {},
     },
   };
 
@@ -280,7 +289,10 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             ),
             briefOverview: data.details?.briefOverview || "", // [NEW] Map brief overview
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
-            attachments: data.details?.attachments || [], // [NEW] Map attachments
+            sampleImageNote: data.details?.sampleImageNote || "",
+            attachments: normalizeReferenceAttachments(
+              data.details?.attachments || [],
+            ), // [NEW] Map attachments
             supplySource: normalizeSupplySourceSelection(
               data.details?.supplySource,
             ),
@@ -373,6 +385,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       Object.keys(formData).forEach((key) => {
         if (
           key === "files" ||
+          key === "fileNotes" ||
           key === "contactType" ||
           key === "corporateEmergency"
         )
@@ -402,21 +415,36 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
 
       // Append Files to 'sampleImage' and 'attachments' fields
       if (formData.files && formData.files.length > 0) {
+        const getFileNote = (file) =>
+          (formData.fileNotes || {})[buildFileKey(file)] || "";
         const imageFile = formData.files.find((f) =>
           f.type.startsWith("image/"),
         );
+        const attachmentFiles = imageFile
+          ? formData.files.filter((f) => f !== imageFile)
+          : formData.files;
+
+        attachmentFiles.forEach((file) => {
+          payload.append("attachments", file);
+        });
+
+        if (attachmentFiles.length > 0) {
+          const attachmentNotes = attachmentFiles.map((file) =>
+            getFileNote(file),
+          );
+          payload.append("attachmentNotes", JSON.stringify(attachmentNotes));
+        }
+
         if (imageFile) {
           payload.append("sampleImage", imageFile);
-          formData.files
-            .filter((f) => f !== imageFile)
-            .forEach((file) => {
-              payload.append("attachments", file);
-            });
-        } else {
-          formData.files.forEach((file) => {
-            payload.append("attachments", file);
-          });
         }
+
+        const sampleNote = imageFile
+          ? getFileNote(imageFile)
+          : formData.sampleImage
+            ? formData.sampleImageNote || ""
+            : "";
+        payload.append("sampleImageNote", sampleNote);
       }
 
       const res = await fetch(url, {

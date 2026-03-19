@@ -1076,6 +1076,13 @@
   word-break: break-word;
 }
 
+.engaged-reference-note {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
 .engaged-warning-banner {
   background: #fff7ed;
   border: 1px solid #fdba74;

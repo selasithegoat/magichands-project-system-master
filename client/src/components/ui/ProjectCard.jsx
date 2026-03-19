@@ -3,6 +3,7 @@ import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
+import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
@@ -44,19 +45,8 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
-const normalizeReferencePath = (value) => {
-  if (!value) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "object") {
-    if (typeof value.url === "string") return value.url.trim();
-    if (typeof value.fileUrl === "string") return value.fileUrl.trim();
-    if (typeof value.path === "string") return value.path.trim();
-  }
-  return "";
-};
-
 const getProjectReferenceImage = (project) => {
-  const sampleImage = normalizeReferencePath(
+  const sampleImage = getReferenceFileUrl(
     project?.sampleImage || project?.details?.sampleImage,
   );
   if (sampleImage) return sampleImage;
@@ -67,7 +57,7 @@ const getProjectReferenceImage = (project) => {
   ];
 
   const firstImage = attachments
-    .map((attachment) => normalizeReferencePath(attachment))
+    .map((attachment) => getReferenceFileUrl(attachment))
     .find((path) => IMAGE_FILE_EXTENSIONS.test(path.split("?")[0].trim()));
 
   return firstImage || "";

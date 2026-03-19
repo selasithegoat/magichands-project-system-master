@@ -12,6 +12,10 @@ import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
+import {
+  normalizeReferenceAttachments,
+  getReferenceFileName,
+} from "../../utils/referenceAttachments";
 import "./EngagedProjects.css";
 
 const STATUS_ACTIONS = {
@@ -174,26 +178,18 @@ const getPendingDeliveryBillingMissing = ({ paymentTypes }) => {
   return missing;
 };
 
-const getReferenceFileName = (path) => {
-  if (!path) return "Reference File";
-  const withoutQuery = String(path).split("?")[0];
-  const rawName = withoutQuery.split("/").pop() || withoutQuery;
-  try {
-    return decodeURIComponent(rawName);
-  } catch {
-    return rawName;
-  }
-};
-
-const getReferenceFileExtension = (path) => {
-  const fileName = getReferenceFileName(path);
+const getReferenceFileExtension = (value) => {
+  const fileName = getReferenceFileName(value);
   const dotIndex = fileName.lastIndexOf(".");
   if (dotIndex <= 0 || dotIndex === fileName.length - 1) return "FILE";
   return fileName.slice(dotIndex + 1).toUpperCase().slice(0, 6);
 };
 
-const isImageReference = (path) =>
-  /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(path || ""));
+const isImageReference = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(fileUrl || ""));
+};
 
 const normalizeObjectId = (value) => {
   if (!value) return "";
@@ -716,29 +712,44 @@ const EngagedProjectActions = ({ user }) => {
 
   const scopeReferenceItems = useMemo(() => {
     const sampleImage = String(project?.details?.sampleImage || "").trim();
-    const attachments = Array.isArray(project?.details?.attachments)
-      ? project.details.attachments
-      : [];
+    const sampleImageNote = String(project?.details?.sampleImageNote || "").trim();
+    const attachments = normalizeReferenceAttachments(
+      project?.details?.attachments || [],
+    );
 
     const seen = new Set();
     const items = [];
-    const addItem = (path, label) => {
-      const normalized = String(path || "").trim();
+    const addItem = (fileUrl, label, note = "", fileType = "", fileName = "") => {
+      const normalized = String(fileUrl || "").trim();
       if (!normalized || seen.has(normalized)) return;
       seen.add(normalized);
-      items.push({ path: normalized, label });
+      items.push({
+        fileUrl: normalized,
+        label,
+        note: String(note || "").trim(),
+        fileType: String(fileType || "").trim(),
+        fileName: String(fileName || "").trim(),
+      });
     };
 
-    addItem(sampleImage, "Primary Reference");
+    addItem(sampleImage, "Primary Reference", sampleImageNote);
 
-    let attachmentCounter = 0;
-    attachments.forEach((path) => {
-      attachmentCounter += 1;
-      addItem(path, `Reference Material ${attachmentCounter}`);
+    attachments.forEach((attachment, index) => {
+      addItem(
+        attachment.fileUrl,
+        `Reference Material ${index + 1}`,
+        attachment.note,
+        attachment.fileType,
+        attachment.fileName,
+      );
     });
 
     return items;
-  }, [project?.details?.sampleImage, project?.details?.attachments]);
+  }, [
+    project?.details?.sampleImage,
+    project?.details?.sampleImageNote,
+    project?.details?.attachments,
+  ]);
 
   const activityFeedItems = useMemo(() => {
     const userUpdates = (Array.isArray(projectUpdates) ? projectUpdates : []).map(
@@ -1891,15 +1902,17 @@ const EngagedProjectActions = ({ user }) => {
               ) : (
                 <div className="engaged-reference-grid">
                   {scopeReferenceItems.map((item) => {
-                    const fileName = getReferenceFileName(item.path);
-                    const fileExtension = getReferenceFileExtension(item.path);
-                    const isImage = isImageReference(item.path);
+                    const fileUrl = item.fileUrl;
+                    const fileName = item.fileName || getReferenceFileName(fileUrl);
+                    const fileExtension = getReferenceFileExtension(fileName);
+                    const isImage = isImageReference(fileUrl, item.fileType);
+                    const note = String(item.note || "").trim();
 
                     return (
                       <a
-                        key={item.path}
+                        key={fileUrl || item.label}
                         className="engaged-reference-item"
-                        href={item.path}
+                        href={fileUrl}
                         target="_blank"
                         rel="noreferrer"
                         download
@@ -1910,7 +1923,7 @@ const EngagedProjectActions = ({ user }) => {
                           }`}
                         >
                           {isImage ? (
-                            <img src={item.path} alt={fileName} loading="lazy" />
+                            <img src={fileUrl} alt={fileName} loading="lazy" />
                           ) : (
                             <span>{fileExtension}</span>
                           )}
@@ -1920,6 +1933,9 @@ const EngagedProjectActions = ({ user }) => {
                             {item.label}
                           </span>
                           <span className="engaged-reference-name">{fileName}</span>
+                          {note && (
+                            <span className="engaged-reference-note">{note}</span>
+                          )}
                         </div>
                       </a>
                     );

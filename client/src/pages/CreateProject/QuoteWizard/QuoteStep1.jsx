@@ -7,6 +7,10 @@ import CalendarIcon from "../../../components/icons/CalendarIcon";
 import FolderIcon from "../../../components/icons/FolderIcon";
 import PersonIcon from "../../../components/icons/PersonIcon";
 import UserAvatar from "../../../components/ui/UserAvatar";
+import {
+  normalizeReferenceAttachments,
+  getReferenceFileName,
+} from "../../../utils/referenceAttachments";
 
 const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const [leads, setLeads] = React.useState([]);
@@ -58,6 +62,14 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const assistantLeadDisplayName =
     leads.find((l) => l.value === assistantLeadValue)?.label ||
     "Not assigned";
+  const attachmentItems = normalizeReferenceAttachments(formData.attachments || []);
+  const sampleImage =
+    formData.sampleImage || (formData.details && formData.details.sampleImage) || "";
+  const sampleImageNote = String(
+    formData.sampleImageNote ||
+      (formData.details && formData.details.sampleImageNote) ||
+      "",
+  ).trim();
 
   const handleNextStep = () => {
     if (!formData.projectName || !formData.deliveryDate || !formData.lead) {
@@ -208,7 +220,7 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             />
           </div>
 
-          {formData.attachments?.length > 0 && (
+          {(sampleImage || attachmentItems.length > 0) && (
             <div style={{ marginBottom: "1.5rem" }}>
               <label
                 className="input-label"
@@ -223,9 +235,8 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                 Reference Materials
               </label>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                {formData.attachments.map((file, idx) => (
+                {sampleImage && (
                   <div
-                    key={idx}
                     style={{
                       padding: "8px 12px",
                       background: "rgba(59, 130, 246, 0.1)",
@@ -234,17 +245,77 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                       fontSize: "0.85rem",
                     }}
                   >
+                    <div
+                      style={{
+                        fontSize: "0.7rem",
+                        fontWeight: 600,
+                        color: "#64748b",
+                        textTransform: "uppercase",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      Sample Image
+                    </div>
                     <Link
-                      to={file}
+                      to={sampleImage}
                       target="_blank"
                       rel="noopener noreferrer"
                       reloadDocument
                       style={{ color: "#3b82f6", textDecoration: "none" }}
                     >
-                      {file.split("/").pop()}
+                      {getReferenceFileName(sampleImage)}
                     </Link>
+                    {sampleImageNote && (
+                      <div
+                        style={{
+                          marginTop: "0.35rem",
+                          fontSize: "0.75rem",
+                          color: "#64748b",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {sampleImageNote}
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
+                {attachmentItems.map((file) => {
+                  const note = String(file.note || "").trim();
+                  return (
+                    <div
+                      key={file.fileUrl}
+                      style={{
+                        padding: "8px 12px",
+                        background: "rgba(59, 130, 246, 0.1)",
+                        border: "1px solid rgba(59, 130, 246, 0.2)",
+                        borderRadius: "6px",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <Link
+                        to={file.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        reloadDocument
+                        style={{ color: "#3b82f6", textDecoration: "none" }}
+                      >
+                        {getReferenceFileName(file)}
+                      </Link>
+                      {note && (
+                        <div
+                          style={{
+                            marginTop: "0.35rem",
+                            fontSize: "0.75rem",
+                            color: "#64748b",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {note}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

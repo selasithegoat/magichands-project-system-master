@@ -8,6 +8,7 @@ import {
   Font,
   Image, // [NEW]
 } from "@react-pdf/renderer";
+import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
 
 // Register fonts if needed (optional, using standard fonts for now)
 // Font.register({
@@ -154,6 +155,12 @@ const styles = StyleSheet.create({
     color: "rgba(127,29,29,0.12)",
     textAlign: "center",
   },
+  referenceCaption: {
+    fontSize: 9,
+    color: "#64748B",
+    marginTop: 4,
+    lineHeight: 1.4,
+  },
 });
 
 const SUPPLY_SOURCE_LABELS = {
@@ -193,6 +200,18 @@ const ProjectSummaryPDF = ({
   imageUrls = {},
   pdfType = "STANDARD",
 }) => {
+  const sampleImage =
+    formData.sampleImage || (formData.details && formData.details.sampleImage);
+  const sampleImageNote = String(
+    formData.sampleImageNote ||
+      (formData.details && formData.details.sampleImageNote) ||
+      "",
+  ).trim();
+  const attachmentItems = normalizeReferenceAttachments(
+    formData.attachments ||
+      (formData.details && formData.details.attachments) ||
+      [],
+  );
   const acknowledgedDepartments = new Set(
     (formData.acknowledgements || []).map((ack) => ack.department),
   );
@@ -299,27 +318,26 @@ const ProjectSummaryPDF = ({
             </View>
           )}
           {/* Sample Image */}
-          {(formData.sampleImage ||
-            (formData.details && formData.details.sampleImage)) &&
-            imageUrls[formData.sampleImage || formData.details.sampleImage] && (
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.label}>Reference Image:</Text>
-                <Image
-                  style={{
-                    width: 100,
-                    height: 100,
-                    objectFit: "contain",
-                    marginTop: 5,
-                  }}
-                  format="png"
-                  src={
-                    imageUrls[
-                      formData.sampleImage || formData.details.sampleImage
-                    ]
-                  }
-                />
-              </View>
-            )}
+          {sampleImage && imageUrls[sampleImage] && (
+            <View style={{ marginTop: 10 }}>
+              <Text style={styles.label}>Reference Image:</Text>
+              <Image
+                style={{
+                  width: 100,
+                  height: 100,
+                  objectFit: "contain",
+                  marginTop: 5,
+                }}
+                format="png"
+                src={imageUrls[sampleImage]}
+              />
+              {sampleImageNote && (
+                <Text style={styles.referenceCaption}>
+                  Note: {sampleImageNote}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Delivery */}
@@ -489,52 +507,52 @@ const ProjectSummaryPDF = ({
       </Page>
 
       {/* [NEW] Image Page */}
-      {(formData.sampleImage ||
-        (formData.details && formData.details.sampleImage)) &&
-        imageUrls[formData.sampleImage || formData.details.sampleImage] && (
-          <Page size="A4" style={styles.page}>
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>Reference Material</Text>
-                <Text style={styles.subtitle}>
-                  {formData.projectName} - Sample Image
-                </Text>
-              </View>
-            </View>
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              {/* Note: React-PDF Image requires valid source. 
-                 Since this is client-side generation, relative URLs match browser access through the Vite proxy.
-             */}
-              <Image
-                src={
-                  imageUrls[
-                    formData.sampleImage || formData.details.sampleImage
-                  ]
-                }
-                format="png"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
-            </View>
-            <View style={styles.footer}>
-              <Text>
-                MagicHands Project Management System • Confidential Document
+      {sampleImage && imageUrls[sampleImage] && (
+        <Page size="A4" style={styles.page}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Reference Material</Text>
+              <Text style={styles.subtitle}>
+                {formData.projectName} - Sample Image
               </Text>
             </View>
-          </Page>
-        )}
+          </View>
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            {/* Note: React-PDF Image requires valid source. 
+               Since this is client-side generation, relative URLs match browser access through the Vite proxy.
+           */}
+            <Image
+              src={imageUrls[sampleImage]}
+              format="png"
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+            {sampleImageNote && (
+              <Text style={styles.referenceCaption}>
+                Note: {sampleImageNote}
+              </Text>
+            )}
+          </View>
+          <View style={styles.footer}>
+            <Text>
+              MagicHands Project Management System • Confidential Document
+            </Text>
+          </View>
+        </Page>
+      )}
 
       {/* [NEW] Attachments Pages - FORCE RENDER */}
-      {formData.attachments &&
-        formData.attachments.length > 0 &&
-        formData.attachments.map((path, index) => {
+      {attachmentItems.length > 0 &&
+        attachmentItems.map((attachment, index) => {
+          const fileUrl = attachment.fileUrl;
+          const note = String(attachment.note || "").trim();
           // Render only if we have a resolved blob URL
-          if (!imageUrls[path]) return null;
+          if (!imageUrls[fileUrl]) return null;
 
           return (
             <Page key={index} size="A4" style={styles.page}>
@@ -554,7 +572,7 @@ const ProjectSummaryPDF = ({
                 }}
               >
                 <Image
-                  src={imageUrls[path]}
+                  src={imageUrls[fileUrl]}
                   format="png"
                   style={{
                     width: "100%",
@@ -562,6 +580,9 @@ const ProjectSummaryPDF = ({
                     objectFit: "contain",
                   }}
                 />
+                {note && (
+                  <Text style={styles.referenceCaption}>Note: {note}</Text>
+                )}
               </View>
               <View style={styles.footer}>
                 <Text>
@@ -571,7 +592,8 @@ const ProjectSummaryPDF = ({
             </Page>
           );
         })}
-    </Document>
+
+      </Document>
   );
 };
 
