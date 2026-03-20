@@ -131,6 +131,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .stock-record-header {
@@ -138,11 +140,18 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.stock-record-header > div {
+  min-width: 0;
 }
 
 .stock-record-header h3 {
   margin: 0;
   font-size: 18px;
+  overflow-wrap: anywhere;
 }
 
 .record-qty {
@@ -164,6 +173,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 
 .stock-entry-meta {
@@ -183,7 +193,7 @@
 }
 
 .stock-entry-form.stock-out {
-  grid-template-columns: 110px 160px 160px 160px auto;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .entry-field {
@@ -252,7 +262,7 @@
 }
 
 .stock-transaction-row.stock-out {
-  grid-template-columns: 80px 1.4fr 1.1fr 1fr 1.6fr;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .stock-transaction-meta {
@@ -454,19 +464,19 @@
   }
 
   .stock-entry-form {
-    grid-template-columns: 90px 140px 140px 1fr auto;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .stock-entry-form.stock-out {
-    grid-template-columns: 90px 140px 140px 140px auto;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .stock-transaction-row {
-    grid-template-columns: 70px 1.4fr 1fr 80px 1.4fr;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .stock-transaction-row.stock-out {
-    grid-template-columns: 70px 1.2fr 1fr 0.9fr 1.4fr;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .table-header,

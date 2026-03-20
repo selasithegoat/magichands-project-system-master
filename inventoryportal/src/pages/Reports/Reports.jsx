@@ -619,6 +619,7 @@ const Reports = () => {
             Type: tx.type || "",
             Qty: tx.qty || "",
             Source: tx.source || "",
+            Supplier: tx.supplierName || tx.supplier || "",
             Destination: tx.destination || "",
             Date: formatShortDateTime(tx.date || tx.createdAt),
             Staff: tx.staff || "",

@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const ClientInventoryItem = require("../models/ClientInventoryItem");
 const PurchasingOrder = require("../models/PurchasingOrder");
 const Supplier = require("../models/Supplier");
@@ -2735,6 +2736,7 @@ const getStockTransactions = async (req, res) => {
         { variantName: search },
         { variantSku: search },
         { staff: search },
+        { supplierName: search },
         { source: search },
         { destination: search },
       ];
@@ -2871,6 +2873,132 @@ const getStockTransactionsDailyReport = async (req, res) => {
   }
 };
 
+const resolveSupplierForStockIn = async ({
+  supplierId,
+  supplierName,
+  actorId,
+}) => {
+  const normalizedId = parseStringValue(supplierId);
+  const normalizedName = parseStringValue(supplierName);
+
+  if (!normalizedId && !normalizedName) {
+    return { error: "Supplier is required for Stock In." };
+  }
+
+  let supplier = null;
+  if (normalizedId) {
+    if (!mongoose.Types.ObjectId.isValid(normalizedId)) {
+      return { error: "Supplier not found." };
+    }
+    supplier = await Supplier.findById(normalizedId);
+    if (!supplier) {
+      return { error: "Supplier not found." };
+    }
+  } else {
+    const nameRegex = buildExactMatchRegex(normalizedName);
+    supplier = nameRegex
+      ? await Supplier.findOne({ name: nameRegex })
+      : null;
+    if (!supplier) {
+      supplier = await Supplier.create({
+        name: normalizedName,
+        createdBy: actorId,
+        updatedBy: actorId,
+      });
+    }
+  }
+
+  return {
+    supplierId: supplier._id,
+    supplierName: supplier.name || normalizedName,
+  };
+};
+
+const createInventoryRecordForStockIn = async ({
+  item,
+  sku,
+  brandGroup,
+  variantName,
+  variantSku,
+  status,
+  warehouse,
+  category,
+  maxQty,
+  actorId,
+}) => {
+  const recordStatus = parseStringValue(status) || "In Stock";
+  const normalizedWarehouse = parseStringValue(warehouse);
+  const normalizedCategory = parseStringValue(category);
+  const normalizedBrandGroup = parseStringValue(brandGroup);
+  const normalizedVariantName = parseStringValue(variantName);
+  const normalizedVariantSku = parseStringValue(variantSku);
+
+  if (normalizedCategory) {
+    await ensureInventoryCategory(normalizedCategory, actorId);
+  }
+
+  let brandGroups = [];
+  let variants = [];
+  if (normalizedVariantName || normalizedVariantSku) {
+    const variant = {
+      name: normalizedVariantName,
+      color: "",
+      colors: [],
+      sku: normalizedVariantSku,
+      price: "",
+      priceValue: null,
+      status: recordStatus,
+      qtyValue: 0,
+      qtyLabel: formatVariantQtyLabel(0),
+    };
+    if (normalizedBrandGroup) {
+      brandGroups = [
+        {
+          name: normalizedBrandGroup,
+          price: "",
+          priceValue: null,
+          variants: [variant],
+        },
+      ];
+      variants = flattenBrandGroups(brandGroups);
+    } else {
+      variants = [variant];
+    }
+  }
+
+  const derivedQtyValue =
+    variants.length > 0 ? sumVariantQty(variants) ?? 0 : 0;
+  const qtyMeta = computeQtyMetaFromCapacity(derivedQtyValue, maxQty);
+
+  const record = await InventoryRecord.create({
+    item,
+    subtext: normalizedWarehouse,
+    warehouse: normalizedWarehouse,
+    sku,
+    brand: normalizedBrandGroup,
+    brandGroups,
+    category: normalizedCategory,
+    categoryTone: normalizedCategory ? pickRandomTone(CATEGORY_TONES) : "",
+    qtyLabel: formatVariantQtyLabel(derivedQtyValue),
+    qtyValue: derivedQtyValue,
+    maxQty,
+    qtyMeta,
+    variants,
+    price: "",
+    priceValue: null,
+    value: "",
+    valueValue: null,
+    status: recordStatus,
+    statusTone: pickRandomTone(STATUS_TONES),
+    reorder: false,
+    image: "",
+    createdBy: actorId,
+    updatedBy: actorId,
+  });
+
+  return record;
+};
+
 const createStockTransaction = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
@@ -2895,6 +3023,12 @@ const createStockTransaction = async (req, res) => {
     if (qtyResult.error) {
       return res.status(400).json({ message: qtyResult.error });
     }
+
+    const isStockIn = normalizeKey(type) === "stock in";
+    const supplierId = parseStringValue(req.body.supplierId);
+    const supplierName = parseStringValue(
+      req.body.supplierName || req.body.supplier || req.body.source,
+    );
 
     const mappingConflict = await findItemIdConflict({
       itemName: item,
@@ -2947,12 +3081,45 @@ const createStockTransaction = async (req, res) => {
     const brandGroup = parseStringValue(req.body.brandGroup);
     const variantName = parseStringValue(req.body.variantName);
     const variantSku = parseStringValue(req.body.variantSku);
+    const createIfMissing = parseBooleanValue(req.body.createIfMissing, false);
 
     const normalizedQty = normalizeStockTransactionQty(type, qtyResult.value);
-    const inventoryRecord = await InventoryRecord.findOne({ sku });
+    let inventoryRecord = await InventoryRecord.findOne({ sku });
     if (!inventoryRecord) {
-      return res.status(404).json({
-        message: `Inventory record not found for Item ID "${sku}". Create the inventory record first.`,
+      if (!isStockIn || !createIfMissing) {
+        return res.status(404).json({
+          message: `Inventory record not found for Item ID "${sku}". Create the inventory record first.`,
+        });
+      }
+    }
+    let resolvedSupplier = null;
+    if (isStockIn) {
+      resolvedSupplier = await resolveSupplierForStockIn({
+        supplierId,
+        supplierName,
+        actorId: req.user?._id,
+      });
+      if (resolvedSupplier?.error) {
+        return res.status(400).json({ message: resolvedSupplier.error });
+      }
+    }
+    if (!inventoryRecord) {
+      const warehouse = parseStringValue(
+        req.body.warehouse || req.body.subtext || req.body.destination,
+      );
+      const category = parseStringValue(req.body.category);
+      const maxQty = parseMaxQty(req.body.maxQty);
+      inventoryRecord = await createInventoryRecordForStockIn({
+        item,
+        sku,
+        brandGroup,
+        variantName,
+        variantSku,
+        status: req.body.status,
+        warehouse,
+        category,
+        maxQty,
+        actorId: req.user?._id,
       });
     }
     const qtyResultWithTarget = await applyInventoryQtyDelta(
@@ -2974,6 +3141,11 @@ const createStockTransaction = async (req, res) => {
       variantName,
       variantSku,
     };
+    const incomingSource = parseStringValue(req.body.source);
+    const resolvedSource =
+      isStockIn && !incomingSource
+        ? resolvedSupplier?.supplierName || ""
+        : incomingSource;
 
     const record = await StockTransaction.create({
       txid,
@@ -2986,11 +3158,13 @@ const createStockTransaction = async (req, res) => {
       qty: normalizedQty,
       beforeQty,
       afterQty,
-      source: parseStringValue(req.body.source),
+      source: resolvedSource,
       destination: parseStringValue(req.body.destination),
       date,
       staff: parseStringValue(req.body.staff),
       notes: parseStringValue(req.body.notes),
+      supplierId: resolvedSupplier?.supplierId,
+      supplierName: resolvedSupplier?.supplierName || "",
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
@@ -3043,6 +3217,14 @@ const updateStockTransaction = async (req, res) => {
       req.body,
       "variantSku",
     );
+    const hasSupplierIdPayload = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "supplierId",
+    );
+    const hasSupplierNamePayload =
+      Object.prototype.hasOwnProperty.call(req.body, "supplierName") ||
+      Object.prototype.hasOwnProperty.call(req.body, "supplier");
+    const hasSupplierPayload = hasSupplierIdPayload || hasSupplierNamePayload;
     const nextItem = hasItemPayload ? parseStringValue(req.body.item) : record.item;
     const nextSku = hasSkuPayload ? parseStringValue(req.body.sku) : record.sku;
     const nextBrandGroup = hasBrandGroupPayload
@@ -3122,6 +3304,50 @@ const updateStockTransaction = async (req, res) => {
     const nextType = hasTypePayload ? parseStringValue(req.body.type) : record.type;
     if (hasTypePayload && !nextType) {
       return res.status(400).json({ message: "type is required." });
+    }
+
+    const isNextStockIn = normalizeKey(nextType) === "stock in";
+    if (isNextStockIn) {
+      const requestedSupplierName = hasSupplierPayload
+        ? parseStringValue(
+            req.body.supplierName || req.body.supplier || req.body.source,
+          )
+        : record.supplierName;
+      const requestedSupplierId = hasSupplierPayload
+        ? parseStringValue(req.body.supplierId)
+        : record.supplierId;
+
+      if (!requestedSupplierName && !requestedSupplierId) {
+        return res.status(400).json({
+          message: "Supplier is required for Stock In.",
+        });
+      }
+
+      if (hasSupplierPayload) {
+        const resolvedSupplier = await resolveSupplierForStockIn({
+          supplierId: requestedSupplierId,
+          supplierName: requestedSupplierName,
+          actorId: req.user?._id,
+        });
+        if (resolvedSupplier?.error) {
+          return res
+            .status(400)
+            .json({ message: resolvedSupplier.error });
+        }
+        record.supplierId = resolvedSupplier.supplierId;
+        record.supplierName = resolvedSupplier.supplierName || "";
+        if (!Object.prototype.hasOwnProperty.call(req.body, "source")) {
+          record.source = resolvedSupplier.supplierName || "";
+        }
+      }
+    } else if (hasSupplierPayload) {
+      record.supplierName = parseStringValue(
+        req.body.supplierName || req.body.supplier,
+      );
+      const nextSupplierId = parseStringValue(req.body.supplierId);
+      record.supplierId = mongoose.Types.ObjectId.isValid(nextSupplierId)
+        ? nextSupplierId
+        : undefined;
     }
 
     let nextQtyRaw = record.qty;

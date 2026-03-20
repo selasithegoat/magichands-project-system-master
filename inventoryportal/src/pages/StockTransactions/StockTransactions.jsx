@@ -47,6 +47,7 @@ const DEFAULT_FORM = {
   qty: "",
   source: "",
   destination: "",
+  supplierName: "",
   date: "",
   staff: "",
   notes: "",
@@ -73,16 +74,6 @@ const formatQtyLabel = (value) => {
     ? value
     : Number(value.toFixed(2));
   return `${normalized.toLocaleString("en-US")} Units`;
-};
-
-const formatShortTime = (value) => {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 };
 
 const buildVariantLabel = ({ brandGroup, variantName, variantSku }) => {
@@ -216,6 +207,7 @@ const StockTransactions = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDailyExporting, setIsDailyExporting] = useState(false);
   const [warehouseOptions, setWarehouseOptions] = useState([]);
+  const [supplierOptions, setSupplierOptions] = useState([]);
   const [entryState, setEntryState] = useState({});
   const [stockRefreshKey, setStockRefreshKey] = useState(0);
 
@@ -300,6 +292,7 @@ const StockTransactions = () => {
             qty: Number.isFinite(qtyValue) ? qtyValue : 0,
             source: row.source || "",
             destination: row.destination || "",
+            supplierName: row.supplierName || row.supplier || "",
             date: formatShortDateTime(dateValue),
             dateRaw: dateValue,
             staff: row.staff || "",
@@ -363,6 +356,30 @@ const StockTransactions = () => {
     };
 
     loadWarehouses();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSuppliers = async () => {
+      try {
+        const payload = await fetchAllPages("/api/inventory/suppliers");
+        const names = payload
+          .map((supplier) => String(supplier?.name || "").trim())
+          .filter(Boolean);
+        const sorted = Array.from(new Set(names)).sort((a, b) =>
+          a.localeCompare(b),
+        );
+        if (isMounted) setSupplierOptions(sorted);
+      } catch (err) {
+        if (isMounted) setSupplierOptions([]);
+      }
+    };
+
+    loadSuppliers();
     return () => {
       isMounted = false;
     };
@@ -460,6 +477,7 @@ const StockTransactions = () => {
             qty: Number.isFinite(qtyValue) ? qtyValue : 0,
             source: row.source || "",
             destination: row.destination || "",
+            supplierName: row.supplierName || row.supplier || "",
             date: formatShortDateTime(dateValue),
             dateRaw: dateValue,
             staff: row.staff || "",
@@ -499,6 +517,8 @@ const StockTransactions = () => {
   const stockTransactionType = isStockOutFlow ? "Stock Out" : "Stock In";
   const isStockOutFilter =
     activeView === "Transactions" && typeFilter === "Stock Out";
+  const isStockInFilter =
+    activeView === "Transactions" && typeFilter === "Stock In";
   const transactionsBySku = dailyTransactions.reduce((acc, tx) => {
     const key = String(tx.sku || "").trim();
     if (!key) return acc;
@@ -566,6 +586,21 @@ const StockTransactions = () => {
     }
     if (current.isSaving) return;
 
+    const isStockOutEntry = stockTransactionType === "Stock Out";
+    const supplierName = !isStockOutEntry
+      ? String(current.supplierName || "").trim()
+      : "";
+    if (!isStockOutEntry && !supplierName) {
+      setEntryState((prev) => ({
+        ...prev,
+        [entryKey]: {
+          ...(prev[entryKey] || {}),
+          error: "Supplier is required for Stock In.",
+        },
+      }));
+      return;
+    }
+
     const isRecordEntry = entry.key === "record";
 
     setEntryState((prev) => ({
@@ -586,13 +621,14 @@ const StockTransactions = () => {
         date: buildStockDateTime(dailyFilterDate),
         staff: current.staff || "",
         notes:
-          stockTransactionType === "Stock Out"
+          isStockOutEntry
             ? current.recipient || ""
             : current.notes || "",
         source:
-          stockTransactionType === "Stock Out"
+          isStockOutEntry
             ? current.orderNumber || ""
-            : current.location || "",
+            : supplierName,
+        supplierName,
         brandGroup: isRecordEntry ? "" : entry.brandGroup || "",
         variantName: isRecordEntry ? "" : entry.variantName || "",
         variantSku: isRecordEntry ? "" : entry.variantSku || "",
@@ -603,6 +639,18 @@ const StockTransactions = () => {
         body: JSON.stringify(payload),
       });
 
+      if (!isStockOutEntry && supplierName) {
+        setSupplierOptions((prev) => {
+          const normalized = supplierName.toLowerCase();
+          if (prev.some((option) => option.toLowerCase() === normalized)) {
+            return prev;
+          }
+          const next = [...prev, supplierName];
+          next.sort((a, b) => a.localeCompare(b));
+          return next;
+        });
+      }
+
       setEntryState((prev) => ({
         ...prev,
         [entryKey]: {
@@ -611,6 +659,7 @@ const StockTransactions = () => {
           notes: "",
           orderNumber: "",
           recipient: "",
+          supplierName: "",
           error: "",
           isSaving: false,
         },
@@ -669,6 +718,7 @@ const StockTransactions = () => {
       Type: row.type,
       Qty: row.qty,
       Source: row.source,
+      Supplier: row.supplierName || "",
       Destination: row.destination,
       Date: row.date,
       "Handled By": row.staff,
@@ -759,6 +809,7 @@ const StockTransactions = () => {
       qty: Number.isFinite(row.qty) ? String(row.qty) : "",
       source: row.source || "",
       destination: row.destination || "",
+      supplierName: row.supplierName || row.source || "",
       date: toInputDateTime(row.dateRaw),
       staff: row.staff || "",
       notes: row.notes || "",
@@ -791,6 +842,10 @@ const StockTransactions = () => {
       setActionError("Transaction type is required.");
       return;
     }
+    if (formData.type === "Stock In" && !formData.supplierName.trim()) {
+      setActionError("Supplier is required for Stock In.");
+      return;
+    }
     const qtyValue = Number(formData.qty);
     if (!Number.isFinite(qtyValue)) {
       setActionError("Quantity must be a number.");
@@ -803,6 +858,7 @@ const StockTransactions = () => {
 
     setIsSaving(true);
     try {
+      const isStockIn = formData.type === "Stock In";
       const payload = {
         txid: formData.txid,
         item: formData.item,
@@ -812,8 +868,10 @@ const StockTransactions = () => {
         variantSku: formData.variantSku,
         type: formData.type,
         qty: qtyValue,
-        source: formData.source,
+        source: isStockIn ? formData.supplierName : formData.source,
         destination: formData.destination,
+        supplierName: formData.supplierName,
+        createIfMissing: !editingTransaction && isStockIn,
         date: formData.date,
         staff: formData.staff,
         notes: formData.notes,
@@ -827,6 +885,18 @@ const StockTransactions = () => {
         method: editingTransaction ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
+      if (isStockIn && formData.supplierName.trim()) {
+        const nextSupplier = formData.supplierName.trim();
+        setSupplierOptions((prev) => {
+          const normalized = nextSupplier.toLowerCase();
+          if (prev.some((option) => option.toLowerCase() === normalized)) {
+            return prev;
+          }
+          const next = [...prev, nextSupplier];
+          next.sort((a, b) => a.localeCompare(b));
+          return next;
+        });
+      }
       closeModal();
       if (!editingTransaction) {
         setPage(1);
@@ -902,7 +972,7 @@ const StockTransactions = () => {
                 <SearchIcon className="search-icon" />
                 <input
                   type="text"
-                  placeholder="Search transactions, items, or staff"
+                  placeholder="Search transactions, items, suppliers, or staff"
                   value={searchTerm}
                   onChange={handleSearchChange}
                 />
@@ -988,7 +1058,7 @@ const StockTransactions = () => {
                   <span>Item</span>
                   <span>Type</span>
                   <span>Qty</span>
-                  <span>Source</span>
+                  <span>{isStockInFilter ? "Supplier" : "Source"}</span>
                   <span>Destination</span>
                   <span>Date</span>
                   <span>Handled By</span>
@@ -1045,8 +1115,13 @@ const StockTransactions = () => {
                     </>
                   ) : (
                     <>
-                      <div className="cell muted" data-label="Source">
-                        {row.source || "-"}
+                      <div
+                        className="cell muted"
+                        data-label={isStockInFilter ? "Supplier" : "Source"}
+                      >
+                        {isStockInFilter
+                          ? row.supplierName || row.source || "-"
+                          : row.source || row.supplierName || "-"}
                       </div>
                       <div className="cell muted" data-label="Destination">
                         {row.destination || "-"}
@@ -1183,7 +1258,7 @@ const StockTransactions = () => {
                     ? formatQtyLabel(record.qtyValue)
                     : "");
                 const isStockOutEntry = stockTransactionType === "Stock Out";
-                const locationLabel = isStockOutEntry ? "Order Number" : "Source";
+                const locationLabel = isStockOutEntry ? "Order Number" : "Supplier";
 
                 return (
                   <div className="stock-record-card" key={record.id}>
@@ -1244,14 +1319,19 @@ const StockTransactions = () => {
                                 <span>{locationLabel}</span>
                                 <input
                                   type="text"
+                                  list={
+                                    isStockOutEntry
+                                      ? undefined
+                                      : "stock-transaction-supplier-options"
+                                  }
                                   value={
                                     isStockOutEntry
                                       ? entryData.orderNumber || ""
-                                      : entryData.location || ""
+                                      : entryData.supplierName || ""
                                   }
                                   onChange={updateEntryField(
                                     entryKey,
-                                    isStockOutEntry ? "orderNumber" : "location",
+                                    isStockOutEntry ? "orderNumber" : "supplierName",
                                   )}
                                   placeholder={locationLabel}
                                 />
@@ -1360,10 +1440,10 @@ const StockTransactions = () => {
                               ) : (
                                 <>
                                   <span className="stock-transaction-meta">
-                                    {tx.staff || "Unassigned"}
+                                    {tx.supplierName || tx.source || "-"}
                                   </span>
                                   <span className="stock-transaction-meta">
-                                    {formatShortTime(tx.dateRaw)}
+                                    {tx.staff || "Unassigned"}
                                   </span>
                                   <span className="stock-transaction-notes">
                                     {tx.notes || "-"}
@@ -1399,6 +1479,24 @@ const StockTransactions = () => {
       >
         {(() => {
           const isModalStockOut = formData.type === "Stock Out";
+          const isModalStockIn = formData.type === "Stock In";
+          const sourceLabel = isModalStockOut
+            ? "Order Number"
+            : isModalStockIn
+              ? "Supplier"
+              : "Source";
+          const sourcePlaceholder = isModalStockOut
+            ? "Order number"
+            : isModalStockIn
+              ? "Select or type supplier"
+              : "Select or type warehouse";
+          const sourceValue = isModalStockIn
+            ? formData.supplierName
+            : formData.source;
+          const sourceField = isModalStockIn ? "supplierName" : "source";
+          const sourceList = isModalStockIn
+            ? "stock-transaction-supplier-options"
+            : "stock-transactions-warehouse-options";
           return (
         <form className="modal-form">
           <div className="modal-grid">
@@ -1479,15 +1577,13 @@ const StockTransactions = () => {
               />
             </label>
             <label className="modal-field">
-              <span>{isModalStockOut ? "Order Number" : "Source"}</span>
+              <span>{sourceLabel}</span>
               <input
                 type="text"
-                list="stock-transactions-warehouse-options"
-                value={formData.source}
-                onChange={updateField("source")}
-                placeholder={
-                  isModalStockOut ? "Order number" : "Select or type warehouse"
-                }
+                list={sourceList}
+                value={sourceValue}
+                onChange={updateField(sourceField)}
+                placeholder={sourcePlaceholder}
               />
             </label>
             {!isModalStockOut ? (
@@ -1543,6 +1639,12 @@ const StockTransactions = () => {
           );
         })()}
       </Modal>
+
+      <datalist id="stock-transaction-supplier-options">
+        {supplierOptions.map((supplier) => (
+          <option key={supplier} value={supplier} />
+        ))}
+      </datalist>
 
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}

@@ -33,6 +33,15 @@ const StockTransactionSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    supplierId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Supplier",
+    },
+    supplierName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     type: {
       type: String,
       required: true,
