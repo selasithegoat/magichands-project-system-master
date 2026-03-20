@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PerformanceAnalytics.css";
 
+const HIDDEN_STAGE_KEYS = new Set(["proofReading", "qualityControl", "photography"]);
+
 const formatDateInput = (date) => date.toISOString().slice(0, 10);
 
 const formatDuration = (hours) => {
@@ -349,6 +351,10 @@ const PerformanceAnalytics = () => {
     const otherStages = stageStats.filter((stage) => !stage.isProcess);
     return processStage ? [processStage, ...otherStages] : stageStats;
   }, [stageStats]);
+  const visibleStages = useMemo(
+    () => orderedStages.filter((stage) => !HIDDEN_STAGE_KEYS.has(stage.key)),
+    [orderedStages],
+  );
   const endToEndStage = useMemo(
     () =>
       stageStats.find((stage) => stage.isProcess) ||
@@ -591,7 +597,7 @@ const PerformanceAnalytics = () => {
             />
           </div>
           <div className="stat-grid">
-            {orderedStages.map((stage) => (
+            {visibleStages.map((stage) => (
               <div
                 key={stage.key}
                 className={`stat-card${stage.isProcess ? " stat-card--process" : ""}`}
