@@ -72,6 +72,93 @@ const mapQuoteStatusForStorage = (status) => {
   return QUOTE_STATUS_DECISION_STORAGE_MAP[normalized] || normalized;
 };
 
+const STANDARD_STATUS_FLOW = [
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Proof Reading",
+  "Proof Reading Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+];
+
+const QUOTE_STATUS_FLOW = [
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
+  "Pending Quote Request",
+  "Quote Request Completed",
+  "Pending Send Response",
+  "Response Sent",
+  "Pending Decision",
+  "Decision Completed",
+  "Completed",
+  "Finished",
+];
+
+const getStatusFlow = (isQuoteProject) =>
+  isQuoteProject ? QUOTE_STATUS_FLOW : STANDARD_STATUS_FLOW;
+
+const buildStatusConfirmPhrase = (status, projectId) => {
+  const normalizedStatus = String(status || "").trim();
+  const normalizedProjectId = String(projectId || "").trim();
+  const projectLabel = normalizedProjectId
+    ? `Project ${normalizedProjectId}`
+    : "this project";
+
+  if (!normalizedStatus) return "";
+
+  return `I agree to change the status of ${projectLabel} to ${normalizedStatus}`;
+};
+
+const getStatusMovementNote = (
+  currentStatus,
+  targetStatus,
+  isQuoteProject,
+) => {
+  if (!currentStatus || !targetStatus) return "";
+
+  const flow = getStatusFlow(isQuoteProject);
+  const currentIndex = flow.indexOf(currentStatus);
+  const targetIndex = flow.indexOf(targetStatus);
+
+  if (currentIndex === -1 || targetIndex === -1) {
+    return "Note: This status change does not map to the standard workflow.";
+  }
+
+  if (targetIndex < currentIndex) {
+    const diff = currentIndex - targetIndex;
+    return `Warning: This moves the project backward by ${diff} stage${
+      diff === 1 ? "" : "s"
+    }.`;
+  }
+
+  if (targetIndex > currentIndex + 1) {
+    const skipped = targetIndex - currentIndex - 1;
+    return `Warning: This skips ${skipped} stage${skipped === 1 ? "" : "s"} in the workflow.`;
+  }
+
+  return "";
+};
+
 const BILLING_REQUIREMENT_LABELS = {
   invoice: "Invoice confirmation",
   payment_verification_any: "Payment method verification",
@@ -503,6 +590,13 @@ const ProjectDetails = ({ user }) => {
     useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteDecisionNoteDraft, setQuoteDecisionNoteDraft] = useState("");
+  const [statusConfirmModal, setStatusConfirmModal] = useState({
+    open: false,
+    targetStatus: "",
+    phrase: "",
+  });
+  const [statusConfirmInput, setStatusConfirmInput] = useState("");
+  const [statusConfirmSubmitting, setStatusConfirmSubmitting] = useState(false);
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -728,12 +822,50 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
+  const openStatusConfirmModal = (nextStatus) => {
+    if (!project) return;
+    const projectId = project?.orderId || project?._id || id;
+    const phrase = buildStatusConfirmPhrase(nextStatus, projectId);
+    setStatusConfirmModal({
+      open: true,
+      targetStatus: nextStatus,
+      phrase,
+    });
+    setStatusConfirmInput("");
+  };
+
+  const closeStatusConfirmModal = ({ force = false } = {}) => {
+    if (statusConfirmSubmitting && !force) return;
+    setStatusConfirmModal({
+      open: false,
+      targetStatus: "",
+      phrase: "",
+    });
+    setStatusConfirmInput("");
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusConfirmModal.open || !statusConfirmModal.targetStatus) return;
+    if (statusConfirmInput.trim() !== statusConfirmModal.phrase) return;
+
+    setStatusConfirmSubmitting(true);
+    await submitStatusChange(statusConfirmModal.targetStatus);
+    setStatusConfirmSubmitting(false);
+    closeStatusConfirmModal({ force: true });
+  };
+
   // Status handling
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = (newStatus) => {
     if (!project) return;
     if (!ensureProjectIsEditable()) return;
 
-    await submitStatusChange(newStatus);
+    const currentDisplayStatus = mapQuoteStatusForDisplay(
+      project.status,
+      project.projectType === "Quote",
+    );
+    if (String(newStatus) === String(currentDisplayStatus)) return;
+
+    openStatusConfirmModal(newStatus);
   };
 
   const handleBillingGuardOverride = async () => {
@@ -1916,6 +2048,17 @@ const ProjectDetails = ({ user }) => {
   };
   const paymentTypes = (project.paymentVerifications || []).map((entry) => entry.type);
   const isQuoteProject = project.projectType === "Quote";
+  const currentDisplayStatus = mapQuoteStatusForDisplay(
+    project.status,
+    isQuoteProject,
+  );
+  const statusMovementNote = statusConfirmModal.open
+    ? getStatusMovementNote(
+        currentDisplayStatus,
+        statusConfirmModal.targetStatus,
+        isQuoteProject,
+      )
+    : "";
   const quoteRequirementItems = isQuoteProject
     ? getQuoteRequirementItems(project)
     : [];
@@ -4009,6 +4152,73 @@ const ProjectDetails = ({ user }) => {
               disabled={smsSubmitting}
             >
               {smsSubmitting ? "Saving..." : "Save & Send"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={statusConfirmModal.open}
+        onClose={() => closeStatusConfirmModal()}
+        title="Confirm Status Change"
+        maxWidth="560px"
+      >
+        <div className="status-confirm-modal">
+          <p className="status-confirm-text">
+            You are about to change the project status. Type the phrase below to
+            confirm.
+          </p>
+          <div className="status-confirm-summary">
+            <div className="status-confirm-summary-row">
+              <span className="status-confirm-summary-label">Current</span>
+              <span className="status-confirm-summary-value">
+                {currentDisplayStatus || "N/A"}
+              </span>
+            </div>
+            <div className="status-confirm-summary-row">
+              <span className="status-confirm-summary-label">New</span>
+              <span className="status-confirm-summary-value">
+                {statusConfirmModal.targetStatus || "N/A"}
+              </span>
+            </div>
+          </div>
+          {statusMovementNote ? (
+            <p className="status-confirm-note">{statusMovementNote}</p>
+          ) : null}
+          <div className="status-confirm-phrase">{statusConfirmModal.phrase}</div>
+          <div className="status-confirm-input-group">
+            <label className="status-confirm-label" htmlFor="status-confirm-input">
+              Confirmation
+            </label>
+            <input
+              id="status-confirm-input"
+              type="text"
+              className="edit-input status-confirm-input"
+              value={statusConfirmInput}
+              onChange={(e) => setStatusConfirmInput(e.target.value)}
+              placeholder="Type the confirmation phrase..."
+              disabled={statusConfirmSubmitting}
+            />
+          </div>
+          <div className="status-confirm-actions">
+            <button
+              type="button"
+              className="status-confirm-btn cancel"
+              onClick={() => closeStatusConfirmModal()}
+              disabled={statusConfirmSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="status-confirm-btn confirm"
+              onClick={handleConfirmStatusChange}
+              disabled={
+                statusConfirmSubmitting ||
+                statusConfirmInput.trim() !== statusConfirmModal.phrase
+              }
+            >
+              {statusConfirmSubmitting ? "Confirming..." : "Confirm Status"}
             </button>
           </div>
         </div>
