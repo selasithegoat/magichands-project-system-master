@@ -92,6 +92,48 @@ const isPendingDeliveryProject = (project) =>
   project?.status === "Pending Delivery/Pickup";
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
+const normalizeDepartmentList = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (!entry) return "";
+        if (typeof entry === "string") return entry.trim();
+        if (typeof entry === "object") {
+          const candidate =
+            entry.name || entry.label || entry.department || entry.title || entry.value;
+          return candidate ? String(candidate).trim() : "";
+        }
+        return String(entry).trim();
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value.trim() ? [value.trim()] : [];
+  }
+  if (value && typeof value === "object") {
+    const candidate =
+      value.name || value.label || value.department || value.title || value.value;
+    return candidate ? [String(candidate).trim()] : [];
+  }
+  return [];
+};
+const formatDepartmentLabel = (value) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/_/g, " ").replace(/\s*\/\s*/g, " / ");
+};
+const getProjectTypeLabel = (project) => {
+  if (isEmergencyProject(project)) return "Emergency";
+  if (isCorporateProject(project)) return "Corporate";
+  if (isQuoteProject(project)) return "Quote";
+  return project?.projectType || "Standard";
+};
+const getProjectTypeClass = (project) => {
+  if (isEmergencyProject(project)) return "emergency";
+  if (isCorporateProject(project)) return "corporate";
+  if (isQuoteProject(project)) return "quote";
+  return "standard";
+};
 
 // SVG Donut Chart Component
 const StatusDonut = ({ stats }) => {
@@ -507,6 +549,37 @@ const Dashboard = ({ user }) => {
     navigate(`/projects?${params.toString()}`);
   };
 
+  const todayProjects = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+
+    return projects
+      .filter((project) => {
+        const dateValue = project?.createdAt || project?.orderDate;
+        if (!dateValue) return false;
+        const createdAt = new Date(dateValue);
+        if (Number.isNaN(createdAt.getTime())) return false;
+        return createdAt >= start && createdAt <= end;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || b.orderDate) - new Date(a.createdAt || a.orderDate),
+      );
+  }, [projects]);
+
+  const todayLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+    [],
+  );
+
   if (isLoading) {
     return (
       <div
@@ -562,6 +635,108 @@ const Dashboard = ({ user }) => {
           </button>
         ))}
       </div>
+
+      {/* Projects Created Today */}
+      <section className="today-projects-card">
+        <div className="today-projects-header">
+          <div>
+            <div className="today-projects-eyebrow">Projects Created Today</div>
+            <h3 className="section-title">Today's New Projects</h3>
+            <p className="today-projects-subtitle">{todayLabel}</p>
+          </div>
+          <div className="today-projects-count">
+            <span className="today-count-number">{todayProjects.length}</span>
+            <span className="today-count-label">Created</span>
+          </div>
+        </div>
+
+        <div className="today-projects-list">
+          {todayProjects.length > 0 ? (
+            todayProjects.map((project) => {
+              const rawOrderId =
+                project.orderId ||
+                project.orderRef?.orderNumber ||
+                project?._id?.slice(-6)?.toUpperCase() ||
+                "";
+              const orderLabel = rawOrderId
+                ? rawOrderId.startsWith("#")
+                  ? rawOrderId
+                  : `#${rawOrderId}`
+                : "Order";
+              const projectName = project.details?.projectName || "Untitled Project";
+              const leadLabel = getLeadDisplay(project, "Unassigned");
+              const clientLabel =
+                project.details?.client ||
+                project.orderRef?.client ||
+                project.details?.clientName ||
+                "Unknown Client";
+              const createdTime = project?.createdAt
+                ? new Date(project.createdAt).toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
+                : "";
+              const departments = normalizeDepartmentList(project?.departments || []);
+              return (
+                <button
+                  key={project._id}
+                  type="button"
+                  className="today-project-row"
+                  onClick={() => navigate(`/projects/${project._id}`)}
+                >
+                  <div className="today-project-primary">
+                    <div className="today-project-order">{orderLabel}</div>
+                    <div className="today-project-name">{projectName}</div>
+                    <div className="today-project-meta">
+                      <span>{leadLabel}</span>
+                      <span>Client: {clientLabel}</span>
+                      {createdTime && <span>Created {createdTime}</span>}
+                    </div>
+                  </div>
+
+                  <div className="today-project-status">
+                    <span
+                      className={`status-pill ${getStatusPillClass(project.status)}`}
+                    >
+                      {project.status}
+                    </span>
+                    <span
+                      className={`today-type-pill ${getProjectTypeClass(project)}`}
+                    >
+                      {getProjectTypeLabel(project)}
+                    </span>
+                  </div>
+
+                  <div className="today-project-depts">
+                    {departments.length > 0 ? (
+                      departments.map((dept) => (
+                        <span
+                          key={`${project._id}-${dept}`}
+                          className="today-dept-chip"
+                        >
+                          {formatDepartmentLabel(dept)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="today-project-depts-empty">
+                        No departments engaged yet
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="today-project-chevron">
+                    <ChevronRightIcon />
+                  </span>
+                </button>
+              );
+            })
+          ) : (
+            <div className="today-projects-empty">
+              No projects created today yet.
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* NEW: Project Status Overview Component */}
       <ProjectStatusOverview projects={projects} />
