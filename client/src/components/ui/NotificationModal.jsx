@@ -258,7 +258,11 @@ const NotificationModal = ({
                   <div
                     key={n._id}
                     className="notif-item unread"
-                    onClick={() => onMarkRead(n)}
+                    onClick={() =>
+                      onMarkRead(n, {
+                        viewScope: hasScopedTabs ? activeTab : "all",
+                      })
+                    }
                   >
                     <div
                       className={`notif-icon-wrapper ${typeMeta.className}`}
@@ -290,7 +294,15 @@ const NotificationModal = ({
               {readNotifications.map((n) => {
                 const typeMeta = getNotificationTypeMeta(n.type);
                 return (
-                  <div key={n._id} className="notif-item" onClick={() => onMarkRead(n)}>
+                  <div
+                    key={n._id}
+                    className="notif-item"
+                    onClick={() =>
+                      onMarkRead(n, {
+                        viewScope: hasScopedTabs ? activeTab : "all",
+                      })
+                    }
+                  >
                     <div
                       className={`notif-icon-wrapper ${typeMeta.className}`}
                       title={typeMeta.label}

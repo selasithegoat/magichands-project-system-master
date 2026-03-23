@@ -40,6 +40,82 @@ const toEntityId = (value) => {
   return "";
 };
 
+const toArray = (value) =>
+  Array.isArray(value) ? value : value ? [value] : [];
+
+const resolveEngagedSubDepartments = (user) => {
+  const userDepts = toArray(user?.department);
+  const hasProductionParent = userDepts.includes("Production");
+  const hasGraphicsParent = userDepts.includes("Graphics/Design");
+  const hasStoresParent = userDepts.includes("Stores");
+  const hasPhotographyParent = userDepts.includes("Photography");
+
+  const productionSubDepts = hasProductionParent
+    ? PRODUCTION_SUB_DEPARTMENTS
+    : userDepts.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+
+  const hasGraphics =
+    hasGraphicsParent ||
+    userDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
+  const hasStores =
+    hasStoresParent || userDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
+  const hasPhotography =
+    hasPhotographyParent ||
+    userDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
+
+  let subDepts = [];
+  if (productionSubDepts.length > 0) {
+    subDepts = subDepts.concat(productionSubDepts);
+  }
+  if (hasGraphics) {
+    subDepts = subDepts.concat(GRAPHICS_SUB_DEPARTMENTS);
+  }
+  if (hasStores) {
+    subDepts = subDepts.concat(STORES_SUB_DEPARTMENTS);
+  }
+  if (hasPhotography) {
+    subDepts = subDepts.concat(PHOTOGRAPHY_SUB_DEPARTMENTS);
+  }
+
+  return Array.from(new Set(subDepts));
+};
+
+const hasEngagedDepartmentOverlap = (user, projectDepartments) => {
+  if (!Array.isArray(projectDepartments) || projectDepartments.length === 0) {
+    return false;
+  }
+  const engagedSubDepts = resolveEngagedSubDepartments(user);
+  if (engagedSubDepts.length === 0) return false;
+  const engagedSubDeptSet = new Set(engagedSubDepts);
+  return projectDepartments.some((dept) => engagedSubDeptSet.has(dept));
+};
+
+const getEngagedProjectPath = (user, projectId, projectDepartments) => {
+  if (!projectId) return "";
+  return hasEngagedDepartmentOverlap(user, projectDepartments)
+    ? `/engaged-projects/actions/${projectId}`
+    : `/detail/${projectId}`;
+};
+
+const getNotificationProjectPath = (notification, user) => {
+  const projectId = toEntityId(
+    notification?.project?._id || notification?.project,
+  );
+  if (!projectId) return "";
+  const projectDepartments = Array.isArray(notification?.project?.departments)
+    ? notification.project.departments
+    : [];
+  const notificationType = String(notification?.type || "")
+    .trim()
+    .toUpperCase();
+
+  if (notificationType === "REMINDER") {
+    return getEngagedProjectPath(user, projectId, projectDepartments);
+  }
+
+  return `/detail/${projectId}`;
+};
+
 // --- Icons ---
 const MenuIcon = () => (
   <svg
@@ -112,10 +188,12 @@ const Layout = ({
       n.onclick = () => {
         window.focus();
         if (notification.project) {
-          const projectId = notification.project._id || notification.project;
-          setIsNotificationOpen(false);
-          setIsMobileMenuOpen(false);
-          navigate(`/detail/${projectId}`);
+          const projectPath = getNotificationProjectPath(notification, user);
+          if (projectPath) {
+            setIsNotificationOpen(false);
+            setIsMobileMenuOpen(false);
+            navigate(projectPath);
+          }
         }
         n.close();
       };
@@ -149,13 +227,18 @@ const Layout = ({
     }
 
     const id = Date.now() + Math.random();
+    const projectId = toEntityId(
+      notification?.project?._id || notification?.project,
+    );
+    const projectPath = getNotificationProjectPath(notification, user);
     setToasts((prev) => [
       ...prev,
       {
         id,
         message: notification.message,
         type: notification.type === "ASSIGNMENT" ? "warning" : "info",
-        projectId: notification.project?._id || notification.project,
+        projectId,
+        projectPath,
       },
     ]);
   };
@@ -170,19 +253,29 @@ const Layout = ({
       .map((item) => {
         const notificationId = toEntityId(item?._id);
         const reminderId = toEntityId(item?.reminder);
+        const projectId = toEntityId(item?.project?._id || item?.project);
+        const projectDepartments = Array.isArray(item?.project?.departments)
+          ? item.project.departments
+          : [];
         const projectOrderId = String(item?.project?.orderId || "").trim();
         const projectName = String(
           item?.project?.details?.projectName || "",
         ).trim();
+        const projectPath = getEngagedProjectPath(
+          user,
+          projectId,
+          projectDepartments,
+        );
         return {
           notificationId,
           reminderId,
           title: String(item?.title || "Reminder").trim(),
           message: String(item?.message || "").trim(),
           createdAt: item?.createdAt || null,
-          projectId: toEntityId(item?.project?._id || item?.project),
+          projectId,
           projectOrderId,
           projectName,
+          projectPath,
         };
       })
       .filter((item) => Boolean(item.notificationId && item.reminderId))
@@ -194,9 +287,14 @@ const Layout = ({
     const unreadIds = new Set(
       unreadReminderNotifications.map((item) => item.notificationId),
     );
+    const unreadMap = new Map(
+      unreadReminderNotifications.map((item) => [item.notificationId, item]),
+    );
 
     setReminderQueue((prev) => {
-      const next = prev.filter((item) => unreadIds.has(item.notificationId));
+      const next = prev
+        .filter((item) => unreadIds.has(item.notificationId))
+        .map((item) => unreadMap.get(item.notificationId) || item);
       const queueSet = new Set(next.map((item) => item.notificationId));
 
       for (const item of unreadReminderNotifications) {
@@ -425,12 +523,16 @@ const Layout = ({
 
   useEffect(() => {
     if (!activeReminderAlert) return;
-    const exists = reminderQueue.some(
+    const refreshed = reminderQueue.find(
       (item) => item.notificationId === activeReminderAlert.notificationId,
     );
-    if (!exists) {
+    if (!refreshed) {
       setActiveReminderAlert(null);
       setReminderActionError("");
+      return;
+    }
+    if (refreshed !== activeReminderAlert) {
+      setActiveReminderAlert(refreshed);
     }
   }, [activeReminderAlert, reminderQueue]);
 
@@ -479,10 +581,26 @@ const Layout = ({
     }
   };
 
-  const handleMarkSingleRead = async (notification) => {
+  const handleMarkSingleRead = async (notification, options = {}) => {
     const id = notification._id;
     const projectId = notification.project?._id || notification.project;
     const type = notification.type;
+    const viewScope = String(options?.viewScope || "all").toLowerCase();
+    const isTeamView = viewScope === "team";
+    const userDepartments = toArray(user?.department);
+    const isFrontDeskUser = userDepartments.includes("Front Desk");
+    const projectDepartments = Array.isArray(notification?.project?.departments)
+      ? notification.project.departments
+      : [];
+    const shouldRouteFrontDeskTeam = isTeamView && isFrontDeskUser;
+    const shouldRouteEngagedTeam =
+      isTeamView && hasEngagedDepartmentOverlap(user, projectDepartments);
+    const teamProjectPath =
+      shouldRouteFrontDeskTeam && projectId
+        ? `/new-orders/actions/${projectId}`
+        : shouldRouteEngagedTeam && projectId
+          ? `/engaged-projects/actions/${projectId}`
+          : "";
 
     try {
       const res = await fetch(`/api/notifications/${id}/read`, {
@@ -508,8 +626,15 @@ const Layout = ({
 
         // Intelligent Routing based on notification type
         if (projectId) {
-          // Special Case: End of Day Update for Front Desk
-          if (notification.title === "Final Update Posted") {
+          if (String(type || "").toUpperCase() === "REMINDER") {
+            const projectPath = getNotificationProjectPath(notification, user);
+            if (projectPath) {
+              navigate(projectPath);
+            }
+          } else if (teamProjectPath) {
+            navigate(teamProjectPath);
+          } else if (notification.title === "Final Update Posted") {
+            // Special Case: End of Day Update for Front Desk
             navigate("/end-of-day");
           } else if (notification.title === "New Project Engagement") {
             navigate("/engaged-projects");
@@ -843,8 +968,11 @@ const Layout = ({
             onClose={() => removeToast(toast.id)}
             duration={5000}
             onClick={() => {
-              if (toast.projectId) {
-                navigate(`/detail/${toast.projectId}`);
+              const targetPath =
+                toast.projectPath ||
+                (toast.projectId ? `/detail/${toast.projectId}` : "");
+              if (targetPath) {
+                navigate(targetPath);
                 removeToast(toast.id);
               }
             }}

@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import "./ReminderAlertModal.css";
 import { BellIcon } from "../../icons/Icons";
 
@@ -22,10 +23,15 @@ const ReminderAlertModal = ({
   onSnooze,
   onStop,
   onComplete,
+  onNavigateProject,
 }) => {
   if (!reminder) return null;
 
   const triggerText = formatTime(reminder.createdAt);
+  const projectOrderId = String(reminder.projectOrderId || "").trim();
+  const projectName = String(reminder.projectName || "").trim();
+  const projectId = String(reminder.projectId || "").trim();
+  const hasProjectMeta = Boolean(projectOrderId || projectName);
 
   return (
     <div className="admin-reminder-alert-overlay" role="presentation">
@@ -42,6 +48,29 @@ const ReminderAlertModal = ({
           Reminder Alert
         </p>
         <h3 className="admin-reminder-alert-title">{reminder.title || "Reminder"}</h3>
+        {hasProjectMeta ? (
+          <div className="admin-reminder-alert-project">
+            <div className="admin-reminder-alert-project-text">
+              {projectOrderId ? (
+                <span className="admin-reminder-alert-project-order">
+                  Order: {projectOrderId}
+                </span>
+              ) : null}
+              {projectName ? (
+                <span className="admin-reminder-alert-project-name">{projectName}</span>
+              ) : null}
+            </div>
+            {projectId ? (
+              <Link
+                className="admin-reminder-alert-project-link"
+                to={`/projects/${projectId}`}
+                onClick={onNavigateProject}
+              >
+                Open Project
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
         {reminder.message ? (
           <p className="admin-reminder-alert-message">{reminder.message}</p>
         ) : null}

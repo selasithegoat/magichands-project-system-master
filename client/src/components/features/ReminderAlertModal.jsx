@@ -31,6 +31,7 @@ const ReminderAlertModal = ({
   const projectOrderId = String(reminder.projectOrderId || "").trim();
   const projectName = String(reminder.projectName || "").trim();
   const projectId = String(reminder.projectId || "").trim();
+  const projectPath = String(reminder.projectPath || "").trim();
   const hasProjectMeta = Boolean(projectOrderId || projectName);
 
   return (
@@ -63,7 +64,7 @@ const ReminderAlertModal = ({
             {projectId ? (
               <Link
                 className="reminder-alert-project-link"
-                to={`/detail/${projectId}`}
+                to={projectPath || `/detail/${projectId}`}
                 onClick={onNavigateProject}
               >
                 Open Project

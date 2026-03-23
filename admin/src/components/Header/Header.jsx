@@ -18,6 +18,7 @@ const Header = ({ onMenuClick, user }) => {
     reminderActionLoading,
     reminderActionError,
     handleReminderAlertAction,
+    handleReminderNavigate,
   } = useNotifications({
     soundEnabled: user?.notificationSettings?.sound ?? true,
     userId: user?._id || "",
@@ -83,6 +84,7 @@ const Header = ({ onMenuClick, user }) => {
         onSnooze={() => handleReminderAlertAction("snooze")}
         onStop={() => handleReminderAlertAction("stop")}
         onComplete={() => handleReminderAlertAction("complete")}
+        onNavigateProject={handleReminderNavigate}
       />
     </header>
   );

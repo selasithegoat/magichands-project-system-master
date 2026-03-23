@@ -36,14 +36,21 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
   const syncReminderQueueFromNotifications = useCallback((notificationList = []) => {
     const unreadReminderNotifications = notificationList
       .filter((item) => !item?.isRead && item?.type === "REMINDER")
-      .map((item) => ({
-        notificationId: toEntityId(item?._id),
-        reminderId: toEntityId(item?.reminder),
-        title: String(item?.title || "Reminder").trim(),
-        message: String(item?.message || "").trim(),
-        createdAt: item?.createdAt || null,
-        projectId: toEntityId(item?.project?._id || item?.project),
-      }))
+      .map((item) => {
+        const projectOrderId = String(item?.project?.orderId || "").trim();
+        const projectName = String(item?.project?.details?.projectName || "").trim();
+
+        return {
+          notificationId: toEntityId(item?._id),
+          reminderId: toEntityId(item?.reminder),
+          title: String(item?.title || "Reminder").trim(),
+          message: String(item?.message || "").trim(),
+          createdAt: item?.createdAt || null,
+          projectId: toEntityId(item?.project?._id || item?.project),
+          projectOrderId,
+          projectName,
+        };
+      })
       .filter((item) => Boolean(item.notificationId && item.reminderId))
       .sort(
         (a, b) =>
@@ -216,6 +223,17 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     ],
   );
 
+  const handleReminderNavigate = useCallback(async () => {
+    if (!activeReminderAlert) return;
+    const notificationId = toEntityId(activeReminderAlert.notificationId);
+    if (!notificationId) return;
+
+    await markNotificationReadSilently(notificationId);
+    handledReminderNotificationIdsRef.current.add(notificationId);
+    removeReminderAlert(notificationId);
+    setActiveReminderAlert(null);
+  }, [activeReminderAlert, markNotificationReadSilently, removeReminderAlert]);
+
   useEffect(() => {
     if (activeReminderAlert) return;
     if (reminderQueue.length === 0) return;
@@ -345,6 +363,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     reminderActionLoading,
     reminderActionError,
     handleReminderAlertAction,
+    handleReminderNavigate,
   };
 };
 

@@ -46,6 +46,12 @@ const REMINDER_TEMPLATE_OPTIONS = [
   },
 ];
 
+const TEMPLATE_RECIPIENT_GROUPS = {
+  mockup_follow_up: ["graphics"],
+  production_progress: ["production"],
+  delivery_readiness: ["stores"],
+};
+
 const REMINDER_REPEAT_OPTIONS = [
   { value: "none", label: "One-time" },
   { value: "daily", label: "Daily" },
@@ -95,6 +101,70 @@ const QUOTE_STATUS_OPTIONS = [
   "Finished",
 ];
 
+const ENGAGED_DEPARTMENT_GROUPS = [
+  { id: "graphics", label: "Graphics" },
+  { id: "production", label: "Production" },
+  { id: "stores", label: "Stores" },
+  { id: "photography", label: "Photography" },
+];
+
+const PRODUCTION_SUB_DEPARTMENT_OPTIONS = [
+  { id: "dtf", label: "DTF Printing" },
+  { id: "uv-dtf", label: "UV DTF Printing" },
+  { id: "uv-printing", label: "UV Printing" },
+  { id: "engraving", label: "Engraving" },
+  { id: "large-format", label: "Large Format" },
+  { id: "digital-press", label: "Digital Press" },
+  { id: "digital-heat-press", label: "Digital Heat Press" },
+  { id: "offset-press", label: "Offset Press" },
+  { id: "screen-printing", label: "Screen Printing" },
+  { id: "embroidery", label: "Embroidery" },
+  { id: "sublimation", label: "Sublimation" },
+  { id: "digital-cutting", label: "Digital Cutting" },
+  { id: "pvc-id", label: "PVC ID Cards" },
+  { id: "business-cards", label: "Business Cards" },
+  { id: "installation", label: "Installation" },
+  { id: "overseas", label: "Overseas" },
+  { id: "woodme", label: "Woodme" },
+  { id: "fabrication", label: "Fabrication" },
+  { id: "signage", label: "Signage" },
+];
+
+const PRODUCTION_SUB_DEPARTMENT_IDS = new Set(
+  PRODUCTION_SUB_DEPARTMENT_OPTIONS.map((entry) => entry.id),
+);
+
+const PRODUCTION_DEPARTMENTS = new Set([
+  "production",
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+]);
+
+const GRAPHICS_DEPARTMENT_TOKENS = new Set([
+  "graphics/design",
+  "graphics",
+  "design",
+]);
+const STORES_DEPARTMENT_TOKENS = new Set(["stores", "stock", "packaging"]);
+const PHOTOGRAPHY_DEPARTMENT_TOKENS = new Set(["photography"]);
+
 const toEntityId = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") {
@@ -105,6 +175,87 @@ const toEntityId = (value) => {
     if (value.id) return String(value.id);
   }
   return "";
+};
+
+const getUserDepartmentTokens = (value) =>
+  toDepartmentArray(value).map(normalizeDepartmentValue).filter(Boolean);
+
+const toDepartmentArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === "") return [];
+  return [value];
+};
+
+const normalizeDepartmentValue = (value) => {
+  if (value && typeof value === "object") {
+    const optionValue = value.value || value.label || "";
+    return String(optionValue).trim().toLowerCase();
+  }
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const canonicalizeDepartment = (value) => {
+  const token = normalizeDepartmentValue(value);
+  if (!token) return "";
+  if (PRODUCTION_DEPARTMENTS.has(token)) return "production";
+  if (GRAPHICS_DEPARTMENT_TOKENS.has(token)) return "graphics";
+  if (STORES_DEPARTMENT_TOKENS.has(token)) return "stores";
+  if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) return "photography";
+  return token;
+};
+
+const getCanonicalDepartmentSet = (value) =>
+  new Set(
+    toDepartmentArray(value)
+      .map(canonicalizeDepartment)
+      .filter(Boolean),
+  );
+
+const getSubDepartmentTokens = (value) =>
+  new Set(
+    getUserDepartmentTokens(value).filter((token) =>
+      PRODUCTION_SUB_DEPARTMENT_IDS.has(token),
+    ),
+  );
+
+const hasDepartmentOverlap = (userDepartments, projectDepartments) => {
+  const userCanonical = getCanonicalDepartmentSet(userDepartments);
+  if (userCanonical.size === 0) return false;
+
+  const projectCanonical = getCanonicalDepartmentSet(projectDepartments);
+  if (projectCanonical.size === 0) return false;
+
+  for (const dept of userCanonical) {
+    if (projectCanonical.has(dept)) return true;
+  }
+  return false;
+};
+
+const getRecipientGroupsFromRecipients = (recipients = []) => {
+  const groups = new Set();
+  (Array.isArray(recipients) ? recipients : []).forEach((entry) => {
+    const departments = entry?.user?.department || entry?.department;
+    toDepartmentArray(departments).forEach((dept) => {
+      const canonical = canonicalizeDepartment(dept);
+      if (canonical) groups.add(canonical);
+    });
+  });
+  return Array.from(groups);
+};
+
+const getRecipientSubDepartmentsFromRecipients = (recipients = []) => {
+  const subDepartments = new Set();
+  (Array.isArray(recipients) ? recipients : []).forEach((entry) => {
+    const departments = entry?.user?.department || entry?.department;
+    getUserDepartmentTokens(departments).forEach((token) => {
+      if (PRODUCTION_SUB_DEPARTMENT_IDS.has(token)) {
+        subDepartments.add(token);
+      }
+    });
+  });
+  return Array.from(subDepartments);
 };
 
 const toDateTimeLocalValue = (value) => {
@@ -208,14 +359,6 @@ const ProjectRemindersCard = ({ project, user }) => {
   const userId = toEntityId(user?._id || user?.id);
   const userRole = String(user?.role || "").trim().toLowerCase();
 
-  const statusOptions = useMemo(
-    () =>
-      project?.projectType === "Quote"
-        ? QUOTE_STATUS_OPTIONS
-        : STANDARD_STATUS_OPTIONS,
-    [project?.projectType],
-  );
-
   const buildInitialForm = useCallback((templateKey = "custom") => {
     const template = getReminderTemplate(templateKey);
     const isCustom = templateKey === "custom";
@@ -230,6 +373,9 @@ const ProjectRemindersCard = ({ project, user }) => {
       repeat: "none",
       inApp: true,
       email: false,
+      recipientGroups: [],
+      recipientSubDepartments: [],
+      includeSelf: true,
     };
   }, []);
 
@@ -243,6 +389,76 @@ const ProjectRemindersCard = ({ project, user }) => {
   const [showDeleteReminderModal, setShowDeleteReminderModal] = useState(false);
   const [deleteReminderTarget, setDeleteReminderTarget] = useState(null);
   const [form, setForm] = useState(() => buildInitialForm("custom"));
+  const [directoryUsers, setDirectoryUsers] = useState([]);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [directoryError, setDirectoryError] = useState("");
+  const [recipientTouched, setRecipientTouched] = useState(false);
+
+  const statusOptions = useMemo(
+    () =>
+      project?.projectType === "Quote"
+        ? QUOTE_STATUS_OPTIONS
+        : STANDARD_STATUS_OPTIONS,
+    [project?.projectType],
+  );
+  const engagedGroupIds = useMemo(() => {
+    const canonical = getCanonicalDepartmentSet(project?.departments);
+    const engaged = new Set();
+    ENGAGED_DEPARTMENT_GROUPS.forEach((group) => {
+      if (canonical.has(group.id)) engaged.add(group.id);
+    });
+    return engaged;
+  }, [project?.departments]);
+  const engagedGroupLabelMap = useMemo(
+    () => new Map(ENGAGED_DEPARTMENT_GROUPS.map((group) => [group.id, group.label])),
+    [],
+  );
+  const engagedProductionSubDepartmentOptions = useMemo(() => {
+    const projectTokens = new Set(getUserDepartmentTokens(project?.departments));
+    return PRODUCTION_SUB_DEPARTMENT_OPTIONS.filter((option) =>
+      projectTokens.has(option.id),
+    );
+  }, [project?.departments]);
+  const engagedSubDepartmentIds = useMemo(
+    () => engagedProductionSubDepartmentOptions.map((option) => option.id),
+    [engagedProductionSubDepartmentOptions],
+  );
+  const productionSubDeptLabelMap = useMemo(
+    () =>
+      new Map(
+        PRODUCTION_SUB_DEPARTMENT_OPTIONS.map((option) => [option.id, option.label]),
+      ),
+    [],
+  );
+  const recipientCounts = useMemo(() => {
+    const counts = new Map();
+    ENGAGED_DEPARTMENT_GROUPS.forEach((group) => counts.set(group.id, 0));
+    (Array.isArray(directoryUsers) ? directoryUsers : []).forEach((entry) => {
+      const userGroups = getCanonicalDepartmentSet(entry?.department);
+      ENGAGED_DEPARTMENT_GROUPS.forEach((group) => {
+        if (!userGroups.has(group.id)) return;
+        counts.set(group.id, (counts.get(group.id) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [directoryUsers]);
+  const recipientSubDepartmentCounts = useMemo(() => {
+    const counts = new Map();
+    PRODUCTION_SUB_DEPARTMENT_OPTIONS.forEach((option) => counts.set(option.id, 0));
+    (Array.isArray(directoryUsers) ? directoryUsers : []).forEach((entry) => {
+      const tokens = getUserDepartmentTokens(entry?.department);
+      tokens.forEach((token) => {
+        if (!counts.has(token)) return;
+        counts.set(token, (counts.get(token) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [directoryUsers]);
+  const allSubDepartmentsSelected = useMemo(() => {
+    if (engagedSubDepartmentIds.length === 0) return false;
+    const selected = new Set(form.recipientSubDepartments || []);
+    return engagedSubDepartmentIds.every((id) => selected.has(id));
+  }, [engagedSubDepartmentIds, form.recipientSubDepartments]);
 
   const fetchReminders = useCallback(async () => {
     if (!projectId) {
@@ -274,9 +490,42 @@ const ProjectRemindersCard = ({ project, user }) => {
     }
   }, [projectId]);
 
+  const fetchDirectoryUsers = useCallback(async () => {
+    if (userRole !== "admin") return;
+    if (directoryLoading) return;
+    setDirectoryLoading(true);
+    setDirectoryError("");
+    try {
+      const res = await fetch("/api/auth/users", { credentials: "include" });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to load recipients.");
+      }
+      const data = await res.json();
+      setDirectoryUsers(Array.isArray(data) ? data : []);
+    } catch (fetchError) {
+      console.error("Failed to fetch recipients:", fetchError);
+      setDirectoryError(fetchError.message || "Failed to load recipients.");
+    } finally {
+      setDirectoryLoading(false);
+    }
+  }, [directoryLoading, userRole]);
+
   useEffect(() => {
     fetchReminders();
   }, [fetchReminders]);
+
+  useEffect(() => {
+    if (!showModal || userRole !== "admin") return;
+    if (directoryUsers.length > 0 || directoryLoading) return;
+    fetchDirectoryUsers();
+  }, [
+    showModal,
+    userRole,
+    directoryUsers.length,
+    directoryLoading,
+    fetchDirectoryUsers,
+  ]);
 
   const scheduledReminders = useMemo(
     () => reminders.filter((item) => isReminderScheduled(item)),
@@ -311,9 +560,56 @@ const ProjectRemindersCard = ({ project, user }) => {
     setReminders((prev) => prev.filter((item) => item._id !== reminderId));
   };
 
+  const resolveRecipientIds = useCallback(
+    (groups = [], subDepartments = [], includeSelf = true) => {
+      const selectedGroups = Array.isArray(groups)
+        ? groups.map((entry) => String(entry || "").trim())
+        : [];
+      const selectedSubDepartments = Array.isArray(subDepartments)
+        ? subDepartments.map((entry) => String(entry || "").trim())
+        : [];
+      const uniqueRecipients = new Set();
+
+      if (selectedGroups.length > 0 || selectedSubDepartments.length > 0) {
+        directoryUsers.forEach((userEntry) => {
+          if (!userEntry?._id) return;
+          if (!hasDepartmentOverlap(userEntry?.department, project?.departments)) {
+            return;
+          }
+          const userGroups = getCanonicalDepartmentSet(userEntry?.department);
+          const userTokens = getUserDepartmentTokens(userEntry?.department);
+          const matchesGroup = selectedGroups.some((group) => userGroups.has(group));
+          const matchesSubDepartment = selectedSubDepartments.some((dept) =>
+            userTokens.includes(dept),
+          );
+          if (!matchesGroup && !matchesSubDepartment) return;
+          uniqueRecipients.add(String(userEntry._id));
+        });
+      }
+
+      if (includeSelf && userId) {
+        uniqueRecipients.add(String(userId));
+      }
+
+      return Array.from(uniqueRecipients);
+    },
+    [directoryUsers, project?.departments, userId],
+  );
+
   const handleTemplateChange = (templateKey) => {
     const template = getReminderTemplate(templateKey);
     const isCustom = templateKey === "custom";
+    const suggestedGroups = TEMPLATE_RECIPIENT_GROUPS[templateKey] || [];
+    const nextRecipientGroups =
+      form.recipientGroups && form.recipientGroups.length > 0
+        ? form.recipientGroups
+        : suggestedGroups.filter(
+            (group) => engagedGroupIds.size === 0 || engagedGroupIds.has(group),
+          );
+
+    if ((form.recipientGroups || []).length === 0 && nextRecipientGroups.length > 0) {
+      setRecipientTouched(true);
+    }
 
     setForm((prev) => ({
       ...prev,
@@ -326,6 +622,7 @@ const ProjectRemindersCard = ({ project, user }) => {
       watchStatus: isCustom ? prev.watchStatus : template.watchStatus || "",
       delayMinutes: isCustom ? prev.delayMinutes : template.delayMinutes || 0,
       remindAt: buildReminderDefaultDateTimeValue(template.offsetHours || 24),
+      recipientGroups: nextRecipientGroups,
     }));
   };
 
@@ -345,8 +642,10 @@ const ProjectRemindersCard = ({ project, user }) => {
 
   const openModal = () => {
     setError("");
+    setDirectoryError("");
     setEditingReminderId("");
     setForm(buildInitialForm("custom"));
+    setRecipientTouched(false);
     setShowModal(true);
   };
 
@@ -354,7 +653,9 @@ const ProjectRemindersCard = ({ project, user }) => {
     if (saving) return;
     setShowModal(false);
     setError("");
+    setDirectoryError("");
     setEditingReminderId("");
+    setRecipientTouched(false);
   };
 
   const openEditModal = (reminder) => {
@@ -363,6 +664,21 @@ const ProjectRemindersCard = ({ project, user }) => {
     const triggerMode =
       reminder.triggerMode === "stage_based" ? "stage_based" : "absolute_time";
     const remindAtValue = reminder.nextTriggerAt || reminder.remindAt;
+    const rawRecipientGroups = getRecipientGroupsFromRecipients(reminder?.recipients);
+    const recipientGroups = rawRecipientGroups.filter(
+      (group) => engagedGroupIds.size === 0 || engagedGroupIds.has(group),
+    );
+    const rawRecipientSubDepartments = getRecipientSubDepartmentsFromRecipients(
+      reminder?.recipients,
+    );
+    const recipientSubDepartments = rawRecipientSubDepartments.filter(
+      (dept) =>
+        engagedProductionSubDepartmentOptions.length === 0 ||
+        engagedProductionSubDepartmentOptions.some((option) => option.id === dept),
+    );
+    const includeSelf = (Array.isArray(reminder?.recipients) ? reminder.recipients : [])
+      .map((entry) => toEntityId(entry?.user?._id || entry?.user))
+      .some((id) => id && id === userId);
 
     setError("");
     setEditingReminderId(reminder._id);
@@ -386,7 +702,11 @@ const ProjectRemindersCard = ({ project, user }) => {
       repeat: String(reminder.repeat || "none"),
       inApp: Boolean(reminder.channels?.inApp),
       email: Boolean(reminder.channels?.email),
+      recipientGroups,
+      recipientSubDepartments,
+      includeSelf,
     });
+    setRecipientTouched(false);
     setShowModal(true);
   };
 
@@ -421,6 +741,72 @@ const ProjectRemindersCard = ({ project, user }) => {
       return;
     }
 
+    const selectedRecipientGroups = Array.isArray(form.recipientGroups)
+      ? form.recipientGroups.filter(
+          (group) => group && (engagedGroupIds.size === 0 || engagedGroupIds.has(group)),
+        )
+      : [];
+    const selectedRecipientSubDepartments = Array.isArray(form.recipientSubDepartments)
+      ? form.recipientSubDepartments.filter((dept) =>
+          engagedProductionSubDepartmentOptions.length > 0
+            ? engagedProductionSubDepartmentOptions.some(
+                (option) => option.id === dept,
+              )
+            : false,
+        )
+      : [];
+    const includeSelf = Boolean(form.includeSelf);
+    let recipientIds = [];
+    const shouldUpdateRecipients = !editingReminderId || recipientTouched;
+
+    if (userRole === "admin" && shouldUpdateRecipients) {
+      if (
+        (selectedRecipientGroups.length > 0 ||
+          selectedRecipientSubDepartments.length > 0) &&
+        directoryLoading
+      ) {
+        setError("Recipients are still loading. Please try again.");
+        return;
+      }
+      if (
+        (selectedRecipientGroups.length > 0 ||
+          selectedRecipientSubDepartments.length > 0) &&
+        directoryUsers.length === 0
+      ) {
+        setError(directoryError || "Recipient list is unavailable. Please try again.");
+        return;
+      }
+
+      const departmentRecipients =
+        selectedRecipientGroups.length > 0 || selectedRecipientSubDepartments.length > 0
+          ? resolveRecipientIds(
+              selectedRecipientGroups,
+              selectedRecipientSubDepartments,
+              false,
+            )
+          : [];
+
+      if (
+        (selectedRecipientGroups.length > 0 ||
+          selectedRecipientSubDepartments.length > 0) &&
+        departmentRecipients.length === 0
+      ) {
+        setError("No users found in the selected departments.");
+        return;
+      }
+
+      if (includeSelf && userId) {
+        recipientIds = Array.from(new Set([...departmentRecipients, userId]));
+      } else {
+        recipientIds = departmentRecipients;
+      }
+
+      if (recipientIds.length === 0) {
+        setError("Select at least one recipient department or include yourself.");
+        return;
+      }
+    }
+
     setSaving(true);
 
     try {
@@ -443,6 +829,10 @@ const ProjectRemindersCard = ({ project, user }) => {
           email: Boolean(form.email),
         },
       };
+
+      if (userRole === "admin" && shouldUpdateRecipients && recipientIds.length > 0) {
+        payload.recipientIds = recipientIds;
+      }
 
       if (!editingReminderId) {
         payload.projectId = projectId;
@@ -573,6 +963,15 @@ const ProjectRemindersCard = ({ project, user }) => {
     const isStageBased = item.triggerMode === "stage_based";
     const hasConcreteTrigger = Boolean(item.nextTriggerAt || item.remindAt);
     const canEditReminder = canManage && isReminderEditable(item);
+    const recipientGroups = getRecipientGroupsFromRecipients(item?.recipients)
+      .filter((group) => engagedGroupLabelMap.has(group))
+      .map((group) => engagedGroupLabelMap.get(group));
+    const recipientSubDepartments = getRecipientSubDepartmentsFromRecipients(
+      item?.recipients,
+    )
+      .filter((dept) => productionSubDeptLabelMap.has(dept))
+      .map((dept) => productionSubDeptLabelMap.get(dept));
+    const recipientCount = Array.isArray(item?.recipients) ? item.recipients.length : 0;
 
     return (
       <div key={item._id} className="admin-reminder-item">
@@ -605,6 +1004,17 @@ const ProjectRemindersCard = ({ project, user }) => {
           {item.repeat && item.repeat !== "none" ? <span>Repeats: {item.repeat}</span> : null}
           {!isStageBased && item.conditionStatus ? (
             <span>Condition: {item.conditionStatus}</span>
+          ) : null}
+          {recipientGroups.length > 0 ? (
+            <span>
+              Recipients: {recipientGroups.join(", ")}
+              {recipientCount ? ` (${recipientCount})` : ""}
+            </span>
+          ) : recipientCount > 0 ? (
+            <span>Recipients: {recipientCount} users</span>
+          ) : null}
+          {recipientSubDepartments.length > 0 ? (
+            <span>Prod sub-depts: {recipientSubDepartments.join(", ")}</span>
           ) : null}
         </div>
 
@@ -874,6 +1284,140 @@ const ProjectRemindersCard = ({ project, user }) => {
                 </>
               )}
 
+              {userRole === "admin" ? (
+                <div className="admin-reminder-field">
+                  <label>Recipients (Engaged Departments)</label>
+                  <div className="admin-reminder-recipient-grid">
+                    {ENGAGED_DEPARTMENT_GROUPS.map((group) => {
+                      const engaged = engagedGroupIds.has(group.id);
+                      const count = recipientCounts.get(group.id) || 0;
+                      return (
+                        <label
+                          key={group.id}
+                          className={`admin-reminder-recipient-option ${
+                            engaged ? "" : "disabled"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.recipientGroups.includes(group.id)}
+                            onChange={() => {
+                              setRecipientTouched(true);
+                              setForm((prev) => {
+                                const current = prev.recipientGroups || [];
+                                const next = current.includes(group.id)
+                                  ? current.filter((entry) => entry !== group.id)
+                                  : [...current, group.id];
+                                return { ...prev, recipientGroups: next };
+                              });
+                            }}
+                            disabled={!engaged}
+                          />
+                          <span className="admin-reminder-recipient-label">
+                            {group.label}
+                          </span>
+                          <span className="admin-reminder-recipient-count">
+                            {directoryLoading ? "..." : `${count} users`}
+                          </span>
+                          {!engaged ? (
+                            <span className="admin-reminder-recipient-note">
+                              Not engaged
+                            </span>
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {engagedGroupIds.has("production") &&
+                  engagedProductionSubDepartmentOptions.length > 0 ? (
+                    <>
+                      <p className="admin-reminder-recipient-subtitle">
+                        Production sub-departments
+                      </p>
+                      <div className="admin-reminder-subdept-actions">
+                        <button
+                          type="button"
+                          className="admin-reminder-subdept-btn"
+                          onClick={() => {
+                            setRecipientTouched(true);
+                            setForm((prev) => {
+                              const current = prev.recipientSubDepartments || [];
+                              const next = allSubDepartmentsSelected
+                                ? current.filter(
+                                    (entry) => !engagedSubDepartmentIds.includes(entry),
+                                  )
+                                : Array.from(
+                                    new Set([...current, ...engagedSubDepartmentIds]),
+                                  );
+                              return { ...prev, recipientSubDepartments: next };
+                            });
+                          }}
+                        >
+                          {allSubDepartmentsSelected
+                            ? "Clear all"
+                            : "Select all engaged"}
+                        </button>
+                      </div>
+                      <div className="admin-reminder-recipient-grid">
+                        {engagedProductionSubDepartmentOptions.map((option) => {
+                          const count = recipientSubDepartmentCounts.get(option.id) || 0;
+                          return (
+                            <label
+                              key={option.id}
+                              className="admin-reminder-recipient-option"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={form.recipientSubDepartments.includes(option.id)}
+                                onChange={() => {
+                                  setRecipientTouched(true);
+                                  setForm((prev) => {
+                                    const current = prev.recipientSubDepartments || [];
+                                    const next = current.includes(option.id)
+                                      ? current.filter((entry) => entry !== option.id)
+                                      : [...current, option.id];
+                                    return { ...prev, recipientSubDepartments: next };
+                                  });
+                                }}
+                              />
+                              <span className="admin-reminder-recipient-label">
+                                {option.label}
+                              </span>
+                              <span className="admin-reminder-recipient-count">
+                                {directoryLoading ? "..." : `${count} users`}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : null}
+                  {directoryError ? (
+                    <p className="admin-reminder-recipient-error" role="alert">
+                      {directoryError}
+                    </p>
+                  ) : null}
+                  <label className="admin-reminder-channel-option admin-reminder-recipient-self">
+                    <input
+                      type="checkbox"
+                      checked={form.includeSelf}
+                      onChange={(event) => {
+                        setRecipientTouched(true);
+                        setForm((prev) => ({
+                          ...prev,
+                          includeSelf: event.target.checked,
+                        }));
+                      }}
+                    />
+                    Include me
+                  </label>
+                  <p className="admin-reminder-recipient-help">
+                    Reminders will appear for selected departments (or sub-departments)
+                    when the stage is reached.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="admin-reminder-channel-grid">
                 <label className="admin-reminder-channel-option">
                   <input
@@ -909,7 +1453,13 @@ const ProjectRemindersCard = ({ project, user }) => {
                 <button
                   type="submit"
                   className="admin-reminder-btn primary"
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    (userRole === "admin" &&
+                      directoryLoading &&
+                      ((form.recipientGroups || []).length > 0 ||
+                        (form.recipientSubDepartments || []).length > 0))
+                  }
                 >
                   {saving
                     ? "Saving..."
