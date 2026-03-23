@@ -36,6 +36,9 @@ const ActivityLogSchema = new mongoose.Schema(
         "engagement_acknowledge", // [NEW]
         "engagement_unacknowledge", // [NEW]
         "mockup_upload", // [NEW]
+        "mockup_approval", // [NEW]
+        "mockup_rejection", // [NEW]
+        "mockup_delete", // [NEW]
       ],
     },
     description: {

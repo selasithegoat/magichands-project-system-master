@@ -200,6 +200,24 @@ const getUploadedFilePath = (file) => {
   return "";
 };
 
+const resolveUploadPathFromUrl = (fileUrl) => {
+  const rawUrl = String(fileUrl || "").trim();
+  if (!rawUrl) return "";
+  const withoutQuery = rawUrl.split("?")[0];
+  const withoutHost = withoutQuery.replace(/^https?:\/\/[^/]+/i, "");
+  const normalized = withoutHost.replace(/\\/g, "/");
+  const trimmed = normalized.replace(/^\/+/, "");
+  if (!trimmed.toLowerCase().startsWith("uploads/")) return "";
+  const relative = trimmed.slice("uploads/".length);
+  if (!relative) return "";
+  const resolved = path.join(uploadDir, relative);
+  const relativeToUploadDir = path.relative(uploadDir, resolved);
+  if (relativeToUploadDir.startsWith("..") || path.isAbsolute(relativeToUploadDir)) {
+    return "";
+  }
+  return resolved;
+};
+
 const scanUploadedFile = async (filePath) => {
   if (!scanCommand || !filePath) return;
 
@@ -457,5 +475,7 @@ upload.maxFileSizeMb = maxFileSizeMb;
 upload.scanRequestFiles = scanRequestFiles;
 upload.cleanupRequestFiles = cleanupRequestFiles;
 upload.getUploadedFiles = getUploadedFiles;
+upload.resolveUploadPathFromUrl = resolveUploadPathFromUrl;
+upload.uploadDir = uploadDir;
 
 module.exports = upload;

@@ -17,6 +17,7 @@ const {
   transitionQuoteRequirement,
   updateQuoteDecision,
   uploadProjectMockup,
+  deleteProjectMockupVersion,
   approveProjectMockup,
   rejectProjectMockup,
   getPendingSmsPrompts,
@@ -96,7 +97,7 @@ const handleProjectUploads = (req, res, next) => {
 };
 
 const handleMockupUpload = (req, res, next) => {
-  upload.single("mockup")(req, res, (err) => {
+  upload.array("mockup", 10)(req, res, (err) => {
     if (err) {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res
@@ -261,6 +262,12 @@ router.post(
   enforceProjectNotOnHold,
   handleMockupUpload,
   uploadProjectMockup,
+);
+router.delete(
+  "/:id/mockup/:version",
+  protect,
+  enforceProjectNotOnHold,
+  deleteProjectMockupVersion,
 );
 router.post(
   "/:id/mockup/approve",

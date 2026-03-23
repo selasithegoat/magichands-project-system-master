@@ -447,6 +447,59 @@
   box-sizing: border-box;
 }
 
+.mockup-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.mockup-footer-actions {
+  margin-top: 0.75rem;
+}
+
+.mockup-append-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mockup-append-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.2);
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.mockup-append-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.mockup-append-icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .mockup-link:hover {
   border-color: #2563eb;
   color: #2563eb;
@@ -462,6 +515,17 @@
   border-color: #0f766e;
   color: #0f766e;
   box-shadow: 0 4px 10px rgba(15, 118, 110, 0.15);
+}
+
+.mockup-link.delete {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.mockup-link.delete:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.18);
 }
 
 .mockup-preview {
@@ -902,6 +966,42 @@
   font-size: 0.76rem;
 }
 
+.graphics-mockup-status {
+  width: fit-content;
+  margin-top: 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.18rem 0.6rem;
+}
+
+.graphics-mockup-status.pending {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.graphics-mockup-status.approved {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.graphics-mockup-status.rejected {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.graphics-mockup-reason {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: #b91c1c;
+}
+
 .graphics-carousel-track {
   display: flex;
   flex-wrap: wrap;
@@ -919,10 +1019,46 @@
   cursor: pointer;
 }
 
+.graphics-carousel-chip.status-pending {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.graphics-carousel-chip.status-approved {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.graphics-carousel-chip.status-rejected {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
 .graphics-carousel-chip.active {
   border-color: rgba(59, 130, 246, 0.5);
   background: rgba(59, 130, 246, 0.14);
   color: #1d4ed8;
+}
+
+.graphics-carousel-chip.active.status-pending {
+  border-color: rgba(245, 158, 11, 0.7);
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.graphics-carousel-chip.active.status-approved {
+  border-color: rgba(16, 185, 129, 0.65);
+  background: rgba(16, 185, 129, 0.2);
+  color: #065f46;
+}
+
+.graphics-carousel-chip.active.status-rejected {
+  border-color: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
 }
 
 .engaged-scope-section {
@@ -1229,6 +1365,7 @@
   display: flex;
   width: 100%;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .engaged-action-meta {
@@ -1458,6 +1595,29 @@
 }
 
 .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-danger {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
@@ -1701,10 +1861,90 @@
   color: var(--text-secondary);
 }
 
+[data-theme="dark"] .graphics-carousel-chip.status-pending {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 18%, var(--surface-alt));
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .graphics-carousel-chip.status-approved {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 18%, var(--surface-alt));
+  color: var(--success);
+}
+
+[data-theme="dark"] .graphics-carousel-chip.status-rejected {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface-alt));
+  color: var(--danger);
+}
+
 [data-theme="dark"] .graphics-carousel-chip.active {
   border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color));
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
+}
+
+[data-theme="dark"] .graphics-carousel-chip.active.status-pending {
+  border-color: color-mix(in srgb, #f59e0b 65%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 26%, var(--surface-alt));
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .graphics-carousel-chip.active.status-approved {
+  border-color: color-mix(in srgb, var(--success) 65%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 26%, var(--surface-alt));
+  color: var(--success);
+}
+
+[data-theme="dark"] .graphics-carousel-chip.active.status-rejected {
+  border-color: color-mix(in srgb, var(--danger) 65%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 26%, var(--surface-alt));
+  color: var(--danger);
+}
+
+[data-theme="dark"] .graphics-mockup-status {
+  border-color: var(--border-color);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .graphics-mockup-status.pending {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 18%, var(--surface-alt));
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .graphics-mockup-status.approved {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 18%, var(--surface-alt));
+  color: var(--success);
+}
+
+[data-theme="dark"] .graphics-mockup-status.rejected {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface-alt));
+  color: var(--danger);
+}
+
+[data-theme="dark"] .graphics-mockup-reason {
+  color: var(--danger);
+}
+
+[data-theme="dark"] .mockup-append-btn {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 18%, var(--surface-alt));
+  color: var(--success);
+}
+
+[data-theme="dark"] .mockup-append-btn:hover {
+  background: color-mix(in srgb, var(--success) 26%, var(--surface-alt));
+}
+
+[data-theme="dark"] .mockup-append-icon {
+  border-color: color-mix(in srgb, var(--success) 55%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 26%, var(--surface-alt));
+  color: var(--success);
 }
 
 [data-theme="dark"] .engaged-scope-section {

@@ -122,7 +122,7 @@ const EngagedProjects = ({ user }) => {
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [showMockupModal, setShowMockupModal] = useState(false);
   const [mockupTarget, setMockupTarget] = useState(null);
-  const [mockupFile, setMockupFile] = useState(null);
+  const [mockupFiles, setMockupFiles] = useState([]);
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
 
@@ -552,7 +552,7 @@ const EngagedProjects = ({ user }) => {
 
   const openMockupModal = (project, action) => {
     setMockupTarget({ project, action });
-    setMockupFile(null);
+    setMockupFiles([]);
     setMockupNote("");
     setShowMockupModal(true);
   };
@@ -567,7 +567,7 @@ const EngagedProjects = ({ user }) => {
   const closeMockupModal = () => {
     setShowMockupModal(false);
     setMockupTarget(null);
-    setMockupFile(null);
+    setMockupFiles([]);
     setMockupNote("");
     setMockupUploading(false);
   };
@@ -592,7 +592,7 @@ const EngagedProjects = ({ user }) => {
   const handleUploadMockup = async (e) => {
     e.preventDefault();
     if (!mockupTarget) return;
-    if (!mockupFile) {
+    if (mockupFiles.length === 0) {
       setToast({ type: "error", message: "Please select a mockup file." });
       return;
     }
@@ -601,7 +601,7 @@ const EngagedProjects = ({ user }) => {
     const target = mockupTarget;
     try {
       const data = new FormData();
-      data.append("mockup", mockupFile);
+      mockupFiles.forEach((file) => data.append("mockup", file));
       if (mockupNote.trim()) data.append("note", mockupNote.trim());
 
       const res = await fetch(`/api/projects/${target.project._id}/mockup`, {
@@ -613,7 +613,10 @@ const EngagedProjects = ({ user }) => {
         const updatedProject = await res.json();
         setToast({
           type: "success",
-          message: "Mockup uploaded. Please confirm completion.",
+          message:
+            mockupFiles.length > 1
+              ? "Mockups uploaded. Please confirm completion."
+              : "Mockup uploaded. Please confirm completion.",
         });
         closeMockupModal();
         fetchEngagedProjects();
@@ -1193,22 +1196,26 @@ const EngagedProjects = ({ user }) => {
             </p>
             <form onSubmit={handleUploadMockup}>
               <div className="form-group">
-                <label>Approved Mockup File</label>
+                <label>Approved Mockup File(s)</label>
                 <input
                   type="file"
                   className="input-field"
-                  onChange={(e) => setMockupFile(e.target.files?.[0] || null)}
+                  multiple
+                  onChange={(e) =>
+                    setMockupFiles(Array.from(e.target.files || []))
+                  }
                   required
                 />
                 <div
                   className="file-hint"
                   style={{ marginTop: "0.5rem" }}
                 >
-                  Any file type allowed (e.g., .cdr, .pdf, .png)
+                  Any file type allowed (e.g., .cdr, .pdf, .png). Select multiple
+                  files to upload several mockups at once.
                 </div>
-                {mockupFile && (
+                {mockupFiles.length > 0 && (
                   <div className="file-hint" style={{ marginTop: "0.25rem" }}>
-                    Selected: {mockupFile.name}
+                    Selected: {mockupFiles.map((file) => file.name).join(", ")}
                   </div>
                 )}
               </div>
@@ -1234,7 +1241,7 @@ const EngagedProjects = ({ user }) => {
                 <button
                   type="submit"
                   className="btn-primary"
-                  disabled={mockupUploading || !mockupFile}
+                  disabled={mockupUploading || mockupFiles.length === 0}
                 >
                   {mockupUploading ? "Uploading..." : "Upload & Continue"}
                 </button>

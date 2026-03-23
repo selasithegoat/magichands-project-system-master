@@ -347,6 +347,72 @@ const getMockupApprovalStatus = (approval = {}) => {
   return "pending";
 };
 
+const getMockupVersions = (mockup = {}) => {
+  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
+  const normalized = rawVersions
+    .map((entry, index) => {
+      const parsedVersion = Number.parseInt(entry?.version, 10);
+      const version =
+        Number.isFinite(parsedVersion) && parsedVersion > 0
+          ? parsedVersion
+          : index + 1;
+      const approvalStatus = getMockupApprovalStatus(entry?.clientApproval || {});
+      return {
+        entryId: entry?._id || entry?.id || null,
+        version,
+        fileUrl: String(entry?.fileUrl || "").trim(),
+        fileName: String(entry?.fileName || "").trim(),
+        fileType: String(entry?.fileType || "").trim(),
+        note: String(entry?.note || "").trim(),
+        uploadedAt: entry?.uploadedAt || null,
+        clientApproval: {
+          status: approvalStatus,
+          approvedAt: entry?.clientApproval?.approvedAt || null,
+          rejectedAt: entry?.clientApproval?.rejectedAt || null,
+          rejectionReason: String(
+            entry?.clientApproval?.rejectionReason ||
+              entry?.clientApproval?.note ||
+              "",
+          ).trim(),
+        },
+      };
+    })
+    .filter((entry) => entry.fileUrl);
+
+  if (normalized.length === 0 && mockup?.fileUrl) {
+    const parsedVersion = Number.parseInt(mockup?.version, 10);
+    const version =
+      Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
+    const approvalStatus = getMockupApprovalStatus(mockup?.clientApproval || {});
+    normalized.push({
+      entryId: mockup?._id || mockup?.id || null,
+      version,
+      fileUrl: String(mockup.fileUrl || "").trim(),
+      fileName: String(mockup.fileName || "").trim(),
+      fileType: String(mockup.fileType || "").trim(),
+      note: String(mockup.note || "").trim(),
+      uploadedAt: mockup.uploadedAt || null,
+      clientApproval: {
+        status: approvalStatus,
+        approvedAt: mockup?.clientApproval?.approvedAt || null,
+        rejectedAt: mockup?.clientApproval?.rejectedAt || null,
+        rejectionReason: String(
+          mockup?.clientApproval?.rejectionReason ||
+            mockup?.clientApproval?.note ||
+            "",
+        ).trim(),
+      },
+    });
+  }
+
+  return normalized.sort((left, right) => {
+    if (left.version !== right.version) return left.version - right.version;
+    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
+    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
+    return leftTime - rightTime;
+  });
+};
+
 const getSampleApprovalStatus = (sampleApproval = {}) => {
   const explicit = String(sampleApproval?.status || "")
     .trim()
@@ -565,6 +631,10 @@ const ProjectDetail = ({ user }) => {
   const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
   const currentUserId = toEntityId(user?._id || user?.id);
+  const projectLeadUserId = toEntityId(project?.projectLeadId);
+  const isProjectLead = Boolean(
+    currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
+  );
   const deliveryDateValue = project?.details?.deliveryDate;
   const deliveryTimeValue = project?.details?.deliveryTime;
   const deliveryDeadline = useMemo(
@@ -1111,7 +1181,10 @@ const ProjectDetail = ({ user }) => {
                 readOnly={true}
               />
               <ReferenceMaterialsCard project={project} />
-              <ApprovedMockupCard project={project} />
+              <ApprovedMockupCard
+                project={project}
+                hideRejected={isProjectLead}
+              />
               <RisksCard
                 risks={project.uncontrollableFactors}
                 projectId={project._id}
@@ -2337,22 +2410,62 @@ const ReferenceMaterialsCard = ({ project }) => {
   );
 };
 
-const ApprovedMockupCard = ({ project }) => {
-  const mockup = project.mockup || {};
-  const mockupUrl = mockup.fileUrl;
-  const mockupName =
-    mockup.fileName || (mockupUrl ? mockupUrl.split("/").pop() : "");
-  const parsedVersion = Number.parseInt(mockup.version, 10);
-  const mockupVersion =
-    Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : null;
-  const mockupVersionLabel = mockupVersion ? `v${mockupVersion}` : "";
-  const mockupApprovalStatus = getMockupApprovalStatus(
-    mockup?.clientApproval || {},
+const ApprovedMockupCard = ({ project, hideRejected = false }) => {
+  const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
+  const mockupVersions = useMemo(
+    () => getMockupVersions(project?.mockup || {}),
+    [project?.mockup],
   );
-  const isClientApproved = mockupApprovalStatus === "approved";
-  const isClientRejected = mockupApprovalStatus === "rejected";
-  const approvedAtLabel = mockup?.clientApproval?.approvedAt
-    ? new Date(mockup.clientApproval.approvedAt).toLocaleString("en-US", {
+  const visibleMockupVersions = useMemo(() => {
+    if (!hideRejected) return mockupVersions;
+    return mockupVersions.filter(
+      (entry) => getMockupApprovalStatus(entry.clientApproval || {}) !== "rejected",
+    );
+  }, [mockupVersions, hideRejected]);
+  const mockupCarouselVersions = useMemo(
+    () => visibleMockupVersions.slice().reverse(),
+    [visibleMockupVersions],
+  );
+
+  useEffect(() => {
+    if (mockupCarouselVersions.length === 0) {
+      setMockupCarouselIndex(0);
+      return;
+    }
+    setMockupCarouselIndex((prev) =>
+      Math.min(Math.max(prev, 0), mockupCarouselVersions.length - 1),
+    );
+  }, [mockupCarouselVersions.length]);
+
+  const latestMockupVersion =
+    visibleMockupVersions.length > 0
+      ? visibleMockupVersions[visibleMockupVersions.length - 1]
+      : null;
+  const latestMockupDecision = getMockupApprovalStatus(
+    latestMockupVersion?.clientApproval || {},
+  );
+  const latestMockupLabel = latestMockupVersion
+    ? `v${latestMockupVersion.version}`
+    : "";
+  const activeMockupVersion =
+    mockupCarouselVersions[mockupCarouselIndex] || mockupCarouselVersions[0] || null;
+
+  if (!activeMockupVersion) return null;
+
+  const activeMockupDecision = getMockupApprovalStatus(
+    activeMockupVersion?.clientApproval || {},
+  );
+  const activeMockupFileName =
+    activeMockupVersion.fileName ||
+    (activeMockupVersion.fileUrl
+      ? activeMockupVersion.fileUrl.split("/").pop()
+      : "Mockup");
+  const activeMockupIsImage = isImageReferenceFile(
+    activeMockupVersion.fileUrl,
+    activeMockupVersion.fileType,
+  );
+  const activeMockupUploadedAt = activeMockupVersion.uploadedAt
+    ? new Date(activeMockupVersion.uploadedAt).toLocaleString("en-US", {
         month: "short",
         day: "numeric",
         year: "numeric",
@@ -2360,76 +2473,130 @@ const ApprovedMockupCard = ({ project }) => {
         minute: "2-digit",
       })
     : "";
-  const rejectedAtLabel = mockup?.clientApproval?.rejectedAt
-    ? new Date(mockup.clientApproval.rejectedAt).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "";
-  const rejectionReason = String(
-    mockup?.clientApproval?.rejectionReason ||
-      mockup?.clientApproval?.note ||
-      "",
+  const activeMockupReason = String(
+    activeMockupVersion?.clientApproval?.rejectionReason || "",
   ).trim();
 
-  if (!mockupUrl) return null;
+  const openPreview = () => {
+    if (!activeMockupVersion?.fileUrl) return;
+    window.open(activeMockupVersion.fileUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="detail-card approved-mockup-card">
       <div className="card-header">
-        <h3 className="card-title">
-          Approved Mockup
-          {mockupVersionLabel && (
-            <span className="mockup-version-pill">{mockupVersionLabel}</span>
-          )}
-        </h3>
+        <h3 className="card-title">Mockups</h3>
       </div>
       <div className="mockup-approval-body">
-        {mockupApprovalStatus === "pending" && (
-          <div className="mockup-approval-banner pending">
-            Pending client approval.
-          </div>
-        )}
-        {isClientApproved && approvedAtLabel && (
-          <div className="mockup-approval-banner approved">
-            Client approved: {approvedAtLabel}
-          </div>
-        )}
-        {isClientRejected && (
-          <div className="mockup-approval-banner rejected">
-            Client rejected
-            {rejectedAtLabel ? `: ${rejectedAtLabel}` : " this mockup version."}
-          </div>
-        )}
-        {isClientRejected && rejectionReason && (
-          <div className="mockup-approval-reason">
-            Reason: {rejectionReason}
-          </div>
-        )}
-        <div className="mockup-file-row">
-          <Link
-            to={`${mockupUrl}`}
+        <div
+          className={`mockup-approval-status ${latestMockupDecision || "pending"}`}
+        >
+          Latest: {latestMockupLabel || "v1"}{" "}
+          {latestMockupDecision === "approved"
+            ? "Client Approved"
+            : latestMockupDecision === "rejected"
+              ? "Client Rejected"
+              : "Pending Client Approval"}
+        </div>
+
+        <div className="mockup-carousel">
+          <button
+            type="button"
+            className="mockup-carousel-nav"
+            onClick={() =>
+              setMockupCarouselIndex((previous) => Math.max(previous - 1, 0))
+            }
+            disabled={mockupCarouselIndex === 0}
+            aria-label="Previous mockup"
+          >
+            {"<"}
+          </button>
+          <button
+            type="button"
+            className={`mockup-carousel-frame ${
+              activeMockupIsImage ? "is-image" : "is-file"
+            }`}
+            onClick={openPreview}
+          >
+            {activeMockupIsImage ? (
+              <img
+                src={activeMockupVersion.fileUrl}
+                alt={activeMockupFileName}
+              />
+            ) : (
+              <span>Preview unavailable for this file type</span>
+            )}
+          </button>
+          <button
+            type="button"
+            className="mockup-carousel-nav"
+            onClick={() =>
+              setMockupCarouselIndex((previous) =>
+                Math.min(previous + 1, mockupCarouselVersions.length - 1),
+              )
+            }
+            disabled={mockupCarouselIndex >= mockupCarouselVersions.length - 1}
+            aria-label="Next mockup"
+          >
+            {">"}
+          </button>
+        </div>
+
+        <div className="mockup-carousel-caption">
+          <strong>v{activeMockupVersion.version}</strong>
+          <span>{activeMockupFileName}</span>
+          {activeMockupUploadedAt && <span>Uploaded: {activeMockupUploadedAt}</span>}
+          {activeMockupDecision === "rejected" && activeMockupReason && (
+            <span className="mockup-approval-meta rejection">
+              Reason: {activeMockupReason}
+            </span>
+          )}
+        </div>
+
+        <div className="mockup-version-links">
+          <a
+            href={activeMockupVersion.fileUrl}
             target="_blank"
             rel="noopener noreferrer"
-            reloadDocument
-            className="mockup-file-link"
           >
-            {mockupName || "View Mockup"}
-          </Link>
-          <Link
-            to={`${mockupUrl}`}
-            download
-            reloadDocument
-            className="mockup-download-link"
-          >
+            View
+          </a>
+          <a href={activeMockupVersion.fileUrl} download>
             Download
-          </Link>
+          </a>
         </div>
-        {mockup.note && (
-          <div className="mockup-approval-note">Note: {mockup.note}</div>
+
+        <div className="mockup-carousel-track">
+          {mockupCarouselVersions.map((version, index) => {
+            const decision = getMockupApprovalStatus(version.clientApproval || {});
+            return (
+              <button
+                key={
+                  version.entryId
+                    ? `mockup-version-tab-${version.entryId}`
+                    : `mockup-version-tab-${version.version}-${index}`
+                }
+                type="button"
+                className={`mockup-carousel-tab ${
+                  mockupCarouselIndex === index ? "active" : ""
+                }`}
+                onClick={() => setMockupCarouselIndex(index)}
+              >
+                <span className="mockup-carousel-tab-version">
+                  v{version.version}
+                </span>
+                <span className={`mockup-carousel-tab-status ${decision}`}>
+                  {decision}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeMockupVersion.note && (
+          <div className="mockup-approval-meta">
+            Note: {activeMockupVersion.note}
+          </div>
         )}
       </div>
     </div>

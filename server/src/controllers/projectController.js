@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const fs = require("fs");
 const Project = require("../models/Project");
 const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
@@ -3449,6 +3450,7 @@ const getNormalizedMockupVersions = (project = {}) => {
       const approvalStatus = getMockupApprovalStatus(entry?.clientApproval || {});
 
       return {
+        entryId: entry?._id || entry?.id || null,
         version,
         fileUrl: toText(entry?.fileUrl),
         fileName: toText(entry?.fileName),
@@ -3476,6 +3478,7 @@ const getNormalizedMockupVersions = (project = {}) => {
       Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
 
     versions.push({
+      entryId: mockup?._id || mockup?.id || null,
       version: fallbackVersion,
       fileUrl: toText(mockup.fileUrl),
       fileName: toText(mockup.fileName),
@@ -3712,6 +3715,7 @@ const notifyMockupRejected = async ({
   senderId,
   version,
   rejectionReason = "",
+  fileName = "",
 }) => {
   try {
     const projectId = toObjectIdString(project?._id);
@@ -3732,8 +3736,10 @@ const notifyMockupRejected = async ({
 
     const versionLabel = buildMockupVersionLabel(version);
     const safeReason = toText(rejectionReason);
+    const safeFileName = toText(fileName);
+    const fileSuffix = safeFileName ? ` (${safeFileName})` : "";
     const reasonSuffix = safeReason ? ` Reason: ${safeReason}.` : "";
-    const message = `Client rejected ${versionLabel} for project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Graphics should upload a revised mockup.${reasonSuffix}`;
+    const message = `Client rejected ${versionLabel}${fileSuffix} for project #${getProjectDisplayRef(project)} (${getProjectDisplayName(project)}). Graphics should upload a revised mockup.${reasonSuffix}`;
 
     await Promise.all(
       uniqueRecipients.map((recipientId) =>
@@ -6888,8 +6894,14 @@ const uploadProjectMockup = async (req, res) => {
   try {
     const { id } = req.params;
     const { note } = req.body;
+    const files = Array.isArray(req.files)
+      ? req.files
+      : req.file
+        ? [req.file]
+        : [];
+    const trimmedNote = String(note || "").trim();
 
-    if (!req.file) {
+    if (files.length === 0) {
       return res.status(400).json({ message: "Mockup file is required" });
     }
 
@@ -6954,29 +6966,63 @@ const uploadProjectMockup = async (req, res) => {
       return Math.max(maxVersion, parsedVersion);
     }, 0);
 
-    const nextVersion = highestVersion + 1;
-    const uploadedAt = new Date();
-    const versionEntry = {
-      version: nextVersion,
-      fileUrl: `/uploads/${req.file.filename}`,
-      fileName: req.file.originalname,
-      fileType: req.file.mimetype,
-      note: (note || "").trim(),
-      uploadedBy: req.user._id,
-      uploadedAt,
-      clientApproval: {
-        status: "pending",
-        isApproved: false,
-        approvedAt: null,
-        approvedBy: null,
-        rejectedAt: null,
-        rejectedBy: null,
-        rejectionReason: "",
-        note: "",
-      },
-    };
+    const appendToLatest = parseBooleanFlag(
+      req.body?.appendToLatest ??
+        req.body?.append ??
+        req.query?.appendToLatest ??
+        req.query?.append,
+      false,
+    );
+    const latestExistingEntry = existingVersions.reduce((latest, entry) => {
+      if (!latest) return entry;
+      const latestVersionNumber = Number.parseInt(latest?.version, 10) || 0;
+      const entryVersionNumber = Number.parseInt(entry?.version, 10) || 0;
+      if (entryVersionNumber !== latestVersionNumber) {
+        return entryVersionNumber > latestVersionNumber ? entry : latest;
+      }
+      const latestTime = latest?.uploadedAt
+        ? new Date(latest.uploadedAt).getTime()
+        : 0;
+      const entryTime = entry?.uploadedAt
+        ? new Date(entry.uploadedAt).getTime()
+        : 0;
+      return entryTime >= latestTime ? entry : latest;
+    }, null);
 
-    const mergedVersions = [...existingVersions, versionEntry].sort(
+    const canAppendToLatest = appendToLatest && existingVersions.length > 0;
+
+    const nextVersionNumber = canAppendToLatest
+      ? highestVersion || 1
+      : highestVersion + 1;
+    const baseUploadTime = new Date();
+    const newEntries = files.map((file, index) => {
+      const versionNumber = nextVersionNumber;
+      const uploadedAt = new Date(baseUploadTime.getTime() + index);
+      return {
+        version: versionNumber,
+        fileUrl: `/uploads/${file.filename}`,
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        note: trimmedNote,
+        uploadedBy: req.user._id,
+        uploadedAt,
+        clientApproval: {
+          status: "pending",
+          isApproved: false,
+          approvedAt: null,
+          approvedBy: null,
+          rejectedAt: null,
+          rejectedBy: null,
+          rejectionReason: "",
+          note: "",
+        },
+      };
+    });
+
+    const latestEntry = newEntries[newEntries.length - 1];
+    const latestVersion = latestEntry?.version || nextVersionNumber;
+
+    const mergedVersions = [...existingVersions, ...newEntries].sort(
       (left, right) => {
         const leftVersion = Number.parseInt(left?.version, 10) || 0;
         const rightVersion = Number.parseInt(right?.version, 10) || 0;
@@ -6985,13 +7031,13 @@ const uploadProjectMockup = async (req, res) => {
     );
 
     project.mockup = {
-      fileUrl: versionEntry.fileUrl,
-      fileName: versionEntry.fileName,
-      fileType: versionEntry.fileType,
-      note: versionEntry.note,
-      uploadedBy: versionEntry.uploadedBy,
-      uploadedAt: versionEntry.uploadedAt,
-      version: nextVersion,
+      fileUrl: latestEntry.fileUrl,
+      fileName: latestEntry.fileName,
+      fileType: latestEntry.fileType,
+      note: latestEntry.note,
+      uploadedBy: latestEntry.uploadedBy,
+      uploadedAt: latestEntry.uploadedAt,
+      version: latestVersion,
       clientApproval: {
         status: "pending",
         isApproved: false,
@@ -7028,7 +7074,8 @@ const uploadProjectMockup = async (req, res) => {
             : ["in_progress", "dept_submitted"];
         const transitionTime = new Date();
         const transitionNote =
-          toText(note) || `Mockup ${buildMockupVersionLabel(nextVersion)} uploaded.`;
+          trimmedNote ||
+          `Mockup ${buildMockupVersionLabel(latestVersion)} uploaded.`;
 
         requirementItem.history = Array.isArray(requirementItem.history)
           ? requirementItem.history
@@ -7063,26 +7110,31 @@ const uploadProjectMockup = async (req, res) => {
 
     await project.save();
 
-    await createProjectSystemUpdateAndSnapshot({
-      project,
-      authorId: req.user._id || req.user.id,
-      category: "Graphics",
-      content: buildMockupPendingApprovalUpdateText(nextVersion),
-    });
+    for (const entry of newEntries) {
+      await createProjectSystemUpdateAndSnapshot({
+        project,
+        authorId: req.user._id || req.user.id,
+        category: "Graphics",
+        content: buildMockupPendingApprovalUpdateText(entry.version),
+      });
 
-    await logActivity(
-      project._id,
-      req.user._id,
-      "mockup_upload",
-      `Mockup ${buildMockupVersionLabel(nextVersion)} uploaded.`,
-      {
-        mockup: {
-          version: nextVersion,
-          fileUrl: project.mockup.fileUrl,
-          note: project.mockup.note,
+      await logActivity(
+        project._id,
+        req.user._id,
+        "mockup_upload",
+        `Mockup ${buildMockupVersionLabel(entry.version)} uploaded${
+          entry.fileName ? ` (${entry.fileName})` : ""
+        }.`,
+        {
+          mockup: {
+            version: entry.version,
+            fileUrl: entry.fileUrl,
+            fileName: entry.fileName,
+            note: entry.note,
+          },
         },
-      },
-    );
+      );
+    }
 
     if (quoteMockupRequirementAutoMoved) {
       await logActivity(
@@ -7120,11 +7172,13 @@ const uploadProjectMockup = async (req, res) => {
       }
     }
 
-    await notifyMockupVersionUploaded({
-      project,
-      senderId: req.user._id,
-      version: nextVersion,
-    });
+    for (const entry of newEntries) {
+      await notifyMockupVersionUploaded({
+        project,
+        senderId: req.user._id,
+        version: entry.version,
+      });
+    }
 
     const populatedProject = await buildProjectResponseQuery(project._id);
     res.json(populatedProject || project);
@@ -7134,7 +7188,234 @@ const uploadProjectMockup = async (req, res) => {
   }
 };
 
-// @desc    Confirm client approval for latest mockup version
+// @desc    Delete a mockup version for a project
+// @route   DELETE /api/projects/:id/mockup/:version
+// @access  Private (Graphics/Design or Admin)
+const deleteProjectMockupVersion = async (req, res) => {
+  try {
+    const { id, version } = req.params;
+    const requestedToken = String(version || "").trim();
+    const requestedEntryId = toObjectIdString(requestedToken);
+    const hasEntryId = mongoose.isValidObjectId(requestedEntryId);
+    const parsedVersion = Number.parseInt(requestedToken, 10);
+    const requestedVersion =
+      Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : null;
+
+    if (!hasEntryId && !requestedVersion) {
+      return res.status(400).json({
+        message: "A valid mockup entry is required.",
+      });
+    }
+
+    const project = await Project.findById(id);
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+
+    const userDepts = Array.isArray(req.user.department)
+      ? req.user.department
+      : req.user.department
+        ? [req.user.department]
+        : [];
+    const isAdmin = req.user.role === "admin";
+    const isGraphics = userDepts.includes("Graphics/Design");
+
+    if (!isAdmin && !isGraphics) {
+      return res.status(403).json({
+        message: "Not authorized to delete mockups",
+      });
+    }
+
+    if (!isMockupWorkflowStatusAllowed(project, project.status)) {
+      return res.status(400).json({
+        message: getMockupWorkflowStatusMessage(project),
+      });
+    }
+
+    project.mockup = project.mockup || {};
+    if (!Array.isArray(project.mockup.versions)) {
+      project.mockup.versions = [];
+    }
+
+    if (project.mockup.versions.length === 0 && project.mockup.fileUrl) {
+      project.mockup.versions.push({
+        version: project.mockup.version || 1,
+        fileUrl: project.mockup.fileUrl,
+        fileName: project.mockup.fileName,
+        fileType: project.mockup.fileType,
+        note: project.mockup.note || "",
+        uploadedBy: project.mockup.uploadedBy || null,
+        uploadedAt: project.mockup.uploadedAt || null,
+        clientApproval: {
+          status: getMockupApprovalStatus(project.mockup?.clientApproval || {}),
+          isApproved: Boolean(project.mockup?.clientApproval?.isApproved),
+          approvedAt: project.mockup?.clientApproval?.approvedAt || null,
+          approvedBy: project.mockup?.clientApproval?.approvedBy || null,
+          rejectedAt: project.mockup?.clientApproval?.rejectedAt || null,
+          rejectedBy: project.mockup?.clientApproval?.rejectedBy || null,
+          rejectionReason: project.mockup?.clientApproval?.rejectionReason || "",
+          note: project.mockup?.clientApproval?.note || "",
+        },
+      });
+    }
+
+    if (project.mockup.versions.length === 0) {
+      return res.status(400).json({
+        message: "No mockup has been uploaded yet.",
+      });
+    }
+
+    let targetEntry = null;
+    if (hasEntryId) {
+      targetEntry = project.mockup.versions.find(
+        (entry) => toObjectIdString(entry?._id) === requestedEntryId,
+      );
+    }
+
+    if (!targetEntry && requestedVersion) {
+      const candidates = project.mockup.versions.filter((entry) => {
+        const parsed = Number.parseInt(entry?.version, 10);
+        return Number.isFinite(parsed) && parsed === requestedVersion;
+      });
+      if (candidates.length > 0) {
+        candidates.sort((left, right) => {
+          const leftTime = left?.uploadedAt
+            ? new Date(left.uploadedAt).getTime()
+            : 0;
+          const rightTime = right?.uploadedAt
+            ? new Date(right.uploadedAt).getTime()
+            : 0;
+          return leftTime - rightTime;
+        });
+        targetEntry = candidates[candidates.length - 1];
+      }
+    }
+
+    if (!targetEntry?.fileUrl) {
+      return res.status(400).json({
+        message: "Selected mockup version is not available.",
+      });
+    }
+
+    const targetFileUrl = targetEntry.fileUrl;
+    const targetFileName = targetEntry.fileName;
+    const targetVersionNumber =
+      Number.parseInt(targetEntry?.version, 10) || requestedVersion || 1;
+
+    if (typeof targetEntry.remove === "function") {
+      targetEntry.remove();
+    } else {
+      project.mockup.versions = project.mockup.versions.filter(
+        (entry) => toObjectIdString(entry?._id) !== toObjectIdString(targetEntry?._id),
+      );
+    }
+
+    const remainingVersions = project.mockup.versions;
+
+    if (remainingVersions.length === 0) {
+      project.mockup.fileUrl = "";
+      project.mockup.fileName = "";
+      project.mockup.fileType = "";
+      project.mockup.note = "";
+      project.mockup.uploadedBy = null;
+      project.mockup.uploadedAt = null;
+      project.mockup.version = 1;
+      project.mockup.clientApproval = {
+        status: "pending",
+        isApproved: false,
+        approvedAt: null,
+        approvedBy: null,
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectionReason: "",
+        note: "",
+        approvedVersion: null,
+      };
+    } else {
+      const latestVersion = remainingVersions.reduce((latest, entry) => {
+        if (!latest) return entry;
+        const latestVersionNumber = Number.parseInt(latest?.version, 10) || 0;
+        const entryVersionNumber = Number.parseInt(entry?.version, 10) || 0;
+        if (entryVersionNumber !== latestVersionNumber) {
+          return entryVersionNumber > latestVersionNumber ? entry : latest;
+        }
+        const latestTime = latest?.uploadedAt
+          ? new Date(latest.uploadedAt).getTime()
+          : 0;
+        const entryTime = entry?.uploadedAt
+          ? new Date(entry.uploadedAt).getTime()
+          : 0;
+        return entryTime >= latestTime ? entry : latest;
+      }, null);
+
+      const approvalStatus = getMockupApprovalStatus(
+        latestVersion?.clientApproval || {},
+      );
+
+      project.mockup.fileUrl = latestVersion?.fileUrl || "";
+      project.mockup.fileName = latestVersion?.fileName || "";
+      project.mockup.fileType = latestVersion?.fileType || "";
+      project.mockup.note = latestVersion?.note || "";
+      project.mockup.uploadedBy = latestVersion?.uploadedBy || null;
+      project.mockup.uploadedAt = latestVersion?.uploadedAt || null;
+      project.mockup.version = latestVersion?.version || 1;
+      project.mockup.clientApproval = {
+        status: approvalStatus,
+        isApproved: approvalStatus === "approved",
+        approvedAt: latestVersion?.clientApproval?.approvedAt || null,
+        approvedBy: latestVersion?.clientApproval?.approvedBy || null,
+        rejectedAt: latestVersion?.clientApproval?.rejectedAt || null,
+        rejectedBy: latestVersion?.clientApproval?.rejectedBy || null,
+        rejectionReason: latestVersion?.clientApproval?.rejectionReason || "",
+        note: latestVersion?.clientApproval?.note || "",
+        approvedVersion:
+          approvalStatus === "approved" ? latestVersion?.version || null : null,
+      };
+    }
+
+    await project.save();
+
+    const versionLabel = buildMockupVersionLabel(targetVersionNumber);
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Graphics",
+      content: `Mockup ${versionLabel} deleted by Graphics.`,
+    });
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_delete",
+      `Mockup ${versionLabel} deleted.`,
+      {
+        mockup: {
+          version: targetVersionNumber,
+          entryId: toObjectIdString(targetEntry?._id),
+          fileUrl: targetFileUrl,
+          fileName: targetFileName,
+        },
+      },
+    );
+
+    const filePath = upload.resolveUploadPathFromUrl(targetFileUrl);
+    if (filePath) {
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (error) {
+        if (error?.code !== "ENOENT") {
+          console.error("Failed to remove mockup file:", error);
+        }
+      }
+    }
+
+    const populatedProject = await buildProjectResponseQuery(project._id);
+    res.json(populatedProject || project);
+  } catch (error) {
+    console.error("Error deleting mockup:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Confirm client approval for a mockup version
 // @route   POST /api/projects/:id/mockup/approve
 // @access  Private (Front Desk or Admin)
 const approveProjectMockup = async (req, res) => {
@@ -7156,20 +7437,15 @@ const approveProjectMockup = async (req, res) => {
     }
 
     const latestVersion = normalizedVersions[normalizedVersions.length - 1];
+    const requestedEntryId = toObjectIdString(req.body?.entryId);
+    const hasEntryId = mongoose.isValidObjectId(requestedEntryId);
     const requestedVersionRaw = Number.parseInt(req.body?.version, 10);
-    const requestedVersion =
+    let requestedVersion =
       Number.isFinite(requestedVersionRaw) && requestedVersionRaw > 0
         ? requestedVersionRaw
         : latestVersion.version;
-
-    if (requestedVersion !== latestVersion.version) {
-      return res.status(400).json({
-        message: `Only the latest mockup version (${buildMockupVersionLabel(latestVersion.version)}) can be approved.`,
-      });
-    }
-
-    const requestedVersionLabel = buildMockupVersionLabel(requestedVersion);
     const approvalNote = toText(req.body?.note);
+    let versionEntry = null;
 
     project.mockup = project.mockup || {};
     if (!Array.isArray(project.mockup.versions)) {
@@ -7198,16 +7474,31 @@ const approveProjectMockup = async (req, res) => {
       });
     }
 
-    const versionEntry = project.mockup.versions.find((entry) => {
-      const parsed = Number.parseInt(entry?.version, 10);
-      return Number.isFinite(parsed) && parsed === requestedVersion;
-    });
+    if (hasEntryId) {
+      versionEntry = project.mockup.versions.find(
+        (entry) => toObjectIdString(entry?._id) === requestedEntryId,
+      );
+    }
+
+    if (!versionEntry) {
+      versionEntry = project.mockup.versions.find((entry) => {
+        const parsed = Number.parseInt(entry?.version, 10);
+        return Number.isFinite(parsed) && parsed === requestedVersion;
+      });
+    }
 
     if (!versionEntry?.fileUrl) {
       return res.status(400).json({
         message: "Selected mockup version is not available.",
       });
     }
+
+    requestedVersion =
+      Number.parseInt(versionEntry?.version, 10) || latestVersion.version;
+    const requestedVersionLabel = buildMockupVersionLabel(requestedVersion);
+    const isLatestRequested = latestVersion?.entryId
+      ? toObjectIdString(versionEntry?._id) === toObjectIdString(latestVersion.entryId)
+      : requestedVersion === latestVersion.version;
 
     if (versionEntry?.clientApproval?.isApproved) {
       return res.status(400).json({
@@ -7229,43 +7520,52 @@ const approveProjectMockup = async (req, res) => {
 
     versionEntry.clientApproval = approvalState;
 
-    project.mockup.fileUrl = versionEntry.fileUrl;
-    project.mockup.fileName = versionEntry.fileName;
-    project.mockup.fileType = versionEntry.fileType;
-    project.mockup.note = versionEntry.note || "";
-    project.mockup.uploadedBy = versionEntry.uploadedBy || null;
-    project.mockup.uploadedAt = versionEntry.uploadedAt || null;
-    project.mockup.version = requestedVersion;
-    project.mockup.clientApproval = {
-      ...approvalState,
-      approvedVersion: requestedVersion,
-    };
+    if (isLatestRequested) {
+      project.mockup.fileUrl = versionEntry.fileUrl;
+      project.mockup.fileName = versionEntry.fileName;
+      project.mockup.fileType = versionEntry.fileType;
+      project.mockup.note = versionEntry.note || "";
+      project.mockup.uploadedBy = versionEntry.uploadedBy || null;
+      project.mockup.uploadedAt = versionEntry.uploadedAt || null;
+      project.mockup.version = requestedVersion;
+      project.mockup.clientApproval = {
+        ...approvalState,
+        approvedVersion: requestedVersion,
+      };
+    }
 
-    const quoteMockupDecisionSync = syncQuoteMockupRequirementDecision({
-      project,
-      targetStatus: "client_approved",
-      actorId: req.user._id,
-      note:
-        approvalNote ||
-        `Client approved ${requestedVersionLabel} via Front Desk/Admin review.`,
-    });
+    const quoteMockupDecisionSync = isLatestRequested
+      ? syncQuoteMockupRequirementDecision({
+          project,
+          targetStatus: "client_approved",
+          actorId: req.user._id,
+          note:
+            approvalNote ||
+            `Client approved ${requestedVersionLabel} via Front Desk/Admin review.`,
+        })
+      : null;
 
     await project.save();
+
+    const approvalFileName = toText(versionEntry?.fileName);
+    const approvalFileSuffix = approvalFileName ? ` (${approvalFileName})` : "";
 
     await logActivity(
       project._id,
       req.user._id,
       "mockup_approval",
-      `Client approval confirmed for mockup ${requestedVersionLabel}.`,
+      `Client approval confirmed for mockup ${requestedVersionLabel}${approvalFileSuffix}.`,
       {
         mockupApproval: {
           version: requestedVersion,
+          entryId: toObjectIdString(versionEntry?._id),
           note: approvalNote,
+          fileName: approvalFileName,
         },
       },
     );
 
-    if (quoteMockupDecisionSync.changed) {
+    if (quoteMockupDecisionSync?.changed) {
       await logActivity(
         project._id,
         req.user._id,
@@ -7287,7 +7587,7 @@ const approveProjectMockup = async (req, res) => {
       );
     }
 
-    if (quoteMockupDecisionSync.statusSync?.changed) {
+    if (quoteMockupDecisionSync?.statusSync?.changed) {
       await logActivity(
         project._id,
         req.user._id,
@@ -7302,18 +7602,20 @@ const approveProjectMockup = async (req, res) => {
       );
     }
 
-    await createProjectSystemUpdateAndSnapshot({
-      project,
-      authorId: req.user._id || req.user.id,
-      category: "Graphics",
-      content: MOCKUP_APPROVED_BY_CLIENT_UPDATE_TEXT,
-    });
+    if (isLatestRequested) {
+      await createProjectSystemUpdateAndSnapshot({
+        project,
+        authorId: req.user._id || req.user.id,
+        category: "Graphics",
+        content: MOCKUP_APPROVED_BY_CLIENT_UPDATE_TEXT,
+      });
 
-    await notifyMockupApprovalConfirmed({
-      project,
-      senderId: req.user._id,
-      version: requestedVersion,
-    });
+      await notifyMockupApprovalConfirmed({
+        project,
+        senderId: req.user._id,
+        version: requestedVersion,
+      });
+    }
 
     const populatedProject = await buildProjectResponseQuery(project._id);
     res.json(populatedProject || project);
@@ -7323,7 +7625,7 @@ const approveProjectMockup = async (req, res) => {
   }
 };
 
-// @desc    Record client rejection for latest mockup version
+// @desc    Record client rejection for a mockup version
 // @route   POST /api/projects/:id/mockup/reject
 // @access  Private (Front Desk or Admin)
 const rejectProjectMockup = async (req, res) => {
@@ -7351,17 +7653,13 @@ const rejectProjectMockup = async (req, res) => {
     }
 
     const latestVersion = normalizedVersions[normalizedVersions.length - 1];
+    const requestedEntryId = toObjectIdString(req.body?.entryId);
+    const hasEntryId = mongoose.isValidObjectId(requestedEntryId);
     const requestedVersionRaw = Number.parseInt(req.body?.version, 10);
-    const requestedVersion =
+    let requestedVersion =
       Number.isFinite(requestedVersionRaw) && requestedVersionRaw > 0
         ? requestedVersionRaw
         : latestVersion.version;
-
-    if (requestedVersion !== latestVersion.version) {
-      return res.status(400).json({
-        message: `Only the latest mockup version (${buildMockupVersionLabel(latestVersion.version)}) can be rejected.`,
-      });
-    }
 
     const rejectionReason = toText(req.body?.reason);
 
@@ -7392,16 +7690,32 @@ const rejectProjectMockup = async (req, res) => {
       });
     }
 
-    const versionEntry = project.mockup.versions.find((entry) => {
-      const parsed = Number.parseInt(entry?.version, 10);
-      return Number.isFinite(parsed) && parsed === requestedVersion;
-    });
+    let versionEntry = null;
+    if (hasEntryId) {
+      versionEntry = project.mockup.versions.find(
+        (entry) => toObjectIdString(entry?._id) === requestedEntryId,
+      );
+    }
+
+    if (!versionEntry) {
+      versionEntry = project.mockup.versions.find((entry) => {
+        const parsed = Number.parseInt(entry?.version, 10);
+        return Number.isFinite(parsed) && parsed === requestedVersion;
+      });
+    }
 
     if (!versionEntry?.fileUrl) {
       return res.status(400).json({
         message: "Selected mockup version is not available.",
       });
     }
+
+    requestedVersion =
+      Number.parseInt(versionEntry?.version, 10) || latestVersion.version;
+    const versionLabel = buildMockupVersionLabel(requestedVersion);
+    const isLatestRequested = latestVersion?.entryId
+      ? toObjectIdString(versionEntry?._id) === toObjectIdString(latestVersion.entryId)
+      : requestedVersion === latestVersion.version;
 
     const rejectionAt = new Date();
     const decisionState = {
@@ -7416,44 +7730,52 @@ const rejectProjectMockup = async (req, res) => {
     };
 
     versionEntry.clientApproval = decisionState;
-    project.mockup.fileUrl = versionEntry.fileUrl;
-    project.mockup.fileName = versionEntry.fileName;
-    project.mockup.fileType = versionEntry.fileType;
-    project.mockup.note = versionEntry.note || "";
-    project.mockup.uploadedBy = versionEntry.uploadedBy || null;
-    project.mockup.uploadedAt = versionEntry.uploadedAt || null;
-    project.mockup.version = requestedVersion;
-    project.mockup.clientApproval = {
-      ...decisionState,
-      approvedVersion: null,
-    };
+    if (isLatestRequested) {
+      project.mockup.fileUrl = versionEntry.fileUrl;
+      project.mockup.fileName = versionEntry.fileName;
+      project.mockup.fileType = versionEntry.fileType;
+      project.mockup.note = versionEntry.note || "";
+      project.mockup.uploadedBy = versionEntry.uploadedBy || null;
+      project.mockup.uploadedAt = versionEntry.uploadedAt || null;
+      project.mockup.version = requestedVersion;
+      project.mockup.clientApproval = {
+        ...decisionState,
+        approvedVersion: null,
+      };
+    }
 
-    const versionLabel = buildMockupVersionLabel(requestedVersion);
-    const quoteMockupDecisionSync = syncQuoteMockupRequirementDecision({
-      project,
-      targetStatus: "client_revision_requested",
-      actorId: req.user._id,
-      note:
-        rejectionReason ||
-        `Client requested revision for ${versionLabel} via Front Desk/Admin review.`,
-    });
+    const quoteMockupDecisionSync = isLatestRequested
+      ? syncQuoteMockupRequirementDecision({
+          project,
+          targetStatus: "client_revision_requested",
+          actorId: req.user._id,
+          note:
+            rejectionReason ||
+            `Client requested revision for ${versionLabel} via Front Desk/Admin review.`,
+        })
+      : null;
 
     await project.save();
+
+    const rejectionFileName = toText(versionEntry?.fileName);
+    const rejectionFileSuffix = rejectionFileName ? ` (${rejectionFileName})` : "";
 
     await logActivity(
       project._id,
       req.user._id,
       "mockup_rejection",
-      `Client rejected mockup ${versionLabel}.`,
+      `Client rejected mockup ${versionLabel}${rejectionFileSuffix}.`,
       {
         mockupRejection: {
           version: requestedVersion,
           reason: rejectionReason,
+          entryId: toObjectIdString(versionEntry?._id),
+          fileName: rejectionFileName,
         },
       },
     );
 
-    if (quoteMockupDecisionSync.changed) {
+    if (quoteMockupDecisionSync?.changed) {
       await logActivity(
         project._id,
         req.user._id,
@@ -7475,7 +7797,7 @@ const rejectProjectMockup = async (req, res) => {
       );
     }
 
-    if (quoteMockupDecisionSync.statusSync?.changed) {
+    if (quoteMockupDecisionSync?.statusSync?.changed) {
       await logActivity(
         project._id,
         req.user._id,
@@ -7495,6 +7817,7 @@ const rejectProjectMockup = async (req, res) => {
       senderId: req.user._id,
       version: requestedVersion,
       rejectionReason,
+      fileName: rejectionFileName,
     });
 
     const populatedProject = await buildProjectResponseQuery(project._id);
@@ -9977,6 +10300,7 @@ module.exports = {
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
   uploadProjectMockup,
+  deleteProjectMockupVersion,
   approveProjectMockup,
   rejectProjectMockup,
   getPendingSmsPrompts,

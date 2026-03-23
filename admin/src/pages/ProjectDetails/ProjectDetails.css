@@ -1364,6 +1364,196 @@
   text-decoration: underline;
 }
 
+.project-mockup-carousel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.project-mockup-nav {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.project-mockup-nav:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.project-mockup-preview {
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+.project-mockup-preview img {
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+
+.project-mockup-preview iframe {
+  width: 100%;
+  height: 320px;
+  border: none;
+}
+
+.project-mockup-fallback {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 1rem;
+}
+
+.project-mockup-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.project-mockup-caption strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.project-mockup-caption span {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.project-mockup-status {
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.65rem;
+}
+
+.project-mockup-status.pending {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.project-mockup-status.approved {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.project-mockup-status.rejected {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.project-mockup-reason {
+  font-size: 0.78rem;
+  color: #b91c1c;
+}
+
+.project-mockup-track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.project-mockup-chip {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.14rem 0.5rem;
+  cursor: pointer;
+}
+
+.project-mockup-chip.active {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.project-mockup-chip.status-pending {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.project-mockup-chip.status-approved {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.project-mockup-chip.status-rejected {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.project-mockup-chip.active.status-pending {
+  border-color: rgba(245, 158, 11, 0.7);
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.project-mockup-chip.active.status-approved {
+  border-color: rgba(16, 185, 129, 0.65);
+  background: rgba(16, 185, 129, 0.2);
+  color: #065f46;
+}
+
+.project-mockup-chip.active.status-rejected {
+  border-color: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
+.project-mockup-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.project-mockup-links a {
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  text-decoration: none;
+  color: #38bdf8;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.project-mockup-links a.download {
+  color: #0f766e;
+  border-color: rgba(13, 148, 136, 0.35);
+}
+
+.project-mockup-note {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 /* Status Change Confirmation */
 .status-confirm-modal {
   display: flex;

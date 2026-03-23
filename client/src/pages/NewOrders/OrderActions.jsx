@@ -528,6 +528,7 @@ const getMockupVersions = (mockup = {}) => {
           : index + 1;
       const decisionStatus = getMockupApprovalStatus(entry?.clientApproval || {});
       return {
+        entryId: entry?._id || entry?.id || null,
         version,
         fileUrl: String(entry?.fileUrl || "").trim(),
         fileName: String(entry?.fileName || "").trim(),
@@ -557,6 +558,7 @@ const getMockupVersions = (mockup = {}) => {
       Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
     const decisionStatus = getMockupApprovalStatus(mockup?.clientApproval || {});
     normalized.push({
+      entryId: mockup?._id || mockup?.id || null,
       version,
       fileUrl: String(mockup.fileUrl || "").trim(),
       fileName: String(mockup.fileName || "").trim(),
@@ -1743,14 +1745,18 @@ const OrderActions = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           version: mockupApprovalModal.version.version,
+          entryId: mockupApprovalModal.version.entryId,
         }),
       });
 
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
+        const fileName = mockupApprovalModal.version.fileName;
         showToast(
-          `Mockup v${mockupApprovalModal.version.version} approved by client.`,
+          `Mockup v${mockupApprovalModal.version.version}${
+            fileName ? ` (${fileName})` : ""
+          } approved by client.`,
           "success",
         );
         closeMockupApprovalModal();
@@ -1782,6 +1788,7 @@ const OrderActions = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           version: mockupRejectionModal.version.version,
+          entryId: mockupRejectionModal.version.entryId,
           reason: mockupRejectionReason.trim(),
         }),
       });
@@ -1789,8 +1796,11 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
+        const fileName = mockupRejectionModal.version.fileName;
         showToast(
-          `Mockup v${mockupRejectionModal.version.version} marked as rejected.`,
+          `Mockup v${mockupRejectionModal.version.version}${
+            fileName ? ` (${fileName})` : ""
+          } marked as rejected.`,
           "success",
         );
         closeMockupRejectionModal();
@@ -2294,9 +2304,6 @@ const OrderActions = () => {
   const activeMockupIsImage = activeMockupVersion
     ? isImageAsset(activeMockupVersion.fileUrl, activeMockupVersion.fileType)
     : false;
-  const activeMockupIsLatest =
-    activeMockupVersion &&
-    Number(activeMockupVersion.version) === Number(latestMockupVersion?.version);
   const canDecideOnMockupVersions =
     canManageMockupApproval &&
     (project?.status === "Pending Mockup" ||
@@ -2919,26 +2926,23 @@ const OrderActions = () => {
                       <button
                         className="action-btn complete-btn"
                         onClick={() => openMockupApprovalModal(activeMockupVersion)}
-                        disabled={!activeMockupIsLatest || activeMockupDecision === "approved"}
+                        disabled={activeMockupDecision === "approved"}
                       >
                         {activeMockupDecision === "approved"
                           ? `Approved (v${activeMockupVersion.version})`
                           : `Confirm Approval (v${activeMockupVersion.version})`}
                       </button>
                     )}
-                    <button
-                      className="action-btn undo-btn"
-                      onClick={() => openMockupRejectionModal(activeMockupVersion)}
-                      disabled={!activeMockupIsLatest || activeMockupDecision === "rejected"}
-                    >
-                      {activeMockupDecision === "rejected"
-                        ? `Rejected (v${activeMockupVersion.version})`
-                        : `Mark Rejected (v${activeMockupVersion.version})`}
-                    </button>
-                    {!activeMockupIsLatest && (
-                      <span className="mockup-version-actions-note">
-                        Only latest version can be approved or rejected.
-                      </span>
+                    {activeMockupDecision !== "approved" && (
+                      <button
+                        className="action-btn undo-btn"
+                        onClick={() => openMockupRejectionModal(activeMockupVersion)}
+                        disabled={activeMockupDecision === "rejected"}
+                      >
+                        {activeMockupDecision === "rejected"
+                          ? `Rejected (v${activeMockupVersion.version})`
+                          : `Mark Rejected (v${activeMockupVersion.version})`}
+                      </button>
                     )}
                   </div>
                 )}
@@ -2946,21 +2950,33 @@ const OrderActions = () => {
                 <div className="mockup-carousel-track">
                   {mockupCarouselVersions.map((version, index) => {
                     const decision = getMockupApprovalStatus(version.clientApproval || {});
+                    const decisionLabel =
+                      decision === "approved"
+                        ? "Approved"
+                        : decision === "rejected"
+                          ? "Rejected"
+                          : "Pending approval";
                     return (
                       <button
-                        key={`mockup-version-tab-${version.version}`}
+                        key={
+                          version.entryId
+                            ? `mockup-version-tab-${version.entryId}`
+                            : `mockup-version-tab-${version.version}-${index}`
+                        }
                         type="button"
                         className={`mockup-carousel-tab ${
                           mockupCarouselIndex === index ? "active" : ""
                         }`}
                         onClick={() => setMockupCarouselIndex(index)}
                       >
-                        v{version.version}{" "}
-                        {decision === "approved"
-                          ? "Approved"
-                          : decision === "rejected"
-                            ? "Rejected"
-                            : "Pending"}
+                        <span className="mockup-carousel-tab-version">
+                          v{version.version}
+                        </span>
+                        <span
+                          className={`mockup-carousel-tab-status ${decision}`}
+                        >
+                          {decisionLabel}
+                        </span>
                       </button>
                     );
                   })}
@@ -3567,6 +3583,11 @@ const OrderActions = () => {
               </strong>
               .
             </p>
+            {mockupApprovalModal.version?.fileName && (
+              <p className="confirm-modal-text">
+                <strong>File:</strong> {mockupApprovalModal.version.fileName}
+              </p>
+            )}
             <div className="confirm-phrase">{MOCKUP_APPROVAL_CONFIRM_PHRASE}</div>
             <div className="confirm-input-group">
               <label>Confirmation</label>
@@ -3615,6 +3636,11 @@ const OrderActions = () => {
               </strong>
               .
             </p>
+            {mockupRejectionModal.version?.fileName && (
+              <p className="confirm-modal-text">
+                <strong>File:</strong> {mockupRejectionModal.version.fileName}
+              </p>
+            )}
             <div className="confirm-phrase">{MOCKUP_REJECTION_CONFIRM_PHRASE}</div>
             <div className="confirm-input-group">
               <label>Confirmation</label>

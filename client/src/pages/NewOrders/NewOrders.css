@@ -2535,12 +2535,50 @@
   font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .mockup-carousel-tab.active {
   border-color: rgba(var(--primary-rgb), 0.4);
   background: var(--primary-soft);
   color: var(--primary-color);
+}
+
+.mockup-carousel-tab-version {
+  font-size: 0.68rem;
+}
+
+.mockup-carousel-tab-status {
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.mockup-carousel-tab-status.pending {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.mockup-carousel-tab-status.approved {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.mockup-carousel-tab-status.rejected {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .mockup-lightbox-overlay {
