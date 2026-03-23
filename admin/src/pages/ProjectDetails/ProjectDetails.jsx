@@ -49,7 +49,7 @@ const formatSupplySource = (value) => {
 };
 
 const STATUS_AUTO_ADVANCE_TARGETS = {
-  "Proof Reading Completed": "Pending Production",
+  "Master Approval Completed": "Pending Production",
   "Packaging Completed": "Pending Delivery/Pickup",
 };
 const QUOTE_STATUS_DECISION_DISPLAY_MAP = {
@@ -80,8 +80,8 @@ const STANDARD_STATUS_FLOW = [
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -1845,7 +1845,7 @@ const ProjectDetails = ({ user }) => {
     );
     const showPendingProductionWarning =
       !quoteProject &&
-      ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+      ["Pending Master Approval", "Pending Production"].includes(project.status) &&
       pendingProductionMissing.length > 0;
     const showPendingDeliveryWarning =
       !quoteProject &&
@@ -2180,7 +2180,7 @@ const ProjectDetails = ({ user }) => {
     : getPendingDeliveryBillingMissing(project);
   const showPendingProductionWarning =
     !isQuoteProject &&
-    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    ["Pending Master Approval", "Pending Production"].includes(project.status) &&
     pendingProductionMissing.length > 0;
   const showPendingDeliveryWarning =
     !isQuoteProject &&
@@ -2465,8 +2465,8 @@ const ProjectDetails = ({ user }) => {
                     "Departmental Engagement Completed",
                     "Pending Mockup",
                     "Mockup Completed",
-                    "Pending Proof Reading",
-                    "Proof Reading Completed",
+                    "Pending Master Approval",
+                    "Master Approval Completed",
                     "Pending Production",
                     "Production Completed",
                     "Pending Quality Control",
@@ -4382,3 +4382,4 @@ const ProjectDetails = ({ user }) => {
 };
 
 export default ProjectDetails;
+

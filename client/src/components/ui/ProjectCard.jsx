@@ -99,8 +99,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#a855f7",
           textClass: "purple",
         }; // Custom class needed?
-      case "Pending Proof Reading":
-      case "Proof Reading Completed":
+      case "Pending Master Approval":
+      case "Master Approval Completed":
         return { class: "in-progress", color: "#ec4899", textClass: "purple" };
       case "Pending Production":
       case "Production Completed":
@@ -175,8 +175,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Departmental Engagement Completed": 32,
     "Pending Mockup": 38,
     "Mockup Completed": 44,
-    "Pending Proof Reading": 48,
-    "Proof Reading Completed": 52,
+    "Pending Master Approval": 48,
+    "Master Approval Completed": 52,
     "Pending Production": 58,
     "Production Completed": 66,
     "Pending Quality Control": 72,
@@ -401,4 +401,5 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 };
 
 export default ProjectCard;
+
 

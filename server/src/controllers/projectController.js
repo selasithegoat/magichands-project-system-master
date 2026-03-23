@@ -1195,8 +1195,8 @@ const QUOTE_ONLY_STATUSES = new Set([
 const NON_QUOTE_ONLY_STATUSES = new Set([
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -1214,12 +1214,21 @@ const DEFAULT_STATUS_BY_PROJECT_TYPE = {
   Emergency: "Pending Departmental Engagement",
   "Corporate Job": "Pending Departmental Engagement",
 };
+const MASTER_APPROVAL_STATUS_ALIASES = Object.freeze({
+  "Pending Proof Reading": "Pending Master Approval",
+  "Proof Reading Completed": "Master Approval Completed",
+});
 const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
   "pending decision": "Pending Feedback",
   "decision completed": "Feedback Completed",
 });
-const normalizeStatusForStorageByProjectType = (status = "", projectType = "") => {
+const normalizeMasterApprovalStatus = (status = "") => {
   const normalizedStatus = toText(status);
+  if (!normalizedStatus) return "";
+  return MASTER_APPROVAL_STATUS_ALIASES[normalizedStatus] || normalizedStatus;
+};
+const normalizeStatusForStorageByProjectType = (status = "", projectType = "") => {
+  const normalizedStatus = normalizeMasterApprovalStatus(status);
   if (!normalizedStatus) return "";
   if (projectType !== "Quote") return normalizedStatus;
   const aliasKey = normalizedStatus.toLowerCase();
@@ -1367,8 +1376,8 @@ const getAutoProgressedStatus = (status, project = {}) => {
     "Departmental Engagement Completed": isQuoteProject(project)
       ? "Pending Quote Request"
       : "Pending Mockup",
-    "Mockup Completed": "Pending Proof Reading",
-    "Proof Reading Completed": "Pending Production",
+    "Mockup Completed": "Pending Master Approval",
+    "Master Approval Completed": "Pending Production",
     "Production Completed": "Pending Quality Control",
     "Quality Control Completed": "Pending Photography",
     "Photography Completed": "Pending Packaging",
@@ -1765,7 +1774,7 @@ const normalizePriority = (value, fallback = "Normal") => {
   return fallback;
 };
 const isStatusCompatibleWithProjectType = (status, projectType) => {
-  const normalizedStatus = toText(status);
+  const normalizedStatus = normalizeMasterApprovalStatus(status);
   if (!normalizedStatus) return false;
   if (projectType === "Quote") {
     return !NON_QUOTE_ONLY_STATUSES.has(normalizedStatus);
@@ -1779,9 +1788,26 @@ const getAllowedStatusesForProjectType = (projectType) => {
   const allStatuses = toSafeArray(Project.schema.path("status")?.enumValues).filter(
     Boolean,
   );
-  return allStatuses.filter((status) =>
-    isStatusCompatibleWithProjectType(status, projectType),
-  );
+  const normalized = allStatuses
+    .map((status) => normalizeMasterApprovalStatus(status))
+    .filter((status) => isStatusCompatibleWithProjectType(status, projectType));
+  return Array.from(new Set(normalized));
+};
+const normalizeProjectStatusFields = (project) => {
+  if (!project) return project;
+  const normalizedStatus = normalizeMasterApprovalStatus(project.status);
+  if (normalizedStatus && normalizedStatus !== project.status) {
+    project.status = normalizedStatus;
+  }
+  if (project.hold?.previousStatus) {
+    const normalizedPrevious = normalizeMasterApprovalStatus(
+      project.hold.previousStatus,
+    );
+    if (normalizedPrevious && normalizedPrevious !== project.hold.previousStatus) {
+      project.hold.previousStatus = normalizedPrevious;
+    }
+  }
+  return project;
 };
 const SUPPLY_SOURCE_VALUES = new Set([
   "in-house",
@@ -4124,6 +4150,8 @@ const getProjects = async (req, res) => {
         .sort({ createdAt: -1 }),
     );
 
+    projects.forEach(normalizeProjectStatusFields);
+
     if (groupByOrder) {
       const groups = buildOrderGroups(projects, { collapseRevisions });
       return res.json(groups);
@@ -4271,6 +4299,7 @@ const getOrderGroups = async (req, res) => {
         .sort({ createdAt: -1 }),
     );
 
+    projects.forEach(normalizeProjectStatusFields);
     const groups = buildOrderGroups(projects, { collapseRevisions });
     res.json(groups);
   } catch (error) {
@@ -4361,6 +4390,7 @@ const getOrderGroupByNumber = async (req, res) => {
       }
     }
 
+    projects.forEach(normalizeProjectStatusFields);
     const groups = buildOrderGroups(projects, {
       collapseRevisions:
         String(req.query.collapseRevisions || "true").toLowerCase() !== "false",
@@ -4447,6 +4477,7 @@ const getProjectById = async (req, res) => {
           .json({ message: "Not authorized to view this project" });
       }
 
+      normalizeProjectStatusFields(project);
       res.json(project);
     } else {
       res.status(404).json({ message: "Project not found" });
@@ -5209,11 +5240,11 @@ const updateProjectStatus = async (req, res) => {
     const isFinishing =
       project.status === "Completed" && newStatus === "Finished";
     const adminOnlyStageCompletions = new Set([
-      "Proof Reading Completed",
+      "Master Approval Completed",
       "Quality Control Completed",
     ]);
     const adminOnlyStagePrerequisites = {
-      "Proof Reading Completed": "Pending Proof Reading",
+      "Master Approval Completed": "Pending Master Approval",
       "Quality Control Completed": "Pending Quality Control",
     };
 
@@ -5549,7 +5580,7 @@ const updateProjectStatus = async (req, res) => {
         project._id,
         "UPDATE",
         "Mockup Completed",
-        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Mockup has been completed and is ready for proof reading.`,
+        `Project #${project.orderId || project._id.slice(-6).toUpperCase()}: Mockup has been completed and is ready for Master Approval.`,
       );
     }
 
@@ -9760,8 +9791,8 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -10332,3 +10363,4 @@ module.exports = {
   acknowledgeProject,
   undoAcknowledgeProject,
 };
+

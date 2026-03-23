@@ -49,8 +49,8 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -119,6 +119,24 @@ const QUOTE_SAMPLE_PRODUCTION_SUBMIT_TRANSITIONS = {
   client_revision_requested: ["in_progress", "dept_submitted"],
   blocked: ["in_progress", "dept_submitted"],
 };
+const PRODUCTION_MOCKUP_VISIBILITY_STATUSES = new Set([
+  "Master Approval Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+  "In Progress",
+]);
 
 const formatQuoteRequirementStatus = (status = "") => {
   const normalized = String(status || "").trim().toLowerCase();
@@ -250,8 +268,8 @@ const ENGAGED_WORKFLOW_STEPS = [
     key: "qc",
     label: "QC",
     statuses: [
-      "Pending Proof Reading",
-      "Proof Reading Completed",
+      "Pending Master Approval",
+      "Master Approval Completed",
       "Pending Production",
       "Production Completed",
       "Pending Quality Control",
@@ -571,7 +589,7 @@ const EngagedProjectActions = ({ user }) => {
   const showPendingProductionWarning =
     project &&
     paymentChecksEnabled &&
-    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    ["Pending Master Approval", "Pending Production"].includes(project.status) &&
     pendingProductionMissing.length > 0;
   const showPendingDeliveryWarning =
     project &&
@@ -611,6 +629,14 @@ const EngagedProjectActions = ({ user }) => {
     const projectLeadId = normalizeObjectId(project?.projectLeadId);
     return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
   }, [user, project?.projectLeadId]);
+  const canShowProductionApprovedMockups = useMemo(() => {
+    if (!project) return false;
+    const statusCandidate =
+      project.status === "On Hold"
+        ? project?.hold?.previousStatus || project.status
+        : project.status;
+    return PRODUCTION_MOCKUP_VISIBILITY_STATUSES.has(statusCandidate);
+  }, [project, project?.status, project?.hold?.previousStatus]);
   const canDeleteMockup = userEngagedDepts.includes("Graphics");
 
   const mockupUrl = project?.mockup?.fileUrl;
@@ -2761,7 +2787,12 @@ const EngagedProjectActions = ({ user }) => {
                         reference.
                       </p>
 
-                      {approvedMockupCarousel.length > 0 ? (
+                      {!canShowProductionApprovedMockups ? (
+                        <div className="engaged-action-meta">
+                          Approved mockups will appear here after Master Approval
+                          is completed.
+                        </div>
+                      ) : approvedMockupCarousel.length > 0 ? (
                         <>
                           <div className="graphics-carousel">
                             <button
@@ -3246,3 +3277,4 @@ const EngagedProjectActions = ({ user }) => {
 };
 
 export default EngagedProjectActions;
+

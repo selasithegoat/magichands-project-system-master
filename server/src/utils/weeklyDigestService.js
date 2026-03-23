@@ -9,7 +9,7 @@ const DIGEST_PREVIEW_LIMIT = 5;
 const STATUS_OWNER = {
   "Pending Scope Approval": "Project Lead",
   "Pending Mockup": "Graphics",
-  "Pending Proof Reading": "Administration",
+  "Pending Master Approval": "Administration",
   "Pending Production": "Production",
   "Pending Quality Control": "Administration",
   "Pending Photography": "Photography",
@@ -253,3 +253,4 @@ module.exports = {
   generateWeeklyDigests,
   startWeeklyDigestScheduler,
 };
+

@@ -621,8 +621,8 @@ const Projects = ({ user }) => {
                 Departmental Engagement Completed
               </option>
               <option value="Pending Mockup">Pending Mockup</option>
-              <option value="Pending Proof Reading">
-                Pending Proof Reading
+              <option value="Pending Master Approval">
+                Pending Master Approval
               </option>
               <option value="Pending Production">Pending Production</option>
               <option value="Pending Quality Control">
@@ -957,3 +957,4 @@ const Projects = ({ user }) => {
 };
 
 export default Projects;
+

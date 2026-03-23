@@ -69,8 +69,8 @@ const STATUS_STEPS = [
   },
   { label: "Mockup", statuses: ["Pending Mockup", "Mockup Completed"] },
   {
-    label: "Proof Reading",
-    statuses: ["Pending Proof Reading", "Proof Reading Completed"],
+    label: "Master Approval",
+    statuses: ["Pending Master Approval", "Master Approval Completed"],
   },
   {
     label: "Production",
@@ -131,8 +131,8 @@ const STANDARD_WORKFLOW_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -218,9 +218,9 @@ const getStatusColor = (status) => {
     case "Mockup Completed":
     case "Mockup":
       return "#a855f7"; // Purple
-    case "Pending Proof Reading":
-    case "Proof Reading Completed":
-    case "Proof Reading":
+    case "Pending Master Approval":
+    case "Master Approval Completed":
+    case "Master Approval":
       return "#ec4899"; // Pink
     case "Pending Production":
     case "Production Completed":
@@ -876,7 +876,7 @@ const ProjectDetail = ({ user }) => {
   );
   const showPendingProductionWarning =
     !isQuote &&
-    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    ["Pending Master Approval", "Pending Production"].includes(project.status) &&
     pendingProductionMissing.length > 0;
   const showPendingDeliveryWarning =
     !isQuote &&
@@ -3316,9 +3316,9 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
         return 38;
       case "Mockup Completed":
         return 44;
-      case "Pending Proof Reading":
+      case "Pending Master Approval":
         return 48;
-      case "Proof Reading Completed":
+      case "Master Approval Completed":
         return 52;
       case "Pending Production":
         return 58;
@@ -3424,7 +3424,7 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
     "Scope Approval": EyeIcon,
     "Departmental Engagement": CheckCircleIcon,
     Mockup: PaintbrushIcon,
-    "Proof Reading": EyeIcon,
+    "Master Approval": EyeIcon,
     Production: FactoryIcon,
     "Quality Control": CheckCircleIcon,
     Photography: FolderIcon,
@@ -3569,3 +3569,4 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
 };
 
 export default ProjectDetail;
+

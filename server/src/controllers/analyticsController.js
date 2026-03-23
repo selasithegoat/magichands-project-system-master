@@ -7,15 +7,15 @@ const STAGES = [
     key: "mockup",
     label: "Mockup Stage",
     startStatus: "Pending Mockup",
-    endStatus: "Pending Proof Reading",
+    endStatus: "Pending Master Approval",
     description: "Average time spent in the mockup phase",
   },
   {
     key: "proofReading",
-    label: "Proof Reading Stage",
-    startStatus: "Pending Proof Reading",
+    label: "Master Approval Stage",
+    startStatus: "Pending Master Approval",
     endStatus: "Pending Production",
-    description: "Average time spent in the proof reading phase",
+    description: "Average time spent in the Master Approval phase",
   },
   {
     key: "production",
@@ -534,3 +534,4 @@ const getProjectAnalytics = async (req, res) => {
 };
 
 module.exports = { getStageDurations, getProjectAnalytics };
+

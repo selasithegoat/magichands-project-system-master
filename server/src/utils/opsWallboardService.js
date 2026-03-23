@@ -17,7 +17,7 @@ const PENDING_APPROVAL_STATUSES = new Set([
   "Pending Approval",
   "Pending Scope Approval",
   "Pending Departmental Engagement",
-  "Pending Proof Reading",
+  "Pending Master Approval",
   "Pending Quality Control",
   "Pending Quote Request",
   "Pending Send Response",
@@ -47,8 +47,8 @@ const PIPELINE_GROUPS = [
     statuses: new Set([
       "Pending Mockup",
       "Mockup Completed",
-      "Pending Proof Reading",
-      "Proof Reading Completed",
+      "Pending Master Approval",
+      "Master Approval Completed",
     ]),
   },
   {
@@ -944,3 +944,4 @@ module.exports = {
   CLOSED_STATUS_LIST,
   getOpsWallboardOverview,
 };
+

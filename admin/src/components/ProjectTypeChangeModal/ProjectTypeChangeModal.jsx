@@ -15,8 +15,8 @@ const PROJECT_STATUS_OPTIONS = [
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -295,3 +295,4 @@ const ProjectTypeChangeModal = ({
 };
 
 export default ProjectTypeChangeModal;
+

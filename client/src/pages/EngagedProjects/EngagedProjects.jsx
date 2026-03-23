@@ -18,7 +18,7 @@ const STATUS_OPTIONS = [
   "All",
   "Pending Departmental Engagement",
   "Pending Mockup",
-  "Pending Proof Reading",
+  "Pending Master Approval",
   "Pending Production",
   "Pending Quality Control",
   "Pending Photography",
@@ -60,8 +60,8 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Departmental Engagement Completed",
   "Pending Mockup",
   "Mockup Completed",
-  "Pending Proof Reading",
-  "Proof Reading Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
   "Pending Production",
   "Production Completed",
   "Pending Quality Control",
@@ -1362,4 +1362,5 @@ const EngagedProjects = ({ user }) => {
 };
 
 export default EngagedProjects;
+
 

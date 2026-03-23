@@ -53,8 +53,8 @@ const STANDARD_PROGRESS_MAP = {
   "Departmental Engagement Completed": 32,
   "Pending Mockup": 38,
   "Mockup Completed": 44,
-  "Pending Proof Reading": 48,
-  "Proof Reading Completed": 52,
+  "Pending Master Approval": 48,
+  "Master Approval Completed": 52,
   "Pending Production": 58,
   "Production Completed": 66,
   "Pending Quality Control": 72,
@@ -1369,3 +1369,4 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
 };
 
 export default DashboardRedesign;
+

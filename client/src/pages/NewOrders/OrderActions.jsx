@@ -113,8 +113,8 @@ const ORDER_WORKFLOW_STEPS = [
     key: "production",
     label: "Production",
     statuses: [
-      "Pending Proof Reading",
-      "Proof Reading Completed",
+      "Pending Master Approval",
+      "Master Approval Completed",
       "Pending Production",
       "Production Completed",
       "Pending Quality Control",
@@ -2107,7 +2107,7 @@ const OrderActions = () => {
   const showPendingProductionWarning =
     project &&
     !isQuoteProject &&
-    ["Pending Proof Reading", "Pending Production"].includes(project.status) &&
+    ["Pending Master Approval", "Pending Production"].includes(project.status) &&
     pendingProductionMissing.length > 0;
   const showPendingDeliveryWarning =
     project &&
@@ -2185,7 +2185,7 @@ const OrderActions = () => {
   const statusBadgeTone = [
     "Pending Scope Approval",
     "Pending Mockup",
-    "Pending Proof Reading",
+    "Pending Master Approval",
     "Pending Production",
     "Pending Delivery/Pickup",
     "Pending Quote Request",
@@ -4106,3 +4106,4 @@ const OrderActions = () => {
 };
 
 export default OrderActions;
+

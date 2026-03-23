@@ -218,6 +218,9 @@ const ProjectSchema = new mongoose.Schema(
         "Departmental Engagement Completed",
         "Pending Mockup",
         "Mockup Completed",
+        "Pending Master Approval",
+        "Master Approval Completed",
+        // Legacy (deprecated)
         "Pending Proof Reading",
         "Proof Reading Completed",
         "Pending Production",
@@ -646,3 +649,4 @@ ProjectSchema.index({ lineageId: 1, versionNumber: -1 });
 ProjectSchema.index({ isLatestVersion: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Project", ProjectSchema);
+
