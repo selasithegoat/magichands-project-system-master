@@ -81,6 +81,12 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#f97316",
           textClass: "orange",
         };
+      case "Pending Departmental Meeting":
+        return {
+          class: "pending-approval",
+          color: "#fb923c",
+          textClass: "orange",
+        };
       case "Pending Departmental Engagement":
         return {
           class: "pending-approval",
@@ -171,6 +177,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Order Confirmed": 5,
     "Pending Scope Approval": 15,
     "Scope Approval Completed": 22,
+    "Pending Departmental Meeting": 25,
     "Pending Departmental Engagement": 27,
     "Departmental Engagement Completed": 32,
     "Pending Mockup": 38,
@@ -197,6 +204,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     "Order Confirmed": 5,
     "Pending Scope Approval": 25,
     "Scope Approval Completed": 35,
+    "Pending Departmental Meeting": 38,
     "Pending Departmental Engagement": 42,
     "Departmental Engagement Completed": 48,
     "Pending Quote Request": 50,

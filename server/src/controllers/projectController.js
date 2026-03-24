@@ -5,6 +5,8 @@ const Order = require("../models/Order");
 const ActivityLog = require("../models/ActivityLog");
 const ProjectUpdate = require("../models/ProjectUpdate");
 const SmsPrompt = require("../models/SmsPrompt");
+const OrderMeeting = require("../models/OrderMeeting");
+const Reminder = require("../models/Reminder");
 const { logActivity } = require("../utils/activityLogger");
 const { createNotification } = require("../utils/notificationService");
 const User = require("../models/User"); // Need User model for department notifications
@@ -443,6 +445,12 @@ const normalizeDepartmentValue = (value) => {
     .toLowerCase();
 };
 
+const PRODUCTION_SUB_DEPARTMENT_TOKENS = new Set(
+  Array.from(PRODUCTION_DEPARTMENTS)
+    .map(normalizeDepartmentValue)
+    .filter((token) => token && token !== "production"),
+);
+
 const PRODUCTION_DEPARTMENT_TOKENS = new Set(
   Array.from(PRODUCTION_DEPARTMENTS)
     .map(normalizeDepartmentValue)
@@ -863,6 +871,301 @@ const buildOrderGroups = (projects = [], { collapseRevisions = true } = {}) => {
     );
 };
 
+const normalizeMeetingDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeMeetingReminderOffsets = (value) => {
+  const list = Array.isArray(value) ? value : [];
+  const unique = new Set();
+  list.forEach((entry) => {
+    const parsed = Number.parseInt(entry, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    unique.add(parsed);
+  });
+  return Array.from(unique).sort((a, b) => b - a);
+};
+
+const normalizeMeetingStatus = (value, fallback = "scheduled") => {
+  const token = String(value || "").trim().toLowerCase();
+  if (["scheduled", "completed", "cancelled"].includes(token)) return token;
+  return fallback;
+};
+
+const resolveOrderGroupProjects = async ({
+  orderNumber,
+  orderRefId,
+  includeCancelled = true,
+} = {}) => {
+  const normalizedOrderNumber = normalizeOrderNumber(orderNumber);
+  const conditions = [];
+  if (normalizedOrderNumber) {
+    conditions.push({ orderId: normalizedOrderNumber });
+  }
+  if (orderRefId) {
+    conditions.push({ orderRef: orderRefId });
+  }
+  if (conditions.length === 0) return [];
+
+  const baseQuery = conditions.length === 1 ? conditions[0] : { $or: conditions };
+  const query = includeCancelled
+    ? baseQuery
+    : {
+        $and: [baseQuery, { "cancellation.isCancelled": { $ne: true } }],
+      };
+
+  const projects = await Project.find(query)
+    .select(
+      "_id orderId orderRef projectLeadId assistantLeadId departments projectType status createdAt lineageId versionNumber isLatestVersion",
+    )
+    .lean();
+
+  return collapseToLatestLineageProjects(projects);
+};
+
+const resolveOrderMeeting = async ({ orderNumber, orderRefId } = {}) => {
+  const normalizedOrderNumber = normalizeOrderNumber(orderNumber);
+  if (!normalizedOrderNumber && !orderRefId) return null;
+  const criteria = {
+    status: "scheduled",
+  };
+  if (orderRefId) {
+    criteria.orderRef = orderRefId;
+  } else if (normalizedOrderNumber) {
+    criteria.orderNumber = normalizedOrderNumber;
+  }
+
+  return OrderMeeting.findOne(criteria).sort({ createdAt: -1 });
+};
+
+const resolveMeetingGateState = async (project = {}) => {
+  const orderNumber = normalizeOrderNumber(
+    project?.orderRef?.orderNumber || project?.orderId,
+  );
+  const orderRefId = toObjectIdString(project?.orderRef);
+  if (!orderNumber && !orderRefId) {
+    return {
+      orderNumber: "",
+      orderRefId: "",
+      required: false,
+      meeting: null,
+      grouped: false,
+    };
+  }
+
+  const groupProjects = await resolveOrderGroupProjects({
+    orderNumber,
+    orderRefId,
+  });
+  const grouped = groupProjects.length > 1;
+  const isCorporate = toText(project?.projectType) === "Corporate Job";
+  const required = grouped || isCorporate;
+  const meeting = await resolveOrderMeeting({ orderNumber, orderRefId });
+
+  return {
+    orderNumber,
+    orderRefId,
+    required,
+    meeting,
+    grouped,
+    groupProjects,
+  };
+};
+
+const normalizeMeetingRecipientDepartmentToken = (value) => {
+  const token = normalizeDepartmentValue(value);
+  if (!token) return "";
+  return PRODUCTION_DEPARTMENT_ALIASES[token] || token;
+};
+
+const resolveMeetingRecipientIds = async (projects = []) => {
+  const leadIds = new Set();
+  const engagedGroups = new Set();
+  const engagedProductionSubDepartments = new Set();
+  let hasGenericProduction = false;
+
+  projects.forEach((project) => {
+    const leadId = toObjectIdString(project?.projectLeadId);
+    const assistantId = toObjectIdString(project?.assistantLeadId);
+    if (leadId) leadIds.add(leadId);
+    if (assistantId) leadIds.add(assistantId);
+
+    const departments = toDepartmentArray(project?.departments);
+    departments.forEach((dept) => {
+      const token = normalizeMeetingRecipientDepartmentToken(dept);
+      if (!token) return;
+      if (PRODUCTION_SUB_DEPARTMENT_TOKENS.has(token)) {
+        engagedProductionSubDepartments.add(token);
+        return;
+      }
+      if (token === "production") {
+        hasGenericProduction = true;
+        return;
+      }
+      const canonical = canonicalizeDepartment(token);
+      if (canonical && canonical !== "production") {
+        engagedGroups.add(canonical);
+      }
+    });
+  });
+
+  if (engagedProductionSubDepartments.size === 0 && hasGenericProduction) {
+    PRODUCTION_SUB_DEPARTMENT_TOKENS.forEach((token) =>
+      engagedProductionSubDepartments.add(token),
+    );
+  }
+
+  const recipientIds = new Set(leadIds);
+  const hasEngagedGroups = engagedGroups.size > 0;
+  const hasProductionSubs = engagedProductionSubDepartments.size > 0;
+
+  if (hasEngagedGroups || hasProductionSubs) {
+    const users = await User.find({})
+      .select("_id department")
+      .lean();
+
+    users.forEach((user) => {
+      const userId = toObjectIdString(user?._id);
+      if (!userId || recipientIds.has(userId)) return;
+      const userDepartments = toDepartmentArray(user?.department);
+      const userTokens = userDepartments.map(normalizeMeetingRecipientDepartmentToken);
+      if (
+        hasProductionSubs &&
+        userTokens.some((token) => engagedProductionSubDepartments.has(token))
+      ) {
+        recipientIds.add(userId);
+        return;
+      }
+      if (hasEngagedGroups) {
+        const canonicalTokens = userTokens
+          .map(canonicalizeDepartment)
+          .filter(Boolean);
+        if (canonicalTokens.some((token) => engagedGroups.has(token))) {
+          recipientIds.add(userId);
+        }
+      }
+    });
+  }
+
+  return Array.from(recipientIds);
+};
+
+const buildMeetingMessage = (meeting, { orderNumber = "" } = {}) => {
+  const meetingTime = meeting?.meetingAt ? new Date(meeting.meetingAt) : null;
+  const timeLabel = meetingTime
+    ? meetingTime.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "TBD";
+  const orderLabel = orderNumber ? `Order #${orderNumber}` : "the order";
+  const parts = [
+    `Departmental meeting scheduled for ${orderLabel} on ${timeLabel}.`,
+  ];
+  const location = toText(meeting?.location);
+  const link = toText(meeting?.virtualLink);
+  const agenda = toText(meeting?.agenda);
+  if (location) parts.push(`Location: ${location}.`);
+  if (link) parts.push(`Virtual link: ${link}.`);
+  if (agenda) parts.push(`Agenda: ${agenda}.`);
+  return parts.join(" ");
+};
+
+const buildMeetingReminderMessage = (meeting, { orderNumber = "" } = {}) => {
+  const meetingTime = meeting?.meetingAt ? new Date(meeting.meetingAt) : null;
+  const timeLabel = meetingTime
+    ? meetingTime.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "soon";
+  const orderLabel = orderNumber ? `Order #${orderNumber}` : "the order";
+  const parts = [
+    `Reminder: Departmental meeting for ${orderLabel} is scheduled for ${timeLabel}.`,
+  ];
+  const location = toText(meeting?.location);
+  const link = toText(meeting?.virtualLink);
+  if (location) parts.push(`Location: ${location}.`);
+  if (link) parts.push(`Virtual link: ${link}.`);
+  return parts.join(" ");
+};
+
+const cancelMeetingReminders = async (reminderIds = []) => {
+  if (!Array.isArray(reminderIds) || reminderIds.length === 0) return;
+  await Reminder.updateMany(
+    { _id: { $in: reminderIds } },
+    {
+      $set: {
+        status: "cancelled",
+        isActive: false,
+        cancelledAt: new Date(),
+        processing: false,
+        processingAt: null,
+        lastError: "",
+      },
+    },
+  );
+};
+
+const createMeetingReminders = async ({
+  meeting,
+  recipientIds,
+  projectId,
+  orderNumber,
+  actorId,
+} = {}) => {
+  const meetingTime = meeting?.meetingAt ? new Date(meeting.meetingAt) : null;
+  if (!meetingTime || Number.isNaN(meetingTime.getTime())) return [];
+  const recipients = Array.isArray(recipientIds) ? recipientIds : [];
+  if (recipients.length === 0) return [];
+
+  const offsets = normalizeMeetingReminderOffsets(meeting?.reminderOffsets || []);
+  const reminderOffsets = [0, ...offsets];
+  const now = Date.now();
+  const reminderIds = [];
+  const message = buildMeetingReminderMessage(meeting, { orderNumber });
+
+  for (const offset of reminderOffsets) {
+    const remindAt = new Date(meetingTime.getTime() - offset * 60 * 1000);
+    if (remindAt.getTime() <= now + 5000) {
+      continue;
+    }
+
+    const reminder = await Reminder.create({
+      createdBy: actorId,
+      project: projectId || null,
+      title: "Departmental Meeting Reminder",
+      message,
+      triggerMode: "absolute_time",
+      remindAt,
+      nextTriggerAt: remindAt,
+      watchStatus: "",
+      delayMinutes: 0,
+      stageMatchedAt: null,
+      repeat: "none",
+      timezone: toText(meeting?.timezone) || "UTC",
+      conditionStatus: "",
+      templateKey: "departmental_meeting",
+      channels: {
+        inApp: true,
+        email: true,
+      },
+      recipients: recipients.map((id) => ({ user: id })),
+    });
+    reminderIds.push(reminder._id);
+  }
+
+  return reminderIds;
+};
+
 const getPaymentVerificationTypes = (project) =>
   new Set(
     (Array.isArray(project?.paymentVerifications)
@@ -1214,6 +1517,48 @@ const DEFAULT_STATUS_BY_PROJECT_TYPE = {
   Emergency: "Pending Departmental Engagement",
   "Corporate Job": "Pending Departmental Engagement",
 };
+const STANDARD_STATUS_FLOW = [
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Departmental Meeting",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+];
+const QUOTE_STATUS_FLOW = [
+  "Order Confirmed",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Departmental Meeting",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
+  "Pending Quote Request",
+  "Quote Request Completed",
+  "Pending Send Response",
+  "Response Sent",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+];
 const MASTER_APPROVAL_STATUS_ALIASES = Object.freeze({
   "Pending Proof Reading": "Pending Master Approval",
   "Proof Reading Completed": "Master Approval Completed",
@@ -1233,6 +1578,17 @@ const normalizeStatusForStorageByProjectType = (status = "", projectType = "") =
   if (projectType !== "Quote") return normalizedStatus;
   const aliasKey = normalizedStatus.toLowerCase();
   return QUOTE_STATUS_ALIAS_TO_STORED[aliasKey] || normalizedStatus;
+};
+const getStatusFlowForProjectType = (projectType = "") =>
+  projectType === "Quote" ? QUOTE_STATUS_FLOW : STANDARD_STATUS_FLOW;
+const isStatusAtOrAfterMeetingGate = (status = "", projectType = "") => {
+  const normalizedStatus = normalizeMasterApprovalStatus(status);
+  if (!normalizedStatus) return false;
+  const flow = getStatusFlowForProjectType(projectType);
+  const gateIndex = flow.indexOf("Pending Departmental Engagement");
+  const statusIndex = flow.indexOf(normalizedStatus);
+  if (gateIndex === -1 || statusIndex === -1) return false;
+  return statusIndex >= gateIndex;
 };
 const QUOTE_REQUIREMENT_KEYS = [
   "cost",
@@ -5415,8 +5771,34 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
+    const meetingGate = await resolveMeetingGateState(project);
+    const meetingRequired = meetingGate.required;
+    const meetingScheduled =
+      meetingGate.meeting && meetingGate.meeting.status === "scheduled";
+    const meetingCompleted =
+      meetingGate.meeting && meetingGate.meeting.status === "completed";
+    const meetingIncomplete = (meetingRequired || meetingScheduled) && !meetingCompleted;
+    const shouldForcePendingMeeting =
+      meetingIncomplete && newStatus === "Scope Approval Completed";
+
+    if (
+      meetingIncomplete &&
+      newStatus !== "Pending Departmental Meeting" &&
+      !shouldForcePendingMeeting &&
+      isStatusAtOrAfterMeetingGate(newStatus, project?.projectType)
+    ) {
+      return res.status(400).json({
+        code: "MEETING_REQUIRED",
+        message:
+          "Departmental meeting must be completed before progressing this project.",
+      });
+    }
+
     // If the selected status has an auto-advancement, use it
-    const finalStatus = getAutoProgressedStatus(newStatus, project);
+    let finalStatus = getAutoProgressedStatus(newStatus, project);
+    if (shouldForcePendingMeeting) {
+      finalStatus = "Pending Departmental Meeting";
+    }
 
     const isStandardProject = !isQuoteProject(project);
 
@@ -9787,6 +10169,7 @@ const deleteProject = async (req, res) => {
 
 const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Mockup",
@@ -9843,6 +10226,19 @@ const acknowledgeProject = async (req, res) => {
       return res.status(400).json({
         message:
           "Scope approval must be completed before engagement can be accepted.",
+      });
+    }
+
+    const meetingGate = await resolveMeetingGateState(project);
+    const meetingRequired = meetingGate.required;
+    const meetingScheduled =
+      meetingGate.meeting && meetingGate.meeting.status === "scheduled";
+    const meetingCompleted =
+      meetingGate.meeting && meetingGate.meeting.status === "completed";
+    if ((meetingRequired || meetingScheduled) && !meetingCompleted) {
+      return res.status(400).json({
+        message:
+          "Departmental meeting must be completed before engagement can be accepted.",
       });
     }
 
@@ -10305,6 +10701,311 @@ const sendProjectSmsPrompt = async (req, res) => {
   }
 };
 
+const canManageMeetings = (user) =>
+  Boolean(user && (user.role === "admin" || isFrontDeskUser(user)));
+
+// @desc    Get order meeting by order number
+// @route   GET /api/meetings/order/:orderNumber
+// @access  Private
+const getOrderMeetingByNumber = async (req, res) => {
+  try {
+    const orderNumber = normalizeOrderNumber(
+      decodeURIComponent(req.params.orderNumber || ""),
+    );
+    if (!orderNumber) {
+      return res.status(400).json({ message: "orderNumber is required." });
+    }
+
+    const { query } = buildProjectAccessQuery(req);
+    const conditions = [{ orderId: orderNumber }];
+    if (query && Object.keys(query).length > 0) {
+      conditions.push(query);
+    }
+    const scopedQuery = conditions.length === 1 ? conditions[0] : { $and: conditions };
+
+    const accessible = await Project.find(scopedQuery)
+      .select("_id orderId orderRef")
+      .lean();
+    if (!accessible || accessible.length === 0) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const orderRefIds = Array.from(
+      new Set(
+        accessible
+          .map((project) => toObjectIdString(project?.orderRef))
+          .filter(Boolean),
+      ),
+    );
+
+    let meeting = null;
+    if (orderRefIds.length > 0) {
+      meeting = await OrderMeeting.findOne({
+        orderRef: { $in: orderRefIds },
+        status: { $ne: "cancelled" },
+      }).sort({ createdAt: -1 });
+    }
+
+    if (!meeting) {
+      meeting = await OrderMeeting.findOne({
+        orderNumber,
+        status: { $ne: "cancelled" },
+      }).sort({ createdAt: -1 });
+    }
+
+    return res.json({ meeting: meeting || null });
+  } catch (error) {
+    console.error("Error fetching order meeting:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Create or schedule a departmental meeting for an order
+// @route   POST /api/meetings
+// @access  Private (Admin/Front Desk)
+const createOrderMeeting = async (req, res) => {
+  try {
+    if (!canManageMeetings(req.user)) {
+      return res.status(403).json({ message: "Not authorized to manage meetings." });
+    }
+
+    const orderNumber = normalizeOrderNumber(req.body?.orderNumber);
+    if (!orderNumber) {
+      return res.status(400).json({ message: "orderNumber is required." });
+    }
+
+    const meetingAt = normalizeMeetingDate(req.body?.meetingAt);
+    if (!meetingAt) {
+      return res.status(400).json({ message: "meetingAt is required." });
+    }
+
+    const order = await Order.findOne({ orderNumber });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const projects = await resolveOrderGroupProjects({
+      orderNumber,
+      orderRefId: order._id,
+    });
+    if (!projects.length) {
+      return res.status(404).json({ message: "No projects found for this order." });
+    }
+
+    const recipientIds = await resolveMeetingRecipientIds(projects);
+    const primaryProject = projects
+      .slice()
+      .sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+      )[0];
+
+    let meeting = await OrderMeeting.findOne({
+      orderRef: order._id,
+      status: "scheduled",
+    }).sort({ createdAt: -1 });
+
+    if (meeting) {
+      await cancelMeetingReminders(meeting.reminderIds || []);
+    }
+
+    const reminderOffsets = normalizeMeetingReminderOffsets(req.body?.reminderOffsets);
+    const channels = {
+      inApp: req.body?.channels?.inApp !== false,
+      email: req.body?.channels?.email !== false,
+    };
+
+    if (!meeting) {
+      meeting = new OrderMeeting({
+        orderRef: order._id,
+        orderNumber,
+        createdBy: req.user._id || req.user.id,
+      });
+    }
+
+    meeting.meetingAt = meetingAt;
+    meeting.timezone = toText(req.body?.timezone) || "UTC";
+    meeting.location = toText(req.body?.location);
+    meeting.virtualLink = toText(req.body?.virtualLink);
+    meeting.agenda = toText(req.body?.agenda);
+    meeting.channels = channels;
+    meeting.reminderOffsets = reminderOffsets;
+    meeting.status = "scheduled";
+    meeting.completedBy = null;
+    meeting.reminderIds = [];
+    await meeting.save();
+
+    const message = buildMeetingMessage(meeting, { orderNumber });
+    await Promise.all(
+      recipientIds.map((recipientId) =>
+        createNotification(
+          recipientId,
+          req.user._id || req.user.id,
+          primaryProject?._id || null,
+          "REMINDER",
+          "Departmental Meeting Scheduled",
+          message,
+          { inApp: true, email: true, allowSelf: true, source: "meeting" },
+        ),
+      ),
+    );
+
+    const reminderIds = await createMeetingReminders({
+      meeting,
+      recipientIds,
+      projectId: primaryProject?._id || null,
+      orderNumber,
+      actorId: req.user._id || req.user.id,
+    });
+    meeting.reminderIds = reminderIds;
+    await meeting.save();
+
+    return res.status(201).json(meeting);
+  } catch (error) {
+    console.error("Error scheduling order meeting:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update an order meeting
+// @route   PATCH /api/meetings/:id
+// @access  Private (Admin/Front Desk)
+const updateOrderMeeting = async (req, res) => {
+  try {
+    if (!canManageMeetings(req.user)) {
+      return res.status(403).json({ message: "Not authorized to manage meetings." });
+    }
+
+    const meeting = await OrderMeeting.findById(req.params.id);
+    if (!meeting) {
+      return res.status(404).json({ message: "Meeting not found." });
+    }
+
+    if (meeting.status === "completed") {
+      return res.status(400).json({
+        message: "Meeting is completed. Schedule a new meeting if needed.",
+      });
+    }
+
+    const meetingAt = normalizeMeetingDate(req.body?.meetingAt);
+    if (!meetingAt) {
+      return res.status(400).json({ message: "meetingAt is required." });
+    }
+
+    const orderNumber = normalizeOrderNumber(meeting.orderNumber);
+    const orderRefId = meeting.orderRef;
+    const projects = await resolveOrderGroupProjects({
+      orderNumber,
+      orderRefId,
+    });
+    if (!projects.length) {
+      return res.status(404).json({ message: "No projects found for this order." });
+    }
+
+    const recipientIds = await resolveMeetingRecipientIds(projects);
+    const primaryProject = projects
+      .slice()
+      .sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+      )[0];
+
+    await cancelMeetingReminders(meeting.reminderIds || []);
+
+    meeting.meetingAt = meetingAt;
+    meeting.timezone = toText(req.body?.timezone) || meeting.timezone || "UTC";
+    meeting.location = toText(req.body?.location);
+    meeting.virtualLink = toText(req.body?.virtualLink);
+    meeting.agenda = toText(req.body?.agenda);
+    meeting.channels = {
+      inApp: req.body?.channels?.inApp !== false,
+      email: req.body?.channels?.email !== false,
+    };
+    meeting.reminderOffsets = normalizeMeetingReminderOffsets(req.body?.reminderOffsets);
+    meeting.reminderIds = [];
+    meeting.status = "scheduled";
+    meeting.completedBy = null;
+    await meeting.save();
+
+    const message = buildMeetingMessage(meeting, { orderNumber });
+    await Promise.all(
+      recipientIds.map((recipientId) =>
+        createNotification(
+          recipientId,
+          req.user._id || req.user.id,
+          primaryProject?._id || null,
+          "REMINDER",
+          "Departmental Meeting Updated",
+          message,
+          { inApp: true, email: true, allowSelf: true, source: "meeting" },
+        ),
+      ),
+    );
+
+    const reminderIds = await createMeetingReminders({
+      meeting,
+      recipientIds,
+      projectId: primaryProject?._id || null,
+      orderNumber,
+      actorId: req.user._id || req.user.id,
+    });
+    meeting.reminderIds = reminderIds;
+    await meeting.save();
+
+    return res.json(meeting);
+  } catch (error) {
+    console.error("Error updating order meeting:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Mark order meeting complete
+// @route   PATCH /api/meetings/:id/complete
+// @access  Private (Admin/Front Desk)
+const completeOrderMeeting = async (req, res) => {
+  try {
+    if (!canManageMeetings(req.user)) {
+      return res.status(403).json({ message: "Not authorized to manage meetings." });
+    }
+
+    const meeting = await OrderMeeting.findById(req.params.id);
+    if (!meeting) {
+      return res.status(404).json({ message: "Meeting not found." });
+    }
+
+    if (meeting.status === "completed") {
+      return res.json(meeting);
+    }
+
+    await cancelMeetingReminders(meeting.reminderIds || []);
+
+    meeting.status = "completed";
+    meeting.completedBy = req.user._id || req.user.id;
+    meeting.reminderIds = [];
+    await meeting.save();
+
+    const orderNumber = normalizeOrderNumber(meeting.orderNumber);
+    const projects = await resolveOrderGroupProjects({
+      orderNumber,
+      orderRefId: meeting.orderRef,
+    });
+    const targetIds = projects
+      .filter((project) => project?.status === "Pending Departmental Meeting")
+      .map((project) => project?._id)
+      .filter(Boolean);
+
+    if (targetIds.length > 0) {
+      await Project.updateMany(
+        { _id: { $in: targetIds } },
+        { $set: { status: "Pending Departmental Engagement" } },
+      );
+    }
+
+    return res.json(meeting);
+  } catch (error) {
+    console.error("Error completing order meeting:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -10362,5 +11063,9 @@ module.exports = {
   reopenProject, // [NEW]
   acknowledgeProject,
   undoAcknowledgeProject,
+  createOrderMeeting,
+  updateOrderMeeting,
+  completeOrderMeeting,
+  getOrderMeetingByNumber,
 };
 

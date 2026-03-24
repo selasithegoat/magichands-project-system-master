@@ -17,6 +17,7 @@ import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCance
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/ProjectTypeChangeModal";
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
+import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
 
 const toEntityId = (value) => {
@@ -76,6 +77,7 @@ const STANDARD_STATUS_FLOW = [
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Mockup",
@@ -102,6 +104,7 @@ const QUOTE_STATUS_FLOW = [
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Quote Request",
@@ -2446,6 +2449,7 @@ const ProjectDetails = ({ user }) => {
                     "Order Confirmed",
                     "Pending Scope Approval",
                     "Scope Approval Completed",
+                    "Pending Departmental Meeting",
                     "Pending Departmental Engagement",
                     "Departmental Engagement Completed",
                     "Pending Quote Request",
@@ -2461,6 +2465,7 @@ const ProjectDetails = ({ user }) => {
                     "Order Confirmed",
                     "Pending Scope Approval",
                     "Scope Approval Completed",
+                    "Pending Departmental Meeting",
                     "Pending Departmental Engagement",
                     "Departmental Engagement Completed",
                     "Pending Mockup",
@@ -3893,6 +3898,11 @@ const ProjectDetails = ({ user }) => {
 
         {/* Right Column */}
         <div className="side-info">
+          <OrderMeetingCard
+            project={project}
+            orderGroupProjects={orderGroupProjects}
+            user={user}
+          />
           <ProjectRemindersCard project={project} user={user} />
           <div className="detail-card">
             <h3

@@ -1,0 +1,451 @@
+import React, { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
+import "./OrderMeetingCard.css";
+
+const REMINDER_OPTIONS = [
+  { value: 1440, label: "24 hours before" },
+  { value: 60, label: "1 hour before" },
+];
+
+const normalizeDepartmentValue = (value) => {
+  if (value && typeof value === "object") {
+    const optionValue = value.value || value.label || "";
+    return String(optionValue).trim().toLowerCase();
+  }
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const toDepartmentArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === "") return [];
+  return [value];
+};
+
+const isFrontDeskUser = (user) =>
+  toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .includes("front desk");
+
+const canManageMeetings = (user) =>
+  Boolean(user && (user.role === "admin" || isFrontDeskUser(user)));
+
+const getDefaultTimezone = () =>
+  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
+const toLocalInputValue = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const offsetMs = parsed.getTimezoneOffset() * 60 * 1000;
+  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const toIsoFromLocalInput = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString();
+};
+
+const formatMeetingStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Not Scheduled";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const formatMeetingDateTime = (value) => {
+  if (!value) return "TBD";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "TBD";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const formatReminderOffset = (minutes) => {
+  const value = Number(minutes);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  if (value % 1440 === 0) {
+    const days = value / 1440;
+    return `${days} day${days === 1 ? "" : "s"} before`;
+  }
+  if (value % 60 === 0) {
+    const hours = value / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"} before`;
+  }
+  return `${value} mins before`;
+};
+
+const buildInitialForm = (meeting) => ({
+  meetingAt: meeting?.meetingAt ? toLocalInputValue(meeting.meetingAt) : "",
+  timezone: meeting?.timezone || getDefaultTimezone(),
+  location: meeting?.location || "",
+  virtualLink: meeting?.virtualLink || "",
+  agenda: meeting?.agenda || "",
+  reminderOffsets: Array.isArray(meeting?.reminderOffsets)
+    ? meeting.reminderOffsets
+    : [],
+});
+
+const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
+  const orderNumber = String(
+    project?.orderId || project?.orderRef?.orderNumber || "",
+  ).trim();
+  const isRequired = Boolean(
+    project?.projectType === "Corporate Job" ||
+      (Array.isArray(orderGroupProjects) && orderGroupProjects.length > 1),
+  );
+  const allowManage = canManageMeetings(user);
+
+  const [meeting, setMeeting] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState(() => buildInitialForm(null));
+
+  const reminderLabels = useMemo(() => {
+    const offsets = Array.isArray(meeting?.reminderOffsets)
+      ? meeting.reminderOffsets
+      : [];
+    return offsets
+      .map(formatReminderOffset)
+      .filter(Boolean)
+      .join(", ");
+  }, [meeting?.reminderOffsets]);
+
+  const fetchMeeting = async (targetOrderNumber) => {
+    if (!targetOrderNumber) {
+      setMeeting(null);
+      setForm(buildInitialForm(null));
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `/api/meetings/order/${encodeURIComponent(targetOrderNumber)}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) {
+        if (res.status === 404) {
+          setMeeting(null);
+          setForm(buildInitialForm(null));
+          return;
+        }
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to load meeting.");
+      }
+      const data = await res.json();
+      const meetingData = data?.meeting || null;
+      setMeeting(meetingData);
+      setForm(buildInitialForm(meetingData));
+    } catch (fetchError) {
+      console.error("Failed to fetch meeting:", fetchError);
+      setError(fetchError.message || "Failed to load meeting.");
+      setMeeting(null);
+      setForm(buildInitialForm(null));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMeeting(orderNumber);
+  }, [orderNumber]);
+
+  const updateField = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleReminderOffset = (value) => {
+    setForm((prev) => {
+      const next = new Set(prev.reminderOffsets || []);
+      if (next.has(value)) {
+        next.delete(value);
+      } else {
+        next.add(value);
+      }
+      return { ...prev, reminderOffsets: Array.from(next).sort((a, b) => b - a) };
+    });
+  };
+
+  const handleSaveMeeting = async () => {
+    if (!allowManage || saving) return;
+    setError("");
+
+    if (!orderNumber) {
+      setError("Order number is required to schedule a meeting.");
+      return;
+    }
+
+    if (!form.meetingAt) {
+      setError("Meeting date/time is required.");
+      return;
+    }
+
+    const meetingAt = toIsoFromLocalInput(form.meetingAt);
+    if (!meetingAt) {
+      setError("Meeting date/time is invalid.");
+      return;
+    }
+
+    const isScheduled = meeting?.status === "scheduled";
+    const url = isScheduled ? `/api/meetings/${meeting._id}` : "/api/meetings";
+    const method = isScheduled ? "PATCH" : "POST";
+
+    const payload = {
+      orderNumber,
+      meetingAt,
+      timezone: form.timezone || getDefaultTimezone(),
+      location: form.location,
+      virtualLink: form.virtualLink,
+      agenda: form.agenda,
+      reminderOffsets: form.reminderOffsets || [],
+      channels: { inApp: true, email: true },
+    };
+
+    setSaving(true);
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message ||
+            (isScheduled ? "Failed to update meeting." : "Failed to schedule meeting."),
+        );
+      }
+      const savedMeeting = await res.json();
+      setMeeting(savedMeeting);
+      setForm(buildInitialForm(savedMeeting));
+      toast.success(isScheduled ? "Meeting updated." : "Meeting scheduled.");
+    } catch (saveError) {
+      console.error("Meeting save failed:", saveError);
+      setError(saveError.message || "Failed to save meeting.");
+      toast.error(saveError.message || "Failed to save meeting.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCompleteMeeting = async () => {
+    if (!allowManage || completing || !meeting?._id) return;
+    setError("");
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/meetings/${meeting._id}/complete`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to mark meeting complete.");
+      }
+      const updatedMeeting = await res.json();
+      setMeeting(updatedMeeting);
+      setForm(buildInitialForm(updatedMeeting));
+      toast.success("Meeting marked complete.");
+    } catch (completeError) {
+      console.error("Meeting completion failed:", completeError);
+      setError(completeError.message || "Failed to complete meeting.");
+      toast.error(completeError.message || "Failed to complete meeting.");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const canComplete =
+    Boolean(meeting && meeting.status === "scheduled") && allowManage;
+  const canEdit = allowManage;
+
+  return (
+    <div className="detail-card order-meeting-card">
+      <div className="detail-card-header">
+        <h3 className="card-title">Departmental Meeting</h3>
+        <div className="order-meeting-badges">
+          {isRequired && <span className="meeting-pill required">Required</span>}
+          <span className="meeting-pill status">
+            {formatMeetingStatus(meeting?.status)}
+          </span>
+        </div>
+      </div>
+
+      {loading && <p className="order-meeting-note">Loading meeting details...</p>}
+      {error && <div className="order-meeting-error">{error}</div>}
+
+      {!loading && !meeting && (
+        <p className="order-meeting-note">
+          No meeting has been scheduled for this order yet.
+        </p>
+      )}
+
+      {meeting && (
+        <div className="order-meeting-summary">
+          <div>
+            <span className="order-meeting-label">Scheduled for</span>
+            <p className="order-meeting-value">
+              {formatMeetingDateTime(meeting.meetingAt)}
+              {meeting.timezone ? ` (${meeting.timezone})` : ""}
+            </p>
+          </div>
+          {meeting.location && (
+            <div>
+              <span className="order-meeting-label">Location</span>
+              <p className="order-meeting-value">{meeting.location}</p>
+            </div>
+          )}
+          {meeting.virtualLink && (
+            <div>
+              <span className="order-meeting-label">Virtual Link</span>
+              <p className="order-meeting-value">
+                <a href={meeting.virtualLink} target="_blank" rel="noreferrer">
+                  {meeting.virtualLink}
+                </a>
+              </p>
+            </div>
+          )}
+          {meeting.agenda && (
+            <div>
+              <span className="order-meeting-label">Agenda</span>
+              <p className="order-meeting-value">{meeting.agenda}</p>
+            </div>
+          )}
+          {reminderLabels && (
+            <div>
+              <span className="order-meeting-label">Reminders</span>
+              <p className="order-meeting-value">{reminderLabels}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {canEdit && (
+        <>
+          <div className="order-meeting-form">
+            <div className="order-meeting-row">
+              <div className="order-meeting-field">
+                <label htmlFor="meeting-at">Meeting Date &amp; Time</label>
+                <input
+                  id="meeting-at"
+                  className="edit-input"
+                  type="datetime-local"
+                  value={form.meetingAt}
+                  onChange={(event) => updateField("meetingAt", event.target.value)}
+                />
+              </div>
+              <div className="order-meeting-field">
+                <label htmlFor="meeting-timezone">Timezone</label>
+                <input
+                  id="meeting-timezone"
+                  className="edit-input"
+                  type="text"
+                  value={form.timezone}
+                  onChange={(event) => updateField("timezone", event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="order-meeting-row">
+              <div className="order-meeting-field">
+                <label htmlFor="meeting-location">Location</label>
+                <input
+                  id="meeting-location"
+                  className="edit-input"
+                  type="text"
+                  value={form.location}
+                  onChange={(event) => updateField("location", event.target.value)}
+                  placeholder="Office / Address"
+                />
+              </div>
+              <div className="order-meeting-field">
+                <label htmlFor="meeting-link">Virtual Link</label>
+                <input
+                  id="meeting-link"
+                  className="edit-input"
+                  type="url"
+                  value={form.virtualLink}
+                  onChange={(event) => updateField("virtualLink", event.target.value)}
+                  placeholder="https://meet..."
+                />
+              </div>
+            </div>
+
+            <div className="order-meeting-field">
+              <label htmlFor="meeting-agenda">Agenda</label>
+              <textarea
+                id="meeting-agenda"
+                className="edit-input"
+                rows="3"
+                value={form.agenda}
+                onChange={(event) => updateField("agenda", event.target.value)}
+                placeholder="Key discussion points"
+              />
+            </div>
+
+            <div className="order-meeting-field">
+              <label>Reminder Offsets</label>
+              <div className="order-meeting-reminders">
+                {REMINDER_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className="order-meeting-reminder-option"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.reminderOffsets.includes(option.value)}
+                      onChange={() => toggleReminderOffset(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="order-meeting-note">
+                Notifications are sent via email and in-app only.
+              </p>
+            </div>
+          </div>
+
+          <div className="order-meeting-actions">
+            <button
+              type="button"
+              className="order-meeting-btn primary"
+              onClick={handleSaveMeeting}
+              disabled={saving || !orderNumber}
+            >
+              {saving
+                ? "Saving..."
+                : meeting?.status === "scheduled"
+                  ? "Update Meeting"
+                  : "Schedule Meeting"}
+            </button>
+            {canComplete && (
+              <button
+                type="button"
+                className="order-meeting-btn complete"
+                onClick={handleCompleteMeeting}
+                disabled={completing}
+              >
+                {completing ? "Completing..." : "Mark Complete"}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default OrderMeetingCard;

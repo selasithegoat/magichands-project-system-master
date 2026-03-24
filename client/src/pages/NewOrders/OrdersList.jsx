@@ -809,6 +809,9 @@ const OrdersList = () => {
               <option value="All">All Status</option>
               <option value="New Order">New Order</option>
               <option value="Order Confirmed">Order Confirmed</option>
+              <option value="Pending Departmental Meeting">
+                Pending Departmental Meeting
+              </option>
               <option value="Pending Departmental Engagement">
                 Pending Departmental Engagement
               </option>

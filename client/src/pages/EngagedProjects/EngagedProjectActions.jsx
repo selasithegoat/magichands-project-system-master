@@ -45,6 +45,7 @@ const ACKNOWLEDGE_PHRASE = "I agree to be engaged in this project";
 const COMPLETE_PHRASE = "I confirm this engagement is complete";
 const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Mockup",
@@ -96,6 +97,7 @@ const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
 ]);
 const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set([
@@ -242,6 +244,39 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
+const formatMeetingStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Not Scheduled";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const formatMeetingDateTime = (value) => {
+  if (!value) return "TBD";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "TBD";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const formatMeetingOffset = (minutes) => {
+  const value = Number(minutes);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  if (value % 1440 === 0) {
+    const days = value / 1440;
+    return `${days} day${days === 1 ? "" : "s"} before`;
+  }
+  if (value % 60 === 0) {
+    const hours = value / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"} before`;
+  }
+  return `${value} mins before`;
+};
+
 const ENGAGED_WORKFLOW_STEPS = [
   {
     key: "brief",
@@ -250,6 +285,7 @@ const ENGAGED_WORKFLOW_STEPS = [
       "Order Confirmed",
       "Pending Scope Approval",
       "Scope Approval Completed",
+      "Pending Departmental Meeting",
       "Pending Departmental Engagement",
       "Departmental Engagement Completed",
     ],
@@ -395,6 +431,9 @@ const EngagedProjectActions = ({ user }) => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [orderMeeting, setOrderMeeting] = useState(null);
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [meetingError, setMeetingError] = useState("");
   const [toast, setToast] = useState(null);
   const [statusUpdating, setStatusUpdating] = useState(null);
   const [quoteRequirementUpdating, setQuoteRequirementUpdating] = useState("");
@@ -952,10 +991,44 @@ const EngagedProjectActions = ({ user }) => {
         throw new Error("Engaged project not found.");
       }
       setProject(match);
+      await fetchOrderMeeting(match?.orderId || match?.orderRef?.orderNumber);
     } catch (err) {
       setError(err.message || "Failed to load engaged project.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOrderMeeting = async (orderNumber) => {
+    const normalizedOrder = String(orderNumber || "").trim();
+    if (!normalizedOrder) {
+      setOrderMeeting(null);
+      setMeetingError("");
+      return;
+    }
+
+    setMeetingLoading(true);
+    setMeetingError("");
+    try {
+      const res = await fetch(
+        `/api/meetings/order/${encodeURIComponent(normalizedOrder)}`,
+      );
+      if (!res.ok) {
+        if (res.status === 404) {
+          setOrderMeeting(null);
+          return;
+        }
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch meeting.");
+      }
+      const data = await res.json();
+      setOrderMeeting(data?.meeting || null);
+    } catch (meetingFetchError) {
+      console.error("Failed to load meeting:", meetingFetchError);
+      setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
+      setOrderMeeting(null);
+    } finally {
+      setMeetingLoading(false);
     }
   };
 
@@ -2011,6 +2084,12 @@ const EngagedProjectActions = ({ user }) => {
       : "Upload the approved mockup file for review.";
   const revisionMeta = getRevisionMeta(project);
   const revisionCount = getRevisionCount(project);
+  const meetingReminderLabel = Array.isArray(orderMeeting?.reminderOffsets)
+    ? orderMeeting.reminderOffsets
+        .map(formatMeetingOffset)
+        .filter(Boolean)
+        .join(", ")
+    : "";
 
   return (
     <div className="engaged-projects-container engaged-actions-page">
@@ -2995,6 +3074,56 @@ const EngagedProjectActions = ({ user }) => {
     </main>
 
     <aside className="engaged-actions-sidebar">
+      <section className="engaged-context-card">
+        <h3>Departmental Meeting</h3>
+        {meetingLoading && <p>Loading meeting details...</p>}
+        {meetingError && <p>{meetingError}</p>}
+        {!meetingLoading && !orderMeeting && !meetingError && (
+          <p>No meeting scheduled yet.</p>
+        )}
+        {orderMeeting && (
+          <>
+            <p>
+              <strong>Status:</strong> {formatMeetingStatus(orderMeeting.status)}
+            </p>
+            <p>
+              <strong>When:</strong>{" "}
+              {formatMeetingDateTime(orderMeeting.meetingAt)}
+            </p>
+            {orderMeeting.timezone && (
+              <p>
+                <strong>Timezone:</strong> {orderMeeting.timezone}
+              </p>
+            )}
+            {orderMeeting.location && (
+              <p>
+                <strong>Location:</strong> {orderMeeting.location}
+              </p>
+            )}
+            {orderMeeting.virtualLink && (
+              <p>
+                <strong>Link:</strong>{" "}
+                <a href={orderMeeting.virtualLink} target="_blank" rel="noreferrer">
+                  Join meeting
+                </a>
+              </p>
+            )}
+            {orderMeeting.agenda && (
+              <p>
+                <strong>Agenda:</strong> {orderMeeting.agenda}
+              </p>
+            )}
+            {meetingReminderLabel && (
+              <p>
+                <strong>Reminders:</strong> {meetingReminderLabel}
+              </p>
+            )}
+            {orderMeeting.status === "scheduled" && (
+              <p>Engagement actions unlock after the meeting is completed.</p>
+            )}
+          </>
+        )}
+      </section>
       <section className="engaged-context-card">
         <h3>Project Context</h3>
         <p>

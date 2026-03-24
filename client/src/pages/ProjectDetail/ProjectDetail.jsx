@@ -61,6 +61,10 @@ const STATUS_STEPS = [
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
   },
   {
+    label: "Departmental Meeting",
+    statuses: ["Pending Departmental Meeting"],
+  },
+  {
     label: "Departmental Engagement",
     statuses: [
       "Pending Departmental Engagement",
@@ -105,6 +109,10 @@ const QUOTE_STEPS = [
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
   },
   {
+    label: "Departmental Meeting",
+    statuses: ["Pending Departmental Meeting"],
+  },
+  {
     label: "Departmental Engagement",
     statuses: [
       "Pending Departmental Engagement",
@@ -127,6 +135,7 @@ const STANDARD_WORKFLOW_STATUSES = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Mockup",
@@ -161,6 +170,7 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Order Confirmed",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Departmental Engagement Completed",
   "Pending Quote Request",
@@ -210,6 +220,9 @@ const getStatusColor = (status) => {
     case "Scope Approval Completed":
     case "Scope Approval":
       return "#f97316"; // Orange
+    case "Pending Departmental Meeting":
+    case "Departmental Meeting":
+      return "#fb923c"; // Orange-light
     case "Pending Departmental Engagement":
     case "Departmental Engagement Completed":
     case "Departmental Engagement":
@@ -618,6 +631,39 @@ const toEntityId = (value) => {
   return "";
 };
 
+const formatMeetingStatus = (status = "") => {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (!normalized) return "Not Scheduled";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const formatMeetingDateTime = (value) => {
+  if (!value) return "TBD";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "TBD";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const formatMeetingOffset = (minutes) => {
+  const value = Number(minutes);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  if (value % 1440 === 0) {
+    const days = value / 1440;
+    return `${days} day${days === 1 ? "" : "s"} before`;
+  }
+  if (value % 60 === 0) {
+    const hours = value / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"} before`;
+  }
+  return `${value} mins before`;
+};
+
 const ProjectDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -628,12 +674,20 @@ const ProjectDetail = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [orderGroupProjects, setOrderGroupProjects] = useState([]);
+  const [orderMeeting, setOrderMeeting] = useState(null);
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [meetingError, setMeetingError] = useState("");
   const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
   const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
   const isProjectLead = Boolean(
     currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
+  );
+  const isMeetingRequired = useMemo(
+    () =>
+      project?.projectType === "Corporate Job" || orderGroupProjects.length > 1,
+    [project?.projectType, orderGroupProjects.length],
   );
   const deliveryDateValue = project?.details?.deliveryDate;
   const deliveryTimeValue = project?.details?.deliveryTime;
@@ -670,6 +724,39 @@ const ProjectDetail = ({ user }) => {
     }
   };
 
+  const fetchOrderMeeting = async (orderNumber) => {
+    const normalizedOrder = String(orderNumber || "").trim();
+    if (!normalizedOrder) {
+      setOrderMeeting(null);
+      setMeetingError("");
+      return;
+    }
+
+    setMeetingLoading(true);
+    setMeetingError("");
+    try {
+      const res = await fetch(
+        `/api/meetings/order/${encodeURIComponent(normalizedOrder)}`,
+      );
+      if (!res.ok) {
+        if (res.status === 404) {
+          setOrderMeeting(null);
+          return;
+        }
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to fetch meeting.");
+      }
+      const data = await res.json();
+      setOrderMeeting(data?.meeting || null);
+    } catch (meetingFetchError) {
+      console.error("Failed to load meeting:", meetingFetchError);
+      setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
+      setOrderMeeting(null);
+    } finally {
+      setMeetingLoading(false);
+    }
+  };
+
   const fetchProject = async () => {
     try {
       const res = await fetch(`/api/projects/${id}`);
@@ -677,6 +764,7 @@ const ProjectDetail = ({ user }) => {
       const data = await res.json();
       setProject(data);
       await fetchOrderGroupProjects(data?.orderId, data);
+      await fetchOrderMeeting(data?.orderId || data?.orderRef?.orderNumber);
     } catch (err) {
       console.error(err);
       setError("Could not load project details");
@@ -1206,6 +1294,12 @@ const ProjectDetail = ({ user }) => {
               />
             </div>
             <div className="side-column">
+              <OrderMeetingDetailsCard
+                meeting={orderMeeting}
+                required={isMeetingRequired}
+                loading={meetingLoading}
+                error={meetingError}
+              />
               <ProjectReminderPanel project={project} user={user} />
               <ProgressCard
                 project={project}
@@ -1229,6 +1323,92 @@ const ProjectDetail = ({ user }) => {
         )}
         {activeTab === "Activities" && <ProjectActivity project={project} />}
       </main>
+    </div>
+  );
+};
+
+const OrderMeetingDetailsCard = ({
+  meeting,
+  required = false,
+  loading = false,
+  error = "",
+}) => {
+  const reminderOffsets = Array.isArray(meeting?.reminderOffsets)
+    ? meeting.reminderOffsets
+    : [];
+  const reminderLabel = reminderOffsets
+    .map(formatMeetingOffset)
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <div className="detail-card meeting-details-card">
+      <div className="card-header">
+        <h3 className="card-title">Departmental Meeting</h3>
+        {required && <span className="meeting-required-pill">Required</span>}
+      </div>
+
+      {loading && <p className="meeting-helper-text">Loading meeting details...</p>}
+      {error && <p className="meeting-helper-text meeting-error">{error}</p>}
+
+      {!loading && !meeting && !error && (
+        <p className="meeting-helper-text">No meeting scheduled yet.</p>
+      )}
+
+      {meeting && (
+        <div className="info-grid">
+          <div className="info-item">
+            <h4>Status</h4>
+            <span className="info-text-bold">
+              {formatMeetingStatus(meeting.status)}
+            </span>
+          </div>
+          <div className="info-item">
+            <h4>When</h4>
+            <span className="info-text-bold">
+              {formatMeetingDateTime(meeting.meetingAt)}
+            </span>
+            {meeting.timezone && (
+              <div className="info-subtext">{meeting.timezone}</div>
+            )}
+          </div>
+          {meeting.location && (
+            <div className="info-item">
+              <h4>Location</h4>
+              <span className="info-text-bold">{meeting.location}</span>
+            </div>
+          )}
+          {meeting.virtualLink && (
+            <div className="info-item">
+              <h4>Virtual Link</h4>
+              <a
+                className="meeting-link"
+                href={meeting.virtualLink}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Join meeting
+              </a>
+            </div>
+          )}
+          {meeting.agenda && (
+            <div className="info-item">
+              <h4>Agenda</h4>
+              <div className="info-subtext" style={{ marginLeft: 0 }}>
+                {meeting.agenda}
+              </div>
+            </div>
+          )}
+          {reminderLabel && (
+            <div className="info-item">
+              <h4>Reminders</h4>
+              <div className="info-subtext" style={{ marginLeft: 0 }}>
+                {reminderLabel}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -3274,6 +3454,8 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
           return 25;
         case "Scope Approval Completed":
           return 35;
+        case "Pending Departmental Meeting":
+          return 38;
         case "Pending Departmental Engagement":
           return 42;
         case "Departmental Engagement Completed":
@@ -3308,6 +3490,8 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
         return 15;
       case "Scope Approval Completed":
         return 22;
+      case "Pending Departmental Meeting":
+        return 25;
       case "Pending Departmental Engagement":
         return 27;
       case "Departmental Engagement Completed":
