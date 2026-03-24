@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
@@ -154,7 +154,10 @@ const Layout = ({
   onToggleTheme,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isFrontDeskUser = toArray(user?.department).includes("Front Desk");
+  const isFrontDeskOrdersPage = location.pathname === "/frontdesk/orders";
 
   // [New] Notifications & Toasts State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -991,6 +994,20 @@ const Layout = ({
           />
         ))}
       </div>
+
+      {isFrontDeskUser && (
+        <button
+          type="button"
+          className={`frontdesk-fab ${isFrontDeskOrdersPage ? "active" : ""}`}
+          onClick={() => navigate("/frontdesk/orders")}
+          aria-label="Open orders management"
+        >
+          <span className="frontdesk-fab-icon">
+            <ClipboardListIcon />
+          </span>
+          <span>Orders</span>
+        </button>
+      )}
 
       {/* Page Content */}
       <main className="layout-content">{children}</main>

@@ -28,6 +28,9 @@ const OngoingProjects = lazy(
 const Profile = lazy(() => import("./pages/Profile/Profile"));
 const NewOrders = lazy(() => import("./pages/NewOrders/NewOrders"));
 const OrderActions = lazy(() => import("./pages/NewOrders/OrderActions"));
+const FrontDeskOrders = lazy(
+  () => import("./pages/FrontDeskOrders/FrontDeskOrders"),
+);
 const EndOfDayUpdate = lazy(
   () => import("./pages/EndOfDayUpdate/EndOfDayUpdate"),
 );
@@ -574,6 +577,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <CreateProjectLanding />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/frontdesk/orders"
+          element={
+            <ProtectedLayout
+              activeView="new-orders"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <FrontDeskOrders />
             </ProtectedLayout>
           }
         />
