@@ -84,7 +84,6 @@ const formatReminderOffset = (minutes) => {
 
 const buildInitialForm = (meeting) => ({
   meetingAt: meeting?.meetingAt ? toLocalInputValue(meeting.meetingAt) : "",
-  timezone: meeting?.timezone || getDefaultTimezone(),
   location: meeting?.location || "",
   virtualLink: meeting?.virtualLink || "",
   agenda: meeting?.agenda || "",
@@ -141,7 +140,9 @@ const OrderMeetingCard = ({
     setError("");
     try {
       const res = await fetch(
-        `/api/meetings/order/${encodeURIComponent(targetOrderNumber)}`,
+        `/api/meetings/order/${encodeURIComponent(
+          targetOrderNumber,
+        )}?source=admin`,
         { credentials: "include" },
       );
       if (!res.ok) {
@@ -217,7 +218,7 @@ const OrderMeetingCard = ({
     const payload = {
       orderNumber,
       meetingAt,
-      timezone: form.timezone || getDefaultTimezone(),
+      timezone: meeting?.timezone || getDefaultTimezone(),
       location: form.location,
       virtualLink: form.virtualLink,
       agenda: form.agenda,
@@ -359,16 +360,6 @@ const OrderMeetingCard = ({
                   type="datetime-local"
                   value={form.meetingAt}
                   onChange={(event) => updateField("meetingAt", event.target.value)}
-                />
-              </div>
-              <div className="order-meeting-field">
-                <label htmlFor="meeting-timezone">Timezone</label>
-                <input
-                  id="meeting-timezone"
-                  className="edit-input"
-                  type="text"
-                  value={form.timezone}
-                  onChange={(event) => updateField("timezone", event.target.value)}
                 />
               </div>
             </div>

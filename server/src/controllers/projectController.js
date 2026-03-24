@@ -1134,9 +1134,14 @@ const createMeetingReminders = async ({
   const message = buildMeetingReminderMessage(meeting, { orderNumber });
 
   for (const offset of reminderOffsets) {
-    const remindAt = new Date(meetingTime.getTime() - offset * 60 * 1000);
+    let remindAt = new Date(meetingTime.getTime() - offset * 60 * 1000);
     if (remindAt.getTime() <= now + 5000) {
-      continue;
+      if (offset === 0) {
+        // If meeting time is now/past, trigger reminder shortly.
+        remindAt = new Date(now + 10000);
+      } else {
+        continue;
+      }
     }
 
     const reminder = await Reminder.create({
@@ -10717,11 +10722,15 @@ const getOrderMeetingByNumber = async (req, res) => {
     }
 
     const { query } = buildProjectAccessQuery(req);
-    const conditions = [{ orderId: orderNumber }];
-    if (query && Object.keys(query).length > 0) {
-      conditions.push(query);
+    const order = await Order.findOne({ orderNumber }).select("_id").lean();
+    const baseConditions = [{ orderId: orderNumber }];
+    if (order?._id) {
+      baseConditions.push({ orderRef: order._id });
     }
-    const scopedQuery = conditions.length === 1 ? conditions[0] : { $and: conditions };
+    const baseQuery =
+      baseConditions.length === 1 ? baseConditions[0] : { $or: baseConditions };
+    const scopedQuery =
+      query && Object.keys(query).length > 0 ? { $and: [baseQuery, query] } : baseQuery;
 
     const accessible = await Project.find(scopedQuery)
       .select("_id orderId orderRef")

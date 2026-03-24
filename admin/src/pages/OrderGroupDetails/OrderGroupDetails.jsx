@@ -78,7 +78,7 @@ const normalizeReferenceAttachments = (attachments) => {
         const url = item.trim();
         if (!url) return null;
         const name = url.split("?")[0].split("/").pop() || url;
-        return { fileUrl: url, fileName: name, note: "" };
+        return { fileUrl: url, fileName: name, note: "", fileType: "" };
       }
       const fileUrl =
         item.fileUrl || item.url || item.path || item.file || item.location;
@@ -92,9 +92,23 @@ const normalizeReferenceAttachments = (attachments) => {
         fileUrl,
         fileName,
         note: item.note || item.notes || "",
+        fileType: item.fileType || item.type || "",
       };
     })
     .filter(Boolean);
+};
+
+const isImageReference = (fileUrl = "", fileType = "") => {
+  const normalizedType = String(fileType || "").toLowerCase();
+  if (normalizedType.startsWith("image/")) return true;
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(fileUrl || ""));
+};
+
+const getFileExtension = (fileName = "") => {
+  const normalized = String(fileName || "");
+  const dotIndex = normalized.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === normalized.length - 1) return "FILE";
+  return normalized.slice(dotIndex + 1).toUpperCase().slice(0, 6);
 };
 
 const buildLeadGroups = (projects = []) => {
@@ -124,7 +138,7 @@ const renderDepartmentTags = (departments) => {
   ));
 };
 
-const ProjectDetailBlock = ({ project }) => {
+const ProjectDetailBlock = ({ project, onViewDetails }) => {
   const details = project?.details || {};
   const items = Array.isArray(project?.items) ? project.items : [];
   const attachments = normalizeReferenceAttachments(
@@ -136,6 +150,7 @@ const ProjectDetailBlock = ({ project }) => {
       fileUrl: sampleImage,
       fileName: "Sample Image",
       note: details.sampleImageNote || "",
+      fileType: "image",
     });
   }
 
@@ -156,7 +171,7 @@ const ProjectDetailBlock = ({ project }) => {
         <div>
           <h3>{details.projectName || "Untitled Project"}</h3>
           <p className="group-project-subtitle">
-            {project?.projectType || "Standard"} •{" "}
+            {project?.projectType || "Standard"} -{" "}
             <span className="group-status-pill">{project?.status || "N/A"}</span>
           </p>
         </div>
@@ -272,29 +287,53 @@ const ProjectDetailBlock = ({ project }) => {
         {attachments.length === 0 ? (
           <p className="group-muted">No reference materials uploaded.</p>
         ) : (
-          <div className="group-reference-list">
-            {attachments.map((file, index) => (
-              <a
-                key={`${file.fileUrl}-${index}`}
-                href={file.fileUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group-reference-item"
-              >
-                <span className="group-reference-name">{file.fileName}</span>
-                {file.note && (
-                  <span className="group-reference-note">{file.note}</span>
-                )}
-              </a>
-            ))}
+          <div className="group-reference-grid">
+            {attachments.map((file, index) => {
+              const isImage = isImageReference(file.fileUrl, file.fileType);
+              const extension = getFileExtension(file.fileName);
+              return (
+                <a
+                  key={`${file.fileUrl}-${index}`}
+                  href={file.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`group-reference-item ${
+                    isImage ? "is-image" : "is-file"
+                  }`}
+                >
+                  <div className="group-reference-preview">
+                    {isImage ? (
+                      <img
+                        src={file.fileUrl}
+                        alt={file.fileName || "Reference"}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span>{extension}</span>
+                    )}
+                  </div>
+                  <div className="group-reference-meta">
+                    <span className="group-reference-name">{file.fileName}</span>
+                    {file.note && (
+                      <span className="group-reference-note">{file.note}</span>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
           </div>
         )}
       </div>
 
-      <details className="group-project-raw">
-        <summary>Full Project Data</summary>
-        <pre>{JSON.stringify(project, null, 2)}</pre>
-      </details>
+      <div className="group-project-footer">
+        <button
+          type="button"
+          className="group-project-btn"
+          onClick={() => onViewDetails?.(project?._id)}
+        >
+          View Project Details
+        </button>
+      </div>
     </article>
   );
 };
@@ -357,6 +396,11 @@ const OrderGroupDetails = ({ user }) => {
     return leadGroups.filter((entry) => entry.lead === selectedLead);
   }, [leadGroups, selectedLead]);
 
+  const openProjectDetails = (projectId) => {
+    if (!projectId) return;
+    navigate(`/projects/${projectId}`);
+  };
+
   if (loading) {
     return (
       <div className="order-group-page">
@@ -404,8 +448,8 @@ const OrderGroupDetails = ({ user }) => {
           </button>
           <h1>Order Group: {group?.orderNumber || orderNumber}</h1>
           <p>
-            <strong>Client:</strong> {client} •{" "}
-            <strong>Order Date:</strong> {formatDate(orderDate)} •{" "}
+            <strong>Client:</strong> {client} -{" "}
+            <strong>Order Date:</strong> {formatDate(orderDate)} -{" "}
             <strong>Projects:</strong> {projects.length}
           </p>
         </div>
@@ -460,6 +504,7 @@ const OrderGroupDetails = ({ user }) => {
                   <ProjectDetailBlock
                     key={project._id || toEntityId(project)}
                     project={project}
+                    onViewDetails={openProjectDetails}
                   />
                 ))}
               </div>

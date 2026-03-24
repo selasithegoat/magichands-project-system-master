@@ -4,6 +4,28 @@
   gap: 1rem;
 }
 
+.order-meeting-card .edit-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+.order-meeting-card .edit-input:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.order-meeting-card .edit-input::placeholder {
+  color: rgba(148, 163, 184, 0.7);
+}
+
 .order-meeting-badges {
   display: flex;
   gap: 0.5rem;
@@ -65,6 +87,10 @@
   display: grid;
   gap: 0.65rem;
   font-size: 0.9rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.35);
 }
 
 .order-meeting-label {
@@ -96,12 +122,23 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.45);
 }
 
 .order-meeting-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 0.75rem;
+  align-items: end;
+}
+
+.order-meeting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .order-meeting-field label {
@@ -135,6 +172,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  align-items: center;
 }
 
 .order-meeting-history {

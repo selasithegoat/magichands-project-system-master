@@ -266,30 +266,60 @@
   letter-spacing: 0.05em;
 }
 
-.group-reference-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+.group-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
 }
 
 .group-reference-item {
-  padding: 0.45rem 0.6rem;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.35);
   color: var(--text-primary);
   text-decoration: none;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  overflow: hidden;
+  transition: border 0.2s ease, transform 0.2s ease;
 }
 
 .group-reference-item:hover {
-  border-color: rgba(59, 130, 246, 0.4);
+  border-color: rgba(59, 130, 246, 0.45);
+  transform: translateY(-2px);
+}
+
+.group-reference-preview {
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.group-reference-item.is-image .group-reference-preview {
+  background: #0b1220;
+}
+
+.group-reference-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-reference-meta {
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .group-reference-name {
   font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .group-reference-note {
@@ -297,26 +327,26 @@
   color: var(--text-secondary);
 }
 
-.group-project-raw {
-  margin-top: 0.5rem;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 12px;
-  padding: 0.6rem;
-  background: rgba(15, 23, 42, 0.35);
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+.group-project-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
 }
 
-.group-project-raw summary {
-  cursor: pointer;
+.group-project-btn {
+  padding: 0.5rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.15);
+  color: #bfdbfe;
   font-weight: 600;
-  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.group-project-raw pre {
-  margin-top: 0.6rem;
-  white-space: pre-wrap;
-  word-break: break-word;
+.group-project-btn:hover {
+  border-color: rgba(59, 130, 246, 0.75);
+  background: rgba(59, 130, 246, 0.25);
 }
 
 .group-muted {
