@@ -1011,7 +1011,7 @@ const EngagedProjectActions = ({ user }) => {
     setMeetingError("");
     try {
       const res = await fetch(
-        `/api/meetings/order/${encodeURIComponent(normalizedOrder)}`,
+        `/api/meetings/order/${encodeURIComponent(normalizedOrder)}?mode=engaged`,
       );
       if (!res.ok) {
         if (res.status === 404) {

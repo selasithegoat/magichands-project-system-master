@@ -441,10 +441,6 @@
 }
 
 .order-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 1.5rem;
-  flex-wrap: wrap;
   margin-bottom: 1rem;
 }
 
@@ -2762,7 +2758,9 @@
 }
 
 /* Order actions dark theme tuning */
-[data-theme="dark"] .order-actions-page .orders-list-container.order-actions-workspace {
+[data-theme="dark"]
+  .order-actions-page
+  .orders-list-container.order-actions-workspace {
   background:
     radial-gradient(
       120% 120% at 92% 0%,

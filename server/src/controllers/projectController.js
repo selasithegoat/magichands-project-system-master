@@ -927,17 +927,56 @@ const resolveOrderGroupProjects = async ({
 
 const resolveOrderMeeting = async ({ orderNumber, orderRefId } = {}) => {
   const normalizedOrderNumber = normalizeOrderNumber(orderNumber);
-  if (!normalizedOrderNumber && !orderRefId) return null;
-  const criteria = {
-    status: "scheduled",
-  };
-  if (orderRefId) {
-    criteria.orderRef = orderRefId;
-  } else if (normalizedOrderNumber) {
-    criteria.orderNumber = normalizedOrderNumber;
+  if (!normalizedOrderNumber && !orderRefId) {
+    return {
+      meeting: null,
+      meetings: [],
+      meetingScheduled: false,
+      meetingCompleted: false,
+    };
   }
 
-  return OrderMeeting.findOne(criteria).sort({ createdAt: -1 });
+  const criteria = [];
+  if (orderRefId) {
+    criteria.push({ orderRef: orderRefId });
+  }
+  if (normalizedOrderNumber) {
+    criteria.push({ orderNumber: normalizedOrderNumber });
+  }
+  if (!criteria.length) {
+    return {
+      meeting: null,
+      meetings: [],
+      meetingScheduled: false,
+      meetingCompleted: false,
+    };
+  }
+
+  const query = criteria.length === 1 ? criteria[0] : { $or: criteria };
+  const meetings = await OrderMeeting.find(query)
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .lean();
+  const meeting = meetings[0] || null;
+  const latestScheduled = meetings.find((item) => item.status === "scheduled");
+  const latestCompleted = meetings.find((item) => item.status === "completed");
+
+  const scheduledUpdatedAt = latestScheduled
+    ? new Date(latestScheduled.updatedAt || latestScheduled.createdAt || 0).getTime()
+    : 0;
+  const completedUpdatedAt = latestCompleted
+    ? new Date(latestCompleted.updatedAt || latestCompleted.createdAt || 0).getTime()
+    : 0;
+
+  const meetingScheduled = Boolean(latestScheduled);
+  const meetingCompleted =
+    Boolean(latestCompleted) && completedUpdatedAt >= scheduledUpdatedAt;
+
+  return {
+    meeting,
+    meetings,
+    meetingScheduled,
+    meetingCompleted,
+  };
 };
 
 const resolveMeetingGateState = async (project = {}) => {
@@ -962,13 +1001,15 @@ const resolveMeetingGateState = async (project = {}) => {
   const grouped = groupProjects.length > 1;
   const isCorporate = toText(project?.projectType) === "Corporate Job";
   const required = grouped || isCorporate;
-  const meeting = await resolveOrderMeeting({ orderNumber, orderRefId });
+  const meetingSummary = await resolveOrderMeeting({ orderNumber, orderRefId });
 
   return {
     orderNumber,
     orderRefId,
     required,
-    meeting,
+    meeting: meetingSummary.meeting,
+    meetingScheduled: meetingSummary.meetingScheduled,
+    meetingCompleted: meetingSummary.meetingCompleted,
     grouped,
     groupProjects,
   };
@@ -5778,10 +5819,8 @@ const updateProjectStatus = async (req, res) => {
 
     const meetingGate = await resolveMeetingGateState(project);
     const meetingRequired = meetingGate.required;
-    const meetingScheduled =
-      meetingGate.meeting && meetingGate.meeting.status === "scheduled";
-    const meetingCompleted =
-      meetingGate.meeting && meetingGate.meeting.status === "completed";
+    const meetingScheduled = Boolean(meetingGate.meetingScheduled);
+    const meetingCompleted = Boolean(meetingGate.meetingCompleted);
     const meetingIncomplete = (meetingRequired || meetingScheduled) && !meetingCompleted;
     const shouldForcePendingMeeting =
       meetingIncomplete && newStatus === "Scope Approval Completed";
@@ -10236,10 +10275,8 @@ const acknowledgeProject = async (req, res) => {
 
     const meetingGate = await resolveMeetingGateState(project);
     const meetingRequired = meetingGate.required;
-    const meetingScheduled =
-      meetingGate.meeting && meetingGate.meeting.status === "scheduled";
-    const meetingCompleted =
-      meetingGate.meeting && meetingGate.meeting.status === "completed";
+    const meetingScheduled = Boolean(meetingGate.meetingScheduled);
+    const meetingCompleted = Boolean(meetingGate.meetingCompleted);
     if ((meetingRequired || meetingScheduled) && !meetingCompleted) {
       return res.status(400).json({
         message:
