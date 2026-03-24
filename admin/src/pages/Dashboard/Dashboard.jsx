@@ -476,62 +476,10 @@ const Dashboard = ({ user }) => {
       label: "Emergencies",
       tone: "rose",
       hint: "Urgent project queue",
+      cta: "Open queue",
       icon: <RocketIcon />,
       statusFilter: "emergency",
-    },
-    {
-      key: "active",
-      value: stats.active,
-      label: "Active Projects",
-      tone: "blue",
-      hint: "Open projects",
-      icon: <ProjectsIcon />,
-      statusFilter: "active",
-    },
-    {
-      key: "pending",
-      value: stats.pending,
-      label: "Pending Acceptance",
-      tone: "purple",
-      hint: "Unaccepted orders from leads",
-      icon: <ClockIcon />,
-      statusFilter: "pending",
-    },
-    {
-      key: "pending-delivery",
-      value: stats.pendingDelivery,
-      label: "Pending Delivery",
-      tone: "teal",
-      hint: "Ready to dispatch",
-      icon: <TruckIcon />,
-      statusFilter: "delivery",
-    },
-    {
-      key: "quotes",
-      value: stats.quotes,
-      label: "Quotes",
-      tone: "orange",
-      hint: "Quote pipeline",
-      icon: <ReportsIcon />,
-      statusFilter: "quote",
-    },
-    {
-      key: "corporate",
-      value: stats.corporate,
-      label: "Corporate Projects",
-      tone: "indigo",
-      hint: "Corporate job queue",
-      icon: <ProjectsIcon />,
-      statusFilter: "corporate",
-    },
-    {
-      key: "completed",
-      value: stats.completed,
-      label: "Total Completed",
-      tone: "green",
-      hint: "Finished projects",
-      icon: <CheckCircleIcon />,
-      statusFilter: "completed",
+      group: "priority",
     },
     {
       key: "critical",
@@ -539,8 +487,76 @@ const Dashboard = ({ user }) => {
       label: "Critical / Overdue",
       tone: "red",
       hint: "Needs attention",
+      cta: "See urgent",
       icon: <AlertTriangleIcon />,
       statusFilter: "critical",
+      group: "priority",
+    },
+    {
+      key: "active",
+      value: stats.active,
+      label: "Active Projects",
+      tone: "blue",
+      hint: "Open projects",
+      cta: "View list",
+      icon: <ProjectsIcon />,
+      statusFilter: "active",
+      group: "overview",
+    },
+    {
+      key: "pending",
+      value: stats.pending,
+      label: "Pending Acceptance",
+      tone: "purple",
+      hint: "Unaccepted orders from leads",
+      cta: "Review now",
+      icon: <ClockIcon />,
+      statusFilter: "pending",
+      group: "priority",
+    },
+    {
+      key: "pending-delivery",
+      value: stats.pendingDelivery,
+      label: "Pending Delivery",
+      tone: "teal",
+      hint: "Ready to dispatch",
+      cta: "Dispatch list",
+      icon: <TruckIcon />,
+      statusFilter: "delivery",
+      group: "priority",
+    },
+    {
+      key: "quotes",
+      value: stats.quotes,
+      label: "Quotes",
+      tone: "orange",
+      hint: "Quote pipeline",
+      cta: "Open quotes",
+      icon: <ReportsIcon />,
+      statusFilter: "quote",
+      group: "overview",
+    },
+    {
+      key: "corporate",
+      value: stats.corporate,
+      label: "Corporate Projects",
+      tone: "indigo",
+      hint: "Corporate job queue",
+      cta: "Corporate queue",
+      icon: <ProjectsIcon />,
+      statusFilter: "corporate",
+      group: "overview",
+    },
+    {
+      key: "completed",
+      value: stats.completed,
+      label: "Total Completed",
+      tone: "green",
+      hint: "Finished projects",
+      cta: "View archive",
+      icon: <CheckCircleIcon />,
+      statusFilter: "completed",
+      group: "overview",
     },
   ];
 
@@ -548,6 +564,9 @@ const Dashboard = ({ user }) => {
     const params = new URLSearchParams({ status: statusFilter });
     navigate(`/projects?${params.toString()}`);
   };
+
+  const priorityCards = statCards.filter((card) => card.group === "priority");
+  const overviewCards = statCards.filter((card) => card.group === "overview");
 
   const todayProjects = useMemo(() => {
     const now = new Date();
@@ -616,24 +635,90 @@ const Dashboard = ({ user }) => {
       </div>
 
       {/* Stats Grid */}
-      <div className="admin-stats-grid">
-        {statCards.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            className={`admin-stat-card stat-card-action stat-card-${card.key}`}
-            onClick={() => openProjectsWithFilter(card.statusFilter)}
-            aria-label={`${card.label} - open filtered projects`}
-          >
-            <div className={`stat-icon-wrapper ${card.tone}`}>{card.icon}</div>
-            <div className="stat-value">{card.value}</div>
-            <div className="stat-label">{card.label}</div>
-            <div className="stat-card-meta">
-              <span>{card.hint}</span>
-              <ChevronRightIcon />
+      <div className="admin-stats-panel">
+        <div className="admin-stats-section">
+          <div className="admin-stats-section-header">
+            <div>
+              <div className="admin-stats-eyebrow">Priority Alerts</div>
+              <h3 className="admin-stats-title">Action Center</h3>
             </div>
-          </button>
-        ))}
+            <div className="admin-stats-note">
+              Items that need immediate attention
+            </div>
+          </div>
+          <div className="admin-stats-grid priority">
+            {priorityCards.map((card) => (
+              <button
+                key={card.key}
+                type="button"
+                className={`admin-stat-card stat-card-action stat-card-${card.key} ${
+                  card.key === "emergencies" || card.key === "critical"
+                    ? "stat-card-priority"
+                    : ""
+                }`}
+                onClick={() => openProjectsWithFilter(card.statusFilter)}
+                aria-label={`${card.label} - open filtered projects`}
+              >
+                <div className="stat-card-top">
+                  <div className={`stat-icon-wrapper ${card.tone}`}>
+                    {card.icon}
+                  </div>
+                  <div className="stat-card-title">
+                    <div className="stat-label">{card.label}</div>
+                    <div className="stat-hint">{card.hint}</div>
+                  </div>
+                </div>
+                <div className="stat-card-middle">
+                  <div className="stat-value">{card.value}</div>
+                </div>
+                <div className="stat-card-footer">
+                  <span>{card.cta || "Open queue"}</span>
+                  <ChevronRightIcon />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="admin-stats-section">
+          <div className="admin-stats-section-header">
+            <div>
+              <div className="admin-stats-eyebrow">Operations</div>
+              <h3 className="admin-stats-title">Production Overview</h3>
+            </div>
+            <div className="admin-stats-note">
+              Snapshot of active workload
+            </div>
+          </div>
+          <div className="admin-stats-grid">
+            {overviewCards.map((card) => (
+              <button
+                key={card.key}
+                type="button"
+                className={`admin-stat-card stat-card-action stat-card-${card.key}`}
+                onClick={() => openProjectsWithFilter(card.statusFilter)}
+                aria-label={`${card.label} - open filtered projects`}
+              >
+                <div className="stat-card-top">
+                  <div className={`stat-icon-wrapper ${card.tone}`}>
+                    {card.icon}
+                  </div>
+                  <div className="stat-card-title">
+                    <div className="stat-label">{card.label}</div>
+                    <div className="stat-hint">{card.hint}</div>
+                  </div>
+                </div>
+                <div className="stat-card-middle">
+                  <div className="stat-value">{card.value}</div>
+                </div>
+                <div className="stat-card-footer">
+                  <span>{card.cta || "Open list"}</span>
+                  <ChevronRightIcon />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Projects Created Today */}
