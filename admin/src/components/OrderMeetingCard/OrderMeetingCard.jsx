@@ -114,7 +114,7 @@ const OrderMeetingCard = ({
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [completing, setCompleting] = useState(false);
+  const [actionId, setActionId] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState(() => buildInitialForm(null));
 
@@ -253,34 +253,39 @@ const OrderMeetingCard = ({
     }
   };
 
-  const handleCompleteMeeting = async () => {
-    if (!allowManage || completing || !meeting?._id) return;
+  const runMeetingAction = async ({ meetingId, endpoint, successMessage }) => {
+    if (!allowManage || !meetingId) return;
+    if (actionId) return;
     setError("");
-    setCompleting(true);
+    setActionId(meetingId);
     try {
-      const res = await fetch(`/api/meetings/${meeting._id}/complete`, {
+      const res = await fetch(`/api/meetings/${meetingId}/${endpoint}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to mark meeting complete.");
+        throw new Error(errorData.message || "Failed to update meeting.");
       }
       await res.json();
       await fetchMeeting(orderNumber);
-      toast.success("Meeting marked complete.");
-    } catch (completeError) {
-      console.error("Meeting completion failed:", completeError);
-      setError(completeError.message || "Failed to complete meeting.");
-      toast.error(completeError.message || "Failed to complete meeting.");
+      if (successMessage) toast.success(successMessage);
+    } catch (actionError) {
+      console.error("Meeting action failed:", actionError);
+      setError(actionError.message || "Failed to update meeting.");
+      toast.error(actionError.message || "Failed to update meeting.");
     } finally {
-      setCompleting(false);
+      setActionId("");
     }
   };
 
-  const canComplete =
-    Boolean(meeting && meeting.status === "scheduled") && allowManage;
+  const handleEditMeeting = (entry) => {
+    if (!entry) return;
+    setMeeting(entry);
+    setForm(buildInitialForm(entry));
+  };
+
   const canEdit = allowManage;
 
   return (
@@ -437,16 +442,6 @@ const OrderMeetingCard = ({
                   ? "Update Meeting"
                   : "Schedule Meeting"}
             </button>
-            {canComplete && (
-              <button
-                type="button"
-                className="order-meeting-btn complete"
-                onClick={handleCompleteMeeting}
-                disabled={completing}
-              >
-                {completing ? "Completing..." : "Mark Complete"}
-              </button>
-            )}
           </div>
         </>
       )}
@@ -455,7 +450,10 @@ const OrderMeetingCard = ({
         <div className="order-meeting-history">
           <h4>Meeting Records</h4>
           <div className="order-meeting-history-list">
-            {meetings.map((entry) => (
+            {meetings.map((entry) => {
+              const isScheduled = entry.status === "scheduled";
+              const isActionLoading = actionId === entry._id;
+              return (
               <div
                 key={entry._id || entry.meetingAt}
                 className={`order-meeting-history-item ${entry.status || ""}`}
@@ -477,8 +475,49 @@ const OrderMeetingCard = ({
                     </a>
                   )}
                 </div>
+                {allowManage && isScheduled && (
+                  <div className="order-meeting-history-actions">
+                    <button
+                      type="button"
+                      className="order-meeting-action-btn ghost"
+                      onClick={() => handleEditMeeting(entry)}
+                      disabled={isActionLoading}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="order-meeting-action-btn warn"
+                      onClick={() =>
+                        runMeetingAction({
+                          meetingId: entry._id,
+                          endpoint: "cancel",
+                          successMessage: "Meeting cancelled.",
+                        })
+                      }
+                      disabled={isActionLoading}
+                    >
+                      {isActionLoading ? "Cancelling..." : "Cancel"}
+                    </button>
+                    <button
+                      type="button"
+                      className="order-meeting-action-btn complete"
+                      onClick={() =>
+                        runMeetingAction({
+                          meetingId: entry._id,
+                          endpoint: "complete",
+                          successMessage: "Meeting marked complete.",
+                        })
+                      }
+                      disabled={isActionLoading}
+                    >
+                      {isActionLoading ? "Completing..." : "Mark Complete"}
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}

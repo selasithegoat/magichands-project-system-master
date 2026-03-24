@@ -169,6 +169,7 @@ const Layout = ({
   const [reminderActionError, setReminderActionError] = useState("");
   const queuedReminderNotificationIdsRef = useRef(new Set());
   const handledReminderNotificationIdsRef = useRef(new Set());
+  const reminderSoundIdRef = useRef("");
 
   // [New] Native Notification Permission Logic
   useEffect(() => {
@@ -535,6 +536,17 @@ const Layout = ({
       setActiveReminderAlert(refreshed);
     }
   }, [activeReminderAlert, reminderQueue]);
+
+  useEffect(() => {
+    if (!activeReminderAlert) return;
+    const alertId = String(
+      activeReminderAlert.notificationId || activeReminderAlert.reminderId || "",
+    );
+    if (!alertId || reminderSoundIdRef.current === alertId) return;
+    reminderSoundIdRef.current = alertId;
+    const allowSound = user?.notificationSettings?.sound ?? true;
+    playNotificationSound("REMINDER", allowSound).catch(() => {});
+  }, [activeReminderAlert, user?.notificationSettings?.sound]);
 
   const handleMarkAllAsRead = async () => {
     try {

@@ -10790,6 +10790,11 @@ const createOrderMeeting = async (req, res) => {
     if (!meetingAt) {
       return res.status(400).json({ message: "meetingAt is required." });
     }
+    if (meetingAt.getTime() <= Date.now()) {
+      return res
+        .status(400)
+        .json({ message: "Meeting time must be in the future." });
+    }
 
     const order = await Order.findOne({ orderNumber });
     if (!order) {
@@ -10893,15 +10898,20 @@ const updateOrderMeeting = async (req, res) => {
       return res.status(404).json({ message: "Meeting not found." });
     }
 
-    if (meeting.status === "completed") {
+    if (meeting.status !== "scheduled") {
       return res.status(400).json({
-        message: "Meeting is completed. Schedule a new meeting if needed.",
+        message: "Only scheduled meetings can be edited.",
       });
     }
 
     const meetingAt = normalizeMeetingDate(req.body?.meetingAt);
     if (!meetingAt) {
       return res.status(400).json({ message: "meetingAt is required." });
+    }
+    if (meetingAt.getTime() <= Date.now()) {
+      return res
+        .status(400)
+        .json({ message: "Meeting time must be in the future." });
     }
 
     const orderNumber = normalizeOrderNumber(meeting.orderNumber);
@@ -10966,6 +10976,40 @@ const updateOrderMeeting = async (req, res) => {
     return res.json(meeting);
   } catch (error) {
     console.error("Error updating order meeting:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Cancel an order meeting
+// @route   PATCH /api/meetings/:id/cancel
+// @access  Private (Admin/Front Desk)
+const cancelOrderMeeting = async (req, res) => {
+  try {
+    if (!canManageMeetings(req.user)) {
+      return res.status(403).json({ message: "Not authorized to manage meetings." });
+    }
+
+    const meeting = await OrderMeeting.findById(req.params.id);
+    if (!meeting) {
+      return res.status(404).json({ message: "Meeting not found." });
+    }
+
+    if (meeting.status === "completed") {
+      return res.status(400).json({ message: "Completed meetings cannot be cancelled." });
+    }
+
+    if (meeting.status === "cancelled") {
+      return res.json(meeting);
+    }
+
+    await cancelMeetingReminders(meeting.reminderIds || []);
+    meeting.status = "cancelled";
+    meeting.reminderIds = [];
+    await meeting.save();
+
+    return res.json(meeting);
+  } catch (error) {
+    console.error("Error cancelling order meeting:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -11078,6 +11122,7 @@ module.exports = {
   undoAcknowledgeProject,
   createOrderMeeting,
   updateOrderMeeting,
+  cancelOrderMeeting,
   completeOrderMeeting,
   getOrderMeetingByNumber,
 };

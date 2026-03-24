@@ -32,6 +32,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
   const isFirstLoadRef = useRef(true);
   const queuedReminderNotificationIdsRef = useRef(new Set());
   const handledReminderNotificationIdsRef = useRef(new Set());
+  const reminderSoundIdRef = useRef("");
 
   const syncReminderQueueFromNotifications = useCallback((notificationList = []) => {
     const unreadReminderNotifications = notificationList
@@ -134,6 +135,16 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     );
     setReminderActionError("");
   }, []);
+
+  useEffect(() => {
+    if (!activeReminderAlert) return;
+    const alertId = String(
+      activeReminderAlert.notificationId || activeReminderAlert.reminderId || "",
+    );
+    if (!alertId || reminderSoundIdRef.current === alertId) return;
+    reminderSoundIdRef.current = alertId;
+    playNotificationSound("REMINDER", soundEnabled).catch(() => {});
+  }, [activeReminderAlert, soundEnabled]);
 
   const markNotificationReadSilently = useCallback(async (notificationId) => {
     const normalizedId = String(notificationId || "");

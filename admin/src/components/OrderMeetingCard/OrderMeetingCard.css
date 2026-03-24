@@ -235,6 +235,45 @@
   text-decoration: underline;
 }
 
+.order-meeting-history-actions {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.order-meeting-action-btn {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.order-meeting-action-btn.ghost {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: var(--text-primary);
+}
+
+.order-meeting-action-btn.warn {
+  background: rgba(251, 146, 60, 0.18);
+  border-color: rgba(251, 146, 60, 0.4);
+  color: #fdba74;
+}
+
+.order-meeting-action-btn.complete {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #86efac;
+}
+
+.order-meeting-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .order-meeting-btn {
   padding: 0.45rem 0.95rem;
   border-radius: 8px;
