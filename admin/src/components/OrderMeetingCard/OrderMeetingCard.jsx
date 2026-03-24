@@ -93,17 +93,26 @@ const buildInitialForm = (meeting) => ({
     : [],
 });
 
-const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
+const OrderMeetingCard = ({
+  project,
+  orderNumber: orderNumberProp,
+  orderGroupProjects = [],
+  user,
+  readOnly = false,
+  showHistory = true,
+  manageHint = "",
+}) => {
   const orderNumber = String(
-    project?.orderId || project?.orderRef?.orderNumber || "",
+    orderNumberProp || project?.orderId || project?.orderRef?.orderNumber || "",
   ).trim();
   const isRequired = Boolean(
     project?.projectType === "Corporate Job" ||
       (Array.isArray(orderGroupProjects) && orderGroupProjects.length > 1),
   );
-  const allowManage = canManageMeetings(user);
+  const allowManage = canManageMeetings(user) && !readOnly;
 
   const [meeting, setMeeting] = useState(null);
+  const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -123,6 +132,7 @@ const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
   const fetchMeeting = async (targetOrderNumber) => {
     if (!targetOrderNumber) {
       setMeeting(null);
+      setMeetings([]);
       setForm(buildInitialForm(null));
       return;
     }
@@ -145,12 +155,15 @@ const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
       }
       const data = await res.json();
       const meetingData = data?.meeting || null;
+      const meetingList = Array.isArray(data?.meetings) ? data.meetings : [];
       setMeeting(meetingData);
+      setMeetings(meetingList);
       setForm(buildInitialForm(meetingData));
     } catch (fetchError) {
       console.error("Failed to fetch meeting:", fetchError);
       setError(fetchError.message || "Failed to load meeting.");
       setMeeting(null);
+      setMeetings([]);
       setForm(buildInitialForm(null));
     } finally {
       setLoading(false);
@@ -227,9 +240,8 @@ const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
             (isScheduled ? "Failed to update meeting." : "Failed to schedule meeting."),
         );
       }
-      const savedMeeting = await res.json();
-      setMeeting(savedMeeting);
-      setForm(buildInitialForm(savedMeeting));
+      await res.json();
+      await fetchMeeting(orderNumber);
       toast.success(isScheduled ? "Meeting updated." : "Meeting scheduled.");
     } catch (saveError) {
       console.error("Meeting save failed:", saveError);
@@ -254,9 +266,8 @@ const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to mark meeting complete.");
       }
-      const updatedMeeting = await res.json();
-      setMeeting(updatedMeeting);
-      setForm(buildInitialForm(updatedMeeting));
+      await res.json();
+      await fetchMeeting(orderNumber);
       toast.success("Meeting marked complete.");
     } catch (completeError) {
       console.error("Meeting completion failed:", completeError);
@@ -330,6 +341,10 @@ const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
             </div>
           )}
         </div>
+      )}
+
+      {manageHint && (
+        <div className="order-meeting-hint">{manageHint}</div>
       )}
 
       {canEdit && (
@@ -443,6 +458,38 @@ const OrderMeetingCard = ({ project, orderGroupProjects = [], user }) => {
             )}
           </div>
         </>
+      )}
+
+      {showHistory && meetings.length > 0 && (
+        <div className="order-meeting-history">
+          <h4>Meeting Records</h4>
+          <div className="order-meeting-history-list">
+            {meetings.map((entry) => (
+              <div
+                key={entry._id || entry.meetingAt}
+                className={`order-meeting-history-item ${entry.status || ""}`}
+              >
+                <div className="order-meeting-history-main">
+                  <span className="order-meeting-history-date">
+                    {formatMeetingDateTime(entry.meetingAt)}
+                  </span>
+                  <span className="meeting-pill status">
+                    {formatMeetingStatus(entry.status)}
+                  </span>
+                </div>
+                <div className="order-meeting-history-meta">
+                  {entry.timezone && <span>{entry.timezone}</span>}
+                  {entry.location && <span>{entry.location}</span>}
+                  {entry.virtualLink && (
+                    <a href={entry.virtualLink} target="_blank" rel="noreferrer">
+                      Virtual link
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

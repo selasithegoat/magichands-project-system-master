@@ -52,6 +52,15 @@
   color: var(--text-secondary);
 }
 
+.order-meeting-hint {
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 .order-meeting-summary {
   display: grid;
   gap: 0.65rem;
@@ -126,6 +135,66 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.order-meeting-history {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.order-meeting-history h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.order-meeting-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.order-meeting-history-item {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.order-meeting-history-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.order-meeting-history-date {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.order-meeting-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.order-meeting-history-meta a {
+  color: #7dd3fc;
+  text-decoration: none;
+}
+
+.order-meeting-history-meta a:hover {
+  text-decoration: underline;
 }
 
 .order-meeting-btn {

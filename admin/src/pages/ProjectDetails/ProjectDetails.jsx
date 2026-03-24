@@ -673,6 +673,10 @@ const ProjectDetails = ({ user }) => {
   const isLeadUser = Boolean(
     currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
   );
+  const isGroupedOrder = orderGroupProjects.length > 1;
+  const orderNumber = String(
+    project?.orderId || project?.orderRef?.orderNumber || "",
+  ).trim();
   const canManageSms =
     user?.role === "admin" && project?.projectType !== "Quote";
   const groupedLeadRows = useMemo(
@@ -3898,11 +3902,32 @@ const ProjectDetails = ({ user }) => {
 
         {/* Right Column */}
         <div className="side-info">
-          <OrderMeetingCard
-            project={project}
-            orderGroupProjects={orderGroupProjects}
-            user={user}
-          />
+          {isGroupedOrder ? (
+            <div className="detail-card group-meeting-notice">
+              <h3 className="card-title">Departmental Meeting</h3>
+              <p>
+                Meetings for grouped orders are scheduled on the Group Projects
+                page so they apply to every project in the order.
+              </p>
+              {orderNumber && (
+                <button
+                  type="button"
+                  className="group-meeting-btn"
+                  onClick={() =>
+                    navigate(`/projects/orders/${encodeURIComponent(orderNumber)}`)
+                  }
+                >
+                  Open Group Projects
+                </button>
+              )}
+            </div>
+          ) : (
+            <OrderMeetingCard
+              project={project}
+              orderGroupProjects={orderGroupProjects}
+              user={user}
+            />
+          )}
           <ProjectRemindersCard project={project} user={user} />
           <div className="detail-card">
             <h3

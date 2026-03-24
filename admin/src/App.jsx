@@ -9,6 +9,9 @@ const CancelledOrders = lazy(
 const ProjectDetails = lazy(
   () => import("./pages/ProjectDetails/ProjectDetails"),
 );
+const OrderGroupDetails = lazy(
+  () => import("./pages/OrderGroupDetails/OrderGroupDetails"),
+);
 const PerformanceAnalytics = lazy(
   () => import("./pages/Analytics/PerformanceAnalytics"),
 );
@@ -165,6 +168,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProjectDetails user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/orders/:orderNumber"
+            element={
+              <ProtectedRoute>
+                <OrderGroupDetails user={user} />
               </ProtectedRoute>
             }
           />

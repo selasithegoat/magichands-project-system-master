@@ -73,6 +73,12 @@ const Projects = ({ user }) => {
     navigate(`/projects/${projectId}`, { state: { project } });
   };
 
+  const openOrderGroup = (orderNumber) => {
+    const normalized = String(orderNumber || "").trim();
+    if (!normalized) return;
+    navigate(`/projects/orders/${encodeURIComponent(normalized)}`);
+  };
+
   const buildFallbackOrderGroups = (projectList = []) => {
     const groups = new Map();
 
@@ -849,7 +855,14 @@ const Projects = ({ user }) => {
                             {groupStatus.label}
                           </span>
                         </td>
-                        <td>-</td>
+                        <td>
+                          <button
+                            className="action-btn"
+                            onClick={() => openOrderGroup(group?.orderNumber)}
+                          >
+                            View Group
+                          </button>
+                        </td>
                       </tr>
 
                       {showGroupChildren &&

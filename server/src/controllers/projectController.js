@@ -10738,22 +10738,25 @@ const getOrderMeetingByNumber = async (req, res) => {
       ),
     );
 
-    let meeting = null;
+    const meetingCriteria = [];
     if (orderRefIds.length > 0) {
-      meeting = await OrderMeeting.findOne({
-        orderRef: { $in: orderRefIds },
-        status: { $ne: "cancelled" },
-      }).sort({ createdAt: -1 });
+      meetingCriteria.push({ orderRef: { $in: orderRefIds } });
     }
+    meetingCriteria.push({ orderNumber });
 
-    if (!meeting) {
-      meeting = await OrderMeeting.findOne({
-        orderNumber,
-        status: { $ne: "cancelled" },
-      }).sort({ createdAt: -1 });
-    }
+    const meetings = await OrderMeeting.find(
+      meetingCriteria.length === 1 ? meetingCriteria[0] : { $or: meetingCriteria },
+    )
+      .sort({ meetingAt: -1, createdAt: -1 })
+      .lean();
 
-    return res.json({ meeting: meeting || null });
+    const scheduledMeeting =
+      meetings.find((item) => item.status === "scheduled") || null;
+
+    return res.json({
+      meeting: scheduledMeeting || meetings[0] || null,
+      meetings,
+    });
   } catch (error) {
     console.error("Error fetching order meeting:", error);
     return res.status(500).json({ message: "Server Error" });
@@ -10799,13 +10802,16 @@ const createOrderMeeting = async (req, res) => {
         (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
       )[0];
 
-    let meeting = await OrderMeeting.findOne({
+    const scheduledMeetings = await OrderMeeting.find({
       orderRef: order._id,
       status: "scheduled",
     }).sort({ createdAt: -1 });
 
-    if (meeting) {
-      await cancelMeetingReminders(meeting.reminderIds || []);
+    for (const scheduledMeeting of scheduledMeetings) {
+      await cancelMeetingReminders(scheduledMeeting.reminderIds || []);
+      scheduledMeeting.status = "cancelled";
+      scheduledMeeting.reminderIds = [];
+      await scheduledMeeting.save();
     }
 
     const reminderOffsets = normalizeMeetingReminderOffsets(req.body?.reminderOffsets);
@@ -10814,13 +10820,11 @@ const createOrderMeeting = async (req, res) => {
       email: req.body?.channels?.email !== false,
     };
 
-    if (!meeting) {
-      meeting = new OrderMeeting({
-        orderRef: order._id,
-        orderNumber,
-        createdBy: req.user._id || req.user.id,
-      });
-    }
+    const meeting = new OrderMeeting({
+      orderRef: order._id,
+      orderNumber,
+      createdBy: req.user._id || req.user.id,
+    });
 
     meeting.meetingAt = meetingAt;
     meeting.timezone = toText(req.body?.timezone) || "UTC";
