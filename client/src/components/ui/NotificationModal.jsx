@@ -103,9 +103,10 @@ const NotificationModal = ({
       ? [currentUser.department]
       : [];
   const isFrontDesk = departments.includes("Front Desk");
-  const isProduction =
-    departments.includes("Production") ||
-    departments.some((dept) => PRODUCTION_SUB_DEPARTMENTS.includes(dept));
+  const productionSubDepts = departments.filter((dept) =>
+    PRODUCTION_SUB_DEPARTMENTS.includes(dept),
+  );
+  const isProduction = productionSubDepts.length > 0;
   const hasScopedTabs = isFrontDesk || isProduction;
   const [activeTab, setActiveTab] = useState(hasScopedTabs ? "mine" : "all");
 
@@ -138,15 +139,10 @@ const NotificationModal = ({
 
       if (!projectDepartments.length) return false;
 
-      if (departments.includes("Production")) {
-        return projectDepartments.some((dept) =>
-          PRODUCTION_SUB_DEPARTMENTS.includes(dept),
-        );
-      }
-
-      return projectDepartments.some((dept) => departments.includes(dept));
+      const productionDeptSet = new Set(productionSubDepts);
+      return projectDepartments.some((dept) => productionDeptSet.has(dept));
     });
-  }, [departments, isProduction, notifications, userId]);
+  }, [departments, isProduction, notifications, productionSubDepts, userId]);
 
   const teamNotifications = useMemo(() => notifications, [notifications]);
 

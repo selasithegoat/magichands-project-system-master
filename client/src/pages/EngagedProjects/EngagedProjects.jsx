@@ -133,23 +133,20 @@ const EngagedProjects = ({ user }) => {
     : user?.department
       ? [user.department]
       : [];
-  const hasProductionParent = userDepartments.includes("Production");
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");
   const hasPhotographyParent = userDepartments.includes("Photography");
 
   const productionSubDepts = useMemo(() => {
-    if (hasProductionParent) return PRODUCTION_SUB_DEPARTMENTS;
     return userDepartments.filter((d) =>
       PRODUCTION_SUB_DEPARTMENTS.includes(d),
     );
-  }, [userDepartments, hasProductionParent]);
+  }, [userDepartments]);
 
   // Determine all engaged departments the user belongs to
   const userEngagedDepts = useMemo(() => {
     const found = [];
-    if (hasProductionParent || productionSubDepts.length > 0)
-      found.push("Production");
+    if (productionSubDepts.length > 0) found.push("Production");
     if (
       hasGraphicsParent ||
       userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
@@ -169,7 +166,6 @@ const EngagedProjects = ({ user }) => {
   }, [
     userDepartments,
     productionSubDepts,
-    hasProductionParent,
     hasGraphicsParent,
     hasStoresParent,
     hasPhotographyParent,
@@ -185,7 +181,7 @@ const EngagedProjects = ({ user }) => {
 
     // If "All" or default, aggregate from all user's engaged departments
     let aggregated = [];
-    if (hasProductionParent || productionSubDepts.length > 0)
+    if (productionSubDepts.length > 0)
       aggregated = [...aggregated, ...productionSubDepts];
     if (userEngagedDepts.includes("Graphics"))
       aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];

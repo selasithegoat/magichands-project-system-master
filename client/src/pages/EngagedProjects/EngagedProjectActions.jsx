@@ -484,20 +484,17 @@ const EngagedProjectActions = ({ user }) => {
     : user?.department
       ? [user.department]
       : [];
-  const hasProductionParent = userDepartments.includes("Production");
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");
   const hasPhotographyParent = userDepartments.includes("Photography");
 
   const productionSubDepts = useMemo(() => {
-    if (hasProductionParent) return PRODUCTION_SUB_DEPARTMENTS;
     return userDepartments.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
-  }, [userDepartments, hasProductionParent]);
+  }, [userDepartments]);
 
   const userEngagedDepts = useMemo(() => {
     const found = [];
-    if (hasProductionParent || productionSubDepts.length > 0)
-      found.push("Production");
+    if (productionSubDepts.length > 0) found.push("Production");
     if (
       hasGraphicsParent ||
       userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
@@ -517,7 +514,6 @@ const EngagedProjectActions = ({ user }) => {
   }, [
     userDepartments,
     productionSubDepts,
-    hasProductionParent,
     hasGraphicsParent,
     hasStoresParent,
     hasPhotographyParent,
@@ -525,7 +521,7 @@ const EngagedProjectActions = ({ user }) => {
 
   const engagedSubDepts = useMemo(() => {
     let aggregated = [];
-    if (hasProductionParent || productionSubDepts.length > 0)
+    if (productionSubDepts.length > 0)
       aggregated = [...aggregated, ...productionSubDepts];
     if (userEngagedDepts.includes("Graphics"))
       aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
@@ -534,11 +530,7 @@ const EngagedProjectActions = ({ user }) => {
     if (userEngagedDepts.includes("Photography"))
       aggregated = [...aggregated, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
     return Array.from(new Set(aggregated));
-  }, [
-    userEngagedDepts,
-    productionSubDepts,
-    hasProductionParent,
-  ]);
+  }, [userEngagedDepts, productionSubDepts]);
 
   const projectEngagedSubDepts = useMemo(() => {
     if (!project) return [];

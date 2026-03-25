@@ -545,6 +545,13 @@ const isUserAssignedProjectLead = (user, project) => {
   return Boolean(userId && projectLeadId && userId === projectLeadId);
 };
 
+const isUserAssignedAssistantLead = (user, project) => {
+  if (!user || !project) return false;
+  const userId = toObjectIdString(user._id || user.id);
+  const assistantLeadId = toObjectIdString(project.assistantLeadId);
+  return Boolean(userId && assistantLeadId && userId === assistantLeadId);
+};
+
 const canMutateProject = (user, project, action = "default") => {
   if (!user || !project) return false;
   if (user.role === "admin") return true;
@@ -636,6 +643,47 @@ const mergeQueryWithCondition = (baseQuery = {}, condition = {}) => {
   return { $and: [baseQuery, condition] };
 };
 
+const resolveEngagedDepartmentFilters = (departments = []) => {
+  const tokens = toDepartmentArray(departments)
+    .map(normalizeDepartmentValue)
+    .filter(Boolean);
+
+  const filters = new Set();
+
+  tokens.forEach((token) => {
+    if (PRODUCTION_SUB_DEPARTMENT_TOKENS.has(token)) {
+      filters.add(token);
+      return;
+    }
+
+    if (GRAPHICS_DEPARTMENT_TOKENS.has(token)) {
+      filters.add("graphics");
+      return;
+    }
+
+    if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) {
+      filters.add("photography");
+      return;
+    }
+
+    if (STORES_DEPARTMENT_TOKENS.has(token)) {
+      if (token === "stores") {
+        filters.add("stock");
+        filters.add("packaging");
+      } else {
+        filters.add(token);
+      }
+      return;
+    }
+
+    if (token === "production") {
+      filters.add("production");
+    }
+  });
+
+  return Array.from(filters);
+};
+
 const buildProjectAccessQuery = (req) => {
   let query = {};
   const isReportMode = req.query.mode === "report";
@@ -645,13 +693,12 @@ const buildProjectAccessQuery = (req) => {
   const userDepartments = Array.isArray(req.user.department)
     ? req.user.department
     : req.user.department
-      ? [req.user.department]
+    ? [req.user.department]
       : [];
-  const isEngagedDept = userDepartments.some(
-    (dept) =>
-      ENGAGED_PARENT_DEPARTMENTS.has(dept) ||
-      ENGAGED_SUB_DEPARTMENTS.has(dept),
-  );
+  const engagedDepartmentFilters = isEngagedMode
+    ? resolveEngagedDepartmentFilters(userDepartments)
+    : [];
+  const isEngagedDept = engagedDepartmentFilters.length > 0;
 
   const canSeeAll =
     (hasAdminPortalAccess(req.user) && isAdminPortal) ||
@@ -673,6 +720,12 @@ const buildProjectAccessQuery = (req) => {
         ],
       };
     }
+  }
+
+  if (isEngagedMode && !(hasAdminPortalAccess(req.user) && isAdminPortal)) {
+    query = mergeQueryWithCondition(query, {
+      departments: { $in: engagedDepartmentFilters },
+    });
   }
 
   const cancelledOnly = String(req.query.cancelled || "").toLowerCase() === "true";
@@ -9210,9 +9263,6 @@ const updateProject = async (req, res) => {
       corporateEmergency, // [NEW]
       workstreamCode,
     } = req.body;
-    const requestedOrderNumber = normalizeOrderNumber(orderId);
-    const hasOrderNumberUpdate = Boolean(requestedOrderNumber);
-    const hasOrderRefUpdate = orderRef !== undefined;
 
     // Parse JSON fields if they are strings (Multipart/form-data behavior)
     if (typeof items === "string") items = JSON.parse(items);
@@ -9236,6 +9286,80 @@ const updateProject = async (req, res) => {
     if (typeof orderRef === "string" && orderRef.startsWith("{"))
       orderRef = JSON.parse(orderRef);
 
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const normalizedProjectType = normalizeProjectType(
+      project.projectType,
+      "Standard",
+    );
+    const requestedStatus = status
+      ? normalizeStatusForStorageByProjectType(status, normalizedProjectType)
+      : "";
+    const isLeadOrAssistant =
+      isUserAssignedProjectLead(req.user, project) ||
+      isUserAssignedAssistantLead(req.user, project);
+    const canManageBillingUser = canManageBilling(req.user);
+    const isLeadAcceptance =
+      !canManageBillingUser &&
+      requestedStatus === "Pending Scope Approval" &&
+      toText(project.status) === "Order Confirmed" &&
+      isLeadOrAssistant;
+
+    if (!canManageBillingUser && !isLeadAcceptance) {
+      return res.status(403).json({
+        message: "Only Front Desk and Admin can revise order details.",
+      });
+    }
+
+    const mutationAction = isLeadAcceptance ? "manage" : "revision";
+    if (!ensureProjectMutationAccess(req, res, project, mutationAction)) return;
+    if (REVISION_LOCKED_STATUSES.has(toText(project?.status))) {
+      return res.status(400).json({
+        message:
+          "Order revision is locked after completion. Reopen the project to revise it.",
+      });
+    }
+
+    if (isLeadAcceptance) {
+      orderId = undefined;
+      orderRef = undefined;
+      orderDate = undefined;
+      receivedTime = undefined;
+      lead = undefined;
+      client = undefined;
+      clientEmail = undefined;
+      clientPhone = undefined;
+      projectName = undefined;
+      briefOverview = undefined;
+      deliveryDate = undefined;
+      deliveryTime = undefined;
+      deliveryLocation = undefined;
+      contactType = undefined;
+      supplySource = undefined;
+      packagingType = undefined;
+      projectLeadId = undefined;
+      assistantLeadId = undefined;
+      description = undefined;
+      details = undefined;
+      attachments = undefined;
+      existingAttachments = undefined;
+      existingSampleImage = undefined;
+      sampleImageNote = undefined;
+      attachmentNotes = undefined;
+      quoteDetails = undefined;
+      projectType = undefined;
+      priority = undefined;
+      corporateEmergency = undefined;
+      workstreamCode = undefined;
+    }
+
+    const requestedOrderNumber = normalizeOrderNumber(orderId);
+    const hasOrderNumberUpdate = Boolean(requestedOrderNumber);
+    const hasOrderRefUpdate = orderRef !== undefined;
+
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
       : Array.isArray(existingAttachments)
@@ -9246,20 +9370,6 @@ const updateProject = async (req, res) => {
     const normalizedSampleImageNote = hasSampleImageNoteUpdate
       ? normalizeAttachmentNote(sampleImageNote)
       : "";
-
-    const project = await Project.findById(id);
-    if (!canManageBilling(req.user)) {
-      return res.status(403).json({
-        message: "Only Front Desk and Admin can revise order details.",
-      });
-    }
-    if (!ensureProjectMutationAccess(req, res, project, "revision")) return;
-    if (REVISION_LOCKED_STATUSES.has(toText(project?.status))) {
-      return res.status(400).json({
-        message:
-          "Order revision is locked after completion. Reopen the project to revise it.",
-      });
-    }
 
     // Helper
     const getValue = (field) => (field && field.value ? field.value : field);

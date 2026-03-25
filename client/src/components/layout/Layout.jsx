@@ -45,14 +45,13 @@ const toArray = (value) =>
 
 const resolveEngagedSubDepartments = (user) => {
   const userDepts = toArray(user?.department);
-  const hasProductionParent = userDepts.includes("Production");
   const hasGraphicsParent = userDepts.includes("Graphics/Design");
   const hasStoresParent = userDepts.includes("Stores");
   const hasPhotographyParent = userDepts.includes("Photography");
 
-  const productionSubDepts = hasProductionParent
-    ? PRODUCTION_SUB_DEPARTMENTS
-    : userDepts.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+  const productionSubDepts = userDepts.filter((d) =>
+    PRODUCTION_SUB_DEPARTMENTS.includes(d),
+  );
 
   const hasGraphics =
     hasGraphicsParent ||
@@ -703,9 +702,9 @@ const Layout = ({
       ? [user.department]
       : [];
 
-  const hasProduction =
-    userDepartments.includes("Production") ||
-    userDepartments.some((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+  const hasProduction = userDepartments.some((d) =>
+    PRODUCTION_SUB_DEPARTMENTS.includes(d),
+  );
   const hasGraphics =
     userDepartments.includes("Graphics/Design") ||
     userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));

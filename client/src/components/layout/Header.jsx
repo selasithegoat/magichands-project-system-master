@@ -49,9 +49,9 @@ const Header = ({
       ? [user.department]
       : [];
 
-  const hasProduction =
-    userDepartments.includes("Production") ||
-    userDepartments.some((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
+  const hasProduction = userDepartments.some((d) =>
+    PRODUCTION_SUB_DEPARTMENTS.includes(d),
+  );
   const hasGraphics =
     userDepartments.includes("Graphics/Design") ||
     userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
