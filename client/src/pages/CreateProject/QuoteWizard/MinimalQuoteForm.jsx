@@ -55,6 +55,18 @@ const formatFileSize = (bytes) => {
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 };
 
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    if (value._id) return toEntityId(value._id);
+    if (value.id) return String(value.id);
+  }
+  return "";
+};
+
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,20 +113,30 @@ const MinimalQuoteForm = () => {
 
   const applyProjectToForm = (project) => {
     if (!project) return;
+    const details = project.details || {};
+    const orderRef = project.orderRef || {};
+    const resolvedQuoteNumber =
+      project.orderId ||
+      project.quoteDetails?.quoteNumber ||
+      orderRef.orderNumber ||
+      "";
+    const resolvedClientName = details.client || orderRef.client || "";
+    const resolvedClientEmail = details.clientEmail || orderRef.clientEmail || "";
+    const resolvedClientPhone = details.clientPhone || orderRef.clientPhone || "";
     setFormData({
-      projectName: project.details?.projectName || "",
-      clientName: project.details?.client || "",
-      clientEmail: project.details?.clientEmail || "",
-      clientPhone: project.details?.clientPhone || "",
-      deliveryDate: project.details?.deliveryDate
-        ? new Date(project.details.deliveryDate).toISOString().slice(0, 10)
+      projectName: details.projectName || "",
+      clientName: resolvedClientName,
+      clientEmail: resolvedClientEmail,
+      clientPhone: resolvedClientPhone,
+      deliveryDate: details.deliveryDate
+        ? new Date(details.deliveryDate).toISOString().slice(0, 10)
         : "",
-      deliveryTime: normalizeTimeForInput(project.details?.deliveryTime),
+      deliveryTime: normalizeTimeForInput(details.deliveryTime),
       projectLeadId: project.projectLeadId?._id || project.projectLeadId || "",
       assistantLeadId:
         project.assistantLeadId?._id || project.assistantLeadId || "",
-      quoteNumber: project.orderId || "",
-      briefOverview: project.details?.briefOverview || "",
+      quoteNumber: resolvedQuoteNumber,
+      briefOverview: details.briefOverview || "",
       items:
         project.items?.length > 0
           ? project.items
@@ -127,10 +149,10 @@ const MinimalQuoteForm = () => {
         bidSubmission: false,
       },
     });
-    setExistingSampleImage(project.details?.sampleImage || "");
-    setExistingSampleImageNote(String(project.details?.sampleImageNote || ""));
+    setExistingSampleImage(details.sampleImage || "");
+    setExistingSampleImageNote(String(details.sampleImageNote || ""));
     setExistingAttachments(
-      normalizeReferenceAttachments(project.details?.attachments || []),
+      normalizeReferenceAttachments(details.attachments || []),
     );
   };
 
@@ -176,8 +198,18 @@ const MinimalQuoteForm = () => {
     const loadEditProject = async () => {
       if (!editingId) return false;
 
-      if (location.state?.reopenedProject?._id === editingId) {
-        applyProjectToForm(location.state.reopenedProject);
+      const reopenedProject = location.state?.reopenedProject || null;
+      const reopenedProjectId = toEntityId(
+        reopenedProject?._id || reopenedProject?.id,
+      );
+      const normalizedEditId = toEntityId(editingId);
+      if (
+        reopenedProject &&
+        (!reopenedProjectId ||
+          !normalizedEditId ||
+          reopenedProjectId === normalizedEditId)
+      ) {
+        applyProjectToForm(reopenedProject);
         return true;
       }
 
@@ -403,7 +435,11 @@ const MinimalQuoteForm = () => {
 
       const getFileNote = (file) =>
         selectedFileNotes[buildFileKey(file)] || "";
-      const imageFile = selectedFiles.find((f) => f.type.startsWith("image/"));
+      const shouldUseSelectedImageAsSample =
+        !editingId || !existingSampleImage;
+      const imageFile = shouldUseSelectedImageAsSample
+        ? selectedFiles.find((f) => f.type.startsWith("image/"))
+        : null;
       const attachmentFiles = imageFile
         ? selectedFiles.filter((file) => file !== imageFile)
         : selectedFiles;

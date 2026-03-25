@@ -2065,11 +2065,23 @@ const OrderActions = () => {
       );
       return;
     }
+    const revisionState = {
+      revisionMode: true,
+      returnTo: `/new-orders/actions/${project._id}`,
+    };
+
+    if (isQuoteProject) {
+      navigate(`/create/quote?edit=${project._id}`, {
+        state: {
+          ...revisionState,
+          reopenedProject: project,
+        },
+      });
+      return;
+    }
+
     navigate(`/new-orders/form?edit=${project._id}`, {
-      state: {
-        revisionMode: true,
-        returnTo: `/new-orders/actions/${project._id}`,
-      },
+      state: revisionState,
     });
   };
 
