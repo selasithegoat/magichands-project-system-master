@@ -844,8 +844,8 @@ const OrdersList = () => {
                     <th>Order ID</th>
                     <th>Client</th>
                     <th>Project</th>
+                    <th>Type</th>
                     <th>Status</th>
-                    <th>Lead(s)</th>
                     <th>Created Date</th>
                     <th>Actions</th>
                   </tr>
@@ -861,6 +861,13 @@ const OrdersList = () => {
                     const primaryProject = allProjects[0] || activeProjects[0] || null;
                     const statusMeta = getGroupStatusMeta(
                       activeProjects.length > 0 ? activeProjects : allProjects,
+                    );
+                    const groupTypes = Array.from(
+                      new Set(
+                        allProjects
+                          .map((project) => project?.projectType || "Standard")
+                          .filter(Boolean),
+                      ),
                     );
                     const createdDate =
                       group?.orderDate || primaryProject?.createdAt || null;
@@ -902,6 +909,7 @@ const OrdersList = () => {
                           </td>
                           <td>{getGroupClient(group, [primaryProject])}</td>
                           <td>{primaryProject.details?.projectName || "Untitled"}</td>
+                          <td>{primaryProject.projectType || "Standard"}</td>
                           <td>
                             <span
                               className={`status-badge ${getStatusClass(getProjectDisplayStatus(primaryProject))}`}
@@ -909,7 +917,6 @@ const OrdersList = () => {
                               {getProjectDisplayStatus(primaryProject)}
                             </span>
                           </td>
-                          <td>{getLeadDisplay(primaryProject, "Unassigned")}</td>
                           <td>{formatDate(primaryProject.createdAt || createdDate)}</td>
                           <td>
                             <button
@@ -986,11 +993,15 @@ const OrdersList = () => {
                             </div>
                           </td>
                           <td>
+                            {groupTypes.length === 1
+                              ? groupTypes[0]
+                              : `Mixed (${groupTypes.length})`}
+                          </td>
+                          <td>
                             <span className={`status-badge ${statusMeta.className}`}>
                               {statusMeta.label}
                             </span>
                           </td>
-                          <td>Multiple Leads</td>
                           <td>{formatDate(createdDate)}</td>
                           <td>-</td>
                         </tr>
@@ -1030,6 +1041,7 @@ const OrdersList = () => {
                               </td>
                               <td>{getGroupClient(group, allProjects)}</td>
                               <td>{order.details?.projectName || "Untitled"}</td>
+                              <td>{order.projectType || "Standard"}</td>
                               <td>
                                 <span
                                   className={`status-badge ${getStatusClass(getProjectDisplayStatus(order))}`}
@@ -1037,7 +1049,6 @@ const OrdersList = () => {
                                   {getProjectDisplayStatus(order)}
                                 </span>
                               </td>
-                              <td>{getLeadDisplay(order, "Unassigned")}</td>
                               <td>{formatDate(order.createdAt)}</td>
                               <td>
                                 <button
