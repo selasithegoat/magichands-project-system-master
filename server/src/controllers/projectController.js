@@ -68,6 +68,7 @@ const ENGAGED_SUB_DEPARTMENTS = new Set([
   "woodme",
   "fabrication",
   "signage",
+  "outside-production",
 ]);
 
 const PRODUCTION_DEPARTMENTS = new Set([
@@ -91,6 +92,7 @@ const PRODUCTION_DEPARTMENTS = new Set([
   "woodme",
   "fabrication",
   "signage",
+  "outside-production",
 ]);
 
 const PAYMENT_TYPES = new Set([

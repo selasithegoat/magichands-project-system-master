@@ -130,6 +130,7 @@ const PRODUCTION_SUB_DEPARTMENT_OPTIONS = [
   { id: "woodme", label: "Woodme" },
   { id: "fabrication", label: "Fabrication" },
   { id: "signage", label: "Signage" },
+  { id: "outside-production", label: "Outside Production" },
 ];
 
 const PRODUCTION_SUB_DEPARTMENT_IDS = new Set(
@@ -157,6 +158,7 @@ const PRODUCTION_DEPARTMENTS = new Set([
   "woodme",
   "fabrication",
   "signage",
+  "outside-production",
 ]);
 
 const GRAPHICS_DEPARTMENT_TOKENS = new Set([

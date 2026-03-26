@@ -45,6 +45,7 @@ export const PRODUCTION_SUB_DEPARTMENTS = [
   "woodme",
   "fabrication",
   "signage",
+  "outside-production",
 ];
 
 export const GRAPHICS_SUB_DEPARTMENTS = ["graphics"];

@@ -68,6 +68,7 @@ const Teams = ({ user }) => {
     { id: "woodme", label: "Woodme" },
     { id: "fabrication", label: "Fabrication" },
     { id: "signage", label: "Signage" },
+    { id: "outside-production", label: "Outside Production" },
   ];
   const productionSubDeptIds = productionSubDepartments.map((d) => d.id);
   const productionSubDeptLabelMap = new Map(

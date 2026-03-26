@@ -67,6 +67,7 @@ const PRODUCTION_DEPARTMENT_TOKENS = new Set([
   "woodme",
   "fabrication",
   "signage",
+  "outside-production",
 ]);
 const GRAPHICS_DEPARTMENT_TOKENS = new Set([
   "graphics/design",
