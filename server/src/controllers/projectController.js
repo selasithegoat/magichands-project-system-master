@@ -5005,7 +5005,11 @@ const getProjectById = async (req, res) => {
         (project.assistantLeadId._id?.toString() === req.user._id.toString() ||
           project.assistantLeadId.toString() === req.user._id.toString());
 
-      if (req.user.role !== "admin" && !isLead && !isAssistant) {
+      const isFrontDesk = toDepartmentArray(req.user?.department)
+        .map(normalizeDepartmentValue)
+        .includes("front desk");
+
+      if (req.user.role !== "admin" && !isLead && !isAssistant && !isFrontDesk) {
         return res
           .status(403)
           .json({ message: "Not authorized to view this project" });
