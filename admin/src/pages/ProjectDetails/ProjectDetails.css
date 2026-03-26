@@ -1338,6 +1338,13 @@
   border: 1px solid rgba(16, 184, 166, 0.2);
 }
 
+.dept-ack-user {
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(16, 184, 166, 0.85);
+}
+
 .dept-undo-btn {
   margin-left: 0.5rem;
   padding: 0.15rem 0.45rem;

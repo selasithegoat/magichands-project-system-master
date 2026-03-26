@@ -1406,6 +1406,13 @@
   text-transform: uppercase;
 }
 
+.engaged-ack-status.by-name {
+  text-transform: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
 /* Modal Styles */
 .modal-overlay {
   position: fixed;

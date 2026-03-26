@@ -10,7 +10,7 @@ import {
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { getLeadDisplay } from "../../utils/leadDisplay";
+import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import {
   normalizeReferenceAttachments,
@@ -543,6 +543,16 @@ const EngagedProjectActions = ({ user }) => {
     () => new Set((project?.acknowledgements || []).map((ack) => ack.department)),
     [project],
   );
+  const acknowledgementsByDept = useMemo(() => {
+    const entries = Array.isArray(project?.acknowledgements)
+      ? project.acknowledgements
+      : [];
+    return new Map(
+      entries
+        .filter((ack) => ack && ack.department)
+        .map((ack) => [ack.department, ack]),
+    );
+  }, [project]);
 
   const paymentTypes = useMemo(
     () =>
@@ -2301,6 +2311,8 @@ const EngagedProjectActions = ({ user }) => {
                     <div className="engaged-ack-list">
                       {section.subDepts.map((dept) => {
                         const isAcknowledged = acknowledgedDepts.has(dept);
+                        const acknowledgement = acknowledgementsByDept.get(dept);
+                        const acknowledgedBy = getFullName(acknowledgement?.user);
                         const canAcknowledge =
                           !isAcknowledged &&
                           !isProjectLeadForProject &&
@@ -2310,8 +2322,12 @@ const EngagedProjectActions = ({ user }) => {
                             <div className="engaged-ack-info">
                               <span>{getDepartmentLabel(dept)}</span>
                               {isAcknowledged && (
-                                <span className="engaged-ack-status">
-                                  Acknowledged
+                                <span
+                                  className={`engaged-ack-status${acknowledgedBy ? " by-name" : ""}`}
+                                >
+                                  {acknowledgedBy
+                                    ? `Acknowledged by ${acknowledgedBy}`
+                                    : "Acknowledged"}
                                 </span>
                               )}
                             </div>

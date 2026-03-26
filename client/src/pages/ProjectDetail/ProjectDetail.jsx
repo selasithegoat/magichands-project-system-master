@@ -33,6 +33,7 @@ import {
   getGroupedLeadDisplayRows,
   getLeadAvatarUrl,
   getLeadDisplay,
+  getFullName,
 } from "../../utils/leadDisplay";
 import {
   mergeProductionRiskSuggestions,
@@ -1937,9 +1938,11 @@ const DepartmentsCard = ({
       <div className="dept-list">
         {departments.length > 0 ? (
           departments.map((dept, index) => {
-            const isAcknowledged = acknowledgements?.some(
+            const acknowledgement = acknowledgements?.find(
               (a) => a.department === dept,
             );
+            const isAcknowledged = Boolean(acknowledgement);
+            const acknowledgedBy = getFullName(acknowledgement?.user);
             return (
               <span key={index} className="dept-tag">
                 <span
@@ -1962,6 +1965,18 @@ const DepartmentsCard = ({
                     }}
                   >
                     ✓ Acknowledged
+                  </span>
+                )}
+                {isAcknowledged && acknowledgedBy && (
+                  <span
+                    style={{
+                      marginLeft: "0.5rem",
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      color: "#0f9f8e",
+                    }}
+                  >
+                    by {acknowledgedBy}
                   </span>
                 )}
               </span>

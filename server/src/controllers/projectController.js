@@ -4600,6 +4600,7 @@ const getProjects = async (req, res) => {
           "assistantLeadId",
           "firstName lastName employeeId email avatarUrl",
         )
+        .populate("acknowledgements.user", "firstName lastName name avatarUrl")
         .populate("endOfDayUpdateBy", "firstName lastName department")
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
         .sort({ createdAt: -1 }),
@@ -4911,6 +4912,7 @@ const getProjectById = async (req, res) => {
           "assistantLeadId",
           "firstName lastName employeeId email avatarUrl",
         )
+        .populate("acknowledgements.user", "firstName lastName name avatarUrl")
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
     );
 
@@ -10449,6 +10451,10 @@ const acknowledgeProject = async (req, res) => {
       );
     }
 
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+
     // Notify Project Lead
     if (project.projectLeadId) {
       await createNotification(
@@ -10457,7 +10463,7 @@ const acknowledgeProject = async (req, res) => {
         project._id,
         "ACTIVITY",
         "Department Acknowledgement",
-        `${department} department has acknowledged project #${project.orderId || project._id.slice(-6).toUpperCase()}: ${project.details.projectName}`,
+        `${actorName} acknowledged ${department} engagement for project #${projectRef}: ${projectName}`,
       );
     }
 

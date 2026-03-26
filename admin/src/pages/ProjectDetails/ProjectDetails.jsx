@@ -32,6 +32,55 @@ const toEntityId = (value) => {
   return "";
 };
 
+const getPersonName = (value) => {
+  if (!value || typeof value !== "object") return "";
+  const firstName = String(value.firstName || "").trim();
+  const lastName = String(value.lastName || "").trim();
+  const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
+  if (fullName) return fullName;
+  return String(value.name || value.fullName || value.displayName || "").trim();
+};
+
+const mergeAcknowledgementUsers = (previous, next) => {
+  const previousAcks = Array.isArray(previous?.acknowledgements)
+    ? previous.acknowledgements
+    : [];
+  const nextAcks = Array.isArray(next?.acknowledgements)
+    ? next.acknowledgements
+    : [];
+
+  if (!previousAcks.length || !nextAcks.length) return next;
+
+  const hasUserName = (user) => {
+    if (!user || typeof user !== "object") return false;
+    return Boolean(
+      String(user.firstName || "").trim() ||
+        String(user.lastName || "").trim() ||
+        String(user.name || "").trim() ||
+        String(user.fullName || "").trim() ||
+        String(user.displayName || "").trim(),
+    );
+  };
+
+  const previousByDepartment = new Map(
+    previousAcks
+      .filter((ack) => ack && ack.department)
+      .map((ack) => [ack.department, ack]),
+  );
+
+  const mergedAcks = nextAcks.map((ack) => {
+    const previousAck = previousByDepartment.get(ack.department);
+    if (!previousAck) return ack;
+    if (hasUserName(ack.user)) return ack;
+    if (previousAck.user) {
+      return { ...ack, user: previousAck.user };
+    }
+    return ack;
+  });
+
+  return { ...next, acknowledgements: mergedAcks };
+};
+
 const normalizeSupplySourceList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (typeof value === "string" && value.trim()) {
@@ -1232,7 +1281,7 @@ const ProjectDetails = ({ user }) => {
       }
 
       const updatedProject = await res.json();
-      setProject(updatedProject);
+      applyProjectToState(updatedProject);
       setHoldReasonDraft(updatedProject.hold?.reason || "");
       setIsEditing(false);
       setIsEditingLead(false);
@@ -1354,28 +1403,29 @@ const ProjectDetails = ({ user }) => {
 
   const applyProjectToState = (data) => {
     if (!data) return;
-    setProject(data);
-    setCancelReasonDraft(data.cancellation?.reason || "");
+    const nextProject = mergeAcknowledgementUsers(project, data);
+    setProject(nextProject);
+    setCancelReasonDraft(nextProject.cancellation?.reason || "");
     setEditForm({
-      orderId: data.orderId || "",
-      client: data.details?.client || "",
-      clientEmail: data.details?.clientEmail || "", // [NEW]
-      clientPhone: data.details?.clientPhone || "", // [NEW]
-      briefOverview: data.details?.briefOverview || "", // [New]
-      orderDate: data.orderDate
-        ? data.orderDate.split("T")[0]
-        : data.createdAt
-          ? data.createdAt.split("T")[0]
+      orderId: nextProject.orderId || "",
+      client: nextProject.details?.client || "",
+      clientEmail: nextProject.details?.clientEmail || "", // [NEW]
+      clientPhone: nextProject.details?.clientPhone || "", // [NEW]
+      briefOverview: nextProject.details?.briefOverview || "", // [New]
+      orderDate: nextProject.orderDate
+        ? nextProject.orderDate.split("T")[0]
+        : nextProject.createdAt
+          ? nextProject.createdAt.split("T")[0]
           : "",
-      receivedTime: data.receivedTime || "",
-      deliveryDate: data.details?.deliveryDate
-        ? data.details.deliveryDate.split("T")[0]
+      receivedTime: nextProject.receivedTime || "",
+      deliveryDate: nextProject.details?.deliveryDate
+        ? nextProject.details.deliveryDate.split("T")[0]
         : "",
-      deliveryTime: data.details?.deliveryTime || "",
-      deliveryLocation: data.details?.deliveryLocation || "",
-      contactType: data.details?.contactType || "None",
-      supplySource: formatSupplySource(data.details?.supplySource),
-      packagingType: data.details?.packagingType || "",
+      deliveryTime: nextProject.details?.deliveryTime || "",
+      deliveryLocation: nextProject.details?.deliveryLocation || "",
+      contactType: nextProject.details?.contactType || "None",
+      supplySource: formatSupplySource(nextProject.details?.supplySource),
+      packagingType: nextProject.details?.packagingType || "",
     });
   };
 
@@ -1682,7 +1732,7 @@ const ProjectDetails = ({ user }) => {
 
       if (res.ok) {
         const updatedProject = await res.json();
-        setProject(updatedProject);
+        applyProjectToState(updatedProject);
         setIsEditingLead(false);
       } else {
         alert("Failed to update Project Lead");
@@ -1756,7 +1806,7 @@ const ProjectDetails = ({ user }) => {
 
       if (res.ok) {
         const updatedProject = await res.json();
-        setProject(updatedProject);
+        applyProjectToState(updatedProject);
         setIsEditing(false);
       } else {
         console.error("Failed to update project");
@@ -1885,7 +1935,7 @@ const ProjectDetails = ({ user }) => {
       }
 
       const updatedProject = await res.json();
-      setProject(updatedProject);
+      applyProjectToState(updatedProject);
     } catch (err) {
       console.error("Error undoing acknowledgement:", err);
       alert("Failed to undo acknowledgement");
@@ -4482,9 +4532,11 @@ const ProjectDetails = ({ user }) => {
               <div style={{ marginTop: "0.5rem" }}>
                 {project.departments && project.departments.length > 0 ? (
                   project.departments.map((dept, i) => {
-                    const isAcknowledged = project.acknowledgements?.some(
+                    const acknowledgement = project.acknowledgements?.find(
                       (a) => a.department === dept,
                     );
+                    const isAcknowledged = Boolean(acknowledgement);
+                    const acknowledgedBy = getPersonName(acknowledgement?.user);
                     return (
                       <span
                         key={i}
@@ -4496,6 +4548,11 @@ const ProjectDetails = ({ user }) => {
                             style={{ marginLeft: "4px", fontSize: "0.7rem" }}
                           >
                             ✓
+                          </span>
+                        )}
+                        {isAcknowledged && acknowledgedBy && (
+                          <span className="dept-ack-user">
+                            by {acknowledgedBy}
                           </span>
                         )}
                         {isAcknowledged && user?.role === "admin" && !isLeadUser && (
