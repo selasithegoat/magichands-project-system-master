@@ -100,6 +100,7 @@ const OrderMeetingCard = ({
   readOnly = false,
   showHistory = true,
   manageHint = "",
+  onMeetingOverrideChange,
 }) => {
   const orderNumber = String(
     orderNumberProp || project?.orderId || project?.orderRef?.orderNumber || "",
@@ -109,11 +110,20 @@ const OrderMeetingCard = ({
       (Array.isArray(orderGroupProjects) && orderGroupProjects.length > 1),
   );
   const allowManage = canManageMeetings(user) && !readOnly;
+  const allowSkip = Boolean(user?.role === "admin" && !readOnly);
+  const meetingSkipped = useMemo(() => {
+    if (project?.meetingOverride?.skipped) return true;
+    if (Array.isArray(orderGroupProjects) && orderGroupProjects.length > 0) {
+      return orderGroupProjects.some((entry) => entry?.meetingOverride?.skipped);
+    }
+    return false;
+  }, [project, orderGroupProjects]);
 
   const [meeting, setMeeting] = useState(null);
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [skipping, setSkipping] = useState(false);
   const [actionId, setActionId] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState(() => buildInitialForm(null));
@@ -253,6 +263,49 @@ const OrderMeetingCard = ({
     }
   };
 
+  const handleMeetingOverride = async (nextSkipped) => {
+    if (!allowSkip || skipping) return;
+    const targetProjectId =
+      project?._id || orderGroupProjects?.[0]?._id || "";
+    if (!targetProjectId) {
+      setError("Project reference is required to update meeting overrides.");
+      return;
+    }
+
+    const confirmMessage = nextSkipped
+      ? "Skip the departmental meeting requirement? This lets the project move past the meeting gate."
+      : "Restore the departmental meeting requirement for this order?";
+    if (!window.confirm(confirmMessage)) return;
+
+    setSkipping(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/projects/${targetProjectId}/meeting-override`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ skipped: nextSkipped }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to update meeting override.");
+      }
+      const updatedProject = await res.json();
+      if (typeof onMeetingOverrideChange === "function") {
+        onMeetingOverrideChange(updatedProject);
+      }
+      toast.success(
+        nextSkipped ? "Meeting requirement skipped." : "Meeting requirement restored.",
+      );
+    } catch (overrideError) {
+      console.error("Meeting override failed:", overrideError);
+      setError(overrideError.message || "Failed to update meeting override.");
+      toast.error(overrideError.message || "Failed to update meeting override.");
+    } finally {
+      setSkipping(false);
+    }
+  };
+
   const runMeetingAction = async ({ meetingId, endpoint, successMessage }) => {
     if (!allowManage || !meetingId) return;
     if (actionId) return;
@@ -294,8 +347,9 @@ const OrderMeetingCard = ({
         <h3 className="card-title">Departmental Meeting</h3>
         <div className="order-meeting-badges">
           {isRequired && <span className="meeting-pill required">Required</span>}
+          {meetingSkipped && <span className="meeting-pill skipped">Skipped</span>}
           <span className="meeting-pill status">
-            {formatMeetingStatus(meeting?.status)}
+            {meetingSkipped ? "Override Active" : formatMeetingStatus(meeting?.status)}
           </span>
         </div>
       </div>
@@ -303,9 +357,16 @@ const OrderMeetingCard = ({
       {loading && <p className="order-meeting-note">Loading meeting details...</p>}
       {error && <div className="order-meeting-error">{error}</div>}
 
-      {!loading && !meeting && (
+      {!loading && !meeting && !meetingSkipped && (
         <p className="order-meeting-note">
           No meeting has been scheduled for this order yet.
+        </p>
+      )}
+
+      {meetingSkipped && (
+        <p className="order-meeting-note">
+          Meeting requirement has been skipped by an admin. This order can advance
+          without a departmental meeting.
         </p>
       )}
 
@@ -442,6 +503,22 @@ const OrderMeetingCard = ({
                   ? "Update Meeting"
                   : "Schedule Meeting"}
             </button>
+            {allowSkip && isRequired && (
+              <button
+                type="button"
+                className={`order-meeting-btn ${meetingSkipped ? "ghost" : "warn"}`}
+                onClick={() => handleMeetingOverride(!meetingSkipped)}
+                disabled={skipping}
+              >
+                {skipping
+                  ? meetingSkipped
+                    ? "Restoring..."
+                    : "Skipping..."
+                  : meetingSkipped
+                    ? "Require Meeting"
+                    : "Skip Meeting"}
+              </button>
+            )}
           </div>
         </>
       )}

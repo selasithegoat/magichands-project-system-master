@@ -525,6 +525,11 @@ const ProjectSchema = new mongoose.Schema(
         date: { type: Date, default: Date.now },
       },
     ],
+    meetingOverride: {
+      skipped: { type: Boolean, default: false },
+      skippedAt: { type: Date, default: null },
+      skippedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    },
     invoice: {
       sent: { type: Boolean, default: false },
       sentAt: Date,

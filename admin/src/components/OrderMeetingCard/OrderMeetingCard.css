@@ -59,6 +59,12 @@
   background: rgba(56, 189, 248, 0.15);
 }
 
+.meeting-pill.skipped {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.15);
+}
+
 .order-meeting-error {
   padding: 0.6rem 0.75rem;
   border-radius: 10px;
@@ -292,6 +298,26 @@
 
 .order-meeting-btn.primary:hover {
   background: #1d4ed8;
+}
+
+.order-meeting-btn.warn {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.order-meeting-btn.warn:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.order-meeting-btn.ghost {
+  background: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: var(--text-primary);
+}
+
+.order-meeting-btn.ghost:hover {
+  background: rgba(148, 163, 184, 0.28);
 }
 
 .order-meeting-btn.complete {

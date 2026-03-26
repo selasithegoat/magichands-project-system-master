@@ -1037,11 +1037,13 @@ const resolveMeetingGateState = async (project = {}) => {
     project?.orderRef?.orderNumber || project?.orderId,
   );
   const orderRefId = toObjectIdString(project?.orderRef);
+  const meetingSkipped = Boolean(project?.meetingOverride?.skipped);
   if (!orderNumber && !orderRefId) {
     return {
       orderNumber: "",
       orderRefId: "",
       required: false,
+      meetingSkipped,
       meeting: null,
       grouped: false,
     };
@@ -1060,12 +1062,85 @@ const resolveMeetingGateState = async (project = {}) => {
     orderNumber,
     orderRefId,
     required,
+    meetingSkipped,
     meeting: meetingSummary.meeting,
     meetingScheduled: meetingSummary.meetingScheduled,
     meetingCompleted: meetingSummary.meetingCompleted,
     grouped,
     groupProjects,
   };
+};
+
+// @desc    Skip or restore departmental meeting requirement (Admin only)
+// @route   PATCH /api/projects/:id/meeting-override
+// @access  Private (Admin)
+const updateMeetingOverride = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await Project.findById(id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    if (req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to override meeting requirement." });
+    }
+
+    const rawValue = req.body?.skipped;
+    let skipped = true;
+    if (typeof rawValue === "boolean") {
+      skipped = rawValue;
+    } else if (typeof rawValue === "string") {
+      skipped = rawValue.trim().toLowerCase() === "true";
+    }
+
+    const skippedAt = skipped ? new Date() : null;
+    const skippedBy = skipped ? req.user._id || req.user.id : null;
+
+    const orderNumber = normalizeOrderNumber(
+      project?.orderRef?.orderNumber || project?.orderId,
+    );
+    const orderRefId = toObjectIdString(project?.orderRef);
+    const groupProjects =
+      orderNumber || orderRefId
+        ? await resolveOrderGroupProjects({ orderNumber, orderRefId })
+        : [];
+    const targetIds = groupProjects.length
+      ? groupProjects.map((entry) => entry._id).filter(Boolean)
+      : [project._id];
+
+    await Project.updateMany(
+      { _id: { $in: targetIds } },
+      {
+        $set: {
+          "meetingOverride.skipped": skipped,
+          "meetingOverride.skippedAt": skippedAt,
+          "meetingOverride.skippedBy": skippedBy,
+        },
+      },
+    );
+
+    await logActivity(
+      project._id,
+      req.user._id || req.user.id,
+      "update",
+      skipped
+        ? "Departmental meeting requirement was skipped."
+        : "Departmental meeting requirement was restored.",
+      { meetingOverride: { skipped } },
+    );
+
+    const updatedProject = await Project.findById(id);
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    normalizeProjectStatusFields(updatedProject);
+    res.json(updatedProject);
+  } catch (error) {
+    console.error("Error updating meeting override:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
 };
 
 const normalizeMeetingRecipientDepartmentToken = (value) => {
@@ -5875,7 +5950,8 @@ const updateProjectStatus = async (req, res) => {
     const meetingGate = await resolveMeetingGateState(project);
     const meetingRequired = meetingGate.required;
     const meetingScheduled = Boolean(meetingGate.meetingScheduled);
-    const meetingCompleted = Boolean(meetingGate.meetingCompleted);
+    const meetingSkipped = Boolean(meetingGate.meetingSkipped);
+    const meetingCompleted = Boolean(meetingGate.meetingCompleted) || meetingSkipped;
     const meetingIncomplete = (meetingRequired || meetingScheduled) && !meetingCompleted;
     const shouldForcePendingMeeting =
       meetingIncomplete && newStatus === "Scope Approval Completed";
@@ -10388,7 +10464,8 @@ const acknowledgeProject = async (req, res) => {
     const meetingGate = await resolveMeetingGateState(project);
     const meetingRequired = meetingGate.required;
     const meetingScheduled = Boolean(meetingGate.meetingScheduled);
-    const meetingCompleted = Boolean(meetingGate.meetingCompleted);
+    const meetingSkipped = Boolean(meetingGate.meetingSkipped);
+    const meetingCompleted = Boolean(meetingGate.meetingCompleted) || meetingSkipped;
     if ((meetingRequired || meetingScheduled) && !meetingCompleted) {
       return res.status(400).json({
         message:
@@ -11230,6 +11307,7 @@ module.exports = {
   cancelProject,
   reactivateProject,
   updateProjectStatus,
+  updateMeetingOverride,
   transitionQuoteRequirement,
   updateQuoteDecision,
   markInvoiceSent,

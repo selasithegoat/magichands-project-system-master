@@ -4226,6 +4226,9 @@ const ProjectDetails = ({ user }) => {
               project={project}
               orderGroupProjects={orderGroupProjects}
               user={user}
+              onMeetingOverrideChange={(updatedProject) =>
+                applyProjectToState(updatedProject)
+              }
             />
           )}
           <ProjectRemindersCard project={project} user={user} />

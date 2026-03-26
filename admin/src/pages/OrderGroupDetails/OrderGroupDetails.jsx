@@ -467,6 +467,7 @@ const OrderGroupDetails = ({ user }) => {
           orderGroupProjects={projects}
           user={user}
           showHistory={true}
+          onMeetingOverrideChange={() => fetchGroup()}
         />
       </section>
 

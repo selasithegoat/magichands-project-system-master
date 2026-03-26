@@ -55,6 +55,7 @@ const {
   updateSampleRequirement,
   updateCorporateEmergency,
   updateProjectType,
+  updateMeetingOverride,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
 } = require("../controllers/projectController");
@@ -294,6 +295,12 @@ router.patch(
   updateQuoteDecision,
 );
 router.patch("/:id/status", protect, enforceProjectNotOnHold, updateProjectStatus);
+router.patch(
+  "/:id/meeting-override",
+  protect,
+  enforceProjectNotOnHold,
+  updateMeetingOverride,
+);
 router.patch("/:id/reopen", protect, enforceProjectNotOnHold, reopenProject); // [NEW] - Reopen completed project
 router.post(
   "/:id/acknowledge",
