@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "./StageBottleneckAlert.css";
+import { renderProjectName } from "../../utils/projectName";
 
 const DEFAULT_THRESHOLD_DAYS = 14;
 const POLL_INTERVAL_MS = 60 * 1000;
@@ -237,7 +238,13 @@ const StageBottleneckAlert = () => {
           )}
           <div className="stage-bottleneck-primary-project">
             <strong>{primary.orderId || "N/A"}</strong>
-            <span>{primary.projectName || "Unnamed Project"}</span>
+            <span>
+              {renderProjectName(
+                primary.projectName,
+                primary.projectIndicator,
+                "Unnamed Project",
+              )}
+            </span>
             <span>
               Bottlenecked at {primaryStage} ({primary.daysInStage} days)
             </span>
@@ -299,7 +306,12 @@ const StageBottleneckAlert = () => {
               <div className="stage-bottleneck-modal-focus">
                 <p>
                   Viewing: <strong>{primary.orderId || "N/A"}</strong> -{" "}
-                  {primary.projectName || "Unnamed Project"} ({primaryStage},{" "}
+                  {renderProjectName(
+                    primary.projectName,
+                    primary.projectIndicator,
+                    "Unnamed Project",
+                  )}{" "}
+                  ({primaryStage},{" "}
                   {primary.daysInStage} days)
                 </p>
                 <Link
@@ -332,7 +344,11 @@ const StageBottleneckAlert = () => {
                 >
                   <p>
                     <strong>Project:</strong> {item.orderId || "N/A"} -{" "}
-                    {item.projectName || "Unnamed Project"}
+                    {renderProjectName(
+                      item.projectName,
+                      item.projectIndicator,
+                      "Unnamed Project",
+                    )}
                   </p>
                   <p>
                     <strong>Bottleneck stage:</strong> {toStageLabel(item.status)}

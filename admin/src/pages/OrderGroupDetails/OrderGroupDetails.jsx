@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 import "./OrderGroupDetails.css";
 
 const toEntityId = (value) => {
@@ -169,7 +170,7 @@ const ProjectDetailBlock = ({ project, onViewDetails }) => {
     <article className="group-project-card">
       <header className="group-project-header">
         <div>
-          <h3>{details.projectName || "Untitled Project"}</h3>
+          <h3>{renderProjectName(details, null, "Untitled Project")}</h3>
           <p className="group-project-subtitle">
             {project?.projectType || "Standard"} -{" "}
             <span className="group-status-pill">{project?.status || "N/A"}</span>

@@ -24,6 +24,7 @@ import {
   initNotificationSound,
   playNotificationSound,
 } from "../../utils/notificationSound";
+import { formatProjectDisplayName } from "../../utils/projectName";
 
 const NOTIFICATION_POLL_INTERVAL_MS = 5000;
 let notificationBootstrapUserId = "";
@@ -261,9 +262,11 @@ const Layout = ({
           ? item.project.departments
           : [];
         const projectOrderId = String(item?.project?.orderId || "").trim();
-        const projectName = String(
-          item?.project?.details?.projectName || "",
-        ).trim();
+        const projectName = formatProjectDisplayName(
+          item?.project?.details,
+          null,
+          "",
+        );
         const projectPath = getEngagedProjectPath(
           user,
           projectId,

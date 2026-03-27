@@ -10,6 +10,10 @@ import QuoteStep5 from "./QuoteStep5";
 import "../WizardLayout.css";
 import "./QuoteProjectWizard.css";
 import { normalizeReferenceAttachments } from "../../../utils/referenceAttachments";
+import {
+  normalizeProjectIndicator,
+  resolveProjectNameForForm,
+} from "../../../utils/projectName";
 
 const QuoteProjectWizard = () => {
   const navigate = useNavigate();
@@ -85,6 +89,7 @@ const QuoteProjectWizard = () => {
   const [formData, setFormData] = useState({
     // Basic Project Fields (Mapped to existing schema)
     projectName: "",
+    projectIndicator: "",
     lead: "", // ID
     leadLabel: "", // Display Name
     assistantLeadId: "", // Optional assistant lead
@@ -205,7 +210,8 @@ const QuoteProjectWizard = () => {
           // Map data to formData
           setFormData((prev) => ({
             ...prev,
-            projectName: data.details?.projectName || "",
+            projectName: resolveProjectNameForForm(data.details) || "",
+            projectIndicator: data.details?.projectIndicator || "",
             lead: data.projectLeadId?._id || data.projectLeadId || "",
             leadLabel: data.details?.lead || "",
             assistantLeadId:
@@ -271,6 +277,8 @@ const QuoteProjectWizard = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    const normalizedValue =
+      name === "projectIndicator" ? normalizeProjectIndicator(value) : value;
 
     // Handle nested state updates helper
     if (name.includes(".")) {
@@ -282,13 +290,13 @@ const QuoteProjectWizard = () => {
           current = current[parts[i]];
         }
         current[parts[parts.length - 1]] =
-          type === "checkbox" ? checked : value;
+          type === "checkbox" ? checked : normalizedValue;
         return newData;
       });
     } else {
       setFormData((prev) => ({
         ...prev,
-        [name]: type === "checkbox" ? checked : value,
+        [name]: type === "checkbox" ? checked : normalizedValue,
       }));
     }
   };
@@ -377,6 +385,7 @@ const QuoteProjectWizard = () => {
         // Ensure details object is populated for top-level schema
         details: {
           projectName: formData.projectName,
+          projectIndicator: formData.projectIndicator,
           client: formData.client,
           lead: resolvedLeadLabel,
           deliveryDate: formData.deliveryDate,
@@ -385,6 +394,7 @@ const QuoteProjectWizard = () => {
           sampleImageNote: formData.sampleImageNote,
           attachments: formData.attachments,
         },
+        projectIndicator: formData.projectIndicator,
         existingSampleImage: formData.sampleImage,
         sampleImageNote: formData.sampleImageNote,
         existingAttachments: formData.attachments,

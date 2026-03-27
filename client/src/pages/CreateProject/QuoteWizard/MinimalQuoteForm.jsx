@@ -20,6 +20,11 @@ import {
   getReferenceFileUrl,
   getReferenceFileNote,
 } from "../../../utils/referenceAttachments";
+import {
+  formatProjectDisplayName,
+  normalizeProjectIndicator,
+  resolveProjectNameForForm,
+} from "../../../utils/projectName";
 import "./MinimalQuoteForm.css";
 
 const normalizeTimeForInput = (value) => {
@@ -92,6 +97,7 @@ const MinimalQuoteForm = () => {
 
   const [formData, setFormData] = useState({
     projectName: "",
+    projectIndicator: "",
     clientName: "",
     clientEmail: "", // [NEW]
     clientPhone: "", // [NEW]
@@ -124,7 +130,8 @@ const MinimalQuoteForm = () => {
     const resolvedClientEmail = details.clientEmail || orderRef.clientEmail || "";
     const resolvedClientPhone = details.clientPhone || orderRef.clientPhone || "";
     setFormData({
-      projectName: details.projectName || "",
+      projectName: resolveProjectNameForForm(details) || "",
+      projectIndicator: details.projectIndicator || "",
       clientName: resolvedClientName,
       clientEmail: resolvedClientEmail,
       clientPhone: resolvedClientPhone,
@@ -243,7 +250,9 @@ const MinimalQuoteForm = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const nextValue =
+      name === "projectIndicator" ? normalizeProjectIndicator(value) : value;
+    setFormData((prev) => ({ ...prev, [name]: nextValue }));
   };
 
   const handleChecklistChange = (field) => {
@@ -407,6 +416,7 @@ const MinimalQuoteForm = () => {
       }
       formPayload.append("orderId", formData.quoteNumber);
       formPayload.append("projectName", formData.projectName);
+      formPayload.append("projectIndicator", formData.projectIndicator || "");
       formPayload.append("client", formData.clientName);
       formPayload.append("clientEmail", formData.clientEmail); // [NEW]
       formPayload.append("clientPhone", formData.clientPhone); // [NEW]
@@ -527,7 +537,11 @@ const MinimalQuoteForm = () => {
               <div>
                 <span className="quote-meta-eyebrow">Quote Snapshot</span>
                 <h2 className="quote-meta-title">
-                  {formData.projectName || "Quote Request"}
+                  {formatProjectDisplayName(
+                    formData.projectName,
+                    formData.projectIndicator,
+                    "Quote Request",
+                  )}
                 </h2>
                 <p className="quote-meta-subtitle">
                   Capture the core identifiers before filling the details.
@@ -621,6 +635,17 @@ const MinimalQuoteForm = () => {
                 onChange={(e) =>
                   handleChange({
                     target: { name: "projectName", value: e.target.value },
+                  })
+                }
+                icon={<FolderIcon />}
+              />
+              <Input
+                label="Brand / Project Indicator"
+                placeholder="e.g. Presidential Villa"
+                value={formData.projectIndicator}
+                onChange={(e) =>
+                  handleChange({
+                    target: { name: "projectIndicator", value: e.target.value },
                   })
                 }
                 icon={<FolderIcon />}

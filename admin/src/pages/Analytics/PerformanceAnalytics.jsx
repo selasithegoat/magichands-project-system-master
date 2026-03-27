@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PerformanceAnalytics.css";
+import { renderProjectName } from "../../utils/projectName";
 
 const HIDDEN_STAGE_KEYS = new Set(["proofReading", "qualityControl", "photography"]);
 
@@ -716,7 +717,13 @@ const PerformanceAnalytics = () => {
                                   <span className="project-id">
                                     {row.orderId || row.projectId.slice(-6).toUpperCase()}
                                   </span>
-                                  <span className="project-name">{row.projectName}</span>
+                                  <span className="project-name">
+                                    {renderProjectName(
+                                      row.projectName,
+                                      row.projectIndicator,
+                                      "Untitled Project",
+                                    )}
+                                  </span>
                                 </div>
                               </td>
                               <td>{row.status}</td>

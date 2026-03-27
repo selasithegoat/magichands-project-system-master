@@ -5,6 +5,7 @@ import BuildingIcon from "../icons/BuildingIcon";
 import CalendarIcon from "../icons/CalendarIcon";
 import CheckCircleIcon from "../icons/CheckCircleIcon";
 import EyeIcon from "../icons/EyeIcon";
+import { renderProjectName } from "../../utils/projectName";
 
 const resolveProjectTypeKey = (project) => {
   const typeValue = String(project?.projectType || "").trim().toLowerCase();
@@ -90,7 +91,7 @@ const HistoryProjectCard = ({ project, onViewDetails, animationDelay = 0 }) => {
 
       <div className="history-card-title-row">
         <h3 className="history-card-title">
-          {details.projectName || "Untitled Project"}
+          {renderProjectName(details, null, "Untitled Project")}
         </h3>
         {hasSpecialRequirementTag && (
           <div className="special-requirements-row">

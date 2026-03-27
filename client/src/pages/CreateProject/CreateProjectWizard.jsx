@@ -11,6 +11,10 @@ import {
   buildFileKey,
   normalizeReferenceAttachments,
 } from "../../utils/referenceAttachments";
+import {
+  normalizeProjectIndicator,
+  resolveProjectNameForForm,
+} from "../../utils/projectName";
 
 const normalizeSupplySourceSelection = (value) => {
   if (Array.isArray(value)) {
@@ -143,6 +147,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       priority: "Normal",
       lead: null,
       projectName: "",
+      projectIndicator: "",
       briefOverview: "", // [New]
       deliveryDate: new Date().toISOString().split("T")[0],
       deliveryTime: "14:00",
@@ -263,7 +268,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             // Use projectLeadId for the lead select value (matches option value)
             lead: data.projectLeadId || null,
 
-            projectName: data.details?.projectName || "",
+            projectName: resolveProjectNameForForm(data.details) || "",
+            projectIndicator: data.details?.projectIndicator || "",
             leadLabel:
               data.projectLeadId && typeof data.projectLeadId === "object"
                 ? (
@@ -349,6 +355,11 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
   const handleUpdateFormData = (updates) => {
     setFormData((prev) => {
       const next = { ...prev, ...updates };
+      if (Object.prototype.hasOwnProperty.call(updates, "projectIndicator")) {
+        next.projectIndicator = normalizeProjectIndicator(
+          updates.projectIndicator,
+        );
+      }
       if (next.projectType !== "Corporate Job") {
         next.corporateEmergency = false;
       }

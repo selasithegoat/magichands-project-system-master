@@ -8,6 +8,7 @@ import RefreshIcon from "../icons/RefreshIcon";
 import CheckCircleIcon from "../icons/CheckCircleIcon";
 import SystemIcon from "../icons/SystemIcon";
 import ReminderBellIcon from "../icons/ReminderBellIcon";
+import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 
 const getNotificationTypeMeta = (type) => {
   switch (type) {
@@ -84,16 +85,16 @@ const NotificationModal = ({
     return full || "";
   };
 
-  const getProjectLabel = (project) => {
-    if (!project || typeof project !== "object") return "";
-    const name =
-      project?.details?.projectName ||
-      project?.details?.title ||
-      project?.details?.projectTitle ||
-      "";
+  const getProjectMeta = (project) => {
+    if (!project || typeof project !== "object") {
+      return { nameNode: null, orderId: "" };
+    }
     const orderId = project?.orderId || "";
-    if (name && orderId) return `${name} · ${orderId}`;
-    return name || orderId;
+    const projectNameText = formatProjectDisplayName(project?.details, null, "");
+    const nameNode = projectNameText
+      ? renderProjectName(project?.details, null, projectNameText)
+      : null;
+    return { nameNode, orderId };
   };
 
   const userId = toEntityId(currentUser?._id || currentUser?.id);
@@ -177,14 +178,18 @@ const NotificationModal = ({
     const leadId = toEntityId(project?.projectLeadId?._id || project?.projectLeadId);
     const leadName = getUserLabel(project?.projectLeadId);
     const leadLabel = leadId && userId && leadId === userId ? "You" : leadName;
-    const projectLabel = getProjectLabel(project);
-    if (!leadLabel && !projectLabel) return null;
+    const projectMeta = getProjectMeta(project);
+    const hasProjectMeta = Boolean(projectMeta.nameNode || projectMeta.orderId);
+    if (!leadLabel && !hasProjectMeta) return null;
 
     return (
       <div className="notif-meta">
         {leadLabel && <span className="notif-meta-pill">For: {leadLabel}</span>}
-        {projectLabel && (
-          <span className="notif-meta-pill subtle">Project: {projectLabel}</span>
+        {hasProjectMeta && (
+          <span className="notif-meta-pill subtle">
+            Project: {projectMeta.nameNode || "Untitled Project"}
+            {projectMeta.orderId ? ` Â· ${projectMeta.orderId}` : ""}
+          </span>
         )}
       </div>
     );

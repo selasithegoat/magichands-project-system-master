@@ -5,6 +5,7 @@ import {
   initNotificationSound,
   playNotificationSound,
 } from "../utils/notificationSound";
+import { formatProjectDisplayName } from "../utils/projectName";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -39,7 +40,11 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
       .filter((item) => !item?.isRead && item?.type === "REMINDER")
       .map((item) => {
         const projectOrderId = String(item?.project?.orderId || "").trim();
-        const projectName = String(item?.project?.details?.projectName || "").trim();
+        const projectName = formatProjectDisplayName(
+          item?.project?.details,
+          null,
+          "",
+        );
 
         return {
           notificationId: toEntityId(item?._id),

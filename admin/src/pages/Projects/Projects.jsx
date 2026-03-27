@@ -6,6 +6,7 @@ import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -748,7 +749,9 @@ const Projects = ({ user }) => {
                             {project.orderId || group?.orderNumber || "N/A"}
                           </span>
                         </td>
-                        <td>{project.details?.projectName || "Untitled"}</td>
+                        <td>
+                          {renderProjectName(project.details, null, "Untitled")}
+                        </td>
                         <td>{renderTypeBadge(project.projectType)}</td>
                         <td>{getLeadDisplay(project, "Unassigned")}</td>
                         <td>{groupClient}</td>
@@ -883,7 +886,13 @@ const Projects = ({ user }) => {
                                 -
                               </span>
                             </td>
-                            <td>{project.details?.projectName || "Untitled"}</td>
+                            <td>
+                              {renderProjectName(
+                                project.details,
+                                null,
+                                "Untitled",
+                              )}
+                            </td>
                             <td>{renderTypeBadge(project.projectType)}</td>
                             <td>{getLeadDisplay(project, "Unassigned")}</td>
                             <td>{project.details?.client || groupClient}</td>

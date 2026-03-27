@@ -11,6 +11,7 @@ import {
 } from "../../icons/Icons";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getGroupedLeadDisplayRows } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 import ProjectHoldModal from "../../components/ProjectHoldModal/ProjectHoldModal";
 import BillingGuardModal from "../../components/BillingGuardModal/BillingGuardModal";
 import ProjectCancelModal from "../../components/ProjectCancelModal/ProjectCancelModal";
@@ -2689,7 +2690,9 @@ const ProjectDetails = ({ user }) => {
               <span className="project-version-badge">v{projectVersion}</span>
             )}
           </h1>
-          <p className="header-project-name">{details.projectName}</p>
+          <p className="header-project-name">
+            {renderProjectName(details, null, "Untitled Project")}
+          </p>
         </div>
 
         <div
@@ -4872,7 +4875,7 @@ const ProjectDetails = ({ user }) => {
         message={billingGuardModal.message}
         missingLabels={billingGuardModal.missingLabels}
         orderId={project?.orderId}
-        projectName={details?.projectName}
+        projectName={renderProjectName(details, null, "Untitled Project")}
       />
 
       <ProjectHoldModal
@@ -4906,7 +4909,7 @@ const ProjectDetails = ({ user }) => {
         onConfirm={handleReactivateProject}
         isSubmitting={isReactivating}
         orderId={project?.orderId}
-        projectName={project?.details?.projectName}
+        projectName={renderProjectName(project?.details, null, "Untitled Project")}
         frozenStage={project?.cancellation?.resumedStatus || project?.status}
         errorMessage={reactivateError}
       />
@@ -4918,7 +4921,7 @@ const ProjectDetails = ({ user }) => {
         isSubmitting={isChangingProjectType}
         errorMessage={projectTypeChangeError}
         orderId={project?.orderId}
-        projectName={project?.details?.projectName}
+        projectName={renderProjectName(project?.details, null, "Untitled Project")}
         currentType={project?.projectType}
         currentStatus={project?.status}
         currentPriority={project?.priority}

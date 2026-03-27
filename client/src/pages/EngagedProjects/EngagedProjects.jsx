@@ -12,6 +12,7 @@ import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
+import { renderProjectName } from "../../utils/projectName";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -845,7 +846,11 @@ const EngagedProjects = ({ user }) => {
                     const client = project.details?.client || "N/A";
                     const deliveryDate = formatDate(project.details?.deliveryDate);
                     const deliveryTime = formatTime(project.details?.deliveryTime);
-                    const projectName = project.details?.projectName || "Untitled";
+                    const projectName = renderProjectName(
+                      project.details,
+                      null,
+                      "Untitled",
+                    );
                     const revisionCount = getRevisionCount(project);
                     const emergency = isEmergency(project);
                     const approaching = isApproachingDelivery(project);
@@ -994,7 +999,11 @@ const EngagedProjects = ({ user }) => {
                     const client = project.details?.client || "N/A";
                     const projectId =
                       project.orderId || project._id.slice(-6).toUpperCase();
-                    const projectName = project.details?.projectName || "Untitled";
+                    const projectName = renderProjectName(
+                      project.details,
+                      null,
+                      "Untitled",
+                    );
                     const revisionCount = getRevisionCount(project);
                     const engagedDeptsForUser = (project.departments || [])
                       .filter((dept) => engagedSubDepts.includes(dept))

@@ -13,6 +13,7 @@ import SearchIcon from "../../components/icons/SearchIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { format, isToday, isYesterday } from "date-fns";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { renderProjectName } from "../../utils/projectName";
 
 const MyActivities = ({ onBack }) => {
   const [activities, setActivities] = useState([]);
@@ -260,8 +261,11 @@ const MyActivities = ({ onBack }) => {
                         <p className="activity-desc">{activity.description}</p>
                         <div className="activity-meta">
                           <span className="project-name">
-                            {activity.project?.details?.projectName ||
-                              "Unknown Project"}
+                            {renderProjectName(
+                              activity.project?.details,
+                              null,
+                              "Unknown Project",
+                            )}
                           </span>
                           <span className="separator" aria-hidden="true" />
                           <span className="time">

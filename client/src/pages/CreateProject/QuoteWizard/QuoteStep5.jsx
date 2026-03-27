@@ -15,6 +15,7 @@ import {
   normalizeReferenceAttachments,
   getReferenceFileName,
 } from "../../../utils/referenceAttachments";
+import { formatProjectDisplayName, renderProjectName } from "../../../utils/projectName";
 import "./QuoteStep5.css"; // We'll create this or use Step5.css if shared
 
 const QuoteStep5 = ({
@@ -140,7 +141,11 @@ const QuoteStep5 = ({
             <div className="review-item">
               <label>Project Name</label>
               <div className="review-value">
-                {formData.projectName || "N/A"}
+                {renderProjectName(
+                  formData.projectName,
+                  formData.projectIndicator,
+                  "N/A",
+                )}
               </div>
             </div>
             <div className="review-item">
@@ -430,7 +435,11 @@ const QuoteStep5 = ({
         onConfirm={handleConfirmFinish}
         onCancel={() => setShowConfirmModal(false)}
         title="Confirm Project Acceptance"
-        message={`Are you sure you want to accept this quote and create the project "${formData.projectName}"? It will be assigned to ${leadDisplayName || "the selected Lead"} for approval.`}
+        message={`Are you sure you want to accept this quote and create the project "${formatProjectDisplayName(
+          formData,
+          null,
+          formData.projectName || "Untitled Project",
+        )}"? It will be assigned to ${leadDisplayName || "the selected Lead"} for approval.`}
         confirmText="Yes, Accept Project"
         cancelText="Cancel"
       />

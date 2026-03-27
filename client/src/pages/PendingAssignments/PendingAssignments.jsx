@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PendingAssignments.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { renderProjectName } from "../../utils/projectName";
 
 const PendingAssignments = ({ onStartNew, user }) => {
   const [adjustments, setAdjustments] = useState([]);
@@ -82,7 +83,13 @@ const PendingAssignments = ({ onStartNew, user }) => {
                 <span className="pa-status-badge">{project.status}</span>
               </div>
               <div className="pa-card-body">
-                <h3>{project.details?.projectName || "Untitled Project"}</h3>
+                <h3>
+                  {renderProjectName(
+                    project.details,
+                    null,
+                    "Untitled Project",
+                  )}
+                </h3>
                 <p>
                   <strong>Assigned:</strong>{" "}
                   {new Date(

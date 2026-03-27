@@ -9,6 +9,10 @@ import {
   Image, // [NEW]
 } from "@react-pdf/renderer";
 import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
+import {
+  buildProjectNameRuns,
+  formatProjectDisplayName,
+} from "../../utils/projectName";
 
 // Register fonts if needed (optional, using standard fonts for now)
 // Font.register({
@@ -70,6 +74,9 @@ const styles = StyleSheet.create({
     width: "65%",
     fontSize: 10,
     color: "#334155",
+  },
+  valueBold: {
+    fontWeight: "bold",
   },
   badge: {
     padding: "3 8",
@@ -233,6 +240,11 @@ const ProjectSummaryPDF = ({
   };
 
   const themeColor = THEME[pdfType] || THEME.STANDARD;
+  const projectNameText = formatProjectDisplayName(
+    formData,
+    null,
+    formData.projectName || "N/A",
+  );
 
   return (
     <Document>
@@ -291,7 +303,18 @@ const ProjectSummaryPDF = ({
           </Text>
           <View style={styles.row}>
             <Text style={styles.label}>Project Name:</Text>
-            <Text style={styles.value}>{formData.projectName || "N/A"}</Text>
+            <Text style={styles.value}>
+              {buildProjectNameRuns(formData, null, "N/A").map(
+                (run, index) => (
+                  <Text
+                    key={`project-name-${index}`}
+                    style={run.bold ? styles.valueBold : null}
+                  >
+                    {run.text}
+                  </Text>
+                ),
+              )}
+            </Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Contact Type:</Text>
@@ -513,7 +536,7 @@ const ProjectSummaryPDF = ({
             <View>
               <Text style={styles.title}>Reference Material</Text>
               <Text style={styles.subtitle}>
-                {formData.projectName} - Sample Image
+                {projectNameText} - Sample Image
               </Text>
             </View>
           </View>
@@ -560,7 +583,7 @@ const ProjectSummaryPDF = ({
                 <View>
                   <Text style={styles.title}>Reference Material</Text>
                   <Text style={styles.subtitle}>
-                    {formData.projectName} - Attachment #{index + 1}
+                    {projectNameText} - Attachment #{index + 1}
                   </Text>
                 </View>
               </View>

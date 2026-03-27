@@ -35,7 +35,12 @@ const BillingGuardModal = ({
         {(orderId || projectName) && (
           <p className="billing-guard-project">
             <strong>Project:</strong> {orderId || "N/A"}
-            {projectName ? ` - ${projectName}` : ""}
+            {projectName ? (
+              <>
+                {" "}
+                - {projectName}
+              </>
+            ) : null}
           </p>
         )}
         <p>{message || "Billing prerequisites are required for this action."}</p>

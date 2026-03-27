@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
@@ -908,7 +909,13 @@ const OrdersList = () => {
                             </div>
                           </td>
                           <td>{getGroupClient(group, [primaryProject])}</td>
-                          <td>{primaryProject.details?.projectName || "Untitled"}</td>
+                          <td>
+                            {renderProjectName(
+                              primaryProject.details,
+                              null,
+                              "Untitled",
+                            )}
+                          </td>
                           <td>{primaryProject.projectType || "Standard"}</td>
                           <td>
                             <span
@@ -1040,7 +1047,13 @@ const OrdersList = () => {
                                 </div>
                               </td>
                               <td>{getGroupClient(group, allProjects)}</td>
-                              <td>{order.details?.projectName || "Untitled"}</td>
+                              <td>
+                                {renderProjectName(
+                                  order.details,
+                                  null,
+                                  "Untitled",
+                                )}
+                              </td>
                               <td>{order.projectType || "Standard"}</td>
                               <td>
                                 <span
@@ -1179,7 +1192,9 @@ const OrdersList = () => {
                       </div>
                     </td>
                     <td>{order.details?.client || "-"}</td>
-                    <td>{order.details?.projectName || "Untitled"}</td>
+                    <td>
+                      {renderProjectName(order.details, null, "Untitled")}
+                    </td>
                     <td>
                       <span
                         className={`status-badge ${getStatusClass(order.status)}`}

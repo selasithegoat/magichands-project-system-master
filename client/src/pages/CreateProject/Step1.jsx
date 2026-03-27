@@ -302,6 +302,15 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
              readOnly={isEditing}
           />
 
+          <Input
+            label="Brand / Project Indicator"
+            placeholder="e.g. Presidential Villa"
+            value={formData.projectIndicator}
+            onChange={(e) => handleChange("projectIndicator", e.target.value)}
+            icon={<FolderIcon />}
+            readOnly={isEditing}
+          />
+
           {/* Client Name */}
           <Input
             label="Client Name"

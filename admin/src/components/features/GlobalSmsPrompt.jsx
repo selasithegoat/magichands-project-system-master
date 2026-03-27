@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./GlobalSmsPrompt.css";
+import { formatProjectDisplayName } from "../../utils/projectName";
 
 const POLL_INTERVAL_MS = 30000;
 const MAX_VISIBLE_PROMPTS = 3;
@@ -25,7 +26,7 @@ const resolveOrderLabel = (prompt) =>
   "Project";
 
 const resolveProjectName = (prompt) =>
-  toText(prompt?.project?.details?.projectName) || "";
+  formatProjectDisplayName(prompt?.project?.details, null, "");
 
 const updateGreeting = (message, clientName) => {
   const greeting = clientName ? `Dear ${clientName},` : "Hello,";

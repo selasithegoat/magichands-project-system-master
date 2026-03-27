@@ -20,6 +20,11 @@ import {
   getReferenceFileUrl,
   getReferenceFileNote,
 } from "../../utils/referenceAttachments";
+import {
+  formatProjectDisplayName,
+  normalizeProjectIndicator,
+  resolveProjectNameForForm,
+} from "../../utils/projectName";
 import "./NewOrders.css";
 
 const REVISION_LOCKED_STATUSES = new Set([
@@ -53,6 +58,7 @@ const NewOrders = () => {
     packagingType: "",
     deliveryLocation: "",
     projectName: "",
+    projectIndicator: "",
     briefOverview: "",
     items: [{ description: "", breakdown: "", qty: 1 }],
     orderDate: "",
@@ -295,7 +301,8 @@ const NewOrders = () => {
       contactType: project.details?.contactType || "None",
       packagingType: project.details?.packagingType || "",
       deliveryLocation: project.details?.deliveryLocation || "",
-      projectName: project.details?.projectName || "",
+      projectName: resolveProjectNameForForm(project.details) || "",
+      projectIndicator: project.details?.projectIndicator || "",
       briefOverview: project.details?.briefOverview || "",
       items:
         project.items?.length > 0
@@ -382,7 +389,9 @@ const NewOrders = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => {
-      const next = { ...prev, [name]: value };
+      const nextValue =
+        name === "projectIndicator" ? normalizeProjectIndicator(value) : value;
+      const next = { ...prev, [name]: nextValue };
       if (name === "projectType" && value !== "Corporate Job") {
         next.corporateEmergency = false;
       }
@@ -496,6 +505,7 @@ const NewOrders = () => {
     formPayload.append("contactType", formData.contactType);
     formPayload.append("packagingType", formData.packagingType);
     formPayload.append("projectName", formData.projectName);
+    formPayload.append("projectIndicator", formData.projectIndicator || "");
     formPayload.append("deliveryLocation", formData.deliveryLocation);
     formPayload.append("deliveryDate", formData.deliveryDate || "");
     formPayload.append("projectLeadId", formData.projectLeadId);
@@ -584,6 +594,7 @@ const NewOrders = () => {
             packagingType: "",
             deliveryLocation: "",
             projectName: "",
+            projectIndicator: "",
             briefOverview: "",
             items: [{ description: "", breakdown: "", qty: 1 }],
             orderDate: new Date().toISOString().slice(0, 16),
@@ -703,7 +714,11 @@ const NewOrders = () => {
                 <div>
                   <span className="order-meta-eyebrow">Order Snapshot</span>
                   <h2 className="order-meta-title">
-                    {formData.projectName || "New Order"}
+                    {formatProjectDisplayName(
+                      formData.projectName,
+                      formData.projectIndicator,
+                      "New Order",
+                    )}
                   </h2>
                   <p className="order-meta-subtitle">
                     Confirm the essentials before assigning the project lead.
@@ -1002,6 +1017,24 @@ const NewOrders = () => {
                     className="form-input"
                     placeholder="e.g. Annual Conference Banners"
                     required
+                  />
+                  <span className="input-icon">
+                    <FolderIcon />
+                  </span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="projectIndicator">Brand / Project Indicator</label>
+                <div className="input-wrapper">
+                  <input
+                    type="text"
+                    id="projectIndicator"
+                    name="projectIndicator"
+                    value={formData.projectIndicator}
+                    onChange={handleChange}
+                    className="form-input"
+                    placeholder="e.g. Presidential Villa"
                   />
                   <span className="input-icon">
                     <FolderIcon />
@@ -1398,7 +1431,11 @@ const NewOrders = () => {
             ? isRevisionMode
               ? `Are you sure you want to save all revision updates for order ${formData.orderNumber}?`
               : `Are you sure you want to save reopened order ${formData.orderNumber}?`
-            : `Are you sure you want to create order ${formData.orderNumber} for ${formData.projectName}? It will be assigned to the selected Project Lead for approval.`
+            : `Are you sure you want to create order ${formData.orderNumber} for ${formatProjectDisplayName(
+                formData.projectName,
+                formData.projectIndicator,
+                "New Order",
+              )}? It will be assigned to the selected Project Lead for approval.`
         }
         confirmText={
           editingId

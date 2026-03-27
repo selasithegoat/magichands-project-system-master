@@ -112,6 +112,16 @@ const ProjectSchema = new mongoose.Schema(
         type: String,
         required: true,
       },
+      projectNameRaw: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      projectIndicator: {
+        type: String,
+        default: "",
+        trim: true,
+      },
       briefOverview: {
         type: String, // [New] High-level summary
       },

@@ -1574,6 +1574,17 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const normalizeProjectIndicator = (value) => {
+  const trimmed = toText(value);
+  return trimmed ? trimmed.toUpperCase() : "";
+};
+const normalizeProjectNameRaw = (value) => toText(value);
+const buildProjectDisplayName = (projectName, projectIndicator) => {
+  const name = normalizeProjectNameRaw(projectName);
+  if (!name) return "";
+  const indicator = normalizeProjectIndicator(projectIndicator);
+  return indicator ? `${name} for ${indicator}` : name;
+};
 const isFrontDeskUser = (user) =>
   toDepartmentArray(user?.department)
     .map(normalizeDepartmentValue)
@@ -3629,8 +3640,17 @@ const getProjectDisplayRef = (project) =>
   project?.orderId ||
   project?._id?.toString()?.slice(-6)?.toUpperCase() ||
   "N/A";
-const getProjectDisplayName = (project) =>
-  project?.details?.projectName || "Unnamed Project";
+const getProjectDisplayName = (project) => {
+  const details = project?.details || {};
+  const baseName =
+    normalizeProjectNameRaw(details.projectNameRaw) ||
+    normalizeProjectNameRaw(details.projectName);
+  const indicator = normalizeProjectIndicator(details.projectIndicator);
+  if (baseName) {
+    return indicator ? `${baseName} for ${indicator}` : baseName;
+  }
+  return "Unnamed Project";
+};
 const getUserDisplayName = (user) => {
   if (!user) return "Someone";
   const firstName = String(user.firstName || "").trim();
@@ -4337,6 +4357,7 @@ const createProject = async (req, res) => {
       clientEmail, // [NEW]
       clientPhone, // [NEW]
       projectName,
+      projectIndicator,
       deliveryDate,
       deliveryTime,
       deliveryLocation,
@@ -4499,6 +4520,15 @@ const createProject = async (req, res) => {
           })
         : finalQuoteDetails;
     const isSampleRequired = parseBooleanFlag(sampleRequired, false);
+    const normalizedProjectNameRaw = normalizeProjectNameRaw(projectName);
+    const normalizedProjectIndicator = normalizeProjectIndicator(
+      projectIndicator !== undefined
+        ? projectIndicator
+        : details?.projectIndicator,
+    );
+    const resolvedProjectName =
+      buildProjectDisplayName(normalizedProjectNameRaw, normalizedProjectIndicator) ||
+      normalizedProjectNameRaw;
     const finalOrderId =
       normalizeOrderNumber(orderId) || (normalizedOrderRefId ? "" : generatedOrderId);
 
@@ -4525,7 +4555,9 @@ const createProject = async (req, res) => {
         client, // [NEW] Added client name
         clientEmail, // [NEW] Added client email
         clientPhone, // [NEW] Added client phone
-        projectName,
+        projectName: resolvedProjectName,
+        projectNameRaw: normalizedProjectNameRaw,
+        projectIndicator: normalizedProjectIndicator,
         briefOverview: getValue(req.body.briefOverview) || description, // [NEW] Map briefOverview, fallback to description if legacy
         deliveryDate,
         deliveryTime: normalizedDeliveryTime, // [NEW]
@@ -9319,6 +9351,7 @@ const updateProject = async (req, res) => {
       clientEmail, // [NEW]
       clientPhone, // [NEW]
       projectName,
+      projectIndicator,
       briefOverview,
       deliveryDate,
       deliveryTime,
@@ -9417,6 +9450,7 @@ const updateProject = async (req, res) => {
       clientEmail = undefined;
       clientPhone = undefined;
       projectName = undefined;
+      projectIndicator = undefined;
       briefOverview = undefined;
       deliveryDate = undefined;
       deliveryTime = undefined;
@@ -9564,8 +9598,44 @@ const updateProject = async (req, res) => {
       project.details.clientPhone = clientPhone;
       detailsChanged = true;
     }
-    if (projectName) {
-      project.details.projectName = projectName;
+    const hasProjectNameUpdate =
+      projectName !== undefined ||
+      (details && Object.prototype.hasOwnProperty.call(details, "projectName"));
+    const hasProjectIndicatorUpdate =
+      projectIndicator !== undefined ||
+      (details && Object.prototype.hasOwnProperty.call(details, "projectIndicator"));
+
+    if (hasProjectNameUpdate || hasProjectIndicatorUpdate) {
+      const incomingProjectName = hasProjectNameUpdate
+        ? projectName !== undefined
+          ? projectName
+          : details?.projectName
+        : "";
+      const fallbackProjectName =
+        normalizeProjectNameRaw(project.details?.projectNameRaw) ||
+        normalizeProjectNameRaw(project.details?.projectName);
+      const normalizedProjectNameRaw =
+        normalizeProjectNameRaw(incomingProjectName) || fallbackProjectName;
+
+      const incomingIndicator = hasProjectIndicatorUpdate
+        ? projectIndicator !== undefined
+          ? projectIndicator
+          : details?.projectIndicator
+        : project.details?.projectIndicator;
+      const normalizedProjectIndicator = normalizeProjectIndicator(incomingIndicator);
+
+      const resolvedProjectName = buildProjectDisplayName(
+        normalizedProjectNameRaw,
+        normalizedProjectIndicator,
+      );
+
+      if (normalizedProjectNameRaw) {
+        project.details.projectNameRaw = normalizedProjectNameRaw;
+      }
+      project.details.projectIndicator = normalizedProjectIndicator;
+      if (resolvedProjectName) {
+        project.details.projectName = resolvedProjectName;
+      }
       detailsChanged = true;
     }
     if (briefOverview !== undefined) {

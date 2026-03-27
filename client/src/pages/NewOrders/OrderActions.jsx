@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { renderProjectName } from "../../utils/projectName";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -2348,7 +2349,7 @@ const OrderActions = () => {
       <header className="order-actions-topbar">
         <div className="order-actions-topbar-main">
           <p className="order-actions-ref">{project.orderId || project._id}</p>
-          <h1>{project.details?.projectName || "Untitled Project"}</h1>
+          <h1>{renderProjectName(project.details, null, "Untitled Project")}</h1>
           <span className={`order-actions-status-pill ${statusBadgeTone}`}>
             {formatProjectStatusForDisplay(project.status, isQuoteProject)}
           </span>
@@ -3464,7 +3465,7 @@ const OrderActions = () => {
             <p className="confirm-modal-text">
               <strong>Project:</strong>{" "}
               {project.orderId || project._id || "N/A"} -{" "}
-              {project.details?.projectName || "Untitled"}
+              {renderProjectName(project.details, null, "Untitled")}
             </p>
             <p className="confirm-modal-text">{billingGuardModal.message}</p>
             {billingGuardModal.missingLabels.length > 0 && (
@@ -3494,7 +3495,7 @@ const OrderActions = () => {
             <p className="confirm-modal-text">
               <strong>Project:</strong>{" "}
               {project.orderId || project._id || "N/A"} -{" "}
-              {project.details?.projectName || "Untitled"}
+              {renderProjectName(project.details, null, "Untitled")}
             </p>
             <p className="confirm-modal-text">
               Confirm that client approved the production sample.
@@ -3541,7 +3542,7 @@ const OrderActions = () => {
             <p className="confirm-modal-text">
               <strong>Project:</strong>{" "}
               {project.orderId || project._id || "N/A"} -{" "}
-              {project.details?.projectName || "Untitled"}
+              {renderProjectName(project.details, null, "Untitled")}
             </p>
             <p className="confirm-modal-text">
               Reset sample approval back to pending.
@@ -3588,7 +3589,7 @@ const OrderActions = () => {
             <p className="confirm-modal-text">
               <strong>Project:</strong>{" "}
               {project.orderId || project._id || "N/A"} -{" "}
-              {project.details?.projectName || "Untitled"}
+              {renderProjectName(project.details, null, "Untitled")}
             </p>
             <p className="confirm-modal-text">
               Confirm that client approved mockup version{" "}
@@ -3641,7 +3642,7 @@ const OrderActions = () => {
             <p className="confirm-modal-text">
               <strong>Project:</strong>{" "}
               {project.orderId || project._id || "N/A"} -{" "}
-              {project.details?.projectName || "Untitled"}
+              {renderProjectName(project.details, null, "Untitled")}
             </p>
             <p className="confirm-modal-text">
               Confirm that client rejected mockup version{" "}

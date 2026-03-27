@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import "./CancelledOrders.css";
+import { renderProjectName } from "../../utils/projectName";
 
 const getGroupProjects = (group) =>
   (Array.isArray(group?.projects) ? group.projects : []).slice();
@@ -195,7 +196,13 @@ const CancelledOrders = () => {
                         className="cancelled-order-item"
                       >
                         <div>
-                          <h3>{project?.details?.projectName || "Unnamed Project"}</h3>
+                          <h3>
+                            {renderProjectName(
+                              project?.details,
+                              null,
+                              "Unnamed Project",
+                            )}
+                          </h3>
                           <p>
                             <strong>Order:</strong> {project?.orderId || "N/A"}
                           </p>
@@ -253,7 +260,11 @@ const CancelledOrders = () => {
         onConfirm={handleReactivate}
         isSubmitting={Boolean(reactivatingId)}
         orderId={reactivateModalProject?.orderId}
-        projectName={reactivateModalProject?.details?.projectName}
+        projectName={renderProjectName(
+          reactivateModalProject?.details,
+          null,
+          "Unnamed Project",
+        )}
         frozenStage={
           reactivateModalProject?.cancellation?.resumedStatus ||
           reactivateModalProject?.status

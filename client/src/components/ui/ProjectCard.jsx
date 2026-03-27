@@ -4,6 +4,7 @@ import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
+import { renderProjectName } from "../../utils/projectName";
 
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
@@ -329,7 +330,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 
       <div className="card-body">
         <h3 className="project-title-new">
-          {project.details?.projectName || "Untitled Project"}
+          {renderProjectName(project.details, null, "Untitled Project")}
         </h3>
         <div className="project-id-row">
           <span className="project-id">{project.orderId || "#ORD-PENDING"}</span>

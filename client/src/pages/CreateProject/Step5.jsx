@@ -8,6 +8,7 @@ import CheckIcon from "../../components/icons/CheckIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
+import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 
 import "./Step5.css";
 
@@ -305,7 +306,11 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
             <div className="review-item">
               <label>Project Name</label>
               <div className="review-value">
-                {formData.projectName || "N/A"}
+                {renderProjectName(
+                  formData.projectName,
+                  formData.projectIndicator,
+                  "N/A",
+                )}
               </div>
             </div>
             <div className="review-item">
@@ -599,7 +604,11 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
         onConfirm={handleConfirmCreate}
         onCancel={() => setShowConfirmModal(false)}
         title="Confirm Project Creation"
-        message={`Are you sure you want to create the project "${formData.projectName}"? It will be assigned to ${formData.lead?.label || "the selected Lead"} for approval.`}
+        message={`Are you sure you want to create the project "${formatProjectDisplayName(
+          formData.projectName,
+          formData.projectIndicator,
+          "New Project",
+        )}"? It will be assigned to ${formData.lead?.label || "the selected Lead"} for approval.`}
         confirmText="Yes, Create Project"
         cancelText="Cancel"
       />

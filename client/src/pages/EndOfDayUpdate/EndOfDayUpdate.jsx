@@ -7,6 +7,7 @@ import "./EndOfDayUpdate.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
+import { buildProjectNameRuns, renderProjectName } from "../../utils/projectName";
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
@@ -244,36 +245,52 @@ const EndOfDayUpdate = ({ user }) => {
         };
 
         const rowColor = getRowColor(project.projectType);
+        const buildCell = (runs) =>
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: runs,
+                alignment: AlignmentType.LEFT,
+              }),
+            ],
+            width: { size: 16, type: WidthType.PERCENTAGE },
+            shading: { fill: rowColor },
+            margins: { top: 100, bottom: 100, left: 100, right: 100 },
+          });
+
+        const buildTextCell = (text) =>
+          buildCell([
+            new TextRun({
+              text: text || "",
+              color: textColor,
+              font: "Calibri",
+            }),
+          ]);
+
+        const projectNameRuns = buildProjectNameRuns(
+          project.details,
+          null,
+          "Untitled",
+        ).map(
+          (run) =>
+            new TextRun({
+              text: run.text || "",
+              bold: run.bold,
+              color: textColor,
+              font: "Calibri",
+            }),
+        );
 
         tableRows.push(
           new TableRow({
             children: [
-              leadName,
-              orderNumberWithVersion,
-              project.details?.projectName || "Untitled",
-              deliveryContent,
-              project.status || "N/A",
-              updateContent,
-            ].map(
-              (text) =>
-                new TableCell({
-                  children: [
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: text || "",
-                          color: textColor,
-                          font: "Calibri",
-                        }),
-                      ],
-                      alignment: AlignmentType.LEFT,
-                    }),
-                  ],
-                  width: { size: 16, type: WidthType.PERCENTAGE },
-                  shading: { fill: rowColor },
-                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
-                }),
-            ),
+              buildTextCell(leadName),
+              buildTextCell(orderNumberWithVersion),
+              buildCell(projectNameRuns),
+              buildTextCell(deliveryContent),
+              buildTextCell(project.status || "N/A"),
+              buildTextCell(updateContent),
+            ],
           }),
         );
       });
@@ -540,7 +557,9 @@ const EndOfDayUpdate = ({ user }) => {
                         )}
                       </div>
                     </td>
-                    <td>{project.details?.projectName || "Untitled"}</td>
+                    <td>
+                      {renderProjectName(project.details, null, "Untitled")}
+                    </td>
                     <td>
                       <div className="delivery-cell">
                         <span>{formatDate(project.details?.deliveryDate)}</span>

@@ -5,6 +5,7 @@ import { getLeadDisplay } from "../../utils/leadDisplay";
 import {
   normalizeReferenceAttachments,
 } from "../../utils/referenceAttachments";
+import { resolveProjectNameForForm } from "../../utils/projectName";
 
 const isImageAttachment = (fileUrl = "", fileType = "") => {
   const normalizedType = String(fileType || "").toLowerCase();
@@ -146,7 +147,8 @@ const ProjectPdfDownload = ({ project }) => {
     const sampleImageNote = String(details?.sampleImageNote || "").trim();
 
     return {
-      projectName: details.projectName || project.projectName,
+      projectName: resolveProjectNameForForm(details) || details.projectName,
+      projectIndicator: details.projectIndicator || "",
       contactType: details.contactType,
       supplySource: details.supplySource,
       deliveryDate: details.deliveryDate

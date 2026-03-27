@@ -22,6 +22,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
+import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 
 const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
 const OVERDUE_EXCLUDED_STATUSES = new Set([
@@ -660,7 +661,11 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
         id: `project-${projectId || project?.orderId || dueTime}`,
         source: "project",
         projectId,
-        title: project?.details?.projectName || "Untitled Project",
+        title: formatProjectDisplayName(
+          project?.details,
+          null,
+          "Untitled Project",
+        ),
         subtitle: formatProjectStatus(project?.status || ""),
         orderId: project?.orderId || "",
         owner: getLeadDisplay(project, "Unassigned"),
@@ -710,6 +715,12 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
     const visibleDepartments = departments.slice(0, 2);
     const extraDepartmentCount = Math.max(0, departments.length - visibleDepartments.length);
     const referenceImage = getProjectReferenceImage(project);
+    const projectTitle = renderProjectName(project?.details, null, "Untitled Project");
+    const projectTitleText = formatProjectDisplayName(
+      project?.details,
+      null,
+      "Project",
+    );
 
     return (
       <article
@@ -731,7 +742,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
               {referenceImage ? (
                 <img
                   src={referenceImage}
-                  alt={`${project?.details?.projectName || "Project"} reference`}
+                  alt={`${projectTitleText} reference`}
                   loading="lazy"
                 />
               ) : (
@@ -742,7 +753,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
             </div>
             <div className="dashboard-project-title-wrap">
               <h4 className="dashboard-project-title">
-                {project?.details?.projectName || "Untitled Project"}
+                {projectTitle}
               </h4>
               <p className="dashboard-project-order">
                 {project?.orderId || "Order ID pending"}
@@ -789,7 +800,11 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                   id: `project-${projectId}`,
                   source: "project",
                   projectId,
-                  title: project?.details?.projectName || "Untitled Project",
+                  title: formatProjectDisplayName(
+                    project?.details,
+                    null,
+                    "Untitled Project",
+                  ),
                   subtitle: formatProjectStatus(project?.status || ""),
                   orderId: project?.orderId || "",
                   owner: getLeadDisplay(project, "Unassigned"),
@@ -902,7 +917,13 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                   <p className="dashboard-lead-alert-id">
                     {project.orderId || "Order pending"}
                   </p>
-                  <h3>{project.details?.projectName || "Untitled Project"}</h3>
+                  <h3>
+                    {renderProjectName(
+                      project.details,
+                      null,
+                      "Untitled Project",
+                    )}
+                  </h3>
                   <p className="dashboard-lead-alert-meta">
                     Assigned {formatAssignedDate(project)}
                     {project.details?.client ? ` | ${project.details.client}` : ""}
@@ -1045,7 +1066,13 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                   }
                 >
                   <div>
-                    <strong>{project?.details?.projectName || "Untitled Project"}</strong>
+                    <strong>
+                      {renderProjectName(
+                        project?.details,
+                        null,
+                        "Untitled Project",
+                      )}
+                    </strong>
                     <p>{project?.orderId || "Order pending"}</p>
                   </div>
                   <ChevronRightIcon width="14" height="14" />
@@ -1259,7 +1286,13 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                 {activeTimelineEvent.source === "project" ? "Project Detail" : "Digest Detail"}
               </span>
               <h3>
-                {activeTimelineProject?.details?.projectName || activeTimelineEvent.title}
+                {activeTimelineProject
+                  ? renderProjectName(
+                      activeTimelineProject?.details,
+                      null,
+                      activeTimelineEvent.title,
+                    )
+                  : activeTimelineEvent.title}
               </h3>
               <p>{activeTimelineProject?.orderId || activeTimelineEvent.orderId || "Order pending"}</p>
             </div>

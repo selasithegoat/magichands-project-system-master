@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import "./Clients.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 
 const Clients = ({ user }) => {
   const navigate = useNavigate();
@@ -258,7 +259,11 @@ const Clients = ({ user }) => {
                               </span>
                             </td>
                             <td>
-                              {project.details?.projectName || "Untitled"}
+                              {renderProjectName(
+                                project.details,
+                                null,
+                                "Untitled",
+                              )}
                             </td>
                             <td>
                               {getLeadDisplay(project, "Unassigned")}

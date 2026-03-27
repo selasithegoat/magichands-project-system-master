@@ -172,6 +172,15 @@ const QuoteStep1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               readOnly
             />
           </div>
+          <div className="form-row">
+            <Input
+              label="Brand / Project Indicator"
+              value={formData.projectIndicator}
+              onChange={(e) => handleChange("projectIndicator", e.target.value)}
+              icon={<FolderIcon />}
+              readOnly
+            />
+          </div>
 
           <div
             className="divider"

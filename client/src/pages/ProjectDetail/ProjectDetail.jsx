@@ -35,6 +35,7 @@ import {
   getLeadDisplay,
   getFullName,
 } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 import {
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
@@ -1204,7 +1205,9 @@ const ProjectDetail = ({ user }) => {
           </div>
         )}
 
-        <div className="project-subtitle">{project.details?.projectName}</div>
+        <div className="project-subtitle">
+          {renderProjectName(project.details, null, "Untitled Project")}
+        </div>
         <nav className="header-nav">
           {["Overview", "Updates", "Challenges", "Activities"].map((tab) => (
             <Link

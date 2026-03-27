@@ -9,6 +9,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
+import { renderProjectName } from "../../utils/projectName";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -748,7 +749,11 @@ const Dashboard = ({ user }) => {
                   ? rawOrderId
                   : `#${rawOrderId}`
                 : "Order";
-              const projectName = project.details?.projectName || "Untitled Project";
+              const projectName = renderProjectName(
+                project.details,
+                null,
+                "Untitled Project",
+              );
               const leadLabel = getLeadDisplay(project, "Unassigned");
               const clientLabel =
                 project.details?.client ||
@@ -842,7 +847,13 @@ const Dashboard = ({ user }) => {
                 onClick={() => navigate(`/projects/${project._id}`)}
               >
                 <div className="project-info">
-                  <h4>{project.details?.projectName}</h4>
+                  <h4>
+                    {renderProjectName(
+                      project.details,
+                      null,
+                      "Untitled Project",
+                    )}
+                  </h4>
                   <div className="project-meta">
                     {project.orderId} |{" "}
                     {getLeadDisplay(project, "No Lead")}

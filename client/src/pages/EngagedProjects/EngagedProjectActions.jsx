@@ -12,6 +12,7 @@ import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
+import { renderProjectName } from "../../utils/projectName";
 import {
   normalizeReferenceAttachments,
   getReferenceFileName,
@@ -2063,7 +2064,7 @@ const EngagedProjectActions = ({ user }) => {
   const deliveryDate = formatDate(project.details?.deliveryDate);
   const deliveryTime = formatTime(project.details?.deliveryTime);
   const projectId = project.orderId || project._id.slice(-6).toUpperCase();
-  const projectName = project.details?.projectName || "Untitled";
+  const projectName = renderProjectName(project.details, null, "Untitled");
   const parsedVersion = Number(project.versionNumber);
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
