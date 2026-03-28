@@ -1585,10 +1585,110 @@ const buildProjectDisplayName = (projectName, projectIndicator) => {
   const indicator = normalizeProjectIndicator(projectIndicator);
   return indicator ? `${name} for ${indicator}` : name;
 };
+const BATCH_STATUSES = [
+  "planned",
+  "in_production",
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+  "cancelled",
+];
+const BATCH_STATUS_FLOW = [
+  "planned",
+  "in_production",
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+];
+const BATCH_STATUS_SET = new Set(BATCH_STATUSES);
+const BATCH_STAGE_OWNER = {
+  in_production: "production",
+  produced: "production",
+  in_packaging: "packaging",
+  packaged: "packaging",
+  delivered: "frontdesk",
+};
 const isFrontDeskUser = (user) =>
   toDepartmentArray(user?.department)
     .map(normalizeDepartmentValue)
     .includes("front desk");
+const isAdminUser = (user) => user?.role === "admin";
+const isProductionUser = (user) =>
+  toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .some((token) => PRODUCTION_DEPARTMENT_TOKENS.has(token));
+const isPackagingUser = (user) =>
+  toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .some((token) => STORES_DEPARTMENT_TOKENS.has(token));
+const normalizeBatchStatus = (value) => {
+  const token = String(value || "").trim().toLowerCase();
+  return BATCH_STATUS_SET.has(token) ? token : "";
+};
+const getNextBatchStatus = (status) => {
+  const current = normalizeBatchStatus(status);
+  const index = BATCH_STATUS_FLOW.indexOf(current);
+  if (index < 0) return "";
+  return BATCH_STATUS_FLOW[index + 1] || "";
+};
+const buildBatchAllocationMap = (batches = [], options = {}) => {
+  const totals = new Map();
+  const excludeBatchId = String(options.excludeBatchId || "");
+  (Array.isArray(batches) ? batches : []).forEach((batch) => {
+    if (!batch) return;
+    if (batch.status === "cancelled") return;
+    if (excludeBatchId && String(batch.batchId || "") === excludeBatchId) return;
+    (Array.isArray(batch.items) ? batch.items : []).forEach((item) => {
+      const itemId = toObjectIdString(item?.itemId || item?._id);
+      const qty = Number(item?.qty);
+      if (!itemId || !Number.isFinite(qty)) return;
+      totals.set(itemId, (totals.get(itemId) || 0) + qty);
+    });
+  });
+  return totals;
+};
+const normalizeBatchItemsPayload = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      itemId: toObjectIdString(item?.itemId || item?.item || item?._id),
+      qty: Number(item?.qty),
+    }))
+    .filter((item) => item.itemId && Number.isFinite(item.qty) && item.qty > 0);
+const validateBatchItems = (items, project, options = {}) => {
+  const normalizedItems = normalizeBatchItemsPayload(items);
+  if (normalizedItems.length === 0) {
+    return {
+      ok: false,
+      message: "Select at least one item with a quantity greater than zero.",
+    };
+  }
+
+  const projectItems = Array.isArray(project?.items) ? project.items : [];
+  const projectItemMap = new Map(
+    projectItems.map((item) => [toObjectIdString(item?._id), item]),
+  );
+  const allocations = buildBatchAllocationMap(project?.batches || [], options);
+
+  for (const entry of normalizedItems) {
+    const projectItem = projectItemMap.get(entry.itemId);
+    if (!projectItem) {
+      return { ok: false, message: "One or more selected items are invalid." };
+    }
+    const maxQty = Number(projectItem.qty) || 0;
+    const allocatedQty = allocations.get(entry.itemId) || 0;
+    const remaining = maxQty - allocatedQty;
+    if (entry.qty > remaining) {
+      return {
+        ok: false,
+        message: `Batch allocation for "${projectItem.description || "Item"}" exceeds remaining quantity.`,
+      };
+    }
+  }
+
+  return { ok: true, items: normalizedItems };
+};
 const canManageSmsForRequest = (req) => {
   if (!req?.user) return false;
   const isAdmin = req.user.role === "admin";
@@ -4758,7 +4858,9 @@ const getStageBottlenecks = async (req, res) => {
       "cancellation.isCancelled": { $ne: true },
       $or: [{ "hold.isOnHold": { $exists: false } }, { "hold.isOnHold": false }],
     })
-      .select("_id orderId details.projectName status hold createdAt")
+      .select(
+        "_id orderId details.projectName details.projectIndicator status hold createdAt",
+      )
       .lean();
 
     if (!projects.length) {
@@ -4821,6 +4923,7 @@ const getStageBottlenecks = async (req, res) => {
         projectId,
         orderId: toText(project?.orderId) || "N/A",
         projectName: toText(project?.details?.projectName) || "Unnamed Project",
+        projectIndicator: toText(project?.details?.projectIndicator) || "",
         status,
         stageEnteredAt,
         daysInStage: Math.floor(elapsedMs / DAY_IN_MS),
@@ -11369,6 +11472,288 @@ const completeOrderMeeting = async (req, res) => {
   }
 };
 
+// @desc    Create a production batch for a project
+// @route   POST /api/projects/:id/batches
+// @access  Private (Production/Admin)
+const createProjectBatch = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    const isAdmin = isAdminUser(req.user);
+    if (!isAdmin && !isProductionUser(req.user)) {
+      return res.status(403).json({
+        message: "Only Production or Admin can create batches.",
+      });
+    }
+
+    const { label, items } = req.body || {};
+    const validation = validateBatchItems(items, project);
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    if (toText(project.status) !== "Pending Production") {
+      return res.status(400).json({
+        message: "Batches can only be created once the project is Pending Production.",
+      });
+    }
+
+    const batchCount = Array.isArray(project.batches) ? project.batches.length : 0;
+    const fallbackLabel = `Batch ${batchCount + 1}`;
+    const batchLabel = toText(label) || fallbackLabel;
+    const batchId = new mongoose.Types.ObjectId().toString();
+    const now = new Date();
+
+    const newBatch = {
+      batchId,
+      label: batchLabel,
+      items: validation.items,
+      status: "planned",
+      createdBy: req.user?._id || req.user?.id,
+      createdAt: now,
+      updatedAt: now,
+      production: {},
+      packaging: {},
+      delivery: {},
+      handoffs: [],
+    };
+
+    project.batches = Array.isArray(project.batches) ? project.batches : [];
+    project.batches.push(newBatch);
+    project.markModified("batches");
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user,
+      "batch_created",
+      `Created ${batchLabel}`,
+      { batchId },
+    );
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error creating project batch:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update batch label/items (before production unless admin)
+// @route   PATCH /api/projects/:id/batches/:batchId
+// @access  Private (Production/Admin)
+const updateProjectBatch = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    const isAdmin = isAdminUser(req.user);
+    if (!isAdmin && !isProductionUser(req.user)) {
+      return res.status(403).json({
+        message: "Only Production or Admin can update batches.",
+      });
+    }
+
+    const batchId = String(req.params.batchId || "");
+    const batches = Array.isArray(project.batches) ? project.batches : [];
+    const batch = batches.find((entry) => String(entry.batchId) === batchId);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found." });
+    }
+
+    if (!isAdmin && batch.status !== "planned") {
+      return res.status(400).json({
+        message: "Batch items can only be edited before production starts.",
+      });
+    }
+
+    const { label, items } = req.body || {};
+    if (typeof label === "string" && label.trim()) {
+      batch.label = label.trim();
+    }
+
+    if (items) {
+      const validation = validateBatchItems(items, project, {
+        excludeBatchId: batch.batchId,
+      });
+      if (!validation.ok) {
+        return res.status(400).json({ message: validation.message });
+      }
+      batch.items = validation.items;
+    }
+
+    batch.updatedAt = new Date();
+    project.markModified("batches");
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user,
+      "batch_updated",
+      `Updated ${batch.label || "batch"}`,
+      { batchId: batch.batchId },
+    );
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating project batch:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update batch status with strict stage order
+// @route   PATCH /api/projects/:id/batches/:batchId/status
+// @access  Private (Stage owners/Admin)
+const updateProjectBatchStatus = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "status")) return;
+
+    const batchId = String(req.params.batchId || "");
+    const batches = Array.isArray(project.batches) ? project.batches : [];
+    const batch = batches.find((entry) => String(entry.batchId) === batchId);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found." });
+    }
+
+    const nextStatus = normalizeBatchStatus(req.body?.status);
+    if (!nextStatus) {
+      return res.status(400).json({ message: "Invalid batch status." });
+    }
+
+    const isAdmin = isAdminUser(req.user);
+    if (!isAdmin) {
+      if (batch.status === "cancelled") {
+        return res
+          .status(400)
+          .json({ message: "Cancelled batches cannot be updated." });
+      }
+      if (nextStatus === "cancelled") {
+        return res.status(403).json({
+          message: "Only Admin can cancel a batch.",
+        });
+      }
+
+      const expectedNext = getNextBatchStatus(batch.status);
+      if (nextStatus !== expectedNext) {
+        return res.status(400).json({
+          message: `Batch status must follow strict order. Next status should be "${expectedNext}".`,
+        });
+      }
+
+      const owner = BATCH_STAGE_OWNER[nextStatus];
+      if (owner === "production" && !isProductionUser(req.user)) {
+        return res.status(403).json({
+          message: "Only Production can update this batch stage.",
+        });
+      }
+      if (owner === "packaging" && !isPackagingUser(req.user)) {
+        return res.status(403).json({
+          message: "Only Packaging can update this batch stage.",
+        });
+      }
+      if (owner === "frontdesk" && !isFrontDeskUser(req.user)) {
+        return res.status(403).json({
+          message: "Only Front Desk can confirm delivery for this batch.",
+        });
+      }
+    }
+
+    const now = new Date();
+    batch.status = nextStatus;
+    batch.updatedAt = now;
+    batch.production = batch.production || {};
+    batch.packaging = batch.packaging || {};
+    batch.delivery = batch.delivery || {};
+    batch.cancellation = batch.cancellation || {};
+    batch.handoffs = Array.isArray(batch.handoffs) ? batch.handoffs : [];
+
+    if (nextStatus === "in_production") {
+      if (!batch.production.startedAt) batch.production.startedAt = now;
+      batch.production.by = req.user?._id || req.user?.id;
+    }
+    if (nextStatus === "produced") {
+      if (!batch.production.startedAt) batch.production.startedAt = now;
+      batch.production.completedAt = now;
+      batch.production.by = req.user?._id || req.user?.id;
+    }
+    if (nextStatus === "in_packaging") {
+      if (!batch.packaging.receivedAt) batch.packaging.receivedAt = now;
+      batch.packaging.by = req.user?._id || req.user?.id;
+      batch.handoffs.push({
+        fromDept: "Production",
+        toDept: "Packaging",
+        at: now,
+        by: req.user?._id || req.user?.id,
+      });
+    }
+    if (nextStatus === "packaged") {
+      if (!batch.packaging.receivedAt) batch.packaging.receivedAt = now;
+      batch.packaging.completedAt = now;
+      batch.packaging.by = req.user?._id || req.user?.id;
+    }
+    if (nextStatus === "delivered") {
+      batch.delivery.deliveredAt = now;
+      batch.delivery.deliveredBy = req.user?._id || req.user?.id;
+      batch.delivery.recipient = toText(req.body?.recipient);
+      batch.delivery.notes = toText(req.body?.notes);
+      batch.handoffs.push({
+        fromDept: "Packaging",
+        toDept: "Delivery",
+        at: now,
+        by: req.user?._id || req.user?.id,
+      });
+    }
+    if (nextStatus === "cancelled") {
+      batch.cancellation.cancelledAt = now;
+      batch.cancellation.cancelledBy = req.user?._id || req.user?.id;
+      batch.cancellation.reason = toText(req.body?.reason);
+    }
+
+    const activeBatches = batches.filter((entry) => entry.status !== "cancelled");
+    const allDelivered =
+      activeBatches.length > 0 &&
+      activeBatches.every((entry) => entry.status === "delivered");
+
+    if (allDelivered) {
+      const currentStatus = toText(project.status);
+      const postDeliveryStatuses = new Set([
+        "Delivered",
+        "Pending Feedback",
+        "Feedback Completed",
+        "Completed",
+        "Finished",
+      ]);
+      if (!postDeliveryStatuses.has(currentStatus)) {
+        project.status = "Delivered";
+        await logActivity(
+          project._id,
+          req.user,
+          "batch_delivery_complete",
+          "All batches delivered. Project auto-marked as Delivered.",
+          { batchId: batch.batchId },
+        );
+      }
+    }
+
+    project.markModified("batches");
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user,
+      "batch_status_updated",
+      `Batch ${batch.label || batch.batchId} moved to ${nextStatus}`,
+      { batchId: batch.batchId, status: nextStatus },
+    );
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating batch status:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   createProject,
   getProjects,
@@ -11395,6 +11780,9 @@ module.exports = {
   updateProjectType,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
+  createProjectBatch,
+  updateProjectBatch,
+  updateProjectBatchStatus,
   uploadProjectMockup,
   deleteProjectMockupVersion,
   approveProjectMockup,

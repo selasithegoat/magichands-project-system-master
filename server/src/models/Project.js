@@ -77,6 +77,114 @@ const createDefaultQuoteRequirementItem = () => ({
   history: [],
 });
 
+const BATCH_STATUSES = [
+  "planned",
+  "in_production",
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+  "cancelled",
+];
+
+const ProjectBatchItemSchema = new mongoose.Schema(
+  {
+    itemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    qty: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+  },
+  { _id: false },
+);
+
+const ProjectBatchSchema = new mongoose.Schema(
+  {
+    batchId: {
+      type: String,
+      required: true,
+    },
+    label: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    items: {
+      type: [ProjectBatchItemSchema],
+      default: [],
+    },
+    status: {
+      type: String,
+      enum: BATCH_STATUSES,
+      default: "planned",
+    },
+    production: {
+      startedAt: Date,
+      completedAt: Date,
+      by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
+    packaging: {
+      receivedAt: Date,
+      completedAt: Date,
+      by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
+    delivery: {
+      deliveredAt: Date,
+      deliveredBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      recipient: {
+        type: String,
+        default: "",
+      },
+      notes: {
+        type: String,
+        default: "",
+      },
+    },
+    cancellation: {
+      cancelledAt: Date,
+      cancelledBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      reason: {
+        type: String,
+        default: "",
+      },
+    },
+    handoffs: [
+      {
+        fromDept: String,
+        toDept: String,
+        at: { type: Date, default: Date.now },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    updatedAt: Date,
+  },
+  { _id: false },
+);
+
 const ProjectSchema = new mongoose.Schema(
   {
     orderId: {
@@ -169,6 +277,10 @@ const ProjectSchema = new mongoose.Schema(
         qty: Number,
       },
     ], // Step 3: List of items
+    batches: {
+      type: [ProjectBatchSchema],
+      default: [],
+    },
     uncontrollableFactors: [
       {
         description: String,

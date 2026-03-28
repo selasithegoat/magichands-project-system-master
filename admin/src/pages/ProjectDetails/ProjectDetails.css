@@ -1319,6 +1319,179 @@
   border-bottom: none;
 }
 
+.batch-admin-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.batch-admin-empty {
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+}
+
+.batch-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.batch-admin-item {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.9rem;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.batch-admin-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.batch-admin-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.batch-admin-header p {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.batch-admin-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.batch-admin-status.planned {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.batch-admin-status.in_production {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
+.batch-admin-status.produced {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: rgba(14, 165, 233, 0.18);
+  color: #38bdf8;
+}
+
+.batch-admin-status.in_packaging {
+  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.18);
+  color: #c7d2fe;
+}
+
+.batch-admin-status.packaged {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.18);
+  color: #6ee7b7;
+}
+
+.batch-admin-status.delivered {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
+
+.batch-admin-status.cancelled {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.batch-admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.batch-admin-controls {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.batch-admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.batch-admin-field span {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.batch-admin-field input,
+.batch-admin-field select,
+.batch-admin-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.batch-admin-field input:focus,
+.batch-admin-field select:focus,
+.batch-admin-field textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.batch-admin-update-btn {
+  align-self: flex-start;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.batch-admin-update-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.batch-admin-update-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .dept-tag {
   display: inline-flex;
   align-items: center;

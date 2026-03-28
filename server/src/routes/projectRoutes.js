@@ -58,6 +58,9 @@ const {
   updateMeetingOverride,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
+  createProjectBatch,
+  updateProjectBatch,
+  updateProjectBatchStatus,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -166,6 +169,24 @@ router.patch(
   enforceProjectNotOnHold,
   updateItemInProject,
 ); // New
+router.post(
+  "/:id/batches",
+  protect,
+  enforceProjectNotOnHold,
+  createProjectBatch,
+);
+router.patch(
+  "/:id/batches/:batchId",
+  protect,
+  enforceProjectNotOnHold,
+  updateProjectBatch,
+);
+router.patch(
+  "/:id/batches/:batchId/status",
+  protect,
+  enforceProjectNotOnHold,
+  updateProjectBatchStatus,
+);
 router.delete(
   "/:id/items/:itemId",
   protect,

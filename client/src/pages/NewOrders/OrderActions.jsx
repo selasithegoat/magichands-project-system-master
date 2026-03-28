@@ -25,6 +25,17 @@ const REVISION_LOCKED_STATUSES = new Set([
   "Feedback Completed",
   "Finished",
 ]);
+const BATCH_STATUS_LABELS = {
+  planned: "Planned",
+  in_production: "In Production",
+  produced: "Produced",
+  in_packaging: "In Packaging",
+  packaged: "Packaged",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+const getBatchStatusLabel = (status) =>
+  BATCH_STATUS_LABELS[status] || status || "Unknown";
 const PAYMENT_OPTIONS = [
   {
     type: "part_payment",
@@ -221,6 +232,28 @@ const isImageAsset = (fileUrl = "", fileType = "") => {
   return [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"].some(
     (extension) => normalizedUrl.includes(extension),
   );
+};
+const buildProjectItemMap = (items = []) =>
+  new Map(
+    (Array.isArray(items) ? items : []).map((item) => [
+      String(item?._id || ""),
+      item,
+    ]),
+  );
+const buildBatchItemSummary = (batch, itemMap) => {
+  const entries = (Array.isArray(batch?.items) ? batch.items : [])
+    .map((entry) => {
+      const itemId = String(entry?.itemId || entry?._id || "");
+      const item = itemMap.get(itemId);
+      const qty = Number(entry?.qty) || 0;
+      if (!item || qty <= 0) return "";
+      const desc = item.description || "Item";
+      const breakdown = String(item.breakdown || "").trim();
+      const label = breakdown ? `${desc} - ${breakdown}` : desc;
+      return `${label} (${qty})`;
+    })
+    .filter(Boolean);
+  return entries.length > 0 ? entries.join(", ") : "No items assigned.";
 };
 const QUOTE_REQUIREMENT_LABELS = {
   cost: "Cost",
@@ -637,6 +670,15 @@ const OrderActions = () => {
   });
   const [deliveryInput, setDeliveryInput] = useState("");
   const [deliverySubmitting, setDeliverySubmitting] = useState(false);
+  const [batchDeliveryModal, setBatchDeliveryModal] = useState({
+    open: false,
+    batch: null,
+  });
+  const [batchDeliveryInput, setBatchDeliveryInput] = useState("");
+  const [batchDeliveryRecipient, setBatchDeliveryRecipient] = useState("");
+  const [batchDeliveryNotes, setBatchDeliveryNotes] = useState("");
+  const [batchDeliverySubmitting, setBatchDeliverySubmitting] =
+    useState(false);
   const [billingGuardModal, setBillingGuardModal] = useState({
     open: false,
     title: "Billing Caution",
@@ -716,6 +758,27 @@ const OrderActions = () => {
     ["Pending Feedback", "Feedback Completed", "Delivered"].includes(
       order?.status,
     );
+  const batches = useMemo(
+    () => (Array.isArray(project?.batches) ? project.batches : []),
+    [project?.batches],
+  );
+  const activeBatches = useMemo(
+    () => batches.filter((batch) => batch?.status !== "cancelled"),
+    [batches],
+  );
+  const hasBatches = batches.length > 0;
+  const batchItemMap = useMemo(
+    () => buildProjectItemMap(project?.items || []),
+    [project?.items],
+  );
+  const deliveredBatchCount = useMemo(
+    () => activeBatches.filter((batch) => batch?.status === "delivered").length,
+    [activeBatches],
+  );
+  const batchDeliveryProgressLabel =
+    activeBatches.length > 0
+      ? `${deliveredBatchCount} of ${activeBatches.length} delivered`
+      : "No active batches";
 
   const fetchCurrentUser = async () => {
     try {
@@ -1247,6 +1310,65 @@ const OrderActions = () => {
     if (deliverySubmitting) return;
     setDeliveryModal({ open: false });
     setDeliveryInput("");
+  };
+
+  const handleBatchDeliveryComplete = async (batch) => {
+    if (!canMarkDelivered || !project || !batch) return false;
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/batches/${batch.batchId}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: "delivered",
+            recipient: batchDeliveryRecipient,
+            notes: batchDeliveryNotes,
+          }),
+        },
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Batch delivered successfully.", "success");
+        return true;
+      }
+      const errorData = await res.json().catch(() => ({}));
+      showToast(
+        errorData.message || "Failed to update batch delivery.",
+        "error",
+      );
+      return false;
+    } catch (error) {
+      console.error("Batch delivery update error:", error);
+      showToast("Network error. Please try again.", "error");
+      return false;
+    }
+  };
+
+  const handleConfirmBatchDelivery = async () => {
+    if (batchDeliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE) return;
+    setBatchDeliverySubmitting(true);
+    const delivered = await handleBatchDeliveryComplete(batchDeliveryModal.batch);
+    setBatchDeliverySubmitting(false);
+    if (delivered) {
+      closeBatchDeliveryModal();
+    }
+  };
+
+  const openBatchDeliveryModal = (batch) => {
+    setBatchDeliveryInput("");
+    setBatchDeliveryRecipient(batch?.delivery?.recipient || "");
+    setBatchDeliveryNotes(batch?.delivery?.notes || "");
+    setBatchDeliveryModal({ open: true, batch });
+  };
+
+  const closeBatchDeliveryModal = () => {
+    if (batchDeliverySubmitting) return;
+    setBatchDeliveryModal({ open: false, batch: null });
+    setBatchDeliveryInput("");
+    setBatchDeliveryRecipient("");
+    setBatchDeliveryNotes("");
   };
 
   const openFeedbackModal = () => {
@@ -2434,25 +2556,109 @@ const OrderActions = () => {
             )}
 
             <div className="action-grid">
-          {!isQuoteProject && (
-            <div className="action-card">
-              <h3>Delivery</h3>
-              <p>Mark the order as delivered once handed over.</p>
-              <button
-                className="action-btn complete-btn"
-                onClick={openDeliveryModal}
-                disabled={
-                  !canMarkDelivered || project.status !== "Pending Delivery/Pickup"
-                }
-                title={
-                  project.status === "Pending Delivery/Pickup"
-                    ? "Mark as Delivered"
-                    : "Waiting for Pending Delivery/Pickup"
-                }
-              >
-                Delivery Complete
-              </button>
+          {!isQuoteProject && hasBatches ? (
+            <div className="action-card batch-delivery-card">
+              <h3>Batch Deliveries</h3>
+              <p>Confirm delivery for each packaged batch.</p>
+              <div className="batch-delivery-progress">
+                {batchDeliveryProgressLabel}
+              </div>
+              {batches.length === 0 ? (
+                <div className="batch-delivery-empty">
+                  No batches created yet.
+                </div>
+              ) : (
+                <div className="batch-delivery-list">
+                  {batches.map((batch) => {
+                    const statusLabel = getBatchStatusLabel(batch?.status);
+                    const summary = buildBatchItemSummary(batch, batchItemMap);
+                    const canDeliver =
+                      batch?.status === "packaged" && canMarkDelivered;
+                    return (
+                      <div
+                        key={batch?.batchId || batch?.label || statusLabel}
+                        className={`batch-delivery-item ${batch?.status || "planned"}`}
+                      >
+                        <div className="batch-delivery-header">
+                          <div>
+                            <strong>{batch?.label || "Batch"}</strong>
+                            <span className="batch-delivery-summary">
+                              {summary}
+                            </span>
+                          </div>
+                          <span
+                            className={`batch-delivery-status ${batch?.status || "planned"}`}
+                          >
+                            {statusLabel}
+                          </span>
+                        </div>
+                        {batch?.status === "delivered" &&
+                          batch?.delivery?.deliveredAt && (
+                            <div className="batch-delivery-meta">
+                              Delivered:{" "}
+                              {formatDateTime(batch.delivery.deliveredAt)}
+                            </div>
+                          )}
+                        {batch?.status === "delivered" &&
+                          batch?.delivery?.recipient && (
+                            <div className="batch-delivery-meta">
+                              Recipient: {batch.delivery.recipient}
+                            </div>
+                          )}
+                        {batch?.status === "delivered" &&
+                          batch?.delivery?.notes && (
+                            <div className="batch-delivery-meta">
+                              Notes: {batch.delivery.notes}
+                            </div>
+                          )}
+                        {batch?.status === "cancelled" && (
+                          <div className="batch-delivery-meta">
+                            Cancelled batch
+                          </div>
+                        )}
+                        {batch?.status === "packaged" && (
+                          <button
+                            className="action-btn complete-btn"
+                            onClick={() => openBatchDeliveryModal(batch)}
+                            disabled={!canDeliver}
+                          >
+                            Confirm Batch Delivery
+                          </button>
+                        )}
+                        {batch?.status !== "packaged" &&
+                          batch?.status !== "delivered" &&
+                          batch?.status !== "cancelled" && (
+                            <div className="batch-delivery-meta">
+                              Waiting for packaging to complete.
+                            </div>
+                          )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+          ) : (
+            !isQuoteProject && (
+              <div className="action-card">
+                <h3>Delivery</h3>
+                <p>Mark the order as delivered once handed over.</p>
+                <button
+                  className="action-btn complete-btn"
+                  onClick={openDeliveryModal}
+                  disabled={
+                    !canMarkDelivered || project.status !== "Pending Delivery/Pickup"
+                  }
+                  title={
+                    project.status === "Pending Delivery/Pickup"
+                      ? "Mark as Delivered"
+                      : "Waiting for Pending Delivery/Pickup"
+                  }
+                >
+                  Delivery Complete
+                </button>
+              </div>
+            )
           )}
 
           <div className="action-card">
@@ -3728,6 +3934,71 @@ const OrderActions = () => {
                 }
               >
                 {deliverySubmitting ? "Confirming..." : "Confirm Delivery"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isQuoteProject && batchDeliveryModal.open && batchDeliveryModal.batch && (
+        <div className="confirm-modal-overlay" onClick={closeBatchDeliveryModal}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Confirm Batch Delivery</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              <strong>Batch:</strong>{" "}
+              {batchDeliveryModal.batch?.label || "Batch"}
+            </p>
+            <p className="confirm-modal-text">
+              <strong>Items:</strong>{" "}
+              {buildBatchItemSummary(batchDeliveryModal.batch, batchItemMap)}
+            </p>
+            <div className="confirm-input-group">
+              <label>Recipient (Optional)</label>
+              <input
+                type="text"
+                value={batchDeliveryRecipient}
+                onChange={(e) => setBatchDeliveryRecipient(e.target.value)}
+                placeholder="Who received this batch?"
+              />
+            </div>
+            <div className="confirm-input-group">
+              <label>Delivery Notes (Optional)</label>
+              <textarea
+                rows="3"
+                value={batchDeliveryNotes}
+                onChange={(e) => setBatchDeliveryNotes(e.target.value)}
+                placeholder="Any delivery notes?"
+              />
+            </div>
+            <p className="confirm-modal-text">
+              Type the phrase below to confirm delivery completion.
+            </p>
+            <div className="confirm-phrase">{DELIVERY_CONFIRM_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={batchDeliveryInput}
+                onChange={(e) => setBatchDeliveryInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button className="action-btn" onClick={closeBatchDeliveryModal}>
+                Cancel
+              </button>
+              <button
+                className="action-btn complete-btn"
+                onClick={handleConfirmBatchDelivery}
+                disabled={
+                  batchDeliverySubmitting ||
+                  batchDeliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE
+                }
+              >
+                {batchDeliverySubmitting ? "Confirming..." : "Confirm Delivery"}
               </button>
             </div>
           </div>

@@ -297,6 +297,49 @@ const getQuoteRequirementStatusOptionsByKey = (key, selectedStatus) => {
   return Array.from(new Set([selectedStatus, "sent_to_client"]));
 };
 
+const BATCH_STATUS_OPTIONS = [
+  "planned",
+  "in_production",
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+  "cancelled",
+];
+const BATCH_STATUS_LABELS = {
+  planned: "Planned",
+  in_production: "In Production",
+  produced: "Produced",
+  in_packaging: "In Packaging",
+  packaged: "Packaged",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+const getBatchStatusLabel = (status) =>
+  BATCH_STATUS_LABELS[status] || status || "Unknown";
+const buildProjectItemMap = (items = []) =>
+  new Map(
+    (Array.isArray(items) ? items : []).map((item) => [
+      String(item?._id || ""),
+      item,
+    ]),
+  );
+const buildBatchItemSummary = (batch, itemMap) => {
+  const entries = (Array.isArray(batch?.items) ? batch.items : [])
+    .map((entry) => {
+      const itemId = String(entry?.itemId || entry?._id || "");
+      const item = itemMap.get(itemId);
+      const qty = Number(entry?.qty) || 0;
+      if (!item || qty <= 0) return "";
+      const desc = item.description || "Item";
+      const breakdown = String(item.breakdown || "").trim();
+      const label = breakdown ? `${desc} - ${breakdown}` : desc;
+      return `${label} (${qty})`;
+    })
+    .filter(Boolean);
+  return entries.length > 0 ? entries.join(", ") : "No items assigned.";
+};
+
 const normalizeQuoteChecklist = (checklist = {}) =>
   QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
     accumulator[key] = Boolean(checklist?.[key]);
@@ -761,6 +804,11 @@ const ProjectDetails = ({ user }) => {
   const [billingActionLoading, setBillingActionLoading] = useState(false);
   const [billingActionInput, setBillingActionInput] = useState("");
   const [isBillingCollapsed, setIsBillingCollapsed] = useState(false);
+  const [batchStatusSelections, setBatchStatusSelections] = useState({});
+  const [batchDeliveryRecipients, setBatchDeliveryRecipients] = useState({});
+  const [batchDeliveryNotes, setBatchDeliveryNotes] = useState({});
+  const [batchCancelReasons, setBatchCancelReasons] = useState({});
+  const [batchStatusUpdatingId, setBatchStatusUpdatingId] = useState("");
 
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
@@ -802,6 +850,14 @@ const ProjectDetails = ({ user }) => {
   const mockupCarouselVersions = useMemo(
     () => visibleMockupVersions.slice().reverse(),
     [visibleMockupVersions],
+  );
+  const batches = useMemo(
+    () => (Array.isArray(project?.batches) ? project.batches : []),
+    [project?.batches],
+  );
+  const batchItemMap = useMemo(
+    () => buildProjectItemMap(project?.items || []),
+    [project?.items],
   );
 
   useEffect(() => {
@@ -863,6 +919,59 @@ const ProjectDetails = ({ user }) => {
     project?.projectType,
     project?.quoteDetails?.decision?.note,
   ]);
+
+  useEffect(() => {
+    if (!batches.length) {
+      setBatchStatusSelections({});
+      setBatchDeliveryRecipients({});
+      setBatchDeliveryNotes({});
+      setBatchCancelReasons({});
+      return;
+    }
+
+    setBatchStatusSelections(() => {
+      const next = {};
+      batches.forEach((batch) => {
+        const batchId = String(batch?.batchId || "");
+        if (!batchId) return;
+        next[batchId] = String(batch?.status || "planned");
+      });
+      return next;
+    });
+    setBatchDeliveryRecipients((prev) => {
+      const next = { ...prev };
+      batches.forEach((batch) => {
+        const batchId = String(batch?.batchId || "");
+        if (!batchId) return;
+        if (!(batchId in next)) {
+          next[batchId] = batch?.delivery?.recipient || "";
+        }
+      });
+      return next;
+    });
+    setBatchDeliveryNotes((prev) => {
+      const next = { ...prev };
+      batches.forEach((batch) => {
+        const batchId = String(batch?.batchId || "");
+        if (!batchId) return;
+        if (!(batchId in next)) {
+          next[batchId] = batch?.delivery?.notes || "";
+        }
+      });
+      return next;
+    });
+    setBatchCancelReasons((prev) => {
+      const next = { ...prev };
+      batches.forEach((batch) => {
+        const batchId = String(batch?.batchId || "");
+        if (!batchId) return;
+        if (!(batchId in next)) {
+          next[batchId] = batch?.cancellation?.reason || "";
+        }
+      });
+      return next;
+    });
+  }, [batches]);
 
   const closeBillingGuardModal = () => {
     if (billingGuardSubmitting) return;
@@ -933,6 +1042,50 @@ const ProjectDetails = ({ user }) => {
     }
     if (shouldClose) {
       closeBillingActionModal(true);
+    }
+  };
+
+  const handleBatchStatusUpdate = async (batch) => {
+    if (!project || !batch) return;
+    const batchId = String(batch?.batchId || "");
+    if (!batchId) return;
+    const selectedStatus =
+      batchStatusSelections[batchId] || String(batch?.status || "planned");
+
+    setBatchStatusUpdatingId(batchId);
+    try {
+      const payload = { status: selectedStatus };
+      if (selectedStatus === "delivered") {
+        payload.recipient = batchDeliveryRecipients[batchId] || "";
+        payload.notes = batchDeliveryNotes[batchId] || "";
+      }
+      if (selectedStatus === "cancelled") {
+        payload.reason = batchCancelReasons[batchId] || "";
+      }
+
+      const res = await fetch(
+        `/api/projects/${id}/batches/${batchId}/status?source=admin`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        toast.success("Batch status updated.");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.message || "Failed to update batch status.");
+      }
+    } catch (error) {
+      console.error("Batch status update error:", error);
+      toast.error("Network error while updating batch.");
+    } finally {
+      setBatchStatusUpdatingId("");
     }
   };
 
@@ -3912,6 +4065,135 @@ const ProjectDetails = ({ user }) => {
                 </p>
               )}
             </div>
+          </div>
+
+          <div className="detail-card">
+            <div className="detail-card-header">
+              <h3 className="card-title">Batch Management</h3>
+              <span className="batch-admin-count">
+                {batches.length} {batches.length === 1 ? "batch" : "batches"}
+              </span>
+            </div>
+            {batches.length === 0 ? (
+              <p className="batch-admin-empty">
+                No batches created yet for this project.
+              </p>
+            ) : (
+              <div className="batch-admin-list">
+                {batches.map((batch) => {
+                  const batchId = String(batch?.batchId || "");
+                  const currentStatus = String(batch?.status || "planned");
+                  const selectedStatus =
+                    batchStatusSelections[batchId] || currentStatus;
+                  const isUpdating = batchStatusUpdatingId === batchId;
+                  const summary = buildBatchItemSummary(batch, batchItemMap);
+                  return (
+                    <div key={batchId || batch?.label} className="batch-admin-item">
+                      <div className="batch-admin-header">
+                        <div>
+                          <h4>{batch?.label || "Batch"}</h4>
+                          <p>{summary}</p>
+                        </div>
+                        <span className={`batch-admin-status ${currentStatus}`}>
+                          {getBatchStatusLabel(currentStatus)}
+                        </span>
+                      </div>
+                      <div className="batch-admin-meta">
+                        {batch?.createdAt && (
+                          <span>Created {formatLastUpdated(batch.createdAt)}</span>
+                        )}
+                        {batch?.updatedAt && (
+                          <span>Updated {formatLastUpdated(batch.updatedAt)}</span>
+                        )}
+                      </div>
+                      <div className="batch-admin-controls">
+                        <label className="batch-admin-field">
+                          <span>Status Override</span>
+                          <select
+                            value={selectedStatus}
+                            onChange={(event) =>
+                              setBatchStatusSelections((prev) => ({
+                                ...prev,
+                                [batchId]: event.target.value,
+                              }))
+                            }
+                            disabled={isUpdating}
+                          >
+                            {BATCH_STATUS_OPTIONS.map((status) => (
+                              <option key={status} value={status}>
+                                {getBatchStatusLabel(status)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        {selectedStatus === "delivered" && (
+                          <>
+                            <label className="batch-admin-field">
+                              <span>Recipient (Optional)</span>
+                              <input
+                                type="text"
+                                value={batchDeliveryRecipients[batchId] || ""}
+                                onChange={(event) =>
+                                  setBatchDeliveryRecipients((prev) => ({
+                                    ...prev,
+                                    [batchId]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Who received this batch?"
+                                disabled={isUpdating}
+                              />
+                            </label>
+                            <label className="batch-admin-field">
+                              <span>Delivery Notes (Optional)</span>
+                              <textarea
+                                rows={2}
+                                value={batchDeliveryNotes[batchId] || ""}
+                                onChange={(event) =>
+                                  setBatchDeliveryNotes((prev) => ({
+                                    ...prev,
+                                    [batchId]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Optional delivery notes"
+                                disabled={isUpdating}
+                              />
+                            </label>
+                          </>
+                        )}
+
+                        {selectedStatus === "cancelled" && (
+                          <label className="batch-admin-field">
+                            <span>Cancellation Reason (Optional)</span>
+                            <input
+                              type="text"
+                              value={batchCancelReasons[batchId] || ""}
+                              onChange={(event) =>
+                                setBatchCancelReasons((prev) => ({
+                                  ...prev,
+                                  [batchId]: event.target.value,
+                                }))
+                              }
+                              placeholder="Why was this batch cancelled?"
+                              disabled={isUpdating}
+                            />
+                          </label>
+                        )}
+
+                        <button
+                          type="button"
+                          className="batch-admin-update-btn"
+                          onClick={() => handleBatchStatusUpdate(batch)}
+                          disabled={isUpdating}
+                        >
+                          {isUpdating ? "Updating..." : "Update Status"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
             </>
           )}
