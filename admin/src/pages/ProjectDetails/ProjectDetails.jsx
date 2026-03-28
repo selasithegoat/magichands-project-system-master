@@ -112,38 +112,6 @@ const QUOTE_STATUS_DECISION_STORAGE_MAP = {
   "Decision Completed": "Feedback Completed",
 };
 
-const PAYMENT_OPTIONS = [
-  {
-    type: "part_payment",
-    label: "Part Payment",
-    phrase: "I confirm part payment has been received",
-    undoPhrase: "I confirm part payment verification should be removed",
-  },
-  {
-    type: "full_payment",
-    label: "Full Payment",
-    phrase: "I confirm full payment has been received",
-    undoPhrase: "I confirm full payment verification should be removed",
-  },
-  {
-    type: "po",
-    label: "P.O",
-    phrase: "I confirm a purchase order has been received",
-    undoPhrase: "I confirm P.O verification should be removed",
-  },
-  {
-    type: "authorized",
-    label: "Authorized",
-    phrase: "I confirm payment authorization has been received",
-    undoPhrase: "I confirm authorization verification should be removed",
-  },
-];
-
-const INVOICE_CONFIRM_PHRASE = "I confirm the invoice has been sent";
-const INVOICE_UNDO_PHRASE = "I confirm the invoice status should be reset";
-const QUOTE_CONFIRM_PHRASE = "I confirm the quote has been sent";
-const QUOTE_UNDO_PHRASE = "I confirm the quote status should be reset";
-
 const mapQuoteStatusForDisplay = (status, isQuoteProject = false) => {
   const normalized = String(status || "").trim();
   if (!isQuoteProject) return normalized;
@@ -849,18 +817,6 @@ const ProjectDetails = ({ user }) => {
   const [statusConfirmInput, setStatusConfirmInput] = useState("");
   const [statusConfirmSubmitting, setStatusConfirmSubmitting] = useState(false);
   const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
-  const [billingActionModal, setBillingActionModal] = useState({
-    open: false,
-    title: "",
-    message: "",
-    confirmText: "Confirm",
-    phrase: "",
-    isDangerous: false,
-    action: null,
-  });
-  const [billingActionLoading, setBillingActionLoading] = useState(false);
-  const [billingActionInput, setBillingActionInput] = useState("");
-  const [isBillingCollapsed, setIsBillingCollapsed] = useState(false);
   const [batchStatusSelections, setBatchStatusSelections] = useState({});
   const [batchDeliveryRecipients, setBatchDeliveryRecipients] = useState({});
   const [batchDeliveryNotes, setBatchDeliveryNotes] = useState({});
@@ -1085,61 +1041,6 @@ const ProjectDetails = ({ user }) => {
       canOverride: false,
       overrideButtonText: "Continue with Override",
     });
-  };
-
-  const closeBillingActionModal = (force = false) => {
-    if (billingActionLoading && !force) return;
-    setBillingActionModal({
-      open: false,
-      title: "",
-      message: "",
-      confirmText: "Confirm",
-      phrase: "",
-      isDangerous: false,
-      action: null,
-    });
-    setBillingActionInput("");
-  };
-
-  const openBillingActionModal = ({
-    title,
-    message,
-    confirmText = "Confirm",
-    isDangerous = false,
-    phrase = "",
-    action,
-  }) => {
-    setBillingActionModal({
-      open: true,
-      title,
-      message,
-      confirmText,
-      phrase,
-      isDangerous,
-      action,
-    });
-    setBillingActionInput("");
-  };
-
-  const handleBillingActionConfirm = async () => {
-    if (!billingActionModal.action || billingActionLoading) return;
-    if (
-      billingActionModal.phrase &&
-      billingActionInput.trim() !== billingActionModal.phrase
-    ) {
-      return;
-    }
-    setBillingActionLoading(true);
-    let shouldClose = false;
-    try {
-      const result = await billingActionModal.action();
-      shouldClose = result !== false;
-    } finally {
-      setBillingActionLoading(false);
-    }
-    if (shouldClose) {
-      closeBillingActionModal(true);
-    }
   };
 
   const handleBatchStatusUpdate = async (batch) => {
@@ -2363,134 +2264,6 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
-  const handleMarkInvoiceSent = async () => {
-    if (!project || user?.role !== "admin" || isLeadUser) return false;
-    if (!ensureProjectIsEditable()) return false;
-
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/invoice-sent?source=admin`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to mark invoice sent.");
-      }
-
-      const updatedProject = await res.json();
-      applyProjectToState(updatedProject);
-      toast.success(
-        updatedProject.projectType === "Quote" ? "Quote sent." : "Invoice sent.",
-      );
-      return true;
-    } catch (error) {
-      console.error("Billing update failed:", error);
-      toast.error(error.message || "Failed to update billing status.");
-    }
-    return false;
-  };
-
-  const handleUndoInvoiceSent = async () => {
-    if (!project || user?.role !== "admin" || isLeadUser) return false;
-    if (!ensureProjectIsEditable()) return false;
-
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/invoice-sent/undo?source=admin`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to undo invoice status.");
-      }
-
-      const updatedProject = await res.json();
-      applyProjectToState(updatedProject);
-      toast.success(
-        updatedProject.projectType === "Quote"
-          ? "Quote status reset."
-          : "Invoice status reset.",
-      );
-      return true;
-    } catch (error) {
-      console.error("Billing update failed:", error);
-      toast.error(error.message || "Failed to update billing status.");
-    }
-    return false;
-  };
-
-  const handleVerifyPayment = async (type) => {
-    if (!project || user?.role !== "admin" || isLeadUser) return false;
-    if (!ensureProjectIsEditable()) return false;
-
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/payment-verification?source=admin`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ type }),
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to verify payment.");
-      }
-
-      const updatedProject = await res.json();
-      applyProjectToState(updatedProject);
-      toast.success("Payment verified.");
-      return true;
-    } catch (error) {
-      console.error("Billing update failed:", error);
-      toast.error(error.message || "Failed to update billing status.");
-    }
-    return false;
-  };
-
-  const handleUndoPayment = async (type) => {
-    if (!project || user?.role !== "admin" || isLeadUser) return false;
-    if (!ensureProjectIsEditable()) return false;
-
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/payment-verification/undo?source=admin`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ type }),
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to undo payment.");
-      }
-
-      const updatedProject = await res.json();
-      applyProjectToState(updatedProject);
-      toast.success("Payment verification removed.");
-      return true;
-    } catch (error) {
-      console.error("Billing update failed:", error);
-      toast.error(error.message || "Failed to update billing status.");
-    }
-    return false;
-  };
-
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
     const parsed = new Date(dateString);
@@ -2676,13 +2449,6 @@ const ProjectDetails = ({ user }) => {
   };
   const paymentTypes = (project.paymentVerifications || []).map((entry) => entry.type);
   const isQuoteProject = project.projectType === "Quote";
-  const billingDocumentLabel = isQuoteProject ? "Quote" : "Invoice";
-  const billingDocumentLower = billingDocumentLabel.toLowerCase();
-  const billingConfirmPhrase = isQuoteProject
-    ? QUOTE_CONFIRM_PHRASE
-    : INVOICE_CONFIRM_PHRASE;
-  const billingUndoPhrase = isQuoteProject ? QUOTE_UNDO_PHRASE : INVOICE_UNDO_PHRASE;
-  const paymentTypeSet = new Set(paymentTypes);
   const currentDisplayStatus = mapQuoteStatusForDisplay(
     project.status,
     isQuoteProject,
@@ -2718,22 +2484,6 @@ const ProjectDetails = ({ user }) => {
   const corporateEmergencyEnabled =
     isCorporateProject && Boolean(project?.corporateEmergency?.isEnabled);
   const invoiceSent = Boolean(project.invoice?.sent);
-  const canManageBillingStatus =
-    user?.role === "admin" &&
-    !isLeadUser &&
-    !isProjectOnHold &&
-    !isCancelledProject;
-  const billingDisabledReason = !canManageBillingStatus
-    ? isLeadUser
-      ? "Billing updates are disabled because you are assigned as Project Lead."
-      : isProjectOnHold
-        ? "Billing updates are disabled while this project is on hold."
-        : isCancelledProject
-          ? "Billing updates are disabled for cancelled projects."
-          : user?.role !== "admin"
-            ? "Only admins can update billing statuses."
-            : ""
-    : "";
   const pendingProductionMissing = isQuoteProject
     ? []
     : getPendingProductionBillingMissing(project);
@@ -4726,153 +4476,6 @@ const ProjectDetails = ({ user }) => {
             />
           )}
           <ProjectRemindersCard project={project} user={user} />
-          {user?.role === "admin" && (
-            <div className="detail-card billing-control-card">
-              <h3 className="card-title billing-control-title">
-                <span>Billing Updates</span>
-                <button
-                  type="button"
-                  className="billing-collapse-btn"
-                  onClick={() => setIsBillingCollapsed((prev) => !prev)}
-                >
-                  {isBillingCollapsed ? "Expand" : "Collapse"}
-                </button>
-              </h3>
-              {!isBillingCollapsed && (
-                <div className="billing-control-body">
-                <div className="billing-control-section">
-                  <div className="billing-control-row">
-                    <div className="billing-control-info">
-                      <span className="billing-control-label">
-                        {billingDocumentLabel}
-                      </span>
-                      <span
-                        className={`billing-control-status ${
-                          invoiceSent ? "sent" : "pending"
-                        }`}
-                      >
-                        {invoiceSent
-                          ? `${billingDocumentLabel} Sent`
-                          : `${billingDocumentLabel} Not Sent`}
-                      </span>
-                    </div>
-                    <div className="billing-control-actions">
-                      {invoiceSent ? (
-                        <button
-                          type="button"
-                          className="billing-control-btn danger"
-                          disabled={!canManageBillingStatus || billingActionLoading}
-                          onClick={() =>
-                            openBillingActionModal({
-                              title: `${billingDocumentLabel} Status Reset`,
-                              message: `Undo ${billingDocumentLower} sent status for this project?`,
-                              confirmText: `Undo ${billingDocumentLabel}`,
-                              isDangerous: true,
-                              phrase: billingUndoPhrase,
-                              action: handleUndoInvoiceSent,
-                            })
-                          }
-                        >
-                          Undo
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="billing-control-btn primary"
-                          disabled={!canManageBillingStatus || billingActionLoading}
-                          onClick={() =>
-                            openBillingActionModal({
-                              title: `Mark ${billingDocumentLabel} Sent`,
-                              message: `Confirm the ${billingDocumentLower} has been sent for this project.`,
-                              confirmText: `Mark ${billingDocumentLabel} Sent`,
-                              phrase: billingConfirmPhrase,
-                              action: handleMarkInvoiceSent,
-                            })
-                          }
-                        >
-                          Mark Sent
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {!isQuoteProject ? (
-                  <div className="billing-control-section">
-                    <div className="billing-control-subtitle">
-                      Payment Verification
-                    </div>
-                    <div className="billing-control-grid">
-                      {PAYMENT_OPTIONS.map((option) => {
-                        const isVerified = paymentTypeSet.has(option.type);
-                        return (
-                          <div
-                            key={option.type}
-                            className={`billing-control-item ${
-                              isVerified ? "verified" : ""
-                            }`}
-                          >
-                            <div className="billing-control-item-info">
-                              <div className="billing-control-item-label">
-                                {option.label}
-                              </div>
-                              <div className="billing-control-item-status">
-                                {isVerified ? "Verified" : "Not verified"}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className={`billing-control-btn ${
-                                isVerified ? "danger" : "primary"
-                              }`}
-                              disabled={
-                                !canManageBillingStatus || billingActionLoading
-                              }
-                              onClick={() =>
-                                openBillingActionModal({
-                                  title: isVerified
-                                    ? `Undo ${option.label} Verification`
-                                    : `Verify ${option.label}`,
-                                  message: isVerified
-                                    ? `Remove ${option.label.toLowerCase()} verification for this project?`
-                                    : `Confirm ${option.label.toLowerCase()} has been received/verified.`,
-                                  confirmText: isVerified
-                                    ? `Undo ${option.label}`
-                                    : `Verify ${option.label}`,
-                                  isDangerous: isVerified,
-                                  phrase: isVerified
-                                    ? option.undoPhrase
-                                    : option.phrase,
-                                  action: () =>
-                                    isVerified
-                                      ? handleUndoPayment(option.type)
-                                      : handleVerifyPayment(option.type),
-                                })
-                              }
-                            >
-                              {isVerified ? "Undo" : "Verify"}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="billing-control-hint">
-                    Payment verification becomes available once this quote is
-                    converted into a project.
-                  </div>
-                )}
-
-                {billingDisabledReason && (
-                  <div className="billing-control-hint warning">
-                    {billingDisabledReason}
-                  </div>
-                )}
-              </div>
-              )}
-            </div>
-          )}
           <div className="detail-card">
             <h3
               className="card-title"
@@ -5294,62 +4897,6 @@ const ProjectDetails = ({ user }) => {
               }
             >
               {statusConfirmSubmitting ? "Confirming..." : "Confirm Status"}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={billingActionModal.open}
-        onClose={() => closeBillingActionModal()}
-        title={billingActionModal.title || "Confirm Billing Update"}
-        maxWidth="520px"
-      >
-        <div className="billing-action-modal">
-          <p className="billing-action-text">{billingActionModal.message}</p>
-          {billingActionModal.phrase && (
-            <>
-              <div className="billing-action-phrase">
-                {billingActionModal.phrase}
-              </div>
-              <div className="billing-action-input-group">
-                <label htmlFor="billing-action-input">Confirmation</label>
-                <input
-                  id="billing-action-input"
-                  type="text"
-                  className="edit-input"
-                  placeholder="Type the confirmation phrase..."
-                  value={billingActionInput}
-                  onChange={(event) => setBillingActionInput(event.target.value)}
-                  disabled={billingActionLoading}
-                />
-              </div>
-            </>
-          )}
-          <div className="billing-action-actions">
-            <button
-              type="button"
-              className="billing-action-btn muted"
-              onClick={() => closeBillingActionModal()}
-              disabled={billingActionLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={`billing-action-btn ${
-                billingActionModal.isDangerous ? "danger" : "primary"
-              }`}
-              onClick={handleBillingActionConfirm}
-              disabled={
-                billingActionLoading ||
-                (billingActionModal.phrase &&
-                  billingActionInput.trim() !== billingActionModal.phrase)
-              }
-            >
-              {billingActionLoading
-                ? "Processing..."
-                : billingActionModal.confirmText}
             </button>
           </div>
         </div>

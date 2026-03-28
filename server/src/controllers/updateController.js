@@ -10,6 +10,7 @@ const {
 const { isEngagedPortalRequest } = require("../middleware/authMiddleware");
 const { normalizeProjectUpdateContent } = require("../utils/projectUpdateText");
 
+const toText = (value) => (typeof value === "string" ? value.trim() : "");
 const normalizeObjectId = (value) => {
   if (!value) return "";
   if (typeof value === "object" && value._id) return String(value._id);
@@ -61,6 +62,67 @@ const GRAPHICS_DEPARTMENT_TOKENS = new Set([
 ]);
 const STORES_DEPARTMENT_TOKENS = new Set(["stores", "stock", "packaging"]);
 const PHOTOGRAPHY_DEPARTMENT_TOKENS = new Set(["photography"]);
+
+const normalizeProjectIndicator = (value) => {
+  const trimmed = toText(value);
+  return trimmed ? trimmed.toUpperCase() : "";
+};
+const normalizeProjectNameRaw = (value) => toText(value);
+const getProjectDisplayRef = (project) =>
+  project?.orderId ||
+  project?._id?.toString?.()?.slice(-6)?.toUpperCase?.() ||
+  "N/A";
+const getProjectDisplayName = (project) => {
+  const details = project?.details || {};
+  const baseName =
+    normalizeProjectNameRaw(details.projectNameRaw) ||
+    normalizeProjectNameRaw(details.projectName);
+  const indicator = normalizeProjectIndicator(details.projectIndicator);
+  if (baseName) {
+    return indicator ? `${baseName} for ${indicator}` : baseName;
+  }
+  return "Unnamed Project";
+};
+const getUserDisplayName = (user) => {
+  if (!user) return "Someone";
+  const firstName = toText(user.firstName);
+  const lastName = toText(user.lastName);
+  const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
+  return fullName || user.name || user.employeeId || "Someone";
+};
+const getRequestSource = (req) => toText(req?.query?.source).toLowerCase();
+const isAdminOrderManagementRequest = (req) =>
+  getRequestSource(req) === "admin";
+const notifyLeadFromAdminOrderManagement = async ({
+  req,
+  project,
+  title,
+  message,
+  type = "UPDATE",
+}) => {
+  try {
+    if (!req?.user || req.user.role !== "admin") return;
+    if (!isAdminOrderManagementRequest(req)) return;
+    const projectId = normalizeObjectId(project?._id);
+    const leadId = normalizeObjectId(project?.projectLeadId);
+    if (!projectId || !leadId) return;
+
+    await createNotification(
+      leadId,
+      req.user._id || req.user.id,
+      projectId,
+      type,
+      title,
+      message,
+      { source: "admin_order_management" },
+    );
+  } catch (error) {
+    console.error(
+      "Error notifying lead for admin order management update:",
+      error,
+    );
+  }
+};
 
 const canonicalizeDepartmentToken = (value) => {
   const token = normalizeDepartmentToken(value);
@@ -313,6 +375,20 @@ exports.createProjectUpdate = async (req, res) => {
       );
     }
 
+    const normalizedCategory = toText(category) || "General";
+    if (normalizedCategory.toLowerCase() === "general") {
+      const actorName = getUserDisplayName(req.user);
+      const projectRef = getProjectDisplayRef(project);
+      const projectName = getProjectDisplayName(project);
+      await notifyLeadFromAdminOrderManagement({
+        req,
+        project,
+        title: "Project Update Posted",
+        message: `Admin ${actorName} posted a General update on project #${projectRef} (${projectName}).`,
+        type: "UPDATE",
+      });
+    }
+
     // [New] Log activity for this update
     await logActivity(
       project._id,
@@ -345,7 +421,7 @@ exports.updateProjectUpdate = async (req, res) => {
     const isAdmin = req.user?.role === "admin";
 
     const project = await Project.findById(update.project).select(
-      "status hold projectLeadId assistantLeadId departments",
+      "status hold projectLeadId assistantLeadId departments orderId details.projectName details.projectNameRaw details.projectIndicator",
     );
 
     if (!project) {
@@ -392,6 +468,17 @@ exports.updateProjectUpdate = async (req, res) => {
       );
     }
 
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Project Update Edited",
+      message: `Admin ${actorName} edited a ${update.category} update on project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     res.status(200).json(update);
   } catch (error) {
     console.error("Error updating project update:", error);
@@ -413,7 +500,7 @@ exports.deleteProjectUpdate = async (req, res) => {
     }
 
     const project = await Project.findById(update.project).select(
-      "status hold projectLeadId assistantLeadId departments",
+      "status hold projectLeadId assistantLeadId departments orderId details.projectName details.projectNameRaw details.projectIndicator",
     );
 
     if (!project) {
@@ -442,6 +529,17 @@ exports.deleteProjectUpdate = async (req, res) => {
 
     await update.deleteOne();
     await syncProjectLatestUpdateSnapshot(update.project);
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Project Update Deleted",
+      message: `Admin ${actorName} deleted a ${update.category} update on project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
 
     res.status(200).json({ message: "Update deleted successfully" });
   } catch (error) {

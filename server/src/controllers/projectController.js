@@ -3869,6 +3869,44 @@ const getUserDisplayName = (user) => {
   const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
   return fullName || user.name || user.employeeId || "Someone";
 };
+const getRequestSource = (req) => toText(req?.query?.source).toLowerCase();
+const isAdminOrderManagementRequest = (req) =>
+  getRequestSource(req) === "admin";
+const formatBatchStatusLabel = (status = "") => {
+  const base = toText(status).replace(/_/g, " ");
+  if (!base) return "Unknown";
+  return base.replace(/\b\w/g, (match) => match.toUpperCase());
+};
+const notifyLeadFromAdminOrderManagement = async ({
+  req,
+  project,
+  title,
+  message,
+  type = "UPDATE",
+}) => {
+  try {
+    if (!req?.user || req.user.role !== "admin") return;
+    if (!isAdminOrderManagementRequest(req)) return;
+    const projectId = toObjectIdString(project?._id);
+    const leadId = toObjectIdString(project?.projectLeadId);
+    if (!projectId || !leadId) return;
+
+    await createNotification(
+      leadId,
+      req.user._id || req.user.id,
+      projectId,
+      type,
+      title,
+      message,
+      { source: "admin_order_management" },
+    );
+  } catch (error) {
+    console.error(
+      "Error notifying lead for admin order management action:",
+      error,
+    );
+  }
+};
 const normalizeOrderItems = (items = []) => {
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
@@ -6409,6 +6447,17 @@ const updateProjectStatus = async (req, res) => {
           console.error("Failed to create SMS prompt:", smsError);
         }
       }
+
+      const actorName = getUserDisplayName(req.user);
+      const projectRef = getProjectDisplayRef(project);
+      const projectName = getProjectDisplayName(project);
+      await notifyLeadFromAdminOrderManagement({
+        req,
+        project,
+        title: "Order Status Updated",
+        message: `Admin ${actorName} updated project #${projectRef} (${projectName}) status to ${finalStatus}.`,
+        type: "UPDATE",
+      });
     }
 
     // Notify Lead when mockup is marked complete
@@ -6688,6 +6737,18 @@ const transitionQuoteRequirement = async (req, res) => {
       )}.`,
     );
 
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Quote Requirement Updated",
+      message: `Admin ${actorName} moved '${requirementLabel}' from ${formatQuoteRequirementStatusLabel(
+        fromStatus,
+      )} to ${formatQuoteRequirementStatusLabel(toStatus)} on project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     return res.json(project);
   } catch (error) {
     console.error("Error transitioning quote requirement:", error);
@@ -6803,6 +6864,16 @@ const updateQuoteDecision = async (req, res) => {
       )}.`,
     );
 
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Quote Decision Updated",
+      message: `Admin ${actorName} validated quote decision as ${decisionLabel} for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     return res.json(project);
   } catch (error) {
     console.error("Error updating quote decision:", error);
@@ -6889,6 +6960,17 @@ const markInvoiceSent = async (req, res) => {
       resolutionNote: `Resolved by ${billingDocumentLabel.toLowerCase()} confirmation.`,
     });
 
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: `${billingDocumentLabel} Sent`,
+      message: `Admin ${actorName} marked ${billingDocumentLabel.toLowerCase()} as sent for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     res.json(project);
   } catch (error) {
     console.error("Error marking invoice sent:", error);
@@ -6964,6 +7046,19 @@ const verifyPayment = async (req, res) => {
       resolutionNote: `Resolved by payment verification (${formatPaymentTypeLabel(type)}).`,
     });
 
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Payment Verified",
+      message: `Admin ${actorName} verified ${formatPaymentTypeLabel(
+        type,
+      )} payment for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     res.json(project);
   } catch (error) {
     console.error("Error verifying payment:", error);
@@ -7034,6 +7129,17 @@ const undoInvoiceSent = async (req, res) => {
       message: `${billingDocumentLabel} status reset for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
     });
 
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: `${billingDocumentLabel} Status Reset`,
+      message: `Admin ${actorName} reset ${billingDocumentLabel.toLowerCase()} status for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     res.json(project);
   } catch (error) {
     console.error("Error undoing invoice sent:", error);
@@ -7092,6 +7198,19 @@ const undoPaymentVerification = async (req, res) => {
       senderId: req.user._id,
       title: "Payment Verification Removed",
       message: `Payment verification removed (${formatPaymentTypeLabel(type)}) for project #${getProjectDisplayRef(project)}: ${getProjectDisplayName(project)}`,
+    });
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Payment Verification Removed",
+      message: `Admin ${actorName} removed ${formatPaymentTypeLabel(
+        type,
+      )} payment verification for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
     });
 
     res.json(project);
@@ -8781,6 +8900,17 @@ const addFeedbackToProject = async (req, res) => {
       `Feedback (${type}) added to project #${updatedProject.orderId || updatedProject._id} by ${req.user.firstName}`,
     );
 
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(updatedProject);
+    const projectName = getProjectDisplayName(updatedProject);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project: updatedProject,
+      title: "Feedback Added",
+      message: `Admin ${actorName} added ${String(type).toLowerCase()} feedback on project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
     if (
       type === "Positive" &&
       !isQuoteProject(updatedProject) &&
@@ -8877,6 +9007,17 @@ const deleteFeedbackFromProject = async (req, res) => {
       "Project Feedback Deleted",
       `Feedback (${deletedType}) removed from project #${updatedProject.orderId || updatedProject._id} by ${req.user.firstName}`,
     );
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(updatedProject);
+    const projectName = getProjectDisplayName(updatedProject);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project: updatedProject,
+      title: "Feedback Deleted",
+      message: `Admin ${actorName} deleted ${String(deletedType).toLowerCase()} feedback on project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
 
     res.json(updatedProject);
   } catch (error) {
@@ -11941,6 +12082,20 @@ const updateProjectBatchStatus = async (req, res) => {
       `Batch ${batch.label || batch.batchId} moved to ${nextStatus}`,
       { batchId: batch.batchId, status: nextStatus },
     );
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    const batchLabel = toText(batch?.label) || batch?.batchId || "Batch";
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Batch Status Updated",
+      message: `Admin ${actorName} moved ${batchLabel} to ${formatBatchStatusLabel(
+        nextStatus,
+      )} for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
 
     return res.json(project);
   } catch (error) {
