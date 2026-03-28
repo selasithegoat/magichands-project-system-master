@@ -1,0 +1,61 @@
+.admin-frontdesk-scope {
+  min-height: 100%;
+  color: var(--text-primary);
+  background: var(--bg-dark);
+}
+
+.admin-frontdesk-scope .orders-list-container {
+  background-color: var(--bg-card);
+}
+
+.admin-frontdesk-scope .toast-message {
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  animation: adminToastMessageLife 5s ease-in-out forwards;
+}
+
+.admin-frontdesk-scope .toast-message.success {
+  background: rgba(16, 185, 129, 0.16);
+  color: var(--success);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.admin-frontdesk-scope .toast-message.error {
+  background: rgba(248, 113, 113, 0.16);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.admin-frontdesk-scope .toast-message.fading-out {
+  animation: adminToastFadeOut 0.5s ease-in forwards;
+}
+
+@keyframes adminToastMessageLife {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  8% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  92% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes adminToastFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}

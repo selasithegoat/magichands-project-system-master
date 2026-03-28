@@ -9,6 +9,12 @@ const baseName = window.location.pathname.startsWith("/admin")
   ? "/admin"
   : "/";
 
+try {
+  window.__MH_PORTAL__ = "admin";
+} catch (error) {
+  // ignore portal flag errors
+}
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter basename={baseName}>

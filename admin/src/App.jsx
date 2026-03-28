@@ -20,10 +20,23 @@ const ProjectAnalytics = lazy(
 );
 const Teams = lazy(() => import("./pages/Teams/Teams"));
 const Clients = lazy(() => import("./pages/Clients/Clients"));
+const OrdersManagement = lazy(
+  () => import("@client/pages/FrontDeskOrders/FrontDeskOrders"),
+);
+const OrderActions = lazy(
+  () => import("@client/pages/NewOrders/OrderActions"),
+);
+const NewOrdersForm = lazy(
+  () => import("@client/pages/NewOrders/NewOrders"),
+);
+const MinimalQuoteForm = lazy(
+  () => import("@client/pages/CreateProject/QuoteWizard/MinimalQuoteForm"),
+);
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
+import AdminFrontDeskScope from "./components/AdminFrontDeskScope/AdminFrontDeskScope";
 import {
   BrowserRouter as Router,
   Routes,
@@ -137,6 +150,12 @@ function App() {
             }
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/client" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/create" element={<Navigate to="/orders-management" replace />} />
+          <Route
+            path="/create/select-type"
+            element={<Navigate to="/orders-management" replace />}
+          />
 
           {/* Protected Routes */}
           <Route
@@ -160,6 +179,54 @@ function App() {
             element={
               <ProtectedRoute>
                 <CancelledOrders user={user} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/orders-management"
+            element={
+              <ProtectedRoute>
+                <AdminFrontDeskScope>
+                  <OrdersManagement />
+                </AdminFrontDeskScope>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/frontdesk/orders"
+            element={<Navigate to="/orders-management" replace />}
+          />
+          <Route
+            path="/new-orders"
+            element={<Navigate to="/orders-management" replace />}
+          />
+          <Route
+            path="/new-orders/form"
+            element={
+              <ProtectedRoute>
+                <AdminFrontDeskScope>
+                  <NewOrdersForm />
+                </AdminFrontDeskScope>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/new-orders/actions/:id"
+            element={
+              <ProtectedRoute>
+                <AdminFrontDeskScope>
+                  <OrderActions />
+                </AdminFrontDeskScope>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create/quote"
+            element={
+              <ProtectedRoute>
+                <AdminFrontDeskScope>
+                  <MinimalQuoteForm />
+                </AdminFrontDeskScope>
               </ProtectedRoute>
             }
           />

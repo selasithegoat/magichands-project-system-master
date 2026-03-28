@@ -8,6 +8,12 @@ window.Buffer = Buffer;
 
 import { BrowserRouter } from "react-router-dom";
 
+try {
+  window.__MH_PORTAL__ = "client";
+} catch (error) {
+  // ignore portal flag errors
+}
+
 const resolveInitialTheme = () => {
   if (typeof window === "undefined") return "light";
   const pathname = window.location?.pathname || "";

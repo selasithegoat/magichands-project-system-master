@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
+import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -751,16 +752,37 @@ const OrderActions = () => {
   const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
   const [mockupLightboxVersion, setMockupLightboxVersion] = useState(null);
 
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const withPortalSource = (url) => appendPortalSource(url, portalSource);
+  const fetchWithPortal = (url, options) =>
+    fetch(withPortalSource(url), options);
+  const toastTimeoutRef = useRef(null);
+
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: "", type }), 5000);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(
+      () => setToast({ show: false, message: "", type }),
+      5000,
+    );
   };
 
-  const canManageBilling =
-    currentUser?.role === "admin" ||
-    currentUser?.department?.includes("Front Desk");
+  useEffect(
+    () => () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  const isAdminUser = currentUser?.role === "admin";
+  const isFrontDeskUser = currentUser?.department?.includes("Front Desk");
+  const canManageBilling = isAdminUser || isFrontDeskUser;
   const canManageSms =
-    currentUser?.department?.includes("Front Desk") &&
+    ((portalSource === "admin" && isAdminUser) || isFrontDeskUser) &&
     project?.projectType !== "Quote";
   const canMarkDelivered = canManageBilling;
   const canManageFeedback = canManageBilling;
@@ -791,9 +813,15 @@ const OrderActions = () => {
       ? `${deliveredBatchCount} of ${activeBatches.length} delivered`
       : "No active batches";
 
+  const smsSource =
+    portalSource === "admin" ? "admin" : isFrontDeskUser ? "frontdesk" : "";
+  const smsSourceQuery = smsSource ? `?source=${smsSource}` : "";
+
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
+      const res = await fetchWithPortal("/api/auth/me", {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setCurrentUser(data);
@@ -807,7 +835,7 @@ const OrderActions = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/projects?mode=report");
+      const res = await fetchWithPortal("/api/projects?mode=report");
       if (!res.ok) {
         throw new Error("Failed to load order.");
       }
@@ -832,7 +860,7 @@ const OrderActions = () => {
 
     setUpdatesLoading(true);
     try {
-      const res = await fetch(`/api/updates/project/${projectId}`);
+      const res = await fetchWithPortal(`/api/updates/project/${projectId}`);
       if (!res.ok) {
         throw new Error("Failed to load project updates.");
       }
@@ -854,7 +882,7 @@ const OrderActions = () => {
     setSmsLoading(true);
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/sms-prompts?source=frontdesk`,
+        `/api/projects/${projectId}/sms-prompts${smsSourceQuery}`,
       );
       if (!res.ok) throw new Error("Failed to load SMS prompts.");
       const data = await res.json();
@@ -941,12 +969,12 @@ const OrderActions = () => {
       let promptId = smsModal.prompt?._id || "";
       if (smsModal.mode === "custom") {
         const res = await fetch(
-          `/api/projects/${project._id}/sms-prompts?source=frontdesk`,
+          `/api/projects/${project._id}/sms-prompts${smsSourceQuery}`,
           {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: trimmedMessage }),
-        },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: trimmedMessage }),
+          },
         );
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -956,7 +984,7 @@ const OrderActions = () => {
         promptId = created?._id || "";
       } else if (smsModal.mode === "edit" && smsModal.prompt?._id) {
         const res = await fetch(
-          `/api/projects/${project._id}/sms-prompts/${smsModal.prompt._id}?source=frontdesk`,
+          `/api/projects/${project._id}/sms-prompts/${smsModal.prompt._id}${smsSourceQuery}`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -992,7 +1020,7 @@ const OrderActions = () => {
     setSmsSendingId(promptId);
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/sms-prompts/${promptId}/send?source=frontdesk`,
+        `/api/projects/${project._id}/sms-prompts/${promptId}/send${smsSourceQuery}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1020,7 +1048,7 @@ const OrderActions = () => {
     setSmsSkippingId(promptId);
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/sms-prompts/${promptId}?source=frontdesk`,
+        `/api/projects/${project._id}/sms-prompts/${promptId}${smsSourceQuery}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -1099,9 +1127,6 @@ const OrderActions = () => {
   );
   const isQuoteProject = project?.projectType === "Quote";
   const invoiceSent = Boolean(project?.invoice?.sent);
-  const isFrontDeskUser = Boolean(
-    currentUser?.department?.includes?.("Front Desk"),
-  );
   const billingDocumentLabel = isQuoteProject ? "Quote" : "Invoice";
   const billingDocumentLower = isQuoteProject ? "quote" : "invoice";
   const billingConfirmPhrase = isQuoteProject
@@ -1266,7 +1291,7 @@ const OrderActions = () => {
   const handleDeliveryComplete = async () => {
     if (!canMarkDelivered || !project) return;
     try {
-      const res = await fetch(`/api/projects/${project._id}/status`, {
+      const res = await fetchWithPortal(`/api/projects/${project._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1327,7 +1352,7 @@ const OrderActions = () => {
     if (!canMarkDelivered || !project || !batch) return false;
     try {
       const deliveredQty = Number(batchDeliveryQty);
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/batches/${batch.batchId}/status`,
         {
           method: "PATCH",
@@ -1470,7 +1495,7 @@ const OrderActions = () => {
         payload.append("feedbackAttachments", file);
       });
 
-      const res = await fetch(`/api/projects/${project._id}/feedback`, {
+      const res = await fetchWithPortal(`/api/projects/${project._id}/feedback`, {
         method: "POST",
         body: payload,
       });
@@ -1499,7 +1524,7 @@ const OrderActions = () => {
   const handleDeleteFeedback = async (feedbackId) => {
     if (!project) return;
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/feedback/${feedbackId}`,
         { method: "DELETE" },
       );
@@ -1573,7 +1598,7 @@ const OrderActions = () => {
       data.append("content", trimmedContent);
       data.append("category", updateCategory);
 
-      const res = await fetch(`/api/updates/project/${project._id}`, {
+      const res = await fetchWithPortal(`/api/updates/project/${project._id}`, {
         method: "POST",
         body: data,
       });
@@ -1619,7 +1644,7 @@ const OrderActions = () => {
 
     setUpdateEditSubmitting(true);
     try {
-      const res = await fetch(`/api/updates/${updateId}`, {
+      const res = await fetchWithPortal(`/api/updates/${updateId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1656,7 +1681,7 @@ const OrderActions = () => {
 
     setUpdateDeleteSubmittingId(update._id);
     try {
-      const res = await fetch(`/api/updates/${update._id}`, {
+      const res = await fetchWithPortal(`/api/updates/${update._id}`, {
         method: "DELETE",
       });
 
@@ -1682,10 +1707,13 @@ const OrderActions = () => {
     if (!project || invoiceInput.trim() !== billingConfirmPhrase) return;
     setInvoiceSubmitting(true);
     try {
-      const res = await fetch(`/api/projects/${project._id}/invoice-sent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/invoice-sent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
@@ -1734,10 +1762,13 @@ const OrderActions = () => {
     if (!project || invoiceUndoInput.trim() !== billingUndoPhrase) return;
     setInvoiceUndoSubmitting(true);
     try {
-      const res = await fetch(`/api/projects/${project._id}/invoice-sent/undo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/invoice-sent/undo`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
@@ -1790,7 +1821,7 @@ const OrderActions = () => {
 
     setPaymentSubmitting(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/payment-verification`,
         {
           method: "POST",
@@ -1827,7 +1858,7 @@ const OrderActions = () => {
 
     setPaymentUndoSubmitting(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/payment-verification/undo`,
         {
           method: "POST",
@@ -1901,14 +1932,17 @@ const OrderActions = () => {
 
     setMockupApprovalSubmitting(true);
     try {
-      const res = await fetch(`/api/projects/${project._id}/mockup/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          version: mockupApprovalModal.version.version,
-          entryId: mockupApprovalModal.version.entryId,
-        }),
-      });
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/mockup/approve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            version: mockupApprovalModal.version.version,
+            entryId: mockupApprovalModal.version.entryId,
+          }),
+        },
+      );
 
       if (res.ok) {
         const updated = await res.json();
@@ -1944,15 +1978,18 @@ const OrderActions = () => {
 
     setMockupRejectionSubmitting(true);
     try {
-      const res = await fetch(`/api/projects/${project._id}/mockup/reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          version: mockupRejectionModal.version.version,
-          entryId: mockupRejectionModal.version.entryId,
-          reason: mockupRejectionReason.trim(),
-        }),
-      });
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/mockup/reject`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            version: mockupRejectionModal.version.version,
+            entryId: mockupRejectionModal.version.entryId,
+            reason: mockupRejectionReason.trim(),
+          }),
+        },
+      );
 
       if (res.ok) {
         const updated = await res.json();
@@ -2016,7 +2053,7 @@ const OrderActions = () => {
 
     setSampleApprovalSubmitting(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/sample-approval/confirm`,
         {
           method: "POST",
@@ -2057,7 +2094,7 @@ const OrderActions = () => {
 
     setSampleApprovalResetSubmitting(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/sample-approval/reset`,
         {
           method: "POST",
@@ -2100,7 +2137,7 @@ const OrderActions = () => {
     setQuoteRequirementSubmittingKey(pendingKey);
 
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${project._id}/quote-requirements/${requirementKey}/transition`,
         {
           method: "PATCH",
@@ -2137,14 +2174,17 @@ const OrderActions = () => {
 
     setQuoteDecisionSubmitting(true);
     try {
-      const res = await fetch(`/api/projects/${project._id}/quote-decision`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          decision: decisionStatus,
-          note: quoteDecisionNote,
-        }),
-      });
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-decision`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: decisionStatus,
+            note: quoteDecisionNote,
+          }),
+        },
+      );
 
       if (res.ok) {
         const updated = await res.json();
@@ -2185,15 +2225,18 @@ const OrderActions = () => {
 
     setQuoteConversionSubmitting(true);
     try {
-      const res = await fetch(`/api/projects/${project._id}/project-type`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetType,
-          reason:
-            "Converted from quote after client decision validated by Front Desk.",
-        }),
-      });
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/project-type`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            targetType,
+            reason:
+              "Converted from quote after client decision validated by Front Desk.",
+          }),
+        },
+      );
 
       if (res.ok) {
         const updated = await res.json();

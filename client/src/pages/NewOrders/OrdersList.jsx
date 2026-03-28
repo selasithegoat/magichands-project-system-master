@@ -4,6 +4,7 @@ import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
+import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
@@ -55,6 +56,11 @@ const OrdersList = () => {
     message: "",
     type: "success",
   });
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const withPortalSource = (url) => appendPortalSource(url, portalSource);
+  const fetchWithPortal = (url, options) =>
+    fetch(withPortalSource(url), options);
+  const toastTimeoutRef = useRef(null);
 
   const [feedbackModal, setFeedbackModal] = useState({
     open: false,
@@ -79,8 +85,29 @@ const OrdersList = () => {
 
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ ...toast, show: false }), 5000);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(
+      () =>
+        setToast((prev) => ({
+          ...prev,
+          show: false,
+          message: "",
+          type,
+        })),
+      5000,
+    );
   };
+
+  useEffect(
+    () => () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     fetchOrders();
@@ -121,7 +148,9 @@ const OrdersList = () => {
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
+      const res = await fetchWithPortal("/api/auth/me", {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setCurrentUser(data);
@@ -135,8 +164,8 @@ const OrdersList = () => {
     setLoading(true);
     try {
       const [projectsRes, groupedRes] = await Promise.all([
-        fetch("/api/projects?mode=report"),
-        fetch("/api/projects/orders?mode=report&collapseRevisions=true"),
+        fetchWithPortal("/api/projects?mode=report"),
+        fetchWithPortal("/api/projects/orders?mode=report&collapseRevisions=true"),
       ]);
 
       if (projectsRes.ok) {
@@ -178,14 +207,17 @@ const OrdersList = () => {
 
     try {
       setReopenSubmitting(true);
-      const res = await fetch(`/api/projects/${reopenModal.project._id}/reopen`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
+      const res = await fetchWithPortal(
+        `/api/projects/${reopenModal.project._id}/reopen`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason: reopenReason.trim() }),
         },
-        body: JSON.stringify({ reason: reopenReason.trim() }),
-      });
+      );
       if (res.ok) {
         const project = await res.json();
         showToast("Project reopened as a new revision.", "success");
@@ -575,7 +607,7 @@ const OrdersList = () => {
   const handleDeliveryComplete = async (order) => {
     if (!canMarkDelivered) return;
     try {
-      const res = await fetch(`/api/projects/${order._id}/status`, {
+      const res = await fetchWithPortal(`/api/projects/${order._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "Delivered" }),
@@ -686,7 +718,7 @@ const OrdersList = () => {
         payload.append("feedbackAttachments", file);
       });
 
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${feedbackModal.project._id}/feedback`,
         {
           method: "POST",
@@ -722,7 +754,7 @@ const OrdersList = () => {
   const handleDeleteFeedback = async (feedbackId) => {
     if (!feedbackModal.project) return;
     try {
-      const res = await fetch(
+      const res = await fetchWithPortal(
         `/api/projects/${feedbackModal.project._id}/feedback/${feedbackId}`,
         {
           method: "DELETE",
