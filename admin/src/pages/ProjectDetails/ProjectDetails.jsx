@@ -317,6 +317,53 @@ const BATCH_STATUS_LABELS = {
 };
 const getBatchStatusLabel = (status) =>
   BATCH_STATUS_LABELS[status] || status || "Unknown";
+const BATCH_PRODUCED_STATUS_SET = new Set([
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+]);
+const BATCH_PACKAGED_STATUS_SET = new Set(["packaged", "delivered"]);
+const BATCH_DELIVERED_STATUS_SET = new Set(["delivered"]);
+const normalizeBatchStatus = (value) => String(value || "").trim().toLowerCase();
+const sumProjectItemQty = (items = []) =>
+  (Array.isArray(items) ? items : []).reduce(
+    (acc, item) => acc + (Number(item?.qty) || 0),
+    0,
+  );
+const sumBatchItemQty = (batches = [], statusSet = null) =>
+  (Array.isArray(batches) ? batches : []).reduce((acc, batch) => {
+    if (!batch || batch.status === "cancelled") return acc;
+    const status = normalizeBatchStatus(batch?.status);
+    if (statusSet && !statusSet.has(status)) return acc;
+    (Array.isArray(batch.items) ? batch.items : []).forEach((entry) => {
+      acc += Number(entry?.qty) || 0;
+    });
+    return acc;
+  }, 0);
+const buildBatchProgress = (project) => {
+  const items = Array.isArray(project?.items) ? project.items : [];
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  const totalQty = sumProjectItemQty(items);
+  const allocatedQty = sumBatchItemQty(batches);
+  const producedQty = sumBatchItemQty(batches, BATCH_PRODUCED_STATUS_SET);
+  const packagedQty = sumBatchItemQty(batches, BATCH_PACKAGED_STATUS_SET);
+  const deliveredQty = sumBatchItemQty(batches, BATCH_DELIVERED_STATUS_SET);
+  const percent = (value) =>
+    totalQty > 0 ? Math.round((value / totalQty) * 100) : 0;
+
+  return {
+    totalQty,
+    allocatedQty,
+    producedQty,
+    packagedQty,
+    deliveredQty,
+    allocatedPercent: percent(allocatedQty),
+    producedPercent: percent(producedQty),
+    packagedPercent: percent(packagedQty),
+    deliveredPercent: percent(deliveredQty),
+  };
+};
 const buildProjectItemMap = (items = []) =>
   new Map(
     (Array.isArray(items) ? items : []).map((item) => [
@@ -338,6 +385,16 @@ const buildBatchItemSummary = (batch, itemMap) => {
     })
     .filter(Boolean);
   return entries.length > 0 ? entries.join(", ") : "No items assigned.";
+};
+const getBatchTotalQty = (batch) =>
+  (Array.isArray(batch?.items) ? batch.items : []).reduce(
+    (acc, entry) => acc + (Number(entry?.qty) || 0),
+    0,
+  );
+const formatBatchQty = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return "";
+  const suffix = totalQty > 0 ? `/${totalQty}` : "";
+  return `${qty}${suffix}`;
 };
 
 const normalizeQuoteChecklist = (checklist = {}) =>
@@ -808,6 +865,8 @@ const ProjectDetails = ({ user }) => {
   const [batchDeliveryRecipients, setBatchDeliveryRecipients] = useState({});
   const [batchDeliveryNotes, setBatchDeliveryNotes] = useState({});
   const [batchCancelReasons, setBatchCancelReasons] = useState({});
+  const [batchPackagingQty, setBatchPackagingQty] = useState({});
+  const [batchDeliveryQty, setBatchDeliveryQty] = useState({});
   const [batchStatusUpdatingId, setBatchStatusUpdatingId] = useState("");
 
   const currentUserId = toEntityId(user?._id || user?.id);
@@ -859,6 +918,14 @@ const ProjectDetails = ({ user }) => {
     () => buildProjectItemMap(project?.items || []),
     [project?.items],
   );
+  const batchProgress = useMemo(
+    () => (project ? buildBatchProgress(project) : null),
+    [project],
+  );
+  const showBatchProgress =
+    project?.projectType !== "Quote" &&
+    batchProgress &&
+    (batchProgress.totalQty > 0 || batches.length > 0);
 
   useEffect(() => {
     const timerId = window.setInterval(() => {
@@ -971,6 +1038,36 @@ const ProjectDetails = ({ user }) => {
       });
       return next;
     });
+    setBatchPackagingQty((prev) => {
+      const next = { ...prev };
+      batches.forEach((batch) => {
+        const batchId = String(batch?.batchId || "");
+        if (!batchId) return;
+        if (!(batchId in next)) {
+          const fallbackQty = (Array.isArray(batch?.items) ? batch.items : []).reduce(
+            (acc, item) => acc + (Number(item?.qty) || 0),
+            0,
+          );
+          next[batchId] = batch?.packaging?.receivedQty ?? fallbackQty;
+        }
+      });
+      return next;
+    });
+    setBatchDeliveryQty((prev) => {
+      const next = { ...prev };
+      batches.forEach((batch) => {
+        const batchId = String(batch?.batchId || "");
+        if (!batchId) return;
+        if (!(batchId in next)) {
+          const fallbackQty = (Array.isArray(batch?.items) ? batch.items : []).reduce(
+            (acc, item) => acc + (Number(item?.qty) || 0),
+            0,
+          );
+          next[batchId] = batch?.delivery?.deliveredQty ?? fallbackQty;
+        }
+      });
+      return next;
+    });
   }, [batches]);
 
   const closeBillingGuardModal = () => {
@@ -1055,9 +1152,13 @@ const ProjectDetails = ({ user }) => {
     setBatchStatusUpdatingId(batchId);
     try {
       const payload = { status: selectedStatus };
+      if (selectedStatus === "in_packaging") {
+        payload.receivedQty = batchPackagingQty[batchId];
+      }
       if (selectedStatus === "delivered") {
         payload.recipient = batchDeliveryRecipients[batchId] || "";
         payload.notes = batchDeliveryNotes[batchId] || "";
+        payload.deliveredQty = batchDeliveryQty[batchId];
       }
       if (selectedStatus === "cancelled") {
         payload.reason = batchCancelReasons[batchId] || "";
@@ -4074,6 +4175,62 @@ const ProjectDetails = ({ user }) => {
                 {batches.length} {batches.length === 1 ? "batch" : "batches"}
               </span>
             </div>
+            {showBatchProgress && (
+              <div className="batch-admin-progress">
+                <div className="batch-admin-progress-header">Batch Progress</div>
+                {batchProgress.totalQty === 0 ? (
+                  <div className="batch-admin-progress-empty">
+                    No items available for batch progress.
+                  </div>
+                ) : (
+                  <>
+                    <div className="batch-admin-progress-summary">
+                      Assigned to batches:{" "}
+                      <strong>
+                        {batchProgress.allocatedQty}/{batchProgress.totalQty}
+                      </strong>{" "}
+                      ({batchProgress.allocatedPercent}%)
+                    </div>
+                    <div className="batch-admin-progress-row">
+                      <span>Produced</span>
+                      <div className="batch-admin-progress-bar">
+                        <span
+                          style={{ width: `${batchProgress.producedPercent}%` }}
+                        />
+                      </div>
+                      <strong>
+                        {batchProgress.producedQty}/{batchProgress.totalQty} (
+                        {batchProgress.producedPercent}%)
+                      </strong>
+                    </div>
+                    <div className="batch-admin-progress-row">
+                      <span>Packaged</span>
+                      <div className="batch-admin-progress-bar">
+                        <span
+                          style={{ width: `${batchProgress.packagedPercent}%` }}
+                        />
+                      </div>
+                      <strong>
+                        {batchProgress.packagedQty}/{batchProgress.totalQty} (
+                        {batchProgress.packagedPercent}%)
+                      </strong>
+                    </div>
+                    <div className="batch-admin-progress-row">
+                      <span>Delivered</span>
+                      <div className="batch-admin-progress-bar">
+                        <span
+                          style={{ width: `${batchProgress.deliveredPercent}%` }}
+                        />
+                      </div>
+                      <strong>
+                        {batchProgress.deliveredQty}/{batchProgress.totalQty} (
+                        {batchProgress.deliveredPercent}%)
+                      </strong>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {batches.length === 0 ? (
               <p className="batch-admin-empty">
                 No batches created yet for this project.
@@ -4087,6 +4244,17 @@ const ProjectDetails = ({ user }) => {
                     batchStatusSelections[batchId] || currentStatus;
                   const isUpdating = batchStatusUpdatingId === batchId;
                   const summary = buildBatchItemSummary(batch, batchItemMap);
+                  const batchTotalQty = getBatchTotalQty(batch);
+                  const producedQtyValue = Number(batch?.packaging?.receivedQty);
+                  const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
+                  const producedQtyLabel = formatBatchQty(
+                    producedQtyValue,
+                    batchTotalQty,
+                  );
+                  const deliveredQtyLabel = formatBatchQty(
+                    deliveredQtyValue,
+                    batchTotalQty,
+                  );
                   return (
                     <div key={batchId || batch?.label} className="batch-admin-item">
                       <div className="batch-admin-header">
@@ -4104,6 +4272,12 @@ const ProjectDetails = ({ user }) => {
                         )}
                         {batch?.updatedAt && (
                           <span>Updated {formatLastUpdated(batch.updatedAt)}</span>
+                        )}
+                        {producedQtyLabel && (
+                          <span>Produced Qty: {producedQtyLabel}</span>
+                        )}
+                        {deliveredQtyLabel && (
+                          <span>Delivered Qty: {deliveredQtyLabel}</span>
                         )}
                       </div>
                       <div className="batch-admin-controls">
@@ -4127,8 +4301,43 @@ const ProjectDetails = ({ user }) => {
                           </select>
                         </label>
 
+                        {selectedStatus === "in_packaging" && (
+                          <label className="batch-admin-field">
+                            <span>Produced Qty (Packaging Confirmation)</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={batchPackagingQty[batchId] ?? ""}
+                              onChange={(event) =>
+                                setBatchPackagingQty((prev) => ({
+                                  ...prev,
+                                  [batchId]: event.target.value,
+                                }))
+                              }
+                              placeholder="Enter produced quantity"
+                              disabled={isUpdating}
+                            />
+                          </label>
+                        )}
+
                         {selectedStatus === "delivered" && (
                           <>
+                            <label className="batch-admin-field">
+                              <span>Delivered Qty</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={batchDeliveryQty[batchId] ?? ""}
+                                onChange={(event) =>
+                                  setBatchDeliveryQty((prev) => ({
+                                    ...prev,
+                                    [batchId]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Enter delivered quantity"
+                                disabled={isUpdating}
+                              />
+                            </label>
                             <label className="batch-admin-field">
                               <span>Recipient (Optional)</span>
                               <input

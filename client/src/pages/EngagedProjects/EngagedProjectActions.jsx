@@ -168,6 +168,12 @@ const BATCH_ACTION_LABELS = {
 };
 const BATCH_PRODUCTION_STATUS_SET = new Set(["in_production", "produced"]);
 const BATCH_PACKAGING_STATUS_SET = new Set(["in_packaging", "packaged"]);
+const BATCH_PRODUCTION_COMPLETE_STATUS_SET = new Set([
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+]);
 
 const getBatchStatusLabel = (status) =>
   BATCH_STATUS_LABELS[status] || status || "Unknown";
@@ -179,6 +185,8 @@ const getNextBatchStatus = (status) => {
   if (index < 0) return "";
   return BATCH_STATUS_FLOW[index + 1] || "";
 };
+const normalizeBatchStatus = (status) =>
+  String(status || "").trim().toLowerCase();
 
 const buildBatchAllocationTotals = (batches = []) =>
   (Array.isArray(batches) ? batches : []).reduce((acc, batch) => {
@@ -214,6 +222,16 @@ const buildBatchItemSummary = (batch, itemMap) => {
     })
     .filter(Boolean);
   return entries.length > 0 ? entries.join(", ") : "No items assigned.";
+};
+const getBatchTotalQty = (batch) =>
+  (Array.isArray(batch?.items) ? batch.items : []).reduce(
+    (acc, entry) => acc + (Number(entry?.qty) || 0),
+    0,
+  );
+const formatBatchQty = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return "";
+  const suffix = totalQty > 0 ? `/${totalQty}` : "";
+  return `${qty}${suffix}`;
 };
 
 const formatQuoteRequirementStatus = (status = "") => {
@@ -560,6 +578,13 @@ const EngagedProjectActions = ({ user }) => {
   const [batchItemAllocations, setBatchItemAllocations] = useState({});
   const [batchCreating, setBatchCreating] = useState(false);
   const [batchUpdatingId, setBatchUpdatingId] = useState("");
+  const [batchPackagingModal, setBatchPackagingModal] = useState({
+    open: false,
+    batch: null,
+  });
+  const [batchPackagingQty, setBatchPackagingQty] = useState("");
+  const [batchPackagingSubmitting, setBatchPackagingSubmitting] =
+    useState(false);
 
   const userDepartments = Array.isArray(user?.department)
     ? user.department
@@ -621,9 +646,10 @@ const EngagedProjectActions = ({ user }) => {
   const hasPackagingRole =
     userDepartments.includes("Stores") ||
     userDepartments.some((dept) => STORES_SUB_DEPARTMENTS.includes(dept));
+  const isAdminPackagingUser = isAdminUser && hasPackagingRole;
   const canCreateBatches = !isAdminUser && hasProductionRole;
   const canManageProductionBatches = !isAdminUser && hasProductionRole;
-  const canManagePackagingBatches = !isAdminUser && hasPackagingRole;
+  const canManagePackagingBatches = hasPackagingRole;
 
   const projectEngagedSubDepts = useMemo(() => {
     if (!project) return [];
@@ -820,11 +846,20 @@ const EngagedProjectActions = ({ user }) => {
       }, 0),
     [projectItems, batchRemainingByItem],
   );
+  const batchProductionComplete = useMemo(() => {
+    if (activeBatches.length === 0) return true;
+    return activeBatches.every((batch) =>
+      BATCH_PRODUCTION_COMPLETE_STATUS_SET.has(
+        normalizeBatchStatus(batch?.status),
+      ),
+    );
+  }, [activeBatches]);
   const totalBatchCountLabel = activeBatches.length || hasBatches
     ? `${activeBatches.length} active`
     : "No batches";
   const canShowBatchSection =
-    !isAdminUser && (hasBatches || canCreateBatches || canManagePackagingBatches);
+    (hasBatches || canCreateBatches || canManagePackagingBatches) &&
+    (!isAdminUser || isAdminPackagingUser);
   const canCreateBatchNow =
     canCreateBatches && project?.status === "Pending Production";
   const canShowProductionApprovedMockups = useMemo(() => {
@@ -1543,6 +1578,98 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const submitBatchStatusUpdate = async (
+    batch,
+    nextStatus,
+    extraPayload = {},
+  ) => {
+    if (!project || !batch || !nextStatus) return false;
+    setBatchUpdatingId(String(batch.batchId || ""));
+    try {
+      const res = await fetch(
+        `/api/projects/${project._id}/batches/${batch.batchId}/status?source=engaged`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: nextStatus, ...extraPayload }),
+        },
+      );
+      if (res.ok) {
+        setToast({
+          type: "success",
+          message: `Batch moved to ${getBatchStatusLabel(nextStatus)}.`,
+        });
+        await fetchProject();
+        return true;
+      }
+      const errorData = await res.json().catch(() => ({}));
+      setToast({
+        type: "error",
+        message: errorData.message || "Failed to update batch status.",
+      });
+      return false;
+    } catch (error) {
+      console.error("Error updating batch status:", error);
+      setToast({
+        type: "error",
+        message: "An unexpected error occurred.",
+      });
+      return false;
+    } finally {
+      setBatchUpdatingId("");
+    }
+  };
+
+  const openBatchPackagingModal = (batch) => {
+    if (!batch) return;
+    const totalQty = getBatchTotalQty(batch);
+    const fallbackQty =
+      batch?.packaging?.receivedQty ?? (totalQty > 0 ? totalQty : "");
+    setBatchPackagingQty(
+      fallbackQty !== "" && fallbackQty !== null && fallbackQty !== undefined
+        ? String(fallbackQty)
+        : "",
+    );
+    setBatchPackagingModal({ open: true, batch });
+  };
+
+  const closeBatchPackagingModal = () => {
+    if (batchPackagingSubmitting) return;
+    setBatchPackagingModal({ open: false, batch: null });
+    setBatchPackagingQty("");
+  };
+
+  const handleConfirmBatchPackaging = async () => {
+    if (!batchPackagingModal.batch) return;
+    const totalQty = getBatchTotalQty(batchPackagingModal.batch);
+    const receivedQtyValue = Number(batchPackagingQty);
+    if (!Number.isFinite(receivedQtyValue) || receivedQtyValue <= 0) {
+      setToast({
+        type: "error",
+        message: "Enter the produced quantity for this batch.",
+      });
+      return;
+    }
+    if (totalQty > 0 && receivedQtyValue > totalQty) {
+      setToast({
+        type: "error",
+        message:
+          "Produced quantity cannot exceed the total quantity assigned to this batch.",
+      });
+      return;
+    }
+    setBatchPackagingSubmitting(true);
+    const updated = await submitBatchStatusUpdate(
+      batchPackagingModal.batch,
+      "in_packaging",
+      { receivedQty: receivedQtyValue },
+    );
+    setBatchPackagingSubmitting(false);
+    if (updated) {
+      closeBatchPackagingModal();
+    }
+  };
+
   const handleBatchStatusUpdate = async (batch, nextStatus) => {
     if (!project || !batch || !nextStatus) return;
     if (isProjectLeadForProject) {
@@ -1553,38 +1680,11 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
-    setBatchUpdatingId(String(batch.batchId || ""));
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/batches/${batch.batchId}/status?source=engaged`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: nextStatus }),
-        },
-      );
-      if (res.ok) {
-        setToast({
-          type: "success",
-          message: `Batch moved to ${getBatchStatusLabel(nextStatus)}.`,
-        });
-        await fetchProject();
-        return;
-      }
-      const errorData = await res.json().catch(() => ({}));
-      setToast({
-        type: "error",
-        message: errorData.message || "Failed to update batch status.",
-      });
-    } catch (error) {
-      console.error("Error updating batch status:", error);
-      setToast({
-        type: "error",
-        message: "An unexpected error occurred.",
-      });
-    } finally {
-      setBatchUpdatingId("");
+    if (nextStatus === "in_packaging") {
+      openBatchPackagingModal(batch);
+      return;
     }
+    await submitBatchStatusUpdate(batch, nextStatus);
   };
 
   const handleSubmitUpdate = async () => {
@@ -2726,10 +2826,21 @@ const EngagedProjectActions = ({ user }) => {
                 const itemSummary = buildBatchItemSummary(batch, batchItemMap);
                 const statusLabel = getBatchStatusLabel(batch?.status);
                 const nextStatus = getNextBatchStatus(batch?.status);
+                const batchTotalQty = getBatchTotalQty(batch);
+                const producedQtyValue = Number(batch?.packaging?.receivedQty);
+                const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
+                const producedQtyLabel = formatBatchQty(
+                  producedQtyValue,
+                  batchTotalQty,
+                );
+                const deliveredQtyLabel = formatBatchQty(
+                  deliveredQtyValue,
+                  batchTotalQty,
+                );
                 const canAdvance =
                   Boolean(nextStatus) &&
                   !isProjectLeadForProject &&
-                  !isAdminUser &&
+                  (!isAdminUser || isAdminPackagingUser) &&
                   ((hasProductionRole &&
                     BATCH_PRODUCTION_STATUS_SET.has(nextStatus)) ||
                     (hasPackagingRole &&
@@ -2764,6 +2875,16 @@ const EngagedProjectActions = ({ user }) => {
                         <span>Updated: {formatUpdateDateTime(batch.updatedAt)}</span>
                       )}
                     </div>
+                    {producedQtyLabel && (
+                      <div className="engaged-batch-meta">
+                        Produced Qty: {producedQtyLabel}
+                      </div>
+                    )}
+                    {deliveredQtyLabel && (
+                      <div className="engaged-batch-meta">
+                        Delivered Qty: {deliveredQtyLabel}
+                      </div>
+                    )}
                     {batch?.status === "delivered" && batch?.delivery?.deliveredAt && (
                       <div className="engaged-batch-meta">
                         Delivered:{" "}
@@ -2951,6 +3072,8 @@ const EngagedProjectActions = ({ user }) => {
                       paymentChecksEnabled &&
                       isProductionAction &&
                       sampleApprovalPending;
+                    const blockedByBatchProduction =
+                      isProductionAction && !batchProductionComplete;
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
@@ -2997,6 +3120,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (blockedBySample) {
                       disabledReason =
                         "Client sample approval is required before Production can be completed.";
+                    } else if (blockedByBatchProduction) {
+                      disabledReason =
+                        "All batches must be produced before Production can be completed.";
                     } else if (blockedByBilling) {
                       disabledReason = `Before Pending Delivery/Pickup, confirm ${pendingDeliveryMissingLabels.join(", ")}.`;
                     }
@@ -3118,7 +3244,8 @@ const EngagedProjectActions = ({ user }) => {
                               !isPending ||
                               isUpdating ||
                               isProjectLeadForProject ||
-                              blockedBySample
+                              blockedBySample ||
+                              blockedByBatchProduction
                             }
                             title={disabledReason || "Confirm stage completion"}
                           >
@@ -3989,6 +4116,67 @@ const EngagedProjectActions = ({ user }) => {
                 }
               >
                 {acknowledgeSubmitting ? "Confirming..." : "Confirm Acceptance"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {batchPackagingModal.open && batchPackagingModal.batch && (
+        <div className="modal-overlay" onClick={closeBatchPackagingModal}>
+          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+            <h3 className="modal-title">Confirm Batch Handoff</h3>
+            <p className="acknowledge-confirm-text">
+              <strong>Batch:</strong>{" "}
+              {batchPackagingModal.batch?.label || "Batch"}
+            </p>
+            <p className="acknowledge-confirm-text">
+              <strong>Items:</strong>{" "}
+              {buildBatchItemSummary(batchPackagingModal.batch, batchItemMap)}
+            </p>
+            <p className="acknowledge-confirm-text">
+              <strong>Total Qty:</strong>{" "}
+              {getBatchTotalQty(batchPackagingModal.batch) || "N/A"}
+            </p>
+            <div className="form-group form-group-top-spaced">
+              <label>Produced Quantity (Packaging Confirmation)</label>
+              <input
+                type="number"
+                className="input-field"
+                min="1"
+                max={
+                  getBatchTotalQty(batchPackagingModal.batch) > 0
+                    ? getBatchTotalQty(batchPackagingModal.batch)
+                    : undefined
+                }
+                value={batchPackagingQty}
+                onChange={(event) => setBatchPackagingQty(event.target.value)}
+                placeholder="Enter produced quantity"
+              />
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeBatchPackagingModal}
+                disabled={batchPackagingSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleConfirmBatchPackaging}
+                disabled={
+                  batchPackagingSubmitting ||
+                  !Number.isFinite(Number(batchPackagingQty)) ||
+                  Number(batchPackagingQty) <= 0 ||
+                  (getBatchTotalQty(batchPackagingModal.batch) > 0 &&
+                    Number(batchPackagingQty) >
+                      getBatchTotalQty(batchPackagingModal.batch))
+                }
+              >
+                {batchPackagingSubmitting ? "Confirming..." : "Confirm Handoff"}
               </button>
             </div>
           </div>

@@ -1492,6 +1492,64 @@
   cursor: not-allowed;
 }
 
+.batch-admin-progress {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.batch-admin-progress-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.batch-admin-progress-summary {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.batch-admin-progress-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.batch-admin-progress-row strong {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.batch-admin-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.batch-admin-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #60a5fa, #22c55e);
+}
+
+.batch-admin-progress-empty {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 .dept-tag {
   display: inline-flex;
   align-items: center;

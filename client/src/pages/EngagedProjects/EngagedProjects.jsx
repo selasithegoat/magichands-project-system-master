@@ -85,6 +85,8 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
 
 const isScopeApprovalComplete = (status) =>
   Boolean(status && SCOPE_APPROVAL_READY_STATUSES.has(status));
+const normalizeBatchStatus = (status) =>
+  String(status || "").trim().toLowerCase();
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
@@ -137,6 +139,9 @@ const EngagedProjects = ({ user }) => {
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");
   const hasPhotographyParent = userDepartments.includes("Photography");
+  const hasPackagingRole =
+    hasStoresParent ||
+    userDepartments.some((dept) => STORES_SUB_DEPARTMENTS.includes(dept));
 
   const productionSubDepts = useMemo(() => {
     return userDepartments.filter((d) =>
@@ -215,10 +220,20 @@ const EngagedProjects = ({ user }) => {
         const data = await res.json();
         // Filter projects that have at least one production sub-department engaged
         const engaged = data.filter((project) => {
-          if (!project.departments || project.departments.length === 0)
+          const hasDeptMatch =
+            Array.isArray(project?.departments) &&
+            project.departments.some((dept) => engagedSubDepts.includes(dept));
+          if (hasDeptMatch) return true;
+          if (
+            !hasPackagingRole ||
+            !["All", "Stores"].includes(departmentFilter)
+          )
             return false;
-          return project.departments.some((dept) =>
-            engagedSubDepts.includes(dept),
+          const batches = Array.isArray(project?.batches) ? project.batches : [];
+          return batches.some((batch) =>
+            ["produced", "in_packaging"].includes(
+              normalizeBatchStatus(batch?.status),
+            ),
           );
         });
         const completedStatuses = new Set(["Completed", "Finished"]);

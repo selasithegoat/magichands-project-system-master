@@ -1577,6 +1577,64 @@
   color: var(--text-secondary);
 }
 
+.approval-batch-progress {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  margin: 0.75rem 0 1rem;
+  background: var(--surface-alt);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.approval-batch-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.approval-batch-summary {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.approval-batch-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.approval-batch-row strong {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.approval-batch-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.approval-batch-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #60a5fa, #22c55e);
+}
+
+.approval-batch-empty {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 .nudge-btn {
   border: 1px solid var(--border-color);
   background: var(--bg-card);

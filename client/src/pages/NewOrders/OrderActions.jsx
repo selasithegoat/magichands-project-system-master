@@ -255,6 +255,16 @@ const buildBatchItemSummary = (batch, itemMap) => {
     .filter(Boolean);
   return entries.length > 0 ? entries.join(", ") : "No items assigned.";
 };
+const getBatchTotalQty = (batch) =>
+  (Array.isArray(batch?.items) ? batch.items : []).reduce(
+    (acc, entry) => acc + (Number(entry?.qty) || 0),
+    0,
+  );
+const formatBatchQty = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return "";
+  const suffix = totalQty > 0 ? `/${totalQty}` : "";
+  return `${qty}${suffix}`;
+};
 const QUOTE_REQUIREMENT_LABELS = {
   cost: "Cost",
   mockup: "Mockup",
@@ -677,6 +687,7 @@ const OrderActions = () => {
   const [batchDeliveryInput, setBatchDeliveryInput] = useState("");
   const [batchDeliveryRecipient, setBatchDeliveryRecipient] = useState("");
   const [batchDeliveryNotes, setBatchDeliveryNotes] = useState("");
+  const [batchDeliveryQty, setBatchDeliveryQty] = useState("");
   const [batchDeliverySubmitting, setBatchDeliverySubmitting] =
     useState(false);
   const [billingGuardModal, setBillingGuardModal] = useState({
@@ -1315,6 +1326,7 @@ const OrderActions = () => {
   const handleBatchDeliveryComplete = async (batch) => {
     if (!canMarkDelivered || !project || !batch) return false;
     try {
+      const deliveredQty = Number(batchDeliveryQty);
       const res = await fetch(
         `/api/projects/${project._id}/batches/${batch.batchId}/status`,
         {
@@ -1324,6 +1336,7 @@ const OrderActions = () => {
             status: "delivered",
             recipient: batchDeliveryRecipient,
             notes: batchDeliveryNotes,
+            deliveredQty: Number.isFinite(deliveredQty) ? deliveredQty : undefined,
           }),
         },
       );
@@ -1348,6 +1361,19 @@ const OrderActions = () => {
 
   const handleConfirmBatchDelivery = async () => {
     if (batchDeliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE) return;
+    const batchTotalQty = getBatchTotalQty(batchDeliveryModal.batch);
+    const deliveredQtyValue = Number(batchDeliveryQty);
+    if (!Number.isFinite(deliveredQtyValue) || deliveredQtyValue <= 0) {
+      showToast("Enter the delivered quantity for this batch.", "error");
+      return;
+    }
+    if (batchTotalQty > 0 && deliveredQtyValue > batchTotalQty) {
+      showToast(
+        "Delivered quantity cannot exceed the total quantity in this batch.",
+        "error",
+      );
+      return;
+    }
     setBatchDeliverySubmitting(true);
     const delivered = await handleBatchDeliveryComplete(batchDeliveryModal.batch);
     setBatchDeliverySubmitting(false);
@@ -1360,6 +1386,15 @@ const OrderActions = () => {
     setBatchDeliveryInput("");
     setBatchDeliveryRecipient(batch?.delivery?.recipient || "");
     setBatchDeliveryNotes(batch?.delivery?.notes || "");
+    const totalQty = getBatchTotalQty(batch);
+    const defaultQty =
+      batch?.delivery?.deliveredQty ??
+      (totalQty > 0 ? totalQty : "");
+    setBatchDeliveryQty(
+      defaultQty !== "" && defaultQty !== null && defaultQty !== undefined
+        ? String(defaultQty)
+        : "",
+    );
     setBatchDeliveryModal({ open: true, batch });
   };
 
@@ -1369,6 +1404,7 @@ const OrderActions = () => {
     setBatchDeliveryInput("");
     setBatchDeliveryRecipient("");
     setBatchDeliveryNotes("");
+    setBatchDeliveryQty("");
   };
 
   const openFeedbackModal = () => {
@@ -2572,6 +2608,17 @@ const OrderActions = () => {
                   {batches.map((batch) => {
                     const statusLabel = getBatchStatusLabel(batch?.status);
                     const summary = buildBatchItemSummary(batch, batchItemMap);
+                    const batchTotalQty = getBatchTotalQty(batch);
+                    const producedQtyValue = Number(batch?.packaging?.receivedQty);
+                    const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
+                    const producedQtyLabel = formatBatchQty(
+                      producedQtyValue,
+                      batchTotalQty,
+                    );
+                    const deliveredQtyLabel = formatBatchQty(
+                      deliveredQtyValue,
+                      batchTotalQty,
+                    );
                     const canDeliver =
                       batch?.status === "packaged" && canMarkDelivered;
                     return (
@@ -2592,6 +2639,16 @@ const OrderActions = () => {
                             {statusLabel}
                           </span>
                         </div>
+                        {producedQtyLabel && (
+                          <div className="batch-delivery-meta">
+                            Produced Qty: {producedQtyLabel}
+                          </div>
+                        )}
+                        {deliveredQtyLabel && (
+                          <div className="batch-delivery-meta">
+                            Delivered Qty: {deliveredQtyLabel}
+                          </div>
+                        )}
                         {batch?.status === "delivered" &&
                           batch?.delivery?.deliveredAt && (
                             <div className="batch-delivery-meta">
@@ -3955,6 +4012,25 @@ const OrderActions = () => {
               <strong>Items:</strong>{" "}
               {buildBatchItemSummary(batchDeliveryModal.batch, batchItemMap)}
             </p>
+            <p className="confirm-modal-text">
+              <strong>Total Qty:</strong>{" "}
+              {getBatchTotalQty(batchDeliveryModal.batch) || "N/A"}
+            </p>
+            <div className="confirm-input-group">
+              <label>Delivered Quantity</label>
+              <input
+                type="number"
+                min="1"
+                max={
+                  getBatchTotalQty(batchDeliveryModal.batch) > 0
+                    ? getBatchTotalQty(batchDeliveryModal.batch)
+                    : undefined
+                }
+                value={batchDeliveryQty}
+                onChange={(e) => setBatchDeliveryQty(e.target.value)}
+                placeholder="Enter delivered quantity"
+              />
+            </div>
             <div className="confirm-input-group">
               <label>Recipient (Optional)</label>
               <input
@@ -3995,7 +4071,12 @@ const OrderActions = () => {
                 onClick={handleConfirmBatchDelivery}
                 disabled={
                   batchDeliverySubmitting ||
-                  batchDeliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE
+                  batchDeliveryInput.trim() !== DELIVERY_CONFIRM_PHRASE ||
+                  !Number.isFinite(Number(batchDeliveryQty)) ||
+                  Number(batchDeliveryQty) <= 0 ||
+                  (getBatchTotalQty(batchDeliveryModal.batch) > 0 &&
+                    Number(batchDeliveryQty) >
+                      getBatchTotalQty(batchDeliveryModal.batch))
                 }
               >
                 {batchDeliverySubmitting ? "Confirming..." : "Confirm Delivery"}

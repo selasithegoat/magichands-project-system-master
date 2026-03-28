@@ -1610,6 +1610,12 @@ const BATCH_STAGE_OWNER = {
   packaged: "packaging",
   delivered: "frontdesk",
 };
+const BATCH_PRODUCED_STATUS_SET = new Set([
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+]);
 const isFrontDeskUser = (user) =>
   toDepartmentArray(user?.department)
     .map(normalizeDepartmentValue)
@@ -1626,6 +1632,111 @@ const isPackagingUser = (user) =>
 const normalizeBatchStatus = (value) => {
   const token = String(value || "").trim().toLowerCase();
   return BATCH_STATUS_SET.has(token) ? token : "";
+};
+const normalizeBatchQty = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+const getBatchTotalQty = (batch) =>
+  (Array.isArray(batch?.items) ? batch.items : []).reduce(
+    (acc, entry) => acc + (Number(entry?.qty) || 0),
+    0,
+  );
+const resolveBatchReceivedQty = (batch, totalQty) => {
+  const received = Number(batch?.packaging?.receivedQty);
+  if (Number.isFinite(received)) return received;
+  return totalQty;
+};
+const resolveBatchDeliveredQty = (batch, totalQty) => {
+  const delivered = Number(batch?.delivery?.deliveredQty);
+  if (Number.isFinite(delivered)) return delivered;
+  return totalQty;
+};
+const areAllBatchesProduced = (project) => {
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  if (batches.length === 0) return true;
+  const activeBatches = batches.filter((entry) => entry?.status !== "cancelled");
+  if (activeBatches.length === 0) return true;
+  return activeBatches.every((entry) => {
+    const status = normalizeBatchStatus(entry?.status);
+    if (!status || !BATCH_PRODUCED_STATUS_SET.has(status)) return false;
+    const totalQty = getBatchTotalQty(entry);
+    if (totalQty <= 0) return true;
+    const receivedQty = Number(entry?.packaging?.receivedQty);
+    if (!Number.isFinite(receivedQty)) return false;
+    return receivedQty >= totalQty;
+  });
+};
+const areAllBatchesDelivered = (project) => {
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  if (batches.length === 0) return true;
+  const activeBatches = batches.filter((entry) => entry?.status !== "cancelled");
+  if (activeBatches.length === 0) return true;
+  return activeBatches.every((entry) => {
+    const status = normalizeBatchStatus(entry?.status);
+    if (status !== "delivered") return false;
+    const totalQty = getBatchTotalQty(entry);
+    if (totalQty <= 0) return true;
+    const deliveredQty = resolveBatchDeliveredQty(entry, totalQty);
+    return deliveredQty >= totalQty;
+  });
+};
+const reconcileProjectStatusForBatchProduction = async (
+  project,
+  actor,
+) => {
+  if (!project || isQuoteProject(project)) return false;
+  if (!Array.isArray(project.batches) || project.batches.length === 0) {
+    return false;
+  }
+  if (project.status === HOLD_STATUS) return false;
+
+  const flow = STANDARD_STATUS_FLOW;
+  const pendingProductionIndex = flow.indexOf("Pending Production");
+  const currentIndex = flow.indexOf(toText(project.status));
+  if (pendingProductionIndex === -1 || currentIndex === -1) return false;
+
+  if (currentIndex > pendingProductionIndex && !areAllBatchesProduced(project)) {
+    project.status = "Pending Production";
+    await logActivity(
+      project._id,
+      actor?._id || actor?.id,
+      "batch_status_reconciled",
+      "Project reverted to Pending Production because batches are incomplete.",
+      {},
+    );
+    return true;
+  }
+  return false;
+};
+const reconcileProjectStatusForBatchDelivery = async (
+  project,
+  actor,
+) => {
+  if (!project || isQuoteProject(project)) return false;
+  if (!Array.isArray(project.batches) || project.batches.length === 0) {
+    return false;
+  }
+  if (project.status === HOLD_STATUS) return false;
+
+  const flow = STANDARD_STATUS_FLOW;
+  const pendingDeliveryIndex = flow.indexOf("Pending Delivery/Pickup");
+  const currentIndex = flow.indexOf(toText(project.status));
+  if (pendingDeliveryIndex === -1 || currentIndex === -1) return false;
+
+  if (currentIndex > pendingDeliveryIndex && !areAllBatchesDelivered(project)) {
+    project.status = "Pending Delivery/Pickup";
+    await logActivity(
+      project._id,
+      actor?._id || actor?.id,
+      "batch_status_reconciled",
+      "Project reverted to Pending Delivery/Pickup because batches are incomplete.",
+      {},
+    );
+    return true;
+  }
+  return false;
 };
 const getNextBatchStatus = (status) => {
   const current = normalizeBatchStatus(status);
@@ -6117,6 +6228,36 @@ const updateProjectStatus = async (req, res) => {
     }
 
     const isStandardProject = !isQuoteProject(project);
+    if (isStandardProject && project?.batches?.length > 0) {
+      const flow = STANDARD_STATUS_FLOW;
+      const pendingProductionIndex = flow.indexOf("Pending Production");
+      const pendingDeliveryIndex = flow.indexOf("Pending Delivery/Pickup");
+      const finalIndex = flow.indexOf(finalStatus);
+      if (
+        pendingProductionIndex !== -1 &&
+        finalIndex > pendingProductionIndex &&
+        !areAllBatchesProduced(project)
+      ) {
+        return res.status(400).json({
+          code: "BATCH_PRODUCTION_INCOMPLETE",
+          targetStatus: finalStatus,
+          message:
+            "All batches must be produced before this project can move past Pending Production.",
+        });
+      }
+      if (
+        pendingDeliveryIndex !== -1 &&
+        finalIndex > pendingDeliveryIndex &&
+        !areAllBatchesDelivered(project)
+      ) {
+        return res.status(400).json({
+          code: "BATCH_DELIVERY_INCOMPLETE",
+          targetStatus: finalStatus,
+          message:
+            "All batches must be delivered before this project can move past Pending Delivery/Pickup.",
+        });
+      }
+    }
 
     const requiresPendingProductionBillingGuard =
       isStandardProject && finalStatus === "Pending Production";
@@ -11615,10 +11756,50 @@ const updateProjectBatchStatus = async (req, res) => {
     if (!batch) {
       return res.status(404).json({ message: "Batch not found." });
     }
+    const batchTotalQty = getBatchTotalQty(batch);
 
     const nextStatus = normalizeBatchStatus(req.body?.status);
     if (!nextStatus) {
       return res.status(400).json({ message: "Invalid batch status." });
+    }
+
+    const receivedQty =
+      nextStatus === "in_packaging"
+        ? normalizeBatchQty(
+            req.body?.receivedQty ?? req.body?.producedQty ?? req.body?.qty,
+          )
+        : null;
+    const deliveredQty =
+      nextStatus === "delivered"
+        ? normalizeBatchQty(req.body?.deliveredQty ?? req.body?.qty)
+        : null;
+
+    if (nextStatus === "in_packaging") {
+      if (!receivedQty) {
+        return res.status(400).json({
+          message: "Packaging must confirm the produced quantity for this batch.",
+        });
+      }
+      if (batchTotalQty > 0 && receivedQty > batchTotalQty) {
+        return res.status(400).json({
+          message:
+            "Produced quantity cannot exceed the total quantity assigned to this batch.",
+        });
+      }
+    }
+
+    if (nextStatus === "delivered") {
+      if (!deliveredQty) {
+        return res.status(400).json({
+          message: "Delivery must include the quantity delivered for this batch.",
+        });
+      }
+      if (batchTotalQty > 0 && deliveredQty > batchTotalQty) {
+        return res.status(400).json({
+          message:
+            "Delivered quantity cannot exceed the total quantity assigned to this batch.",
+        });
+      }
     }
 
     const isAdmin = isAdminUser(req.user);
@@ -11679,6 +11860,9 @@ const updateProjectBatchStatus = async (req, res) => {
     }
     if (nextStatus === "in_packaging") {
       if (!batch.packaging.receivedAt) batch.packaging.receivedAt = now;
+      if (receivedQty) {
+        batch.packaging.receivedQty = receivedQty;
+      }
       batch.packaging.by = req.user?._id || req.user?.id;
       batch.handoffs.push({
         fromDept: "Production",
@@ -11694,6 +11878,9 @@ const updateProjectBatchStatus = async (req, res) => {
     }
     if (nextStatus === "delivered") {
       batch.delivery.deliveredAt = now;
+      if (deliveredQty) {
+        batch.delivery.deliveredQty = deliveredQty;
+      }
       batch.delivery.deliveredBy = req.user?._id || req.user?.id;
       batch.delivery.recipient = toText(req.body?.recipient);
       batch.delivery.notes = toText(req.body?.notes);
@@ -11711,9 +11898,14 @@ const updateProjectBatchStatus = async (req, res) => {
     }
 
     const activeBatches = batches.filter((entry) => entry.status !== "cancelled");
-    const allDelivered =
-      activeBatches.length > 0 &&
-      activeBatches.every((entry) => entry.status === "delivered");
+    const allDelivered = activeBatches.length > 0 &&
+      activeBatches.every((entry) => {
+        if (normalizeBatchStatus(entry?.status) !== "delivered") return false;
+        const totalQty = getBatchTotalQty(entry);
+        if (totalQty <= 0) return true;
+        const deliveredQty = resolveBatchDeliveredQty(entry, totalQty);
+        return deliveredQty >= totalQty;
+      });
 
     if (allDelivered) {
       const currentStatus = toText(project.status);
@@ -11725,7 +11917,7 @@ const updateProjectBatchStatus = async (req, res) => {
         "Finished",
       ]);
       if (!postDeliveryStatuses.has(currentStatus)) {
-        project.status = "Delivered";
+        project.status = getAutoProgressedStatus("Delivered", project);
         await logActivity(
           project._id,
           req.user,
@@ -11735,6 +11927,9 @@ const updateProjectBatchStatus = async (req, res) => {
         );
       }
     }
+
+    await reconcileProjectStatusForBatchProduction(project, req.user);
+    await reconcileProjectStatusForBatchDelivery(project, req.user);
 
     project.markModified("batches");
     await project.save();

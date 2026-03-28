@@ -132,6 +132,10 @@ const ProjectBatchSchema = new mongoose.Schema(
     },
     packaging: {
       receivedAt: Date,
+      receivedQty: {
+        type: Number,
+        min: 0,
+      },
       completedAt: Date,
       by: {
         type: mongoose.Schema.Types.ObjectId,
@@ -140,6 +144,10 @@ const ProjectBatchSchema = new mongoose.Schema(
     },
     delivery: {
       deliveredAt: Date,
+      deliveredQty: {
+        type: Number,
+        min: 0,
+      },
       deliveredBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",

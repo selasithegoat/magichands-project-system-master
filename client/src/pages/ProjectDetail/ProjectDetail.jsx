@@ -441,6 +441,56 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
+const BATCH_PRODUCED_STATUS_SET = new Set([
+  "produced",
+  "in_packaging",
+  "packaged",
+  "delivered",
+]);
+const BATCH_PACKAGED_STATUS_SET = new Set(["packaged", "delivered"]);
+const BATCH_DELIVERED_STATUS_SET = new Set(["delivered"]);
+
+const normalizeBatchStatus = (value) =>
+  String(value || "").trim().toLowerCase();
+const sumProjectItemQty = (items = []) =>
+  (Array.isArray(items) ? items : []).reduce(
+    (acc, item) => acc + (Number(item?.qty) || 0),
+    0,
+  );
+const sumBatchItemQty = (batches = [], statusSet = null) =>
+  (Array.isArray(batches) ? batches : []).reduce((acc, batch) => {
+    if (!batch || batch.status === "cancelled") return acc;
+    const status = normalizeBatchStatus(batch?.status);
+    if (statusSet && !statusSet.has(status)) return acc;
+    (Array.isArray(batch.items) ? batch.items : []).forEach((entry) => {
+      acc += Number(entry?.qty) || 0;
+    });
+    return acc;
+  }, 0);
+const buildBatchProgress = (project) => {
+  const items = Array.isArray(project?.items) ? project.items : [];
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  const totalQty = sumProjectItemQty(items);
+  const allocatedQty = sumBatchItemQty(batches);
+  const producedQty = sumBatchItemQty(batches, BATCH_PRODUCED_STATUS_SET);
+  const packagedQty = sumBatchItemQty(batches, BATCH_PACKAGED_STATUS_SET);
+  const deliveredQty = sumBatchItemQty(batches, BATCH_DELIVERED_STATUS_SET);
+  const percent = (value) =>
+    totalQty > 0 ? Math.round((value / totalQty) * 100) : 0;
+
+  return {
+    totalQty,
+    allocatedQty,
+    producedQty,
+    packagedQty,
+    deliveredQty,
+    allocatedPercent: percent(allocatedQty),
+    producedPercent: percent(producedQty),
+    packagedPercent: percent(packagedQty),
+    deliveredPercent: percent(deliveredQty),
+  };
+};
+
 const SECOND_IN_MS = 1000;
 const DAY_IN_SECONDS = 24 * 60 * 60;
 const COUNTDOWN_RING_SIZE = 104;
@@ -1312,6 +1362,7 @@ const ProjectDetail = ({ user }) => {
               />
               {/* Quick Actions Removed */}
               <ApprovalsCard
+                project={project}
                 workflowStatus={workflowStatus}
                 type={project.projectType}
                 isOnHold={isProjectOnHold}
@@ -3586,8 +3637,16 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
   );
 };
 
-const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
+const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
   const steps = type === "Quote" ? QUOTE_STEPS : STATUS_STEPS;
+  const batchProgress = useMemo(
+    () => (project ? buildBatchProgress(project) : null),
+    [project],
+  );
+  const showBatchProgress =
+    type !== "Quote" &&
+    batchProgress &&
+    (batchProgress.totalQty > 0 || (project?.batches || []).length > 0);
 
   // Find current step index
   let currentStepIndex = steps.findIndex((step) =>
@@ -3645,6 +3704,62 @@ const ApprovalsCard = ({ workflowStatus, type, isOnHold }) => {
       {isOnHold && (
         <div className="workflow-hold-indicator approvals-hold-indicator">
           On Hold - Workflow paused at {workflowStatus}
+        </div>
+      )}
+      {showBatchProgress && (
+        <div className="approval-batch-progress">
+          <div className="approval-batch-header">Batch Progress</div>
+          {batchProgress.totalQty === 0 ? (
+            <div className="approval-batch-empty">
+              No items available for batch progress.
+            </div>
+          ) : (
+            <>
+              <div className="approval-batch-summary">
+                Assigned to batches:{" "}
+                <strong>
+                  {batchProgress.allocatedQty}/{batchProgress.totalQty}
+                </strong>{" "}
+                ({batchProgress.allocatedPercent}%)
+              </div>
+              <div className="approval-batch-row">
+                <span>Produced</span>
+                <div className="approval-batch-bar">
+                  <span
+                    style={{ width: `${batchProgress.producedPercent}%` }}
+                  />
+                </div>
+                <strong>
+                  {batchProgress.producedQty}/{batchProgress.totalQty} (
+                  {batchProgress.producedPercent}%)
+                </strong>
+              </div>
+              <div className="approval-batch-row">
+                <span>Packaged</span>
+                <div className="approval-batch-bar">
+                  <span
+                    style={{ width: `${batchProgress.packagedPercent}%` }}
+                  />
+                </div>
+                <strong>
+                  {batchProgress.packagedQty}/{batchProgress.totalQty} (
+                  {batchProgress.packagedPercent}%)
+                </strong>
+              </div>
+              <div className="approval-batch-row">
+                <span>Delivered</span>
+                <div className="approval-batch-bar">
+                  <span
+                    style={{ width: `${batchProgress.deliveredPercent}%` }}
+                  />
+                </div>
+                <strong>
+                  {batchProgress.deliveredQty}/{batchProgress.totalQty} (
+                  {batchProgress.deliveredPercent}%)
+                </strong>
+              </div>
+            </>
+          )}
         </div>
       )}
       <div className="approval-list">
