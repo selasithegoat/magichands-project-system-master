@@ -121,6 +121,20 @@ If you use subdomains locally, map them in your hosts file.
 
 Then set `ADMIN_HOST`, `CLIENT_HOST`, and `OPS_HOST` to match.
 
+## Router-Agnostic LAN Access (No DNS)
+
+If the main router/DNS is down or you are on a different router, you can still
+access the system using the server IP address. The API serves the portals at
+path prefixes in addition to subdomains:
+
+- Client: `http://<server-ip>/`
+- Admin: `http://<server-ip>/admin`
+- Ops wallboard: `http://<server-ip>/ops`
+- Inventory: `http://<server-ip>/inventory`
+
+This avoids any dependency on `.lan` hostnames and works on any LAN that can
+reach the server IP.
+
 ## Install
 
 ```bash

@@ -8,6 +8,7 @@ import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import useTheme from "./hooks/useTheme";
+import { buildPortalUrl } from "./utils/portalNavigation";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
@@ -386,9 +387,7 @@ function App() {
         onNavigateInventory={() => navigate("/inventory")}
         onCreateProject={() => navigate("/create")}
         onNavigateAdmin={() => {
-          const host = window.location.hostname;
-          const adminHost = host ? `admin.${host}` : "admin.magichandsproject.lan";
-          window.location.href = `http://${adminHost}`;
+          window.location.href = buildPortalUrl("admin");
         }}
         onSignOut={onSignOut}
       >
