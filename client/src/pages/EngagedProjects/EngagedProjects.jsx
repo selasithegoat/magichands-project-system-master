@@ -26,7 +26,7 @@ const STATUS_OPTIONS = [
   "Pending Photography",
   "Pending Packaging",
   "Pending Delivery/Pickup",
-  "Order Confirmed",
+  "Order Created",
   "In Progress",
 ];
 

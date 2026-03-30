@@ -1916,7 +1916,7 @@ const DEFAULT_STATUS_BY_PROJECT_TYPE = {
   "Corporate Job": "Pending Departmental Engagement",
 };
 const STANDARD_STATUS_FLOW = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -1942,7 +1942,7 @@ const STANDARD_STATUS_FLOW = [
   "Finished",
 ];
 const QUOTE_STATUS_FLOW = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -2094,7 +2094,7 @@ const QUOTE_REQUIREMENT_DEPARTMENT_STAGE_ACCESS = {
   bidSubmission: new Set(),
 };
 const QUOTE_STATUS_SYNC_PENDING_SET = new Set([
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Engagement",
@@ -4827,7 +4827,7 @@ const createProject = async (req, res) => {
         status ||
         (normalizedProjectType === "Quote"
           ? "Pending Quote Request"
-          : "Order Confirmed"), // Default or Explicit
+          : "Order Created"), // Default or Explicit
       createdBy: req.user._id,
       projectLeadId: projectLeadId || null,
       assistantLeadId: normalizedAssistantLeadId || null,
@@ -9807,7 +9807,7 @@ const updateProject = async (req, res) => {
     const isLeadAcceptance =
       !canManageBillingUser &&
       requestedStatus === "Pending Scope Approval" &&
-      toText(project.status) === "Order Confirmed" &&
+      toText(project.status) === "Order Created" &&
       isLeadOrAssistant;
 
     if (!canManageBillingUser && !isLeadAcceptance) {

@@ -35,7 +35,7 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
 ]);
 
 const STATUS_LABEL_OVERRIDES = {
-  "Order Confirmed": "Waiting Acceptance",
+  "Order Created": "Waiting Acceptance",
   "Pending Delivery/Pickup": "Pending Delivery",
 };
 
@@ -47,7 +47,7 @@ const PROJECT_TYPE_META = {
 };
 
 const STANDARD_PROGRESS_MAP = {
-  "Order Confirmed": 5,
+  "Order Created": 5,
   "Pending Scope Approval": 15,
   "Scope Approval Completed": 22,
   "Pending Departmental Meeting": 25,
@@ -74,7 +74,7 @@ const STANDARD_PROGRESS_MAP = {
 };
 
 const QUOTE_PROGRESS_MAP = {
-  "Order Confirmed": 5,
+  "Order Created": 5,
   "Pending Scope Approval": 25,
   "Scope Approval Completed": 35,
   "Pending Departmental Meeting": 38,
@@ -107,7 +107,7 @@ const RECENT_PROJECT_LIMIT = 5;
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DRAWER_TRANSITION_MS = 280;
 
-const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
+const isPendingAcceptanceProject = (project) => project.status === "Order Created";
 const isPendingDeliveryProject = (project) =>
   project?.status === "Pending Delivery/Pickup";
 const getProjectTypeValue = (project) =>
@@ -239,7 +239,7 @@ const formatProjectStatus = (status = "") =>
 const getStatusTone = (status = "") => {
   if (["Completed", "Finished"].includes(status)) return "success";
   if (status === "Pending Delivery/Pickup") return "info";
-  if (status === "Order Confirmed") return "attention";
+  if (status === "Order Created") return "attention";
   if (status.toLowerCase().includes("pending")) return "warning";
   return "neutral";
 };

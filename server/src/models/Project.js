@@ -341,7 +341,7 @@ const ProjectSchema = new mongoose.Schema(
         "On Hold",
         // New Workflow Statuses
         "New Order", // [New]
-        "Order Confirmed",
+        "Order Created",
         "Pending Scope Approval",
         "Scope Approval Completed",
         "Pending Departmental Meeting",
@@ -373,7 +373,7 @@ const ProjectSchema = new mongoose.Schema(
         "Pending Send Response",
         "Response Sent",
       ],
-      default: "Order Confirmed",
+      default: "Order Created",
     },
     hold: {
       isOnHold: {

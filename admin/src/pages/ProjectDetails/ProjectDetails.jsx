@@ -124,7 +124,7 @@ const mapQuoteStatusForStorage = (status) => {
 };
 
 const STANDARD_STATUS_FLOW = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -151,7 +151,7 @@ const STANDARD_STATUS_FLOW = [
 ];
 
 const QUOTE_STATUS_FLOW = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -2757,7 +2757,7 @@ const ProjectDetails = ({ user }) => {
             >
               {(project.projectType === "Quote"
                 ? [
-                    "Order Confirmed",
+                    "Order Created",
                     "Pending Scope Approval",
                     "Scope Approval Completed",
                     "Pending Departmental Meeting",
@@ -2773,7 +2773,7 @@ const ProjectDetails = ({ user }) => {
                     ...(isProjectOnHold ? ["On Hold"] : []),
                   ]
                 : [
-                    "Order Confirmed",
+                    "Order Created",
                     "Pending Scope Approval",
                     "Scope Approval Completed",
                     "Pending Departmental Meeting",

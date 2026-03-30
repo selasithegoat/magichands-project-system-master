@@ -158,7 +158,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       items: [], // Step 3
       uncontrollableFactors: [], // Step 4
       productionRisks: [], // Step 4
-      status: "Order Confirmed", // Default for new, overwritten if editing
+      status: "Order Created", // Default for new, overwritten if editing
       assistantLeadId: "", // Optional assistant lead
       sampleRequired: false,
       corporateEmergency: false,
@@ -411,7 +411,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         }
       });
 
-      if (editingId && formData.status === "Order Confirmed") {
+      if (editingId && formData.status === "Order Created") {
         payload.delete("status"); // Remove old status
         payload.append("status", "Pending Scope Approval");
       }

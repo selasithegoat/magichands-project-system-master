@@ -12,7 +12,7 @@ const CLOSED_STATUSES = new Set([
 ]);
 
 const ACTION_STATUSES = new Set([
-  "Order Confirmed",
+  "Order Created",
   "Pending Acceptance",
   "Pending Scope Approval",
   "Pending Departmental Meeting",

@@ -74,7 +74,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Order Confirmed":
+      case "Order Created":
         return { class: "draft", color: "#94a3b8", textClass: "gray" };
       case "Pending Scope Approval":
         return {
@@ -175,7 +175,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const projectTypeInfo = getProjectTypeInfo(projectTypeKey);
 
   const standardProgressMap = {
-    "Order Confirmed": 5,
+    "Order Created": 5,
     "Pending Scope Approval": 15,
     "Scope Approval Completed": 22,
     "Pending Departmental Meeting": 25,
@@ -202,7 +202,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   };
 
   const quoteProgressMap = {
-    "Order Confirmed": 5,
+    "Order Created": 5,
     "Pending Scope Approval": 25,
     "Scope Approval Completed": 35,
     "Pending Departmental Meeting": 38,
@@ -296,7 +296,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             {projectTypeInfo.label}
           </span>
           <span className={`status-badge ${statusInfo.class}`}>
-            {project.status === "Order Confirmed"
+            {project.status === "Order Created"
               ? "WAITING ACCEPTANCE"
               : project.status || "Draft"}
           </span>

@@ -31,7 +31,7 @@ const PIPELINE_GROUPS = [
     statuses: new Set([
       "Draft",
       "New Order",
-      "Order Confirmed",
+      "Order Created",
       "Pending Approval",
       "Pending Scope Approval",
       "Scope Approval Completed",

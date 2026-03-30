@@ -17,7 +17,7 @@ const PendingAssignments = ({ onStartNew, user }) => {
         const data = await res.json();
         const pending = data.filter((p) => {
           const leadId = p.projectLeadId?._id || p.projectLeadId;
-          return leadId === user._id && p.status === "Order Confirmed";
+          return leadId === user._id && p.status === "Order Created";
         });
         setAdjustments(pending);
       }

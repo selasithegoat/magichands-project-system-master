@@ -1,7 +1,7 @@
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 
 const STANDARD_PROGRESS_MAP = {
-  "Order Confirmed": 5,
+  "Order Created": 5,
   "Pending Scope Approval": 15,
   "Scope Approval Completed": 22,
   "Pending Departmental Meeting": 25,
@@ -28,7 +28,7 @@ const STANDARD_PROGRESS_MAP = {
 };
 
 const QUOTE_PROGRESS_MAP = {
-  "Order Confirmed": 5,
+  "Order Created": 5,
   "Pending Scope Approval": 25,
   "Scope Approval Completed": 35,
   "Pending Departmental Meeting": 38,
@@ -46,7 +46,7 @@ const QUOTE_PROGRESS_MAP = {
 };
 
 const STATUS_TITLE_MAP = {
-  "Order Confirmed": "Project Started",
+  "Order Created": "Project Started",
   "Pending Scope Approval": "Project Started",
   "Scope Approval Completed": "Project Started",
   "Pending Departmental Meeting": "Project Started",

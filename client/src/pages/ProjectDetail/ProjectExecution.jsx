@@ -6,7 +6,7 @@ import "./ProjectExecution.css";
 const steps = [
   {
     id: 1,
-    title: "Order Confirmed",
+    title: "Order Created",
     date: "Oct 20, 09:30",
     status: "completed",
     completedBy: "Sarah J.",

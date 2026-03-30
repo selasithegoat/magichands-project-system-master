@@ -53,15 +53,15 @@ const updateProject = async (req, res) => {
 
     if (currentStep) project.currentStep = currentStep;
 
-    // Status update logic: If accepting ("Pending Scope Approval" -> "Order Confirmed")
+    // Status update logic: If accepting ("Pending Scope Approval" -> "Order Created")
     // or specifically passed status
     if (status) {
       // If current status is Pending Scope Approval and we are saving, maybe move to next?
-      // For now, respect passed status. Use "Order Confirmed" if this is the "Accept" action.
+      // For now, respect passed status. Use "Order Created" if this is the "Accept" action.
       project.status = status;
     } else if (project.status === "Pending Scope Approval") {
       // If simply saving/updating from wizard without explicit status, assume moving to active
-      project.status = "Order Confirmed";
+      project.status = "Order Created";
     }
 
     const updatedProject = await project.save();

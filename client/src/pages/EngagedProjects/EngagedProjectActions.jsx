@@ -95,7 +95,7 @@ const QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_LABEL = "Previous Sample / Jobs Done";
 const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY = "sampleProduction";
 const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL = "Sample Production";
 const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -376,7 +376,7 @@ const ENGAGED_WORKFLOW_STEPS = [
     key: "brief",
     label: "Project Brief",
     statuses: [
-      "Order Confirmed",
+      "Order Created",
       "Pending Scope Approval",
       "Scope Approval Completed",
       "Pending Departmental Meeting",

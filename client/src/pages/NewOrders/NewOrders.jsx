@@ -513,7 +513,7 @@ const NewOrders = () => {
       formPayload.append("assistantLeadId", formData.assistantLeadId);
     }
     if (!editingId) {
-      formPayload.append("status", "Order Confirmed");
+      formPayload.append("status", "Order Created");
     }
     formPayload.append("briefOverview", formData.briefOverview);
     formPayload.append("projectType", formData.projectType);

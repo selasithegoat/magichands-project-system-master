@@ -55,7 +55,7 @@ const REMINDER_REPEAT_OPTIONS = [
 ];
 
 const STANDARD_STATUS_OPTIONS = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -82,7 +82,7 @@ const STANDARD_STATUS_OPTIONS = [
 ];
 
 const QUOTE_STATUS_OPTIONS = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",

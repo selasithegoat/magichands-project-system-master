@@ -27,7 +27,7 @@ const PACKAGING_HOURS = Number(getArgValue("--packaging-hours", "24"));
 const PROJECT_ID = getArgValue("--project-id", null);
 
 const STATUS_ORDER = [
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Mockup",

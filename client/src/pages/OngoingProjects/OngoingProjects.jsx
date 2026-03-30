@@ -22,7 +22,7 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
   "Finished",
 ]);
 
-const isPendingAcceptanceProject = (project) => project.status === "Order Confirmed";
+const isPendingAcceptanceProject = (project) => project.status === "Order Created";
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const isEmergencyProject = (project) =>

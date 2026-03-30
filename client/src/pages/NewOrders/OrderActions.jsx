@@ -110,7 +110,7 @@ const ORDER_WORKFLOW_STEPS = [
     key: "scope",
     label: "Scope",
     statuses: [
-      "Order Confirmed",
+      "Order Created",
       "Pending Scope Approval",
       "Scope Approval Completed",
       "Pending Departmental Meeting",
@@ -173,7 +173,7 @@ const QUOTE_WORKFLOW_STEPS = [
     key: "scope",
     label: "Scope",
     statuses: [
-      "Order Confirmed",
+      "Order Created",
       "Pending Scope Approval",
       "Scope Approval Completed",
       "Pending Departmental Meeting",

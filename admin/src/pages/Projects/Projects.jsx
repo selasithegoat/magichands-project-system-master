@@ -11,7 +11,7 @@ import { renderProjectName } from "../../utils/projectName";
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished"]);
-const PENDING_PROJECT_STATUSES = new Set(["Order Confirmed"]);
+const PENDING_PROJECT_STATUSES = new Set(["Order Created"]);
 const DELIVERY_PROJECT_STATUSES = new Set(["Pending Delivery/Pickup"]);
 const POST_DELIVERY_PROJECT_STATUSES = new Set([
   "Delivered",
@@ -616,7 +616,7 @@ const Projects = ({ user }) => {
               <option value="__URGENT__">Critical / Overdue</option>
               <option value="Draft">Draft</option>
               <option value="New Order">New Order</option>
-              <option value="Order Confirmed">Order Confirmed</option>
+              <option value="Order Created">Order Created</option>
               <option value="Pending Approval">Pending Approval</option>
               <option value="Pending Scope Approval">
                 Pending Scope Approval

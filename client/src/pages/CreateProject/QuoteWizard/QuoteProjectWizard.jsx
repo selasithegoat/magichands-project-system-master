@@ -170,7 +170,7 @@ const QuoteProjectWizard = () => {
     updates: [], // Project Memo Updates
     projectType: "Quote", // Default for this wizard
     priority: "Normal",
-    status: "Order Confirmed",
+    status: "Order Created",
   });
 
   // Fetch Leads
@@ -375,12 +375,12 @@ const QuoteProjectWizard = () => {
       const payload = {
         ...formData,
         projectType: formData.projectType || "Quote",
-        // Lead acceptance moves Order Confirmed -> Pending Scope Approval.
+        // Lead acceptance moves Order Created -> Pending Scope Approval.
         status: editingId
-          ? formData.status === "Order Confirmed"
+          ? formData.status === "Order Created"
             ? "Pending Scope Approval"
             : formData.status
-          : "Order Confirmed",
+          : "Order Created",
 
         // Ensure details object is populated for top-level schema
         details: {

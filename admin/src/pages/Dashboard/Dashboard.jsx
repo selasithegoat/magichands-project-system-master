@@ -432,7 +432,7 @@ const Dashboard = ({ user }) => {
         completed++;
       } else {
         active++;
-        if (p.status === "Order Confirmed") {
+        if (p.status === "Order Created") {
           pending++;
         }
         if (p.details?.deliveryDate) {
@@ -461,7 +461,7 @@ const Dashboard = ({ user }) => {
   const getStatusPillClass = (status) => {
     if (status === "Completed" || status === "Finished") return "completed";
     if (
-      status === "Order Confirmed" ||
+      status === "Order Created" ||
       status === "Pending Scope Approval" ||
       status === "Pending Acceptance"
     )

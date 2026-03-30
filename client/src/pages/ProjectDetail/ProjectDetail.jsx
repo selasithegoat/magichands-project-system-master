@@ -57,7 +57,7 @@ import TruckIcon from "../../components/icons/TruckIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 
 const STATUS_STEPS = [
-  { label: "Order Confirmed", statuses: ["Order Confirmed"] },
+  { label: "Order Created", statuses: ["Order Created"] },
   {
     label: "Scope Approval",
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
@@ -105,7 +105,7 @@ const STATUS_STEPS = [
 ];
 
 const QUOTE_STEPS = [
-  { label: "Order Confirmed", statuses: ["Order Confirmed"] },
+  { label: "Order Created", statuses: ["Order Created"] },
   {
     label: "Scope Approval",
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
@@ -131,10 +131,10 @@ const QUOTE_STEPS = [
   },
 ];
 
-const DEFAULT_WORKFLOW_STATUS = "Order Confirmed";
+const DEFAULT_WORKFLOW_STATUS = "Order Created";
 
 const STANDARD_WORKFLOW_STATUSES = new Set([
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -169,7 +169,7 @@ const DELIVERY_COMPLETED_STATUS_KEYS = new Set([
 ]);
 
 const QUOTE_WORKFLOW_STATUSES = new Set([
-  "Order Confirmed",
+  "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
   "Pending Departmental Meeting",
@@ -216,7 +216,7 @@ const resolveWorkflowStatus = (project) => {
 
 const getStatusColor = (status) => {
   switch (status) {
-    case "Order Confirmed":
+    case "Order Created":
       return "#94a3b8"; // Slate
     case "Pending Scope Approval":
     case "Scope Approval Completed":
@@ -1082,7 +1082,7 @@ const ProjectDetail = ({ user }) => {
               )}
                 <span className="status-badge">
                   <ClockIcon width="14" height="14" />{" "}
-                  {projectStatusDisplay === "Order Confirmed"
+                  {projectStatusDisplay === "Order Created"
                     ? "WAITING ACCEPTANCE"
                     : projectStatusDisplay.startsWith("Pending ")
                       ? projectStatusDisplay.replace("Pending ", "")
@@ -1228,7 +1228,7 @@ const ProjectDetail = ({ user }) => {
         )}
 
         {/* Acceptance Banner */}
-        {project.status === "Order Confirmed" && (
+        {project.status === "Order Created" && (
           <div className="acceptance-banner">
             <div>
               <h3 className="acceptance-banner-title">
@@ -1313,7 +1313,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Order Confirmed"
+                  project.status === "Order Created"
                 }
               />
               <OrderItemsCard
@@ -1333,7 +1333,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Order Confirmed"
+                  project.status === "Order Created"
                 }
               />
               <ProductionRisksCard
@@ -1343,7 +1343,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Order Confirmed"
+                  project.status === "Order Created"
                 }
               />
             </div>
@@ -3517,7 +3517,7 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
       switch (status) {
-        case "Order Confirmed":
+        case "Order Created":
           return 5;
         case "Pending Scope Approval":
           return 25;
@@ -3553,7 +3553,7 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
     }
 
     switch (status) {
-      case "Order Confirmed":
+      case "Order Created":
         return 5;
       case "Pending Scope Approval":
         return 15;
@@ -3653,7 +3653,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
     step.statuses.includes(workflowStatus),
   );
 
-  if (currentStepIndex !== -1 && workflowStatus !== "Order Confirmed") {
+  if (currentStepIndex !== -1 && workflowStatus !== "Order Created") {
     // Determine if the status represents a completed step
     const isCompletedVariant =
       workflowStatus.includes("Completed") ||
@@ -3681,7 +3681,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
   }
 
   const statusIcons = {
-    "Order Confirmed": ClipboardListIcon,
+    "Order Created": ClipboardListIcon,
     "Scope Approval": EyeIcon,
     "Departmental Engagement": CheckCircleIcon,
     Mockup: PaintbrushIcon,
@@ -3787,7 +3787,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
                 workflowStatus === "Feedback Completed"
                   ? "Completed"
                   : "Pending";
-            } else if (workflowStatus === "Order Confirmed") {
+            } else if (workflowStatus === "Order Created") {
               subText = "Confirmed";
             } else if (
               stepStatuses.includes(workflowStatus) &&
@@ -3872,7 +3872,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
                   </span>
                   {isActive &&
                     subText === "Pending" &&
-                    workflowStatus !== "Order Confirmed"}
+                    workflowStatus !== "Order Created"}
                 </div>
 
                 <span className="approval-sub">{subText}</span>
