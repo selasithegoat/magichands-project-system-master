@@ -228,6 +228,56 @@ cd ../server
 node src/server.js
 ```
 
+## Staging (No-Interrupt Updates)
+
+Use a staging instance on a separate port + database so you can test changes
+without disrupting the live system.
+
+1. Create a staging env file:
+
+```bash
+cp server/.env.staging.example server/.env.staging
+```
+
+Update `PORT`, `MONGO_URI`, and the IPs/hosts inside `server/.env.staging`.
+
+2. Build staging bundles:
+
+```bash
+cd client
+npm run build:staging
+
+cd ../admin
+npm run build:staging
+
+cd ../opsportal
+npm run build:staging
+
+cd ../inventoryportal
+npm run build:staging
+```
+
+3. Start the staging API (PowerShell):
+
+```powershell
+$env:DOTENV_FILE = ".env.staging"
+node src/server.js
+```
+
+Staging URLs (example for port `8080`):
+
+- Client: `http://<server-ip>:8080/`
+- Admin: `http://<server-ip>:8080/admin`
+- Ops wallboard: `http://<server-ip>:8080/ops`
+- Inventory: `http://<server-ip>:8080/inventory`
+
+## Promote to Production
+
+When staging looks good:
+
+1. Build production bundles (`npm run build` in each portal).
+2. Restart the main API server on the production port (e.g., `80`).
+
 ## Create an Admin User (Optional)
 
 There is a helper script in `server/createAdmin.js`.

@@ -27,8 +27,21 @@ const { broadcastDataChange } = require("./utils/realtimeHub");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 const { startReminderScheduler } = require("./utils/reminderScheduler");
 
-// Load env vars
-dotenv.config();
+const resolveEnvPath = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (path.isAbsolute(raw)) return raw;
+  return path.resolve(__dirname, "..", raw);
+};
+
+// Load env vars (support DOTENV_FILE for staging/alternate configs)
+const dotenvPath = resolveEnvPath(process.env.DOTENV_FILE);
+const dotenvResult = dotenvPath
+  ? dotenv.config({ path: dotenvPath })
+  : dotenv.config();
+if (dotenvPath && dotenvResult?.error) {
+  dotenv.config();
+}
 
 // Connect to database
 connectDB();
@@ -387,13 +400,29 @@ app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/inventory", inventoryRoutes);
 
+const resolveDistPath = (value, fallbackPath) => {
+  const raw = String(value || "").trim();
+  if (!raw) return fallbackPath;
+  if (path.isAbsolute(raw)) return raw;
+  return path.resolve(__dirname, "../..", raw);
+};
+
 // Serve built frontends (Vite builds -> dist)
-const clientDistPath = path.resolve(__dirname, "../../client/dist");
-const adminDistPath = path.resolve(__dirname, "../../admin/dist");
-const opsDistPath = path.resolve(__dirname, "../../opsportal/dist");
-const inventoryDistPath = path.resolve(
-  __dirname,
-  "../../inventoryportal/dist",
+const clientDistPath = resolveDistPath(
+  process.env.CLIENT_DIST_DIR,
+  path.resolve(__dirname, "../../client/dist"),
+);
+const adminDistPath = resolveDistPath(
+  process.env.ADMIN_DIST_DIR,
+  path.resolve(__dirname, "../../admin/dist"),
+);
+const opsDistPath = resolveDistPath(
+  process.env.OPS_DIST_DIR,
+  path.resolve(__dirname, "../../opsportal/dist"),
+);
+const inventoryDistPath = resolveDistPath(
+  process.env.INVENTORY_DIST_DIR,
+  path.resolve(__dirname, "../../inventoryportal/dist"),
 );
 const hasClientBuild = fs.existsSync(clientDistPath);
 const hasAdminBuild = fs.existsSync(adminDistPath);
