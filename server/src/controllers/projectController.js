@@ -8571,8 +8571,9 @@ const updateProjectType = async (req, res) => {
       nextStatus = getDefaultStatusForProjectType(requestedType);
     }
 
-    if (isQuoteToProjectConversion) {
-      // Quote conversion always restarts the full standard workflow from scope approval.
+    if (isQuoteToProjectConversion && !requestedStatus) {
+      // Quote conversion restarts the full standard workflow from scope approval
+      // unless a target status is explicitly provided.
       nextStatus = "Pending Scope Approval";
     }
 

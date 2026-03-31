@@ -4,10 +4,6 @@ import "./ProjectTypeChangeModal.css";
 
 const PROJECT_TYPE_OPTIONS = ["Standard", "Emergency", "Corporate Job", "Quote"];
 const PROJECT_STATUS_OPTIONS = [
-  "Draft",
-  "Pending Approval",
-  "In Progress",
-  "New Order",
   "Order Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
@@ -34,10 +30,6 @@ const PROJECT_STATUS_OPTIONS = [
   "Finished",
 ];
 const QUOTE_STATUS_OPTIONS = [
-  "Draft",
-  "Pending Approval",
-  "In Progress",
-  "New Order",
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",

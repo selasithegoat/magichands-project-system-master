@@ -337,6 +337,32 @@ const QUOTE_CONVERSION_TYPE_OPTIONS = [
   "Emergency",
   "Corporate Job",
 ];
+const QUOTE_CONVERSION_STATUS_OPTIONS = [
+  "Order Created",
+  "Pending Scope Approval",
+  "Scope Approval Completed",
+  "Pending Departmental Meeting",
+  "Pending Departmental Engagement",
+  "Departmental Engagement Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Master Approval",
+  "Master Approval Completed",
+  "Pending Production",
+  "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+];
 const QUOTE_DECISION_STATUS_LABELS = {
   pending: "Pending Decision",
   go_ahead: "Go Ahead",
@@ -717,6 +743,8 @@ const OrderActions = () => {
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
+  const [quoteConversionStatus, setQuoteConversionStatus] =
+    useState("Pending Scope Approval");
   const [quoteConversionSubmitting, setQuoteConversionSubmitting] =
     useState(false);
   const [focusedWorkflowStep, setFocusedWorkflowStep] = useState("");
@@ -1302,6 +1330,15 @@ const OrderActions = () => {
     [quoteWorkflowStatusDisplay, isQuoteProject, quoteRequirementMode],
   );
   const activeJourneyStep = workflowJourney.find((item) => item.state === "active");
+
+  useEffect(() => {
+    if (!isQuoteProject) return;
+    setQuoteConversionStatus((previous) =>
+      QUOTE_CONVERSION_STATUS_OPTIONS.includes(previous)
+        ? previous
+        : "Pending Scope Approval",
+    );
+  }, [isQuoteProject]);
 
   useEffect(() => {
     if (workflowJourney.length === 0) return;
@@ -2501,6 +2538,11 @@ const OrderActions = () => {
     const targetType = QUOTE_CONVERSION_TYPE_OPTIONS.includes(quoteConversionType)
       ? quoteConversionType
       : "Standard";
+    const targetStatus = QUOTE_CONVERSION_STATUS_OPTIONS.includes(
+      quoteConversionStatus,
+    )
+      ? quoteConversionStatus
+      : "Pending Scope Approval";
 
     setQuoteConversionSubmitting(true);
     try {
@@ -2511,6 +2553,7 @@ const OrderActions = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             targetType,
+            targetStatus,
             reason:
               "Converted from quote after client decision validated by Front Desk.",
           }),
@@ -2520,7 +2563,10 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        showToast(`Quote converted to ${targetType}.`, "success");
+        showToast(
+          `Quote converted to ${targetType} (${targetStatus}).`,
+          "success",
+        );
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(errorData.message || "Failed to convert quote.", "error");
@@ -3564,6 +3610,20 @@ const OrderActions = () => {
                           </option>
                         ))}
                       </select>
+                      <select
+                        className="quote-decision-select"
+                        value={quoteConversionStatus}
+                        onChange={(event) =>
+                          setQuoteConversionStatus(event.target.value)
+                        }
+                        disabled={!canManageBilling || quoteConversionSubmitting}
+                      >
+                        {QUOTE_CONVERSION_STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         className="action-btn complete-btn"
                         onClick={handleConvertQuoteToProject}
@@ -3578,7 +3638,7 @@ const OrderActions = () => {
                     </div>
                     <p className="mockup-approval-meta">
                       Front Desk converts this quote into the selected project
-                      type after client go-ahead.
+                      type and starting status after client go-ahead.
                     </p>
                   </div>
                 )}
