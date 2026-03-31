@@ -156,7 +156,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   };
 
   const selectedLeadValue =
-    formData.lead?.value || formData.lead || "";
+    formData.lead?.value || formData.lead?._id || formData.lead || "";
   const leadDisplayName =
     formData.leadLabel ||
     leads.find((l) => l.value === formData.lead)?.label ||
@@ -220,56 +220,34 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
           </div>
 
           {/* Lead Assignment */}
-          {formData.lead ? (
-            <div className="input-group">
-              <label className="input-label">Project Lead</label>
-              <div
-                style={{
-                  padding: "0.75rem",
-                  background: "rgba(255,255,255,0.05)",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-color)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                <UserAvatar name={leadDisplayName} />
-                <span style={{ color: "var(--text-primary)" }}>
-                  {leadDisplayName}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <Select
-              label={
-                <>
-                  Lead Assignment <span style={{ color: "#ef4444" }}>*</span>
-                </>
-              }
-              options={leads}
-              value={
-                isLoadingLeads
-                  ? null
-                  : leads.find((l) => l.value === formData.lead) ||
-                    formData.lead
-              }
-              onChange={(val) => handleChange("lead", val)}
-              placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
-              renderValue={(option) => (
-                <>
-                  <UserAvatar name={option.label} />
-                  <span>{option.label}</span>
-                </>
-              )}
-              renderOption={(option) => (
-                <>
-                  <UserAvatar name={option.label} />
-                  <span>{option.label}</span>
-                </>
-              )}
-            />
-          )}
+          <Select
+            label={
+              <>
+                Lead Assignment <span style={{ color: "#ef4444" }}>*</span>
+              </>
+            }
+            options={leads}
+            value={
+              isLoadingLeads
+                ? null
+                : leads.find((l) => l.value === selectedLeadValue) ||
+                  formData.lead
+            }
+            onChange={(val) => handleChange("lead", val)}
+            placeholder={isLoadingLeads ? "Loading users..." : "Select Lead"}
+            renderValue={(option) => (
+              <>
+                <UserAvatar name={option.label} />
+                <span>{option.label}</span>
+              </>
+            )}
+            renderOption={(option) => (
+              <>
+                <UserAvatar name={option.label} />
+                <span>{option.label}</span>
+              </>
+            )}
+          />
 
           <Select
             label="Assistant Lead (Optional)"
@@ -277,7 +255,6 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             value={leads.find((l) => l.value === formData.assistantLeadId)}
             onChange={(val) => handleChange("assistantLeadId", val.value)}
             placeholder={isLoadingLeads ? "Loading users..." : "Select Assistant"}
-            disabled={isEditing}
             renderValue={(option) => (
               <>
                 <UserAvatar name={option.label} />

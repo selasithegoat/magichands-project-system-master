@@ -411,6 +411,14 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         }
       });
 
+      const leadValue =
+        formData.lead?.value ||
+        formData.lead?._id ||
+        formData.lead;
+      if (leadValue) {
+        payload.append("projectLeadId", leadValue);
+      }
+
       if (editingId && formData.status === "Order Created") {
         payload.delete("status"); // Remove old status
         payload.append("status", "Pending Scope Approval");

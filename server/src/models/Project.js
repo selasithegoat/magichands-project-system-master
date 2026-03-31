@@ -795,6 +795,13 @@ const ProjectSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+ProjectSchema.pre("validate", function normalizeLegacyStatus() {
+  const rawStatus = String(this.status || "").trim();
+  if (rawStatus.toLowerCase() === "order confirmed") {
+    this.status = "Order Created";
+  }
+});
+
 // Indexes for performance optimization
 // Combined index for Dashboard/Filtering: Most common filter combo
 ProjectSchema.index({ status: 1, projectType: 1, createdAt: -1 });

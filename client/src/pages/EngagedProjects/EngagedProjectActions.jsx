@@ -537,6 +537,7 @@ const EngagedProjectActions = ({ user }) => {
   const [orderMeeting, setOrderMeeting] = useState(null);
   const [meetingLoading, setMeetingLoading] = useState(false);
   const [meetingError, setMeetingError] = useState("");
+  const [meetingGate, setMeetingGate] = useState(null);
   const [toast, setToast] = useState(null);
   const [statusUpdating, setStatusUpdating] = useState(null);
   const [quoteRequirementUpdating, setQuoteRequirementUpdating] = useState("");
@@ -1234,6 +1235,7 @@ const EngagedProjectActions = ({ user }) => {
     const normalizedOrder = String(orderNumber || "").trim();
     if (!normalizedOrder) {
       setOrderMeeting(null);
+      setMeetingGate(null);
       setMeetingError("");
       return;
     }
@@ -1254,10 +1256,12 @@ const EngagedProjectActions = ({ user }) => {
       }
       const data = await res.json();
       setOrderMeeting(data?.meeting || null);
+      setMeetingGate(data?.meetingGate || null);
     } catch (meetingFetchError) {
       console.error("Failed to load meeting:", meetingFetchError);
       setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
       setOrderMeeting(null);
+      setMeetingGate(null);
     } finally {
       setMeetingLoading(false);
     }
@@ -1825,6 +1829,18 @@ const EngagedProjectActions = ({ user }) => {
         message:
           "Project Leads cannot take engagement actions on their own projects here.",
       });
+      return;
+    }
+    const meetingSkipped = Boolean(targetProject?.meetingOverride?.skipped);
+    const meetingBlocked =
+      Boolean(meetingGate?.required) &&
+      !meetingSkipped &&
+      !meetingGate?.meetingCompleted;
+    if (meetingBlocked) {
+      const message = meetingGate?.meetingScheduled
+        ? "Departmental meeting must be completed before engagement can be accepted."
+        : "Schedule and complete the departmental meeting before engagement can be accepted.";
+      setToast({ type: "error", message });
       return;
     }
     const resolvedStatus =

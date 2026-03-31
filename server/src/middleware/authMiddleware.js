@@ -21,7 +21,7 @@ const hasAdministrationDepartment = (user) =>
   normalizeDepartmentValues(user?.department).includes(ADMIN_DEPARTMENT_KEY);
 
 const hasAdminPortalAccess = (user) =>
-  user?.role === "admin" && hasAdministrationDepartment(user);
+  user?.role === "admin" || hasAdministrationDepartment(user);
 
 const hasInventoryPortalAccess = (user) => {
   if (!user) return false;

@@ -576,7 +576,7 @@ const canMutateProject = (user, project, action = "default") => {
 
   switch (action) {
     case "revision":
-      return isFrontDesk;
+      return isFrontDesk || user?.role === "admin";
     case "manage":
     case "delete":
     case "reopen":
@@ -601,7 +601,8 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
   if (
     req.user?.role === "admin" &&
     isUserAssignedProjectLead(req.user, project) &&
-    isAdminPortalMutation
+    isAdminPortalMutation &&
+    action !== "revision"
   ) {
     res.status(403).json({
       message:
@@ -837,32 +838,45 @@ const buildOrderGroups = (projects = [], { collapseRevisions = true } = {}) => {
 
   sourceProjects.forEach((project) => {
     const orderRefId = toObjectIdString(project?.orderRef);
-    const orderNumber =
-      normalizeOrderNumber(project?.orderRef?.orderNumber) ||
-      normalizeOrderNumber(project?.orderId) ||
-      "UNASSIGNED";
-    // Always group by order number first so all projects under the same
-    // orderNumber are in one bucket even if orderRef is inconsistent.
-    const groupKey = orderNumber || orderRefId || toObjectIdString(project?._id);
+    const orderIdNumber = normalizeOrderNumber(project?.orderId);
+    const orderRefNumber = normalizeOrderNumber(project?.orderRef?.orderNumber);
+    const canUseOrderRef =
+      Boolean(orderRefNumber) && (!orderIdNumber || orderRefNumber === orderIdNumber);
+    const orderNumber = orderIdNumber || orderRefNumber || "UNASSIGNED";
+    // Group by the explicit project orderId first to avoid merging different orders
+    // that might share an orderRef or have mismatched orderRef numbers.
+    const groupKey =
+      orderIdNumber || orderRefNumber || orderRefId || toObjectIdString(project?._id);
 
     if (!groups.has(groupKey)) {
+      const clientFromDetails = normalizeOptionalText(project?.details?.client);
+      const clientFromOrderRef = canUseOrderRef
+        ? normalizeOptionalText(project?.orderRef?.client)
+        : "";
+      const clientEmailFromDetails = normalizeOptionalText(
+        project?.details?.clientEmail,
+      );
+      const clientEmailFromOrderRef = canUseOrderRef
+        ? normalizeOptionalText(project?.orderRef?.clientEmail)
+        : "";
+      const clientPhoneFromDetails = normalizeOptionalText(
+        project?.details?.clientPhone,
+      );
+      const clientPhoneFromOrderRef = canUseOrderRef
+        ? normalizeOptionalText(project?.orderRef?.clientPhone)
+        : "";
+      const orderDateFromOrderRef = canUseOrderRef
+        ? project?.orderRef?.orderDate
+        : null;
+
       groups.set(groupKey, {
         id: groupKey,
-        orderRef: orderRefId || null,
+        orderRef: canUseOrderRef ? orderRefId || null : null,
         orderNumber,
-        orderDate: project?.orderRef?.orderDate || project?.orderDate || null,
-        client:
-          normalizeOptionalText(project?.orderRef?.client) ||
-          normalizeOptionalText(project?.details?.client) ||
-          "",
-        clientEmail:
-          normalizeOptionalText(project?.orderRef?.clientEmail) ||
-          normalizeOptionalText(project?.details?.clientEmail) ||
-          "",
-        clientPhone:
-          normalizeOptionalText(project?.orderRef?.clientPhone) ||
-          normalizeOptionalText(project?.details?.clientPhone) ||
-          "",
+        orderDate: orderDateFromOrderRef || project?.orderDate || null,
+        client: clientFromDetails || clientFromOrderRef || "",
+        clientEmail: clientEmailFromDetails || clientEmailFromOrderRef || "",
+        clientPhone: clientPhoneFromDetails || clientPhoneFromOrderRef || "",
         totalProjects: 0,
         openProjects: 0,
         leads: [],
@@ -871,31 +885,40 @@ const buildOrderGroups = (projects = [], { collapseRevisions = true } = {}) => {
     }
 
     const group = groups.get(groupKey);
-    if (!group.orderRef && orderRefId) {
+    if (!group.orderRef && canUseOrderRef && orderRefId) {
       group.orderRef = orderRefId;
     }
     if (group.orderNumber === "UNASSIGNED" && orderNumber !== "UNASSIGNED") {
       group.orderNumber = orderNumber;
     }
     if (!group.orderDate && (project?.orderRef?.orderDate || project?.orderDate)) {
-      group.orderDate = project?.orderRef?.orderDate || project?.orderDate || null;
+      group.orderDate =
+        (canUseOrderRef ? project?.orderRef?.orderDate : null) ||
+        project?.orderDate ||
+        null;
     }
     if (!group.client) {
       group.client =
-        normalizeOptionalText(project?.orderRef?.client) ||
         normalizeOptionalText(project?.details?.client) ||
+        (canUseOrderRef
+          ? normalizeOptionalText(project?.orderRef?.client)
+          : "") ||
         "";
     }
     if (!group.clientEmail) {
       group.clientEmail =
-        normalizeOptionalText(project?.orderRef?.clientEmail) ||
         normalizeOptionalText(project?.details?.clientEmail) ||
+        (canUseOrderRef
+          ? normalizeOptionalText(project?.orderRef?.clientEmail)
+          : "") ||
         "";
     }
     if (!group.clientPhone) {
       group.clientPhone =
-        normalizeOptionalText(project?.orderRef?.clientPhone) ||
         normalizeOptionalText(project?.details?.clientPhone) ||
+        (canUseOrderRef
+          ? normalizeOptionalText(project?.orderRef?.clientPhone)
+          : "") ||
         "";
     }
 
@@ -954,11 +977,21 @@ const resolveOrderGroupProjects = async ({
   includeCancelled = true,
 } = {}) => {
   const normalizedOrderNumber = normalizeOrderNumber(orderNumber);
+  let useOrderRef = Boolean(orderRefId);
+  if (orderRefId && normalizedOrderNumber) {
+    const linkedOrder = await Order.findById(orderRefId)
+      .select("orderNumber")
+      .lean();
+    const linkedOrderNumber = normalizeOrderNumber(linkedOrder?.orderNumber);
+    if (linkedOrderNumber && linkedOrderNumber !== normalizedOrderNumber) {
+      useOrderRef = false;
+    }
+  }
   const conditions = [];
   if (normalizedOrderNumber) {
     conditions.push({ orderId: normalizedOrderNumber });
   }
-  if (orderRefId) {
+  if (useOrderRef) {
     conditions.push({ orderRef: orderRefId });
   }
   if (conditions.length === 0) return [];
@@ -4714,7 +4747,14 @@ const createProject = async (req, res) => {
     const generatedOrderId = `ORD-${Date.now().toString().slice(-6)}`;
 
     // Helper to extract value if object
-    const getValue = (field) => (field && field.value ? field.value : field);
+    const getValue = (field) => {
+      if (field && typeof field === "object") {
+        if (field.value) return field.value;
+        if (field._id) return field._id;
+        if (field.id) return field.id;
+      }
+      return field;
+    };
     const parseMaybeJson = (field) => {
       if (typeof field === "string" && field.trim().startsWith("{")) {
         try {
@@ -5297,7 +5337,15 @@ const getOrderGroupByNumber = async (req, res) => {
       collapseRevisions:
         String(req.query.collapseRevisions || "true").toLowerCase() !== "false",
     });
-    const group = groups.find((entry) => entry.orderNumber === orderNumber);
+    const group = groups.find((entry) => {
+      if (entry.orderNumber === orderNumber) return true;
+      if (!Array.isArray(entry.projects)) return false;
+      return entry.projects.some((project) => {
+        const projectOrderId = normalizeOrderNumber(project?.orderId);
+        const projectOrderRef = normalizeOrderNumber(project?.orderRef?.orderNumber);
+        return projectOrderId === orderNumber || projectOrderRef === orderNumber;
+      });
+    });
 
     if (!group) {
       return res.status(404).json({ message: "Order not found." });
@@ -10097,6 +10145,8 @@ const updateProject = async (req, res) => {
       corporateEmergency = JSON.parse(corporateEmergency);
     if (typeof lead === "string" && lead.startsWith("{"))
       lead = JSON.parse(lead);
+    if (typeof projectLeadId === "string" && projectLeadId.startsWith("{"))
+      projectLeadId = JSON.parse(projectLeadId);
     if (typeof assistantLeadId === "string" && assistantLeadId.startsWith("{"))
       assistantLeadId = JSON.parse(assistantLeadId);
     if (typeof orderRef === "string" && orderRef.startsWith("{"))
@@ -10106,6 +10156,12 @@ const updateProject = async (req, res) => {
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
+
+    const leadOnlyKeys = new Set(["projectLeadId", "assistantLeadId", "lead"]);
+    const bodyKeys = Object.keys(req.body || {});
+    const hasLeadKey = bodyKeys.some((key) => leadOnlyKeys.has(key));
+    const hasNonLeadKey = bodyKeys.some((key) => !leadOnlyKeys.has(key));
+    const isLeadOnlyUpdate = hasLeadKey && !hasNonLeadKey;
 
     const normalizedProjectType = normalizeProjectType(
       project.projectType,
@@ -10125,6 +10181,12 @@ const updateProject = async (req, res) => {
       isLeadOrAssistant;
 
     if (!canManageBillingUser && !isLeadAcceptance) {
+      console.warn("[updateProject] Access denied: not front desk/admin", {
+        projectId: id,
+        userId: req.user?._id || req.user?.id,
+        status: project?.status,
+        projectType: project?.projectType,
+      });
       return res.status(403).json({
         message: "Only Front Desk and Admin can revise order details.",
       });
@@ -10132,7 +10194,17 @@ const updateProject = async (req, res) => {
 
     const mutationAction = isLeadAcceptance ? "manage" : "revision";
     if (!ensureProjectMutationAccess(req, res, project, mutationAction)) return;
-    if (REVISION_LOCKED_STATUSES.has(toText(project?.status))) {
+    if (
+      REVISION_LOCKED_STATUSES.has(toText(project?.status)) &&
+      !isLeadOnlyUpdate
+    ) {
+      console.warn("[updateProject] Revision locked", {
+        projectId: id,
+        userId: req.user?._id || req.user?.id,
+        status: project?.status,
+        projectType: project?.projectType,
+        isLeadOnlyUpdate,
+      });
       return res.status(400).json({
         message:
           "Order revision is locked after completion. Reopen the project to revise it.",
@@ -10189,7 +10261,14 @@ const updateProject = async (req, res) => {
       : "";
 
     // Helper
-    const getValue = (field) => (field && field.value ? field.value : field);
+    const getValue = (field) => {
+      if (field && typeof field === "object") {
+        if (field.value) return field.value;
+        if (field._id) return field._id;
+        if (field.id) return field.id;
+      }
+      return field;
+    };
 
     const currentOrderNumber = normalizeOrderNumber(project.orderId);
     const currentOrderRefId = toObjectIdString(project.orderRef);
@@ -10270,8 +10349,9 @@ const updateProject = async (req, res) => {
       project.receivedTime = getValue(receivedTime);
       detailsChanged = true;
     }
-    if (projectLeadId) {
-      project.projectLeadId = projectLeadId;
+    if (projectLeadId !== undefined) {
+      const normalizedLeadId = getValue(projectLeadId);
+      project.projectLeadId = normalizedLeadId || null;
       detailsChanged = true;
     }
     if (assistantLeadId !== undefined) {
@@ -10531,11 +10611,17 @@ const updateProject = async (req, res) => {
       });
     }
 
-    if (project.projectType === "Quote") {
+    if (!isLeadOnlyUpdate && project.projectType === "Quote") {
       const { isCostOnly, nonCostRequirements } = getQuoteChecklistState(
         project.quoteDetails || {},
       );
       if (!isCostOnly) {
+        console.warn("[updateProject] Quote requirements blocked", {
+          projectId: id,
+          userId: req.user?._id || req.user?.id,
+          projectType: project?.projectType,
+          nonCostRequirements,
+        });
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
@@ -10551,6 +10637,11 @@ const updateProject = async (req, res) => {
       project.projectType === "Quote" &&
       !hasQuoteDecisionRecorded(project)
     ) {
+      console.warn("[updateProject] Quote decision pending", {
+        projectId: id,
+        userId: req.user?._id || req.user?.id,
+        status: project?.status,
+      });
       return res.status(400).json({
         code: "QUOTE_DECISION_PENDING",
         message:
@@ -10853,7 +10944,41 @@ const updateProject = async (req, res) => {
 
     res.json(populatedProject);
   } catch (error) {
-    console.error("Error updating project:", error);
+    const safeStringify = (value) => {
+      if (value === undefined) return "undefined";
+      if (value === null) return "null";
+      if (typeof value === "string") return value;
+      try {
+        const json = JSON.stringify(value);
+        return json.length > 2000 ? `${json.slice(0, 2000)}…` : json;
+      } catch (err) {
+        try {
+          return String(value);
+        } catch {
+          return "[unserializable]";
+        }
+      }
+    };
+
+    console.error("Error updating project:", {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+      projectId: req?.params?.id,
+      userId: req?.user?._id || req?.user?.id,
+      bodyKeys: req?.body ? Object.keys(req.body) : [],
+      projectLeadId: safeStringify(req?.body?.projectLeadId),
+      assistantLeadId: safeStringify(req?.body?.assistantLeadId),
+      lead: safeStringify(req?.body?.lead),
+      orderRef: safeStringify(req?.body?.orderRef),
+      status: safeStringify(req?.body?.status),
+      validationErrors: error?.errors
+        ? Object.keys(error.errors).reduce((acc, key) => {
+            acc[key] = error.errors[key]?.message || "Validation error";
+            return acc;
+          }, {})
+        : null,
+    });
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
@@ -11214,6 +11339,12 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "In Progress",
   "Completed",
   "On Hold",
+  // Quote workflow statuses that occur after scope approval
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
 ]);
 
 // @desc    Acknowledge project engagement by a department
@@ -11753,7 +11884,7 @@ const getOrderMeetingByNumber = async (req, res) => {
       query && Object.keys(query).length > 0 ? { $and: [baseQuery, query] } : baseQuery;
 
     const accessible = await Project.find(scopedQuery)
-      .select("_id orderId orderRef")
+      .select("_id orderId orderRef projectType")
       .lean();
     if (!accessible || accessible.length === 0) {
       return res.status(404).json({ message: "Order not found." });
@@ -11781,10 +11912,32 @@ const getOrderMeetingByNumber = async (req, res) => {
 
     const scheduledMeeting =
       meetings.find((item) => item.status === "scheduled") || null;
+    const latestScheduled = scheduledMeeting;
+    const latestCompleted = meetings.find((item) => item.status === "completed") || null;
+    const scheduledUpdatedAt = latestScheduled
+      ? new Date(latestScheduled.updatedAt || latestScheduled.createdAt || 0).getTime()
+      : 0;
+    const completedUpdatedAt = latestCompleted
+      ? new Date(latestCompleted.updatedAt || latestCompleted.createdAt || 0).getTime()
+      : 0;
+    const meetingScheduled = Boolean(latestScheduled);
+    const meetingCompleted =
+      Boolean(latestCompleted) && completedUpdatedAt >= scheduledUpdatedAt;
+    const grouped = accessible.length > 1;
+    const hasCorporate = accessible.some(
+      (entry) => toText(entry?.projectType) === "Corporate Job",
+    );
 
     return res.json({
       meeting: scheduledMeeting || meetings[0] || null,
       meetings,
+      meetingGate: {
+        required: grouped || hasCorporate,
+        grouped,
+        hasCorporate,
+        meetingScheduled,
+        meetingCompleted,
+      },
     });
   } catch (error) {
     console.error("Error fetching order meeting:", error);

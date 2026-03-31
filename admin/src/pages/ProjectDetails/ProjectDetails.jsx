@@ -757,7 +757,9 @@ const ProjectDetails = ({ user }) => {
     project?.orderId || project?.orderRef?.orderNumber || "",
   ).trim();
   const canManageSms =
-    user?.role === "admin" && project?.projectType !== "Quote";
+    user?.role === "admin" &&
+    Boolean(project) &&
+    project?.projectType !== "Quote";
   const groupedLeadRows = useMemo(
     () =>
       getGroupedLeadDisplayRows(
@@ -826,14 +828,6 @@ const ProjectDetails = ({ user }) => {
 
 
   const ensureProjectIsEditable = () => {
-    const isAdminLeadOnProject = Boolean(user?.role === "admin" && isLeadUser);
-    if (isAdminLeadOnProject) {
-      alert(
-        "You cannot modify a project where you are the assigned Project Lead. Ask another admin to make this change.",
-      );
-      return false;
-    }
-
     const currentlyCancelled = Boolean(project?.cancellation?.isCancelled);
     if (currentlyCancelled) {
       alert(
@@ -1521,7 +1515,13 @@ const ProjectDetails = ({ user }) => {
           credentials: "include",
         },
       );
-      if (!res.ok) throw new Error("Failed to fetch grouped order projects");
+      if (!res.ok) {
+        if (res.status === 404) {
+          setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+          return;
+        }
+        throw new Error("Failed to fetch grouped order projects");
+      }
 
       const group = await res.json();
       const projects = Array.isArray(group?.projects) ? group.projects : [];
@@ -1547,7 +1547,10 @@ const ProjectDetails = ({ user }) => {
 
       const data = await res.json();
       applyProjectToState(data);
-      await fetchOrderGroupProjects(data?.orderId, data);
+      await fetchOrderGroupProjects(
+        data?.orderRef?.orderNumber || data?.orderId,
+        data,
+      );
     } catch (err) {
       console.error("Error fetching project:", err);
       if (retries > 0) {
@@ -1574,7 +1577,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const fetchSmsPrompts = async () => {
-    if (!canManageSms) {
+    if (!canManageSms || !project || project.projectType === "Quote") {
       setSmsPrompts([]);
       return;
     }
@@ -4301,7 +4304,8 @@ const ProjectDetails = ({ user }) => {
             >
               <span>People & Departments</span>
               {!isEditingLead ? (
-                !isLeadUser && !isProjectOnHold && (
+                (user?.role === "admin" || !isLeadUser) &&
+                !isProjectOnHold && (
                   <button
                     onClick={() => setIsEditingLead(true)}
                     style={{
