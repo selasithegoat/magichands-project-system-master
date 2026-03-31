@@ -10,7 +10,10 @@ import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay } from "@client/utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+} from "@client/utils/quoteStatus";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -102,7 +105,10 @@ const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const getProjectStatusDisplay = (project) =>
   isQuoteProject(project)
-    ? getQuoteStatusDisplay(project?.status || "")
+    ? getQuoteStatusDisplay(
+        project?.status || "",
+        getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
+      )
     : project?.status || "";
 const normalizeDepartmentList = (value) => {
   if (Array.isArray(value)) {

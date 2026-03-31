@@ -20,7 +20,11 @@ import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/Proj
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
-import { getQuoteStatusDisplay, normalizeQuoteStatus } from "@client/utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+  normalizeQuoteStatus,
+} from "@client/utils/quoteStatus";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -111,10 +115,14 @@ const STATUS_AUTO_ADVANCE_TARGETS = {
   "Master Approval Completed": "Pending Production",
   "Packaging Completed": "Pending Delivery/Pickup",
 };
-const mapQuoteStatusForDisplay = (status, isQuoteProject = false) => {
+const mapQuoteStatusForDisplay = (
+  status,
+  isQuoteProject = false,
+  requirementMode = "",
+) => {
   const normalized = String(status || "").trim();
   if (!isQuoteProject) return normalized;
-  const normalizedQuote = getQuoteStatusDisplay(normalized);
+  const normalizedQuote = getQuoteStatusDisplay(normalized, requirementMode);
   if (normalizedQuote === "Pending Client Decision") return "Pending Decision";
   return normalizedQuote;
 };
@@ -154,21 +162,38 @@ const STANDARD_STATUS_FLOW = [
   "Finished",
 ];
 
-const QUOTE_STATUS_FLOW = [
-  "Quote Created",
-  "Pending Scope Approval",
-  "Scope Approval Completed",
-  "Pending Cost Verification",
-  "Cost Verification Completed",
-  "Pending Quote Submission",
-  "Quote Submission Completed",
-  "Pending Client Decision",
-  "Completed",
-  "Finished",
-];
+const QUOTE_STATUS_FLOW_BY_MODE = {
+  cost: [
+    "Quote Created",
+    "Pending Scope Approval",
+    "Scope Approval Completed",
+    "Pending Cost Verification",
+    "Cost Verification Completed",
+    "Pending Quote Submission",
+    "Quote Submission Completed",
+    "Pending Client Decision",
+    "Completed",
+    "Finished",
+  ],
+  mockup: [
+    "Quote Created",
+    "Pending Scope Approval",
+    "Scope Approval Completed",
+    "Pending Mockup",
+    "Mockup Completed",
+    "Pending Quote Submission",
+    "Quote Submission Completed",
+    "Pending Client Decision",
+    "Completed",
+    "Finished",
+  ],
+};
 
-const getStatusFlow = (isQuoteProject) =>
-  isQuoteProject ? QUOTE_STATUS_FLOW : STANDARD_STATUS_FLOW;
+const getQuoteStatusFlow = (mode) =>
+  QUOTE_STATUS_FLOW_BY_MODE[mode] || QUOTE_STATUS_FLOW_BY_MODE.cost;
+
+const getStatusFlow = (isQuoteProject, requirementMode = "") =>
+  isQuoteProject ? getQuoteStatusFlow(requirementMode) : STANDARD_STATUS_FLOW;
 
 const buildStatusConfirmPhrase = (status, projectId) => {
   const normalizedStatus = String(status || "").trim();
@@ -186,10 +211,11 @@ const getStatusMovementNote = (
   currentStatus,
   targetStatus,
   isQuoteProject,
+  requirementMode = "",
 ) => {
   if (!currentStatus || !targetStatus) return "";
 
-  const flow = getStatusFlow(isQuoteProject);
+  const flow = getStatusFlow(isQuoteProject, requirementMode);
   const currentIndex = flow.indexOf(currentStatus);
   const targetIndex = flow.indexOf(targetStatus);
 
@@ -1181,6 +1207,7 @@ const ProjectDetails = ({ user }) => {
     const currentDisplayStatus = mapQuoteStatusForDisplay(
       project.status,
       project.projectType === "Quote",
+      getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
     );
     if (String(newStatus) === String(currentDisplayStatus)) return;
 
@@ -2298,6 +2325,11 @@ const ProjectDetails = ({ user }) => {
   const activeMockupIsPdf =
     activeMockupFileType === "application/pdf" ||
     /\.pdf$/i.test(activeMockupFileUrl || "");
+  const latestMockupVersion =
+    mockupCarouselVersions[mockupCarouselVersions.length - 1] || null;
+  const latestMockupDecisionStatus = getMockupApprovalStatus(
+    latestMockupVersion?.clientApproval || project?.mockup?.clientApproval || {},
+  );
   const paymentLabels = {
     part_payment: "Part Payment",
     full_payment: "Full Payment",
@@ -2310,31 +2342,46 @@ const ProjectDetails = ({ user }) => {
     ? normalizeQuoteStatus(project.status || "")
     : project.status || "";
   const quoteChecklist = project?.quoteDetails?.checklist || {};
+  const quoteRequirementMode = isQuoteProject
+    ? getQuoteRequirementMode(quoteChecklist)
+    : "none";
+  const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
+  const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
   const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
-    ([key, value]) => key !== "cost" && Boolean(value),
+    ([key, value]) =>
+      key !== "cost" && key !== "mockup" && Boolean(value),
+  );
+  const quoteHasMultipleRequirements = Boolean(
+    quoteChecklist?.cost && quoteChecklist?.mockup,
   );
   const quoteWorkflowBlocked =
-    isQuoteProject && (!quoteChecklist?.cost || quoteHasUnsupportedRequirements);
-  const quoteWorkflowBlockedMessage = !quoteChecklist?.cost
-    ? "Cost requirement is not enabled for this quote."
-    : quoteHasUnsupportedRequirements
-      ? "Quote requirement workflows are not configured yet."
-      : "";
+    isQuoteProject && !isCostOnlyQuote && !isMockupOnlyQuote;
+  const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
+    ? quoteRequirementMode === "none"
+      ? "Quote requirements are not configured yet."
+      : quoteHasMultipleRequirements
+        ? "Multiple quote requirements are selected. Only one workflow can be active right now."
+        : quoteHasUnsupportedRequirements
+          ? "Quote requirement workflows are not configured yet."
+          : ""
+    : "";
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
   const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
   const quoteCostVerified =
-    isQuoteProject &&
+    isCostOnlyQuote &&
     Number.isFinite(quoteCostAmountValue) &&
     quoteCostAmountValue > 0;
   const currentDisplayStatus = mapQuoteStatusForDisplay(
     quoteWorkflowStatus,
     isQuoteProject,
+    quoteRequirementMode,
   );
   const statusMovementNote = statusConfirmModal.open
     ? getStatusMovementNote(
         currentDisplayStatus,
         statusConfirmModal.targetStatus,
         isQuoteProject,
+        quoteRequirementMode,
       )
     : "";
   const quoteDecisionState = isQuoteProject
@@ -2609,7 +2656,11 @@ const ProjectDetails = ({ user }) => {
               className={`status-badge-select ${quoteWorkflowStatus
                 ?.toLowerCase()
                 .replace(/\s+/g, "-")}`}
-              value={mapQuoteStatusForDisplay(quoteWorkflowStatus, isQuoteProject)}
+              value={mapQuoteStatusForDisplay(
+                quoteWorkflowStatus,
+                isQuoteProject,
+                quoteRequirementMode,
+              )}
               onChange={(e) => handleStatusChange(e.target.value)}
               disabled={
                 loading ||
@@ -2633,19 +2684,33 @@ const ProjectDetails = ({ user }) => {
               }}
             >
               {(project.projectType === "Quote"
-                ? [
-                    "Quote Created",
-                    "Pending Scope Approval",
-                    "Scope Approval Completed",
-                    "Pending Cost Verification",
-                    "Cost Verified",
-                    "Pending Quote Submission",
-                    "Quote Submitted",
-                    "Pending Decision",
-                    "Completed",
-                    "Finished",
-                    ...(isProjectOnHold ? ["On Hold"] : []),
-                  ]
+                ? isMockupOnlyQuote
+                  ? [
+                      "Quote Created",
+                      "Pending Scope Approval",
+                      "Scope Approval Completed",
+                      "Pending Mockup",
+                      "Mockup Completed",
+                      "Pending Quote Submission",
+                      "Quote Submitted",
+                      "Pending Decision",
+                      "Completed",
+                      "Finished",
+                      ...(isProjectOnHold ? ["On Hold"] : []),
+                    ]
+                  : [
+                      "Quote Created",
+                      "Pending Scope Approval",
+                      "Scope Approval Completed",
+                      "Pending Cost Verification",
+                      "Cost Verified",
+                      "Pending Quote Submission",
+                      "Quote Submitted",
+                      "Pending Decision",
+                      "Completed",
+                      "Finished",
+                      ...(isProjectOnHold ? ["On Hold"] : []),
+                    ]
                 : [
                     "Order Created",
                     "Pending Scope Approval",
@@ -3384,31 +3449,74 @@ const ProjectDetails = ({ user }) => {
                 )}
               </div>
               <div className="checklist-admin-grid quote-requirements-admin-grid">
-                <div
-                  className={`checklist-admin-item quote-requirement-admin-item ${
-                    quoteCostVerified ? "is-required" : "is-not-required"
-                  }`}
-                >
-                  <div className="quote-requirement-admin-header">
-                    <span className="quote-requirement-admin-title">Quote Cost</span>
-                    <span className="quote-requirement-admin-status">
-                      {quoteCostVerified ? "Verified" : "Pending"}
-                    </span>
-                  </div>
-                  <div className="quote-requirement-admin-updated">
-                    Amount: {formatAmountLabel(quoteCostAmountValue, quoteCostVerification?.currency)}
-                  </div>
-                  {quoteCostVerification?.updatedAt && (
+                {isCostOnlyQuote && (
+                  <div
+                    className={`checklist-admin-item quote-requirement-admin-item ${
+                      quoteCostVerified ? "is-required" : "is-not-required"
+                    }`}
+                  >
+                    <div className="quote-requirement-admin-header">
+                      <span className="quote-requirement-admin-title">
+                        Quote Cost
+                      </span>
+                      <span className="quote-requirement-admin-status">
+                        {quoteCostVerified ? "Verified" : "Pending"}
+                      </span>
+                    </div>
                     <div className="quote-requirement-admin-updated">
-                      Updated {formatLastUpdated(quoteCostVerification.updatedAt)}
+                      Amount: {formatAmountLabel(quoteCostAmountValue, quoteCostVerification?.currency)}
                     </div>
-                  )}
-                  {quoteCostVerification?.note && (
-                    <div className="quote-requirement-admin-helper">
-                      Note: {quoteCostVerification.note}
+                    {quoteCostVerification?.updatedAt && (
+                      <div className="quote-requirement-admin-updated">
+                        Updated {formatLastUpdated(quoteCostVerification.updatedAt)}
+                      </div>
+                    )}
+                    {quoteCostVerification?.note && (
+                      <div className="quote-requirement-admin-helper">
+                        Note: {quoteCostVerification.note}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isMockupOnlyQuote && (
+                  <div
+                    className={`checklist-admin-item quote-requirement-admin-item ${
+                      latestMockupDecisionStatus === "approved"
+                        ? "is-required"
+                        : "is-not-required"
+                    }`}
+                  >
+                    <div className="quote-requirement-admin-header">
+                      <span className="quote-requirement-admin-title">
+                        Quote Mockup
+                      </span>
+                      <span className="quote-requirement-admin-status">
+                        {latestMockupDecisionStatus === "approved"
+                          ? "Approved"
+                          : latestMockupDecisionStatus === "rejected"
+                            ? "Rejected"
+                            : "Pending"}
+                      </span>
                     </div>
-                  )}
-                </div>
+                    <div className="quote-requirement-admin-updated">
+                      Latest:{" "}
+                      {latestMockupVersion?.version
+                        ? `v${latestMockupVersion.version}`
+                        : "N/A"}
+                    </div>
+                    {latestMockupVersion?.uploadedAt && (
+                      <div className="quote-requirement-admin-updated">
+                        Updated {formatLastUpdated(latestMockupVersion.uploadedAt)}
+                      </div>
+                    )}
+                    {latestMockupDecisionStatus === "rejected" &&
+                      latestMockupVersion?.clientApproval?.rejectionReason && (
+                        <div className="quote-requirement-admin-helper">
+                          Note: {latestMockupVersion.clientApproval.rejectionReason}
+                        </div>
+                      )}
+                  </div>
+                )}
                 {quoteWorkflowBlocked && (
                   <p className="quote-requirement-admin-empty">
                     {quoteWorkflowBlockedMessage ||

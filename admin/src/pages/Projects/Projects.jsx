@@ -7,7 +7,10 @@ import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationMo
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay } from "@client/utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+} from "@client/utils/quoteStatus";
 
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -35,7 +38,10 @@ const isPendingDeliveryProject = (project) =>
   DELIVERY_PROJECT_STATUSES.has(project?.status);
 const getProjectStatusDisplay = (project) =>
   isQuoteProject(project)
-    ? getQuoteStatusDisplay(project?.status || "")
+    ? getQuoteStatusDisplay(
+        project?.status || "",
+        getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
+      )
     : project?.status || "";
 
 const isUrgentProject = (project) => {

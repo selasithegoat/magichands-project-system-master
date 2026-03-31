@@ -5,7 +5,10 @@ import "./Clients.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay } from "@client/utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+} from "@client/utils/quoteStatus";
 
 const Clients = ({ user }) => {
   const navigate = useNavigate();
@@ -84,7 +87,10 @@ const Clients = ({ user }) => {
 
   const getProjectStatusDisplay = (project) =>
     project?.projectType === "Quote"
-      ? getQuoteStatusDisplay(project.status)
+      ? getQuoteStatusDisplay(
+          project.status,
+          getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
+        )
       : project.status;
 
   const getContactOrEmail = (project) => {

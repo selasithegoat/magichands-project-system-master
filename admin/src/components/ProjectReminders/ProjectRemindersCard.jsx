@@ -90,6 +90,8 @@ const QUOTE_STATUS_OPTIONS = [
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Mockup",
+  "Mockup Completed",
   "Pending Cost Verification",
   "Cost Verification Completed",
   "Pending Quote Submission",

@@ -13,7 +13,10 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay } from "../../utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+} from "../../utils/quoteStatus";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -869,7 +872,12 @@ const EngagedProjects = ({ user }) => {
                     );
                     const displayStatus =
                       project.projectType === "Quote"
-                        ? getQuoteStatusDisplay(project.status)
+                        ? getQuoteStatusDisplay(
+                            project.status,
+                            getQuoteRequirementMode(
+                              project?.quoteDetails?.checklist || {},
+                            ),
+                          )
                         : project.status;
                     const revisionCount = getRevisionCount(project);
                     const emergency = isEmergency(project);
@@ -1028,7 +1036,12 @@ const EngagedProjects = ({ user }) => {
                     );
                     const displayStatus =
                       project.projectType === "Quote"
-                        ? getQuoteStatusDisplay(project.status)
+                        ? getQuoteStatusDisplay(
+                            project.status,
+                            getQuoteRequirementMode(
+                              project?.quoteDetails?.checklist || {},
+                            ),
+                          )
                         : project.status;
                     const revisionCount = getRevisionCount(project);
                     const engagedDeptsForUser = (project.departments || [])

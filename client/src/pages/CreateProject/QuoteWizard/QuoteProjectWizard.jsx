@@ -15,6 +15,32 @@ import {
   resolveProjectNameForForm,
 } from "../../../utils/projectName";
 
+const defaultChecklist = {
+  cost: true,
+  mockup: false,
+  previousSamples: false,
+  sampleProduction: false,
+  bidSubmission: false,
+};
+
+const normalizeChecklist = (checklist) => {
+  const next = { ...defaultChecklist, ...(checklist || {}) };
+  const hasCost = Boolean(next.cost);
+  const hasMockup = Boolean(next.mockup);
+  if (!hasCost && !hasMockup) {
+    next.cost = true;
+  }
+  if (hasCost && hasMockup) {
+    next.mockup = false;
+  }
+  next.cost = Boolean(next.cost);
+  next.mockup = Boolean(next.mockup);
+  next.previousSamples = Boolean(next.previousSamples);
+  next.sampleProduction = Boolean(next.sampleProduction);
+  next.bidSubmission = Boolean(next.bidSubmission);
+  return next;
+};
+
 const QuoteProjectWizard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -113,13 +139,7 @@ const QuoteProjectWizard = () => {
       projectCoordinatorSignature: "",
       scopeApproved: false,
 
-      checklist: {
-        cost: true,
-        mockup: false,
-        previousSamples: false,
-        sampleProduction: false,
-        bidSubmission: false,
-      },
+      checklist: { ...defaultChecklist },
 
       departmentalEngagements: false, // Maps to 'departments' check but singular boolean here?
       // Actually user request says "Departmental Engagements (checkbox)".
@@ -229,13 +249,9 @@ const QuoteProjectWizard = () => {
               submissionDate: data.quoteDetails?.submissionDate
                 ? data.quoteDetails.submissionDate.split("T")[0]
                 : prev.quoteDetails.submissionDate,
-              checklist: {
-                cost: true,
-                mockup: false,
-                previousSamples: false,
-                sampleProduction: false,
-                bidSubmission: false,
-              },
+              checklist: normalizeChecklist(
+                data.quoteDetails?.checklist || prev.quoteDetails?.checklist,
+              ),
             },
             items: data.items || [],
             receivedTime: data.receivedTime || prev.receivedTime,

@@ -9,18 +9,76 @@ const QUOTE_STATUS_ALIASES = {
   Declined: "Completed",
 };
 
+const QUOTE_REQUIREMENT_KEYS = [
+  "cost",
+  "mockup",
+  "previousSamples",
+  "sampleProduction",
+  "bidSubmission",
+];
+
 export const normalizeQuoteStatus = (status = "") =>
   QUOTE_STATUS_ALIASES[status] || status;
 
-const QUOTE_STATUS_DISPLAY_OVERRIDES = {
-  "Scope Approval Completed": "Pending Cost Verification",
-  "Cost Verification Completed": "Pending Quote Submission",
-  "Quote Submission Completed": "Pending Client Decision",
+export const normalizeQuoteChecklist = (checklist = {}) =>
+  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
+    accumulator[key] = Boolean(checklist?.[key]);
+    return accumulator;
+  }, {});
+
+export const getQuoteRequirementMode = (checklist = {}) => {
+  const normalized = normalizeQuoteChecklist(checklist);
+  const hasCost = Boolean(normalized.cost);
+  const hasMockup = Boolean(normalized.mockup);
+  const hasOther = QUOTE_REQUIREMENT_KEYS.some(
+    (key) => key !== "cost" && key !== "mockup" && normalized[key],
+  );
+
+  if (hasCost && !hasMockup && !hasOther) return "cost";
+  if (hasMockup && !hasCost && !hasOther) return "mockup";
+  if (!hasCost && !hasMockup && !hasOther) return "none";
+  return "unsupported";
 };
 
-export const getQuoteStatusDisplay = (status = "") => {
+const QUOTE_STATUS_DISPLAY_OVERRIDES = {
+  cost: {
+    "Scope Approval Completed": "Pending Cost Verification",
+    "Cost Verification Completed": "Pending Quote Submission",
+    "Quote Submission Completed": "Pending Client Decision",
+  },
+  mockup: {
+    "Scope Approval Completed": "Pending Mockup",
+    "Mockup Completed": "Pending Quote Submission",
+    "Quote Submission Completed": "Pending Client Decision",
+  },
+};
+
+const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
+  if (
+    modeOrChecklist &&
+    typeof modeOrChecklist === "object" &&
+    !Array.isArray(modeOrChecklist)
+  ) {
+    return getQuoteRequirementMode(modeOrChecklist);
+  }
+  if (typeof modeOrChecklist === "string" && modeOrChecklist.trim()) {
+    return modeOrChecklist.trim();
+  }
+  const normalizedStatus = String(status || "").toLowerCase();
+  if (normalizedStatus.includes("mockup")) return "mockup";
+  return "cost";
+};
+
+export const getQuoteStatusDisplay = (status = "", modeOrChecklist) => {
   const normalized = normalizeQuoteStatus(status);
-  return QUOTE_STATUS_DISPLAY_OVERRIDES[normalized] || normalized;
+  const requirementMode = resolveQuoteRequirementMode(
+    modeOrChecklist,
+    normalized,
+  );
+  const overrides =
+    QUOTE_STATUS_DISPLAY_OVERRIDES[requirementMode] ||
+    QUOTE_STATUS_DISPLAY_OVERRIDES.cost;
+  return overrides[normalized] || normalized;
 };
 
 export const QUOTE_STATUS_ALIAS_MAP = QUOTE_STATUS_ALIASES;

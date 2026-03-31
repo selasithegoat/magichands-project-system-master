@@ -62,6 +62,7 @@ const {
   createProjectBatch,
   updateProjectBatch,
   updateProjectBatchStatus,
+  resetQuoteMockup,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -315,6 +316,12 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   updateQuoteCostVerification,
+);
+router.patch(
+  "/:id/quote-mockup",
+  protect,
+  enforceProjectNotOnHold,
+  resetQuoteMockup,
 );
 router.patch(
   "/:id/quote-decision",

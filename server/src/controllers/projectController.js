@@ -2170,6 +2170,20 @@ const QUOTE_DECISION_STATUS_ALIASES = {
 
 const getAutoProgressedStatus = (status, project = {}) => {
   if (isQuoteProject(project)) {
+    const requirementMode = getQuoteRequirementMode(
+      normalizeQuoteDetailsWorkflow({
+        quoteDetailsInput: project?.quoteDetails || {},
+        existingQuoteDetails: project?.quoteDetails || {},
+      }),
+    );
+    if (requirementMode === "mockup") {
+      const progression = {
+        "Scope Approval Completed": "Pending Mockup",
+        "Mockup Completed": "Pending Quote Submission",
+        "Quote Submission Completed": "Pending Client Decision",
+      };
+      return progression[status] || status;
+    }
     return status;
   }
 
@@ -2355,16 +2369,31 @@ const normalizeQuoteDetailsWorkflow = ({
 
 const getQuoteChecklistState = (quoteDetails = {}) => {
   const checklist = normalizeQuoteChecklistValue(quoteDetails?.checklist || {});
-  const nonCostRequirements = QUOTE_REQUIREMENT_KEYS.filter(
-    (key) => key !== "cost" && checklist[key],
-  );
-  const isCostOnly = Boolean(checklist.cost) && nonCostRequirements.length === 0;
+  const enabledKeys = QUOTE_REQUIREMENT_KEYS.filter((key) => checklist[key]);
+  const nonCostRequirements = enabledKeys.filter((key) => key !== "cost");
+  const isCostOnly = enabledKeys.length === 1 && enabledKeys[0] === "cost";
+  const isMockupOnly = enabledKeys.length === 1 && enabledKeys[0] === "mockup";
+  const mode =
+    enabledKeys.length === 0
+      ? "none"
+      : isCostOnly
+        ? "cost"
+        : isMockupOnly
+          ? "mockup"
+          : "unsupported";
+
   return {
     checklist,
+    enabledKeys,
     nonCostRequirements,
     isCostOnly,
+    isMockupOnly,
+    mode,
   };
 };
+
+const getQuoteRequirementMode = (quoteDetails = {}) =>
+  getQuoteChecklistState(quoteDetails).mode;
 
 const isQuoteCostOnlyProject = (project = {}) => {
   if (!isQuoteProject(project)) return false;
@@ -2372,7 +2401,33 @@ const isQuoteCostOnlyProject = (project = {}) => {
     quoteDetailsInput: project?.quoteDetails || {},
     existingQuoteDetails: project?.quoteDetails || {},
   });
-  return getQuoteChecklistState(normalizedQuoteDetails).isCostOnly;
+  return getQuoteChecklistState(normalizedQuoteDetails).mode === "cost";
+};
+
+const isQuoteMockupOnlyProject = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  return getQuoteChecklistState(normalizedQuoteDetails).mode === "mockup";
+};
+
+const isQuoteWorkflowSupported = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  const mode = getQuoteChecklistState(normalizedQuoteDetails).mode;
+  return mode === "cost" || mode === "mockup";
+};
+
+const isQuoteMockupApproved = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  return (
+    getMockupApprovalStatus(project?.mockup?.clientApproval || {}) === "approved"
+  );
 };
 
 const isQuoteCostVerified = (project = {}) => {
@@ -2416,13 +2471,18 @@ const areQuoteRequirementsCompleted = (project = {}) => {
     quoteDetailsInput: project?.quoteDetails || {},
     existingQuoteDetails: project?.quoteDetails || {},
   });
-  const { isCostOnly } = getQuoteChecklistState(normalizedQuoteDetails);
-  if (!isCostOnly) return false;
+  const { mode } = getQuoteChecklistState(normalizedQuoteDetails);
+  if (mode === "cost") {
+    const amount = Number.parseFloat(
+      normalizedQuoteDetails?.costVerification?.amount,
+    );
+    return Number.isFinite(amount) && amount > 0;
+  }
+  if (mode === "mockup") {
+    return isQuoteMockupApproved(project);
+  }
 
-  const amount = Number.parseFloat(
-    normalizedQuoteDetails?.costVerification?.amount,
-  );
-  return Number.isFinite(amount) && amount > 0;
+  return false;
 };
 
 const syncQuoteProjectStatusByRequirements = (project = {}) => {
@@ -2436,6 +2496,23 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
   }
 
   const previousStatus = toText(project?.status);
+  const requirementMode = getQuoteRequirementMode(
+    normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project?.quoteDetails || {},
+      existingQuoteDetails: project?.quoteDetails || {},
+    }),
+  );
+
+  if (requirementMode !== "cost") {
+    return {
+      changed: false,
+      fromStatus: previousStatus,
+      toStatus: previousStatus,
+      allRequirementsCompleted:
+        requirementMode === "mockup" ? isQuoteMockupApproved(project) : false,
+    };
+  }
+
   const costVerified = isQuoteCostVerified(project);
   let nextStatus = previousStatus;
 
@@ -4880,16 +4957,19 @@ const createProject = async (req, res) => {
           })
         : finalQuoteDetails;
     if (normalizedProjectType === "Quote") {
-      const { isCostOnly, nonCostRequirements } = getQuoteChecklistState(
-        normalizedQuoteDetails,
-      );
-      if (!isCostOnly) {
+      const { mode } = getQuoteChecklistState(normalizedQuoteDetails);
+      if (mode === "unsupported") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            nonCostRequirements.length > 0
-              ? "Only cost-based quotes are supported right now. Remove other requirements and try again."
-              : "Quote must include the Cost requirement to continue.",
+            "Only cost-only or mockup-only quotes are supported right now. Remove other requirements and try again.",
+        });
+      }
+      if (mode === "none") {
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_BLOCKED",
+          message:
+            "Quote must include either the Cost or Mockup requirement to continue.",
         });
       }
     }
@@ -6345,11 +6425,11 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
-    if (isQuoteProject(project) && !isQuoteCostOnlyProject(project)) {
+    if (isQuoteProject(project) && !isQuoteWorkflowSupported(project)) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-based quotes are supported right now. Remove other requirements before progressing this quote.",
+          "Only cost-only or mockup-only quotes are supported right now. Remove other requirements before progressing this quote.",
       });
     }
 
@@ -6726,25 +6806,39 @@ const transitionQuoteRequirement = async (req, res) => {
       });
     }
 
-    if (!isQuoteCostOnlyProject(project)) {
-      return res.status(400).json({
-        code: "QUOTE_REQUIREMENTS_BLOCKED",
-        message:
-          "Only cost-based quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
-      });
-    }
-
-    if (requirementKey !== "cost") {
-      return res.status(400).json({
-        message:
-          "Quote requirement transitions are disabled for non-cost requirements.",
-      });
-    }
-
     const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
       quoteDetailsInput: project.quoteDetails || {},
       existingQuoteDetails: project.quoteDetails || {},
     });
+    const requirementMode = getQuoteRequirementMode(normalizedQuoteDetails);
+    if (requirementMode === "unsupported" || requirementMode === "none") {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Only cost-only or mockup-only quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
+      });
+    }
+
+    if (requirementKey === "cost" && requirementMode !== "cost") {
+      return res.status(400).json({
+        message:
+          "Cost requirement transitions are only available for cost-only quotes.",
+      });
+    }
+
+    if (requirementKey === "mockup" && requirementMode !== "mockup") {
+      return res.status(400).json({
+        message:
+          "Mockup requirement transitions are only available for mockup-only quotes.",
+      });
+    }
+
+    if (!["cost", "mockup"].includes(requirementKey)) {
+      return res.status(400).json({
+        message:
+          "Quote requirement transitions are disabled for this requirement.",
+      });
+    }
     project.quoteDetails = normalizedQuoteDetails;
 
     const requirementItem =
@@ -7055,6 +7149,162 @@ const updateQuoteCostVerification = async (req, res) => {
   }
 };
 
+// @desc    Rework quote mockup (Mockup requirement)
+// @route   PATCH /api/projects/:id/quote-mockup
+// @access  Private (Admin or Front Desk)
+const resetQuoteMockup = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to rework quote mockup.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Quote mockup rework is only available for quote projects.",
+      });
+    }
+
+    if (!isQuoteMockupOnlyProject(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Mockup rework is only available for mockup-only quotes.",
+      });
+    }
+
+    const note = toText(req.body?.note).slice(0, 500);
+    const previousStatus = project.status;
+
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    project.quoteDetails.decision = {
+      ...normalizeQuoteDecision(project.quoteDetails?.decision || {}),
+      status: "pending",
+      note: "",
+      validatedAt: null,
+      validatedBy: null,
+      convertedAt: null,
+      convertedBy: null,
+      convertedToType: "Quote",
+    };
+
+    project.invoice = {
+      sent: false,
+      sentAt: null,
+      sentBy: null,
+    };
+
+    project.status = "Pending Mockup";
+    project.markModified("quoteDetails.decision");
+
+    const requirementItem = project.quoteDetails?.requirementItems?.mockup;
+    if (requirementItem?.isRequired) {
+      const fromStatus = toText(requirementItem.status).toLowerCase() || "assigned";
+      const transitionTime = new Date();
+      requirementItem.history = Array.isArray(requirementItem.history)
+        ? requirementItem.history
+        : [];
+      requirementItem.history.push({
+        fromStatus,
+        toStatus: "client_revision_requested",
+        changedAt: transitionTime,
+        changedBy: req.user._id,
+        note: note || "Mockup rework requested after quote decision.",
+      });
+      requirementItem.status = "client_revision_requested";
+      requirementItem.updatedAt = transitionTime;
+      requirementItem.updatedBy = req.user._id;
+      requirementItem.note = note || "Mockup rework requested.";
+      project.markModified("quoteDetails.requirementItems");
+    }
+
+    const normalizedVersions = getNormalizedMockupVersions(project);
+    const latestVersion = normalizedVersions[normalizedVersions.length - 1] || null;
+    if (latestVersion?.entryId && Array.isArray(project.mockup?.versions)) {
+      const versionEntry = project.mockup.versions.find(
+        (entry) => toObjectIdString(entry?._id) === toObjectIdString(latestVersion.entryId),
+      );
+      if (versionEntry) {
+        versionEntry.clientApproval = {
+          status: "rejected",
+          isApproved: false,
+          approvedAt: null,
+          approvedBy: null,
+          rejectedAt: new Date(),
+          rejectedBy: req.user._id,
+          rejectionReason: note || "Mockup rework requested.",
+          note: note || "Mockup rework requested.",
+        };
+      }
+    }
+
+    if (project.mockup) {
+      project.mockup.clientApproval = {
+        status: "rejected",
+        isApproved: false,
+        approvedAt: null,
+        approvedBy: null,
+        rejectedAt: new Date(),
+        rejectedBy: req.user._id,
+        rejectionReason: note || "Mockup rework requested.",
+        note: note || "Mockup rework requested.",
+        approvedVersion: null,
+      };
+    }
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Quote mockup rework requested.",
+      {
+        quoteMockup: {
+          reset: true,
+          note,
+        },
+      },
+    );
+
+    if (previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: { from: previousStatus, to: project.status },
+        },
+      );
+    }
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Quote Mockup Rework",
+      message: `Admin ${actorName} requested mockup rework for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error resetting quote mockup:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Validate quote decision after response is sent
 // @route   PATCH /api/projects/:id/quote-decision
 // @access  Private (Admin or Front Desk)
@@ -7100,11 +7350,11 @@ const updateQuoteDecision = async (req, res) => {
       project.status,
       "Quote",
     );
-    if (!isQuoteCostOnlyProject(project)) {
+    if (!isQuoteWorkflowSupported(project)) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-based quotes are supported right now. Remove other requirements before validating the decision.",
+          "Only cost-only or mockup-only quotes are supported right now. Remove other requirements before validating the decision.",
       });
     }
 
@@ -7239,18 +7489,25 @@ const markInvoiceSent = async (req, res) => {
     const oldStatus = project.status;
 
     if (isQuoteProject(project)) {
-      if (!isQuoteCostOnlyProject(project)) {
+      if (!isQuoteWorkflowSupported(project)) {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Only cost-based quotes are supported right now. Remove other requirements before sending the quote.",
+            "Only cost-only or mockup-only quotes are supported right now. Remove other requirements before sending the quote.",
         });
       }
-      if (!isQuoteCostVerified(project)) {
+      if (isQuoteCostOnlyProject(project) && !isQuoteCostVerified(project)) {
         return res.status(400).json({
           code: "QUOTE_COST_MISSING",
           message:
             "Cost verification must be completed before sending the quote.",
+        });
+      }
+      if (isQuoteMockupOnlyProject(project) && !isQuoteMockupApproved(project)) {
+        return res.status(400).json({
+          code: "QUOTE_MOCKUP_MISSING",
+          message:
+            "Client-approved mockup is required before sending the quote.",
         });
       }
     }
@@ -8896,6 +9153,16 @@ const approveProjectMockup = async (req, res) => {
         })
       : null;
 
+    const previousStatus = project.status;
+    let autoStatusApplied = false;
+    if (isLatestRequested && isQuoteMockupOnlyProject(project)) {
+      const nextStatus = getAutoProgressedStatus("Mockup Completed", project);
+      if (nextStatus && nextStatus !== project.status) {
+        project.status = nextStatus;
+        autoStatusApplied = true;
+      }
+    }
+
     await project.save();
 
     const approvalFileName = toText(versionEntry?.fileName);
@@ -8948,6 +9215,21 @@ const approveProjectMockup = async (req, res) => {
           statusChange: {
             from: quoteMockupDecisionSync.statusSync.fromStatus,
             to: quoteMockupDecisionSync.statusSync.toStatus,
+          },
+        },
+      );
+    }
+
+    if (autoStatusApplied && previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: {
+            from: previousStatus,
+            to: project.status,
           },
         },
       );
@@ -9106,6 +9388,15 @@ const rejectProjectMockup = async (req, res) => {
         })
       : null;
 
+    const previousStatus = project.status;
+    let autoStatusApplied = false;
+    if (isLatestRequested && isQuoteMockupOnlyProject(project)) {
+      if (project.status !== "Pending Mockup") {
+        project.status = "Pending Mockup";
+        autoStatusApplied = true;
+      }
+    }
+
     await project.save();
 
     const rejectionFileName = toText(versionEntry?.fileName);
@@ -9159,6 +9450,18 @@ const rejectProjectMockup = async (req, res) => {
             from: quoteMockupDecisionSync.statusSync.fromStatus,
             to: quoteMockupDecisionSync.statusSync.toStatus,
           },
+        },
+      );
+    }
+
+    if (autoStatusApplied && previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: { from: previousStatus, to: project.status },
         },
       );
     }
@@ -10612,22 +10915,27 @@ const updateProject = async (req, res) => {
     }
 
     if (!isLeadOnlyUpdate && project.projectType === "Quote") {
-      const { isCostOnly, nonCostRequirements } = getQuoteChecklistState(
+      const { mode, enabledKeys } = getQuoteChecklistState(
         project.quoteDetails || {},
       );
-      if (!isCostOnly) {
+      if (mode === "unsupported") {
         console.warn("[updateProject] Quote requirements blocked", {
           projectId: id,
           userId: req.user?._id || req.user?.id,
           projectType: project?.projectType,
-          nonCostRequirements,
+          enabledKeys,
         });
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            nonCostRequirements.length > 0
-              ? "Only cost-based quotes are supported right now. Remove other requirements before saving."
-              : "Quote must include the Cost requirement to continue.",
+            "Only cost-only or mockup-only quotes are supported right now. Remove other requirements before saving.",
+        });
+      }
+      if (mode === "none") {
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_BLOCKED",
+          message:
+            "Quote must include either the Cost or Mockup requirement to continue.",
         });
       }
     }
@@ -12603,6 +12911,7 @@ module.exports = {
   updateMeetingOverride,
   transitionQuoteRequirement,
   updateQuoteCostVerification,
+  resetQuoteMockup,
   updateQuoteDecision,
   markInvoiceSent,
   verifyPayment,

@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import OrdersList from "../NewOrders/OrdersList";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { normalizeQuoteStatus } from "../../utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+} from "../../utils/quoteStatus";
 import "./FrontDeskOrders.css";
 
 const CLOSED_STATUSES = new Set([
@@ -19,6 +22,7 @@ const ACTION_STATUSES = new Set([
   "Pending Departmental Meeting",
   "Pending Departmental Engagement",
   "Quote Created",
+  "Pending Mockup",
   "Pending Cost Verification",
   "Pending Quote Submission",
   "Quote Submission Completed",
@@ -56,7 +60,10 @@ const getOrderLabel = (project) => {
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const resolveProjectStatus = (project) =>
   isQuoteProject(project)
-    ? normalizeQuoteStatus(project?.status || "")
+    ? getQuoteStatusDisplay(
+        project?.status || "",
+        getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
+      )
     : project?.status || "";
 
 const hasBillingBlock = (project) => {
@@ -156,6 +163,7 @@ const FrontDeskOrders = () => {
           const status = resolveProjectStatus(project);
           return [
             "Pending Cost Verification",
+            "Pending Mockup",
             "Pending Quote Submission",
             "Quote Submission Completed",
             "Pending Client Decision",

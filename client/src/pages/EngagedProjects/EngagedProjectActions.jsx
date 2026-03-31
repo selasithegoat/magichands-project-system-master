@@ -13,7 +13,11 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+  normalizeQuoteStatus,
+} from "../../utils/quoteStatus";
 import {
   normalizeReferenceAttachments,
   getReferenceFileName,
@@ -706,7 +710,10 @@ const EngagedProjectActions = ({ user }) => {
       ? "Quote requirement workflows are not configured yet."
       : "";
   const displayStatus = isQuoteProject
-    ? getQuoteStatusDisplay(project?.status || "")
+    ? getQuoteStatusDisplay(
+        project?.status || "",
+        getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
+      )
     : project?.status || "";
   const paymentChecksEnabled = !isQuoteProject;
   const quoteMockupRequirement = useMemo(

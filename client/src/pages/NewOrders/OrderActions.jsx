@@ -3,7 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
-import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+  normalizeQuoteStatus,
+} from "../../utils/quoteStatus";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import "./NewOrders.css";
 
@@ -170,39 +174,72 @@ const ORDER_WORKFLOW_STEPS = [
   },
 ];
 
-const QUOTE_WORKFLOW_STEPS = [
-  {
-    key: "scope",
-    label: "Scope",
-    statuses: [
-      "Quote Created",
-      "Pending Scope Approval",
-      "Scope Approval Completed",
-    ],
-  },
-  {
-    key: "cost",
-    label: "Cost Verification",
-    statuses: ["Pending Cost Verification", "Cost Verification Completed"],
-  },
-  {
-    key: "submission",
-    label: "Quote Submission",
-    statuses: ["Pending Quote Submission", "Quote Submission Completed"],
-  },
-  {
-    key: "decision",
-    label: "Client Decision",
-    statuses: [
-      "Pending Client Decision",
-      "Completed",
-      "Finished",
-    ],
-  },
-];
+const QUOTE_WORKFLOW_STEPS_BY_MODE = {
+  cost: [
+    {
+      key: "scope",
+      label: "Scope",
+      statuses: [
+        "Quote Created",
+        "Pending Scope Approval",
+        "Scope Approval Completed",
+      ],
+    },
+    {
+      key: "cost",
+      label: "Cost Verification",
+      statuses: ["Pending Cost Verification", "Cost Verification Completed"],
+    },
+    {
+      key: "submission",
+      label: "Quote Submission",
+      statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+    },
+    {
+      key: "decision",
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
+  mockup: [
+    {
+      key: "scope",
+      label: "Scope",
+      statuses: [
+        "Quote Created",
+        "Pending Scope Approval",
+        "Scope Approval Completed",
+      ],
+    },
+    {
+      key: "mockup",
+      label: "Mockup",
+      statuses: ["Pending Mockup", "Mockup Completed"],
+    },
+    {
+      key: "submission",
+      label: "Quote Submission",
+      statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+    },
+    {
+      key: "decision",
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
+};
 
-const resolveWorkflowJourney = (status = "", isQuoteProject = false) => {
-  const steps = isQuoteProject ? QUOTE_WORKFLOW_STEPS : ORDER_WORKFLOW_STEPS;
+const getQuoteWorkflowSteps = (mode) =>
+  QUOTE_WORKFLOW_STEPS_BY_MODE[mode] || QUOTE_WORKFLOW_STEPS_BY_MODE.cost;
+
+const resolveWorkflowJourney = (
+  status = "",
+  isQuoteProject = false,
+  requirementMode = "",
+) => {
+  const steps = isQuoteProject
+    ? getQuoteWorkflowSteps(requirementMode)
+    : ORDER_WORKFLOW_STEPS;
   const activeIndex = steps.findIndex((step) => step.statuses.includes(status));
   const normalizedIndex = activeIndex >= 0 ? activeIndex : 0;
 
@@ -287,10 +324,14 @@ const normalizeQuoteChecklist = (checklist = {}) =>
     return accumulator;
   }, {});
 
-const formatProjectStatusForDisplay = (status, isQuoteProject = false) => {
+const formatProjectStatusForDisplay = (
+  status,
+  isQuoteProject = false,
+  requirementMode = "",
+) => {
   const normalized = String(status || "").trim();
   if (!isQuoteProject) return normalized;
-  const normalizedQuote = getQuoteStatusDisplay(normalized);
+  const normalizedQuote = getQuoteStatusDisplay(normalized, requirementMode);
   if (normalizedQuote === "Pending Client Decision") return "Pending Decision";
   return normalizedQuote;
 };
@@ -619,6 +660,9 @@ const OrderActions = () => {
   const [quoteCostResetting, setQuoteCostResetting] = useState(false);
   const [quoteCostResetConfirmOpen, setQuoteCostResetConfirmOpen] =
     useState(false);
+  const [quoteMockupResetConfirmOpen, setQuoteMockupResetConfirmOpen] =
+    useState(false);
+  const [quoteMockupResetting, setQuoteMockupResetting] = useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
@@ -1053,7 +1097,7 @@ const OrderActions = () => {
   const unsupportedQuoteRequirementKeys = useMemo(
     () =>
       QUOTE_REQUIREMENT_KEYS.filter(
-        (key) => key !== "cost" && quoteChecklist[key],
+        (key) => key !== "cost" && key !== "mockup" && quoteChecklist[key],
       ),
     [quoteChecklist],
   );
@@ -1064,28 +1108,47 @@ const OrderActions = () => {
       ),
     [unsupportedQuoteRequirementKeys],
   );
-  const isCostOnlyQuote =
-    isQuoteProject &&
-    Boolean(quoteChecklist.cost) &&
-    unsupportedQuoteRequirementKeys.length === 0;
-  const quoteWorkflowBlocked = isQuoteProject && !isCostOnlyQuote;
+  const quoteRequirementMode = useMemo(
+    () => (isQuoteProject ? getQuoteRequirementMode(quoteChecklist) : "none"),
+    [isQuoteProject, quoteChecklist],
+  );
+  const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
+  const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
+  const quoteHasMultipleRequirements = Boolean(
+    quoteChecklist.cost && quoteChecklist.mockup,
+  );
+  const quoteWorkflowBlocked =
+    isQuoteProject && !isCostOnlyQuote && !isMockupOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
-    ? !quoteChecklist.cost
-      ? "Cost requirement is not enabled for this quote."
-      : unsupportedQuoteRequirementLabels.length > 0
-        ? `Unsupported requirements: ${unsupportedQuoteRequirementLabels.join(", ")}.`
-        : "Quote requirements are not configured yet."
+    ? quoteRequirementMode === "none"
+      ? "Quote requirements are not configured yet."
+      : quoteHasMultipleRequirements
+        ? "Multiple quote requirements are selected. Only one workflow can be active right now."
+        : unsupportedQuoteRequirementLabels.length > 0
+          ? `Unsupported requirements: ${unsupportedQuoteRequirementLabels.join(", ")}.`
+          : "Quote requirement workflows are not configured yet."
     : "";
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
   const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
   const quoteCostVerified =
-    isQuoteProject &&
+    isCostOnlyQuote &&
     Number.isFinite(quoteCostAmountValue) &&
     quoteCostAmountValue > 0;
   const canSubmitQuote =
-    isQuoteProject && !quoteWorkflowBlocked && quoteCostVerified;
+    isQuoteProject &&
+    !quoteWorkflowBlocked &&
+    (isCostOnlyQuote
+      ? quoteCostVerified
+      : isMockupOnlyQuote
+        ? mockupApprovalConfirmed
+        : false);
   const quoteCostMissing =
-    isQuoteProject && !quoteWorkflowBlocked && !quoteCostVerified;
+    isCostOnlyQuote && !quoteCostVerified;
+  const quoteMockupMissing =
+    isMockupOnlyQuote && !mockupApprovalConfirmed;
+  const quoteWorkflowStatusDisplay = isQuoteProject
+    ? getQuoteStatusDisplay(quoteWorkflowStatus, quoteRequirementMode)
+    : quoteWorkflowStatus;
   const quoteDecisionState = useMemo(
     () => getQuoteDecisionState(project),
     [project],
@@ -1112,8 +1175,13 @@ const OrderActions = () => {
       ? project.quoteDetails.decision.convertedAt
       : null;
   const workflowJourney = useMemo(
-    () => resolveWorkflowJourney(quoteWorkflowStatus, isQuoteProject),
-    [quoteWorkflowStatus, isQuoteProject],
+    () =>
+      resolveWorkflowJourney(
+        quoteWorkflowStatusDisplay,
+        isQuoteProject,
+        quoteRequirementMode,
+      ),
+    [quoteWorkflowStatusDisplay, isQuoteProject, quoteRequirementMode],
   );
   const activeJourneyStep = workflowJourney.find((item) => item.state === "active");
 
@@ -1800,6 +1868,45 @@ const OrderActions = () => {
     }
   };
 
+  const handleQuoteMockupReset = () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    setQuoteMockupResetConfirmOpen(true);
+  };
+
+  const handleConfirmQuoteMockupReset = async () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    setQuoteMockupResetConfirmOpen(false);
+    setQuoteMockupResetting(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-mockup`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          "Quote mockup reset. Status moved back to Pending Mockup.",
+          "success",
+        );
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to reset quote mockup.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Quote mockup reset error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteMockupResetting(false);
+    }
+  };
+
   const openPaymentModal = (type) => {
     setPaymentModal({ open: true, type });
     setPaymentInput("");
@@ -2338,10 +2445,14 @@ const OrderActions = () => {
     : "";
   const workflowAttentionItems = [
     quoteWorkflowBlocked
-      ? "Quote requirement workflows are not configured yet. Only cost-only quotes can proceed."
+      ? quoteWorkflowBlockedMessage ||
+        "Quote requirement workflows are not configured yet."
       : "",
-    isQuoteProject && !quoteWorkflowBlocked && !quoteCostVerified
+    isCostOnlyQuote && !quoteCostVerified
       ? "Quote cost verification is still pending."
+      : "",
+    isMockupOnlyQuote && !mockupApprovalConfirmed
+      ? "Client mockup approval is still pending."
       : "",
     isQuoteProject &&
     !quoteWorkflowBlocked &&
@@ -2366,14 +2477,20 @@ const OrderActions = () => {
     showPendingDeliveryWarning
       ? "Confirm full payment or authorization before delivery can proceed."
       : "",
-    mockupApprovalPending && latestMockupVersion
+    (!isQuoteProject || isMockupOnlyQuote) &&
+    mockupApprovalPending &&
+    latestMockupVersion
       ? `Confirm client approval for ${latestMockupVersionLabel}.`
       : "",
-    mockupApprovalRejected && latestMockupVersion
+    (!isQuoteProject || isMockupOnlyQuote) &&
+    mockupApprovalRejected &&
+    latestMockupVersion
       ? `Client rejected ${latestMockupVersionLabel}. Upload revised mockup.`
       : "",
   ].filter(Boolean);
-  const statusToneTarget = isQuoteProject ? quoteWorkflowStatus : project?.status;
+  const statusToneTarget = isQuoteProject
+    ? quoteWorkflowStatusDisplay
+    : project?.status;
   const statusBadgeTone = [
     "Quote Created",
     "Pending Scope Approval",
@@ -2502,8 +2619,10 @@ const OrderActions = () => {
     : false;
   const canDecideOnMockupVersions =
     canManageMockupApproval &&
-    !isQuoteProject &&
-    project?.status === "Pending Mockup";
+    ((isQuoteProject &&
+      isMockupOnlyQuote &&
+      quoteWorkflowStatus === "Pending Mockup") ||
+      (!isQuoteProject && project?.status === "Pending Mockup"));
 
   if (loading) {
     return (
@@ -2536,13 +2655,27 @@ const OrderActions = () => {
         onConfirm={handleConfirmQuoteCostReset}
         onCancel={() => setQuoteCostResetConfirmOpen(false)}
       />
+      <ConfirmDialog
+        isOpen={quoteMockupResetConfirmOpen}
+        title="Rework Mockup?"
+        message="This will move the quote back to Pending Mockup and reset quote submission and decision."
+        confirmText="Rework Mockup"
+        cancelText="Cancel"
+        type="primary"
+        onConfirm={handleConfirmQuoteMockupReset}
+        onCancel={() => setQuoteMockupResetConfirmOpen(false)}
+      />
 
       <header className="order-actions-topbar">
         <div className="order-actions-topbar-main">
           <p className="order-actions-ref">{project.orderId || project._id}</p>
           <h1>{renderProjectName(project.details, null, "Untitled Project")}</h1>
           <span className={`order-actions-status-pill ${statusBadgeTone}`}>
-            {formatProjectStatusForDisplay(quoteWorkflowStatus, isQuoteProject)}
+            {formatProjectStatusForDisplay(
+              quoteWorkflowStatus,
+              isQuoteProject,
+              quoteRequirementMode,
+            )}
           </span>
         </div>
         <button className="action-btn" onClick={() => navigate("/new-orders")}>
@@ -2770,7 +2903,7 @@ const OrderActions = () => {
             </button>
           </div>
 
-          {isQuoteProject && (
+          {isQuoteProject && isCostOnlyQuote && (
             <div className="action-card">
               <h3>Cost Verification</h3>
               <p>Confirm the quote cost before sending the quote.</p>
@@ -2874,6 +3007,59 @@ const OrderActions = () => {
             </div>
           )}
 
+          {isQuoteProject && isMockupOnlyQuote && (
+            <div className="action-card">
+              <h3>Mockup Requirement</h3>
+              <p>
+                Confirm client approval for the mockup before sending the quote.
+              </p>
+              {quoteWorkflowBlocked ? (
+                <div className="mockup-empty-state">
+                  {quoteWorkflowBlockedMessage ||
+                    "Quote workflows are not configured for this requirement set."}
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={`mockup-approval-status ${
+                      mockupApprovalConfirmed
+                        ? "approved"
+                        : mockupApprovalRejected
+                          ? "rejected"
+                          : "pending"
+                    }`}
+                  >
+                    {mockupApprovalConfirmed
+                      ? "Mockup approved by client"
+                      : mockupApprovalRejected
+                        ? "Mockup rejected by client"
+                        : "Client mockup approval pending"}
+                  </div>
+                  {latestMockupVersion?.uploadedAt && (
+                    <p className="mockup-approval-meta">
+                      Updated: {formatDateTime(latestMockupVersion.uploadedAt)}
+                    </p>
+                  )}
+                  {quoteDecisionStatus === "declined" && (
+                    <div className="billing-actions">
+                      <button
+                        className="action-btn undo-btn"
+                        onClick={handleQuoteMockupReset}
+                        disabled={!canManageBilling || quoteMockupResetting}
+                      >
+                        {quoteMockupResetting ? "Resetting..." : "Rework Mockup"}
+                      </button>
+                    </div>
+                  )}
+                  <p className="mockup-approval-meta">
+                    Use the Mockup Workbench below to review versions and record
+                    approval or rejection.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="action-card billing-card" id="order-actions-billing">
             <h3>{isQuoteProject ? "Quote Submission" : "Billing"}</h3>
             <p>
@@ -2902,7 +3088,9 @@ const OrderActions = () => {
                       isQuoteProject && !canSubmitQuote
                         ? quoteWorkflowBlocked
                           ? "Quote workflows are not configured for this requirement set."
-                          : "Verify quote cost before sending the quote."
+                          : isCostOnlyQuote
+                            ? "Verify quote cost before sending the quote."
+                            : "Confirm mockup approval before sending the quote."
                         : undefined
                     }
                   >
@@ -2950,6 +3138,11 @@ const OrderActions = () => {
             {isQuoteProject && quoteCostMissing && (
               <p className="mockup-approval-meta">
                 Verify quote cost before sending the quote to the client.
+              </p>
+            )}
+            {isQuoteProject && quoteMockupMissing && (
+              <p className="mockup-approval-meta">
+                Confirm mockup approval before sending the quote to the client.
               </p>
             )}
             {isQuoteProject && quoteWorkflowBlocked && (
@@ -3634,7 +3827,11 @@ const OrderActions = () => {
               </p>
               <p>
                 <strong>Status:</strong>{" "}
-                {formatProjectStatusForDisplay(quoteWorkflowStatus, isQuoteProject)}
+                {formatProjectStatusForDisplay(
+                  quoteWorkflowStatus,
+                  isQuoteProject,
+                  quoteRequirementMode,
+                )}
               </p>
               <p>
                 <strong>Created:</strong> {formatDate(project.createdAt)}
@@ -3686,6 +3883,9 @@ const OrderActions = () => {
                 )}
                 {isQuoteProject && !quoteWorkflowBlocked && quoteCostMissing && (
                   <span className="status-tag caution">Quote Cost Pending</span>
+                )}
+                {isQuoteProject && !quoteWorkflowBlocked && quoteMockupMissing && (
+                  <span className="status-tag caution">Mockup Approval Pending</span>
                 )}
                 {isQuoteProject &&
                   !quoteWorkflowBlocked &&

@@ -5,7 +5,11 @@ import FolderIcon from "../icons/FolderIcon";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+  normalizeQuoteStatus,
+} from "../../utils/quoteStatus";
 
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
@@ -171,18 +175,24 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     }
   };
 
+  const quoteRequirementMode =
+    project?.projectType === "Quote"
+      ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+      : "none";
   const resolvedStatus =
     project?.projectType === "Quote"
       ? normalizeQuoteStatus(project.status)
       : project.status;
   const displayStatus =
     project?.projectType === "Quote"
-      ? getQuoteStatusDisplay(project.status)
+      ? getQuoteStatusDisplay(project.status, quoteRequirementMode)
       : project.status;
   const isCompletedStatus =
     resolvedStatus === "Completed" ||
     resolvedStatus === "Finished";
-  const statusInfo = getStatusColor(resolvedStatus);
+  const statusToneTarget =
+    project?.projectType === "Quote" ? displayStatus : resolvedStatus;
+  const statusInfo = getStatusColor(statusToneTarget);
 
   const getProjectTypeInfo = (typeKey) => {
     switch (typeKey) {
@@ -239,10 +249,26 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     Completed: 100,
     Finished: 100,
   };
+  const quoteMockupProgressMap = {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Mockup": 45,
+    "Mockup Completed": 55,
+    "Pending Quote Submission": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+  };
 
   const progressMap =
-    project.projectType === "Quote" ? quoteProgressMap : standardProgressMap;
-  const progress = progressMap[resolvedStatus] ?? 5;
+    project.projectType === "Quote"
+      ? quoteRequirementMode === "mockup"
+        ? quoteMockupProgressMap
+        : quoteProgressMap
+      : standardProgressMap;
+  const progress = progressMap[statusToneTarget] ?? progressMap[resolvedStatus] ?? 5;
   const leadDisplay = getLeadDisplay(project, "Unassigned");
   const avatarName = getLeadDisplay(project, "U");
   const leadAvatarUrl = getLeadAvatarUrl(project);

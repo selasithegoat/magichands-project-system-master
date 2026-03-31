@@ -72,6 +72,32 @@ const toEntityId = (value) => {
   return "";
 };
 
+const defaultChecklist = {
+  cost: true,
+  mockup: false,
+  previousSamples: false,
+  sampleProduction: false,
+  bidSubmission: false,
+};
+
+const normalizeChecklist = (checklist) => {
+  const next = { ...defaultChecklist, ...(checklist || {}) };
+  const hasCost = Boolean(next.cost);
+  const hasMockup = Boolean(next.mockup);
+  if (!hasCost && !hasMockup) {
+    next.cost = true;
+  }
+  if (hasCost && hasMockup) {
+    next.mockup = false;
+  }
+  next.cost = Boolean(next.cost);
+  next.mockup = Boolean(next.mockup);
+  next.previousSamples = Boolean(next.previousSamples);
+  next.sampleProduction = Boolean(next.sampleProduction);
+  next.bidSubmission = Boolean(next.bidSubmission);
+  return next;
+};
+
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,13 +134,7 @@ const MinimalQuoteForm = () => {
     quoteNumber: "",
     briefOverview: "",
     items: [{ description: "", breakdown: "", qty: 1 }],
-    checklist: {
-      cost: true,
-      mockup: false,
-      previousSamples: false,
-      sampleProduction: false,
-      bidSubmission: false,
-    },
+    checklist: { ...defaultChecklist },
   });
 
   const applyProjectToForm = (project) => {
@@ -148,13 +168,7 @@ const MinimalQuoteForm = () => {
         project.items?.length > 0
           ? project.items
           : [{ description: "", breakdown: "", qty: 1 }],
-      checklist: {
-        cost: true,
-        mockup: false,
-        previousSamples: false,
-        sampleProduction: false,
-        bidSubmission: false,
-      },
+      checklist: normalizeChecklist(project.quoteDetails?.checklist),
     });
     setExistingSampleImage(details.sampleImage || "");
     setExistingSampleImageNote(String(details.sampleImageNote || ""));
@@ -256,14 +270,23 @@ const MinimalQuoteForm = () => {
   };
 
   const handleChecklistChange = (field) => {
-    if (field !== "cost") return;
-    setFormData((prev) => ({
-      ...prev,
-      checklist: {
-        ...prev.checklist,
-        cost: true,
-      },
-    }));
+    if (!["cost", "mockup"].includes(field)) return;
+    setFormData((prev) => {
+      const currentChecklist = normalizeChecklist(prev.checklist);
+      const nextValue = !currentChecklist[field];
+      const nextChecklist = {
+        ...currentChecklist,
+        cost: field === "cost" ? nextValue : false,
+        mockup: field === "mockup" ? nextValue : false,
+      };
+      if (!nextChecklist.cost && !nextChecklist.mockup) {
+        nextChecklist[field] = true;
+      }
+      return {
+        ...prev,
+        checklist: nextChecklist,
+      };
+    });
   };
 
   const addItem = () => {
@@ -433,13 +456,7 @@ const MinimalQuoteForm = () => {
         "quoteDetails",
         JSON.stringify({
           quoteNumber: formData.quoteNumber,
-          checklist: {
-            cost: true,
-            mockup: false,
-            previousSamples: false,
-            sampleProduction: false,
-            bidSubmission: false,
-          },
+          checklist: normalizeChecklist(formData.checklist),
         }),
       );
 
@@ -833,8 +850,8 @@ const MinimalQuoteForm = () => {
               <span style={{ color: "red" }}>*</span>
             </h3>
             <p className="section-hint">
-              Only Cost is available right now. Other quote requirement workflows
-              are coming soon.
+              Cost and Mockup are available right now. Other quote requirement
+              workflows are coming soon.
             </p>
             <div className="minimal-quote-checklist-grid">
               <label className="checklist-item">
@@ -842,7 +859,6 @@ const MinimalQuoteForm = () => {
                   type="checkbox"
                   checked={formData.checklist.cost}
                   onChange={() => handleChecklistChange("cost")}
-                  disabled
                 />
                 <span>Cost</span>
               </label>
@@ -851,7 +867,6 @@ const MinimalQuoteForm = () => {
                   type="checkbox"
                   checked={formData.checklist.mockup}
                   onChange={() => handleChecklistChange("mockup")}
-                  disabled
                 />
                 <span>Mockup</span>
               </label>

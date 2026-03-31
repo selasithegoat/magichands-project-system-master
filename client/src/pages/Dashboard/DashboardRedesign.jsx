@@ -23,7 +23,11 @@ import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
-import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
+import {
+  getQuoteRequirementMode,
+  getQuoteStatusDisplay,
+  normalizeQuoteStatus,
+} from "../../utils/quoteStatus";
 
 const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
 const OVERDUE_EXCLUDED_STATUSES = new Set([
@@ -83,6 +87,18 @@ const QUOTE_PROGRESS_MAP = {
   "Scope Approval Completed": 30,
   "Pending Cost Verification": 45,
   "Cost Verification Completed": 55,
+  "Pending Quote Submission": 70,
+  "Quote Submission Completed": 80,
+  "Pending Client Decision": 90,
+  Completed: 100,
+  Finished: 100,
+};
+const QUOTE_MOCKUP_PROGRESS_MAP = {
+  "Quote Created": 5,
+  "Pending Scope Approval": 20,
+  "Scope Approval Completed": 30,
+  "Pending Mockup": 45,
+  "Mockup Completed": 55,
   "Pending Quote Submission": 70,
   "Quote Submission Completed": 80,
   "Pending Client Decision": 90,
@@ -233,15 +249,22 @@ const resolveProjectTypeKey = (project) => {
 };
 
 const getProjectProgress = (project) => {
-  const map = isQuoteProject(project) ? QUOTE_PROGRESS_MAP : STANDARD_PROGRESS_MAP;
+  const quoteRequirementMode = isQuoteProject(project)
+    ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+    : "none";
+  const map = isQuoteProject(project)
+    ? quoteRequirementMode === "mockup"
+      ? QUOTE_MOCKUP_PROGRESS_MAP
+      : QUOTE_PROGRESS_MAP
+    : STANDARD_PROGRESS_MAP;
   const status = isQuoteProject(project)
-    ? normalizeQuoteStatus(project?.status || "")
+    ? getQuoteStatusDisplay(project?.status || "", quoteRequirementMode)
     : project?.status || "";
   return map[status] ?? 5;
 };
 
-const formatProjectStatus = (status = "") => {
-  const normalized = getQuoteStatusDisplay(status || "");
+const formatProjectStatus = (status = "", requirementMode = "") => {
+  const normalized = getQuoteStatusDisplay(status || "", requirementMode);
   return (
     STATUS_LABEL_OVERRIDES[normalized] ||
     (normalized.startsWith("Pending ")
@@ -691,7 +714,12 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
           null,
           "Untitled Project",
         ),
-        subtitle: formatProjectStatus(project?.status || ""),
+        subtitle: formatProjectStatus(
+          project?.status || "",
+          isQuoteProject(project)
+            ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+            : "",
+        ),
         orderId: project?.orderId || "",
         owner: getLeadDisplay(project, "Unassigned"),
         dueAt,
@@ -728,8 +756,11 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
     const projectId = toEntityId(project?._id || project?.id);
     const projectTypeKey = resolveProjectTypeKey(project);
     const projectTypeMeta = PROJECT_TYPE_META[projectTypeKey] || PROJECT_TYPE_META.standard;
+    const quoteRequirementMode = isQuoteProject(project)
+      ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+      : "";
     const normalizedStatus = isQuoteProject(project)
-      ? normalizeQuoteStatus(project?.status || "")
+      ? getQuoteStatusDisplay(project?.status || "", quoteRequirementMode)
       : project?.status || "";
     const statusTone = getStatusTone(normalizedStatus);
     const progress = getProjectProgress(project);
@@ -837,7 +868,12 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                     null,
                     "Untitled Project",
                   ),
-                  subtitle: formatProjectStatus(project?.status || ""),
+                  subtitle: formatProjectStatus(
+                    project?.status || "",
+                    isQuoteProject(project)
+                      ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+                      : "",
+                  ),
                   orderId: project?.orderId || "",
                   owner: getLeadDisplay(project, "Unassigned"),
                   dueAt,
@@ -856,7 +892,12 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
             {projectTypeMeta.label}
           </span>
           <span className={`dashboard-status-badge tone-${statusTone}`}>
-            {formatProjectStatus(project?.status || "")}
+            {formatProjectStatus(
+              project?.status || "",
+              isQuoteProject(project)
+                ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+                : "",
+            )}
           </span>
         </div>
 
@@ -1334,7 +1375,14 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                 <span>Status</span>
                 <strong>
                   {activeTimelineProject
-                    ? formatProjectStatus(activeTimelineProject.status || "")
+                    ? formatProjectStatus(
+                        activeTimelineProject.status || "",
+                        isQuoteProject(activeTimelineProject)
+                          ? getQuoteRequirementMode(
+                              activeTimelineProject?.quoteDetails?.checklist || {},
+                            )
+                          : "",
+                      )
                     : activeTimelineEvent.subtitle}
                 </strong>
               </div>
