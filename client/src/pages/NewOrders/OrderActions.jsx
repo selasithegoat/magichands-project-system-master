@@ -4,6 +4,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -616,6 +617,8 @@ const OrderActions = () => {
   const [quoteCostNote, setQuoteCostNote] = useState("");
   const [quoteCostSubmitting, setQuoteCostSubmitting] = useState(false);
   const [quoteCostResetting, setQuoteCostResetting] = useState(false);
+  const [quoteCostResetConfirmOpen, setQuoteCostResetConfirmOpen] =
+    useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
@@ -1766,13 +1769,14 @@ const OrderActions = () => {
     }
   };
 
-  const handleQuoteCostReset = async () => {
+  const handleQuoteCostReset = () => {
     if (!project || !isQuoteProject || !canManageBilling) return;
-    const confirmed = window.confirm(
-      "Rework cost? This will move the quote back to Cost Verification and reset quote submission and decision.",
-    );
-    if (!confirmed) return;
+    setQuoteCostResetConfirmOpen(true);
+  };
 
+  const handleConfirmQuoteCostReset = async () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    setQuoteCostResetConfirmOpen(false);
     setQuoteCostResetting(true);
     try {
       const res = await fetchWithPortal(`/api/projects/${project._id}/quote-cost`, {
@@ -2522,6 +2526,16 @@ const OrderActions = () => {
       {toast.show && (
         <div className={`toast-message ${toast.type}`}>{toast.message}</div>
       )}
+      <ConfirmDialog
+        isOpen={quoteCostResetConfirmOpen}
+        title="Rework Cost?"
+        message="This will move the quote back to Cost Verification and reset quote submission and decision."
+        confirmText="Rework Cost"
+        cancelText="Cancel"
+        type="primary"
+        onConfirm={handleConfirmQuoteCostReset}
+        onCancel={() => setQuoteCostResetConfirmOpen(false)}
+      />
 
       <header className="order-actions-topbar">
         <div className="order-actions-topbar-main">
