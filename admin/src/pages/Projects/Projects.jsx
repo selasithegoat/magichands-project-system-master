@@ -7,11 +7,16 @@ import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationMo
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay } from "@client/utils/quoteStatus";
 
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
-const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished"]);
-const PENDING_PROJECT_STATUSES = new Set(["Order Created"]);
+const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished", "Declined"]);
+const PENDING_PROJECT_STATUSES = new Set([
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
+]);
 const DELIVERY_PROJECT_STATUSES = new Set(["Pending Delivery/Pickup"]);
 const POST_DELIVERY_PROJECT_STATUSES = new Set([
   "Delivered",
@@ -19,6 +24,7 @@ const POST_DELIVERY_PROJECT_STATUSES = new Set([
   "Feedback Completed",
   "Completed",
   "Finished",
+  "Declined",
 ]);
 
 const isEmergencyProject = (project) =>
@@ -27,6 +33,10 @@ const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const isPendingDeliveryProject = (project) =>
   DELIVERY_PROJECT_STATUSES.has(project?.status);
+const getProjectStatusDisplay = (project) =>
+  isQuoteProject(project)
+    ? getQuoteStatusDisplay(project?.status || "")
+    : project?.status || "";
 
 const isUrgentProject = (project) => {
   const deliveryDateValue = project?.details?.deliveryDate;
@@ -298,7 +308,7 @@ const Projects = ({ user }) => {
 
   const getGroupStatusSummary = (projects = []) => {
     const statuses = Array.from(
-      new Set(projects.map((project) => project?.status).filter(Boolean)),
+      new Set(projects.map((project) => getProjectStatusDisplay(project)).filter(Boolean)),
     );
     if (statuses.length === 0) {
       return { label: "Draft", className: getStatusClass("Draft") };
@@ -312,7 +322,7 @@ const Projects = ({ user }) => {
   };
 
   const matchesStatusFilter = (project) => {
-    const projectStatus = project?.status;
+    const projectStatus = getProjectStatusDisplay(project);
 
     if (filterStatus === "All") return true;
     if (filterStatus === "__ACTIVE__") {
@@ -649,13 +659,22 @@ const Projects = ({ user }) => {
               <option value="Feedback Completed">Feedback Completed</option>
               <option value="Completed">Completed</option>
               <option value="Delivered">Delivered</option>
-              <option value="Pending Quote Request">
-                Pending Quote Request
+              <option value="Quote Created">Quote Created</option>
+              <option value="Pending Cost Verification">
+                Pending Cost Verification
               </option>
-              <option value="Pending Send Response">
-                Pending Send Response
+              <option value="Cost Verification Completed">
+                Cost Verification Completed
               </option>
-              <option value="Response Sent">Response Sent</option>
+              <option value="Pending Quote Submission">
+                Pending Quote Submission
+              </option>
+              <option value="Quote Submission Completed">
+                Quote Submission Completed
+              </option>
+              <option value="Pending Client Decision">
+                Pending Client Decision
+              </option>
             </select>
 
             {/* Client Filter */}
@@ -758,8 +777,12 @@ const Projects = ({ user }) => {
                         <td>{formatDate(project.orderDate || project.createdAt)}</td>
                         <td>{formatTime(project.receivedTime)}</td>
                         <td>
-                          <span className={`status-badge ${getStatusClass(project.status)}`}>
-                            {project.status}
+                          <span
+                            className={`status-badge ${getStatusClass(
+                              getProjectStatusDisplay(project),
+                            )}`}
+                          >
+                            {getProjectStatusDisplay(project)}
                           </span>
                         </td>
                         <td>
@@ -900,9 +923,11 @@ const Projects = ({ user }) => {
                             <td>{formatTime(project.receivedTime)}</td>
                             <td>
                               <span
-                                className={`status-badge ${getStatusClass(project.status)}`}
+                                className={`status-badge ${getStatusClass(
+                                  getProjectStatusDisplay(project),
+                                )}`}
                               >
-                                {project.status}
+                                {getProjectStatusDisplay(project)}
                               </span>
                             </td>
                             <td>

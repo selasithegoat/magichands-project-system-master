@@ -5,6 +5,7 @@ import "./Clients.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay } from "@client/utils/quoteStatus";
 
 const Clients = ({ user }) => {
   const navigate = useNavigate();
@@ -81,6 +82,11 @@ const Clients = ({ user }) => {
     return "draft";
   };
 
+  const getProjectStatusDisplay = (project) =>
+    project?.projectType === "Quote"
+      ? getQuoteStatusDisplay(project.status)
+      : project.status;
+
   const getContactOrEmail = (project) => {
     const email = (project?.details?.clientEmail || "").trim();
     const phone = (project?.details?.clientPhone || "").trim();
@@ -107,11 +113,15 @@ const Clients = ({ user }) => {
 
       if (projectStatusFilter === "ongoing") {
         filteredProjects = client.projects.filter(
-          (p) => p.status !== "Completed" && p.status !== "Finished",
+          (p) =>
+            getProjectStatusDisplay(p) !== "Completed" &&
+            getProjectStatusDisplay(p) !== "Finished",
         );
       } else if (projectStatusFilter === "completed") {
         filteredProjects = client.projects.filter(
-          (p) => p.status === "Completed" || p.status === "Finished",
+          (p) =>
+            getProjectStatusDisplay(p) === "Completed" ||
+            getProjectStatusDisplay(p) === "Finished",
         );
       }
 
@@ -277,10 +287,10 @@ const Clients = ({ user }) => {
                             <td>
                               <span
                                 className={`status-badge ${getStatusClass(
-                                  project.status,
+                                  getProjectStatusDisplay(project),
                                 )}`}
                               >
-                                {project.status}
+                                {getProjectStatusDisplay(project)}
                               </span>
                             </td>
                             <td>

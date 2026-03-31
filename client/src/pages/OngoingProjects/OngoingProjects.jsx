@@ -20,9 +20,13 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
   "Feedback Completed",
   "Completed",
   "Finished",
+  "Declined",
 ]);
 
-const isPendingAcceptanceProject = (project) => project.status === "Order Created";
+const isPendingAcceptanceProject = (project) =>
+  ["Order Created", "Quote Created", "Pending Acceptance"].includes(
+    project.status,
+  );
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const isEmergencyProject = (project) =>
@@ -92,7 +96,8 @@ const OngoingProjects = ({
   const handleUpdateStatus = async (projectId, currentStatus) => {
     if (currentStatus !== "Completed") {
       setToast({
-        message: "Project must be 'Completed' before marking as finished.",
+        message:
+          "Project must be 'Completed' before marking as finished.",
         type: "error",
       });
       return;
@@ -106,7 +111,7 @@ const OngoingProjects = ({
       });
 
       if (res.ok) {
-        setToast({ message: "Project marked as Completed!", type: "success" });
+        setToast({ message: "Project marked as Finished!", type: "success" });
         fetchProjects();
         if (onProjectChange) onProjectChange(); // Refresh global count
       } else {
@@ -170,7 +175,8 @@ const OngoingProjects = ({
         return projects.filter(
           (project) =>
             isQuoteProject(project) &&
-            !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+            !HISTORY_PROJECT_STATUSES.has(project.status || "") &&
+            !isPendingAcceptanceProject(project),
         );
       case "corporate":
         return projects.filter(

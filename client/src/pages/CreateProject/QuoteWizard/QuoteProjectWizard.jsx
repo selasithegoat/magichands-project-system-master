@@ -114,7 +114,7 @@ const QuoteProjectWizard = () => {
       scopeApproved: false,
 
       checklist: {
-        cost: false,
+        cost: true,
         mockup: false,
         previousSamples: false,
         sampleProduction: false,
@@ -170,7 +170,7 @@ const QuoteProjectWizard = () => {
     updates: [], // Project Memo Updates
     projectType: "Quote", // Default for this wizard
     priority: "Normal",
-    status: "Order Created",
+    status: "Quote Created",
   });
 
   // Fetch Leads
@@ -229,6 +229,13 @@ const QuoteProjectWizard = () => {
               submissionDate: data.quoteDetails?.submissionDate
                 ? data.quoteDetails.submissionDate.split("T")[0]
                 : prev.quoteDetails.submissionDate,
+              checklist: {
+                cost: true,
+                mockup: false,
+                previousSamples: false,
+                sampleProduction: false,
+                bidSubmission: false,
+              },
             },
             items: data.items || [],
             receivedTime: data.receivedTime || prev.receivedTime,
@@ -375,12 +382,12 @@ const QuoteProjectWizard = () => {
       const payload = {
         ...formData,
         projectType: formData.projectType || "Quote",
-        // Lead acceptance moves Order Created -> Pending Scope Approval.
+        // Lead acceptance moves Quote Created -> Pending Scope Approval.
         status: editingId
-          ? formData.status === "Order Created"
+          ? formData.status === "Quote Created"
             ? "Pending Scope Approval"
             : formData.status
-          : "Order Created",
+          : "Quote Created",
 
         // Ensure details object is populated for top-level schema
         details: {

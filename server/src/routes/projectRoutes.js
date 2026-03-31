@@ -15,6 +15,7 @@ const {
   reactivateProject,
   updateProjectStatus,
   transitionQuoteRequirement,
+  updateQuoteCostVerification,
   updateQuoteDecision,
   uploadProjectMockup,
   deleteProjectMockupVersion,
@@ -308,6 +309,12 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   transitionQuoteRequirement,
+);
+router.patch(
+  "/:id/quote-cost",
+  protect,
+  enforceProjectNotOnHold,
+  updateQuoteCostVerification,
 );
 router.patch(
   "/:id/quote-decision",

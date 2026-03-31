@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay } from "@client/utils/quoteStatus";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -78,13 +79,19 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
-const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished"]);
+const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished", "Declined"]);
 const OVERDUE_EXCLUDED_STATUSES = new Set([
   "Delivered",
   "Pending Feedback",
   "Feedback Completed",
   "Completed",
   "Finished",
+  "Declined",
+]);
+const PENDING_ACCEPTANCE_STATUSES = new Set([
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
 ]);
 
 const isEmergencyProject = (project) =>
@@ -93,6 +100,10 @@ const isPendingDeliveryProject = (project) =>
   project?.status === "Pending Delivery/Pickup";
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
+const getProjectStatusDisplay = (project) =>
+  isQuoteProject(project)
+    ? getQuoteStatusDisplay(project?.status || "")
+    : project?.status || "";
 const normalizeDepartmentList = (value) => {
   if (Array.isArray(value)) {
     return value
@@ -251,7 +262,7 @@ const ProjectStatusOverview = ({ projects }) => {
       // 2. If deliveryDate is in the past (overdue) and not delivered -> Delayed
       // 3. Otherwise -> In Progress (except for 'Completed')
 
-      if (p.status === "Completed" || p.status === "Finished") {
+      if (["Completed", "Finished", "Declined"].includes(p.status)) {
         completed++;
       } else {
         const dDate = p.details?.deliveryDate
@@ -264,6 +275,7 @@ const ProjectStatusOverview = ({ projects }) => {
           "Feedback Completed",
           "Completed",
           "Finished",
+          "Declined",
         ]);
         // Count as delayed if overdue OR within 3 days (72 hours) of delivery
         const isUrgent = dDate && dDate - now <= 3 * 24 * 60 * 60 * 1000;
@@ -432,7 +444,7 @@ const Dashboard = ({ user }) => {
         completed++;
       } else {
         active++;
-        if (p.status === "Order Created") {
+        if (PENDING_ACCEPTANCE_STATUSES.has(p.status)) {
           pending++;
         }
         if (p.details?.deliveryDate) {
@@ -459,9 +471,9 @@ const Dashboard = ({ user }) => {
   };
 
   const getStatusPillClass = (status) => {
-    if (status === "Completed" || status === "Finished") return "completed";
+    if (["Completed", "Finished", "Declined"].includes(status)) return "completed";
     if (
-      status === "Order Created" ||
+      PENDING_ACCEPTANCE_STATUSES.has(status) ||
       status === "Pending Scope Approval" ||
       status === "Pending Acceptance"
     )
@@ -760,6 +772,7 @@ const Dashboard = ({ user }) => {
                 project.orderRef?.client ||
                 project.details?.clientName ||
                 "Unknown Client";
+              const displayStatus = getProjectStatusDisplay(project);
               const createdTime = project?.createdAt
                 ? new Date(project.createdAt).toLocaleTimeString("en-US", {
                     hour: "numeric",
@@ -786,9 +799,9 @@ const Dashboard = ({ user }) => {
 
                   <div className="today-project-status">
                     <span
-                      className={`status-pill ${getStatusPillClass(project.status)}`}
+                      className={`status-pill ${getStatusPillClass(displayStatus)}`}
                     >
-                      {project.status}
+                      {displayStatus}
                     </span>
                     <span
                       className={`today-type-pill ${getProjectTypeClass(project)}`}
@@ -867,10 +880,10 @@ const Dashboard = ({ user }) => {
                 <div className="project-status">
                   <span
                     className={`status-pill ${getStatusPillClass(
-                      project.status,
+                      getProjectStatusDisplay(project),
                     )}`}
                   >
-                    {project.status}
+                    {getProjectStatusDisplay(project)}
                   </span>
                 </div>
 
@@ -906,6 +919,7 @@ const Dashboard = ({ user }) => {
                 (p) =>
                   p.status !== "Completed" &&
                   p.status !== "Finished" &&
+                  p.status !== "Declined" &&
                   p.status !== "Delivered" &&
                   p.status !== "Pending Feedback" &&
                   p.status !== "Feedback Completed",

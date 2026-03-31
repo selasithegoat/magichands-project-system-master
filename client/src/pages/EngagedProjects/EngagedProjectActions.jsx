@@ -13,6 +13,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
 import {
   normalizeReferenceAttachments,
   getReferenceFileName,
@@ -69,6 +70,12 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "In Progress",
   "Completed",
   "On Hold",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
+  "Completed",
 ]);
 
 const isScopeApprovalComplete = (status) =>
@@ -95,14 +102,13 @@ const QUOTE_REQUIREMENT_PREVIOUS_SAMPLES_LABEL = "Previous Sample / Jobs Done";
 const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY = "sampleProduction";
 const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL = "Sample Production";
 const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
-  "Order Created",
+  "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
-  "Pending Departmental Engagement",
+  "Pending Cost Verification",
 ]);
 const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set([
-  "Pending Quote Request",
+  "Pending Cost Verification",
   "Pending Mockup",
 ]);
 const QUOTE_MOCKUP_SUBMIT_TRANSITIONS = {
@@ -376,6 +382,7 @@ const ENGAGED_WORKFLOW_STEPS = [
     key: "brief",
     label: "Project Brief",
     statuses: [
+      "Quote Created",
       "Order Created",
       "Pending Scope Approval",
       "Scope Approval Completed",
@@ -388,8 +395,8 @@ const ENGAGED_WORKFLOW_STEPS = [
     key: "graphics",
     label: "Graphics",
     statuses: [
-      "Pending Quote Request",
-      "Quote Request Completed",
+      "Pending Cost Verification",
+      "Cost Verification Completed",
       "Pending Mockup",
       "Mockup Completed",
     ],
@@ -408,8 +415,10 @@ const ENGAGED_WORKFLOW_STEPS = [
       "Photography Completed",
       "Pending Packaging",
       "Packaging Completed",
-      "Pending Send Response",
-      "Response Sent",
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      "Completed",
     ],
   },
   {
@@ -681,6 +690,23 @@ const EngagedProjectActions = ({ user }) => {
     [project],
   );
   const isQuoteProject = project?.projectType === "Quote";
+  const quoteWorkflowStatus = isQuoteProject
+    ? normalizeQuoteStatus(project?.status || "")
+    : project?.status || "";
+  const quoteChecklist = project?.quoteDetails?.checklist || {};
+  const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
+    ([key, value]) => key !== "cost" && Boolean(value),
+  );
+  const quoteWorkflowBlocked =
+    isQuoteProject && (!quoteChecklist?.cost || quoteHasUnsupportedRequirements);
+  const quoteWorkflowBlockedMessage = !quoteChecklist?.cost
+    ? "Cost requirement is not enabled for this quote."
+    : quoteHasUnsupportedRequirements
+      ? "Quote requirement workflows are not configured yet."
+      : "";
+  const displayStatus = isQuoteProject
+    ? getQuoteStatusDisplay(project?.status || "")
+    : project?.status || "";
   const paymentChecksEnabled = !isQuoteProject;
   const quoteMockupRequirement = useMemo(
     () =>
@@ -720,7 +746,8 @@ const EngagedProjectActions = ({ user }) => {
   );
   const quoteDepartmentalEngagementComplete = useMemo(() => {
     if (!isQuoteProject) return true;
-    const status = String(project?.status || "").trim();
+    if (quoteWorkflowBlocked) return false;
+    const status = String(quoteWorkflowStatus || "").trim();
     if (QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(status)) return false;
 
     const engagedDepartments = Array.isArray(project?.departments)
@@ -730,7 +757,13 @@ const EngagedProjectActions = ({ user }) => {
     return engagedDepartments.every((departmentName) =>
       acknowledgedDepts.has(departmentName),
     );
-  }, [isQuoteProject, project?.status, project?.departments, acknowledgedDepts]);
+  }, [
+    isQuoteProject,
+    quoteWorkflowBlocked,
+    quoteWorkflowStatus,
+    project?.departments,
+    acknowledgedDepts,
+  ]);
   const invoiceSent = Boolean(project?.invoice?.sent);
   const pendingProductionMissing =
     project && paymentChecksEnabled
@@ -968,11 +1001,15 @@ const EngagedProjectActions = ({ user }) => {
     formatQuoteRequirementStatus(quoteSampleProductionStatus);
   const quoteMockupReadyForSampleProduction =
     isQuoteProject &&
+    !quoteWorkflowBlocked &&
     Boolean(mockupUrl) &&
     mockupApprovalStatus === "approved";
   const workflowJourney = useMemo(
-    () => resolveEngagedWorkflow(project?.status || ""),
-    [project?.status],
+    () =>
+      resolveEngagedWorkflow(
+        isQuoteProject ? quoteWorkflowStatus : project?.status || "",
+      ),
+    [isQuoteProject, quoteWorkflowStatus, project?.status],
   );
   const departmentSections = useMemo(() => {
     if (!project) return [];
@@ -1790,7 +1827,11 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
-    if (!isScopeApprovalComplete(targetProject.status)) {
+    const resolvedStatus =
+      targetProject?.projectType === "Quote"
+        ? normalizeQuoteStatus(targetProject.status)
+        : targetProject.status;
+    if (!isScopeApprovalComplete(resolvedStatus)) {
       setToast({
         type: "error",
         message: "Scope approval must be completed before engagement can be accepted.",
@@ -2570,11 +2611,11 @@ const EngagedProjectActions = ({ user }) => {
           </p>
           <div className="engaged-actions-topbar-tags">
             <span
-              className={`status-badge ${project.status
+              className={`status-badge ${displayStatus
                 .toLowerCase()
                 .replace(/\s+/g, "-")}`}
             >
-              {project.status}
+              {displayStatus}
             </span>
           </div>
         </div>
@@ -3022,7 +3063,7 @@ const EngagedProjectActions = ({ user }) => {
                         const canAcknowledge =
                           !isAcknowledged &&
                           !isProjectLeadForProject &&
-                          isScopeApprovalComplete(project.status);
+                          isScopeApprovalComplete(quoteWorkflowStatus);
                         return (
                           <div key={dept} className="engaged-ack-row">
                             <div className="engaged-ack-info">
@@ -3046,7 +3087,7 @@ const EngagedProjectActions = ({ user }) => {
                                   ? "Already acknowledged"
                                   : isProjectLeadForProject
                                     ? "Project leads cannot take engagement actions on their own projects here."
-                                  : isScopeApprovalComplete(project.status)
+                                  : isScopeApprovalComplete(quoteWorkflowStatus)
                                     ? "Confirm engagement"
                                     : "Scope approval must be completed"
                               }
@@ -3080,7 +3121,8 @@ const EngagedProjectActions = ({ user }) => {
                     const isQuoteGraphicsAction = isQuoteProject && isMockupAction;
                     const quoteAllowsMockupWorkflowStatus =
                       isQuoteGraphicsAction &&
-                      QUOTE_MOCKUP_WORKFLOW_STATUS_SET.has(project.status);
+                      !quoteWorkflowBlocked &&
+                      QUOTE_MOCKUP_WORKFLOW_STATUS_SET.has(quoteWorkflowStatus);
                     const mockupAlreadySubmitted = Boolean(mockupUrl);
                     const mockupApprovalPending =
                       isMockupAction && mockupApprovalStatus === "pending";
@@ -3131,12 +3173,16 @@ const EngagedProjectActions = ({ user }) => {
                     if (isProjectLeadForProject) {
                       mockupUploadTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
+                      mockupUploadTitle =
+                        quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteAllowsMockupWorkflowStatus
                     ) {
                       mockupUploadTitle =
-                        "Mockup upload is only available while status is Pending Quote Request or Pending Mockup.";
+                        "Mockup upload is only available while status is Pending Cost Verification or Pending Mockup.";
                     } else if (!isQuoteGraphicsAction && !isPending) {
                       mockupUploadTitle = `Waiting for ${action.pending}.`;
                     } else if (mockupApprovalRejected) {
@@ -3151,12 +3197,16 @@ const EngagedProjectActions = ({ user }) => {
                     if (isProjectLeadForProject) {
                       mockupConfirmTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
+                      mockupConfirmTitle =
+                        quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteAllowsMockupWorkflowStatus
                     ) {
                       mockupConfirmTitle =
-                        "Mockup completion for quote is only available while status is Pending Quote Request or Pending Mockup.";
+                        "Mockup completion for quote is only available while status is Pending Cost Verification or Pending Mockup.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteDepartmentalEngagementComplete
@@ -3435,6 +3485,7 @@ const EngagedProjectActions = ({ user }) => {
                     const retrievalUpdating =
                       quoteRequirementUpdating === retrievalActionKey;
                     const canConfirmRetrieved =
+                      !quoteWorkflowBlocked &&
                       quotePreviousSamplesRequirement.isRequired &&
                       quoteDepartmentalEngagementComplete &&
                       QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(
@@ -3447,6 +3498,10 @@ const EngagedProjectActions = ({ user }) => {
                     if (isProjectLeadForProject) {
                       retrievalTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (quoteWorkflowBlocked) {
+                      retrievalTitle =
+                        quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet.";
                     } else if (!quotePreviousSamplesRequirement.isRequired) {
                       retrievalTitle =
                         "Previous Sample / Jobs Done is not required for this quote.";
@@ -3513,6 +3568,7 @@ const EngagedProjectActions = ({ user }) => {
                         quoteSampleProductionStatus
                       ] || [];
                     const canSubmitSampleProduction =
+                      !quoteWorkflowBlocked &&
                       quoteSampleProductionRequirement.isRequired &&
                       quoteDepartmentalEngagementComplete &&
                       quoteMockupReadyForSampleProduction &&
@@ -3525,6 +3581,10 @@ const EngagedProjectActions = ({ user }) => {
                     if (isProjectLeadForProject) {
                       sampleProductionTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (quoteWorkflowBlocked) {
+                      sampleProductionTitle =
+                        quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet.";
                     } else if (!quoteSampleProductionRequirement.isRequired) {
                       sampleProductionTitle =
                         `${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL} is not required for this quote.`;
@@ -3847,7 +3907,7 @@ const EngagedProjectActions = ({ user }) => {
       <section className="engaged-context-card">
         <h3>Project Context</h3>
         <p>
-          <strong>Status:</strong> {project.status}
+          <strong>Status:</strong> {displayStatus}
         </p>
         <p>
           <strong>Lead:</strong> {lead}
@@ -3869,7 +3929,7 @@ const EngagedProjectActions = ({ user }) => {
               .toLowerCase()
               .replace(/\s+/g, "-")}`}
           >
-            {project.status}
+            {displayStatus}
           </span>
           {invoiceSent && <span className="engaged-tag invoice">Invoice Sent</span>}
           {Array.from(paymentTypes).map((type) => (

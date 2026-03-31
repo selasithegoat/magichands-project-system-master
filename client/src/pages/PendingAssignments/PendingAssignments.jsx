@@ -4,6 +4,12 @@ import "./PendingAssignments.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 
+const PENDING_ACCEPTANCE_STATUSES = new Set([
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
+]);
+
 const PendingAssignments = ({ onStartNew, user }) => {
   const [adjustments, setAdjustments] = useState([]);
   const navigate = useNavigate();
@@ -17,7 +23,10 @@ const PendingAssignments = ({ onStartNew, user }) => {
         const data = await res.json();
         const pending = data.filter((p) => {
           const leadId = p.projectLeadId?._id || p.projectLeadId;
-          return leadId === user._id && p.status === "Order Created";
+          return (
+            leadId === user._id &&
+            PENDING_ACCEPTANCE_STATUSES.has(p.status)
+          );
         });
         setAdjustments(pending);
       }
@@ -34,8 +43,13 @@ const PendingAssignments = ({ onStartNew, user }) => {
 
   useRealtimeRefresh(() => fetchAssignments(), { enabled: Boolean(user) });
 
-  const handleAccept = (projectId) => {
-    navigate(`/create/wizard?edit=${projectId}`);
+  const handleAccept = (project) => {
+    if (!project) return;
+    const route =
+      project.projectType === "Quote"
+        ? `/create/quote-wizard?edit=${project._id}`
+        : `/create/wizard?edit=${project._id}`;
+    navigate(route);
   };
 
   if (loading) return <div>Loading...</div>;
@@ -114,7 +128,7 @@ const PendingAssignments = ({ onStartNew, user }) => {
               <div className="pa-card-footer">
                 <button
                   className="btn-accept"
-                  onClick={() => handleAccept(project._id)}
+                  onClick={() => handleAccept(project)}
                 >
                   Accept Project
                 </button>

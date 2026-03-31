@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
+import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -173,39 +174,29 @@ const QUOTE_WORKFLOW_STEPS = [
     key: "scope",
     label: "Scope",
     statuses: [
-      "Order Created",
+      "Quote Created",
       "Pending Scope Approval",
       "Scope Approval Completed",
-      "Pending Departmental Meeting",
-      "Pending Departmental Engagement",
-      "Departmental Engagement Completed",
     ],
   },
   {
-    key: "requirements",
-    label: "Requirements",
-    statuses: ["Pending Quote Request", "Quote Request Completed"],
+    key: "cost",
+    label: "Cost Verification",
+    statuses: ["Pending Cost Verification", "Cost Verification Completed"],
   },
   {
-    key: "response",
-    label: "Response",
-    statuses: ["Pending Send Response", "Response Sent"],
+    key: "submission",
+    label: "Quote Submission",
+    statuses: ["Pending Quote Submission", "Quote Submission Completed"],
   },
   {
     key: "decision",
-    label: "Decision",
+    label: "Client Decision",
     statuses: [
-      "Response Sent",
-      "Pending Feedback",
-      "Feedback Completed",
+      "Pending Client Decision",
       "Completed",
       "Finished",
     ],
-  },
-  {
-    key: "convert",
-    label: "Convert",
-    statuses: ["Completed", "Finished"],
   },
 ];
 
@@ -295,132 +286,12 @@ const normalizeQuoteChecklist = (checklist = {}) =>
     return accumulator;
   }, {});
 
-const formatQuoteRequirementStatus = (status = "") => {
-  const normalized = String(status || "").trim().toLowerCase();
-  if (!normalized) return "Assigned";
-  return normalized
-    .split("_")
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(" ");
-};
-
-const getQuoteRequirementItems = (project = {}) => {
-  const quoteDetails = project?.quoteDetails || {};
-  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
-  const rawItems =
-    quoteDetails?.requirementItems && typeof quoteDetails.requirementItems === "object"
-      ? quoteDetails.requirementItems
-      : {};
-
-  return QUOTE_REQUIREMENT_KEYS.map((key) => {
-    const rawItem =
-      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
-    const isRequired = Boolean(checklist[key]);
-    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
-    const status = isRequired ? normalizedStatus || "assigned" : "not_required";
-
-    return {
-      key,
-      label: QUOTE_REQUIREMENT_LABELS[key] || key,
-      isRequired,
-      status,
-      updatedAt: rawItem?.updatedAt || null,
-      note: String(rawItem?.note || "").trim(),
-    };
-  });
-};
-
 const formatProjectStatusForDisplay = (status, isQuoteProject = false) => {
   const normalized = String(status || "").trim();
   if (!isQuoteProject) return normalized;
-  if (normalized === "Pending Feedback") return "Pending Decision";
-  if (normalized === "Feedback Completed") return "Decision Completed";
-  return normalized;
-};
-
-const isQuoteRequirementCompleted = (requirementKey, status) => {
-  const normalizedKey = String(requirementKey || "").trim();
-  const normalizedStatus = String(status || "").trim().toLowerCase();
-  if (!normalizedStatus) return false;
-
-  if (normalizedKey === "previousSamples" || normalizedKey === "bidSubmission") {
-    return normalizedStatus === "sent_to_client" || normalizedStatus === "client_approved";
-  }
-
-  return normalizedStatus === "client_approved";
-};
-
-const formatQuoteRequirementStatusForItem = (requirementKey, status) => {
-  const normalizedKey = String(requirementKey || "").trim();
-  const normalizedStatus = String(status || "").trim().toLowerCase();
-
-  if (normalizedKey === "previousSamples") {
-    if (normalizedStatus === "dept_submitted") return "Sample Retrieved";
-    if (normalizedStatus === "sent_to_client") {
-      return "Sample Retrieved Confirmed";
-    }
-  }
-  if (normalizedKey === "bidSubmission" && normalizedStatus === "sent_to_client") {
-    return "Documents Sent";
-  }
-
-  return formatQuoteRequirementStatus(status);
-};
-
-const getQuoteFrontDeskActions = (requirementKey, status) => {
-  const normalizedKey = String(requirementKey || "").trim();
-  const normalized = String(status || "").trim().toLowerCase();
-
-  if (normalizedKey === "bidSubmission") {
-    if (
-      [
-        "assigned",
-        "in_progress",
-        "dept_submitted",
-        "frontdesk_review",
-        "client_revision_requested",
-        "client_approved",
-        "blocked",
-      ].includes(normalized)
-    ) {
-      return [{ toStatus: "sent_to_client", label: "Mark Documents Sent" }];
-    }
-
-    return [];
-  }
-
-  if (normalizedKey === "previousSamples") {
-    if (
-      ["assigned", "in_progress", "client_revision_requested"].includes(
-        normalized,
-      )
-    ) {
-      return [{ toStatus: "dept_submitted", label: "Confirm Sample Retrieved" }];
-    }
-
-    if (normalized === "dept_submitted" || normalized === "frontdesk_review") {
-      return [{ toStatus: "sent_to_client", label: "Confirm Sample Retrieved" }];
-    }
-
-    return [];
-  }
-
-  if (normalized === "dept_submitted") {
-    return [{ toStatus: "frontdesk_review", label: "Review Internally" }];
-  }
-
-  if (normalized === "frontdesk_review") {
-    return [{ toStatus: "sent_to_client", label: "Send to Client" }];
-  }
-
-  if (normalized === "sent_to_client") {
-    return [
-      { toStatus: "client_approved", label: "Client Approved" },
-      { toStatus: "client_revision_requested", label: "Client Requested Revision" },
-    ];
-  }
-
-  return [];
+  const normalizedQuote = getQuoteStatusDisplay(normalized);
+  if (normalizedQuote === "Pending Client Decision") return "Pending Decision";
+  return normalizedQuote;
 };
 
 const normalizeQuoteDecisionStatus = (value) => {
@@ -740,8 +611,11 @@ const OrderActions = () => {
   const [sampleApprovalResetInput, setSampleApprovalResetInput] = useState("");
   const [sampleApprovalResetSubmitting, setSampleApprovalResetSubmitting] =
     useState(false);
-  const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
-    useState("");
+  const [quoteCostAmount, setQuoteCostAmount] = useState("");
+  const [quoteCostCurrency, setQuoteCostCurrency] = useState("");
+  const [quoteCostNote, setQuoteCostNote] = useState("");
+  const [quoteCostSubmitting, setQuoteCostSubmitting] = useState(false);
+  const [quoteCostResetting, setQuoteCostResetting] = useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
@@ -1100,6 +974,26 @@ const OrderActions = () => {
     );
   }, [project?._id, project?.projectType, project?.quoteDetails?.decision]);
 
+  useEffect(() => {
+    const isQuote = project?.projectType === "Quote";
+    if (!isQuote) {
+      setQuoteCostAmount("");
+      setQuoteCostCurrency("");
+      setQuoteCostNote("");
+      return;
+    }
+
+    const costVerification = project?.quoteDetails?.costVerification || {};
+    const amountValue = costVerification?.amount;
+    setQuoteCostAmount(
+      amountValue === 0 || Number.isFinite(amountValue)
+        ? String(amountValue)
+        : "",
+    );
+    setQuoteCostCurrency(String(costVerification?.currency || "").trim());
+    setQuoteCostNote(String(costVerification?.note || "").trim());
+  }, [project?._id, project?.projectType, project?.quoteDetails?.costVerification]);
+
   const paymentTypes = useMemo(
     () => new Set((project?.paymentVerifications || []).map((p) => p.type)),
     [project],
@@ -1126,6 +1020,9 @@ const OrderActions = () => {
     latestMockupVersion?.fileUrl && latestMockupDecisionStatus === "approved",
   );
   const isQuoteProject = project?.projectType === "Quote";
+  const quoteWorkflowStatus = isQuoteProject
+    ? normalizeQuoteStatus(project?.status || "")
+    : project?.status || "";
   const invoiceSent = Boolean(project?.invoice?.sent);
   const billingDocumentLabel = isQuoteProject ? "Quote" : "Invoice";
   const billingDocumentLower = isQuoteProject ? "quote" : "invoice";
@@ -1143,22 +1040,49 @@ const OrderActions = () => {
     sampleRequirementEnabled && sampleApprovalStatus === "approved";
   const sampleApprovalPending =
     sampleRequirementEnabled && sampleApprovalStatus !== "approved";
-  const quoteRequirementItems = useMemo(
-    () => (isQuoteProject ? getQuoteRequirementItems(project) : []),
-    [isQuoteProject, project],
+  const quoteChecklist = useMemo(
+    () =>
+      (isQuoteProject
+        ? normalizeQuoteChecklist(project?.quoteDetails?.checklist || {})
+        : {}),
+    [isQuoteProject, project?.quoteDetails?.checklist],
   );
-  const requiredQuoteRequirementItems = quoteRequirementItems.filter(
-    (item) => item.isRequired,
+  const unsupportedQuoteRequirementKeys = useMemo(
+    () =>
+      QUOTE_REQUIREMENT_KEYS.filter(
+        (key) => key !== "cost" && quoteChecklist[key],
+      ),
+    [quoteChecklist],
   );
-  const frontDeskQueueRequirementItems = requiredQuoteRequirementItems.filter(
-    (item) => item.key !== "mockup",
+  const unsupportedQuoteRequirementLabels = useMemo(
+    () =>
+      unsupportedQuoteRequirementKeys.map(
+        (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
+      ),
+    [unsupportedQuoteRequirementKeys],
   );
-  const allQuoteRequirementsCompleted =
+  const isCostOnlyQuote =
     isQuoteProject &&
-    requiredQuoteRequirementItems.length > 0 &&
-    requiredQuoteRequirementItems.every(
-      (item) => isQuoteRequirementCompleted(item.key, item.status),
-    );
+    Boolean(quoteChecklist.cost) &&
+    unsupportedQuoteRequirementKeys.length === 0;
+  const quoteWorkflowBlocked = isQuoteProject && !isCostOnlyQuote;
+  const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
+    ? !quoteChecklist.cost
+      ? "Cost requirement is not enabled for this quote."
+      : unsupportedQuoteRequirementLabels.length > 0
+        ? `Unsupported requirements: ${unsupportedQuoteRequirementLabels.join(", ")}.`
+        : "Quote requirements are not configured yet."
+    : "";
+  const quoteCostVerification = project?.quoteDetails?.costVerification || {};
+  const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
+  const quoteCostVerified =
+    isQuoteProject &&
+    Number.isFinite(quoteCostAmountValue) &&
+    quoteCostAmountValue > 0;
+  const canSubmitQuote =
+    isQuoteProject && !quoteWorkflowBlocked && quoteCostVerified;
+  const quoteCostMissing =
+    isQuoteProject && !quoteWorkflowBlocked && !quoteCostVerified;
   const quoteDecisionState = useMemo(
     () => getQuoteDecisionState(project),
     [project],
@@ -1167,16 +1091,26 @@ const OrderActions = () => {
   const quoteDecisionTaken =
     isQuoteProject && ["go_ahead", "declined"].includes(quoteDecisionStatus);
   const canValidateQuoteDecision =
-    isQuoteProject && canManageBilling && project?.status === "Response Sent";
+    isQuoteProject &&
+    canManageBilling &&
+    !quoteWorkflowBlocked &&
+    ["Pending Client Decision", "Quote Submission Completed", "Completed"].includes(
+      quoteWorkflowStatus,
+    );
   const canConvertQuoteToProject =
-    canValidateQuoteDecision && quoteDecisionStatus === "go_ahead";
+    isQuoteProject &&
+    canManageBilling &&
+    quoteDecisionStatus === "go_ahead" &&
+    ["Pending Client Decision", "Quote Submission Completed", "Completed"].includes(
+      quoteWorkflowStatus,
+    );
   const convertedFromQuoteAt =
     !isQuoteProject && project?.quoteDetails?.decision?.convertedAt
       ? project.quoteDetails.decision.convertedAt
       : null;
   const workflowJourney = useMemo(
-    () => resolveWorkflowJourney(project?.status, isQuoteProject),
-    [project?.status, isQuoteProject],
+    () => resolveWorkflowJourney(quoteWorkflowStatus, isQuoteProject),
+    [quoteWorkflowStatus, isQuoteProject],
   );
   const activeJourneyStep = workflowJourney.find((item) => item.state === "active");
 
@@ -1790,6 +1724,78 @@ const OrderActions = () => {
     }
   };
 
+  const handleQuoteCostVerification = async () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    if (quoteWorkflowBlocked) {
+      showToast(
+        "Quote requirement workflows are not configured yet. Only cost-only quotes can proceed.",
+        "error",
+      );
+      return;
+    }
+    const amountValue = Number.parseFloat(quoteCostAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      showToast("Enter a valid cost amount to continue.", "error");
+      return;
+    }
+
+    setQuoteCostSubmitting(true);
+    try {
+      const res = await fetchWithPortal(`/api/projects/${project._id}/quote-cost`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amountValue,
+          currency: String(quoteCostCurrency || "").trim(),
+          note: String(quoteCostNote || "").trim(),
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Quote cost verified.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to verify quote cost.", "error");
+      }
+    } catch (error) {
+      console.error("Quote cost verification error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteCostSubmitting(false);
+    }
+  };
+
+  const handleQuoteCostReset = async () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    const confirmed = window.confirm(
+      "Rework cost? This will move the quote back to Cost Verification and reset quote submission and decision.",
+    );
+    if (!confirmed) return;
+
+    setQuoteCostResetting(true);
+    try {
+      const res = await fetchWithPortal(`/api/projects/${project._id}/quote-cost`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Quote cost reset. Cost verification is now pending.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.message || "Failed to reset quote cost.", "error");
+      }
+    } catch (error) {
+      console.error("Quote cost reset error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteCostResetting(false);
+    }
+  };
+
   const openPaymentModal = (type) => {
     setPaymentModal({ open: true, type });
     setPaymentInput("");
@@ -2123,51 +2129,6 @@ const OrderActions = () => {
     }
   };
 
-  const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
-    if (!project || !isQuoteProject || !canManageBilling) return;
-    if (requirementKey === "mockup") {
-      showToast(
-        "Use the Mockup Approval panel for client approval or revision on mockups.",
-        "error",
-      );
-      return;
-    }
-
-    const pendingKey = `${requirementKey}:${toStatus}`;
-    setQuoteRequirementSubmittingKey(pendingKey);
-
-    try {
-      const res = await fetchWithPortal(
-        `/api/projects/${project._id}/quote-requirements/${requirementKey}/transition`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ toStatus }),
-        },
-      );
-
-      if (res.ok) {
-        const updated = await res.json();
-        setProject(updated);
-        showToast(
-          `${QUOTE_REQUIREMENT_LABELS[requirementKey] || "Requirement"} moved to ${formatQuoteRequirementStatusForItem(requirementKey, toStatus)}.`,
-          "success",
-        );
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        showToast(
-          errorData.message || "Failed to update quote requirement.",
-          "error",
-        );
-      }
-    } catch (error) {
-      console.error("Quote requirement transition error:", error);
-      showToast("Network error. Please try again.", "error");
-    } finally {
-      setQuoteRequirementSubmittingKey("");
-    }
-  };
-
   const handleValidateQuoteDecision = async (decisionStatus) => {
     if (!project || !isQuoteProject || !canManageBilling) return;
     if (!["go_ahead", "declined", "pending"].includes(decisionStatus)) return;
@@ -2336,9 +2297,7 @@ const OrderActions = () => {
     project.status === "Pending Production" &&
     sampleApprovalPending;
   const mockupReviewStageOpen =
-    project &&
-    (project.status === "Pending Mockup" ||
-      (isQuoteProject && project.status === "Pending Quote Request"));
+    project && !isQuoteProject && project.status === "Pending Mockup";
   const showMockupApprovalWarning =
     project &&
     mockupReviewStageOpen &&
@@ -2374,12 +2333,24 @@ const OrderActions = () => {
       }`
     : "";
   const workflowAttentionItems = [
-    isQuoteProject &&
-    requiredQuoteRequirementItems.length > 0 &&
-    !allQuoteRequirementsCompleted
-      ? "Required quote requirements are still pending completion."
+    quoteWorkflowBlocked
+      ? "Quote requirement workflows are not configured yet. Only cost-only quotes can proceed."
       : "",
-    isQuoteProject && project?.status === "Response Sent" && !quoteDecisionTaken
+    isQuoteProject && !quoteWorkflowBlocked && !quoteCostVerified
+      ? "Quote cost verification is still pending."
+      : "",
+    isQuoteProject &&
+    !quoteWorkflowBlocked &&
+    quoteWorkflowStatus === "Pending Quote Submission" &&
+    !invoiceSent
+      ? "Quote submission is still pending."
+      : "",
+    isQuoteProject &&
+    !quoteWorkflowBlocked &&
+    ["Pending Client Decision", "Quote Submission Completed"].includes(
+      quoteWorkflowStatus,
+    ) &&
+    !quoteDecisionTaken
       ? "Client quote decision is pending validation."
       : "",
     showPendingProductionWarning
@@ -2398,20 +2369,25 @@ const OrderActions = () => {
       ? `Client rejected ${latestMockupVersionLabel}. Upload revised mockup.`
       : "",
   ].filter(Boolean);
+  const statusToneTarget = isQuoteProject ? quoteWorkflowStatus : project?.status;
   const statusBadgeTone = [
+    "Quote Created",
     "Pending Scope Approval",
     "Pending Mockup",
     "Pending Master Approval",
     "Pending Production",
     "Pending Delivery/Pickup",
+    "Pending Cost Verification",
+    "Pending Quote Submission",
+    "Pending Client Decision",
     "Pending Quote Request",
     "Pending Send Response",
     "Pending Feedback",
-  ].includes(project?.status)
+  ].includes(statusToneTarget)
     ? "pending"
     : ["Delivered", "Feedback Completed", "Completed", "Finished"].includes(
-          project?.status,
-        )
+        statusToneTarget,
+      )
       ? "complete"
       : "active";
 
@@ -2522,8 +2498,8 @@ const OrderActions = () => {
     : false;
   const canDecideOnMockupVersions =
     canManageMockupApproval &&
-    (project?.status === "Pending Mockup" ||
-      (isQuoteProject && project?.status === "Pending Quote Request"));
+    !isQuoteProject &&
+    project?.status === "Pending Mockup";
 
   if (loading) {
     return (
@@ -2552,7 +2528,7 @@ const OrderActions = () => {
           <p className="order-actions-ref">{project.orderId || project._id}</p>
           <h1>{renderProjectName(project.details, null, "Untitled Project")}</h1>
           <span className={`order-actions-status-pill ${statusBadgeTone}`}>
-            {formatProjectStatusForDisplay(project.status, isQuoteProject)}
+            {formatProjectStatusForDisplay(quoteWorkflowStatus, isQuoteProject)}
           </span>
         </div>
         <button className="action-btn" onClick={() => navigate("/new-orders")}>
@@ -2780,11 +2756,115 @@ const OrderActions = () => {
             </button>
           </div>
 
+          {isQuoteProject && (
+            <div className="action-card">
+              <h3>Cost Verification</h3>
+              <p>Confirm the quote cost before sending the quote.</p>
+              {quoteWorkflowBlocked ? (
+                <div className="mockup-empty-state">
+                  {quoteWorkflowBlockedMessage ||
+                    "Quote workflows are not configured for this requirement set."}
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={`mockup-approval-status ${
+                      quoteCostVerified ? "approved" : "pending"
+                    }`}
+                  >
+                    {quoteCostVerified
+                      ? "Quote cost verified"
+                      : "Quote cost verification pending"}
+                  </div>
+                  {quoteCostVerification?.updatedAt && (
+                    <p className="mockup-approval-meta">
+                      Updated: {formatDateTime(quoteCostVerification.updatedAt)}
+                    </p>
+                  )}
+                  <label className="quote-decision-field">
+                    <span>Cost Amount</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={quoteCostAmount}
+                      onChange={(event) => setQuoteCostAmount(event.target.value)}
+                      placeholder="Enter total cost"
+                      disabled={
+                        !canManageBilling ||
+                        quoteCostSubmitting ||
+                        quoteCostResetting
+                      }
+                    />
+                  </label>
+                  <label className="quote-decision-field">
+                    <span>Currency (Optional)</span>
+                    <input
+                      type="text"
+                      value={quoteCostCurrency}
+                      onChange={(event) => setQuoteCostCurrency(event.target.value)}
+                      placeholder="e.g. NGN"
+                      disabled={
+                        !canManageBilling ||
+                        quoteCostSubmitting ||
+                        quoteCostResetting
+                      }
+                    />
+                  </label>
+                  <label className="quote-decision-field">
+                    <span>Note (Optional)</span>
+                    <textarea
+                      rows={2}
+                      value={quoteCostNote}
+                      onChange={(event) => setQuoteCostNote(event.target.value)}
+                      placeholder="Add any cost notes for the client."
+                      disabled={
+                        !canManageBilling ||
+                        quoteCostSubmitting ||
+                        quoteCostResetting
+                      }
+                    />
+                  </label>
+                  <div className="billing-actions">
+                    <button
+                      className="action-btn complete-btn"
+                      onClick={handleQuoteCostVerification}
+                      disabled={
+                        !canManageBilling ||
+                        quoteCostSubmitting ||
+                        quoteCostResetting
+                      }
+                    >
+                      {quoteCostSubmitting
+                        ? "Saving..."
+                        : quoteCostVerified
+                          ? "Update Cost"
+                          : "Verify Cost"}
+                    </button>
+                    {quoteDecisionStatus === "declined" && (
+                      <button
+                        className="action-btn undo-btn"
+                        onClick={handleQuoteCostReset}
+                        disabled={
+                          !canManageBilling ||
+                          quoteCostSubmitting ||
+                          quoteCostResetting
+                        }
+                      >
+                        {quoteCostResetting ? "Resetting..." : "Rework Cost"}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="action-card billing-card" id="order-actions-billing">
-            <h3>Billing</h3>
+            <h3>{isQuoteProject ? "Quote Submission" : "Billing"}</h3>
             <p>
               {isQuoteProject
-                ? "Confirm quote response and decision milestones."
+                ? "Confirm when the quote has been sent to the client."
                 : "Manage invoice and payment checkpoints."}
             </p>
             <button
@@ -2802,11 +2882,13 @@ const OrderActions = () => {
                     onClick={openInvoiceModal}
                     disabled={
                       !canManageBilling ||
-                      (isQuoteProject && !allQuoteRequirementsCompleted)
+                      (isQuoteProject && !canSubmitQuote)
                     }
                     title={
-                      isQuoteProject && !allQuoteRequirementsCompleted
-                        ? "All required quote requirements must be completed first."
+                      isQuoteProject && !canSubmitQuote
+                        ? quoteWorkflowBlocked
+                          ? "Quote workflows are not configured for this requirement set."
+                          : "Verify quote cost before sending the quote."
                         : undefined
                     }
                   >
@@ -2851,9 +2933,14 @@ const OrderActions = () => {
                 )}
               </div>
             )}
-            {isQuoteProject && !allQuoteRequirementsCompleted && (
+            {isQuoteProject && quoteCostMissing && (
               <p className="mockup-approval-meta">
-                Complete required quote requirements before sending the quote.
+                Verify quote cost before sending the quote to the client.
+              </p>
+            )}
+            {isQuoteProject && quoteWorkflowBlocked && (
+              <p className="mockup-approval-meta">
+                Quote requirements are not supported yet for this project.
               </p>
             )}
           </div>
@@ -2862,7 +2949,7 @@ const OrderActions = () => {
             <div className="action-card">
               <h3>Quote Decision</h3>
               <p>
-                After response is sent, validate client decision before quote
+                After the quote is sent, validate client decision before quote
                 closure or conversion.
               </p>
 
@@ -2894,6 +2981,7 @@ const OrderActions = () => {
                     placeholder="Client confirmed they will proceed / declined."
                     disabled={
                       !canManageBilling ||
+                      quoteWorkflowBlocked ||
                       quoteDecisionSubmitting ||
                       quoteConversionSubmitting
                     }
@@ -2942,8 +3030,10 @@ const OrderActions = () => {
                   </div>
                 ) : (
                   <p className="mockup-approval-meta">
-                    Quote decision can be validated once status reaches Response
-                    Sent.
+                    {quoteWorkflowBlocked
+                      ? quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet."
+                      : "Quote decision can be validated once status reaches Pending Client Decision or Quote Submission Completed."}
                   </p>
                 )}
 
@@ -2986,95 +3076,17 @@ const OrderActions = () => {
             </div>
           )}
 
-          {isQuoteProject && (
+          {isQuoteProject && quoteWorkflowBlocked && (
             <div className="action-card">
               <h3>Quote Requirements</h3>
               <p>
-                Front Desk coordinates client-facing transitions for required quote
-                items.
+                This quote includes requirements that are not supported yet. Only
+                cost-only quotes can proceed.
               </p>
-              {requiredQuoteRequirementItems.some((item) => item.key === "mockup") && (
-                <p className="mockup-approval-meta">
-                  Mockup review uses the standard Mockup Approval section below.
-                </p>
-              )}
-
-              {frontDeskQueueRequirementItems.length === 0 ? (
-                <div className="mockup-empty-state">
-                  No additional quote requirements are currently pending Front Desk
-                  queue actions.
-                </div>
-              ) : (
-                <div className="quote-requirements-list">
-                  {frontDeskQueueRequirementItems.map((item) => {
-                    const actions = getQuoteFrontDeskActions(item.key, item.status);
-                    const submittingThisRequirement = quoteRequirementSubmittingKey
-                      .startsWith(`${item.key}:`);
-
-                    return (
-                      <div key={item.key} className="quote-requirement-item">
-                        <div className="quote-requirement-item-header">
-                          <strong>{item.label}</strong>
-                          <span className="mockup-approval-meta quote-requirement-status">
-                            {formatQuoteRequirementStatusForItem(
-                              item.key,
-                              item.status,
-                            )}
-                          </span>
-                        </div>
-
-                        {item.updatedAt && (
-                          <div className="mockup-approval-meta">
-                            Updated: {formatDateTime(item.updatedAt)}
-                          </div>
-                        )}
-
-                        {item.note && (
-                          <div className="mockup-approval-meta">Note: {item.note}</div>
-                        )}
-
-                        {actions.length > 0 ? (
-                          <div className="billing-actions">
-                            {actions.map((action) => (
-                              <button
-                                key={`${item.key}-${action.toStatus}`}
-                                className="action-btn"
-                                onClick={() =>
-                                  handleQuoteRequirementTransition(
-                                    item.key,
-                                    action.toStatus,
-                                  )
-                                }
-                                disabled={
-                                  !canManageBilling || submittingThisRequirement
-                                }
-                              >
-                                {action.label}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mockup-approval-meta">
-                            {item.key === "previousSamples" &&
-                            ["sent_to_client", "client_approved"].includes(item.status)
-                              ? "Previous sample retrieval has been confirmed."
-                              : item.key === "bidSubmission" &&
-                                ["sent_to_client", "client_approved"].includes(
-                                  item.status,
-                                )
-                              ? "Bid submission documents have been sent."
-                              : item.status === "client_approved"
-                                ? "Client has approved this requirement."
-                                : item.status === "client_revision_requested"
-                                ? "Client requested revision. Waiting for department rework."
-                                : "Waiting for department or admin action."}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="mockup-empty-state">
+                {quoteWorkflowBlockedMessage ||
+                  "Quote workflows are not configured for this requirement set."}
+              </div>
             </div>
           )}
 
@@ -3608,7 +3620,7 @@ const OrderActions = () => {
               </p>
               <p>
                 <strong>Status:</strong>{" "}
-                {formatProjectStatusForDisplay(project.status, isQuoteProject)}
+                {formatProjectStatusForDisplay(quoteWorkflowStatus, isQuoteProject)}
               </p>
               <p>
                 <strong>Created:</strong> {formatDate(project.createdAt)}
@@ -3655,12 +3667,17 @@ const OrderActions = () => {
                     Converted from Quote ({formatDate(convertedFromQuoteAt)})
                   </span>
                 )}
+                {isQuoteProject && quoteWorkflowBlocked && (
+                  <span className="status-tag caution">Quote Workflow Blocked</span>
+                )}
+                {isQuoteProject && !quoteWorkflowBlocked && quoteCostMissing && (
+                  <span className="status-tag caution">Quote Cost Pending</span>
+                )}
                 {isQuoteProject &&
-                  requiredQuoteRequirementItems.length > 0 &&
-                  !allQuoteRequirementsCompleted && (
-                    <span className="status-tag caution">Quote Requirements Pending</span>
-                  )}
-                {isQuoteProject && project.status === "Response Sent" && (
+                  !quoteWorkflowBlocked &&
+                  (quoteWorkflowStatus === "Pending Client Decision" ||
+                    quoteWorkflowStatus === "Quote Submission Completed" ||
+                    quoteDecisionTaken) && (
                   <span
                     className={`status-tag ${
                       quoteDecisionStatus === "go_ahead"

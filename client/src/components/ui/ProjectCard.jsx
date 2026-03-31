@@ -5,6 +5,7 @@ import FolderIcon from "../icons/FolderIcon";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
 
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
@@ -75,6 +76,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const getStatusColor = (status) => {
     switch (status) {
       case "Order Created":
+      case "Quote Created":
         return { class: "draft", color: "#94a3b8", textClass: "gray" };
       case "Pending Scope Approval":
         return {
@@ -137,6 +139,21 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#06b6d4",
           textClass: "teal",
         };
+      case "Pending Cost Verification":
+      case "Pending Quote Submission":
+      case "Pending Client Decision":
+        return {
+          class: "pending-approval",
+          color: "#f97316",
+          textClass: "orange",
+        };
+      case "Cost Verification Completed":
+      case "Quote Submission Completed":
+        return {
+          class: "in-progress",
+          color: "#d97706",
+          textClass: "orange",
+        };
       case "Completed":
         return { class: "completed", color: "#22c55e", textClass: "green" };
       case "Finished":
@@ -154,9 +171,18 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     }
   };
 
+  const resolvedStatus =
+    project?.projectType === "Quote"
+      ? normalizeQuoteStatus(project.status)
+      : project.status;
+  const displayStatus =
+    project?.projectType === "Quote"
+      ? getQuoteStatusDisplay(project.status)
+      : project.status;
   const isCompletedStatus =
-    project.status === "Completed" || project.status === "Finished";
-  const statusInfo = getStatusColor(project.status);
+    resolvedStatus === "Completed" ||
+    resolvedStatus === "Finished";
+  const statusInfo = getStatusColor(resolvedStatus);
 
   const getProjectTypeInfo = (typeKey) => {
     switch (typeKey) {
@@ -202,26 +228,21 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   };
 
   const quoteProgressMap = {
-    "Order Created": 5,
-    "Pending Scope Approval": 25,
-    "Scope Approval Completed": 35,
-    "Pending Departmental Meeting": 38,
-    "Pending Departmental Engagement": 42,
-    "Departmental Engagement Completed": 48,
-    "Pending Quote Request": 50,
-    "Quote Request Completed": 60,
-    "Pending Send Response": 75,
-    "Response Sent": 90,
-    Delivered: 95,
-    "Pending Feedback": 97,
-    "Feedback Completed": 99,
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Cost Verification": 45,
+    "Cost Verification Completed": 55,
+    "Pending Quote Submission": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
     Completed: 100,
     Finished: 100,
   };
 
   const progressMap =
     project.projectType === "Quote" ? quoteProgressMap : standardProgressMap;
-  const progress = progressMap[project.status] ?? 5;
+  const progress = progressMap[resolvedStatus] ?? 5;
   const leadDisplay = getLeadDisplay(project, "Unassigned");
   const avatarName = getLeadDisplay(project, "U");
   const leadAvatarUrl = getLeadAvatarUrl(project);
@@ -296,9 +317,9 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
             {projectTypeInfo.label}
           </span>
           <span className={`status-badge ${statusInfo.class}`}>
-            {project.status === "Order Created"
+            {["Order Created", "Quote Created"].includes(resolvedStatus)
               ? "WAITING ACCEPTANCE"
-              : project.status || "Draft"}
+              : displayStatus || "Draft"}
           </span>
           {showPendingClientApprovalTag && (
             <span className="status-badge mockup-client-pending">
@@ -391,15 +412,15 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         </button>
         <button
           className={`btn-update ${
-            project.status === "Completed"
+            resolvedStatus === "Completed"
               ? "active-finished"
               : "disabled-finished"
           }`}
-          aria-disabled={project.status !== "Completed"}
+          aria-disabled={resolvedStatus !== "Completed"}
           onClick={() => {
-            // Always pass the current status. The parent handler validates if it is "Delivered"
-            // and then handles the update to "Completed".
-            onUpdateStatus(project._id, project.status);
+            // Always pass the current status. The parent handler validates if it is eligible
+            // and then handles the update to "Finished".
+            onUpdateStatus(project._id, resolvedStatus);
           }}
         >
           Mark as Finished

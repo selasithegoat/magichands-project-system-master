@@ -28,25 +28,29 @@ const STANDARD_PROGRESS_MAP = {
 };
 
 const QUOTE_PROGRESS_MAP = {
-  "Order Created": 5,
-  "Pending Scope Approval": 25,
-  "Scope Approval Completed": 35,
-  "Pending Departmental Meeting": 38,
-  "Pending Departmental Engagement": 42,
-  "Departmental Engagement Completed": 48,
-  "Pending Quote Request": 50,
-  "Quote Request Completed": 60,
-  "Pending Send Response": 75,
-  "Response Sent": 90,
-  Delivered: 95,
-  "Pending Feedback": 97,
-  "Feedback Completed": 99,
+  "Quote Created": 5,
+  "Pending Scope Approval": 15,
+  "Scope Approval Completed": 25,
+  "Pending Cost Verification": 40,
+  "Cost Verification Completed": 55,
+  "Pending Quote Submission": 70,
+  "Quote Submission Completed": 80,
+  "Pending Client Decision": 90,
   Completed: 100,
+  Declined: 100,
   Finished: 100,
+  // Legacy quote statuses
+  "Pending Quote Request": 40,
+  "Quote Request Completed": 55,
+  "Pending Send Response": 70,
+  "Response Sent": 90,
+  "Pending Feedback": 90,
+  "Feedback Completed": 100,
 };
 
 const STATUS_TITLE_MAP = {
   "Order Created": "Project Started",
+  "Quote Created": "Quote Created",
   "Pending Scope Approval": "Project Started",
   "Scope Approval Completed": "Project Started",
   "Pending Departmental Meeting": "Project Started",

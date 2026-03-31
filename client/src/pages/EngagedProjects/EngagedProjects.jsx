@@ -13,6 +13,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay } from "../../utils/quoteStatus";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -866,6 +867,10 @@ const EngagedProjects = ({ user }) => {
                       null,
                       "Untitled",
                     );
+                    const displayStatus =
+                      project.projectType === "Quote"
+                        ? getQuoteStatusDisplay(project.status)
+                        : project.status;
                     const revisionCount = getRevisionCount(project);
                     const emergency = isEmergency(project);
                     const approaching = isApproachingDelivery(project);
@@ -943,9 +948,11 @@ const EngagedProjects = ({ user }) => {
                         </td>
                         <td>
                           <span
-                            className={`status-badge ${project.status.toLowerCase().replace(/\s+/g, "-")}`}
+                            className={`status-badge ${String(displayStatus || "")
+                              .toLowerCase()
+                              .replace(/\s+/g, "-")}`}
                           >
-                            {project.status}
+                            {displayStatus}
                           </span>
                         </td>
                         <td>
@@ -1019,6 +1026,10 @@ const EngagedProjects = ({ user }) => {
                       null,
                       "Untitled",
                     );
+                    const displayStatus =
+                      project.projectType === "Quote"
+                        ? getQuoteStatusDisplay(project.status)
+                        : project.status;
                     const revisionCount = getRevisionCount(project);
                     const engagedDeptsForUser = (project.departments || [])
                       .filter((dept) => engagedSubDepts.includes(dept))
@@ -1057,9 +1068,11 @@ const EngagedProjects = ({ user }) => {
                         <td>{client}</td>
                         <td>
                           <span
-                            className={`status-badge ${project.status.toLowerCase().replace(/\s+/g, "-")}`}
+                            className={`status-badge ${String(displayStatus || "")
+                              .toLowerCase()
+                              .replace(/\s+/g, "-")}`}
                           >
-                            {project.status}
+                            {displayStatus}
                           </span>
                         </td>
                         <td>{engagedDeptLabel}</td>

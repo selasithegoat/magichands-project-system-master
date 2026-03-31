@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import OrdersList from "../NewOrders/OrdersList";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { normalizeQuoteStatus } from "../../utils/quoteStatus";
 import "./FrontDeskOrders.css";
 
 const CLOSED_STATUSES = new Set([
@@ -17,8 +18,11 @@ const ACTION_STATUSES = new Set([
   "Pending Scope Approval",
   "Pending Departmental Meeting",
   "Pending Departmental Engagement",
-  "Pending Quote Request",
-  "Pending Send Response",
+  "Quote Created",
+  "Pending Cost Verification",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
   "Pending Feedback",
 ]);
 
@@ -50,6 +54,10 @@ const getOrderLabel = (project) => {
 };
 
 const isQuoteProject = (project) => project?.projectType === "Quote";
+const resolveProjectStatus = (project) =>
+  isQuoteProject(project)
+    ? normalizeQuoteStatus(project?.status || "")
+    : project?.status || "";
 
 const hasBillingBlock = (project) => {
   if (!project || isQuoteProject(project)) return false;
@@ -113,47 +121,64 @@ const FrontDeskOrders = () => {
   useRealtimeRefresh(() => fetchOrders());
 
   const billingBlocks = useMemo(
-    () => orders.filter((project) => !CLOSED_STATUSES.has(project.status) && hasBillingBlock(project)).length,
+    () =>
+      orders.filter((project) => {
+        const status = resolveProjectStatus(project);
+        return !CLOSED_STATUSES.has(status) && hasBillingBlock(project);
+      }).length,
     [orders],
   );
   const actionNeeded = useMemo(
     () =>
       orders.filter(
-        (project) =>
-          !CLOSED_STATUSES.has(project.status) && ACTION_STATUSES.has(project.status),
+        (project) => {
+          const status = resolveProjectStatus(project);
+          return !CLOSED_STATUSES.has(status) && ACTION_STATUSES.has(status);
+        },
       ).length,
     [orders],
   );
   const deliveryRisk = useMemo(
     () =>
       orders.filter(
-        (project) =>
-          !CLOSED_STATUSES.has(project.status) && getDeliveryRisk(project).risk,
+        (project) => {
+          const status = resolveProjectStatus(project);
+          return !CLOSED_STATUSES.has(status) && getDeliveryRisk(project).risk;
+        },
       ).length,
     [orders],
   );
   const quoteResponses = useMemo(
     () =>
       orders.filter(
-        (project) =>
-          isQuoteProject(project) &&
-          ["Pending Quote Request", "Pending Send Response"].includes(project.status),
+        (project) => {
+          if (!isQuoteProject(project)) return false;
+          const status = resolveProjectStatus(project);
+          return [
+            "Pending Cost Verification",
+            "Pending Quote Submission",
+            "Quote Submission Completed",
+            "Pending Client Decision",
+          ].includes(status);
+        },
       ).length,
     [orders],
   );
   const mockupPending = useMemo(
     () =>
       orders.filter(
-        (project) =>
-          !CLOSED_STATUSES.has(project.status) &&
-          project.status === "Pending Mockup",
+        (project) => {
+          const status = resolveProjectStatus(project);
+          return !CLOSED_STATUSES.has(status) && status === "Pending Mockup";
+        },
       ).length,
     [orders],
   );
   const samplePending = useMemo(
     () =>
       orders.filter((project) => {
-        if (CLOSED_STATUSES.has(project.status)) return false;
+        const status = resolveProjectStatus(project);
+        if (CLOSED_STATUSES.has(status)) return false;
         const required = Boolean(project?.sampleRequirement?.isRequired);
         if (!required) return false;
         return getSampleApprovalStatus(project?.sampleApproval || {}) !== "approved";
@@ -187,7 +212,7 @@ const FrontDeskOrders = () => {
       key: "quotes",
       label: "Quote Responses",
       value: quoteResponses,
-      description: "Pending quote request/response",
+      description: "Pending quote cost/submission/decision",
       tone: "info",
     },
     {

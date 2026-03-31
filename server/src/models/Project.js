@@ -342,6 +342,8 @@ const ProjectSchema = new mongoose.Schema(
         // New Workflow Statuses
         "New Order", // [New]
         "Order Created",
+        // Quote-specific workflow statuses
+        "Quote Created",
         "Pending Scope Approval",
         "Scope Approval Completed",
         "Pending Departmental Meeting",
@@ -366,6 +368,12 @@ const ProjectSchema = new mongoose.Schema(
         "Delivered",
         "Pending Feedback",
         "Feedback Completed",
+        "Pending Cost Verification",
+        "Cost Verification Completed",
+        "Pending Quote Submission",
+        "Quote Submission Completed",
+        "Pending Client Decision",
+        "Declined",
         "Finished",
         // Quote-Specific Statuses
         "Pending Quote Request",
@@ -578,6 +586,26 @@ const ProjectSchema = new mongoose.Schema(
         previousSamples: Boolean,
         sampleProduction: Boolean,
         bidSubmission: Boolean,
+      },
+      costVerification: {
+        amount: {
+          type: Number,
+          min: 0,
+        },
+        currency: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        note: {
+          type: String,
+          default: "",
+        },
+        updatedAt: Date,
+        updatedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
       },
       requirementItems: {
         cost: {

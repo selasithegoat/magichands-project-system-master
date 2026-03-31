@@ -29,6 +29,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
 import {
   getGroupedLeadDisplayRows,
   getLeadAvatarUrl,
@@ -105,33 +106,33 @@ const STATUS_STEPS = [
 ];
 
 const QUOTE_STEPS = [
-  { label: "Order Created", statuses: ["Order Created"] },
+  { label: "Quote Created", statuses: ["Quote Created"] },
   {
     label: "Scope Approval",
     statuses: ["Pending Scope Approval", "Scope Approval Completed"],
   },
   {
-    label: "Departmental Meeting",
-    statuses: ["Pending Departmental Meeting"],
+    label: "Cost Verification",
+    statuses: ["Pending Cost Verification", "Cost Verification Completed"],
   },
   {
-    label: "Departmental Engagement",
-    statuses: [
-      "Pending Departmental Engagement",
-      "Departmental Engagement Completed",
-    ],
+    label: "Quote Submission",
+    statuses: ["Pending Quote Submission", "Quote Submission Completed"],
   },
   {
-    label: "Quote Request",
-    statuses: ["Pending Quote Request", "Quote Request Completed"],
-  },
-  {
-    label: "Send Response",
-    statuses: ["Pending Send Response", "Response Sent"],
+    label: "Client Decision",
+    statuses: ["Pending Client Decision", "Completed", "Finished"],
   },
 ];
 
+const PENDING_ACCEPTANCE_STATUSES = new Set([
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
+]);
+
 const DEFAULT_WORKFLOW_STATUS = "Order Created";
+const DEFAULT_QUOTE_STATUS = "Quote Created";
 
 const STANDARD_WORKFLOW_STATUSES = new Set([
   "Order Created",
@@ -169,21 +170,16 @@ const DELIVERY_COMPLETED_STATUS_KEYS = new Set([
 ]);
 
 const QUOTE_WORKFLOW_STATUSES = new Set([
-  "Order Created",
+  "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
-  "Pending Departmental Engagement",
-  "Departmental Engagement Completed",
-  "Pending Quote Request",
-  "Quote Request Completed",
-  "Pending Send Response",
-  "Response Sent",
-  "Pending Feedback",
-  "Feedback Completed",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
   "Completed",
   "Finished",
-  "Delivered",
 ]);
 
 const resolveWorkflowStatus = (project) => {
@@ -192,6 +188,10 @@ const resolveWorkflowStatus = (project) => {
   );
 
   if (!isProjectOnHold) {
+    if (project?.projectType === "Quote") {
+      const normalizedQuote = normalizeQuoteStatus(project?.status || "");
+      return normalizedQuote || DEFAULT_QUOTE_STATUS;
+    }
     return project?.status || DEFAULT_WORKFLOW_STATUS;
   }
 
@@ -204,19 +204,24 @@ const resolveWorkflowStatus = (project) => {
     return DEFAULT_WORKFLOW_STATUS;
   }
 
-  const validStatuses =
-    project?.projectType === "Quote"
-      ? QUOTE_WORKFLOW_STATUSES
-      : STANDARD_WORKFLOW_STATUSES;
+  const isQuote = project?.projectType === "Quote";
+  const validStatuses = isQuote
+    ? QUOTE_WORKFLOW_STATUSES
+    : STANDARD_WORKFLOW_STATUSES;
+  const resolvedPreviousStatus = isQuote
+    ? normalizeQuoteStatus(previousStatus)
+    : previousStatus;
+  const fallbackStatus = isQuote ? DEFAULT_QUOTE_STATUS : DEFAULT_WORKFLOW_STATUS;
 
-  return validStatuses.has(previousStatus)
-    ? previousStatus
-    : DEFAULT_WORKFLOW_STATUS;
+  return validStatuses.has(resolvedPreviousStatus)
+    ? resolvedPreviousStatus
+    : fallbackStatus;
 };
 
 const getStatusColor = (status) => {
   switch (status) {
     case "Order Created":
+    case "Quote Created":
       return "#94a3b8"; // Slate
     case "Pending Scope Approval":
     case "Scope Approval Completed":
@@ -264,14 +269,19 @@ const getStatusColor = (status) => {
     case "Completed":
     case "Finished":
       return "#22c55e"; // Green
-    case "Pending Quote Request":
-    case "Quote Request Completed":
-    case "Quote Request":
+    case "Pending Cost Verification":
+    case "Cost Verification Completed":
+    case "Cost Verification":
       return "#eab308"; // Yellow/Gold
-    case "Pending Send Response":
-    case "Response Sent":
-    case "Send Response":
+    case "Pending Quote Submission":
+    case "Quote Submission Completed":
+    case "Quote Submission":
       return "#6366f1"; // Indigo
+    case "Pending Client Decision":
+    case "Client Decision":
+      return "#06b6d4"; // Cyan
+    case "Declined":
+      return "#ef4444"; // Red (legacy)
     default:
       return "#cbd5e1"; // Grey
   }
@@ -280,9 +290,9 @@ const getStatusColor = (status) => {
 const formatProjectStatusForDisplay = (status = "", projectType = "") => {
   const normalized = String(status || "").trim();
   if (projectType !== "Quote") return normalized;
-  if (normalized === "Pending Feedback") return "Pending Decision";
-  if (normalized === "Feedback Completed") return "Decision Completed";
-  return normalized;
+  const normalizedQuote = getQuoteStatusDisplay(normalized);
+  if (normalizedQuote === "Pending Client Decision") return "Pending Decision";
+  return normalizedQuote;
 };
 
 const BILLING_REQUIREMENT_LABELS = {
@@ -312,40 +322,11 @@ const normalizeQuoteChecklist = (checklist = {}) =>
     return accumulator;
   }, {});
 
-const formatQuoteRequirementStatus = (status = "") => {
-  const normalized = String(status || "").trim().toLowerCase();
-  if (!normalized) return "Assigned";
-  return normalized
-    .split("_")
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(" ");
-};
-
-const getQuoteRequirementItems = (project = {}) => {
-  const quoteDetails = project?.quoteDetails || {};
-  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
-  const rawItems =
-    quoteDetails?.requirementItems &&
-    typeof quoteDetails.requirementItems === "object"
-      ? quoteDetails.requirementItems
-      : {};
-
-  return QUOTE_REQUIREMENT_KEYS.map((key) => {
-    const rawItem =
-      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
-    const isRequired = Boolean(checklist[key]);
-    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
-    const status = isRequired ? normalizedStatus || "assigned" : "not_required";
-
-    return {
-      key,
-      label: QUOTE_REQUIREMENT_LABELS[key] || key,
-      isRequired,
-      status,
-      updatedAt: rawItem?.updatedAt || null,
-      note: String(rawItem?.note || "").trim(),
-    };
-  });
+const formatAmountLabel = (amount, currency = "") => {
+  if (!Number.isFinite(amount) || amount <= 0) return "-";
+  const formattedAmount = amount.toLocaleString("en-US");
+  const trimmedCurrency = String(currency || "").trim();
+  return trimmedCurrency ? `${trimmedCurrency} ${formattedAmount}` : formattedAmount;
 };
 
 const getMockupApprovalStatus = (approval = {}) => {
@@ -891,9 +872,10 @@ const ProjectDetail = ({ user }) => {
       } else {
         const errorData = await res.json().catch(() => ({}));
         console.error("Failed to finish project", errorData);
+        const finishHint = "Completed";
         alert(
           errorData.message ||
-            "Failed to mark project as finished. Make sure it is 'Completed'.",
+            `Failed to mark project as finished. Make sure it is '${finishHint}'.`,
         );
       }
     } catch (err) {
@@ -973,10 +955,18 @@ const ProjectDetail = ({ user }) => {
     project.priority === "Urgent" || project.projectType === "Emergency";
   const isCorporate = project.projectType === "Corporate Job";
   const isQuote = project.projectType === "Quote";
+  const isPendingAcceptanceStatus = PENDING_ACCEPTANCE_STATUSES.has(
+    project.status,
+  );
   const projectStatusDisplay = formatProjectStatusForDisplay(
     project.status,
     project.projectType,
   );
+  const normalizedQuoteStatus = isQuote
+    ? normalizeQuoteStatus(project.status || "")
+    : "";
+  const canFinishQuote = isQuote && normalizedQuoteStatus === "Completed";
+  const canFinishProject = !isQuote && project.status === "Completed";
   const showFeedbackSection = [
     "Delivered",
     "Pending Feedback",
@@ -1082,13 +1072,13 @@ const ProjectDetail = ({ user }) => {
               )}
                 <span className="status-badge">
                   <ClockIcon width="14" height="14" />{" "}
-                  {projectStatusDisplay === "Order Created"
+              {isPendingAcceptanceStatus
                     ? "WAITING ACCEPTANCE"
                     : projectStatusDisplay.startsWith("Pending ")
                       ? projectStatusDisplay.replace("Pending ", "")
                       : projectStatusDisplay}
                 </span>
-              {project.status === "Completed" && (
+              {(canFinishProject || canFinishQuote) && (
                 <button
                   className="btn-primary"
                   onClick={() => handleFinishProject()}
@@ -1228,7 +1218,7 @@ const ProjectDetail = ({ user }) => {
         )}
 
         {/* Acceptance Banner */}
-        {project.status === "Order Created" && (
+        {isPendingAcceptanceStatus && (
           <div className="acceptance-banner">
             <div>
               <h3 className="acceptance-banner-title">
@@ -1313,7 +1303,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Order Created"
+                  isPendingAcceptanceStatus
                 }
               />
               <OrderItemsCard
@@ -1333,7 +1323,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Order Created"
+                  isPendingAcceptanceStatus
                 }
               />
               <ProductionRisksCard
@@ -1343,7 +1333,7 @@ const ProjectDetail = ({ user }) => {
                 onUpdate={fetchProject}
                 readOnly={
                   project.status === "Finished" ||
-                  project.status === "Order Created"
+                  isPendingAcceptanceStatus
                 }
               />
             </div>
@@ -1641,11 +1631,23 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
 };
 
 const QuoteChecklistCard = ({ project }) => {
-  const items = getQuoteRequirementItems(project);
-  const requiredItems = items.filter((item) => item.isRequired);
-  const approvedCount = requiredItems.filter(
-    (item) => item.status === "client_approved",
-  ).length;
+  const checklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist || {});
+  const unsupportedKeys = QUOTE_REQUIREMENT_KEYS.filter(
+    (key) => key !== "cost" && checklist[key],
+  );
+  const unsupportedLabels = unsupportedKeys.map(
+    (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
+  );
+  const isCostOnly = Boolean(checklist.cost) && unsupportedKeys.length === 0;
+  const costVerification = project?.quoteDetails?.costVerification || {};
+  const amountValue = Number.parseFloat(costVerification?.amount);
+  const costVerified = Number.isFinite(amountValue) && amountValue > 0;
+  const costNote = String(costVerification?.note || "").trim();
+  const blockedMessage = !checklist.cost
+    ? "Cost requirement is not enabled for this quote."
+    : unsupportedLabels.length > 0
+      ? `Unsupported requirements: ${unsupportedLabels.join(", ")}.`
+      : "Quote requirements are not configured yet.";
 
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
@@ -1663,61 +1665,39 @@ const QuoteChecklistCard = ({ project }) => {
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">Quote Requirements</h3>
+        <h3 className="card-title">Quote Cost</h3>
       </div>
-      <p className="info-subtext quote-requirements-summary">
-        Client-approved: {approvedCount}/{requiredItems.length || 0} required items
-      </p>
-      <div className="checklist-grid quote-requirements-grid">
-        {items.map((item) => {
-          const status = String(item.status || "").toLowerCase();
-          const isApproved = status === "client_approved";
-          const isRevision = status === "client_revision_requested";
-          const cardClassName = [
-            "quote-requirement-card",
-            isApproved ? "is-approved" : "",
-            isRevision ? "is-revision" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
-          const requiredBadgeClassName = [
-            "quote-requirement-required-pill",
-            item.isRequired ? "is-required" : "is-not-required",
-          ]
-            .filter(Boolean)
-            .join(" ");
-          const statusClassName = [
-            "quote-requirement-status-line",
-            isApproved ? "is-approved" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
-
-          return (
-            <div key={item.key} className={cardClassName}>
-              <div className="quote-requirement-card-header">
-                <strong>{item.label}</strong>
-                <span className={requiredBadgeClassName}>
-                  {item.isRequired ? "Required" : "Not Required"}
-                </span>
+      {!isCostOnly ? (
+        <p className="info-subtext">{blockedMessage}</p>
+      ) : (
+        <>
+          <p className="info-subtext">
+            Status: {costVerified ? "Cost Verified" : "Cost Pending"}
+          </p>
+          <div className="info-grid">
+            <div className="info-item">
+              <h4>AMOUNT</h4>
+              <div className="info-text-bold">
+                {formatAmountLabel(amountValue, costVerification?.currency)}
               </div>
-              <div className={statusClassName}>
-                Status: {formatQuoteRequirementStatus(status)}
-              </div>
-              {item.updatedAt && (
-                <div className="quote-requirement-meta quote-requirement-updated">
-                  Updated: {formatDateTime(item.updatedAt)}
-                </div>
-              )}
-              {item.note && (
-                <div className="quote-requirement-meta quote-requirement-note">
-                  Note: {item.note}
-                </div>
-              )}
             </div>
-          );
-        })}
-      </div>
+            <div className="info-item">
+              <h4>UPDATED</h4>
+              <div className="info-text-bold">
+                {costVerification?.updatedAt
+                  ? formatDateTime(costVerification.updatedAt)
+                  : "N/A"}
+              </div>
+            </div>
+            {costNote && (
+              <div className="info-item">
+                <h4>NOTE</h4>
+                <div className="info-subtext">{costNote}</div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -3517,36 +3497,28 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
       switch (status) {
-        case "Order Created":
+        case "Quote Created":
           return 5;
         case "Pending Scope Approval":
-          return 25;
+          return 20;
         case "Scope Approval Completed":
-          return 35;
-        case "Pending Departmental Meeting":
-          return 38;
-        case "Pending Departmental Engagement":
-          return 42;
-        case "Departmental Engagement Completed":
-          return 48;
-        case "Pending Quote Request":
-          return 50;
-        case "Quote Request Completed":
-          return 60;
-        case "Pending Send Response":
-          return 75;
-        case "Response Sent":
+          return 30;
+        case "Pending Cost Verification":
+          return 45;
+        case "Cost Verification Completed":
+          return 55;
+        case "Pending Quote Submission":
+          return 70;
+        case "Quote Submission Completed":
+          return 80;
+        case "Pending Client Decision":
           return 90;
-        case "Pending Feedback":
-          return 97;
-        case "Feedback Completed":
-          return 99;
+        case "Declined":
+          return 100;
         case "Completed":
           return 100;
         case "Finished":
           return 100;
-        case "Delivered":
-          return 95;
         default:
           return 0;
       }
@@ -3653,12 +3625,14 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
     step.statuses.includes(workflowStatus),
   );
 
-  if (currentStepIndex !== -1 && workflowStatus !== "Order Created") {
+  if (
+    currentStepIndex !== -1 &&
+    !PENDING_ACCEPTANCE_STATUSES.has(workflowStatus)
+  ) {
     // Determine if the status represents a completed step
     const isCompletedVariant =
       workflowStatus.includes("Completed") ||
-      workflowStatus === "Delivered" ||
-      workflowStatus === "Response Sent";
+      workflowStatus === "Delivered";
 
     if (isCompletedVariant) {
       // If completed, visually move to the next step (making it "Pending")
@@ -3682,6 +3656,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
 
   const statusIcons = {
     "Order Created": ClipboardListIcon,
+    "Quote Created": ClipboardListIcon,
     "Scope Approval": EyeIcon,
     "Departmental Engagement": CheckCircleIcon,
     Mockup: PaintbrushIcon,
@@ -3692,8 +3667,9 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
     Packaging: PackageIcon,
     "Delivery/Pickup": TruckIcon,
     Feedback: CheckCircleIcon,
-    "Quote Request": ClipboardListIcon,
-    "Send Response": ClockIcon,
+    "Cost Verification": ClipboardListIcon,
+    "Quote Submission": ClockIcon,
+    "Client Decision": CheckCircleIcon,
   };
 
   return (
@@ -3787,7 +3763,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
                 workflowStatus === "Feedback Completed"
                   ? "Completed"
                   : "Pending";
-            } else if (workflowStatus === "Order Created") {
+            } else if (PENDING_ACCEPTANCE_STATUSES.has(workflowStatus)) {
               subText = "Confirmed";
             } else if (
               stepStatuses.includes(workflowStatus) &&
@@ -3872,7 +3848,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
                   </span>
                   {isActive &&
                     subText === "Pending" &&
-                    workflowStatus !== "Order Created"}
+                    !PENDING_ACCEPTANCE_STATUSES.has(workflowStatus)}
                 </div>
 
                 <span className="approval-sub">{subText}</span>

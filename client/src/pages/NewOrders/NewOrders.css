@@ -681,6 +681,7 @@
 }
 
 .quote-decision-field textarea,
+.quote-decision-field input,
 .quote-decision-select {
   width: 100%;
   border: 1px solid var(--border-color);
@@ -692,6 +693,7 @@
 }
 
 .quote-decision-field textarea:focus,
+.quote-decision-field input:focus,
 .quote-decision-select:focus {
   outline: none;
   border-color: var(--border-focus);
@@ -2389,6 +2391,12 @@
   border-color: rgba(16, 185, 129, 0.35);
   background: var(--success-soft);
   color: var(--success);
+}
+
+.order-actions-status-pill.rejection {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
 }
 
 .order-actions-layout {

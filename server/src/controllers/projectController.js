@@ -756,8 +756,7 @@ const CLOSED_ORDER_STATUSES = new Set([
   "Delivered",
   "Feedback Completed",
   "Finished",
-  "Response Sent",
-  "Quote Request Completed",
+  "Declined",
 ]);
 const BOTTLENECK_EXCLUDED_STATUSES = new Set([
   "Completed",
@@ -1888,6 +1887,14 @@ const PROJECT_TYPE_VALUES = new Set([
 ]);
 const PRIORITY_VALUES = new Set(["Normal", "Urgent"]);
 const QUOTE_ONLY_STATUSES = new Set([
+  "Quote Created",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
+  "Declined",
+  // Legacy quote statuses (kept for migration compatibility)
   "Pending Quote Request",
   "Quote Request Completed",
   "Pending Send Response",
@@ -1910,7 +1917,7 @@ const NON_QUOTE_ONLY_STATUSES = new Set([
   "Delivered",
 ]);
 const DEFAULT_STATUS_BY_PROJECT_TYPE = {
-  Quote: "Pending Quote Request",
+  Quote: "Quote Created",
   Standard: "Pending Departmental Engagement",
   Emergency: "Pending Departmental Engagement",
   "Corporate Job": "Pending Departmental Engagement",
@@ -1942,18 +1949,14 @@ const STANDARD_STATUS_FLOW = [
   "Finished",
 ];
 const QUOTE_STATUS_FLOW = [
-  "Order Created",
+  "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
-  "Pending Departmental Engagement",
-  "Departmental Engagement Completed",
-  "Pending Quote Request",
-  "Quote Request Completed",
-  "Pending Send Response",
-  "Response Sent",
-  "Pending Feedback",
-  "Feedback Completed",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
   "Completed",
   "Finished",
 ];
@@ -1962,8 +1965,18 @@ const MASTER_APPROVAL_STATUS_ALIASES = Object.freeze({
   "Proof Reading Completed": "Master Approval Completed",
 });
 const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
-  "pending decision": "Pending Feedback",
-  "decision completed": "Feedback Completed",
+  "pending decision": "Pending Client Decision",
+  "decision completed": "Completed",
+  completed: "Completed",
+  declined: "Completed",
+});
+const QUOTE_STATUS_LEGACY_TO_STORED = Object.freeze({
+  "Pending Quote Request": "Pending Cost Verification",
+  "Quote Request Completed": "Cost Verification Completed",
+  "Pending Send Response": "Pending Quote Submission",
+  "Response Sent": "Pending Client Decision",
+  "Pending Feedback": "Pending Client Decision",
+  "Feedback Completed": "Completed",
 });
 const normalizeMasterApprovalStatus = (status = "") => {
   const normalizedStatus = toText(status);
@@ -1974,6 +1987,8 @@ const normalizeStatusForStorageByProjectType = (status = "", projectType = "") =
   const normalizedStatus = normalizeMasterApprovalStatus(status);
   if (!normalizedStatus) return "";
   if (projectType !== "Quote") return normalizedStatus;
+  const legacyMapped = QUOTE_STATUS_LEGACY_TO_STORED[normalizedStatus];
+  if (legacyMapped) return legacyMapped;
   const aliasKey = normalizedStatus.toLowerCase();
   return QUOTE_STATUS_ALIAS_TO_STORED[aliasKey] || normalizedStatus;
 };
@@ -1982,6 +1997,7 @@ const getStatusFlowForProjectType = (projectType = "") =>
 const isStatusAtOrAfterMeetingGate = (status = "", projectType = "") => {
   const normalizedStatus = normalizeMasterApprovalStatus(status);
   if (!normalizedStatus) return false;
+  if (projectType === "Quote") return false;
   const flow = getStatusFlowForProjectType(projectType);
   const gateIndex = flow.indexOf("Pending Departmental Engagement");
   const statusIndex = flow.indexOf(normalizedStatus);
@@ -2094,14 +2110,10 @@ const QUOTE_REQUIREMENT_DEPARTMENT_STAGE_ACCESS = {
   bidSubmission: new Set(),
 };
 const QUOTE_STATUS_SYNC_PENDING_SET = new Set([
-  "Order Created",
+  "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Engagement",
-  "Departmental Engagement Completed",
-  "Pending Quote Request",
-  "Quote Request Completed",
-  "Pending Send Response",
+  "Pending Cost Verification",
 ]);
 const QUOTE_DECISION_STATUS_VALUES = ["pending", "go_ahead", "declined"];
 const QUOTE_DECISION_STATUS_SET = new Set(QUOTE_DECISION_STATUS_VALUES);
@@ -2124,12 +2136,14 @@ const QUOTE_DECISION_STATUS_ALIASES = {
 };
 
 const getAutoProgressedStatus = (status, project = {}) => {
+  if (isQuoteProject(project)) {
+    return status;
+  }
+
   const progression = {
     // Standard workflow
     "Scope Approval Completed": "Pending Departmental Engagement",
-    "Departmental Engagement Completed": isQuoteProject(project)
-      ? "Pending Quote Request"
-      : "Pending Mockup",
+    "Departmental Engagement Completed": "Pending Mockup",
     "Mockup Completed": "Pending Master Approval",
     "Master Approval Completed": "Pending Production",
     "Production Completed": "Pending Quality Control",
@@ -2137,25 +2151,17 @@ const getAutoProgressedStatus = (status, project = {}) => {
     "Photography Completed": "Pending Packaging",
     "Packaging Completed": "Pending Delivery/Pickup",
     Delivered: "Pending Feedback",
-    // Quote workflow
-    "Quote Request Completed": "Pending Send Response",
   };
 
   return progression[status] || status;
 };
 
 const isMockupWorkflowStatusAllowed = (project = {}, status = "") => {
-  const allowedStatuses = new Set(["Pending Mockup"]);
-  if (isQuoteProject(project)) {
-    allowedStatuses.add("Pending Quote Request");
-  }
-  return allowedStatuses.has(status);
+  return status === "Pending Mockup";
 };
 
-const getMockupWorkflowStatusMessage = (project = {}) =>
-  isQuoteProject(project)
-    ? "Mockup action is only allowed while status is Pending Mockup or Pending Quote Request."
-    : "Mockup action is only allowed while status is Pending Mockup.";
+const getMockupWorkflowStatusMessage = () =>
+  "Mockup action is only allowed while status is Pending Mockup.";
 
 const formatQuoteRequirementStatusLabel = (status = "") => {
   const normalized = toText(status).toLowerCase();
@@ -2211,6 +2217,18 @@ const normalizeQuoteChecklistValue = (checklist = {}) =>
     accumulator[key] = parseBooleanFlag(checklist?.[key], false);
     return accumulator;
   }, { ...DEFAULT_QUOTE_CHECKLIST });
+
+const normalizeQuoteCostVerification = (value = {}) => {
+  const source = toPlainObject(value);
+  const amount = Number.parseFloat(source.amount);
+  return {
+    amount: Number.isFinite(amount) ? amount : null,
+    currency: toText(source.currency),
+    note: toText(source.note),
+    updatedAt: toDateOrNull(source.updatedAt),
+    updatedBy: source.updatedBy || null,
+  };
+};
 
 const normalizeQuoteRequirementHistoryEntry = (entry = {}) => {
   const toStatus = toText(entry?.toStatus).toLowerCase();
@@ -2283,6 +2301,12 @@ const normalizeQuoteDetailsWorkflow = ({
     });
   });
 
+  const normalizedCostVerification = normalizeQuoteCostVerification(
+    incoming.costVerification !== undefined
+      ? incoming.costVerification
+      : existing.costVerification,
+  );
+
   const normalizedDecision = normalizeQuoteDecision(
     incoming.decision !== undefined ? incoming.decision : existing.decision,
   );
@@ -2290,9 +2314,43 @@ const normalizeQuoteDetailsWorkflow = ({
   return {
     ...merged,
     checklist: normalizedChecklist,
+    costVerification: normalizedCostVerification,
     requirementItems: normalizedRequirementItems,
     decision: normalizedDecision,
   };
+};
+
+const getQuoteChecklistState = (quoteDetails = {}) => {
+  const checklist = normalizeQuoteChecklistValue(quoteDetails?.checklist || {});
+  const nonCostRequirements = QUOTE_REQUIREMENT_KEYS.filter(
+    (key) => key !== "cost" && checklist[key],
+  );
+  const isCostOnly = Boolean(checklist.cost) && nonCostRequirements.length === 0;
+  return {
+    checklist,
+    nonCostRequirements,
+    isCostOnly,
+  };
+};
+
+const isQuoteCostOnlyProject = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  return getQuoteChecklistState(normalizedQuoteDetails).isCostOnly;
+};
+
+const isQuoteCostVerified = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  const costVerification = normalizedQuoteDetails.costVerification || {};
+  const amount = Number.parseFloat(costVerification.amount);
+  return Number.isFinite(amount) && amount > 0;
 };
 
 const getNormalizedQuoteRequirementItems = (project = {}) => {
@@ -2321,16 +2379,17 @@ const isQuoteRequirementCompleted = (requirementKey = "", status = "") => {
 const areQuoteRequirementsCompleted = (project = {}) => {
   if (!isQuoteProject(project)) return false;
 
-  const requirementItems = getNormalizedQuoteRequirementItems(project);
-  const requiredKeys = QUOTE_REQUIREMENT_KEYS.filter((key) =>
-    Boolean(requirementItems?.[key]?.isRequired),
-  );
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  const { isCostOnly } = getQuoteChecklistState(normalizedQuoteDetails);
+  if (!isCostOnly) return false;
 
-  if (requiredKeys.length === 0) return false;
-
-  return requiredKeys.every(
-    (key) => isQuoteRequirementCompleted(key, requirementItems?.[key]?.status),
+  const amount = Number.parseFloat(
+    normalizedQuoteDetails?.costVerification?.amount,
   );
+  return Number.isFinite(amount) && amount > 0;
 };
 
 const syncQuoteProjectStatusByRequirements = (project = {}) => {
@@ -2344,18 +2403,30 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
   }
 
   const previousStatus = toText(project?.status);
-  const allRequirementsCompleted = areQuoteRequirementsCompleted(project);
+  const costVerified = isQuoteCostVerified(project);
   let nextStatus = previousStatus;
 
-  if (allRequirementsCompleted) {
-    if (QUOTE_STATUS_SYNC_PENDING_SET.has(previousStatus)) {
-      nextStatus = "Quote Request Completed";
+  if (costVerified) {
+    if (
+      QUOTE_STATUS_SYNC_PENDING_SET.has(previousStatus) ||
+      previousStatus === "Pending Cost Verification" ||
+      previousStatus === "Pending Quote Request"
+    ) {
+      nextStatus = "Cost Verification Completed";
     }
   } else if (
-    ["Quote Request Completed", "Pending Send Response"].includes(previousStatus) &&
+    [
+      "Cost Verification Completed",
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      "Quote Request Completed",
+      "Pending Send Response",
+      "Response Sent",
+    ].includes(previousStatus) &&
     !project?.invoice?.sent
   ) {
-    nextStatus = "Pending Quote Request";
+    nextStatus = "Pending Cost Verification";
   }
 
   if (nextStatus && nextStatus !== previousStatus) {
@@ -2366,7 +2437,7 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
     changed: nextStatus !== previousStatus,
     fromStatus: previousStatus,
     toStatus: nextStatus,
-    allRequirementsCompleted,
+    allRequirementsCompleted: costVerified,
   };
 };
 
@@ -4768,6 +4839,20 @@ const createProject = async (req, res) => {
             quoteDetailsInput: finalQuoteDetails,
           })
         : finalQuoteDetails;
+    if (normalizedProjectType === "Quote") {
+      const { isCostOnly, nonCostRequirements } = getQuoteChecklistState(
+        normalizedQuoteDetails,
+      );
+      if (!isCostOnly) {
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_BLOCKED",
+          message:
+            nonCostRequirements.length > 0
+              ? "Only cost-based quotes are supported right now. Remove other requirements and try again."
+              : "Quote must include the Cost requirement to continue.",
+        });
+      }
+    }
     const isSampleRequired = parseBooleanFlag(sampleRequired, false);
     const normalizedProjectNameRaw = normalizeProjectNameRaw(projectName);
     const normalizedProjectIndicator = normalizeProjectIndicator(
@@ -4826,7 +4911,7 @@ const createProject = async (req, res) => {
       status:
         status ||
         (normalizedProjectType === "Quote"
-          ? "Pending Quote Request"
+          ? "Quote Created"
           : "Order Created"), // Default or Explicit
       createdBy: req.user._id,
       projectLeadId: projectLeadId || null,
@@ -6060,7 +6145,9 @@ const updateProjectStatus = async (req, res) => {
       project.projectLeadId &&
       project.projectLeadId.toString() === req.user.id.toString();
     const isFinishing =
-      project.status === "Completed" && newStatus === "Finished";
+      newStatus === "Finished" &&
+      (project.status === "Completed" ||
+        (isQuoteProject(project) && project.status === "Declined"));
     const adminOnlyStageCompletions = new Set([
       "Master Approval Completed",
       "Quality Control Completed",
@@ -6210,20 +6297,34 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
-    if (isQuoteProject(project) && newStatus === "Quote Request Completed") {
-      if (!areQuoteRequirementsCompleted(project)) {
+    if (isQuoteProject(project) && !isQuoteCostOnlyProject(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Only cost-based quotes are supported right now. Remove other requirements before progressing this quote.",
+      });
+    }
+
+    if (isQuoteProject(project) && newStatus === "Cost Verification Completed") {
+      if (!isQuoteCostVerified(project)) {
         return res.status(400).json({
-          code: "QUOTE_REQUIREMENTS_PENDING",
+          code: "QUOTE_COST_MISSING",
           message:
-            "All required quote requirements must be completed before quote request can be completed.",
+            "Cost verification must be recorded before completing this stage.",
         });
       }
     }
 
-    if (isQuoteProject(project) && newStatus === "Response Sent" && !project.invoice?.sent) {
+    if (
+      isQuoteProject(project) &&
+      ["Quote Submission Completed", "Pending Client Decision"].includes(
+        newStatus,
+      ) &&
+      !project.invoice?.sent
+    ) {
       return res.status(400).json({
         message:
-          "Mark quote as sent from billing before setting status to Response Sent.",
+          "Mark quote as sent from billing before setting status to Quote Submission.",
       });
     }
 
@@ -6577,6 +6678,21 @@ const transitionQuoteRequirement = async (req, res) => {
       });
     }
 
+    if (!isQuoteCostOnlyProject(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Only cost-based quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
+      });
+    }
+
+    if (requirementKey !== "cost") {
+      return res.status(400).json({
+        message:
+          "Quote requirement transitions are disabled for non-cost requirements.",
+      });
+    }
+
     const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
       quoteDetailsInput: project.quoteDetails || {},
       existingQuoteDetails: project.quoteDetails || {},
@@ -6756,6 +6872,141 @@ const transitionQuoteRequirement = async (req, res) => {
   }
 };
 
+// @desc    Update quote cost verification (Cost requirement)
+// @route   PATCH /api/projects/:id/quote-cost
+// @access  Private (Admin or Front Desk)
+const updateQuoteCostVerification = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to verify quote cost.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Quote cost verification is only available for quote projects.",
+      });
+    }
+
+    if (!isQuoteCostOnlyProject(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Only cost-based quotes are supported right now. Remove other requirements before verifying cost.",
+      });
+    }
+
+    const reset = parseBooleanFlag(req.body?.reset, false);
+    const note = toText(req.body?.note).slice(0, 500);
+    const currency = toText(req.body?.currency).slice(0, 10);
+    const amount = Number.parseFloat(req.body?.amount);
+
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    const previousStatus = project.status;
+
+    if (reset) {
+      project.quoteDetails.costVerification = {
+        amount: null,
+        currency: "",
+        note: "",
+        updatedAt: new Date(),
+        updatedBy: req.user._id,
+      };
+      project.quoteDetails.decision = {
+        ...normalizeQuoteDecision(project.quoteDetails?.decision || {}),
+        status: "pending",
+        note: "",
+        validatedAt: null,
+        validatedBy: null,
+        convertedAt: null,
+        convertedBy: null,
+        convertedToType: "Quote",
+      };
+      project.invoice = {
+        sent: false,
+        sentAt: null,
+        sentBy: null,
+      };
+      project.status = "Pending Cost Verification";
+      project.markModified("quoteDetails.decision");
+    } else {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid cost amount before submitting.",
+        });
+      }
+
+      project.quoteDetails.costVerification = {
+        amount,
+        currency,
+        note,
+        updatedAt: new Date(),
+        updatedBy: req.user._id,
+      };
+      project.status = getAutoProgressedStatus(
+        "Cost Verification Completed",
+        project,
+      );
+    }
+
+    project.markModified("quoteDetails.costVerification");
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      reset ? "Quote cost verification reset." : "Quote cost verified.",
+      {
+        quoteCost: {
+          amount: reset ? null : amount,
+          currency: reset ? "" : currency,
+          note: reset ? "" : note,
+          reset,
+        },
+      },
+    );
+
+    if (previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: { from: previousStatus, to: project.status },
+        },
+      );
+    }
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: reset ? "Quote Cost Reset" : "Quote Cost Verified",
+      message: `Admin ${actorName} ${
+        reset ? "reset" : "verified"
+      } quote cost for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating quote cost verification:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Validate quote decision after response is sent
 // @route   PATCH /api/projects/:id/quote-decision
 // @access  Private (Admin or Front Desk)
@@ -6797,14 +7048,33 @@ const updateQuoteDecision = async (req, res) => {
       existingQuoteDetails: project.quoteDetails || {},
     });
 
+    const normalizedStatus = normalizeStatusForStorageByProjectType(
+      project.status,
+      "Quote",
+    );
+    if (!isQuoteCostOnlyProject(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Only cost-based quotes are supported right now. Remove other requirements before validating the decision.",
+      });
+    }
+
+    const decisionGateStatuses = new Set([
+      "Pending Client Decision",
+      "Quote Submission Completed",
+      "Completed",
+      "Declined",
+    ]);
+
     if (
       normalizedDecision !== "pending" &&
-      project.status !== "Response Sent"
+      !decisionGateStatuses.has(normalizedStatus)
     ) {
       return res.status(400).json({
-        code: "QUOTE_DECISION_REQUIRES_RESPONSE_SENT",
+        code: "QUOTE_DECISION_REQUIRES_SUBMISSION",
         message:
-          "Quote decision can only be validated after quote response has been sent.",
+          "Quote decision can only be validated after quote submission is completed.",
       });
     }
 
@@ -6826,7 +7096,16 @@ const updateQuoteDecision = async (req, res) => {
       nextDecision.convertedToType = "Quote";
     }
 
+    const previousStatus = project.status;
+    let nextStatus = previousStatus;
+    if (normalizedDecision === "pending") {
+      nextStatus = "Pending Client Decision";
+    } else if (normalizedDecision === "declined" || normalizedDecision === "go_ahead") {
+      nextStatus = "Completed";
+    }
+
     project.quoteDetails.decision = nextDecision;
+    project.status = nextStatus;
     project.markModified("quoteDetails.decision");
     await project.save();
 
@@ -6849,6 +7128,18 @@ const updateQuoteDecision = async (req, res) => {
         },
       },
     );
+
+    if (previousStatus !== nextStatus) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${nextStatus}`,
+        {
+          statusChange: { from: previousStatus, to: nextStatus },
+        },
+      );
+    }
 
     const actorName =
       `${toText(req.user?.firstName)} ${toText(req.user?.lastName)}`.trim() ||
@@ -6899,12 +7190,21 @@ const markInvoiceSent = async (req, res) => {
     const billingGuardBefore = getBillingGuardMissingByTarget(project);
     const oldStatus = project.status;
 
-    if (isQuoteProject(project) && !areQuoteRequirementsCompleted(project)) {
-      return res.status(400).json({
-        code: "QUOTE_REQUIREMENTS_PENDING",
-        message:
-          "All required quote requirements must be completed before sending quote response.",
-      });
+    if (isQuoteProject(project)) {
+      if (!isQuoteCostOnlyProject(project)) {
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_BLOCKED",
+          message:
+            "Only cost-based quotes are supported right now. Remove other requirements before sending the quote.",
+        });
+      }
+      if (!isQuoteCostVerified(project)) {
+        return res.status(400).json({
+          code: "QUOTE_COST_MISSING",
+          message:
+            "Cost verification must be completed before sending the quote.",
+        });
+      }
     }
 
     if (project.invoice?.sent) {
@@ -6919,7 +7219,10 @@ const markInvoiceSent = async (req, res) => {
       sentBy: req.user._id,
     };
     if (isQuoteProject(project)) {
-      project.status = "Response Sent";
+      project.status = getAutoProgressedStatus(
+        "Quote Submission Completed",
+        project,
+      );
     }
     const billingGuardAfter = getBillingGuardMissingByTarget(project);
 
@@ -7095,9 +7398,9 @@ const undoInvoiceSent = async (req, res) => {
       sentBy: null,
     };
     if (isQuoteProject(project)) {
-      project.status = areQuoteRequirementsCompleted(project)
-        ? "Pending Send Response"
-        : "Pending Quote Request";
+      project.status = isQuoteCostVerified(project)
+        ? "Pending Quote Submission"
+        : "Pending Cost Verification";
     }
 
     await project.save();
@@ -7615,11 +7918,22 @@ const updateProjectType = async (req, res) => {
     );
 
     if (isQuoteToProjectConversion) {
-      if (previousStatus !== "Response Sent") {
+      const normalizedStatus = normalizeStatusForStorageByProjectType(
+        previousStatus,
+        "Quote",
+      );
+      if (
+        ![
+          "Pending Client Decision",
+          "Quote Submission Completed",
+          "Completed",
+          "Declined",
+        ].includes(normalizedStatus)
+      ) {
         return res.status(400).json({
-          code: "QUOTE_CONVERSION_REQUIRES_RESPONSE_SENT",
+          code: "QUOTE_CONVERSION_REQUIRES_SUBMISSION",
           message:
-            "Quote can only be converted to a project type after quote response has been sent.",
+            "Quote can only be converted to a project type after quote submission and client decision.",
         });
       }
 
@@ -9807,7 +10121,7 @@ const updateProject = async (req, res) => {
     const isLeadAcceptance =
       !canManageBillingUser &&
       requestedStatus === "Pending Scope Approval" &&
-      toText(project.status) === "Order Created" &&
+      ["Order Created", "Quote Created"].includes(toText(project.status)) &&
       isLeadOrAssistant;
 
     if (!canManageBillingUser && !isLeadAcceptance) {
@@ -10215,6 +10529,21 @@ const updateProject = async (req, res) => {
         quoteDetailsInput: project.quoteDetails || {},
         existingQuoteDetails: project.quoteDetails || {},
       });
+    }
+
+    if (project.projectType === "Quote") {
+      const { isCostOnly, nonCostRequirements } = getQuoteChecklistState(
+        project.quoteDetails || {},
+      );
+      if (!isCostOnly) {
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_BLOCKED",
+          message:
+            nonCostRequirements.length > 0
+              ? "Only cost-based quotes are supported right now. Remove other requirements before saving."
+              : "Quote must include the Cost requirement to continue.",
+        });
+      }
     }
 
     if (
@@ -12120,6 +12449,7 @@ module.exports = {
   updateProjectStatus,
   updateMeetingOverride,
   transitionQuoteRequirement,
+  updateQuoteCostVerification,
   updateQuoteDecision,
   markInvoiceSent,
   verifyPayment,

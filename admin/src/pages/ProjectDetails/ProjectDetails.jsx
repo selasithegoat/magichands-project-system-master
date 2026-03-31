@@ -20,6 +20,7 @@ import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/Proj
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
+import { getQuoteStatusDisplay, normalizeQuoteStatus } from "@client/utils/quoteStatus";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -99,28 +100,31 @@ const formatSupplySource = (value) => {
   return list.join(", ");
 };
 
+const formatAmountLabel = (amount, currency = "") => {
+  if (!Number.isFinite(amount) || amount <= 0) return "-";
+  const formattedAmount = amount.toLocaleString("en-US");
+  const trimmedCurrency = String(currency || "").trim();
+  return trimmedCurrency ? `${trimmedCurrency} ${formattedAmount}` : formattedAmount;
+};
+
 const STATUS_AUTO_ADVANCE_TARGETS = {
   "Master Approval Completed": "Pending Production",
   "Packaging Completed": "Pending Delivery/Pickup",
 };
-const QUOTE_STATUS_DECISION_DISPLAY_MAP = {
-  "Pending Feedback": "Pending Decision",
-  "Feedback Completed": "Decision Completed",
-};
-const QUOTE_STATUS_DECISION_STORAGE_MAP = {
-  "Pending Decision": "Pending Feedback",
-  "Decision Completed": "Feedback Completed",
-};
-
 const mapQuoteStatusForDisplay = (status, isQuoteProject = false) => {
   const normalized = String(status || "").trim();
   if (!isQuoteProject) return normalized;
-  return QUOTE_STATUS_DECISION_DISPLAY_MAP[normalized] || normalized;
+  const normalizedQuote = getQuoteStatusDisplay(normalized);
+  if (normalizedQuote === "Pending Client Decision") return "Pending Decision";
+  return normalizedQuote;
 };
 
 const mapQuoteStatusForStorage = (status) => {
   const normalized = String(status || "").trim();
-  return QUOTE_STATUS_DECISION_STORAGE_MAP[normalized] || normalized;
+  if (normalized === "Pending Decision") return "Pending Client Decision";
+  if (normalized === "Cost Verified") return "Cost Verification Completed";
+  if (normalized === "Quote Submitted") return "Quote Submission Completed";
+  return normalized;
 };
 
 const STANDARD_STATUS_FLOW = [
@@ -151,18 +155,14 @@ const STANDARD_STATUS_FLOW = [
 ];
 
 const QUOTE_STATUS_FLOW = [
-  "Order Created",
+  "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
-  "Pending Departmental Engagement",
-  "Departmental Engagement Completed",
-  "Pending Quote Request",
-  "Quote Request Completed",
-  "Pending Send Response",
-  "Response Sent",
-  "Pending Decision",
-  "Decision Completed",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
   "Completed",
   "Finished",
 ];
@@ -230,40 +230,6 @@ const SMS_STATE_LABELS = {
   failed: "Failed",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
-const QUOTE_REQUIREMENT_KEYS = [
-  "cost",
-  "mockup",
-  "previousSamples",
-  "sampleProduction",
-  "bidSubmission",
-];
-const QUOTE_REQUIREMENT_LABELS = {
-  cost: "Cost",
-  mockup: "Mockup",
-  previousSamples: "Previous Sample / Jobs Done",
-  sampleProduction: "Sample Production",
-  bidSubmission: "Bid Submission / Documents",
-};
-const QUOTE_REQUIREMENT_STATUS_OPTIONS = [
-  "assigned",
-  "in_progress",
-  "dept_submitted",
-  "frontdesk_review",
-  "sent_to_client",
-  "client_approved",
-  "client_revision_requested",
-  "blocked",
-  "cancelled",
-];
-const getQuoteRequirementStatusOptionsByKey = (key, selectedStatus) => {
-  if (key !== "bidSubmission") return QUOTE_REQUIREMENT_STATUS_OPTIONS;
-
-  if (selectedStatus === "sent_to_client") {
-    return ["sent_to_client", "assigned"];
-  }
-
-  return Array.from(new Set([selectedStatus, "sent_to_client"]));
-};
 
 const BATCH_STATUS_OPTIONS = [
   "planned",
@@ -365,48 +331,6 @@ const formatBatchQty = (qty, totalQty) => {
   return `${qty}${suffix}`;
 };
 
-const normalizeQuoteChecklist = (checklist = {}) =>
-  QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
-    accumulator[key] = Boolean(checklist?.[key]);
-    return accumulator;
-  }, {});
-
-const formatQuoteRequirementStatus = (status = "") => {
-  const normalized = String(status || "").trim().toLowerCase();
-  if (!normalized) return "Assigned";
-  return normalized
-    .split("_")
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(" ");
-};
-
-const getQuoteRequirementItems = (project = {}) => {
-  const quoteDetails = project?.quoteDetails || {};
-  const checklist = normalizeQuoteChecklist(quoteDetails?.checklist || {});
-  const rawItems =
-    quoteDetails?.requirementItems && typeof quoteDetails.requirementItems === "object"
-      ? quoteDetails.requirementItems
-      : {};
-
-  return QUOTE_REQUIREMENT_KEYS.map((key) => {
-    const rawItem =
-      rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
-    const isRequired = Boolean(checklist[key]);
-    const normalizedStatus = String(rawItem?.status || "").trim().toLowerCase();
-    const resolvedStatus = isRequired
-      ? normalizedStatus || "assigned"
-      : "not_required";
-
-    return {
-      key,
-      label: QUOTE_REQUIREMENT_LABELS[key] || key,
-      isRequired,
-      status: resolvedStatus,
-      note: String(rawItem?.note || "").trim(),
-      updatedAt: rawItem?.updatedAt || null,
-    };
-  });
-};
 
 const normalizeQuoteDecisionStatus = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
@@ -805,8 +729,6 @@ const ProjectDetails = ({ user }) => {
   const [isChangingProjectType, setIsChangingProjectType] = useState(false);
   const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
   const [activeContentTab, setActiveContentTab] = useState("overview");
-  const [quoteRequirementSubmittingKey, setQuoteRequirementSubmittingKey] =
-    useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteDecisionNoteDraft, setQuoteDecisionNoteDraft] = useState("");
   const [statusConfirmModal, setStatusConfirmModal] = useState({
@@ -1974,74 +1896,6 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
-  const handleChecklistToggle = async (key, val) => {
-    if (!ensureProjectIsEditable()) return;
-    if (!project || !project.quoteDetails) return;
-
-    const currentChecklist = project.quoteDetails.checklist || {};
-    const updatedChecklist = { ...currentChecklist, [key]: !val };
-
-    try {
-      const res = await fetch(`/api/projects/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          quoteDetails: {
-            ...project.quoteDetails,
-            checklist: updatedChecklist,
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to update checklist");
-      }
-
-      const updatedProject = await res.json();
-      applyProjectToState(updatedProject);
-    } catch (err) {
-      console.error("Error updating checklist:", err);
-      alert("Failed to update checklist");
-    }
-  };
-
-  const handleQuoteRequirementTransition = async (requirementKey, toStatus) => {
-    if (!ensureProjectIsEditable()) return;
-    if (!project || project.projectType !== "Quote") return;
-
-    const pendingKey = `${requirementKey}:${toStatus}`;
-    setQuoteRequirementSubmittingKey(pendingKey);
-
-    try {
-      const res = await fetch(
-        `/api/projects/${id}/quote-requirements/${requirementKey}/transition?source=admin`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            toStatus,
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to update quote requirement.");
-      }
-
-      const updatedProject = await res.json();
-      applyProjectToState(updatedProject);
-    } catch (error) {
-      console.error("Error updating quote requirement:", error);
-      alert(error.message || "Failed to update quote requirement.");
-    } finally {
-      setQuoteRequirementSubmittingKey("");
-    }
-  };
-
   const handleQuoteDecisionValidation = async (decision) => {
     if (!ensureProjectIsEditable()) return;
     if (!project || project.projectType !== "Quote") return;
@@ -2449,8 +2303,28 @@ const ProjectDetails = ({ user }) => {
   };
   const paymentTypes = (project.paymentVerifications || []).map((entry) => entry.type);
   const isQuoteProject = project.projectType === "Quote";
+  const quoteWorkflowStatus = isQuoteProject
+    ? normalizeQuoteStatus(project.status || "")
+    : project.status || "";
+  const quoteChecklist = project?.quoteDetails?.checklist || {};
+  const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
+    ([key, value]) => key !== "cost" && Boolean(value),
+  );
+  const quoteWorkflowBlocked =
+    isQuoteProject && (!quoteChecklist?.cost || quoteHasUnsupportedRequirements);
+  const quoteWorkflowBlockedMessage = !quoteChecklist?.cost
+    ? "Cost requirement is not enabled for this quote."
+    : quoteHasUnsupportedRequirements
+      ? "Quote requirement workflows are not configured yet."
+      : "";
+  const quoteCostVerification = project?.quoteDetails?.costVerification || {};
+  const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
+  const quoteCostVerified =
+    isQuoteProject &&
+    Number.isFinite(quoteCostAmountValue) &&
+    quoteCostAmountValue > 0;
   const currentDisplayStatus = mapQuoteStatusForDisplay(
-    project.status,
+    quoteWorkflowStatus,
     isQuoteProject,
   );
   const statusMovementNote = statusConfirmModal.open
@@ -2460,9 +2334,6 @@ const ProjectDetails = ({ user }) => {
         isQuoteProject,
       )
     : "";
-  const quoteRequirementItems = isQuoteProject
-    ? getQuoteRequirementItems(project)
-    : [];
   const quoteDecisionState = isQuoteProject
     ? getQuoteDecisionState(project)
     : { status: "pending", note: "", validatedAt: null };
@@ -2470,7 +2341,10 @@ const ProjectDetails = ({ user }) => {
     isQuoteProject &&
     ["go_ahead", "declined"].includes(quoteDecisionState.status);
   const canValidateQuoteDecision =
-    isQuoteProject && project.status === "Response Sent";
+    isQuoteProject &&
+    ["Pending Client Decision", "Quote Submission Completed", "Completed"].includes(
+      quoteWorkflowStatus,
+    );
   const convertedFromQuoteAt =
     !isQuoteProject && project?.quoteDetails?.decision?.convertedAt
       ? project.quoteDetails.decision.convertedAt
@@ -2729,10 +2603,10 @@ const ProjectDetails = ({ user }) => {
         <div className="header-right-panel">
           <div className="header-status-row">
             <select
-              className={`status-badge-select ${project.status
+              className={`status-badge-select ${quoteWorkflowStatus
                 ?.toLowerCase()
-                .replace(" ", "-")}`}
-              value={mapQuoteStatusForDisplay(project.status, isQuoteProject)}
+                .replace(/\s+/g, "-")}`}
+              value={mapQuoteStatusForDisplay(quoteWorkflowStatus, isQuoteProject)}
               onChange={(e) => handleStatusChange(e.target.value)}
               disabled={
                 loading ||
@@ -2757,19 +2631,16 @@ const ProjectDetails = ({ user }) => {
             >
               {(project.projectType === "Quote"
                 ? [
-                    "Order Created",
+                    "Quote Created",
                     "Pending Scope Approval",
                     "Scope Approval Completed",
-                    "Pending Departmental Meeting",
-                    "Pending Departmental Engagement",
-                    "Departmental Engagement Completed",
-                    "Pending Quote Request",
-                    "Quote Request Completed",
-                    "Pending Send Response",
-                    "Response Sent",
+                    "Pending Cost Verification",
+                    "Cost Verified",
+                    "Pending Quote Submission",
+                    "Quote Submitted",
                     "Pending Decision",
-                    "Decision Completed",
                     "Completed",
+                    "Finished",
                     ...(isProjectOnHold ? ["On Hold"] : []),
                   ]
                 : [
@@ -3424,10 +3295,10 @@ const ProjectDetails = ({ user }) => {
             </div>
           )}
 
-          {/* Quote Checklist (Only for Quote projects) */}
+          {/* Quote Decision & Cost (Only for Quote projects) */}
           {project.projectType === "Quote" && (
             <div className="detail-card">
-              <h3 className="card-title">Quote Requirements</h3>
+              <h3 className="card-title">Quote Decision &amp; Cost</h3>
               <div className="quote-decision-admin-panel">
                 <div
                   className={`quote-decision-admin-status ${
@@ -3495,8 +3366,10 @@ const ProjectDetails = ({ user }) => {
 
                 {!canValidateQuoteDecision && (
                   <div className="quote-decision-admin-meta">
-                    Quote decision can only be validated after status reaches
-                    Response Sent.
+                    {quoteWorkflowBlocked
+                      ? quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet."
+                      : "Quote decision can only be validated after status reaches Pending Client Decision or Quote Submission Completed."}
                   </div>
                 )}
 
@@ -3508,90 +3381,35 @@ const ProjectDetails = ({ user }) => {
                 )}
               </div>
               <div className="checklist-admin-grid quote-requirements-admin-grid">
-                {quoteRequirementItems.length > 0 ? (
-                  quoteRequirementItems.map((item) => {
-                    const submittingThisRequirement = quoteRequirementSubmittingKey
-                      .startsWith(`${item.key}:`);
-                    const selectedStatus =
-                      item.status === "not_required" ? "assigned" : item.status;
-                    const statusOptions = Array.from(
-                      new Set([
-                        ...getQuoteRequirementStatusOptionsByKey(
-                          item.key,
-                          selectedStatus,
-                        ),
-                        selectedStatus,
-                      ]),
-                    );
-                    const itemClassName = [
-                      "checklist-admin-item",
-                      "quote-requirement-admin-item",
-                      item.isRequired ? "is-required" : "is-not-required",
-                    ]
-                      .filter(Boolean)
-                      .join(" ");
-                    const toggleClassName = [
-                      "quote-requirement-admin-toggle",
-                      item.isRequired ? "is-required" : "is-not-required",
-                    ]
-                      .filter(Boolean)
-                      .join(" ");
-
-                    return (
-                      <div key={item.key} className={itemClassName}>
-                        <div className="quote-requirement-admin-header">
-                          <span className="quote-requirement-admin-title">{item.label}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleChecklistToggle(item.key, item.isRequired)
-                            }
-                            disabled={submittingThisRequirement}
-                            className={toggleClassName}
-                          >
-                            {item.isRequired ? "Required" : "Not Required"}
-                          </button>
-                        </div>
-
-                        <div className="quote-requirement-admin-status">
-                          Status: {formatQuoteRequirementStatus(item.status)}
-                        </div>
-
-                        {item.updatedAt && (
-                          <div className="quote-requirement-admin-updated">
-                            Updated {formatLastUpdated(item.updatedAt)}
-                          </div>
-                        )}
-
-                        {item.isRequired ? (
-                          <select
-                            value={selectedStatus}
-                            onChange={(event) =>
-                              handleQuoteRequirementTransition(
-                                item.key,
-                                event.target.value,
-                              )
-                            }
-                            disabled={submittingThisRequirement}
-                            className="quote-requirement-admin-select"
-                          >
-                            {statusOptions.map((statusOption) => (
-                              <option key={statusOption} value={statusOption}>
-                                {formatQuoteRequirementStatus(statusOption)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className="quote-requirement-admin-helper">
-                            Enable this requirement to start its workflow.
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
+                <div
+                  className={`checklist-admin-item quote-requirement-admin-item ${
+                    quoteCostVerified ? "is-required" : "is-not-required"
+                  }`}
+                >
+                  <div className="quote-requirement-admin-header">
+                    <span className="quote-requirement-admin-title">Quote Cost</span>
+                    <span className="quote-requirement-admin-status">
+                      {quoteCostVerified ? "Verified" : "Pending"}
+                    </span>
+                  </div>
+                  <div className="quote-requirement-admin-updated">
+                    Amount: {formatAmountLabel(quoteCostAmountValue, quoteCostVerification?.currency)}
+                  </div>
+                  {quoteCostVerification?.updatedAt && (
+                    <div className="quote-requirement-admin-updated">
+                      Updated {formatLastUpdated(quoteCostVerification.updatedAt)}
+                    </div>
+                  )}
+                  {quoteCostVerification?.note && (
+                    <div className="quote-requirement-admin-helper">
+                      Note: {quoteCostVerification.note}
+                    </div>
+                  )}
+                </div>
+                {quoteWorkflowBlocked && (
                   <p className="quote-requirement-admin-empty">
-                    No checklist requirements.
+                    {quoteWorkflowBlockedMessage ||
+                      "Quote workflows are not configured yet."}
                   </p>
                 )}
               </div>

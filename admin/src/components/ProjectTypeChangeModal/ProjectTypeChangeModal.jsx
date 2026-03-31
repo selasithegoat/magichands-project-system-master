@@ -38,18 +38,14 @@ const QUOTE_STATUS_OPTIONS = [
   "Pending Approval",
   "In Progress",
   "New Order",
-  "Order Created",
+  "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
-  "Pending Departmental Meeting",
-  "Pending Departmental Engagement",
-  "Departmental Engagement Completed",
-  "Pending Quote Request",
-  "Quote Request Completed",
-  "Pending Send Response",
-  "Response Sent",
-  "Pending Feedback",
-  "Feedback Completed",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
   "Completed",
   "Finished",
 ];
@@ -59,7 +55,7 @@ const getStatusOptionsForType = (projectType) =>
 
 const getDefaultStatusForType = (projectType) =>
   projectType === "Quote"
-    ? "Pending Quote Request"
+    ? "Quote Created"
     : "Pending Departmental Engagement";
 
 const normalizeProjectType = (value) => {

@@ -23,6 +23,7 @@ import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
+import { getQuoteStatusDisplay, normalizeQuoteStatus } from "../../utils/quoteStatus";
 
 const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
 const OVERDUE_EXCLUDED_STATUSES = new Set([
@@ -32,10 +33,13 @@ const OVERDUE_EXCLUDED_STATUSES = new Set([
   "Feedback Completed",
   "Completed",
   "Finished",
+  "Declined",
 ]);
 
 const STATUS_LABEL_OVERRIDES = {
   "Order Created": "Waiting Acceptance",
+  "Quote Created": "Waiting Acceptance",
+  "Pending Acceptance": "Waiting Acceptance",
   "Pending Delivery/Pickup": "Pending Delivery",
 };
 
@@ -74,19 +78,14 @@ const STANDARD_PROGRESS_MAP = {
 };
 
 const QUOTE_PROGRESS_MAP = {
-  "Order Created": 5,
-  "Pending Scope Approval": 25,
-  "Scope Approval Completed": 35,
-  "Pending Departmental Meeting": 38,
-  "Pending Departmental Engagement": 42,
-  "Departmental Engagement Completed": 48,
-  "Pending Quote Request": 50,
-  "Quote Request Completed": 60,
-  "Pending Send Response": 75,
-  "Response Sent": 90,
-  Delivered: 95,
-  "Pending Feedback": 97,
-  "Feedback Completed": 99,
+  "Quote Created": 5,
+  "Pending Scope Approval": 20,
+  "Scope Approval Completed": 30,
+  "Pending Cost Verification": 45,
+  "Cost Verification Completed": 55,
+  "Pending Quote Submission": 70,
+  "Quote Submission Completed": 80,
+  "Pending Client Decision": 90,
   Completed: 100,
   Finished: 100,
 };
@@ -107,7 +106,13 @@ const RECENT_PROJECT_LIMIT = 5;
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DRAWER_TRANSITION_MS = 280;
 
-const isPendingAcceptanceProject = (project) => project.status === "Order Created";
+const PENDING_ACCEPTANCE_STATUSES = new Set([
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
+]);
+const isPendingAcceptanceProject = (project) =>
+  PENDING_ACCEPTANCE_STATUSES.has(project?.status);
 const isPendingDeliveryProject = (project) =>
   project?.status === "Pending Delivery/Pickup";
 const getProjectTypeValue = (project) =>
@@ -229,17 +234,26 @@ const resolveProjectTypeKey = (project) => {
 
 const getProjectProgress = (project) => {
   const map = isQuoteProject(project) ? QUOTE_PROGRESS_MAP : STANDARD_PROGRESS_MAP;
-  return map[project?.status] ?? 5;
+  const status = isQuoteProject(project)
+    ? normalizeQuoteStatus(project?.status || "")
+    : project?.status || "";
+  return map[status] ?? 5;
 };
 
-const formatProjectStatus = (status = "") =>
-  STATUS_LABEL_OVERRIDES[status] ||
-  (status.startsWith("Pending ") ? status.replace("Pending ", "") : status || "Draft");
+const formatProjectStatus = (status = "") => {
+  const normalized = getQuoteStatusDisplay(status || "");
+  return (
+    STATUS_LABEL_OVERRIDES[normalized] ||
+    (normalized.startsWith("Pending ")
+      ? normalized.replace("Pending ", "")
+      : normalized || "Draft")
+  );
+};
 
 const getStatusTone = (status = "") => {
   if (["Completed", "Finished"].includes(status)) return "success";
   if (status === "Pending Delivery/Pickup") return "info";
-  if (status === "Order Created") return "attention";
+  if (PENDING_ACCEPTANCE_STATUSES.has(status)) return "attention";
   if (status.toLowerCase().includes("pending")) return "warning";
   return "neutral";
 };
@@ -398,17 +412,28 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
     navigate(`/detail/${projectId}`);
   };
 
-  const handleUpdateStatusClick = async (projectId, currentStatus) => {
-    if (currentStatus !== "Completed") {
+  const handleUpdateStatusClick = async (project) => {
+    if (!project) return;
+    const isQuote = isQuoteProject(project);
+    const normalizedStatus = isQuote
+      ? normalizeQuoteStatus(project?.status || "")
+      : project?.status || "";
+    const canFinish = isQuote
+      ? normalizedStatus === "Completed"
+      : normalizedStatus === "Completed";
+
+    if (!canFinish) {
       setToast({
-        message: "Project must be 'Completed' before marking as finished.",
+        message: isQuote
+          ? "Quote must be 'Completed' before marking as finished."
+          : "Project must be 'Completed' before marking as finished.",
         type: "error",
       });
       return;
     }
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/status`, {
+      const res = await fetch(`/api/projects/${project._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "Finished" }),
@@ -703,7 +728,10 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
     const projectId = toEntityId(project?._id || project?.id);
     const projectTypeKey = resolveProjectTypeKey(project);
     const projectTypeMeta = PROJECT_TYPE_META[projectTypeKey] || PROJECT_TYPE_META.standard;
-    const statusTone = getStatusTone(project?.status || "");
+    const normalizedStatus = isQuoteProject(project)
+      ? normalizeQuoteStatus(project?.status || "")
+      : project?.status || "";
+    const statusTone = getStatusTone(normalizedStatus);
     const progress = getProjectProgress(project);
     const dueAt = buildDeliveryDateTime(
       project?.details?.deliveryDate,
@@ -777,14 +805,18 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
               type="button"
               className="dashboard-quick-action"
               title={
-                project?.status === "Completed"
+                (isQuoteProject(project)
+                  ? normalizedStatus === "Completed"
+                  : project?.status === "Completed")
                   ? "Mark as finished"
-                  : "Project must be Completed first"
+                  : isQuoteProject(project)
+                    ? "Quote must be Completed first"
+                    : "Project must be Completed first"
               }
               aria-label="Mark project as finished"
               onClick={(event) => {
                 event.stopPropagation();
-                handleUpdateStatusClick(projectId, project?.status);
+                handleUpdateStatusClick(project);
               }}
             >
               <CheckCircleIcon width="16" height="16" />
@@ -1373,10 +1405,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
                     type="button"
                     className="dashboard-drawer-secondary"
                     onClick={() =>
-                      handleUpdateStatusClick(
-                        toEntityId(activeTimelineProject?._id || activeTimelineProject?.id),
-                        activeTimelineProject?.status,
-                      )
+                      handleUpdateStatusClick(activeTimelineProject)
                     }
                   >
                     Mark as Finished

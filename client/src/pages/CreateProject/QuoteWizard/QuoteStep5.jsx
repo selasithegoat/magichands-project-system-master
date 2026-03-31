@@ -310,7 +310,7 @@ const QuoteStep5 = ({
               <div className="icon-box-blue">
                 <ClipboardListIcon width="18" height="18" color="currentColor" />
               </div>
-              <span className="card-title">Quote Requirements</span>
+              <span className="card-title">Quote Cost</span>
             </div>
           </div>
           <div className="review-grid">

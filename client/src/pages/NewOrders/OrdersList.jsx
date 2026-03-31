@@ -5,6 +5,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
+import { getQuoteStatusDisplay } from "../../utils/quoteStatus";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
@@ -271,8 +272,13 @@ const OrdersList = () => {
     return "draft";
   };
 
-  const getProjectDisplayStatus = (project) =>
-    project?.projectLeadId ? project.status : "New Order";
+  const getProjectDisplayStatus = (project) => {
+    if (!project?.projectLeadId) return "New Order";
+    if (project?.projectType === "Quote") {
+      return getQuoteStatusDisplay(project.status);
+    }
+    return project.status;
+  };
 
   const getActiveGroupProjects = (group) =>
     (group?.projects || []).filter((project) => !isHistoryEligible(project));

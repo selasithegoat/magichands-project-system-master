@@ -9,7 +9,7 @@ const CLOSED_STATUS_LIST = [
   "Delivered",
   "Feedback Completed",
   "Finished",
-  "Response Sent",
+  "Declined",
 ];
 const CLOSED_STATUS_SET = new Set(CLOSED_STATUS_LIST);
 
@@ -20,6 +20,10 @@ const PENDING_APPROVAL_STATUSES = new Set([
   "Pending Departmental Engagement",
   "Pending Master Approval",
   "Pending Quality Control",
+  "Pending Cost Verification",
+  "Pending Quote Submission",
+  "Pending Client Decision",
+  // Legacy quote statuses
   "Pending Quote Request",
   "Pending Send Response",
 ]);
@@ -32,15 +36,23 @@ const PIPELINE_GROUPS = [
       "Draft",
       "New Order",
       "Order Created",
+      "Quote Created",
       "Pending Approval",
       "Pending Scope Approval",
       "Scope Approval Completed",
       "Pending Departmental Meeting",
       "Pending Departmental Engagement",
       "Departmental Engagement Completed",
+      "Pending Cost Verification",
+      "Cost Verification Completed",
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      // Legacy quote statuses
       "Pending Quote Request",
       "Quote Request Completed",
       "Pending Send Response",
+      "Response Sent",
     ]),
   },
   {
