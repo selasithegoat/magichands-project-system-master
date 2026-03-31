@@ -24,7 +24,10 @@ const ACTION_STATUSES = new Set([
   "Quote Created",
   "Pending Mockup",
   "Pending Cost Verification",
+  "Pending Sample Retrieval",
+  "Pending Sample / Work done Retrieval",
   "Pending Quote Submission",
+  "Pending Sample / Work done Sent",
   "Quote Submission Completed",
   "Pending Client Decision",
   "Pending Feedback",
@@ -164,7 +167,10 @@ const FrontDeskOrders = () => {
           return [
             "Pending Cost Verification",
             "Pending Mockup",
+            "Pending Sample Retrieval",
+            "Pending Sample / Work done Retrieval",
             "Pending Quote Submission",
+            "Pending Sample / Work done Sent",
             "Quote Submission Completed",
             "Pending Client Decision",
           ].includes(status);

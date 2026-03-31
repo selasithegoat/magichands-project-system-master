@@ -89,6 +89,7 @@ const QUOTE_STATUS_OPTIONS = [
   "Mockup Completed",
   "Pending Cost Verification",
   "Cost Verification Completed",
+  "Pending Sample Retrieval",
   "Pending Quote Submission",
   "Quote Submission Completed",
   "Pending Client Decision",

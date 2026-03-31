@@ -84,11 +84,15 @@ const normalizeChecklist = (checklist) => {
   const next = { ...defaultChecklist, ...(checklist || {}) };
   const hasCost = Boolean(next.cost);
   const hasMockup = Boolean(next.mockup);
-  if (!hasCost && !hasMockup) {
+  const hasPreviousSamples = Boolean(next.previousSamples);
+  if (!hasCost && !hasMockup && !hasPreviousSamples) {
     next.cost = true;
   }
-  if (hasCost && hasMockup) {
+  if (hasCost) {
     next.mockup = false;
+    next.previousSamples = false;
+  } else if (hasMockup) {
+    next.previousSamples = false;
   }
   next.cost = Boolean(next.cost);
   next.mockup = Boolean(next.mockup);
@@ -270,17 +274,23 @@ const MinimalQuoteForm = () => {
   };
 
   const handleChecklistChange = (field) => {
-    if (!["cost", "mockup"].includes(field)) return;
+    if (!["cost", "mockup", "previousSamples"].includes(field)) return;
     setFormData((prev) => {
       const currentChecklist = normalizeChecklist(prev.checklist);
       const nextValue = !currentChecklist[field];
       const nextChecklist = {
         ...currentChecklist,
-        cost: field === "cost" ? nextValue : false,
-        mockup: field === "mockup" ? nextValue : false,
+        cost: false,
+        mockup: false,
+        previousSamples: false,
       };
-      if (!nextChecklist.cost && !nextChecklist.mockup) {
+      if (nextValue) {
         nextChecklist[field] = true;
+      } else {
+        const fallback = ["cost", "mockup", "previousSamples"].find(
+          (key) => key !== field && currentChecklist[key],
+        );
+        nextChecklist[fallback || field] = true;
       }
       return {
         ...prev,
@@ -850,8 +860,8 @@ const MinimalQuoteForm = () => {
               <span style={{ color: "red" }}>*</span>
             </h3>
             <p className="section-hint">
-              Cost and Mockup are available right now. Other quote requirement
-              workflows are coming soon.
+              Cost, Mockup, and Previous Sample / Jobs Done are available right
+              now. Other quote requirement workflows are coming soon.
             </p>
             <div className="minimal-quote-checklist-grid">
               <label className="checklist-item">
@@ -875,7 +885,6 @@ const MinimalQuoteForm = () => {
                   type="checkbox"
                   checked={formData.checklist.previousSamples}
                   onChange={() => handleChecklistChange("previousSamples")}
-                  disabled
                 />
                 <span>Previous Sample / Jobs Done</span>
               </label>

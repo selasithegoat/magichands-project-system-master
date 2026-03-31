@@ -227,6 +227,36 @@ const QUOTE_WORKFLOW_STEPS_BY_MODE = {
       statuses: ["Pending Client Decision", "Completed", "Finished"],
     },
   ],
+  previousSamples: [
+    {
+      key: "scope",
+      label: "Scope",
+      statuses: [
+        "Quote Created",
+        "Pending Scope Approval",
+        "Scope Approval Completed",
+      ],
+    },
+    {
+      key: "retrieval",
+      label: "Sample Retrieval",
+      statuses: ["Pending Sample Retrieval", "Pending Sample / Work done Retrieval"],
+    },
+    {
+      key: "submission",
+      label: "Sample / Work done Sent",
+      statuses: [
+        "Pending Quote Submission",
+        "Pending Sample / Work done Sent",
+        "Quote Submission Completed",
+      ],
+    },
+    {
+      key: "decision",
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
 };
 
 const getQuoteWorkflowSteps = (mode) =>
@@ -323,6 +353,21 @@ const normalizeQuoteChecklist = (checklist = {}) =>
     accumulator[key] = Boolean(checklist?.[key]);
     return accumulator;
   }, {});
+
+const QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES = new Set([
+  "assigned",
+  "in_progress",
+  "client_revision_requested",
+]);
+
+const formatQuoteRequirementStatusLabel = (status = "") => {
+  const normalized = String(status || "").trim();
+  if (!normalized) return "Pending";
+  return normalized
+    .split("_")
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(" ");
+};
 
 const formatProjectStatusForDisplay = (
   status,
@@ -663,6 +708,12 @@ const OrderActions = () => {
   const [quoteMockupResetConfirmOpen, setQuoteMockupResetConfirmOpen] =
     useState(false);
   const [quoteMockupResetting, setQuoteMockupResetting] = useState(false);
+  const [quotePreviousSamplesSubmitting, setQuotePreviousSamplesSubmitting] =
+    useState(false);
+  const [quotePreviousSamplesResetConfirmOpen, setQuotePreviousSamplesResetConfirmOpen] =
+    useState(false);
+  const [quotePreviousSamplesResetting, setQuotePreviousSamplesResetting] =
+    useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
@@ -1088,16 +1139,30 @@ const OrderActions = () => {
   const sampleApprovalPending =
     sampleRequirementEnabled && sampleApprovalStatus !== "approved";
   const quoteChecklist = useMemo(
-    () =>
-      (isQuoteProject
-        ? normalizeQuoteChecklist(project?.quoteDetails?.checklist || {})
-        : {}),
-    [isQuoteProject, project?.quoteDetails?.checklist],
+    () => {
+      if (!isQuoteProject) return {};
+      const base = normalizeQuoteChecklist(
+        project?.quoteDetails?.checklist || {},
+      );
+      const requirementItems = project?.quoteDetails?.requirementItems || {};
+      Object.keys(base).forEach((key) => {
+        if (!base[key] && requirementItems?.[key]?.isRequired) {
+          base[key] = true;
+        }
+      });
+      return base;
+    },
+    [
+      isQuoteProject,
+      project?.quoteDetails?.checklist,
+      project?.quoteDetails?.requirementItems,
+    ],
   );
   const unsupportedQuoteRequirementKeys = useMemo(
     () =>
       QUOTE_REQUIREMENT_KEYS.filter(
-        (key) => key !== "cost" && key !== "mockup" && quoteChecklist[key],
+        (key) =>
+          !["cost", "mockup", "previousSamples"].includes(key) && quoteChecklist[key],
       ),
     [quoteChecklist],
   );
@@ -1114,11 +1179,19 @@ const OrderActions = () => {
   );
   const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
   const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
-  const quoteHasMultipleRequirements = Boolean(
-    quoteChecklist.cost && quoteChecklist.mockup,
+  const isPreviousSamplesOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "previousSamples";
+  const enabledQuoteRequirements = useMemo(
+    () =>
+      ["cost", "mockup", "previousSamples"].filter((key) => quoteChecklist[key]),
+    [quoteChecklist],
   );
+  const quoteHasMultipleRequirements = enabledQuoteRequirements.length > 1;
   const quoteWorkflowBlocked =
-    isQuoteProject && !isCostOnlyQuote && !isMockupOnlyQuote;
+    isQuoteProject &&
+    !isCostOnlyQuote &&
+    !isMockupOnlyQuote &&
+    !isPreviousSamplesOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -1134,6 +1207,35 @@ const OrderActions = () => {
     isCostOnlyQuote &&
     Number.isFinite(quoteCostAmountValue) &&
     quoteCostAmountValue > 0;
+  const quotePreviousSamplesRequirement = useMemo(() => {
+    if (!isQuoteProject) {
+      return { isRequired: false, status: "not_required", updatedAt: null, note: "" };
+    }
+    return project?.quoteDetails?.requirementItems?.previousSamples || {
+      isRequired: Boolean(quoteChecklist.previousSamples),
+      status: "assigned",
+      updatedAt: null,
+      note: "",
+    };
+  }, [isQuoteProject, project?.quoteDetails?.requirementItems, quoteChecklist.previousSamples]);
+  const quotePreviousSamplesStatus = String(
+    quotePreviousSamplesRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase() || "assigned";
+  const quotePreviousSamplesStatusLabel = formatQuoteRequirementStatusLabel(
+    quotePreviousSamplesStatus,
+  );
+  const quotePreviousSamplesRetrieved = [
+    "dept_submitted",
+    "frontdesk_review",
+    "sent_to_client",
+    "client_approved",
+  ].includes(quotePreviousSamplesStatus);
+  const quotePreviousSamplesReadyForSubmission = [
+    "dept_submitted",
+    "frontdesk_review",
+  ].includes(quotePreviousSamplesStatus);
   const canSubmitQuote =
     isQuoteProject &&
     !quoteWorkflowBlocked &&
@@ -1141,14 +1243,30 @@ const OrderActions = () => {
       ? quoteCostVerified
       : isMockupOnlyQuote
         ? mockupApprovalConfirmed
-        : false);
+        : isPreviousSamplesOnlyQuote
+          ? quotePreviousSamplesReadyForSubmission
+          : false);
   const quoteCostMissing =
     isCostOnlyQuote && !quoteCostVerified;
   const quoteMockupMissing =
     isMockupOnlyQuote && !mockupApprovalConfirmed;
+  const quotePreviousSamplesMissing =
+    isPreviousSamplesOnlyQuote && !quotePreviousSamplesRetrieved;
+  const canConfirmPreviousSamplesRetrieved =
+    isPreviousSamplesOnlyQuote &&
+    canManageBilling &&
+    !quoteWorkflowBlocked &&
+    QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(quotePreviousSamplesStatus) &&
+    !quotePreviousSamplesSubmitting;
   const quoteWorkflowStatusDisplay = isQuoteProject
     ? getQuoteStatusDisplay(quoteWorkflowStatus, quoteRequirementMode)
     : quoteWorkflowStatus;
+  const quoteSubmissionLabel = isPreviousSamplesOnlyQuote
+    ? "Sample / Work done Sent"
+    : "Quote Submission";
+  const quoteSubmissionDescription = isPreviousSamplesOnlyQuote
+    ? "Confirm when the sample/work done and quote have been sent to the client."
+    : "Confirm when the quote has been sent to the client.";
   const quoteDecisionState = useMemo(
     () => getQuoteDecisionState(project),
     [project],
@@ -1907,6 +2025,95 @@ const OrderActions = () => {
     }
   };
 
+  const handleConfirmQuotePreviousSamplesRetrieved = async () => {
+    if (
+      !project ||
+      !isQuoteProject ||
+      !isPreviousSamplesOnlyQuote ||
+      !canManageBilling
+    ) {
+      return;
+    }
+    if (!QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(quotePreviousSamplesStatus)) {
+      showToast("Sample retrieval is already confirmed.", "error");
+      return;
+    }
+
+    setQuotePreviousSamplesSubmitting(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-requirements/previousSamples/transition`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toStatus: "dept_submitted" }),
+        },
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast("Sample retrieval confirmed.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to confirm sample retrieval.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Quote sample retrieval error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuotePreviousSamplesSubmitting(false);
+    }
+  };
+
+  const handleQuotePreviousSamplesReset = () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    setQuotePreviousSamplesResetConfirmOpen(true);
+  };
+
+  const handleConfirmQuotePreviousSamplesReset = async () => {
+    if (
+      !project ||
+      !isQuoteProject ||
+      !isPreviousSamplesOnlyQuote ||
+      !canManageBilling
+    ) {
+      return;
+    }
+    setQuotePreviousSamplesResetConfirmOpen(false);
+    setQuotePreviousSamplesResetting(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-previous-samples`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          "Sample retrieval reset. Status moved back to Pending Sample Retrieval.",
+          "success",
+        );
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to reset sample retrieval.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Quote sample reset error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuotePreviousSamplesResetting(false);
+    }
+  };
+
   const openPaymentModal = (type) => {
     setPaymentModal({ open: true, type });
     setPaymentInput("");
@@ -2499,7 +2706,10 @@ const OrderActions = () => {
     "Pending Production",
     "Pending Delivery/Pickup",
     "Pending Cost Verification",
+    "Pending Sample Retrieval",
+    "Pending Sample / Work done Retrieval",
     "Pending Quote Submission",
+    "Pending Sample / Work done Sent",
     "Pending Client Decision",
     "Pending Quote Request",
     "Pending Send Response",
@@ -2664,6 +2874,16 @@ const OrderActions = () => {
         type="primary"
         onConfirm={handleConfirmQuoteMockupReset}
         onCancel={() => setQuoteMockupResetConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={quotePreviousSamplesResetConfirmOpen}
+        title="Rework Sample Retrieval?"
+        message="This will move the quote back to Pending Sample Retrieval and reset quote submission and decision."
+        confirmText="Rework Sample"
+        cancelText="Cancel"
+        type="primary"
+        onConfirm={handleConfirmQuotePreviousSamplesReset}
+        onCancel={() => setQuotePreviousSamplesResetConfirmOpen(false)}
       />
 
       <header className="order-actions-topbar">
@@ -3060,11 +3280,87 @@ const OrderActions = () => {
             </div>
           )}
 
+          {isQuoteProject && isPreviousSamplesOnlyQuote && (
+            <div className="action-card">
+              <h3>Sample Retrieval</h3>
+              <p>
+                Confirm that previous samples/work done have been retrieved
+                before sending the quote.
+              </p>
+              {quoteWorkflowBlocked ? (
+                <div className="mockup-empty-state">
+                  {quoteWorkflowBlockedMessage ||
+                    "Quote workflows are not configured for this requirement set."}
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={`mockup-approval-status ${
+                      quotePreviousSamplesRetrieved ? "approved" : "pending"
+                    }`}
+                  >
+                    {quotePreviousSamplesRetrieved
+                      ? "Sample retrieval confirmed"
+                      : "Sample retrieval pending"}
+                  </div>
+                  <p className="mockup-approval-meta">
+                    Requirement status: {quotePreviousSamplesStatusLabel}
+                  </p>
+                  {quotePreviousSamplesRequirement.updatedAt && (
+                    <p className="mockup-approval-meta">
+                      Updated:{" "}
+                      {formatDateTime(quotePreviousSamplesRequirement.updatedAt)}
+                    </p>
+                  )}
+                  {quotePreviousSamplesRequirement.note && (
+                    <p className="mockup-approval-meta">
+                      Note: {quotePreviousSamplesRequirement.note}
+                    </p>
+                  )}
+                  <div className="billing-actions">
+                    <button
+                      className="action-btn complete-btn"
+                      onClick={handleConfirmQuotePreviousSamplesRetrieved}
+                      disabled={!canConfirmPreviousSamplesRetrieved}
+                      title={
+                        !canConfirmPreviousSamplesRetrieved
+                          ? quoteWorkflowBlocked
+                            ? quoteWorkflowBlockedMessage ||
+                              "Quote workflows are not configured yet."
+                            : quotePreviousSamplesRetrieved
+                              ? "Sample retrieval is already confirmed."
+                              : "Confirm sample retrieval when ready."
+                          : undefined
+                      }
+                    >
+                      {quotePreviousSamplesSubmitting
+                        ? "Confirming..."
+                        : "Confirm Sample Retrieved"}
+                    </button>
+                    {quoteDecisionStatus === "declined" && (
+                      <button
+                        className="action-btn undo-btn"
+                        onClick={handleQuotePreviousSamplesReset}
+                        disabled={
+                          !canManageBilling || quotePreviousSamplesResetting
+                        }
+                      >
+                        {quotePreviousSamplesResetting
+                          ? "Resetting..."
+                          : "Rework Sample"}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="action-card billing-card" id="order-actions-billing">
-            <h3>{isQuoteProject ? "Quote Submission" : "Billing"}</h3>
+            <h3>{isQuoteProject ? quoteSubmissionLabel : "Billing"}</h3>
             <p>
               {isQuoteProject
-                ? "Confirm when the quote has been sent to the client."
+                ? quoteSubmissionDescription
                 : "Manage invoice and payment checkpoints."}
             </p>
             <button
@@ -3090,7 +3386,9 @@ const OrderActions = () => {
                           ? "Quote workflows are not configured for this requirement set."
                           : isCostOnlyQuote
                             ? "Verify quote cost before sending the quote."
-                            : "Confirm mockup approval before sending the quote."
+                            : isMockupOnlyQuote
+                              ? "Confirm mockup approval before sending the quote."
+                              : "Confirm sample retrieval before sending the quote."
                         : undefined
                     }
                   >
@@ -3143,6 +3441,11 @@ const OrderActions = () => {
             {isQuoteProject && quoteMockupMissing && (
               <p className="mockup-approval-meta">
                 Confirm mockup approval before sending the quote to the client.
+              </p>
+            )}
+            {isQuoteProject && quotePreviousSamplesMissing && (
+              <p className="mockup-approval-meta">
+                Confirm sample retrieval before sending the quote to the client.
               </p>
             )}
             {isQuoteProject && quoteWorkflowBlocked && (
@@ -3288,7 +3591,7 @@ const OrderActions = () => {
               <h3>Quote Requirements</h3>
               <p>
                 This quote includes requirements that are not supported yet. Only
-                cost-only quotes can proceed.
+                cost, mockup, or previous sample quotes can proceed.
               </p>
               <div className="mockup-empty-state">
                 {quoteWorkflowBlockedMessage ||
@@ -3886,6 +4189,13 @@ const OrderActions = () => {
                 )}
                 {isQuoteProject && !quoteWorkflowBlocked && quoteMockupMissing && (
                   <span className="status-tag caution">Mockup Approval Pending</span>
+                )}
+                {isQuoteProject &&
+                  !quoteWorkflowBlocked &&
+                  quotePreviousSamplesMissing && (
+                  <span className="status-tag caution">
+                    Sample Retrieval Pending
+                  </span>
                 )}
                 {isQuoteProject &&
                   !quoteWorkflowBlocked &&

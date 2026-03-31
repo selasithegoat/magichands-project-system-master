@@ -131,6 +131,12 @@ const mapQuoteStatusForStorage = (status) => {
   const normalized = String(status || "").trim();
   if (normalized === "Pending Decision") return "Pending Client Decision";
   if (normalized === "Cost Verified") return "Cost Verification Completed";
+  if (normalized === "Pending Sample / Work done Retrieval") {
+    return "Pending Sample Retrieval";
+  }
+  if (normalized === "Pending Sample / Work done Sent") {
+    return "Pending Quote Submission";
+  }
   if (normalized === "Quote Submitted") return "Quote Submission Completed";
   return normalized;
 };
@@ -181,6 +187,17 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
     "Scope Approval Completed",
     "Pending Mockup",
     "Mockup Completed",
+    "Pending Quote Submission",
+    "Quote Submission Completed",
+    "Pending Client Decision",
+    "Completed",
+    "Finished",
+  ],
+  previousSamples: [
+    "Quote Created",
+    "Pending Scope Approval",
+    "Scope Approval Completed",
+    "Pending Sample Retrieval",
     "Pending Quote Submission",
     "Quote Submission Completed",
     "Pending Client Decision",
@@ -2341,21 +2358,35 @@ const ProjectDetails = ({ user }) => {
   const quoteWorkflowStatus = isQuoteProject
     ? normalizeQuoteStatus(project.status || "")
     : project.status || "";
-  const quoteChecklist = project?.quoteDetails?.checklist || {};
+  const quoteChecklist = { ...(project?.quoteDetails?.checklist || {}) };
+  const quoteRequirementItems = project?.quoteDetails?.requirementItems || {};
+  ["cost", "mockup", "previousSamples", "sampleProduction", "bidSubmission"].forEach(
+    (key) => {
+      if (!quoteChecklist[key] && quoteRequirementItems?.[key]?.isRequired) {
+        quoteChecklist[key] = true;
+      }
+    },
+  );
   const quoteRequirementMode = isQuoteProject
     ? getQuoteRequirementMode(quoteChecklist)
     : "none";
   const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
   const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
+  const isPreviousSamplesOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "previousSamples";
   const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
     ([key, value]) =>
-      key !== "cost" && key !== "mockup" && Boolean(value),
+      !["cost", "mockup", "previousSamples"].includes(key) && Boolean(value),
   );
-  const quoteHasMultipleRequirements = Boolean(
-    quoteChecklist?.cost && quoteChecklist?.mockup,
+  const enabledQuoteRequirements = ["cost", "mockup", "previousSamples"].filter(
+    (key) => quoteChecklist?.[key],
   );
+  const quoteHasMultipleRequirements = enabledQuoteRequirements.length > 1;
   const quoteWorkflowBlocked =
-    isQuoteProject && !isCostOnlyQuote && !isMockupOnlyQuote;
+    isQuoteProject &&
+    !isCostOnlyQuote &&
+    !isMockupOnlyQuote &&
+    !isPreviousSamplesOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -2371,6 +2402,19 @@ const ProjectDetails = ({ user }) => {
     isCostOnlyQuote &&
     Number.isFinite(quoteCostAmountValue) &&
     quoteCostAmountValue > 0;
+  const quotePreviousSamplesRequirement =
+    project?.quoteDetails?.requirementItems?.previousSamples || {};
+  const quotePreviousSamplesStatus = String(
+    quotePreviousSamplesRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const quotePreviousSamplesStatusLabel = quotePreviousSamplesStatus
+    ? quotePreviousSamplesStatus
+        .split("_")
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .join(" ")
+    : "Pending";
   const currentDisplayStatus = mapQuoteStatusForDisplay(
     quoteWorkflowStatus,
     isQuoteProject,
@@ -2698,6 +2742,19 @@ const ProjectDetails = ({ user }) => {
                       "Finished",
                       ...(isProjectOnHold ? ["On Hold"] : []),
                     ]
+                  : isPreviousSamplesOnlyQuote
+                    ? [
+                        "Quote Created",
+                        "Pending Scope Approval",
+                        "Scope Approval Completed",
+                        "Pending Sample / Work done Retrieval",
+                        "Pending Sample / Work done Sent",
+                        "Quote Submitted",
+                        "Pending Decision",
+                        "Completed",
+                        "Finished",
+                        ...(isProjectOnHold ? ["On Hold"] : []),
+                      ]
                   : [
                       "Quote Created",
                       "Pending Scope Approval",
@@ -3515,6 +3572,37 @@ const ProjectDetails = ({ user }) => {
                           Note: {latestMockupVersion.clientApproval.rejectionReason}
                         </div>
                       )}
+                  </div>
+                )}
+                {isPreviousSamplesOnlyQuote && (
+                  <div
+                    className={`checklist-admin-item quote-requirement-admin-item ${
+                      ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+                        quotePreviousSamplesStatus,
+                      )
+                        ? "is-required"
+                        : "is-not-required"
+                    }`}
+                  >
+                    <div className="quote-requirement-admin-header">
+                      <span className="quote-requirement-admin-title">
+                        Previous Sample / Jobs Done
+                      </span>
+                      <span className="quote-requirement-admin-status">
+                        {quotePreviousSamplesStatusLabel}
+                      </span>
+                    </div>
+                    {quotePreviousSamplesRequirement.updatedAt && (
+                      <div className="quote-requirement-admin-updated">
+                        Updated{" "}
+                        {formatLastUpdated(quotePreviousSamplesRequirement.updatedAt)}
+                      </div>
+                    )}
+                    {quotePreviousSamplesRequirement.note && (
+                      <div className="quote-requirement-admin-helper">
+                        Note: {quotePreviousSamplesRequirement.note}
+                      </div>
+                    )}
                   </div>
                 )}
                 {quoteWorkflowBlocked && (

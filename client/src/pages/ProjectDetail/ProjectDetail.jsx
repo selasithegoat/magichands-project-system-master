@@ -148,6 +148,29 @@ const QUOTE_STEPS_BY_MODE = {
       statuses: ["Pending Client Decision", "Completed", "Finished"],
     },
   ],
+  previousSamples: [
+    { label: "Quote Created", statuses: ["Quote Created"] },
+    {
+      label: "Scope Approval",
+      statuses: ["Pending Scope Approval", "Scope Approval Completed"],
+    },
+    {
+      label: "Sample Retrieval",
+      statuses: ["Pending Sample Retrieval", "Pending Sample / Work done Retrieval"],
+    },
+    {
+      label: "Sample / Work done Sent",
+      statuses: [
+        "Pending Quote Submission",
+        "Pending Sample / Work done Sent",
+        "Quote Submission Completed",
+      ],
+    },
+    {
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
 };
 
 const getQuoteSteps = (mode) =>
@@ -201,11 +224,14 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Sample Retrieval",
+  "Pending Sample / Work done Retrieval",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Cost Verification",
   "Cost Verification Completed",
   "Pending Quote Submission",
+  "Pending Sample / Work done Sent",
   "Quote Submission Completed",
   "Pending Client Decision",
   "Completed",
@@ -312,7 +338,11 @@ const getStatusColor = (status) => {
     case "Cost Verification Completed":
     case "Cost Verification":
       return "#eab308"; // Yellow/Gold
+    case "Pending Sample Retrieval":
+    case "Pending Sample / Work done Retrieval":
+      return "#eab308"; // Yellow/Gold
     case "Pending Quote Submission":
+    case "Pending Sample / Work done Sent":
     case "Quote Submission Completed":
     case "Quote Submission":
       return "#6366f1"; // Indigo
@@ -1679,8 +1709,15 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
 
 const QuoteChecklistCard = ({ project }) => {
   const checklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist || {});
+  const requirementItems = project?.quoteDetails?.requirementItems || {};
+  Object.keys(checklist).forEach((key) => {
+    if (!checklist[key] && requirementItems?.[key]?.isRequired) {
+      checklist[key] = true;
+    }
+  });
   const unsupportedKeys = QUOTE_REQUIREMENT_KEYS.filter(
-    (key) => key !== "cost" && key !== "mockup" && checklist[key],
+    (key) =>
+      !["cost", "mockup", "previousSamples"].includes(key) && checklist[key],
   );
   const unsupportedLabels = unsupportedKeys.map(
     (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
@@ -1688,7 +1725,11 @@ const QuoteChecklistCard = ({ project }) => {
   const requirementMode = getQuoteRequirementMode(checklist);
   const isCostOnly = requirementMode === "cost";
   const isMockupOnly = requirementMode === "mockup";
-  const hasMultipleRequirements = Boolean(checklist.cost && checklist.mockup);
+  const isPreviousSamplesOnly = requirementMode === "previousSamples";
+  const enabledRequirements = ["cost", "mockup", "previousSamples"].filter(
+    (key) => checklist[key],
+  );
+  const hasMultipleRequirements = enabledRequirements.length > 1;
   const costVerification = project?.quoteDetails?.costVerification || {};
   const amountValue = Number.parseFloat(costVerification?.amount);
   const costVerified = Number.isFinite(amountValue) && amountValue > 0;
@@ -1729,16 +1770,54 @@ const QuoteChecklistCard = ({ project }) => {
       : mockupDecisionStatus === "rejected"
         ? "Rejected"
         : "Pending";
+  const previousSamplesRequirement =
+    project?.quoteDetails?.requirementItems?.previousSamples || {};
+  const previousSamplesStatus = String(
+    previousSamplesRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const previousSamplesStatusLabel = previousSamplesStatus
+    ? previousSamplesStatus
+        .split("_")
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .join(" ")
+    : "Pending";
+  const requirementTitle = isMockupOnly
+    ? "Quote Mockup"
+    : isPreviousSamplesOnly
+      ? "Quote Samples"
+      : "Quote Cost";
 
   return (
     <div className="detail-card">
       <div className="card-header">
-        <h3 className="card-title">
-          {isMockupOnly ? "Quote Mockup" : "Quote Cost"}
-        </h3>
+        <h3 className="card-title">{requirementTitle}</h3>
       </div>
-      {!isCostOnly && !isMockupOnly ? (
+      {!isCostOnly && !isMockupOnly && !isPreviousSamplesOnly ? (
         <p className="info-subtext">{blockedMessage}</p>
+      ) : isPreviousSamplesOnly ? (
+        <>
+          <p className="info-subtext">Status: {previousSamplesStatusLabel}</p>
+          {previousSamplesRequirement?.updatedAt && (
+            <div className="info-item">
+              <h4>UPDATED</h4>
+              <div className="info-text-bold">
+                {formatDateTime(previousSamplesRequirement.updatedAt)}
+              </div>
+            </div>
+          )}
+          {previousSamplesRequirement?.note && (
+            <div className="info-item">
+              <h4>NOTE</h4>
+              <div className="info-subtext">{previousSamplesRequirement.note}</div>
+            </div>
+          )}
+          <p className="info-subtext">
+            Track sample/work done retrieval before sending the quote to the
+            client.
+          </p>
+        </>
       ) : isMockupOnly ? (
         <>
           <p className="info-subtext">Status: {mockupDecisionLabel}</p>
@@ -3628,6 +3707,32 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
             return 0;
         }
       }
+      if (quoteRequirementMode === "previousSamples") {
+        switch (status) {
+          case "Quote Created":
+            return 5;
+          case "Pending Scope Approval":
+            return 20;
+          case "Scope Approval Completed":
+            return 30;
+          case "Pending Sample Retrieval":
+          case "Pending Sample / Work done Retrieval":
+            return 45;
+          case "Pending Quote Submission":
+          case "Pending Sample / Work done Sent":
+            return 70;
+          case "Quote Submission Completed":
+            return 80;
+          case "Pending Client Decision":
+            return 90;
+          case "Declined":
+          case "Completed":
+          case "Finished":
+            return 100;
+          default:
+            return 0;
+        }
+      }
       switch (status) {
         case "Quote Created":
           return 5;
@@ -3805,7 +3910,9 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
     "Delivery/Pickup": TruckIcon,
     Feedback: CheckCircleIcon,
     "Cost Verification": ClipboardListIcon,
+    "Sample Retrieval": FolderIcon,
     "Quote Submission": ClockIcon,
+    "Sample / Work done Sent": ClockIcon,
     "Client Decision": CheckCircleIcon,
   };
 

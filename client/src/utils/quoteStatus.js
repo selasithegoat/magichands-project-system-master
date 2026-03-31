@@ -30,13 +30,17 @@ export const getQuoteRequirementMode = (checklist = {}) => {
   const normalized = normalizeQuoteChecklist(checklist);
   const hasCost = Boolean(normalized.cost);
   const hasMockup = Boolean(normalized.mockup);
+  const hasPreviousSamples = Boolean(normalized.previousSamples);
   const hasOther = QUOTE_REQUIREMENT_KEYS.some(
-    (key) => key !== "cost" && key !== "mockup" && normalized[key],
+    (key) =>
+      !["cost", "mockup", "previousSamples"].includes(key) && normalized[key],
   );
 
-  if (hasCost && !hasMockup && !hasOther) return "cost";
-  if (hasMockup && !hasCost && !hasOther) return "mockup";
-  if (!hasCost && !hasMockup && !hasOther) return "none";
+  if (hasCost && !hasMockup && !hasPreviousSamples && !hasOther) return "cost";
+  if (hasMockup && !hasCost && !hasPreviousSamples && !hasOther) return "mockup";
+  if (hasPreviousSamples && !hasCost && !hasMockup && !hasOther)
+    return "previousSamples";
+  if (!hasCost && !hasMockup && !hasPreviousSamples && !hasOther) return "none";
   return "unsupported";
 };
 
@@ -49,6 +53,12 @@ const QUOTE_STATUS_DISPLAY_OVERRIDES = {
   mockup: {
     "Scope Approval Completed": "Pending Mockup",
     "Mockup Completed": "Pending Quote Submission",
+    "Quote Submission Completed": "Pending Client Decision",
+  },
+  previousSamples: {
+    "Scope Approval Completed": "Pending Sample / Work done Retrieval",
+    "Pending Sample Retrieval": "Pending Sample / Work done Retrieval",
+    "Pending Quote Submission": "Pending Sample / Work done Sent",
     "Quote Submission Completed": "Pending Client Decision",
   },
 };
@@ -66,6 +76,7 @@ const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
   }
   const normalizedStatus = String(status || "").toLowerCase();
   if (normalizedStatus.includes("mockup")) return "mockup";
+  if (normalizedStatus.includes("sample")) return "previousSamples";
   return "cost";
 };
 

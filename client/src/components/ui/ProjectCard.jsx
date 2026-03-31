@@ -144,7 +144,10 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           textClass: "teal",
         };
       case "Pending Cost Verification":
+      case "Pending Sample Retrieval":
+      case "Pending Sample / Work done Retrieval":
       case "Pending Quote Submission":
+      case "Pending Sample / Work done Sent":
       case "Pending Client Decision":
         return {
           class: "pending-approval",
@@ -261,11 +264,26 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     Completed: 100,
     Finished: 100,
   };
+  const quotePreviousSamplesProgressMap = {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Sample Retrieval": 45,
+    "Pending Sample / Work done Retrieval": 45,
+    "Pending Quote Submission": 70,
+    "Pending Sample / Work done Sent": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+  };
 
   const progressMap =
     project.projectType === "Quote"
       ? quoteRequirementMode === "mockup"
         ? quoteMockupProgressMap
+        : quoteRequirementMode === "previousSamples"
+          ? quotePreviousSamplesProgressMap
         : quoteProgressMap
       : standardProgressMap;
   const progress = progressMap[statusToneTarget] ?? progressMap[resolvedStatus] ?? 5;

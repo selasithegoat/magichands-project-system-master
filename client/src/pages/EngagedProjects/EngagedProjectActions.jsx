@@ -77,6 +77,8 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "On Hold",
   "Pending Cost Verification",
   "Cost Verification Completed",
+  "Pending Sample Retrieval",
+  "Pending Sample / Work done Retrieval",
   "Pending Quote Submission",
   "Quote Submission Completed",
   "Pending Client Decision",
@@ -712,18 +714,27 @@ const EngagedProjectActions = ({ user }) => {
 
   const quoteChecklist = isQuoteProject ? resolveQuoteChecklist(project) : {};
   const unsupportedQuoteRequirementKeys = Object.entries(quoteChecklist)
-    .filter(([key, value]) => key !== "cost" && key !== "mockup" && Boolean(value))
+    .filter(
+      ([key, value]) =>
+        !["cost", "mockup", "previousSamples"].includes(key) && Boolean(value),
+    )
     .map(([key]) => key);
   const quoteRequirementMode = isQuoteProject
     ? getQuoteRequirementMode(quoteChecklist)
     : "none";
   const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
   const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
-  const quoteHasMultipleRequirements = Boolean(
-    quoteChecklist.cost && quoteChecklist.mockup,
+  const isPreviousSamplesOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "previousSamples";
+  const enabledQuoteRequirements = ["cost", "mockup", "previousSamples"].filter(
+    (key) => quoteChecklist[key],
   );
+  const quoteHasMultipleRequirements = enabledQuoteRequirements.length > 1;
   const quoteWorkflowBlocked =
-    isQuoteProject && !isCostOnlyQuote && !isMockupOnlyQuote;
+    isQuoteProject &&
+    !isCostOnlyQuote &&
+    !isMockupOnlyQuote &&
+    !isPreviousSamplesOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -3585,7 +3596,7 @@ const EngagedProjectActions = ({ user }) => {
                         <h3>Previous Sample Retrieval</h3>
                         <p>
                           Confirm when previous samples/jobs are retrieved. Front
-                          Desk will then confirm sample retrieval.
+                          Desk/Admin will then send the quote to the client.
                         </p>
                         <button
                           className="complete-btn confirm-btn"

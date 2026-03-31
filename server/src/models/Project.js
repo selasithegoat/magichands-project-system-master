@@ -346,6 +346,7 @@ const ProjectSchema = new mongoose.Schema(
         "Quote Created",
         "Pending Scope Approval",
         "Scope Approval Completed",
+        "Pending Sample Retrieval",
         "Pending Departmental Meeting",
         "Pending Departmental Engagement",
         "Departmental Engagement Completed",
