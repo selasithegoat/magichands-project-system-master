@@ -6354,7 +6354,12 @@ const updateProjectStatus = async (req, res) => {
         });
       }
 
-      if (project.status !== deptAction.from) {
+      const allowQuoteMockupCompletionFromSubmission =
+        newStatus === "Mockup Completed" &&
+        isQuoteMockupOnlyProject(project) &&
+        project.status === "Pending Quote Submission" &&
+        isQuoteMockupApproved(project);
+      if (project.status !== deptAction.from && !allowQuoteMockupCompletionFromSubmission) {
         return res.status(400).json({
           message: `Status must be '${deptAction.from}' before completing this stage.`,
         });
@@ -9156,9 +9161,8 @@ const approveProjectMockup = async (req, res) => {
     const previousStatus = project.status;
     let autoStatusApplied = false;
     if (isLatestRequested && isQuoteMockupOnlyProject(project)) {
-      const nextStatus = getAutoProgressedStatus("Mockup Completed", project);
-      if (nextStatus && nextStatus !== project.status) {
-        project.status = nextStatus;
+      if (project.status !== "Pending Mockup") {
+        project.status = "Pending Mockup";
         autoStatusApplied = true;
       }
     }

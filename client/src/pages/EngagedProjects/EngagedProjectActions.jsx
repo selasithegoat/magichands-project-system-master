@@ -112,10 +112,7 @@ const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
   "Scope Approval Completed",
   "Pending Cost Verification",
 ]);
-const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set([
-  "Pending Cost Verification",
-  "Pending Mockup",
-]);
+const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set(["Pending Mockup"]);
 const QUOTE_MOCKUP_SUBMIT_TRANSITIONS = {
   assigned: ["in_progress", "dept_submitted"],
   in_progress: ["dept_submitted"],
@@ -3180,12 +3177,17 @@ const EngagedProjectActions = ({ user }) => {
                       isMockupAction && mockupApprovalStatus === "rejected";
                     const mockupApprovalConfirmed =
                       isMockupAction && mockupApprovalStatus === "approved";
+                    const quoteMockupCompletionFallback =
+                      isQuoteGraphicsAction &&
+                      mockupApprovalConfirmed &&
+                      quoteWorkflowStatus === "Pending Quote Submission";
                     const canConfirmMockupCompletion =
                       isMockupAction &&
                       mockupAlreadySubmitted &&
                       mockupApprovalConfirmed &&
                       (isQuoteGraphicsAction
-                        ? quoteAllowsMockupWorkflowStatus &&
+                        ? (quoteAllowsMockupWorkflowStatus ||
+                            quoteMockupCompletionFallback) &&
                           quoteMockupRequirement.isRequired &&
                           quoteDepartmentalEngagementComplete
                         : isPending);
@@ -3232,7 +3234,7 @@ const EngagedProjectActions = ({ user }) => {
                       !quoteAllowsMockupWorkflowStatus
                     ) {
                       mockupUploadTitle =
-                        "Mockup upload is only available while status is Pending Cost Verification or Pending Mockup.";
+                        "Mockup upload is only available while status is Pending Mockup.";
                     } else if (!isQuoteGraphicsAction && !isPending) {
                       mockupUploadTitle = `Waiting for ${action.pending}.`;
                     } else if (mockupApprovalRejected) {
@@ -3253,10 +3255,11 @@ const EngagedProjectActions = ({ user }) => {
                         "Quote workflows are not configured yet.";
                     } else if (
                       isQuoteGraphicsAction &&
-                      !quoteAllowsMockupWorkflowStatus
+                      !quoteAllowsMockupWorkflowStatus &&
+                      !quoteMockupCompletionFallback
                     ) {
                       mockupConfirmTitle =
-                        "Mockup completion for quote is only available while status is Pending Cost Verification or Pending Mockup.";
+                        "Mockup completion for quote is only available while status is Pending Mockup.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteDepartmentalEngagementComplete
