@@ -16,6 +16,7 @@ import { renderProjectName } from "../../utils/projectName";
 import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
+  normalizeQuoteChecklist,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import {
@@ -698,17 +699,43 @@ const EngagedProjectActions = ({ user }) => {
   const quoteWorkflowStatus = isQuoteProject
     ? normalizeQuoteStatus(project?.status || "")
     : project?.status || "";
-  const quoteChecklist = project?.quoteDetails?.checklist || {};
-  const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
-    ([key, value]) => key !== "cost" && Boolean(value),
+  const resolveQuoteChecklist = (projectRecord) => {
+    const base = normalizeQuoteChecklist(
+      projectRecord?.quoteDetails?.checklist || {},
+    );
+    const requirementItems =
+      projectRecord?.quoteDetails?.requirementItems || {};
+    Object.keys(base).forEach((key) => {
+      if (!base[key] && requirementItems?.[key]?.isRequired) {
+        base[key] = true;
+      }
+    });
+    return base;
+  };
+
+  const quoteChecklist = isQuoteProject ? resolveQuoteChecklist(project) : {};
+  const unsupportedQuoteRequirementKeys = Object.entries(quoteChecklist)
+    .filter(([key, value]) => key !== "cost" && key !== "mockup" && Boolean(value))
+    .map(([key]) => key);
+  const quoteRequirementMode = isQuoteProject
+    ? getQuoteRequirementMode(quoteChecklist)
+    : "none";
+  const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
+  const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
+  const quoteHasMultipleRequirements = Boolean(
+    quoteChecklist.cost && quoteChecklist.mockup,
   );
   const quoteWorkflowBlocked =
-    isQuoteProject && (!quoteChecklist?.cost || quoteHasUnsupportedRequirements);
-  const quoteWorkflowBlockedMessage = !quoteChecklist?.cost
-    ? "Cost requirement is not enabled for this quote."
-    : quoteHasUnsupportedRequirements
-      ? "Quote requirement workflows are not configured yet."
-      : "";
+    isQuoteProject && !isCostOnlyQuote && !isMockupOnlyQuote;
+  const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
+    ? quoteRequirementMode === "none"
+      ? "Quote requirements are not configured yet."
+      : quoteHasMultipleRequirements
+        ? "Multiple quote requirements are selected. Only one workflow can be active right now."
+        : unsupportedQuoteRequirementKeys.length > 0
+          ? `Unsupported requirements: ${unsupportedQuoteRequirementKeys.join(", ")}.`
+          : "Quote requirement workflows are not configured yet."
+    : "";
   const displayStatus = isQuoteProject
     ? getQuoteStatusDisplay(
         project?.status || "",
