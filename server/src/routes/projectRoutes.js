@@ -66,6 +66,7 @@ const {
   resetQuoteMockup,
   resetQuotePreviousSamples,
   resetQuoteSampleProduction,
+  resetProjectMockupDecision,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -331,6 +332,12 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   rejectProjectMockup,
+);
+router.post(
+  "/:id/mockup/reset",
+  protect,
+  enforceProjectNotOnHold,
+  resetProjectMockupDecision,
 );
 router.patch(
   "/:id/quote-requirements/:requirementKey/transition",

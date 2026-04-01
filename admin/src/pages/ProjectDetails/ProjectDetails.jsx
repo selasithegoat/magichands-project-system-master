@@ -824,6 +824,9 @@ const ProjectDetails = ({ user }) => {
   const isLeadUser = Boolean(
     currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
   );
+  const isQuoteLeadAdminOverride =
+    user?.role === "admin" && project?.projectType === "Quote";
+  const isLeadRestricted = isLeadUser && !isQuoteLeadAdminOverride;
   const isGroupedOrder = orderGroupProjects.length > 1;
   const orderNumber = String(
     project?.orderId || project?.orderRef?.orderNumber || "",
@@ -853,11 +856,11 @@ const ProjectDetails = ({ user }) => {
     [project?.mockup],
   );
   const visibleMockupVersions = useMemo(() => {
-    if (!isLeadUser) return mockupVersions;
+    if (!isLeadRestricted) return mockupVersions;
     return mockupVersions.filter(
       (entry) => getMockupApprovalStatus(entry.clientApproval || {}) !== "rejected",
     );
-  }, [mockupVersions, isLeadUser]);
+  }, [mockupVersions, isLeadRestricted]);
   const mockupCarouselVersions = useMemo(
     () => visibleMockupVersions.slice().reverse(),
     [visibleMockupVersions],
@@ -1273,7 +1276,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const handleToggleSampleRequirement = async (nextRequired) => {
-    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (!project || user?.role !== "admin" || isLeadRestricted) return;
     if (isTogglingSampleRequirement) return;
     if (!ensureProjectIsEditable()) return;
 
@@ -1316,7 +1319,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const handleToggleCorporateEmergency = async (nextEnabled) => {
-    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (!project || user?.role !== "admin" || isLeadRestricted) return;
     if (isTogglingCorporateEmergency) return;
     if (!ensureProjectIsEditable()) return;
     if (project.projectType !== "Corporate Job") return;
@@ -1360,7 +1363,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const openProjectTypeModal = () => {
-    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (!project || user?.role !== "admin" || isLeadRestricted) return;
     if (!ensureProjectIsEditable()) return;
     setProjectTypeChangeError("");
     setIsProjectTypeModalOpen(true);
@@ -1373,7 +1376,7 @@ const ProjectDetails = ({ user }) => {
   };
 
   const handleProjectTypeChange = async (payload) => {
-    if (!project || user?.role !== "admin" || isLeadUser) return;
+    if (!project || user?.role !== "admin" || isLeadRestricted) return;
     if (isChangingProjectType) return;
 
     setIsChangingProjectType(true);
@@ -2801,7 +2804,7 @@ const ProjectDetails = ({ user }) => {
               onChange={(e) => handleStatusChange(e.target.value)}
               disabled={
                 loading ||
-                isLeadUser ||
+                isLeadRestricted ||
                 isProjectOnHold ||
                 isCancelledProject ||
                 isTogglingHold ||
@@ -2928,7 +2931,7 @@ const ProjectDetails = ({ user }) => {
 
           <div className="header-actions-row">
             {user?.role === "admin" &&
-              !isLeadUser &&
+              !isLeadRestricted &&
               (isCancelledProject ? (
                 <button
                   type="button"
@@ -3159,7 +3162,7 @@ const ProjectDetails = ({ user }) => {
                 )}
               </span>
               {!isEditing ? (
-                !isLeadUser && !isProjectOnHold && !isCancelledProject && (
+                !isLeadRestricted && !isProjectOnHold && !isCancelledProject && (
                   <button
                     onClick={handleEditToggle}
                     style={{
@@ -4686,7 +4689,7 @@ const ProjectDetails = ({ user }) => {
             >
               <span>People & Departments</span>
               {!isEditingLead ? (
-                (user?.role === "admin" || !isLeadUser) &&
+                (user?.role === "admin" || !isLeadRestricted) &&
                 !isProjectOnHold && (
                   <button
                     onClick={() => setIsEditingLead(true)}
@@ -4859,7 +4862,9 @@ const ProjectDetails = ({ user }) => {
                             by {acknowledgedBy}
                           </span>
                         )}
-                        {isAcknowledged && user?.role === "admin" && !isLeadUser && (
+                        {isAcknowledged &&
+                          user?.role === "admin" &&
+                          !isLeadRestricted && (
                           <button
                             type="button"
                             className="dept-undo-btn"

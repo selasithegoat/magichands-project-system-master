@@ -899,6 +899,8 @@ const EngagedProjectActions = ({ user }) => {
     const projectLeadId = normalizeObjectId(project?.projectLeadId);
     return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
   }, [user, project?.projectLeadId]);
+  const isLeadGraphicsMockupUser =
+    isProjectLeadForProject && userEngagedDepts.includes("Graphics");
   const projectItems = useMemo(
     () => (Array.isArray(project?.items) ? project.items : []),
     [project?.items],
@@ -1440,7 +1442,9 @@ const EngagedProjectActions = ({ user }) => {
   });
 
   const handleCompleteStatus = async (targetProject, action) => {
-    if (isProjectLeadForProject) {
+    const isLeadGraphicsMockupAction =
+      isLeadGraphicsMockupUser && action?.dept === "Graphics";
+    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
       setToast({
         type: "error",
         message:
@@ -1859,7 +1863,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleAcknowledge = async (targetProject, department) => {
-    if (isProjectLeadForProject) {
+    if (isProjectLeadForProject && !isLeadGraphicsMockupUser) {
       setToast({
         type: "error",
         message:
@@ -2002,7 +2006,9 @@ const EngagedProjectActions = ({ user }) => {
   ]);
 
   const openCompleteModal = (targetProject, action) => {
-    if (isProjectLeadForProject) {
+    const isLeadGraphicsMockupAction =
+      isLeadGraphicsMockupUser && action?.dept === "Graphics";
+    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
       setToast({
         type: "error",
         message:
@@ -2017,7 +2023,9 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openMockupModal = (targetProject, action, mode = "revision") => {
-    if (isProjectLeadForProject) {
+    const isLeadGraphicsMockupAction =
+      isLeadGraphicsMockupUser && action?.dept === "Graphics";
+    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
       setToast({
         type: "error",
         message:
@@ -2084,7 +2092,10 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleUploadMockup = async (e) => {
     e.preventDefault();
-    if (isProjectLeadForProject) {
+    if (!mockupTarget) return;
+    const isLeadGraphicsMockupAction =
+      isLeadGraphicsMockupUser && mockupTarget?.action?.dept === "Graphics";
+    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
       setToast({
         type: "error",
         message:
@@ -2092,7 +2103,6 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
-    if (!mockupTarget) return;
     if (mockupFiles.length === 0) {
       setToast({ type: "error", message: "Please select a mockup file." });
       return;
@@ -3210,6 +3220,8 @@ const EngagedProjectActions = ({ user }) => {
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
+                    const isLeadGraphicsMockupAction =
+                      isLeadGraphicsMockupUser && isMockupAction;
                     const isQuoteGraphicsAction = isQuoteProject && isMockupAction;
                     const quoteAllowsMockupWorkflowStatus =
                       isQuoteGraphicsAction &&
@@ -3249,7 +3261,7 @@ const EngagedProjectActions = ({ user }) => {
                       formatQuoteRequirementStatus(quoteMockupStatus);
                     const canUploadMockup =
                       !isUpdating &&
-                      !isProjectLeadForProject &&
+                      (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
                       (isQuoteGraphicsAction
                         ? quoteAllowsMockupWorkflowStatus
                         : isPending);
@@ -3257,7 +3269,7 @@ const EngagedProjectActions = ({ user }) => {
                     let disabledReason = "";
                     if (!isQuoteGraphicsAction && !isPending) {
                       disabledReason = `Waiting for ${action.pending}.`;
-                    } else if (isProjectLeadForProject) {
+                    } else if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
                       disabledReason =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (blockedBySample) {
@@ -3271,7 +3283,7 @@ const EngagedProjectActions = ({ user }) => {
                     }
 
                     let mockupUploadTitle = "Upload approved mockup";
-                    if (isProjectLeadForProject) {
+                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
                       mockupUploadTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
@@ -3295,7 +3307,7 @@ const EngagedProjectActions = ({ user }) => {
                     }
 
                     let mockupConfirmTitle = "Confirm mockup completion";
-                    if (isProjectLeadForProject) {
+                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
                       mockupConfirmTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
@@ -3381,7 +3393,8 @@ const EngagedProjectActions = ({ user }) => {
                               disabled={
                                 isUpdating ||
                                 !canConfirmMockupCompletion ||
-                                isProjectLeadForProject
+                                (isProjectLeadForProject &&
+                                  !isLeadGraphicsMockupAction)
                               }
                               title={mockupConfirmTitle}
                             >

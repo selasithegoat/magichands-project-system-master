@@ -21,6 +21,8 @@ const MOCKUP_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved this mockup";
 const MOCKUP_REJECTION_CONFIRM_PHRASE =
   "I confirm the client rejected this mockup";
+const MOCKUP_DECISION_RESET_PHRASE =
+  "I confirm the mockup decision should be reset";
 const SAMPLE_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved the production sample";
 const SAMPLE_APPROVAL_RESET_PHRASE =
@@ -790,6 +792,13 @@ const OrderActions = () => {
   const [mockupRejectionInput, setMockupRejectionInput] = useState("");
   const [mockupRejectionReason, setMockupRejectionReason] = useState("");
   const [mockupRejectionSubmitting, setMockupRejectionSubmitting] =
+    useState(false);
+  const [mockupDecisionResetModal, setMockupDecisionResetModal] = useState({
+    open: false,
+    version: null,
+  });
+  const [mockupDecisionResetInput, setMockupDecisionResetInput] = useState("");
+  const [mockupDecisionResetSubmitting, setMockupDecisionResetSubmitting] =
     useState(false);
   const [sampleApprovalModal, setSampleApprovalModal] = useState(false);
   const [sampleApprovalInput, setSampleApprovalInput] = useState("");
@@ -2579,6 +2588,24 @@ const OrderActions = () => {
     setMockupRejectionReason("");
   };
 
+  const openMockupDecisionResetModal = (version) => {
+    if (!version || !canManageMockupApproval) return;
+    setMockupDecisionResetModal({
+      open: true,
+      version,
+    });
+    setMockupDecisionResetInput("");
+  };
+
+  const closeMockupDecisionResetModal = () => {
+    if (mockupDecisionResetSubmitting) return;
+    setMockupDecisionResetModal({
+      open: false,
+      version: null,
+    });
+    setMockupDecisionResetInput("");
+  };
+
   const handleConfirmMockupApproval = async () => {
     if (!project || !mockupApprovalModal.version || !canManageMockupApproval) {
       return;
@@ -2669,6 +2696,52 @@ const OrderActions = () => {
       showToast("Network error. Please try again.", "error");
     } finally {
       setMockupRejectionSubmitting(false);
+    }
+  };
+
+  const handleConfirmMockupDecisionReset = async () => {
+    if (!project || !mockupDecisionResetModal.version || !canManageMockupApproval) {
+      return;
+    }
+    if (mockupDecisionResetInput.trim() !== MOCKUP_DECISION_RESET_PHRASE) return;
+
+    setMockupDecisionResetSubmitting(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/mockup/reset`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            version: mockupDecisionResetModal.version.version,
+            entryId: mockupDecisionResetModal.version.entryId,
+          }),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        const fileName = mockupDecisionResetModal.version.fileName;
+        showToast(
+          `Mockup v${mockupDecisionResetModal.version.version}${
+            fileName ? ` (${fileName})` : ""
+          } decision reset to pending.`,
+          "success",
+        );
+        closeMockupDecisionResetModal();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to reset mockup decision.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Mockup decision reset error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setMockupDecisionResetSubmitting(false);
     }
   };
 
@@ -4379,6 +4452,19 @@ const OrderActions = () => {
                           : `Mark Rejected (v${activeMockupVersion.version})`}
                       </button>
                     )}
+                    {activeMockupDecision !== "pending" && (
+                      <button
+                        className="action-btn undo-btn"
+                        onClick={() =>
+                          openMockupDecisionResetModal(activeMockupVersion)
+                        }
+                        disabled={mockupDecisionResetSubmitting}
+                      >
+                        {activeMockupDecision === "approved"
+                          ? "Undo Approval"
+                          : "Undo Rejection"}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -5128,6 +5214,66 @@ const OrderActions = () => {
                 }
               >
                 {mockupRejectionSubmitting ? "Saving..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mockupDecisionResetModal.open && (
+        <div
+          className="confirm-modal-overlay"
+          onClick={closeMockupDecisionResetModal}
+        >
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>Undo Mockup Decision</h3>
+              <p>{project.orderId || project._id || "Project"}</p>
+            </div>
+            <p className="confirm-modal-text">
+              <strong>Project:</strong>{" "}
+              {project.orderId || project._id || "N/A"} -{" "}
+              {renderProjectName(project.details, null, "Untitled")}
+            </p>
+            <p className="confirm-modal-text">
+              Reset the decision for mockup version{" "}
+              <strong>
+                v{mockupDecisionResetModal.version?.version || "N/A"}
+              </strong>{" "}
+              back to pending.
+            </p>
+            {mockupDecisionResetModal.version?.fileName && (
+              <p className="confirm-modal-text">
+                <strong>File:</strong> {mockupDecisionResetModal.version.fileName}
+              </p>
+            )}
+            <div className="confirm-phrase">{MOCKUP_DECISION_RESET_PHRASE}</div>
+            <div className="confirm-input-group">
+              <label>Confirmation</label>
+              <input
+                type="text"
+                value={mockupDecisionResetInput}
+                onChange={(e) => setMockupDecisionResetInput(e.target.value)}
+                placeholder="Type the confirmation phrase..."
+              />
+            </div>
+            <div className="confirm-actions">
+              <button
+                className="action-btn"
+                onClick={closeMockupDecisionResetModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="action-btn undo-btn"
+                onClick={handleConfirmMockupDecisionReset}
+                disabled={
+                  mockupDecisionResetSubmitting ||
+                  mockupDecisionResetInput.trim() !==
+                    MOCKUP_DECISION_RESET_PHRASE
+                }
+              >
+                {mockupDecisionResetSubmitting ? "Saving..." : "Reset Decision"}
               </button>
             </div>
           </div>

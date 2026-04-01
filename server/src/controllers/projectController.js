@@ -12290,6 +12290,228 @@ const updateProject = async (req, res) => {
   }
 };
 
+// @desc    Reset client decision for a mockup version
+// @route   POST /api/projects/:id/mockup/reset
+// @access  Private (Front Desk or Admin)
+const resetProjectMockupDecision = async (req, res) => {
+  try {
+    if (!canManageMockupApproval(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to reset mockup decisions.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+
+    const normalizedVersions = getNormalizedMockupVersions(project);
+    if (!normalizedVersions.length) {
+      return res.status(400).json({
+        message: "No mockup has been uploaded yet.",
+      });
+    }
+
+    const latestVersion = normalizedVersions[normalizedVersions.length - 1];
+    const requestedEntryId = toObjectIdString(req.body?.entryId);
+    const hasEntryId = mongoose.isValidObjectId(requestedEntryId);
+    const requestedVersionRaw = Number.parseInt(req.body?.version, 10);
+    let requestedVersion =
+      Number.isFinite(requestedVersionRaw) && requestedVersionRaw > 0
+        ? requestedVersionRaw
+        : latestVersion.version;
+
+    project.mockup = project.mockup || {};
+    if (!Array.isArray(project.mockup.versions)) {
+      project.mockup.versions = [];
+    }
+
+    if (project.mockup.versions.length === 0 && project.mockup.fileUrl) {
+      project.mockup.versions.push({
+        version: latestVersion.version,
+        fileUrl: project.mockup.fileUrl,
+        fileName: project.mockup.fileName,
+        fileType: project.mockup.fileType,
+        note: project.mockup.note || "",
+        uploadedBy: project.mockup.uploadedBy || null,
+        uploadedAt: project.mockup.uploadedAt || null,
+        clientApproval: {
+          status: getMockupApprovalStatus(project.mockup?.clientApproval || {}),
+          isApproved: Boolean(project.mockup?.clientApproval?.isApproved),
+          approvedAt: project.mockup?.clientApproval?.approvedAt || null,
+          approvedBy: project.mockup?.clientApproval?.approvedBy || null,
+          rejectedAt: project.mockup?.clientApproval?.rejectedAt || null,
+          rejectedBy: project.mockup?.clientApproval?.rejectedBy || null,
+          rejectionReason: project.mockup?.clientApproval?.rejectionReason || "",
+          note: project.mockup?.clientApproval?.note || "",
+        },
+      });
+    }
+
+    let versionEntry = null;
+    if (hasEntryId) {
+      versionEntry = project.mockup.versions.find(
+        (entry) => toObjectIdString(entry?._id) === requestedEntryId,
+      );
+    }
+
+    if (!versionEntry) {
+      versionEntry = project.mockup.versions.find((entry) => {
+        const parsed = Number.parseInt(entry?.version, 10);
+        return Number.isFinite(parsed) && parsed === requestedVersion;
+      });
+    }
+
+    if (!versionEntry?.fileUrl) {
+      return res.status(400).json({
+        message: "Selected mockup version is not available.",
+      });
+    }
+
+    requestedVersion =
+      Number.parseInt(versionEntry?.version, 10) || latestVersion.version;
+    const versionLabel = buildMockupVersionLabel(requestedVersion);
+    const isLatestRequested = latestVersion?.entryId
+      ? toObjectIdString(versionEntry?._id) === toObjectIdString(latestVersion.entryId)
+      : requestedVersion === latestVersion.version;
+
+    const currentDecision = getMockupApprovalStatus(versionEntry.clientApproval || {});
+    if (currentDecision === "pending") {
+      return res.status(400).json({
+        message: `Mockup ${versionLabel} is already pending.`,
+      });
+    }
+
+    const resetState = {
+      status: "pending",
+      isApproved: false,
+      approvedAt: null,
+      approvedBy: null,
+      rejectedAt: null,
+      rejectedBy: null,
+      rejectionReason: "",
+      note: "",
+    };
+
+    versionEntry.clientApproval = resetState;
+
+    if (isLatestRequested) {
+      project.mockup.fileUrl = versionEntry.fileUrl;
+      project.mockup.fileName = versionEntry.fileName;
+      project.mockup.fileType = versionEntry.fileType;
+      project.mockup.note = versionEntry.note || "";
+      project.mockup.uploadedBy = versionEntry.uploadedBy || null;
+      project.mockup.uploadedAt = versionEntry.uploadedAt || null;
+      project.mockup.version = requestedVersion;
+      project.mockup.clientApproval = {
+        ...resetState,
+        approvedVersion: null,
+      };
+    }
+
+    const decisionNote = `Mockup ${versionLabel} decision reset to pending.`;
+    const quoteMockupDecisionSync = isLatestRequested
+      ? syncQuoteMockupRequirementDecision({
+          project,
+          targetStatus: "frontdesk_review",
+          actorId: req.user._id,
+          note: decisionNote,
+        })
+      : null;
+
+    const previousStatus = project.status;
+    let autoStatusApplied = false;
+    if (isLatestRequested && isQuoteMockupOnlyProject(project)) {
+      if (project.status !== "Pending Mockup") {
+        project.status = "Pending Mockup";
+        autoStatusApplied = true;
+      }
+    }
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_decision_reset",
+      decisionNote,
+      {
+        mockupDecisionReset: {
+          version: requestedVersion,
+          entryId: toObjectIdString(versionEntry?._id),
+          fileName: toText(versionEntry?.fileName),
+        },
+      },
+    );
+
+    if (quoteMockupDecisionSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "update",
+        `Quote requirement 'Mockup' moved from ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.fromStatus,
+        )} to ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.toStatus,
+        )} after mockup decision reset.`,
+        {
+          quoteRequirement: {
+            key: "mockup",
+            label: "Mockup",
+            fromStatus: quoteMockupDecisionSync.fromStatus,
+            toStatus: quoteMockupDecisionSync.toStatus,
+            note: decisionNote,
+          },
+        },
+      );
+    }
+
+    if (quoteMockupDecisionSync?.statusSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${quoteMockupDecisionSync.statusSync.toStatus}`,
+        {
+          statusChange: {
+            from: quoteMockupDecisionSync.statusSync.fromStatus,
+            to: quoteMockupDecisionSync.statusSync.toStatus,
+          },
+        },
+      );
+    }
+
+    if (autoStatusApplied && previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: {
+            from: previousStatus,
+            to: project.status,
+          },
+        },
+      );
+    }
+
+    if (isLatestRequested) {
+      await createProjectSystemUpdateAndSnapshot({
+        project,
+        authorId: req.user._id || req.user.id,
+        category: "Graphics",
+        content: "Client mockup decision reset to pending.",
+      });
+    }
+
+    const populatedProject = await buildProjectResponseQuery(project._id);
+    res.json(populatedProject || project);
+  } catch (error) {
+    console.error("Error resetting mockup decision:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Get all clients with their projects
 // @route   GET /api/projects/clients
 // @access  Private (Admin only)
@@ -13931,6 +14153,7 @@ module.exports = {
   deleteProjectMockupVersion,
   approveProjectMockup,
   rejectProjectMockup,
+  resetProjectMockupDecision,
   getPendingSmsPrompts,
   getProjectSmsPrompts,
   createProjectSmsPrompt,
