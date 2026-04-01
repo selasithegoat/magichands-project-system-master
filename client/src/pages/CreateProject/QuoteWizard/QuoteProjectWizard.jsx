@@ -28,14 +28,23 @@ const normalizeChecklist = (checklist) => {
   const hasCost = Boolean(next.cost);
   const hasMockup = Boolean(next.mockup);
   const hasPreviousSamples = Boolean(next.previousSamples);
-  if (!hasCost && !hasMockup && !hasPreviousSamples) {
+  const hasSampleProduction = Boolean(next.sampleProduction);
+  if (!hasCost && !hasMockup && !hasPreviousSamples && !hasSampleProduction) {
     next.cost = true;
   }
-  if (hasCost) {
+  if (hasSampleProduction) {
+    next.cost = false;
     next.mockup = false;
     next.previousSamples = false;
+  } else if (hasCost) {
+    next.mockup = false;
+    next.previousSamples = false;
+    next.sampleProduction = false;
   } else if (hasMockup) {
     next.previousSamples = false;
+    next.sampleProduction = false;
+  } else if (hasPreviousSamples) {
+    next.sampleProduction = false;
   }
   next.cost = Boolean(next.cost);
   next.mockup = Boolean(next.mockup);

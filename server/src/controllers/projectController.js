@@ -1935,12 +1935,8 @@ const QUOTE_ONLY_STATUSES = new Set([
   "Response Sent",
 ]);
 const NON_QUOTE_ONLY_STATUSES = new Set([
-  "Pending Mockup",
-  "Mockup Completed",
   "Pending Master Approval",
   "Master Approval Completed",
-  "Pending Production",
-  "Production Completed",
   "Pending Quality Control",
   "Quality Control Completed",
   "Pending Photography",
@@ -1986,6 +1982,10 @@ const QUOTE_STATUS_FLOW = [
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Production",
+  "Production Completed",
   "Pending Sample Retrieval",
   "Pending Cost Verification",
   "Cost Verification Completed",
@@ -2002,6 +2002,9 @@ const MASTER_APPROVAL_STATUS_ALIASES = Object.freeze({
 const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
   "pending decision": "Pending Client Decision",
   "decision completed": "Completed",
+  "pending sample production": "Pending Production",
+  "sample production": "Pending Production",
+  "sample production completed": "Production Completed",
   completed: "Completed",
   declined: "Completed",
 });
@@ -2193,6 +2196,15 @@ const getAutoProgressedStatus = (status, project = {}) => {
       };
       return progression[status] || status;
     }
+    if (requirementMode === "sampleProduction") {
+      const progression = {
+        "Scope Approval Completed": "Pending Mockup",
+        "Mockup Completed": "Pending Production",
+        "Production Completed": "Pending Quote Submission",
+        "Quote Submission Completed": "Pending Client Decision",
+      };
+      return progression[status] || status;
+    }
     return status;
   }
 
@@ -2344,6 +2356,9 @@ const normalizeQuoteDetailsWorkflow = ({
   const incomingRequirementItems = toPlainObject(incoming.requirementItems);
   const existingRequirementItems = toPlainObject(existing.requirementItems);
   const normalizedRequirementItems = {};
+  const mockupRequiredForSampleProduction = Boolean(
+    normalizedChecklist.mockup || normalizedChecklist.sampleProduction,
+  );
 
   QUOTE_REQUIREMENT_KEYS.forEach((key) => {
     const sourceItem =
@@ -2351,8 +2366,13 @@ const normalizeQuoteDetailsWorkflow = ({
         ? incomingRequirementItems[key]
         : existingRequirementItems[key];
 
+    const isRequired =
+      key === "mockup"
+        ? mockupRequiredForSampleProduction
+        : Boolean(normalizedChecklist[key]);
+
     normalizedRequirementItems[key] = normalizeQuoteRequirementItem({
-      isRequired: Boolean(normalizedChecklist[key]),
+      isRequired,
       item: sourceItem,
     });
   });
@@ -2384,6 +2404,11 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
   const isMockupOnly = enabledKeys.length === 1 && enabledKeys[0] === "mockup";
   const isPreviousSamplesOnly =
     enabledKeys.length === 1 && enabledKeys[0] === "previousSamples";
+  const isSampleProductionOnly =
+    enabledKeys.includes("sampleProduction") &&
+    enabledKeys.every((key) =>
+      ["sampleProduction", "mockup"].includes(key),
+    );
   const mode =
     enabledKeys.length === 0
       ? "none"
@@ -2391,8 +2416,10 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
         ? "cost"
         : isMockupOnly
           ? "mockup"
-          : isPreviousSamplesOnly
-            ? "previousSamples"
+      : isPreviousSamplesOnly
+        ? "previousSamples"
+        : isSampleProductionOnly
+          ? "sampleProduction"
           : "unsupported";
 
   return {
@@ -2402,6 +2429,7 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
     isCostOnly,
     isMockupOnly,
     isPreviousSamplesOnly,
+    isSampleProductionOnly,
     mode,
   };
 };
@@ -2438,6 +2466,17 @@ const isQuotePreviousSamplesOnlyProject = (project = {}) => {
   );
 };
 
+const isQuoteSampleProductionOnlyProject = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  return (
+    getQuoteChecklistState(normalizedQuoteDetails).mode === "sampleProduction"
+  );
+};
+
 const isQuoteWorkflowSupported = (project = {}) => {
   if (!isQuoteProject(project)) return false;
   const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
@@ -2445,7 +2484,9 @@ const isQuoteWorkflowSupported = (project = {}) => {
     existingQuoteDetails: project?.quoteDetails || {},
   });
   const mode = getQuoteChecklistState(normalizedQuoteDetails).mode;
-  return ["cost", "mockup", "previousSamples"].includes(mode);
+  return ["cost", "mockup", "previousSamples", "sampleProduction"].includes(
+    mode,
+  );
 };
 
 const isQuoteMockupApproved = (project = {}) => {
@@ -2505,6 +2546,24 @@ const areQuoteRequirementsCompleted = (project = {}) => {
   }
   if (mode === "mockup") {
     return isQuoteMockupApproved(project);
+  }
+  if (mode === "previousSamples") {
+    const requirementItem =
+      normalizedQuoteDetails?.requirementItems?.previousSamples || {};
+    const requirementStatus =
+      toText(requirementItem.status).toLowerCase() || "assigned";
+    return ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+      requirementStatus,
+    );
+  }
+  if (mode === "sampleProduction") {
+    const requirementItem =
+      normalizedQuoteDetails?.requirementItems?.sampleProduction || {};
+    const requirementStatus =
+      toText(requirementItem.status).toLowerCase() || "assigned";
+    return ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+      requirementStatus,
+    );
   }
 
   return false;
@@ -2580,6 +2639,61 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
       allRequirementsCompleted: ["sent_to_client", "client_approved"].includes(
         requirementStatus,
       ),
+    };
+  }
+
+  if (requirementMode === "sampleProduction") {
+    const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project?.quoteDetails || {},
+      existingQuoteDetails: project?.quoteDetails || {},
+    });
+    const requirementItem =
+      normalizedQuoteDetails?.requirementItems?.sampleProduction || {};
+    const requirementStatus = toText(requirementItem.status).toLowerCase() || "assigned";
+    const lockedStatuses = new Set(["Completed", "Finished", "Declined"]);
+    if (lockedStatuses.has(previousStatus)) {
+      return {
+        changed: false,
+        fromStatus: previousStatus,
+        toStatus: previousStatus,
+        allRequirementsCompleted: [
+          "dept_submitted",
+          "frontdesk_review",
+          "sent_to_client",
+          "client_approved",
+        ].includes(requirementStatus),
+      };
+    }
+
+    let nextStatus = previousStatus;
+    if (
+      ["assigned", "in_progress", "blocked", "client_revision_requested"].includes(
+        requirementStatus,
+      )
+    ) {
+      nextStatus = isQuoteMockupApproved(project)
+        ? "Pending Production"
+        : "Pending Mockup";
+    } else if (["dept_submitted", "frontdesk_review"].includes(requirementStatus)) {
+      nextStatus = "Pending Quote Submission";
+    } else if (["sent_to_client", "client_approved"].includes(requirementStatus)) {
+      nextStatus = "Pending Client Decision";
+    }
+
+    if (nextStatus && nextStatus !== previousStatus) {
+      project.status = nextStatus;
+    }
+
+    return {
+      changed: nextStatus !== previousStatus,
+      fromStatus: previousStatus,
+      toStatus: nextStatus,
+      allRequirementsCompleted: [
+        "dept_submitted",
+        "frontdesk_review",
+        "sent_to_client",
+        "client_approved",
+      ].includes(requirementStatus),
     };
   }
 
@@ -5041,14 +5155,14 @@ const createProject = async (req, res) => {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Only cost-only, mockup-only, or previous-sample-only quotes are supported right now. Remove other requirements and try again.",
+            "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements and try again.",
         });
       }
       if (mode === "none") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Quote must include Cost, Mockup, or Previous Sample / Jobs Done requirement to continue.",
+            "Quote must include Cost, Mockup, Previous Sample / Jobs Done, or Sample Production requirement to continue.",
         });
       }
     }
@@ -6513,7 +6627,7 @@ const updateProjectStatus = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, or previous-sample-only quotes are supported right now. Remove other requirements before progressing this quote.",
+          "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before progressing this quote.",
       });
     }
 
@@ -6899,7 +7013,7 @@ const transitionQuoteRequirement = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, or previous-sample-only quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
+          "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
       });
     }
 
@@ -6910,10 +7024,13 @@ const transitionQuoteRequirement = async (req, res) => {
       });
     }
 
-    if (requirementKey === "mockup" && requirementMode !== "mockup") {
+    if (
+      requirementKey === "mockup" &&
+      !["mockup", "sampleProduction"].includes(requirementMode)
+    ) {
       return res.status(400).json({
         message:
-          "Mockup requirement transitions are only available for mockup-only quotes.",
+          "Mockup requirement transitions are only available for mockup-only or sample-production quotes.",
       });
     }
 
@@ -6927,7 +7044,17 @@ const transitionQuoteRequirement = async (req, res) => {
       });
     }
 
-    if (!["cost", "mockup", "previousSamples"].includes(requirementKey)) {
+    if (
+      requirementKey === "sampleProduction" &&
+      requirementMode !== "sampleProduction"
+    ) {
+      return res.status(400).json({
+        message:
+          "Sample production requirement transitions are only available for sample-production quotes.",
+      });
+    }
+
+    if (!["cost", "mockup", "previousSamples", "sampleProduction"].includes(requirementKey)) {
       return res.status(400).json({
         message:
           "Quote requirement transitions are disabled for this requirement.",
@@ -6943,7 +7070,15 @@ const transitionQuoteRequirement = async (req, res) => {
       });
     }
 
-    const fromStatus = toText(requirementItem.status).toLowerCase() || "not_required";
+    let fromStatus =
+      toText(requirementItem.status).toLowerCase() || "not_required";
+    const allowImplicitMockup =
+      requirementKey === "mockup" && requirementMode === "sampleProduction";
+    if (allowImplicitMockup && fromStatus === "not_required") {
+      fromStatus = "assigned";
+      requirementItem.status = "assigned";
+      requirementItem.isRequired = true;
+    }
     const currentlyRequired = Boolean(requirementItem.isRequired);
 
     if (
@@ -7020,18 +7155,26 @@ const transitionQuoteRequirement = async (req, res) => {
       note,
     });
 
+    const shouldSyncChecklist = !(
+      requirementKey === "mockup" && requirementMode === "sampleProduction"
+    );
+
     if (toStatus === "not_required") {
       requirementItem.isRequired = false;
-      project.quoteDetails.checklist = {
-        ...(project.quoteDetails.checklist || {}),
-        [requirementKey]: false,
-      };
+      if (shouldSyncChecklist) {
+        project.quoteDetails.checklist = {
+          ...(project.quoteDetails.checklist || {}),
+          [requirementKey]: false,
+        };
+      }
     } else {
       requirementItem.isRequired = true;
-      project.quoteDetails.checklist = {
-        ...(project.quoteDetails.checklist || {}),
-        [requirementKey]: true,
-      };
+      if (shouldSyncChecklist) {
+        project.quoteDetails.checklist = {
+          ...(project.quoteDetails.checklist || {}),
+          [requirementKey]: true,
+        };
+      }
     }
 
     project.markModified("quoteDetails.requirementItems");
@@ -7522,6 +7665,130 @@ const resetQuotePreviousSamples = async (req, res) => {
   }
 };
 
+// @desc    Rework quote sample production (Sample Production requirement)
+// @route   PATCH /api/projects/:id/quote-sample-production
+// @access  Private (Admin or Front Desk)
+const resetQuoteSampleProduction = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to rework sample production.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message:
+          "Sample production rework is only available for quote projects.",
+      });
+    }
+
+    if (!isQuoteSampleProductionOnlyProject(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Sample production rework is only available for sample-production quotes.",
+      });
+    }
+
+    const note = toText(req.body?.note).slice(0, 500);
+    const previousStatus = project.status;
+
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    project.quoteDetails.decision = {
+      ...normalizeQuoteDecision(project.quoteDetails?.decision || {}),
+      status: "pending",
+      note: "",
+      validatedAt: null,
+      validatedBy: null,
+      convertedAt: null,
+      convertedBy: null,
+      convertedToType: "Quote",
+    };
+
+    project.invoice = {
+      sent: false,
+      sentAt: null,
+      sentBy: null,
+    };
+
+    project.status = "Pending Production";
+    project.markModified("quoteDetails.decision");
+
+    const requirementItem =
+      project.quoteDetails?.requirementItems?.sampleProduction;
+    if (requirementItem?.isRequired) {
+      const fromStatus = toText(requirementItem.status).toLowerCase() || "assigned";
+      const transitionTime = new Date();
+      requirementItem.history = Array.isArray(requirementItem.history)
+        ? requirementItem.history
+        : [];
+      requirementItem.history.push({
+        fromStatus,
+        toStatus: "client_revision_requested",
+        changedAt: transitionTime,
+        changedBy: req.user._id,
+        note: note || "Sample production rework requested after quote decision.",
+      });
+      requirementItem.status = "client_revision_requested";
+      requirementItem.updatedAt = transitionTime;
+      requirementItem.updatedBy = req.user._id;
+      requirementItem.note = note || "Sample production rework requested.";
+      project.markModified("quoteDetails.requirementItems");
+    }
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Quote sample production rework requested.",
+      {
+        quoteSampleProduction: {
+          reset: true,
+          note,
+        },
+      },
+    );
+
+    if (previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: { from: previousStatus, to: project.status },
+        },
+      );
+    }
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Quote Sample Production Rework",
+      message: `Admin ${actorName} requested sample production rework for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error resetting quote sample production:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Validate quote decision after response is sent
 // @route   PATCH /api/projects/:id/quote-decision
 // @access  Private (Admin or Front Desk)
@@ -7571,7 +7838,7 @@ const updateQuoteDecision = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, or previous-sample-only quotes are supported right now. Remove other requirements before validating the decision.",
+          "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before validating the decision.",
       });
     }
 
@@ -7711,12 +7978,12 @@ const markInvoiceSent = async (req, res) => {
         existingQuoteDetails: project.quoteDetails || {},
       });
       if (!isQuoteWorkflowSupported(project)) {
-          return res.status(400).json({
-            code: "QUOTE_REQUIREMENTS_BLOCKED",
-            message:
-            "Only cost-only, mockup-only, or previous-sample-only quotes are supported right now. Remove other requirements before sending the quote.",
-          });
-        }
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_BLOCKED",
+          message:
+            "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before sending the quote.",
+        });
+      }
       if (isQuoteCostOnlyProject(project) && !isQuoteCostVerified(project)) {
         return res.status(400).json({
           code: "QUOTE_COST_MISSING",
@@ -7750,6 +8017,25 @@ const markInvoiceSent = async (req, res) => {
           });
         }
       }
+      if (isQuoteSampleProductionOnlyProject(project)) {
+        const requirementItem =
+          project.quoteDetails?.requirementItems?.sampleProduction || {};
+        const requirementStatus =
+          toText(requirementItem.status).toLowerCase() || "assigned";
+        const readyStatuses = new Set([
+          "dept_submitted",
+          "frontdesk_review",
+          "sent_to_client",
+          "client_approved",
+        ]);
+        if (!readyStatuses.has(requirementStatus)) {
+          return res.status(400).json({
+            code: "QUOTE_SAMPLE_PRODUCTION_MISSING",
+            message:
+              "Sample production must be completed before sending the quote.",
+          });
+        }
+      }
     }
 
     if (project.invoice?.sent) {
@@ -7767,6 +8053,32 @@ const markInvoiceSent = async (req, res) => {
       if (isQuotePreviousSamplesOnlyProject(project)) {
         const requirementItem =
           project.quoteDetails?.requirementItems?.previousSamples || null;
+        if (requirementItem?.isRequired) {
+          const fromStatus =
+            toText(requirementItem.status).toLowerCase() || "assigned";
+          if (!["sent_to_client", "client_approved"].includes(fromStatus)) {
+            const transitionTime = new Date();
+            requirementItem.history = Array.isArray(requirementItem.history)
+              ? requirementItem.history
+              : [];
+            requirementItem.history.push({
+              fromStatus,
+              toStatus: "sent_to_client",
+              changedAt: transitionTime,
+              changedBy: req.user._id,
+              note: "Quote sent to client.",
+            });
+            requirementItem.status = "sent_to_client";
+            requirementItem.updatedAt = transitionTime;
+            requirementItem.updatedBy = req.user._id;
+            requirementItem.note = "Quote sent to client.";
+            project.markModified("quoteDetails.requirementItems");
+          }
+        }
+      }
+      if (isQuoteSampleProductionOnlyProject(project)) {
+        const requirementItem =
+          project.quoteDetails?.requirementItems?.sampleProduction || null;
         if (requirementItem?.isRequired) {
           const fromStatus =
             toText(requirementItem.status).toLowerCase() || "assigned";
@@ -7984,6 +8296,32 @@ const undoInvoiceSent = async (req, res) => {
       } else if (isQuotePreviousSamplesOnlyProject(project)) {
         const requirementItem =
           project.quoteDetails?.requirementItems?.previousSamples || null;
+        if (requirementItem?.isRequired) {
+          const fromStatus =
+            toText(requirementItem.status).toLowerCase() || "assigned";
+          if (["sent_to_client", "client_approved"].includes(fromStatus)) {
+            const transitionTime = new Date();
+            requirementItem.history = Array.isArray(requirementItem.history)
+              ? requirementItem.history
+              : [];
+            requirementItem.history.push({
+              fromStatus,
+              toStatus: "dept_submitted",
+              changedAt: transitionTime,
+              changedBy: req.user._id,
+              note: "Quote send status reset.",
+            });
+            requirementItem.status = "dept_submitted";
+            requirementItem.updatedAt = transitionTime;
+            requirementItem.updatedBy = req.user._id;
+            requirementItem.note = "Quote send status reset.";
+            project.markModified("quoteDetails.requirementItems");
+          }
+        }
+        syncQuoteProjectStatusByRequirements(project);
+      } else if (isQuoteSampleProductionOnlyProject(project)) {
+        const requirementItem =
+          project.quoteDetails?.requirementItems?.sampleProduction || null;
         if (requirementItem?.isRequired) {
           const fromStatus =
             toText(requirementItem.status).toLowerCase() || "assigned";
@@ -11222,24 +11560,24 @@ const updateProject = async (req, res) => {
       const { mode, enabledKeys } = getQuoteChecklistState(
         project.quoteDetails || {},
       );
-      if (mode === "unsupported") {
-        console.warn("[updateProject] Quote requirements blocked", {
-          projectId: id,
-          userId: req.user?._id || req.user?.id,
-          projectType: project?.projectType,
-          enabledKeys,
-        });
+        if (mode === "unsupported") {
+          console.warn("[updateProject] Quote requirements blocked", {
+            projectId: id,
+            userId: req.user?._id || req.user?.id,
+            projectType: project?.projectType,
+            enabledKeys,
+          });
           return res.status(400).json({
             code: "QUOTE_REQUIREMENTS_BLOCKED",
             message:
-            "Only cost-only, mockup-only, or previous-sample-only quotes are supported right now. Remove other requirements before saving.",
+            "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before saving.",
           });
         }
       if (mode === "none") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Quote must include either the Cost or Mockup requirement to continue.",
+            "Quote must include Cost, Mockup, Previous Sample / Jobs Done, or Sample Production requirement to continue.",
         });
       }
     }
@@ -13217,6 +13555,7 @@ module.exports = {
   updateQuoteCostVerification,
   resetQuoteMockup,
   resetQuotePreviousSamples,
+  resetQuoteSampleProduction,
   updateQuoteDecision,
   markInvoiceSent,
   verifyPayment,

@@ -31,16 +31,27 @@ export const getQuoteRequirementMode = (checklist = {}) => {
   const hasCost = Boolean(normalized.cost);
   const hasMockup = Boolean(normalized.mockup);
   const hasPreviousSamples = Boolean(normalized.previousSamples);
+  const hasSampleProduction = Boolean(normalized.sampleProduction);
   const hasOther = QUOTE_REQUIREMENT_KEYS.some(
     (key) =>
-      !["cost", "mockup", "previousSamples"].includes(key) && normalized[key],
+      !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+      normalized[key],
   );
 
   if (hasCost && !hasMockup && !hasPreviousSamples && !hasOther) return "cost";
   if (hasMockup && !hasCost && !hasPreviousSamples && !hasOther) return "mockup";
   if (hasPreviousSamples && !hasCost && !hasMockup && !hasOther)
     return "previousSamples";
-  if (!hasCost && !hasMockup && !hasPreviousSamples && !hasOther) return "none";
+  if (hasSampleProduction && !hasCost && !hasPreviousSamples && !hasOther)
+    return "sampleProduction";
+  if (
+    !hasCost &&
+    !hasMockup &&
+    !hasPreviousSamples &&
+    !hasSampleProduction &&
+    !hasOther
+  )
+    return "none";
   return "unsupported";
 };
 
@@ -61,6 +72,13 @@ const QUOTE_STATUS_DISPLAY_OVERRIDES = {
     "Pending Quote Submission": "Pending Sample / Work done Sent",
     "Quote Submission Completed": "Pending Client Decision",
   },
+  sampleProduction: {
+    "Scope Approval Completed": "Pending Mockup",
+    "Mockup Completed": "Pending Sample Production",
+    "Pending Production": "Pending Sample Production",
+    "Production Completed": "Pending Quote Submission",
+    "Quote Submission Completed": "Pending Client Decision",
+  },
 };
 
 const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
@@ -75,6 +93,8 @@ const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
     return modeOrChecklist.trim();
   }
   const normalizedStatus = String(status || "").toLowerCase();
+  if (normalizedStatus.includes("sample production")) return "sampleProduction";
+  if (normalizedStatus.includes("production")) return "sampleProduction";
   if (normalizedStatus.includes("mockup")) return "mockup";
   if (normalizedStatus.includes("sample")) return "previousSamples";
   return "cost";

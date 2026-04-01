@@ -702,10 +702,14 @@ const EngagedProjectActions = ({ user }) => {
     const base = normalizeQuoteChecklist(
       projectRecord?.quoteDetails?.checklist || {},
     );
+    const sampleProductionSelected = Boolean(base.sampleProduction);
     const requirementItems =
       projectRecord?.quoteDetails?.requirementItems || {};
     Object.keys(base).forEach((key) => {
       if (!base[key] && requirementItems?.[key]?.isRequired) {
+        if (sampleProductionSelected && key === "mockup") {
+          return;
+        }
         base[key] = true;
       }
     });
@@ -716,7 +720,8 @@ const EngagedProjectActions = ({ user }) => {
   const unsupportedQuoteRequirementKeys = Object.entries(quoteChecklist)
     .filter(
       ([key, value]) =>
-        !["cost", "mockup", "previousSamples"].includes(key) && Boolean(value),
+        !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+        Boolean(value),
     )
     .map(([key]) => key);
   const quoteRequirementMode = isQuoteProject
@@ -726,15 +731,24 @@ const EngagedProjectActions = ({ user }) => {
   const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
   const isPreviousSamplesOnlyQuote =
     isQuoteProject && quoteRequirementMode === "previousSamples";
-  const enabledQuoteRequirements = ["cost", "mockup", "previousSamples"].filter(
-    (key) => quoteChecklist[key],
-  );
-  const quoteHasMultipleRequirements = enabledQuoteRequirements.length > 1;
+  const isSampleProductionOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "sampleProduction";
+  const enabledQuoteRequirements = [
+    "cost",
+    "mockup",
+    "previousSamples",
+    "sampleProduction",
+  ].filter((key) => quoteChecklist[key]);
+  const effectiveEnabledRequirements = quoteChecklist.sampleProduction
+    ? enabledQuoteRequirements.filter((key) => key !== "mockup")
+    : enabledQuoteRequirements;
+  const quoteHasMultipleRequirements = effectiveEnabledRequirements.length > 1;
   const quoteWorkflowBlocked =
     isQuoteProject &&
     !isCostOnlyQuote &&
     !isMockupOnlyQuote &&
-    !isPreviousSamplesOnlyQuote;
+    !isPreviousSamplesOnlyQuote &&
+    !isSampleProductionOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -752,16 +766,26 @@ const EngagedProjectActions = ({ user }) => {
     : project?.status || "";
   const paymentChecksEnabled = !isQuoteProject;
   const quoteMockupRequirement = useMemo(
-    () =>
-      isQuoteProject
-        ? getQuoteRequirementState(project, QUOTE_REQUIREMENT_MOCKUP_KEY)
-        : {
-            isRequired: false,
-            status: "not_required",
-            updatedAt: null,
-            note: "",
-          },
-    [isQuoteProject, project],
+    () => {
+      if (!isQuoteProject) {
+        return {
+          isRequired: false,
+          status: "not_required",
+          updatedAt: null,
+          note: "",
+        };
+      }
+      const base = getQuoteRequirementState(project, QUOTE_REQUIREMENT_MOCKUP_KEY);
+      if (isSampleProductionOnlyQuote) {
+        return {
+          ...base,
+          isRequired: true,
+          status: base.status === "not_required" ? "assigned" : base.status,
+        };
+      }
+      return base;
+    },
+    [isQuoteProject, project, isSampleProductionOnlyQuote],
   );
   const quotePreviousSamplesRequirement = useMemo(
     () =>
@@ -3191,7 +3215,11 @@ const EngagedProjectActions = ({ user }) => {
                     const quoteMockupCompletionFallback =
                       isQuoteGraphicsAction &&
                       mockupApprovalConfirmed &&
-                      quoteWorkflowStatus === "Pending Quote Submission";
+                      (quoteWorkflowStatus === "Pending Quote Submission" ||
+                        (isSampleProductionOnlyQuote &&
+                          ["Pending Production", "Pending Sample Production"].includes(
+                            quoteWorkflowStatus,
+                          )));
                     const canConfirmMockupCompletion =
                       isMockupAction &&
                       mockupAlreadySubmitted &&

@@ -116,6 +116,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
       case "Master Approval Completed":
         return { class: "in-progress", color: "#ec4899", textClass: "purple" };
       case "Pending Production":
+      case "Pending Sample Production":
       case "Production Completed":
         return { class: "in-progress", color: "#3b82f6", textClass: "blue" };
       case "Pending Quality Control":
@@ -277,6 +278,20 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     Completed: 100,
     Finished: 100,
   };
+  const quoteSampleProductionProgressMap = {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Mockup": 40,
+    "Mockup Completed": 45,
+    "Pending Production": 55,
+    "Pending Sample Production": 55,
+    "Pending Quote Submission": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+  };
 
   const progressMap =
     project.projectType === "Quote"
@@ -284,6 +299,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
         ? quoteMockupProgressMap
         : quoteRequirementMode === "previousSamples"
           ? quotePreviousSamplesProgressMap
+          : quoteRequirementMode === "sampleProduction"
+            ? quoteSampleProductionProgressMap
         : quoteProgressMap
       : standardProgressMap;
   const progress = progressMap[statusToneTarget] ?? progressMap[resolvedStatus] ?? 5;

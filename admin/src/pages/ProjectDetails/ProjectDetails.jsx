@@ -137,6 +137,9 @@ const mapQuoteStatusForStorage = (status) => {
   if (normalized === "Pending Sample / Work done Sent") {
     return "Pending Quote Submission";
   }
+  if (normalized === "Pending Sample Production") {
+    return "Pending Production";
+  }
   if (normalized === "Quote Submitted") return "Quote Submission Completed";
   return normalized;
 };
@@ -198,6 +201,19 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
     "Pending Scope Approval",
     "Scope Approval Completed",
     "Pending Sample Retrieval",
+    "Pending Quote Submission",
+    "Quote Submission Completed",
+    "Pending Client Decision",
+    "Completed",
+    "Finished",
+  ],
+  sampleProduction: [
+    "Quote Created",
+    "Pending Scope Approval",
+    "Scope Approval Completed",
+    "Pending Mockup",
+    "Mockup Completed",
+    "Pending Sample Production",
     "Pending Quote Submission",
     "Quote Submission Completed",
     "Pending Client Decision",
@@ -2359,10 +2375,14 @@ const ProjectDetails = ({ user }) => {
     ? normalizeQuoteStatus(project.status || "")
     : project.status || "";
   const quoteChecklist = { ...(project?.quoteDetails?.checklist || {}) };
+  const sampleProductionSelected = Boolean(quoteChecklist.sampleProduction);
   const quoteRequirementItems = project?.quoteDetails?.requirementItems || {};
   ["cost", "mockup", "previousSamples", "sampleProduction", "bidSubmission"].forEach(
     (key) => {
       if (!quoteChecklist[key] && quoteRequirementItems?.[key]?.isRequired) {
+        if (sampleProductionSelected && key === "mockup") {
+          return;
+        }
         quoteChecklist[key] = true;
       }
     },
@@ -2374,19 +2394,29 @@ const ProjectDetails = ({ user }) => {
   const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
   const isPreviousSamplesOnlyQuote =
     isQuoteProject && quoteRequirementMode === "previousSamples";
+  const isSampleProductionOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "sampleProduction";
   const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
     ([key, value]) =>
-      !["cost", "mockup", "previousSamples"].includes(key) && Boolean(value),
+      !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+      Boolean(value),
   );
-  const enabledQuoteRequirements = ["cost", "mockup", "previousSamples"].filter(
-    (key) => quoteChecklist?.[key],
-  );
-  const quoteHasMultipleRequirements = enabledQuoteRequirements.length > 1;
+  const enabledQuoteRequirements = [
+    "cost",
+    "mockup",
+    "previousSamples",
+    "sampleProduction",
+  ].filter((key) => quoteChecklist?.[key]);
+  const effectiveEnabledRequirements = quoteChecklist.sampleProduction
+    ? enabledQuoteRequirements.filter((key) => key !== "mockup")
+    : enabledQuoteRequirements;
+  const quoteHasMultipleRequirements = effectiveEnabledRequirements.length > 1;
   const quoteWorkflowBlocked =
     isQuoteProject &&
     !isCostOnlyQuote &&
     !isMockupOnlyQuote &&
-    !isPreviousSamplesOnlyQuote;
+    !isPreviousSamplesOnlyQuote &&
+    !isSampleProductionOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -2411,6 +2441,19 @@ const ProjectDetails = ({ user }) => {
     .toLowerCase();
   const quotePreviousSamplesStatusLabel = quotePreviousSamplesStatus
     ? quotePreviousSamplesStatus
+        .split("_")
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .join(" ")
+    : "Pending";
+  const quoteSampleProductionRequirement =
+    project?.quoteDetails?.requirementItems?.sampleProduction || {};
+  const quoteSampleProductionStatus = String(
+    quoteSampleProductionRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const quoteSampleProductionStatusLabel = quoteSampleProductionStatus
+    ? quoteSampleProductionStatus
         .split("_")
         .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
         .join(" ")
@@ -2755,6 +2798,21 @@ const ProjectDetails = ({ user }) => {
                         "Finished",
                         ...(isProjectOnHold ? ["On Hold"] : []),
                       ]
+                    : isSampleProductionOnlyQuote
+                      ? [
+                          "Quote Created",
+                          "Pending Scope Approval",
+                          "Scope Approval Completed",
+                          "Pending Mockup",
+                          "Mockup Completed",
+                          "Pending Sample Production",
+                          "Pending Quote Submission",
+                          "Quote Submitted",
+                          "Pending Decision",
+                          "Completed",
+                          "Finished",
+                          ...(isProjectOnHold ? ["On Hold"] : []),
+                        ]
                   : [
                       "Quote Created",
                       "Pending Scope Approval",
@@ -3601,6 +3659,45 @@ const ProjectDetails = ({ user }) => {
                     {quotePreviousSamplesRequirement.note && (
                       <div className="quote-requirement-admin-helper">
                         Note: {quotePreviousSamplesRequirement.note}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isSampleProductionOnlyQuote && (
+                  <div
+                    className={`checklist-admin-item quote-requirement-admin-item ${
+                      ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+                        quoteSampleProductionStatus,
+                      )
+                        ? "is-required"
+                        : "is-not-required"
+                    }`}
+                  >
+                    <div className="quote-requirement-admin-header">
+                      <span className="quote-requirement-admin-title">
+                        Sample Production
+                      </span>
+                      <span className="quote-requirement-admin-status">
+                        {quoteSampleProductionStatusLabel}
+                      </span>
+                    </div>
+                    <div className="quote-requirement-admin-updated">
+                      Mockup:{" "}
+                      {latestMockupDecisionStatus === "approved"
+                        ? "Approved"
+                        : latestMockupDecisionStatus === "rejected"
+                          ? "Rejected"
+                          : "Pending"}
+                    </div>
+                    {quoteSampleProductionRequirement.updatedAt && (
+                      <div className="quote-requirement-admin-updated">
+                        Updated{" "}
+                        {formatLastUpdated(quoteSampleProductionRequirement.updatedAt)}
+                      </div>
+                    )}
+                    {quoteSampleProductionRequirement.note && (
+                      <div className="quote-requirement-admin-helper">
+                        Note: {quoteSampleProductionRequirement.note}
                       </div>
                     )}
                   </div>

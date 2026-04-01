@@ -171,6 +171,29 @@ const QUOTE_STEPS_BY_MODE = {
       statuses: ["Pending Client Decision", "Completed", "Finished"],
     },
   ],
+  sampleProduction: [
+    { label: "Quote Created", statuses: ["Quote Created"] },
+    {
+      label: "Scope Approval",
+      statuses: ["Pending Scope Approval", "Scope Approval Completed"],
+    },
+    {
+      label: "Mockup",
+      statuses: ["Pending Mockup", "Mockup Completed"],
+    },
+    {
+      label: "Sample Production",
+      statuses: ["Pending Production", "Pending Sample Production"],
+    },
+    {
+      label: "Quote Submission",
+      statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+    },
+    {
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
 };
 
 const getQuoteSteps = (mode) =>
@@ -228,6 +251,8 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Pending Sample / Work done Retrieval",
   "Pending Mockup",
   "Mockup Completed",
+  "Pending Sample Production",
+  "Pending Production",
   "Pending Cost Verification",
   "Cost Verification Completed",
   "Pending Quote Submission",
@@ -308,6 +333,7 @@ const getStatusColor = (status) => {
     case "Master Approval":
       return "#ec4899"; // Pink
     case "Pending Production":
+    case "Pending Sample Production":
     case "Production Completed":
     case "Production":
       return "#3b82f6"; // Blue
@@ -1710,14 +1736,19 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
 const QuoteChecklistCard = ({ project }) => {
   const checklist = normalizeQuoteChecklist(project?.quoteDetails?.checklist || {});
   const requirementItems = project?.quoteDetails?.requirementItems || {};
+  const sampleProductionSelected = Boolean(checklist.sampleProduction);
   Object.keys(checklist).forEach((key) => {
     if (!checklist[key] && requirementItems?.[key]?.isRequired) {
+      if (sampleProductionSelected && key === "mockup") {
+        return;
+      }
       checklist[key] = true;
     }
   });
   const unsupportedKeys = QUOTE_REQUIREMENT_KEYS.filter(
     (key) =>
-      !["cost", "mockup", "previousSamples"].includes(key) && checklist[key],
+      !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+      checklist[key],
   );
   const unsupportedLabels = unsupportedKeys.map(
     (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
@@ -1726,10 +1757,17 @@ const QuoteChecklistCard = ({ project }) => {
   const isCostOnly = requirementMode === "cost";
   const isMockupOnly = requirementMode === "mockup";
   const isPreviousSamplesOnly = requirementMode === "previousSamples";
-  const enabledRequirements = ["cost", "mockup", "previousSamples"].filter(
-    (key) => checklist[key],
-  );
-  const hasMultipleRequirements = enabledRequirements.length > 1;
+  const isSampleProductionOnly = requirementMode === "sampleProduction";
+  const enabledRequirements = [
+    "cost",
+    "mockup",
+    "previousSamples",
+    "sampleProduction",
+  ].filter((key) => checklist[key]);
+  const effectiveEnabledRequirements = checklist.sampleProduction
+    ? enabledRequirements.filter((key) => key !== "mockup")
+    : enabledRequirements;
+  const hasMultipleRequirements = effectiveEnabledRequirements.length > 1;
   const costVerification = project?.quoteDetails?.costVerification || {};
   const amountValue = Number.parseFloat(costVerification?.amount);
   const costVerified = Number.isFinite(amountValue) && amountValue > 0;
@@ -1783,10 +1821,25 @@ const QuoteChecklistCard = ({ project }) => {
         .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
         .join(" ")
     : "Pending";
+  const sampleProductionRequirement =
+    project?.quoteDetails?.requirementItems?.sampleProduction || {};
+  const sampleProductionStatus = String(
+    sampleProductionRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const sampleProductionStatusLabel = sampleProductionStatus
+    ? sampleProductionStatus
+        .split("_")
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .join(" ")
+    : "Pending";
   const requirementTitle = isMockupOnly
     ? "Quote Mockup"
     : isPreviousSamplesOnly
       ? "Quote Samples"
+      : isSampleProductionOnly
+        ? "Quote Sample Production"
       : "Quote Cost";
 
   return (
@@ -1794,7 +1847,10 @@ const QuoteChecklistCard = ({ project }) => {
       <div className="card-header">
         <h3 className="card-title">{requirementTitle}</h3>
       </div>
-      {!isCostOnly && !isMockupOnly && !isPreviousSamplesOnly ? (
+      {!isCostOnly &&
+      !isMockupOnly &&
+      !isPreviousSamplesOnly &&
+      !isSampleProductionOnly ? (
         <p className="info-subtext">{blockedMessage}</p>
       ) : isPreviousSamplesOnly ? (
         <>
@@ -1816,6 +1872,33 @@ const QuoteChecklistCard = ({ project }) => {
           <p className="info-subtext">
             Track sample/work done retrieval before sending the quote to the
             client.
+          </p>
+        </>
+      ) : isSampleProductionOnly ? (
+        <>
+          <p className="info-subtext">
+            Sample production status: {sampleProductionStatusLabel}
+          </p>
+          <p className="info-subtext">
+            Mockup status: {mockupDecisionLabel}
+          </p>
+          {sampleProductionRequirement?.updatedAt && (
+            <div className="info-item">
+              <h4>UPDATED</h4>
+              <div className="info-text-bold">
+                {formatDateTime(sampleProductionRequirement.updatedAt)}
+              </div>
+            </div>
+          )}
+          {sampleProductionRequirement?.note && (
+            <div className="info-item">
+              <h4>NOTE</h4>
+              <div className="info-subtext">{sampleProductionRequirement.note}</div>
+            </div>
+          )}
+          <p className="info-subtext">
+            Production submits the sample after mockup approval before quote
+            submission.
           </p>
         </>
       ) : isMockupOnly ? (
@@ -3720,6 +3803,34 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
             return 45;
           case "Pending Quote Submission":
           case "Pending Sample / Work done Sent":
+            return 70;
+          case "Quote Submission Completed":
+            return 80;
+          case "Pending Client Decision":
+            return 90;
+          case "Declined":
+          case "Completed":
+          case "Finished":
+            return 100;
+          default:
+            return 0;
+        }
+      }
+      if (quoteRequirementMode === "sampleProduction") {
+        switch (status) {
+          case "Quote Created":
+            return 5;
+          case "Pending Scope Approval":
+            return 20;
+          case "Scope Approval Completed":
+            return 30;
+          case "Pending Mockup":
+          case "Mockup Completed":
+            return 45;
+          case "Pending Production":
+          case "Pending Sample Production":
+            return 55;
+          case "Pending Quote Submission":
             return 70;
           case "Quote Submission Completed":
             return 80;

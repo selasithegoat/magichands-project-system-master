@@ -64,6 +64,7 @@ const {
   updateProjectBatchStatus,
   resetQuoteMockup,
   resetQuotePreviousSamples,
+  resetQuoteSampleProduction,
 } = require("../controllers/projectController");
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -329,6 +330,12 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   resetQuotePreviousSamples,
+);
+router.patch(
+  "/:id/quote-sample-production",
+  protect,
+  enforceProjectNotOnHold,
+  resetQuoteSampleProduction,
 );
 router.patch(
   "/:id/quote-decision",

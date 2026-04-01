@@ -257,6 +257,37 @@ const QUOTE_WORKFLOW_STEPS_BY_MODE = {
       statuses: ["Pending Client Decision", "Completed", "Finished"],
     },
   ],
+  sampleProduction: [
+    {
+      key: "scope",
+      label: "Scope",
+      statuses: [
+        "Quote Created",
+        "Pending Scope Approval",
+        "Scope Approval Completed",
+      ],
+    },
+    {
+      key: "mockup",
+      label: "Mockup",
+      statuses: ["Pending Mockup", "Mockup Completed"],
+    },
+    {
+      key: "production",
+      label: "Sample Production",
+      statuses: ["Pending Production", "Pending Sample Production"],
+    },
+    {
+      key: "submission",
+      label: "Quote Submission",
+      statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+    },
+    {
+      key: "decision",
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
 };
 
 const getQuoteWorkflowSteps = (mode) =>
@@ -740,6 +771,10 @@ const OrderActions = () => {
     useState(false);
   const [quotePreviousSamplesResetting, setQuotePreviousSamplesResetting] =
     useState(false);
+  const [quoteSampleProductionResetConfirmOpen, setQuoteSampleProductionResetConfirmOpen] =
+    useState(false);
+  const [quoteSampleProductionResetting, setQuoteSampleProductionResetting] =
+    useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
@@ -1172,9 +1207,13 @@ const OrderActions = () => {
       const base = normalizeQuoteChecklist(
         project?.quoteDetails?.checklist || {},
       );
+      const sampleProductionSelected = Boolean(base.sampleProduction);
       const requirementItems = project?.quoteDetails?.requirementItems || {};
       Object.keys(base).forEach((key) => {
         if (!base[key] && requirementItems?.[key]?.isRequired) {
+          if (sampleProductionSelected && key === "mockup") {
+            return;
+          }
           base[key] = true;
         }
       });
@@ -1190,7 +1229,9 @@ const OrderActions = () => {
     () =>
       QUOTE_REQUIREMENT_KEYS.filter(
         (key) =>
-          !["cost", "mockup", "previousSamples"].includes(key) && quoteChecklist[key],
+          !["cost", "mockup", "previousSamples", "sampleProduction"].includes(
+            key,
+          ) && quoteChecklist[key],
       ),
     [quoteChecklist],
   );
@@ -1209,17 +1250,29 @@ const OrderActions = () => {
   const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
   const isPreviousSamplesOnlyQuote =
     isQuoteProject && quoteRequirementMode === "previousSamples";
+  const isSampleProductionOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "sampleProduction";
   const enabledQuoteRequirements = useMemo(
     () =>
-      ["cost", "mockup", "previousSamples"].filter((key) => quoteChecklist[key]),
+      ["cost", "mockup", "previousSamples", "sampleProduction"].filter(
+        (key) => quoteChecklist[key],
+      ),
     [quoteChecklist],
   );
-  const quoteHasMultipleRequirements = enabledQuoteRequirements.length > 1;
+  const effectiveEnabledRequirements = useMemo(
+    () =>
+      quoteChecklist.sampleProduction
+        ? enabledQuoteRequirements.filter((key) => key !== "mockup")
+        : enabledQuoteRequirements,
+    [enabledQuoteRequirements, quoteChecklist.sampleProduction],
+  );
+  const quoteHasMultipleRequirements = effectiveEnabledRequirements.length > 1;
   const quoteWorkflowBlocked =
     isQuoteProject &&
     !isCostOnlyQuote &&
     !isMockupOnlyQuote &&
-    !isPreviousSamplesOnlyQuote;
+    !isPreviousSamplesOnlyQuote &&
+    !isSampleProductionOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -1264,6 +1317,39 @@ const OrderActions = () => {
     "dept_submitted",
     "frontdesk_review",
   ].includes(quotePreviousSamplesStatus);
+  const quoteSampleProductionRequirement = useMemo(() => {
+    if (!isQuoteProject) {
+      return { isRequired: false, status: "not_required", updatedAt: null, note: "" };
+    }
+    return project?.quoteDetails?.requirementItems?.sampleProduction || {
+      isRequired: Boolean(quoteChecklist.sampleProduction),
+      status: "assigned",
+      updatedAt: null,
+      note: "",
+    };
+  }, [
+    isQuoteProject,
+    project?.quoteDetails?.requirementItems,
+    quoteChecklist.sampleProduction,
+  ]);
+  const quoteSampleProductionStatus = String(
+    quoteSampleProductionRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase() || "assigned";
+  const quoteSampleProductionStatusLabel = formatQuoteRequirementStatusLabel(
+    quoteSampleProductionStatus,
+  );
+  const quoteSampleProductionCompleted = [
+    "dept_submitted",
+    "frontdesk_review",
+    "sent_to_client",
+    "client_approved",
+  ].includes(quoteSampleProductionStatus);
+  const quoteSampleProductionReadyForSubmission = [
+    "dept_submitted",
+    "frontdesk_review",
+  ].includes(quoteSampleProductionStatus);
   const canSubmitQuote =
     isQuoteProject &&
     !quoteWorkflowBlocked &&
@@ -1273,13 +1359,17 @@ const OrderActions = () => {
         ? mockupApprovalConfirmed
         : isPreviousSamplesOnlyQuote
           ? quotePreviousSamplesReadyForSubmission
-          : false);
+          : isSampleProductionOnlyQuote
+            ? quoteSampleProductionReadyForSubmission
+            : false);
   const quoteCostMissing =
     isCostOnlyQuote && !quoteCostVerified;
   const quoteMockupMissing =
     isMockupOnlyQuote && !mockupApprovalConfirmed;
   const quotePreviousSamplesMissing =
     isPreviousSamplesOnlyQuote && !quotePreviousSamplesRetrieved;
+  const quoteSampleProductionMissing =
+    isSampleProductionOnlyQuote && !quoteSampleProductionCompleted;
   const canConfirmPreviousSamplesRetrieved =
     isPreviousSamplesOnlyQuote &&
     canManageBilling &&
@@ -2151,6 +2241,52 @@ const OrderActions = () => {
     }
   };
 
+  const handleQuoteSampleProductionReset = () => {
+    if (!project || !isQuoteProject || !canManageBilling) return;
+    setQuoteSampleProductionResetConfirmOpen(true);
+  };
+
+  const handleConfirmQuoteSampleProductionReset = async () => {
+    if (
+      !project ||
+      !isQuoteProject ||
+      !isSampleProductionOnlyQuote ||
+      !canManageBilling
+    ) {
+      return;
+    }
+    setQuoteSampleProductionResetConfirmOpen(false);
+    setQuoteSampleProductionResetting(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-sample-production`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          "Sample production reset. Status moved back to Pending Production.",
+          "success",
+        );
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to reset sample production.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Quote sample production reset error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteSampleProductionResetting(false);
+    }
+  };
+
   const openPaymentModal = (type) => {
     setPaymentModal({ open: true, type });
     setPaymentInput("");
@@ -2704,8 +2840,11 @@ const OrderActions = () => {
     isCostOnlyQuote && !quoteCostVerified
       ? "Quote cost verification is still pending."
       : "",
-    isMockupOnlyQuote && !mockupApprovalConfirmed
+    (isMockupOnlyQuote || isSampleProductionOnlyQuote) && !mockupApprovalConfirmed
       ? "Client mockup approval is still pending."
+      : "",
+    isSampleProductionOnlyQuote && !quoteSampleProductionCompleted
+      ? "Sample production is still pending."
       : "",
     isQuoteProject &&
     !quoteWorkflowBlocked &&
@@ -2730,12 +2869,12 @@ const OrderActions = () => {
     showPendingDeliveryWarning
       ? "Confirm full payment or authorization before delivery can proceed."
       : "",
-    (!isQuoteProject || isMockupOnlyQuote) &&
+    (!isQuoteProject || isMockupOnlyQuote || isSampleProductionOnlyQuote) &&
     mockupApprovalPending &&
     latestMockupVersion
       ? `Confirm client approval for ${latestMockupVersionLabel}.`
       : "",
-    (!isQuoteProject || isMockupOnlyQuote) &&
+    (!isQuoteProject || isMockupOnlyQuote || isSampleProductionOnlyQuote) &&
     mockupApprovalRejected &&
     latestMockupVersion
       ? `Client rejected ${latestMockupVersionLabel}. Upload revised mockup.`
@@ -2754,6 +2893,7 @@ const OrderActions = () => {
     "Pending Cost Verification",
     "Pending Sample Retrieval",
     "Pending Sample / Work done Retrieval",
+    "Pending Sample Production",
     "Pending Quote Submission",
     "Pending Sample / Work done Sent",
     "Pending Client Decision",
@@ -2876,7 +3016,7 @@ const OrderActions = () => {
   const canDecideOnMockupVersions =
     canManageMockupApproval &&
     ((isQuoteProject &&
-      isMockupOnlyQuote &&
+      (isMockupOnlyQuote || isSampleProductionOnlyQuote) &&
       quoteWorkflowStatus === "Pending Mockup") ||
       (!isQuoteProject && project?.status === "Pending Mockup"));
 
@@ -2930,6 +3070,16 @@ const OrderActions = () => {
         type="primary"
         onConfirm={handleConfirmQuotePreviousSamplesReset}
         onCancel={() => setQuotePreviousSamplesResetConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={quoteSampleProductionResetConfirmOpen}
+        title="Rework Sample Production?"
+        message="This will move the quote back to Pending Production and reset quote submission and decision."
+        confirmText="Rework Sample Production"
+        cancelText="Cancel"
+        type="primary"
+        onConfirm={handleConfirmQuoteSampleProductionReset}
+        onCancel={() => setQuoteSampleProductionResetConfirmOpen(false)}
       />
 
       <header className="order-actions-topbar">
@@ -3402,6 +3552,63 @@ const OrderActions = () => {
             </div>
           )}
 
+          {isQuoteProject && isSampleProductionOnlyQuote && (
+            <div className="action-card">
+              <h3>Sample Production</h3>
+              <p>
+                Production will submit sample production after mockup approval.
+                Confirm submission before sending the quote.
+              </p>
+              {quoteWorkflowBlocked ? (
+                <div className="mockup-empty-state">
+                  {quoteWorkflowBlockedMessage ||
+                    "Quote workflows are not configured for this requirement set."}
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={`mockup-approval-status ${
+                      quoteSampleProductionCompleted ? "approved" : "pending"
+                    }`}
+                  >
+                    {quoteSampleProductionCompleted
+                      ? "Sample production completed"
+                      : "Sample production pending"}
+                  </div>
+                  <p className="mockup-approval-meta">
+                    Requirement status: {quoteSampleProductionStatusLabel}
+                  </p>
+                  {quoteSampleProductionRequirement.updatedAt && (
+                    <p className="mockup-approval-meta">
+                      Updated:{" "}
+                      {formatDateTime(quoteSampleProductionRequirement.updatedAt)}
+                    </p>
+                  )}
+                  {quoteSampleProductionRequirement.note && (
+                    <p className="mockup-approval-meta">
+                      Note: {quoteSampleProductionRequirement.note}
+                    </p>
+                  )}
+                  {quoteDecisionStatus === "declined" && (
+                    <div className="billing-actions">
+                      <button
+                        className="action-btn undo-btn"
+                        onClick={handleQuoteSampleProductionReset}
+                        disabled={
+                          !canManageBilling || quoteSampleProductionResetting
+                        }
+                      >
+                        {quoteSampleProductionResetting
+                          ? "Resetting..."
+                          : "Rework Sample Production"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           <div className="action-card billing-card" id="order-actions-billing">
             <h3>{isQuoteProject ? quoteSubmissionLabel : "Billing"}</h3>
             <p>
@@ -3434,7 +3641,9 @@ const OrderActions = () => {
                             ? "Verify quote cost before sending the quote."
                             : isMockupOnlyQuote
                               ? "Confirm mockup approval before sending the quote."
-                              : "Confirm sample retrieval before sending the quote."
+                              : isPreviousSamplesOnlyQuote
+                                ? "Confirm sample retrieval before sending the quote."
+                                : "Confirm sample production before sending the quote."
                         : undefined
                     }
                   >
@@ -3492,6 +3701,11 @@ const OrderActions = () => {
             {isQuoteProject && quotePreviousSamplesMissing && (
               <p className="mockup-approval-meta">
                 Confirm sample retrieval before sending the quote to the client.
+              </p>
+            )}
+            {isQuoteProject && quoteSampleProductionMissing && (
+              <p className="mockup-approval-meta">
+                Confirm sample production before sending the quote to the client.
               </p>
             )}
             {isQuoteProject && quoteWorkflowBlocked && (
