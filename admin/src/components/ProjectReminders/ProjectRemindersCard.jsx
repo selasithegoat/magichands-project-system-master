@@ -96,6 +96,7 @@ const QUOTE_STATUS_OPTIONS = [
   "Cost Verification Completed",
   "Pending Sample Retrieval",
   "Pending Quote Submission",
+  "Pending Bid Submission / Documents",
   "Quote Submission Completed",
   "Pending Client Decision",
   "Completed",

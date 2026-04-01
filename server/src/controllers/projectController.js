@@ -243,6 +243,21 @@ const mapFeedbackAttachments = (req, userId) => {
     }));
 };
 
+const mapBidSubmissionDocuments = (req, userId) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+  const notes = normalizeAttachmentNotes(req.body?.documentNotes);
+  return files
+    .filter((file) => file?.filename)
+    .map((file, index) => ({
+      fileUrl: `/uploads/${file.filename}`,
+      fileName: file.originalname || "",
+      fileType: file.mimetype || "",
+      note: notes[index] || "",
+      uploadedBy: userId || undefined,
+      uploadedAt: new Date(),
+    }));
+};
+
 const cleanupUploadedFilesSafely = async (req) => {
   try {
     await upload.cleanupRequestFiles(req);
@@ -2005,6 +2020,8 @@ const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
   "pending sample production": "Pending Production",
   "sample production": "Pending Production",
   "sample production completed": "Production Completed",
+  "pending bid submission / documents": "Pending Quote Submission",
+  "pending bid submission": "Pending Quote Submission",
   completed: "Completed",
   declined: "Completed",
 });
@@ -2111,14 +2128,12 @@ const QUOTE_REQUIREMENT_CUSTOM_ALLOWED_TRANSITIONS = {
     client_revision_requested: new Set(["dept_submitted"]),
   },
   bidSubmission: {
-    assigned: new Set(["sent_to_client"]),
-    in_progress: new Set(["sent_to_client"]),
+    assigned: new Set(["dept_submitted"]),
+    in_progress: new Set(["dept_submitted"]),
     dept_submitted: new Set(["sent_to_client"]),
     frontdesk_review: new Set(["sent_to_client"]),
-    client_revision_requested: new Set(["sent_to_client"]),
-    client_approved: new Set(["sent_to_client"]),
+    client_revision_requested: new Set(["dept_submitted"]),
     sent_to_client: new Set(["assigned"]),
-    blocked: new Set(["sent_to_client"]),
   },
 };
 const QUOTE_REQUIREMENT_FRONT_DESK_STAGES = new Set([
@@ -2192,6 +2207,13 @@ const getAutoProgressedStatus = (status, project = {}) => {
     if (requirementMode === "previousSamples") {
       const progression = {
         "Scope Approval Completed": "Pending Sample Retrieval",
+        "Quote Submission Completed": "Pending Client Decision",
+      };
+      return progression[status] || status;
+    }
+    if (requirementMode === "bidSubmission") {
+      const progression = {
+        "Scope Approval Completed": "Pending Quote Submission",
         "Quote Submission Completed": "Pending Client Decision",
       };
       return progression[status] || status;
@@ -2298,6 +2320,31 @@ const normalizeQuoteCostVerification = (value = {}) => {
   };
 };
 
+const normalizeBidSubmissionDocuments = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      const base = normalizeAttachmentItem(entry);
+      if (!base) return null;
+      return {
+        ...base,
+        uploadedAt: toDateOrNull(entry?.uploadedAt),
+        uploadedBy: entry?.uploadedBy || null,
+      };
+    })
+    .filter(Boolean);
+};
+
+const normalizeQuoteBidSubmission = (value = {}) => {
+  const source = toPlainObject(value);
+  return {
+    isSensitive: parseBooleanFlag(source.isSensitive, false),
+    documents: normalizeBidSubmissionDocuments(source.documents),
+    updatedAt: toDateOrNull(source.updatedAt),
+    updatedBy: source.updatedBy || null,
+  };
+};
+
 const normalizeQuoteRequirementHistoryEntry = (entry = {}) => {
   const toStatus = toText(entry?.toStatus).toLowerCase();
   if (!QUOTE_REQUIREMENT_STATUS_SET.has(toStatus)) return null;
@@ -2386,12 +2433,18 @@ const normalizeQuoteDetailsWorkflow = ({
   const normalizedDecision = normalizeQuoteDecision(
     incoming.decision !== undefined ? incoming.decision : existing.decision,
   );
+  const normalizedBidSubmission = normalizeQuoteBidSubmission(
+    incoming.bidSubmission !== undefined
+      ? incoming.bidSubmission
+      : existing.bidSubmission,
+  );
 
   return {
     ...merged,
     checklist: normalizedChecklist,
     costVerification: normalizedCostVerification,
     requirementItems: normalizedRequirementItems,
+    bidSubmission: normalizedBidSubmission,
     decision: normalizedDecision,
   };
 };
@@ -2404,6 +2457,8 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
   const isMockupOnly = enabledKeys.length === 1 && enabledKeys[0] === "mockup";
   const isPreviousSamplesOnly =
     enabledKeys.length === 1 && enabledKeys[0] === "previousSamples";
+  const isBidSubmissionOnly =
+    enabledKeys.length === 1 && enabledKeys[0] === "bidSubmission";
   const isSampleProductionOnly =
     enabledKeys.includes("sampleProduction") &&
     enabledKeys.every((key) =>
@@ -2418,6 +2473,8 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
           ? "mockup"
       : isPreviousSamplesOnly
         ? "previousSamples"
+        : isBidSubmissionOnly
+          ? "bidSubmission"
         : isSampleProductionOnly
           ? "sampleProduction"
           : "unsupported";
@@ -2429,6 +2486,7 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
     isCostOnly,
     isMockupOnly,
     isPreviousSamplesOnly,
+    isBidSubmissionOnly,
     isSampleProductionOnly,
     mode,
   };
@@ -2477,6 +2535,17 @@ const isQuoteSampleProductionOnlyProject = (project = {}) => {
   );
 };
 
+const isQuoteBidSubmissionOnlyProject = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  return (
+    getQuoteChecklistState(normalizedQuoteDetails).mode === "bidSubmission"
+  );
+};
+
 const isQuoteWorkflowSupported = (project = {}) => {
   if (!isQuoteProject(project)) return false;
   const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
@@ -2484,7 +2553,7 @@ const isQuoteWorkflowSupported = (project = {}) => {
     existingQuoteDetails: project?.quoteDetails || {},
   });
   const mode = getQuoteChecklistState(normalizedQuoteDetails).mode;
-  return ["cost", "mockup", "previousSamples", "sampleProduction"].includes(
+  return ["cost", "mockup", "previousSamples", "sampleProduction", "bidSubmission"].includes(
     mode,
   );
 };
@@ -2505,6 +2574,33 @@ const isQuoteCostVerified = (project = {}) => {
   const costVerification = normalizedQuoteDetails.costVerification || {};
   const amount = Number.parseFloat(costVerification.amount);
   return Number.isFinite(amount) && amount > 0;
+};
+
+const getQuoteBidSubmissionState = (project = {}) => {
+  if (!isQuoteProject(project)) {
+    return {
+      isSensitive: false,
+      documents: [],
+      hasDocuments: false,
+      isReady: false,
+    };
+  }
+  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+    quoteDetailsInput: project?.quoteDetails || {},
+    existingQuoteDetails: project?.quoteDetails || {},
+  });
+  const bidSubmission = normalizedQuoteDetails?.bidSubmission || {};
+  const isSensitive = parseBooleanFlag(bidSubmission.isSensitive, false);
+  const documents = normalizeBidSubmissionDocuments(
+    bidSubmission.documents || [],
+  );
+  const hasDocuments = documents.length > 0;
+  return {
+    isSensitive,
+    documents,
+    hasDocuments,
+    isReady: isSensitive || hasDocuments,
+  };
 };
 
 const getNormalizedQuoteRequirementItems = (project = {}) => {
@@ -2555,6 +2651,14 @@ const areQuoteRequirementsCompleted = (project = {}) => {
     return ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
       requirementStatus,
     );
+  }
+  if (mode === "bidSubmission") {
+    const bidSubmission = normalizedQuoteDetails?.bidSubmission || {};
+    const isSensitive = parseBooleanFlag(bidSubmission.isSensitive, false);
+    const documents = normalizeBidSubmissionDocuments(
+      bidSubmission.documents || [],
+    );
+    return isSensitive || documents.length > 0;
   }
   if (mode === "sampleProduction") {
     const requirementItem =
@@ -2623,6 +2727,56 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
     ) {
       nextStatus = "Pending Sample Retrieval";
     } else if (["dept_submitted", "frontdesk_review"].includes(requirementStatus)) {
+      nextStatus = "Pending Quote Submission";
+    } else if (["sent_to_client", "client_approved"].includes(requirementStatus)) {
+      nextStatus = "Pending Client Decision";
+    }
+
+    if (nextStatus && nextStatus !== previousStatus) {
+      project.status = nextStatus;
+    }
+
+    return {
+      changed: nextStatus !== previousStatus,
+      fromStatus: previousStatus,
+      toStatus: nextStatus,
+      allRequirementsCompleted: ["sent_to_client", "client_approved"].includes(
+        requirementStatus,
+      ),
+    };
+  }
+
+  if (requirementMode === "bidSubmission") {
+    const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project?.quoteDetails || {},
+      existingQuoteDetails: project?.quoteDetails || {},
+    });
+    const requirementItem =
+      normalizedQuoteDetails?.requirementItems?.bidSubmission || {};
+    const requirementStatus = toText(requirementItem.status).toLowerCase() || "assigned";
+    const lockedStatuses = new Set(["Completed", "Finished", "Declined"]);
+    if (lockedStatuses.has(previousStatus)) {
+      return {
+        changed: false,
+        fromStatus: previousStatus,
+        toStatus: previousStatus,
+        allRequirementsCompleted: ["sent_to_client", "client_approved"].includes(
+          requirementStatus,
+        ),
+      };
+    }
+
+    let nextStatus = previousStatus;
+    if (
+      [
+        "assigned",
+        "in_progress",
+        "blocked",
+        "client_revision_requested",
+        "dept_submitted",
+        "frontdesk_review",
+      ].includes(requirementStatus)
+    ) {
       nextStatus = "Pending Quote Submission";
     } else if (["sent_to_client", "client_approved"].includes(requirementStatus)) {
       nextStatus = "Pending Client Decision";
@@ -5155,14 +5309,14 @@ const createProject = async (req, res) => {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements and try again.",
+            "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements and try again.",
         });
       }
       if (mode === "none") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Quote must include Cost, Mockup, Previous Sample / Jobs Done, or Sample Production requirement to continue.",
+            "Quote must include Cost, Mockup, Previous Sample / Jobs Done, Sample Production, or Bid Submission / Documents requirement to continue.",
         });
       }
     }
@@ -6627,7 +6781,7 @@ const updateProjectStatus = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before progressing this quote.",
+          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before progressing this quote.",
       });
     }
 
@@ -7013,7 +7167,7 @@ const transitionQuoteRequirement = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
+          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
       });
     }
 
@@ -7054,7 +7208,7 @@ const transitionQuoteRequirement = async (req, res) => {
       });
     }
 
-    if (!["cost", "mockup", "previousSamples", "sampleProduction"].includes(requirementKey)) {
+    if (!["cost", "mockup", "previousSamples", "sampleProduction", "bidSubmission"].includes(requirementKey)) {
       return res.status(400).json({
         message:
           "Quote requirement transitions are disabled for this requirement.",
@@ -7789,6 +7943,147 @@ const resetQuoteSampleProduction = async (req, res) => {
   }
 };
 
+// @desc    Update bid submission documents for a quote
+// @route   PATCH /api/projects/:id/quote-bid-documents
+// @access  Private (Admin or Front Desk)
+const updateQuoteBidSubmissionDocuments = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to update bid submission documents.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Bid submission documents are only available for quote projects.",
+      });
+    }
+
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    if (!isQuoteWorkflowSupported(project)) {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before updating documents.",
+      });
+    }
+
+    const requirementMode = getQuoteRequirementMode(project.quoteDetails);
+    if (requirementMode !== "bidSubmission") {
+      return res.status(400).json({
+        message:
+          "Bid submission documents are only available for bid-submission quotes.",
+      });
+    }
+
+    const existingBidSubmission = normalizeQuoteBidSubmission(
+      project.quoteDetails?.bidSubmission || {},
+    );
+    const isSensitive =
+      req.body?.isSensitive === undefined
+        ? existingBidSubmission.isSensitive
+        : parseBooleanFlag(req.body?.isSensitive, existingBidSubmission.isSensitive);
+
+    let baseDocuments = existingBidSubmission.documents || [];
+    if (req.body?.existingDocuments !== undefined) {
+      try {
+        const parsed =
+          typeof req.body.existingDocuments === "string"
+            ? JSON.parse(req.body.existingDocuments)
+            : req.body.existingDocuments;
+        baseDocuments = normalizeBidSubmissionDocuments(parsed);
+      } catch {
+        baseDocuments = existingBidSubmission.documents || [];
+      }
+    }
+
+    const newDocuments = mapBidSubmissionDocuments(req, req.user?._id);
+    const documents = [...baseDocuments, ...newDocuments];
+    const updatedAt = new Date();
+
+    project.quoteDetails.bidSubmission = {
+      ...existingBidSubmission,
+      isSensitive,
+      documents,
+      updatedAt,
+      updatedBy: req.user._id,
+    };
+    project.markModified("quoteDetails.bidSubmission");
+
+    const requirementItem =
+      project.quoteDetails?.requirementItems?.bidSubmission || null;
+    if (requirementItem?.isRequired) {
+      const fromStatus =
+        toText(requirementItem.status).toLowerCase() || "assigned";
+      const lockedStatuses = new Set(["sent_to_client", "client_approved"]);
+      const isReady = isSensitive || documents.length > 0;
+      const nextStatus = isReady ? "dept_submitted" : "assigned";
+
+      if (!lockedStatuses.has(fromStatus) && fromStatus !== nextStatus) {
+        requirementItem.history = Array.isArray(requirementItem.history)
+          ? requirementItem.history
+          : [];
+        requirementItem.history.push({
+          fromStatus,
+          toStatus: nextStatus,
+          changedAt: updatedAt,
+          changedBy: req.user._id,
+          note: isReady
+            ? "Bid submission documents prepared."
+            : "Bid submission documents cleared.",
+        });
+        requirementItem.status = nextStatus;
+        requirementItem.updatedAt = updatedAt;
+        requirementItem.updatedBy = req.user._id;
+        requirementItem.note = isReady
+          ? "Bid submission documents prepared."
+          : "Bid submission documents cleared.";
+        project.markModified("quoteDetails.requirementItems");
+      }
+    }
+
+    syncQuoteProjectStatusByRequirements(project);
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      "Bid submission documents updated.",
+      {
+        bidSubmission: {
+          isSensitive,
+          documentCount: documents.length,
+        },
+      },
+    );
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Bid Documents Updated",
+      message: `Admin ${actorName} updated bid submission documents for project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating bid submission documents:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Validate quote decision after response is sent
 // @route   PATCH /api/projects/:id/quote-decision
 // @access  Private (Admin or Front Desk)
@@ -7838,7 +8133,7 @@ const updateQuoteDecision = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before validating the decision.",
+          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before validating the decision.",
       });
     }
 
@@ -7981,7 +8276,7 @@ const markInvoiceSent = async (req, res) => {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before sending the quote.",
+            "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before sending the quote.",
         });
       }
       if (isQuoteCostOnlyProject(project) && !isQuoteCostVerified(project)) {
@@ -8036,6 +8331,16 @@ const markInvoiceSent = async (req, res) => {
           });
         }
       }
+      if (isQuoteBidSubmissionOnlyProject(project)) {
+        const bidState = getQuoteBidSubmissionState(project);
+        if (!bidState.isReady) {
+          return res.status(400).json({
+            code: "QUOTE_BID_DOCS_MISSING",
+            message:
+              "Bid submission documents must be prepared before sending the quote.",
+          });
+        }
+      }
     }
 
     if (project.invoice?.sent) {
@@ -8079,6 +8384,32 @@ const markInvoiceSent = async (req, res) => {
       if (isQuoteSampleProductionOnlyProject(project)) {
         const requirementItem =
           project.quoteDetails?.requirementItems?.sampleProduction || null;
+        if (requirementItem?.isRequired) {
+          const fromStatus =
+            toText(requirementItem.status).toLowerCase() || "assigned";
+          if (!["sent_to_client", "client_approved"].includes(fromStatus)) {
+            const transitionTime = new Date();
+            requirementItem.history = Array.isArray(requirementItem.history)
+              ? requirementItem.history
+              : [];
+            requirementItem.history.push({
+              fromStatus,
+              toStatus: "sent_to_client",
+              changedAt: transitionTime,
+              changedBy: req.user._id,
+              note: "Quote sent to client.",
+            });
+            requirementItem.status = "sent_to_client";
+            requirementItem.updatedAt = transitionTime;
+            requirementItem.updatedBy = req.user._id;
+            requirementItem.note = "Quote sent to client.";
+            project.markModified("quoteDetails.requirementItems");
+          }
+        }
+      }
+      if (isQuoteBidSubmissionOnlyProject(project)) {
+        const requirementItem =
+          project.quoteDetails?.requirementItems?.bidSubmission || null;
         if (requirementItem?.isRequired) {
           const fromStatus =
             toText(requirementItem.status).toLowerCase() || "assigned";
@@ -8322,6 +8653,32 @@ const undoInvoiceSent = async (req, res) => {
       } else if (isQuoteSampleProductionOnlyProject(project)) {
         const requirementItem =
           project.quoteDetails?.requirementItems?.sampleProduction || null;
+        if (requirementItem?.isRequired) {
+          const fromStatus =
+            toText(requirementItem.status).toLowerCase() || "assigned";
+          if (["sent_to_client", "client_approved"].includes(fromStatus)) {
+            const transitionTime = new Date();
+            requirementItem.history = Array.isArray(requirementItem.history)
+              ? requirementItem.history
+              : [];
+            requirementItem.history.push({
+              fromStatus,
+              toStatus: "dept_submitted",
+              changedAt: transitionTime,
+              changedBy: req.user._id,
+              note: "Quote send status reset.",
+            });
+            requirementItem.status = "dept_submitted";
+            requirementItem.updatedAt = transitionTime;
+            requirementItem.updatedBy = req.user._id;
+            requirementItem.note = "Quote send status reset.";
+            project.markModified("quoteDetails.requirementItems");
+          }
+        }
+        syncQuoteProjectStatusByRequirements(project);
+      } else if (isQuoteBidSubmissionOnlyProject(project)) {
+        const requirementItem =
+          project.quoteDetails?.requirementItems?.bidSubmission || null;
         if (requirementItem?.isRequired) {
           const fromStatus =
             toText(requirementItem.status).toLowerCase() || "assigned";
@@ -11570,14 +11927,14 @@ const updateProject = async (req, res) => {
           return res.status(400).json({
             code: "QUOTE_REQUIREMENTS_BLOCKED",
             message:
-            "Only cost-only, mockup-only, previous-sample-only, or sample-production quotes are supported right now. Remove other requirements before saving.",
+            "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before saving.",
           });
         }
       if (mode === "none") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Quote must include Cost, Mockup, Previous Sample / Jobs Done, or Sample Production requirement to continue.",
+            "Quote must include Cost, Mockup, Previous Sample / Jobs Done, Sample Production, or Bid Submission / Documents requirement to continue.",
         });
       }
     }
@@ -13556,6 +13913,7 @@ module.exports = {
   resetQuoteMockup,
   resetQuotePreviousSamples,
   resetQuoteSampleProduction,
+  updateQuoteBidSubmissionDocuments,
   updateQuoteDecision,
   markInvoiceSent,
   verifyPayment,

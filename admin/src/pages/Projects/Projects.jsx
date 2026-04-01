@@ -678,6 +678,9 @@ const Projects = ({ user }) => {
               <option value="Pending Quote Submission">
                 Pending Quote Submission
               </option>
+              <option value="Pending Bid Submission / Documents">
+                Pending Bid Submission / Documents
+              </option>
               <option value="Quote Submission Completed">
                 Quote Submission Completed
               </option>

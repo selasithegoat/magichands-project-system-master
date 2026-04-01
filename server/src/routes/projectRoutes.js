@@ -16,6 +16,7 @@ const {
   updateProjectStatus,
   transitionQuoteRequirement,
   updateQuoteCostVerification,
+  updateQuoteBidSubmissionDocuments,
   updateQuoteDecision,
   uploadProjectMockup,
   deleteProjectMockupVersion,
@@ -130,6 +131,30 @@ const handleMockupUpload = (req, res, next) => {
 
 const handleFeedbackUploads = (req, res, next) => {
   upload.array("feedbackAttachments", 6)(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ message: `File too large. Max limit is ${maxFileSizeMb}MB.` });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please upload a different file.",
+        });
+      });
+  });
+};
+
+const handleBidSubmissionUploads = (req, res, next) => {
+  upload.array("bidDocuments", 10)(req, res, (err) => {
     if (err) {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res
@@ -336,6 +361,13 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   resetQuoteSampleProduction,
+);
+router.patch(
+  "/:id/quote-bid-documents",
+  protect,
+  enforceProjectNotOnHold,
+  handleBidSubmissionUploads,
+  updateQuoteBidSubmissionDocuments,
 );
 router.patch(
   "/:id/quote-decision",

@@ -3609,6 +3609,18 @@
   background: rgba(15, 118, 110, 0.1);
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.toggle-row input {
+  accent-color: var(--order-primary);
+}
+
 .new-orders-page .submit-btn {
   background: linear-gradient(135deg, #0f766e, #22c55e) !important;
   background-image: linear-gradient(135deg, #0f766e, #22c55e) !important;

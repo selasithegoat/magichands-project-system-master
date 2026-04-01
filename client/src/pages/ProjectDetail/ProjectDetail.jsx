@@ -194,6 +194,28 @@ const QUOTE_STEPS_BY_MODE = {
       statuses: ["Pending Client Decision", "Completed", "Finished"],
     },
   ],
+  bidSubmission: [
+    { label: "Quote Created", statuses: ["Quote Created"] },
+    {
+      label: "Scope Approval",
+      statuses: ["Pending Scope Approval", "Scope Approval Completed"],
+    },
+    {
+      label: "Bid Documents",
+      statuses: [
+        "Pending Quote Submission",
+        "Pending Bid Submission / Documents",
+      ],
+    },
+    {
+      label: "Quote Submission",
+      statuses: ["Quote Submission Completed"],
+    },
+    {
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
 };
 
 const getQuoteSteps = (mode) =>
@@ -255,6 +277,7 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Pending Production",
   "Pending Cost Verification",
   "Cost Verification Completed",
+  "Pending Bid Submission / Documents",
   "Pending Quote Submission",
   "Pending Sample / Work done Sent",
   "Quote Submission Completed",
@@ -368,6 +391,7 @@ const getStatusColor = (status) => {
     case "Pending Sample / Work done Retrieval":
       return "#eab308"; // Yellow/Gold
     case "Pending Quote Submission":
+    case "Pending Bid Submission / Documents":
     case "Pending Sample / Work done Sent":
     case "Quote Submission Completed":
     case "Quote Submission":
@@ -1747,7 +1771,13 @@ const QuoteChecklistCard = ({ project }) => {
   });
   const unsupportedKeys = QUOTE_REQUIREMENT_KEYS.filter(
     (key) =>
-      !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+      ![
+        "cost",
+        "mockup",
+        "previousSamples",
+        "sampleProduction",
+        "bidSubmission",
+      ].includes(key) &&
       checklist[key],
   );
   const unsupportedLabels = unsupportedKeys.map(
@@ -1758,11 +1788,13 @@ const QuoteChecklistCard = ({ project }) => {
   const isMockupOnly = requirementMode === "mockup";
   const isPreviousSamplesOnly = requirementMode === "previousSamples";
   const isSampleProductionOnly = requirementMode === "sampleProduction";
+  const isBidSubmissionOnly = requirementMode === "bidSubmission";
   const enabledRequirements = [
     "cost",
     "mockup",
     "previousSamples",
     "sampleProduction",
+    "bidSubmission",
   ].filter((key) => checklist[key]);
   const effectiveEnabledRequirements = checklist.sampleProduction
     ? enabledRequirements.filter((key) => key !== "mockup")
@@ -1834,12 +1866,21 @@ const QuoteChecklistCard = ({ project }) => {
         .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
         .join(" ")
     : "Pending";
+  const bidSubmissionDetails = project?.quoteDetails?.bidSubmission || {};
+  const bidSubmissionDocuments = normalizeReferenceAttachments(
+    bidSubmissionDetails.documents || [],
+  );
+  const bidSubmissionIsSensitive = Boolean(bidSubmissionDetails.isSensitive);
+  const bidSubmissionReady =
+    bidSubmissionIsSensitive || bidSubmissionDocuments.length > 0;
   const requirementTitle = isMockupOnly
     ? "Quote Mockup"
     : isPreviousSamplesOnly
       ? "Quote Samples"
       : isSampleProductionOnly
         ? "Quote Sample Production"
+      : isBidSubmissionOnly
+        ? "Bid Submission / Documents"
       : "Quote Cost";
 
   return (
@@ -1850,7 +1891,8 @@ const QuoteChecklistCard = ({ project }) => {
       {!isCostOnly &&
       !isMockupOnly &&
       !isPreviousSamplesOnly &&
-      !isSampleProductionOnly ? (
+      !isSampleProductionOnly &&
+      !isBidSubmissionOnly ? (
         <p className="info-subtext">{blockedMessage}</p>
       ) : isPreviousSamplesOnly ? (
         <>
@@ -1872,6 +1914,29 @@ const QuoteChecklistCard = ({ project }) => {
           <p className="info-subtext">
             Track sample/work done retrieval before sending the quote to the
             client.
+          </p>
+        </>
+      ) : isBidSubmissionOnly ? (
+        <>
+          <p className="info-subtext">
+            Documents: {bidSubmissionReady ? "Ready" : "Needed"}
+          </p>
+          <p className="info-subtext">
+            Sensitivity: {bidSubmissionIsSensitive ? "Sensitive" : "Not sensitive"}
+          </p>
+          <p className="info-subtext">
+            Uploaded documents: {bidSubmissionDocuments.length}
+          </p>
+          {bidSubmissionDetails.updatedAt && (
+            <div className="info-item">
+              <h4>UPDATED</h4>
+              <div className="info-text-bold">
+                {formatDateTime(bidSubmissionDetails.updatedAt)}
+              </div>
+            </div>
+          )}
+          <p className="info-subtext">
+            Upload bid submission documents before confirming quote submission.
           </p>
         </>
       ) : isSampleProductionOnly ? (
@@ -3832,6 +3897,29 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
             return 55;
           case "Pending Quote Submission":
             return 70;
+          case "Quote Submission Completed":
+            return 80;
+          case "Pending Client Decision":
+            return 90;
+          case "Declined":
+          case "Completed":
+          case "Finished":
+            return 100;
+          default:
+            return 0;
+        }
+      }
+      if (quoteRequirementMode === "bidSubmission") {
+        switch (status) {
+          case "Quote Created":
+            return 5;
+          case "Pending Scope Approval":
+            return 20;
+          case "Scope Approval Completed":
+            return 30;
+          case "Pending Quote Submission":
+          case "Pending Bid Submission / Documents":
+            return 60;
           case "Quote Submission Completed":
             return 80;
           case "Pending Client Decision":

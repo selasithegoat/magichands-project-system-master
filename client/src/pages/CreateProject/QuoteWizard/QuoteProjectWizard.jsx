@@ -29,22 +29,38 @@ const normalizeChecklist = (checklist) => {
   const hasMockup = Boolean(next.mockup);
   const hasPreviousSamples = Boolean(next.previousSamples);
   const hasSampleProduction = Boolean(next.sampleProduction);
-  if (!hasCost && !hasMockup && !hasPreviousSamples && !hasSampleProduction) {
+  const hasBidSubmission = Boolean(next.bidSubmission);
+  if (
+    !hasCost &&
+    !hasMockup &&
+    !hasPreviousSamples &&
+    !hasSampleProduction &&
+    !hasBidSubmission
+  ) {
     next.cost = true;
   }
-  if (hasSampleProduction) {
+  if (hasBidSubmission) {
     next.cost = false;
     next.mockup = false;
     next.previousSamples = false;
+    next.sampleProduction = false;
+  } else if (hasSampleProduction) {
+    next.cost = false;
+    next.mockup = false;
+    next.previousSamples = false;
+    next.bidSubmission = false;
   } else if (hasCost) {
     next.mockup = false;
     next.previousSamples = false;
     next.sampleProduction = false;
+    next.bidSubmission = false;
   } else if (hasMockup) {
     next.previousSamples = false;
     next.sampleProduction = false;
+    next.bidSubmission = false;
   } else if (hasPreviousSamples) {
     next.sampleProduction = false;
+    next.bidSubmission = false;
   }
   next.cost = Boolean(next.cost);
   next.mockup = Boolean(next.mockup);

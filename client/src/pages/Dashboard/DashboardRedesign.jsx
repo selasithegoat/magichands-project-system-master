@@ -132,6 +132,17 @@ const QUOTE_SAMPLE_PRODUCTION_PROGRESS_MAP = {
   Completed: 100,
   Finished: 100,
 };
+const QUOTE_BID_SUBMISSION_PROGRESS_MAP = {
+  "Quote Created": 5,
+  "Pending Scope Approval": 20,
+  "Scope Approval Completed": 30,
+  "Pending Quote Submission": 60,
+  "Pending Bid Submission / Documents": 60,
+  "Quote Submission Completed": 80,
+  "Pending Client Decision": 90,
+  Completed: 100,
+  Finished: 100,
+};
 
 const WORKLOAD_COLORS = [
   "#0ea5e9",
@@ -286,6 +297,8 @@ const getProjectProgress = (project) => {
         ? QUOTE_PREVIOUS_SAMPLES_PROGRESS_MAP
         : quoteRequirementMode === "sampleProduction"
           ? QUOTE_SAMPLE_PRODUCTION_PROGRESS_MAP
+          : quoteRequirementMode === "bidSubmission"
+            ? QUOTE_BID_SUBMISSION_PROGRESS_MAP
       : QUOTE_PROGRESS_MAP
     : STANDARD_PROGRESS_MAP;
   const status = isQuoteProject(project)

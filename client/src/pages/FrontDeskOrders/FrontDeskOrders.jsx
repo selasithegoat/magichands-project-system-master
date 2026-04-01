@@ -170,6 +170,7 @@ const FrontDeskOrders = () => {
             "Pending Sample Retrieval",
             "Pending Sample / Work done Retrieval",
             "Pending Sample Production",
+            "Pending Bid Submission / Documents",
             "Pending Quote Submission",
             "Pending Sample / Work done Sent",
             "Quote Submission Completed",

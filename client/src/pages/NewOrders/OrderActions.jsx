@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
+import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
 import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
@@ -77,6 +78,19 @@ const formatDate = (dateString) => {
     day: "numeric",
     year: "numeric",
   });
+};
+
+const formatFileSize = (bytes) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(size) / Math.log(1024)),
+  );
+  const value = size / 1024 ** index;
+  const precision = value >= 10 || index === 0 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[index]}`;
 };
 
 const paymentLabels = {
@@ -281,6 +295,35 @@ const QUOTE_WORKFLOW_STEPS_BY_MODE = {
       key: "submission",
       label: "Quote Submission",
       statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+    },
+    {
+      key: "decision",
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
+  bidSubmission: [
+    {
+      key: "scope",
+      label: "Scope",
+      statuses: [
+        "Quote Created",
+        "Pending Scope Approval",
+        "Scope Approval Completed",
+      ],
+    },
+    {
+      key: "documents",
+      label: "Bid Documents",
+      statuses: [
+        "Pending Quote Submission",
+        "Pending Bid Submission / Documents",
+      ],
+    },
+    {
+      key: "submission",
+      label: "Quote Submission",
+      statuses: ["Quote Submission Completed"],
     },
     {
       key: "decision",
@@ -775,6 +818,9 @@ const OrderActions = () => {
     useState(false);
   const [quoteSampleProductionResetting, setQuoteSampleProductionResetting] =
     useState(false);
+  const [quoteBidDocsSensitive, setQuoteBidDocsSensitive] = useState(false);
+  const [quoteBidDocsFiles, setQuoteBidDocsFiles] = useState([]);
+  const [quoteBidDocsSaving, setQuoteBidDocsSaving] = useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteConversionType, setQuoteConversionType] = useState("Standard");
@@ -1229,9 +1275,13 @@ const OrderActions = () => {
     () =>
       QUOTE_REQUIREMENT_KEYS.filter(
         (key) =>
-          !["cost", "mockup", "previousSamples", "sampleProduction"].includes(
-            key,
-          ) && quoteChecklist[key],
+          ![
+            "cost",
+            "mockup",
+            "previousSamples",
+            "sampleProduction",
+            "bidSubmission",
+          ].includes(key) && quoteChecklist[key],
       ),
     [quoteChecklist],
   );
@@ -1252,9 +1302,17 @@ const OrderActions = () => {
     isQuoteProject && quoteRequirementMode === "previousSamples";
   const isSampleProductionOnlyQuote =
     isQuoteProject && quoteRequirementMode === "sampleProduction";
+  const isBidSubmissionOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "bidSubmission";
   const enabledQuoteRequirements = useMemo(
     () =>
-      ["cost", "mockup", "previousSamples", "sampleProduction"].filter(
+      [
+        "cost",
+        "mockup",
+        "previousSamples",
+        "sampleProduction",
+        "bidSubmission",
+      ].filter(
         (key) => quoteChecklist[key],
       ),
     [quoteChecklist],
@@ -1272,7 +1330,8 @@ const OrderActions = () => {
     !isCostOnlyQuote &&
     !isMockupOnlyQuote &&
     !isPreviousSamplesOnlyQuote &&
-    !isSampleProductionOnlyQuote;
+    !isSampleProductionOnlyQuote &&
+    !isBidSubmissionOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -1350,6 +1409,33 @@ const OrderActions = () => {
     "dept_submitted",
     "frontdesk_review",
   ].includes(quoteSampleProductionStatus);
+  const quoteBidSubmissionRequirement = useMemo(() => {
+    if (!isQuoteProject) {
+      return { isRequired: false, status: "not_required", updatedAt: null, note: "" };
+    }
+    return project?.quoteDetails?.requirementItems?.bidSubmission || {
+      isRequired: Boolean(quoteChecklist.bidSubmission),
+      status: "assigned",
+      updatedAt: null,
+      note: "",
+    };
+  }, [isQuoteProject, project?.quoteDetails?.requirementItems, quoteChecklist.bidSubmission]);
+  const quoteBidSubmissionStatus = String(
+    quoteBidSubmissionRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase() || "assigned";
+  const quoteBidSubmissionStatusLabel = formatQuoteRequirementStatusLabel(
+    quoteBidSubmissionStatus,
+  );
+  const bidSubmissionDetails = project?.quoteDetails?.bidSubmission || {};
+  const bidSubmissionDocuments = useMemo(
+    () => normalizeReferenceAttachments(bidSubmissionDetails.documents || []),
+    [bidSubmissionDetails.documents],
+  );
+  const bidSubmissionIsSensitive = Boolean(bidSubmissionDetails.isSensitive);
+  const bidSubmissionHasDocuments = bidSubmissionDocuments.length > 0;
+  const bidSubmissionReady = bidSubmissionIsSensitive || bidSubmissionHasDocuments;
   const canSubmitQuote =
     isQuoteProject &&
     !quoteWorkflowBlocked &&
@@ -1361,6 +1447,8 @@ const OrderActions = () => {
           ? quotePreviousSamplesReadyForSubmission
           : isSampleProductionOnlyQuote
             ? quoteSampleProductionReadyForSubmission
+            : isBidSubmissionOnlyQuote
+              ? bidSubmissionReady
             : false);
   const quoteCostMissing =
     isCostOnlyQuote && !quoteCostVerified;
@@ -1370,6 +1458,8 @@ const OrderActions = () => {
     isPreviousSamplesOnlyQuote && !quotePreviousSamplesRetrieved;
   const quoteSampleProductionMissing =
     isSampleProductionOnlyQuote && !quoteSampleProductionCompleted;
+  const quoteBidSubmissionMissing =
+    isBidSubmissionOnlyQuote && !bidSubmissionReady;
   const canConfirmPreviousSamplesRetrieved =
     isPreviousSamplesOnlyQuote &&
     canManageBilling &&
@@ -1381,10 +1471,18 @@ const OrderActions = () => {
     : quoteWorkflowStatus;
   const quoteSubmissionLabel = isPreviousSamplesOnlyQuote
     ? "Sample / Work done Sent"
-    : "Quote Submission";
+    : isBidSubmissionOnlyQuote
+      ? "Bid Submission / Documents Sent"
+      : "Quote Submission";
   const quoteSubmissionDescription = isPreviousSamplesOnlyQuote
     ? "Confirm when the sample/work done and quote have been sent to the client."
-    : "Confirm when the quote has been sent to the client.";
+    : isBidSubmissionOnlyQuote
+      ? "Confirm when bid submission documents and the quote have been sent to the client."
+      : "Confirm when the quote has been sent to the client.";
+  useEffect(() => {
+    if (!isQuoteProject) return;
+    setQuoteBidDocsSensitive(bidSubmissionIsSensitive);
+  }, [isQuoteProject, bidSubmissionIsSensitive, project?._id]);
   const quoteDecisionState = useMemo(
     () => getQuoteDecisionState(project),
     [project],
@@ -2287,6 +2385,66 @@ const OrderActions = () => {
     }
   };
 
+  const handleBidDocsFileChange = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    setQuoteBidDocsFiles((prev) => [...prev, ...files]);
+    event.target.value = null;
+  };
+
+  const handleRemoveBidDocFile = (index) => {
+    setQuoteBidDocsFiles((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveBidDocuments = async () => {
+    if (!project || !isQuoteProject || !isBidSubmissionOnlyQuote || !canManageBilling) {
+      return;
+    }
+    const totalDocs = bidSubmissionDocuments.length + quoteBidDocsFiles.length;
+    if (!quoteBidDocsSensitive && totalDocs === 0) {
+      showToast(
+        "Upload at least one document or mark the document as sensitive.",
+        "error",
+      );
+      return;
+    }
+
+    setQuoteBidDocsSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("isSensitive", quoteBidDocsSensitive ? "true" : "false");
+      quoteBidDocsFiles.forEach((file) => {
+        formData.append("bidDocuments", file);
+      });
+
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-bid-documents`,
+        {
+          method: "PATCH",
+          body: formData,
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        setQuoteBidDocsFiles([]);
+        showToast("Bid submission documents updated.", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to update bid submission documents.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Bid documents update error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteBidDocsSaving(false);
+    }
+  };
+
   const openPaymentModal = (type) => {
     setPaymentModal({ open: true, type });
     setPaymentInput("");
@@ -2846,6 +3004,9 @@ const OrderActions = () => {
     isSampleProductionOnlyQuote && !quoteSampleProductionCompleted
       ? "Sample production is still pending."
       : "",
+    isBidSubmissionOnlyQuote && !bidSubmissionReady
+      ? "Bid submission documents are still needed."
+      : "",
     isQuoteProject &&
     !quoteWorkflowBlocked &&
     quoteWorkflowStatus === "Pending Quote Submission" &&
@@ -2894,6 +3055,7 @@ const OrderActions = () => {
     "Pending Sample Retrieval",
     "Pending Sample / Work done Retrieval",
     "Pending Sample Production",
+    "Pending Bid Submission / Documents",
     "Pending Quote Submission",
     "Pending Sample / Work done Sent",
     "Pending Client Decision",
@@ -3609,6 +3771,155 @@ const OrderActions = () => {
             </div>
           )}
 
+          {isQuoteProject && isBidSubmissionOnlyQuote && (
+            <div className="action-card">
+              <h3>Bid Submission / Documents</h3>
+              <p>
+                Upload bid submission or supporting documents before confirming
+                quote submission. Mark as sensitive if uploads should not be shared.
+              </p>
+              {quoteWorkflowBlocked ? (
+                <div className="mockup-empty-state">
+                  {quoteWorkflowBlockedMessage ||
+                    "Quote workflows are not configured for this requirement set."}
+                </div>
+              ) : (
+                <>
+                  <label className="quote-decision-field">
+                    <span>Document Sensitivity</span>
+                    <div className="toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={quoteBidDocsSensitive}
+                        onChange={(event) =>
+                          setQuoteBidDocsSensitive(event.target.checked)
+                        }
+                        disabled={!canManageBilling || quoteBidDocsSaving}
+                      />
+                      <span>
+                        Mark as sensitive (no upload required to proceed).
+                      </span>
+                    </div>
+                  </label>
+                  <div className="billing-actions">
+                    <input
+                      type="file"
+                      id="quote-bid-docs-input"
+                      multiple
+                      style={{ display: "none" }}
+                      onChange={handleBidDocsFileChange}
+                    />
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={() =>
+                        document.getElementById("quote-bid-docs-input")?.click()
+                      }
+                      disabled={!canManageBilling || quoteBidDocsSaving}
+                    >
+                      Add Documents
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn complete-btn"
+                      onClick={handleSaveBidDocuments}
+                      disabled={!canManageBilling || quoteBidDocsSaving}
+                    >
+                      {quoteBidDocsSaving ? "Saving..." : "Save Documents"}
+                    </button>
+                  </div>
+
+                  {(bidSubmissionDocuments.length > 0 ||
+                    quoteBidDocsFiles.length > 0) && (
+                    <div className="reference-files-grid">
+                      {bidSubmissionDocuments.map((doc, index) => {
+                        const isImage = isImageAsset(doc.fileUrl, doc.fileType);
+                        return (
+                          <div
+                            key={doc.fileUrl || `existing-${index}`}
+                            className="reference-file-tile existing"
+                          >
+                            <div className="file-icon">
+                              {isImage ? (
+                                <img src={doc.fileUrl} alt={doc.fileName} />
+                              ) : (
+                                <span>FILE</span>
+                              )}
+                            </div>
+                            <div className="file-info">
+                              <a
+                                className="file-name"
+                                href={doc.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {doc.fileName || "Document"}
+                              </a>
+                              <span className="file-size">
+                                {doc.fileType || "Document"}
+                              </span>
+                            </div>
+                            {doc.note && (
+                              <div className="mockup-approval-meta">
+                                Note: {doc.note}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {quoteBidDocsFiles.map((file, index) => {
+                        const isImage = file.type?.startsWith("image/");
+                        const previewUrl = isImage
+                          ? URL.createObjectURL(file)
+                          : "";
+                        return (
+                          <div
+                            key={`${file.name}-${index}`}
+                            className="reference-file-tile"
+                          >
+                            <div className="file-icon">
+                              {isImage ? (
+                                <img src={previewUrl} alt={file.name} />
+                              ) : (
+                                <span>FILE</span>
+                              )}
+                            </div>
+                            <div className="file-info">
+                              <span className="file-name">{file.name}</span>
+                              <span className="file-size">
+                                {formatFileSize(file.size)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="file-remove-btn"
+                              onClick={() => handleRemoveBidDocFile(index)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {bidSubmissionDocuments.length === 0 &&
+                    quoteBidDocsFiles.length === 0 && (
+                      <div className="mockup-empty-state">
+                        No bid documents uploaded yet.
+                      </div>
+                    )}
+
+                  <p className="mockup-approval-meta">
+                    Requirement status: {quoteBidSubmissionStatusLabel}.{" "}
+                    {bidSubmissionReady
+                      ? "Ready for quote submission."
+                      : "Upload documents or mark as sensitive to proceed."}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="action-card billing-card" id="order-actions-billing">
             <h3>{isQuoteProject ? quoteSubmissionLabel : "Billing"}</h3>
             <p>
@@ -3643,7 +3954,9 @@ const OrderActions = () => {
                               ? "Confirm mockup approval before sending the quote."
                               : isPreviousSamplesOnlyQuote
                                 ? "Confirm sample retrieval before sending the quote."
-                                : "Confirm sample production before sending the quote."
+                                : isSampleProductionOnlyQuote
+                                  ? "Confirm sample production before sending the quote."
+                                  : "Upload bid documents or mark them as sensitive before sending the quote."
                         : undefined
                     }
                   >
@@ -3706,6 +4019,11 @@ const OrderActions = () => {
             {isQuoteProject && quoteSampleProductionMissing && (
               <p className="mockup-approval-meta">
                 Confirm sample production before sending the quote to the client.
+              </p>
+            )}
+            {isQuoteProject && quoteBidSubmissionMissing && (
+              <p className="mockup-approval-meta">
+                Upload bid documents or mark them as sensitive before sending the quote.
               </p>
             )}
             {isQuoteProject && quoteWorkflowBlocked && (

@@ -3,6 +3,7 @@ const QUOTE_STATUS_ALIASES = {
   "Quote Request Completed": "Cost Verification Completed",
   "Pending Send Response": "Pending Quote Submission",
   "Response Sent": "Pending Client Decision",
+  "Pending Bid Submission / Documents": "Pending Quote Submission",
   "Pending Feedback": "Pending Client Decision",
   "Feedback Completed": "Completed",
   "Decision Completed": "Completed",
@@ -32,9 +33,16 @@ export const getQuoteRequirementMode = (checklist = {}) => {
   const hasMockup = Boolean(normalized.mockup);
   const hasPreviousSamples = Boolean(normalized.previousSamples);
   const hasSampleProduction = Boolean(normalized.sampleProduction);
+  const hasBidSubmission = Boolean(normalized.bidSubmission);
   const hasOther = QUOTE_REQUIREMENT_KEYS.some(
     (key) =>
-      !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+      ![
+        "cost",
+        "mockup",
+        "previousSamples",
+        "sampleProduction",
+        "bidSubmission",
+      ].includes(key) &&
       normalized[key],
   );
 
@@ -42,13 +50,29 @@ export const getQuoteRequirementMode = (checklist = {}) => {
   if (hasMockup && !hasCost && !hasPreviousSamples && !hasOther) return "mockup";
   if (hasPreviousSamples && !hasCost && !hasMockup && !hasOther)
     return "previousSamples";
-  if (hasSampleProduction && !hasCost && !hasPreviousSamples && !hasOther)
+  if (
+    hasSampleProduction &&
+    !hasCost &&
+    !hasPreviousSamples &&
+    !hasBidSubmission &&
+    !hasOther
+  )
     return "sampleProduction";
+  if (
+    hasBidSubmission &&
+    !hasCost &&
+    !hasMockup &&
+    !hasPreviousSamples &&
+    !hasSampleProduction &&
+    !hasOther
+  )
+    return "bidSubmission";
   if (
     !hasCost &&
     !hasMockup &&
     !hasPreviousSamples &&
     !hasSampleProduction &&
+    !hasBidSubmission &&
     !hasOther
   )
     return "none";
@@ -79,6 +103,11 @@ const QUOTE_STATUS_DISPLAY_OVERRIDES = {
     "Production Completed": "Pending Quote Submission",
     "Quote Submission Completed": "Pending Client Decision",
   },
+  bidSubmission: {
+    "Scope Approval Completed": "Pending Bid Submission / Documents",
+    "Pending Quote Submission": "Pending Bid Submission / Documents",
+    "Quote Submission Completed": "Pending Client Decision",
+  },
 };
 
 const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
@@ -93,6 +122,8 @@ const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
     return modeOrChecklist.trim();
   }
   const normalizedStatus = String(status || "").toLowerCase();
+  if (normalizedStatus.includes("bid")) return "bidSubmission";
+  if (normalizedStatus.includes("document")) return "bidSubmission";
   if (normalizedStatus.includes("sample production")) return "sampleProduction";
   if (normalizedStatus.includes("production")) return "sampleProduction";
   if (normalizedStatus.includes("mockup")) return "mockup";

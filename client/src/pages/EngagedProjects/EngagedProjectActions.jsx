@@ -720,7 +720,13 @@ const EngagedProjectActions = ({ user }) => {
   const unsupportedQuoteRequirementKeys = Object.entries(quoteChecklist)
     .filter(
       ([key, value]) =>
-        !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+        ![
+          "cost",
+          "mockup",
+          "previousSamples",
+          "sampleProduction",
+          "bidSubmission",
+        ].includes(key) &&
         Boolean(value),
     )
     .map(([key]) => key);
@@ -733,11 +739,14 @@ const EngagedProjectActions = ({ user }) => {
     isQuoteProject && quoteRequirementMode === "previousSamples";
   const isSampleProductionOnlyQuote =
     isQuoteProject && quoteRequirementMode === "sampleProduction";
+  const isBidSubmissionOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "bidSubmission";
   const enabledQuoteRequirements = [
     "cost",
     "mockup",
     "previousSamples",
     "sampleProduction",
+    "bidSubmission",
   ].filter((key) => quoteChecklist[key]);
   const effectiveEnabledRequirements = quoteChecklist.sampleProduction
     ? enabledQuoteRequirements.filter((key) => key !== "mockup")
@@ -748,7 +757,8 @@ const EngagedProjectActions = ({ user }) => {
     !isCostOnlyQuote &&
     !isMockupOnlyQuote &&
     !isPreviousSamplesOnlyQuote &&
-    !isSampleProductionOnlyQuote;
+    !isSampleProductionOnlyQuote &&
+    !isBidSubmissionOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."

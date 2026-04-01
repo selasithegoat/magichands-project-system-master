@@ -137,6 +137,9 @@ const mapQuoteStatusForStorage = (status) => {
   if (normalized === "Pending Sample / Work done Sent") {
     return "Pending Quote Submission";
   }
+  if (normalized === "Pending Bid Submission / Documents") {
+    return "Pending Quote Submission";
+  }
   if (normalized === "Pending Sample Production") {
     return "Pending Production";
   }
@@ -214,6 +217,16 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
     "Pending Mockup",
     "Mockup Completed",
     "Pending Sample Production",
+    "Pending Quote Submission",
+    "Quote Submission Completed",
+    "Pending Client Decision",
+    "Completed",
+    "Finished",
+  ],
+  bidSubmission: [
+    "Quote Created",
+    "Pending Scope Approval",
+    "Scope Approval Completed",
     "Pending Quote Submission",
     "Quote Submission Completed",
     "Pending Client Decision",
@@ -2396,9 +2409,17 @@ const ProjectDetails = ({ user }) => {
     isQuoteProject && quoteRequirementMode === "previousSamples";
   const isSampleProductionOnlyQuote =
     isQuoteProject && quoteRequirementMode === "sampleProduction";
+  const isBidSubmissionOnlyQuote =
+    isQuoteProject && quoteRequirementMode === "bidSubmission";
   const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
     ([key, value]) =>
-      !["cost", "mockup", "previousSamples", "sampleProduction"].includes(key) &&
+      ![
+        "cost",
+        "mockup",
+        "previousSamples",
+        "sampleProduction",
+        "bidSubmission",
+      ].includes(key) &&
       Boolean(value),
   );
   const enabledQuoteRequirements = [
@@ -2406,6 +2427,7 @@ const ProjectDetails = ({ user }) => {
     "mockup",
     "previousSamples",
     "sampleProduction",
+    "bidSubmission",
   ].filter((key) => quoteChecklist?.[key]);
   const effectiveEnabledRequirements = quoteChecklist.sampleProduction
     ? enabledQuoteRequirements.filter((key) => key !== "mockup")
@@ -2416,7 +2438,8 @@ const ProjectDetails = ({ user }) => {
     !isCostOnlyQuote &&
     !isMockupOnlyQuote &&
     !isPreviousSamplesOnlyQuote &&
-    !isSampleProductionOnlyQuote;
+    !isSampleProductionOnlyQuote &&
+    !isBidSubmissionOnlyQuote;
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? quoteRequirementMode === "none"
       ? "Quote requirements are not configured yet."
@@ -2458,6 +2481,33 @@ const ProjectDetails = ({ user }) => {
         .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
         .join(" ")
     : "Pending";
+  const quoteBidSubmissionRequirement =
+    project?.quoteDetails?.requirementItems?.bidSubmission || {};
+  const quoteBidSubmissionStatus = String(
+    quoteBidSubmissionRequirement?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+  const quoteBidSubmissionStatusLabel = quoteBidSubmissionStatus
+    ? quoteBidSubmissionStatus
+        .split("_")
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .join(" ")
+    : "Pending";
+  const quoteBidSubmissionDetails = project?.quoteDetails?.bidSubmission || {};
+  const quoteBidSubmissionIsSensitive = Boolean(
+    quoteBidSubmissionDetails.isSensitive,
+  );
+  const quoteBidSubmissionDocuments = Array.isArray(
+    quoteBidSubmissionDetails.documents,
+  )
+    ? quoteBidSubmissionDetails.documents.filter(Boolean)
+    : [];
+  const quoteBidSubmissionDocCount = quoteBidSubmissionDocuments.length;
+  const quoteBidSubmissionReady =
+    quoteBidSubmissionIsSensitive || quoteBidSubmissionDocCount > 0;
+  const quoteBidSubmissionUpdatedAt =
+    quoteBidSubmissionDetails.updatedAt || quoteBidSubmissionRequirement.updatedAt;
   const currentDisplayStatus = mapQuoteStatusForDisplay(
     quoteWorkflowStatus,
     isQuoteProject,
@@ -2798,7 +2848,7 @@ const ProjectDetails = ({ user }) => {
                         "Finished",
                         ...(isProjectOnHold ? ["On Hold"] : []),
                       ]
-                    : isSampleProductionOnlyQuote
+                  : isSampleProductionOnlyQuote
                       ? [
                           "Quote Created",
                           "Pending Scope Approval",
@@ -2807,6 +2857,18 @@ const ProjectDetails = ({ user }) => {
                           "Mockup Completed",
                           "Pending Sample Production",
                           "Pending Quote Submission",
+                          "Quote Submitted",
+                          "Pending Decision",
+                          "Completed",
+                          "Finished",
+                          ...(isProjectOnHold ? ["On Hold"] : []),
+                        ]
+                    : isBidSubmissionOnlyQuote
+                      ? [
+                          "Quote Created",
+                          "Pending Scope Approval",
+                          "Scope Approval Completed",
+                          "Pending Bid Submission / Documents",
                           "Quote Submitted",
                           "Pending Decision",
                           "Completed",
@@ -3698,6 +3760,33 @@ const ProjectDetails = ({ user }) => {
                     {quoteSampleProductionRequirement.note && (
                       <div className="quote-requirement-admin-helper">
                         Note: {quoteSampleProductionRequirement.note}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isBidSubmissionOnlyQuote && (
+                  <div
+                    className={`checklist-admin-item quote-requirement-admin-item ${
+                      quoteBidSubmissionReady ? "is-required" : "is-not-required"
+                    }`}
+                  >
+                    <div className="quote-requirement-admin-header">
+                      <span className="quote-requirement-admin-title">
+                        Bid Submission / Documents
+                      </span>
+                      <span className="quote-requirement-admin-status">
+                        {quoteBidSubmissionStatusLabel}
+                      </span>
+                    </div>
+                    <div className="quote-requirement-admin-updated">
+                      Sensitive: {quoteBidSubmissionIsSensitive ? "Yes" : "No"}
+                    </div>
+                    <div className="quote-requirement-admin-updated">
+                      Documents: {quoteBidSubmissionDocCount}
+                    </div>
+                    {quoteBidSubmissionUpdatedAt && (
+                      <div className="quote-requirement-admin-updated">
+                        Updated {formatLastUpdated(quoteBidSubmissionUpdatedAt)}
                       </div>
                     )}
                   </div>

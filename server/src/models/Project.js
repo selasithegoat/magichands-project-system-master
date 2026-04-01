@@ -630,6 +630,21 @@ const ProjectSchema = new mongoose.Schema(
           default: createDefaultQuoteRequirementItem,
         },
       },
+      bidSubmission: {
+        isSensitive: {
+          type: Boolean,
+          default: false,
+        },
+        documents: {
+          type: [mongoose.Schema.Types.Mixed],
+          default: [],
+        },
+        updatedAt: Date,
+        updatedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      },
       productionChecklist: {
         inHouse: Boolean,
         outside: Boolean,

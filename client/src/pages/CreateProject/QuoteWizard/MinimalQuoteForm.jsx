@@ -86,22 +86,38 @@ const normalizeChecklist = (checklist) => {
   const hasMockup = Boolean(next.mockup);
   const hasPreviousSamples = Boolean(next.previousSamples);
   const hasSampleProduction = Boolean(next.sampleProduction);
-  if (!hasCost && !hasMockup && !hasPreviousSamples && !hasSampleProduction) {
+  const hasBidSubmission = Boolean(next.bidSubmission);
+  if (
+    !hasCost &&
+    !hasMockup &&
+    !hasPreviousSamples &&
+    !hasSampleProduction &&
+    !hasBidSubmission
+  ) {
     next.cost = true;
   }
-  if (hasSampleProduction) {
+  if (hasBidSubmission) {
     next.cost = false;
     next.mockup = false;
     next.previousSamples = false;
+    next.sampleProduction = false;
+  } else if (hasSampleProduction) {
+    next.cost = false;
+    next.mockup = false;
+    next.previousSamples = false;
+    next.bidSubmission = false;
   } else if (hasCost) {
     next.mockup = false;
     next.previousSamples = false;
     next.sampleProduction = false;
+    next.bidSubmission = false;
   } else if (hasMockup) {
     next.previousSamples = false;
     next.sampleProduction = false;
+    next.bidSubmission = false;
   } else if (hasPreviousSamples) {
     next.sampleProduction = false;
+    next.bidSubmission = false;
   }
   next.cost = Boolean(next.cost);
   next.mockup = Boolean(next.mockup);
@@ -288,6 +304,7 @@ const MinimalQuoteForm = () => {
       "mockup",
       "previousSamples",
       "sampleProduction",
+      "bidSubmission",
     ];
     if (!requirementKeys.includes(field)) return;
     setFormData((prev) => {
@@ -299,6 +316,7 @@ const MinimalQuoteForm = () => {
         mockup: false,
         previousSamples: false,
         sampleProduction: false,
+        bidSubmission: false,
       };
       if (nextValue) {
         nextChecklist[field] = true;
@@ -876,9 +894,8 @@ const MinimalQuoteForm = () => {
               <span style={{ color: "red" }}>*</span>
             </h3>
             <p className="section-hint">
-              Cost, Mockup, Previous Sample / Jobs Done, and Sample Production
-              are available right now. Bid Submission / Documents is coming
-              soon.
+              Cost, Mockup, Previous Sample / Jobs Done, Sample Production, and
+              Bid Submission / Documents are available right now.
             </p>
             <div className="minimal-quote-checklist-grid">
               <label className="checklist-item">
@@ -918,7 +935,6 @@ const MinimalQuoteForm = () => {
                   type="checkbox"
                   checked={formData.checklist.bidSubmission}
                   onChange={() => handleChecklistChange("bidSubmission")}
-                  disabled
                 />
                 <span>Bid Submission / Documents</span>
               </label>

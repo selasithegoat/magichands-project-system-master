@@ -292,6 +292,17 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     Completed: 100,
     Finished: 100,
   };
+  const quoteBidSubmissionProgressMap = {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Quote Submission": 60,
+    "Pending Bid Submission / Documents": 60,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+  };
 
   const progressMap =
     project.projectType === "Quote"
@@ -301,6 +312,8 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           ? quotePreviousSamplesProgressMap
           : quoteRequirementMode === "sampleProduction"
             ? quoteSampleProductionProgressMap
+            : quoteRequirementMode === "bidSubmission"
+              ? quoteBidSubmissionProgressMap
         : quoteProgressMap
       : standardProgressMap;
   const progress = progressMap[statusToneTarget] ?? progressMap[resolvedStatus] ?? 5;
