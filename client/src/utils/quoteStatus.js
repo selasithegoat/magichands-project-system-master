@@ -1,4 +1,4 @@
-const QUOTE_STATUS_ALIASES = {
+export const QUOTE_STATUS_ALIASES = {
   "Pending Quote Request": "Pending Cost Verification",
   "Quote Request Completed": "Cost Verification Completed",
   "Pending Send Response": "Pending Quote Submission",
@@ -10,13 +10,36 @@ const QUOTE_STATUS_ALIASES = {
   Declined: "Completed",
 };
 
-const QUOTE_REQUIREMENT_KEYS = [
+export const QUOTE_REQUIREMENT_KEYS = [
   "cost",
   "mockup",
   "previousSamples",
   "sampleProduction",
   "bidSubmission",
 ];
+
+export const QUOTE_REQUIREMENT_LABELS = {
+  cost: "Cost",
+  mockup: "Mockup",
+  previousSamples: "Previous Sample / Work done",
+  sampleProduction: "Sample Production",
+  bidSubmission: "Bid Submission / Documents",
+};
+
+const QUOTE_MULTI_REQUIREMENT_PENDING_STATUSES = new Set([
+  "Scope Approval Completed",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Mockup",
+  "Mockup Completed",
+  "Pending Sample Retrieval",
+  "Pending Sample / Work done Retrieval",
+  "Pending Production",
+  "Pending Sample Production",
+  "Production Completed",
+  "Pending Bid Submission / Documents",
+  "Pending Quote Requirements",
+]);
 
 export const normalizeQuoteStatus = (status = "") =>
   QUOTE_STATUS_ALIASES[status] || status;
@@ -27,56 +50,44 @@ export const normalizeQuoteChecklist = (checklist = {}) =>
     return accumulator;
   }, {});
 
-export const getQuoteRequirementMode = (checklist = {}) => {
+export const getEffectiveQuoteRequirementKeys = (checklist = {}) => {
   const normalized = normalizeQuoteChecklist(checklist);
-  const hasCost = Boolean(normalized.cost);
-  const hasMockup = Boolean(normalized.mockup);
-  const hasPreviousSamples = Boolean(normalized.previousSamples);
-  const hasSampleProduction = Boolean(normalized.sampleProduction);
-  const hasBidSubmission = Boolean(normalized.bidSubmission);
-  const hasOther = QUOTE_REQUIREMENT_KEYS.some(
-    (key) =>
-      ![
-        "cost",
-        "mockup",
-        "previousSamples",
-        "sampleProduction",
-        "bidSubmission",
-      ].includes(key) &&
-      normalized[key],
-  );
+  const enabledKeys = QUOTE_REQUIREMENT_KEYS.filter((key) => normalized[key]);
+  return normalized.sampleProduction
+    ? enabledKeys.filter((key) => key !== "mockup")
+    : enabledKeys;
+};
 
-  if (hasCost && !hasMockup && !hasPreviousSamples && !hasOther) return "cost";
-  if (hasMockup && !hasCost && !hasPreviousSamples && !hasOther) return "mockup";
-  if (hasPreviousSamples && !hasCost && !hasMockup && !hasOther)
-    return "previousSamples";
-  if (
-    hasSampleProduction &&
-    !hasCost &&
-    !hasPreviousSamples &&
-    !hasBidSubmission &&
-    !hasOther
-  )
-    return "sampleProduction";
-  if (
-    hasBidSubmission &&
-    !hasCost &&
-    !hasMockup &&
-    !hasPreviousSamples &&
-    !hasSampleProduction &&
-    !hasOther
-  )
-    return "bidSubmission";
-  if (
-    !hasCost &&
-    !hasMockup &&
-    !hasPreviousSamples &&
-    !hasSampleProduction &&
-    !hasBidSubmission &&
-    !hasOther
-  )
-    return "none";
-  return "unsupported";
+export const getQuoteRequirementMode = (checklist = {}) => {
+  const effectiveKeys = getEffectiveQuoteRequirementKeys(checklist);
+  if (effectiveKeys.length === 0) return "none";
+  if (effectiveKeys.length > 1) return "multi";
+  return effectiveKeys[0];
+};
+
+export const getQuoteRequirementSummary = (checklist = {}) => {
+  const normalizedChecklist = normalizeQuoteChecklist(checklist);
+  const enabledKeys = QUOTE_REQUIREMENT_KEYS.filter(
+    (key) => normalizedChecklist[key],
+  );
+  const effectiveEnabledKeys = getEffectiveQuoteRequirementKeys(normalizedChecklist);
+  const mode = getQuoteRequirementMode(normalizedChecklist);
+
+  return {
+    checklist: normalizedChecklist,
+    enabledKeys,
+    effectiveEnabledKeys,
+    hasRequirements: effectiveEnabledKeys.length > 0,
+    hasMultipleRequirements: effectiveEnabledKeys.length > 1,
+    mode,
+    includesCost: effectiveEnabledKeys.includes("cost"),
+    includesMockup:
+      effectiveEnabledKeys.includes("mockup") ||
+      effectiveEnabledKeys.includes("sampleProduction"),
+    includesPreviousSamples: effectiveEnabledKeys.includes("previousSamples"),
+    includesSampleProduction: effectiveEnabledKeys.includes("sampleProduction"),
+    includesBidSubmission: effectiveEnabledKeys.includes("bidSubmission"),
+  };
 };
 
 const QUOTE_STATUS_DISPLAY_OVERRIDES = {
@@ -108,6 +119,10 @@ const QUOTE_STATUS_DISPLAY_OVERRIDES = {
     "Pending Quote Submission": "Pending Bid Submission / Documents",
     "Quote Submission Completed": "Pending Client Decision",
   },
+  multi: {
+    "Scope Approval Completed": "Pending Quote Requirements",
+    "Quote Submission Completed": "Pending Client Decision",
+  },
 };
 
 const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
@@ -122,6 +137,7 @@ const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
     return modeOrChecklist.trim();
   }
   const normalizedStatus = String(status || "").toLowerCase();
+  if (normalizedStatus.includes("quote requirements")) return "multi";
   if (normalizedStatus.includes("bid")) return "bidSubmission";
   if (normalizedStatus.includes("document")) return "bidSubmission";
   if (normalizedStatus.includes("sample production")) return "sampleProduction";
@@ -137,10 +153,339 @@ export const getQuoteStatusDisplay = (status = "", modeOrChecklist) => {
     modeOrChecklist,
     normalized,
   );
+
+  if (
+    requirementMode === "multi" &&
+    QUOTE_MULTI_REQUIREMENT_PENDING_STATUSES.has(normalized)
+  ) {
+    return normalized === "Pending Quote Submission"
+      ? "Pending Quote Submission"
+      : "Pending Quote Requirements";
+  }
+
   const overrides =
     QUOTE_STATUS_DISPLAY_OVERRIDES[requirementMode] ||
     QUOTE_STATUS_DISPLAY_OVERRIDES.cost;
   return overrides[normalized] || normalized;
+};
+
+export const getQuoteWorkflowJourneySteps = (modeOrChecklist) => {
+  const requirementMode = resolveQuoteRequirementMode(modeOrChecklist);
+  if (requirementMode === "multi") {
+    return [
+      {
+        key: "scope",
+        label: "Scope",
+        statuses: [
+          "Quote Created",
+          "Pending Scope Approval",
+          "Scope Approval Completed",
+        ],
+      },
+      {
+        key: "requirements",
+        label: "Requirements",
+        statuses: ["Pending Quote Requirements"],
+      },
+      {
+        key: "submission",
+        label: "Quote Submission",
+        statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        statuses: ["Pending Client Decision", "Completed", "Finished"],
+      },
+    ];
+  }
+
+  const stepsByMode = {
+    cost: [
+      {
+        key: "scope",
+        label: "Scope",
+        statuses: [
+          "Quote Created",
+          "Pending Scope Approval",
+          "Scope Approval Completed",
+        ],
+      },
+      {
+        key: "cost",
+        label: "Cost Verification",
+        statuses: ["Pending Cost Verification", "Cost Verification Completed"],
+      },
+      {
+        key: "submission",
+        label: "Quote Submission",
+        statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        statuses: ["Pending Client Decision", "Completed", "Finished"],
+      },
+    ],
+    mockup: [
+      {
+        key: "scope",
+        label: "Scope",
+        statuses: [
+          "Quote Created",
+          "Pending Scope Approval",
+          "Scope Approval Completed",
+        ],
+      },
+      {
+        key: "mockup",
+        label: "Mockup",
+        statuses: ["Pending Mockup", "Mockup Completed"],
+      },
+      {
+        key: "submission",
+        label: "Quote Submission",
+        statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        statuses: ["Pending Client Decision", "Completed", "Finished"],
+      },
+    ],
+    previousSamples: [
+      {
+        key: "scope",
+        label: "Scope",
+        statuses: [
+          "Quote Created",
+          "Pending Scope Approval",
+          "Scope Approval Completed",
+        ],
+      },
+      {
+        key: "retrieval",
+        label: "Sample Retrieval",
+        statuses: [
+          "Pending Sample Retrieval",
+          "Pending Sample / Work done Retrieval",
+        ],
+      },
+      {
+        key: "submission",
+        label: "Sample / Work done Sent",
+        statuses: [
+          "Pending Quote Submission",
+          "Pending Sample / Work done Sent",
+          "Quote Submission Completed",
+        ],
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        statuses: ["Pending Client Decision", "Completed", "Finished"],
+      },
+    ],
+    sampleProduction: [
+      {
+        key: "scope",
+        label: "Scope",
+        statuses: [
+          "Quote Created",
+          "Pending Scope Approval",
+          "Scope Approval Completed",
+        ],
+      },
+      {
+        key: "mockup",
+        label: "Mockup",
+        statuses: ["Pending Mockup", "Mockup Completed"],
+      },
+      {
+        key: "production",
+        label: "Sample Production",
+        statuses: ["Pending Production", "Pending Sample Production"],
+      },
+      {
+        key: "submission",
+        label: "Quote Submission",
+        statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        statuses: ["Pending Client Decision", "Completed", "Finished"],
+      },
+    ],
+    bidSubmission: [
+      {
+        key: "scope",
+        label: "Scope",
+        statuses: [
+          "Quote Created",
+          "Pending Scope Approval",
+          "Scope Approval Completed",
+        ],
+      },
+      {
+        key: "documents",
+        label: "Bid Documents",
+        statuses: [
+          "Pending Quote Submission",
+          "Pending Bid Submission / Documents",
+        ],
+      },
+      {
+        key: "submission",
+        label: "Quote Submission",
+        statuses: ["Quote Submission Completed"],
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        statuses: ["Pending Client Decision", "Completed", "Finished"],
+      },
+    ],
+  };
+
+  return stepsByMode[requirementMode] || stepsByMode.cost;
+};
+
+export const QUOTE_PROGRESS_MAP_BY_MODE = {
+  cost: {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Cost Verification": 45,
+    "Cost Verification Completed": 55,
+    "Pending Quote Submission": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+    Declined: 100,
+  },
+  mockup: {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Mockup": 45,
+    "Mockup Completed": 55,
+    "Pending Quote Submission": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+    Declined: 100,
+  },
+  previousSamples: {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Sample Retrieval": 45,
+    "Pending Sample / Work done Retrieval": 45,
+    "Pending Quote Submission": 70,
+    "Pending Sample / Work done Sent": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+    Declined: 100,
+  },
+  sampleProduction: {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Mockup": 40,
+    "Mockup Completed": 45,
+    "Pending Production": 55,
+    "Pending Sample Production": 55,
+    "Pending Quote Submission": 70,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+    Declined: 100,
+  },
+  bidSubmission: {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Quote Submission": 60,
+    "Pending Bid Submission / Documents": 60,
+    "Quote Submission Completed": 80,
+    "Pending Client Decision": 90,
+    Completed: 100,
+    Finished: 100,
+    Declined: 100,
+  },
+  multi: {
+    "Quote Created": 5,
+    "Pending Scope Approval": 20,
+    "Scope Approval Completed": 30,
+    "Pending Quote Requirements": 55,
+    "Pending Quote Submission": 75,
+    "Quote Submission Completed": 85,
+    "Pending Client Decision": 92,
+    Completed: 100,
+    Finished: 100,
+    Declined: 100,
+  },
+};
+
+export const getQuoteProgressPercent = (status = "", modeOrChecklist) => {
+  const requirementMode = resolveQuoteRequirementMode(modeOrChecklist, status);
+  const displayStatus = getQuoteStatusDisplay(status, requirementMode);
+  const progressMap =
+    QUOTE_PROGRESS_MAP_BY_MODE[requirementMode] || QUOTE_PROGRESS_MAP_BY_MODE.cost;
+  return progressMap[displayStatus] ?? progressMap[normalizeQuoteStatus(status)] ?? 5;
+};
+
+export const isQuoteMockupCompletionConfirmed = (
+  project = {},
+  modeOrChecklist,
+) => {
+  const requirementMode = resolveQuoteRequirementMode(
+    modeOrChecklist || project?.quoteDetails?.checklist || {},
+    project?.status || "",
+  );
+  const requirementItem = project?.quoteDetails?.requirementItems?.mockup || {};
+
+  if (requirementItem?.completionConfirmedAt || requirementItem?.completionConfirmedBy) {
+    return true;
+  }
+
+  const normalizedStatus = normalizeQuoteStatus(project?.status || "");
+  if (normalizedStatus === "Mockup Completed") {
+    return true;
+  }
+
+  if (requirementMode === "mockup") {
+    return [
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      "Completed",
+      "Finished",
+      "Declined",
+    ].includes(normalizedStatus);
+  }
+
+  if (requirementMode === "sampleProduction") {
+    return [
+      "Pending Production",
+      "Pending Sample Production",
+      "Production Completed",
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      "Completed",
+      "Finished",
+      "Declined",
+    ].includes(normalizedStatus);
+  }
+
+  return false;
 };
 
 export const QUOTE_STATUS_ALIAS_MAP = QUOTE_STATUS_ALIASES;

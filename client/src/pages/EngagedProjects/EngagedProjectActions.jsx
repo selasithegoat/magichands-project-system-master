@@ -14,8 +14,10 @@ import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
 import {
+  getQuoteRequirementSummary,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
+  isQuoteMockupCompletionConfirmed,
   normalizeQuoteChecklist,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
@@ -401,8 +403,15 @@ const ENGAGED_WORKFLOW_STEPS = [
     statuses: [
       "Pending Cost Verification",
       "Cost Verification Completed",
+      "Pending Quote Requirements",
       "Pending Mockup",
       "Mockup Completed",
+      "Pending Sample Retrieval",
+      "Pending Sample / Work done Retrieval",
+      "Pending Production",
+      "Pending Sample Production",
+      "Production Completed",
+      "Pending Bid Submission / Documents",
     ],
   },
   {
@@ -717,56 +726,29 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const quoteChecklist = isQuoteProject ? resolveQuoteChecklist(project) : {};
-  const unsupportedQuoteRequirementKeys = Object.entries(quoteChecklist)
-    .filter(
-      ([key, value]) =>
-        ![
-          "cost",
-          "mockup",
-          "previousSamples",
-          "sampleProduction",
-          "bidSubmission",
-        ].includes(key) &&
-        Boolean(value),
-    )
-    .map(([key]) => key);
+  const quoteRequirementSummary = useMemo(
+    () => getQuoteRequirementSummary(quoteChecklist),
+    [quoteChecklist],
+  );
   const quoteRequirementMode = isQuoteProject
-    ? getQuoteRequirementMode(quoteChecklist)
+    ? quoteRequirementSummary.mode
     : "none";
-  const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
-  const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
-  const isPreviousSamplesOnlyQuote =
-    isQuoteProject && quoteRequirementMode === "previousSamples";
-  const isSampleProductionOnlyQuote =
-    isQuoteProject && quoteRequirementMode === "sampleProduction";
-  const isBidSubmissionOnlyQuote =
-    isQuoteProject && quoteRequirementMode === "bidSubmission";
-  const enabledQuoteRequirements = [
-    "cost",
-    "mockup",
-    "previousSamples",
-    "sampleProduction",
-    "bidSubmission",
-  ].filter((key) => quoteChecklist[key]);
-  const effectiveEnabledRequirements = quoteChecklist.sampleProduction
-    ? enabledQuoteRequirements.filter((key) => key !== "mockup")
-    : enabledQuoteRequirements;
-  const quoteHasMultipleRequirements = effectiveEnabledRequirements.length > 1;
+  const effectiveEnabledRequirements =
+    quoteRequirementSummary.effectiveEnabledKeys || [];
+  const quoteHasCostRequirement =
+    isQuoteProject && quoteRequirementSummary.includesCost;
+  const quoteHasMockupWorkflow =
+    isQuoteProject && quoteRequirementSummary.includesMockup;
+  const quoteHasPreviousSamplesRequirement =
+    isQuoteProject && quoteRequirementSummary.includesPreviousSamples;
+  const quoteHasSampleProductionRequirement =
+    isQuoteProject && quoteRequirementSummary.includesSampleProduction;
+  const quoteHasBidSubmissionRequirement =
+    isQuoteProject && quoteRequirementSummary.includesBidSubmission;
   const quoteWorkflowBlocked =
-    isQuoteProject &&
-    !isCostOnlyQuote &&
-    !isMockupOnlyQuote &&
-    !isPreviousSamplesOnlyQuote &&
-    !isSampleProductionOnlyQuote &&
-    !isBidSubmissionOnlyQuote;
+    isQuoteProject && quoteRequirementMode === "none";
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
-    ? quoteRequirementMode === "none"
-      ? "Quote requirements are not configured yet."
-      : quoteHasMultipleRequirements
-        ? "Multiple quote requirements are selected. Only one workflow can be active right now."
-        : unsupportedQuoteRequirementKeys.length > 0
-          ? `Unsupported requirements: ${unsupportedQuoteRequirementKeys.join(", ")}.`
-          : "Quote requirement workflows are not configured yet."
+    ? "Select at least one quote requirement to continue."
     : "";
   const displayStatus = isQuoteProject
     ? getQuoteStatusDisplay(
@@ -786,7 +768,7 @@ const EngagedProjectActions = ({ user }) => {
         };
       }
       const base = getQuoteRequirementState(project, QUOTE_REQUIREMENT_MOCKUP_KEY);
-      if (isSampleProductionOnlyQuote) {
+      if (quoteHasSampleProductionRequirement) {
         return {
           ...base,
           isRequired: true,
@@ -795,7 +777,7 @@ const EngagedProjectActions = ({ user }) => {
       }
       return base;
     },
-    [isQuoteProject, project, isSampleProductionOnlyQuote],
+    [isQuoteProject, project, quoteHasSampleProductionRequirement],
   );
   const quotePreviousSamplesRequirement = useMemo(
     () =>
@@ -1078,11 +1060,15 @@ const EngagedProjectActions = ({ user }) => {
     .toLowerCase();
   const quoteSampleProductionStatusLabel =
     formatQuoteRequirementStatus(quoteSampleProductionStatus);
+  const quoteMockupCompletionConfirmed = isQuoteProject
+    ? isQuoteMockupCompletionConfirmed(project, quoteRequirementMode)
+    : false;
   const quoteMockupReadyForSampleProduction =
     isQuoteProject &&
     !quoteWorkflowBlocked &&
     Boolean(mockupUrl) &&
-    mockupApprovalStatus === "approved";
+    mockupApprovalStatus === "approved" &&
+    quoteMockupCompletionConfirmed;
   const workflowJourney = useMemo(
     () =>
       resolveEngagedWorkflow(
@@ -1863,7 +1849,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleAcknowledge = async (targetProject, department) => {
-    if (isProjectLeadForProject && !isLeadGraphicsMockupUser) {
+    if (isProjectLeadForProject) {
       setToast({
         type: "error",
         message:
@@ -2410,7 +2396,15 @@ const EngagedProjectActions = ({ user }) => {
     const targetMockupApprovalStatus = getMockupApprovalStatus(
       targetProject?.mockup?.clientApproval || {},
     );
-    if (!targetProject?.mockup?.fileUrl || targetMockupApprovalStatus !== "approved") {
+    const targetMockupCompletionConfirmed = isQuoteMockupCompletionConfirmed(
+      targetProject,
+      quoteRequirementMode,
+    );
+    if (
+      !targetProject?.mockup?.fileUrl ||
+      targetMockupApprovalStatus !== "approved" ||
+      !targetMockupCompletionConfirmed
+    ) {
       setToast({
         type: "error",
         message:
@@ -2504,7 +2498,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleConfirmQuoteMockupRequirement = async (targetProject) => {
     if (!targetProject?._id || !isQuoteProject) return false;
 
-    if (isProjectLeadForProject) {
+    if (isProjectLeadForProject && !isLeadGraphicsMockupUser) {
       setToast({
         type: "error",
         message:
@@ -2567,8 +2561,14 @@ const EngagedProjectActions = ({ user }) => {
       targetProject,
       QUOTE_REQUIREMENT_MOCKUP_KEY,
     );
+    const sampleProductionRequirement = getQuoteRequirementState(
+      targetProject,
+      QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_KEY,
+    );
+    const mockupFlowRequired =
+      mockupRequirement.isRequired || sampleProductionRequirement.isRequired;
 
-    if (!mockupRequirement.isRequired) {
+    if (!mockupFlowRequired) {
       setToast({
         type: "error",
         message: "Mockup is not marked as a required quote item.",
@@ -2576,62 +2576,21 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
-    if (mockupRequirement.status === "client_approved") {
+    if (isQuoteMockupCompletionConfirmed(targetProject, quoteRequirementMode)) {
       setToast({
         type: "success",
         message:
-          "Client approval is confirmed. Mockup is complete and Production can begin sample production.",
+          "Mockup completion is already confirmed for this quote.",
       });
       return true;
     }
 
-    const plannedTransitions =
-      QUOTE_MOCKUP_SUBMIT_TRANSITIONS[mockupRequirement.status] || [];
-
-    if (plannedTransitions.length === 0) {
-      const normalizedStatus = String(mockupRequirement.status || "").trim().toLowerCase();
-      const statusMessage =
-        normalizedStatus === "dept_submitted" ||
-        normalizedStatus === "frontdesk_review" ||
-        normalizedStatus === "sent_to_client"
-          ? "Mockup requirement is awaiting Front Desk/client review."
-          : normalizedStatus === "client_approved"
-            ? "Mockup requirement is already client-approved."
-            : `Mockup requirement cannot be submitted from ${formatQuoteRequirementStatus(normalizedStatus)}.`;
-      setToast({
-        type: "error",
-        message: statusMessage,
-      });
-      return false;
-    }
-
-    let workingProject = targetProject;
-    for (const nextStatus of plannedTransitions) {
-      const transitionResult = await transitionQuoteRequirement({
-        targetProject: workingProject,
-        requirementKey: QUOTE_REQUIREMENT_MOCKUP_KEY,
-        toStatus: nextStatus,
-        suppressErrorToast: true,
-      });
-
-      if (!transitionResult.ok) {
-        setToast({
-          type: "error",
-          message:
-            transitionResult.errorData?.message ||
-            "Failed to submit mockup requirement.",
-        });
-        return false;
-      }
-
-      workingProject = transitionResult.project || workingProject;
-    }
-
-    setToast({
-      type: "success",
-      message: `${QUOTE_REQUIREMENT_MOCKUP_LABEL} requirement submitted to Front Desk.`,
+    return handleCompleteStatus(targetProject, {
+      dept: "Graphics",
+      pending: "Pending Mockup",
+      complete: "Mockup Completed",
+      label: "Mockup",
     });
-    return true;
   };
 
   if (loading) {
@@ -3223,35 +3182,6 @@ const EngagedProjectActions = ({ user }) => {
                     const isLeadGraphicsMockupAction =
                       isLeadGraphicsMockupUser && isMockupAction;
                     const isQuoteGraphicsAction = isQuoteProject && isMockupAction;
-                    const quoteAllowsMockupWorkflowStatus =
-                      isQuoteGraphicsAction &&
-                      !quoteWorkflowBlocked &&
-                      QUOTE_MOCKUP_WORKFLOW_STATUS_SET.has(quoteWorkflowStatus);
-                    const mockupAlreadySubmitted = Boolean(mockupUrl);
-                    const mockupApprovalPending =
-                      isMockupAction && mockupApprovalStatus === "pending";
-                    const mockupApprovalRejected =
-                      isMockupAction && mockupApprovalStatus === "rejected";
-                    const mockupApprovalConfirmed =
-                      isMockupAction && mockupApprovalStatus === "approved";
-                    const quoteMockupCompletionFallback =
-                      isQuoteGraphicsAction &&
-                      mockupApprovalConfirmed &&
-                      (quoteWorkflowStatus === "Pending Quote Submission" ||
-                        (isSampleProductionOnlyQuote &&
-                          ["Pending Production", "Pending Sample Production"].includes(
-                            quoteWorkflowStatus,
-                          )));
-                    const canConfirmMockupCompletion =
-                      isMockupAction &&
-                      mockupAlreadySubmitted &&
-                      mockupApprovalConfirmed &&
-                      (isQuoteGraphicsAction
-                        ? (quoteAllowsMockupWorkflowStatus ||
-                            quoteMockupCompletionFallback) &&
-                          quoteMockupRequirement.isRequired &&
-                          quoteDepartmentalEngagementComplete
-                        : isPending);
                     const quoteMockupStatus = String(
                       quoteMockupRequirement?.status || "",
                     )
@@ -3259,11 +3189,47 @@ const EngagedProjectActions = ({ user }) => {
                       .toLowerCase();
                     const quoteMockupStatusLabel =
                       formatQuoteRequirementStatus(quoteMockupStatus);
+                    const quoteAllowsMockupWorkflowStatus =
+                      isQuoteGraphicsAction &&
+                      !quoteWorkflowBlocked &&
+                      quoteMockupRequirement.isRequired &&
+                      quoteDepartmentalEngagementComplete;
+                    const mockupAlreadySubmitted = Boolean(mockupUrl);
+                    const mockupApprovalPending =
+                      isMockupAction && mockupApprovalStatus === "pending";
+                    const mockupApprovalRejected =
+                      isMockupAction && mockupApprovalStatus === "rejected";
+                    const mockupApprovalConfirmed =
+                      isMockupAction && mockupApprovalStatus === "approved";
+                    const quoteMockupAlreadyCompleted =
+                      isQuoteGraphicsAction && quoteMockupCompletionConfirmed;
+                    const quoteCanUploadMockupRequirement =
+                      quoteAllowsMockupWorkflowStatus &&
+                      (
+                        !mockupAlreadySubmitted ||
+                        mockupApprovalRejected ||
+                        [
+                          "assigned",
+                          "in_progress",
+                          "client_revision_requested",
+                          "blocked",
+                          "dept_submitted",
+                          "frontdesk_review",
+                        ].includes(quoteMockupStatus)
+                      );
+                    const canConfirmMockupCompletion =
+                      isMockupAction &&
+                      mockupAlreadySubmitted &&
+                      mockupApprovalConfirmed &&
+                      !quoteMockupAlreadyCompleted &&
+                      (isQuoteGraphicsAction
+                        ? quoteAllowsMockupWorkflowStatus
+                        : isPending);
                     const canUploadMockup =
                       !isUpdating &&
                       (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
                       (isQuoteGraphicsAction
-                        ? quoteAllowsMockupWorkflowStatus
+                        ? quoteCanUploadMockupRequirement
                         : isPending);
 
                     let disabledReason = "";
@@ -3292,10 +3258,22 @@ const EngagedProjectActions = ({ user }) => {
                         "Quote workflows are not configured yet.";
                     } else if (
                       isQuoteGraphicsAction &&
-                      !quoteAllowsMockupWorkflowStatus
+                      !quoteMockupRequirement.isRequired
                     ) {
                       mockupUploadTitle =
-                        "Mockup upload is only available while status is Pending Mockup.";
+                        "Mockup is not marked as required for this quote.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      !quoteDepartmentalEngagementComplete
+                    ) {
+                      mockupUploadTitle =
+                        "Departmental engagement must be completed first.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      !quoteCanUploadMockupRequirement
+                    ) {
+                      mockupUploadTitle =
+                        `Mockup upload is not available while requirement status is ${quoteMockupStatusLabel}.`;
                     } else if (!isQuoteGraphicsAction && !isPending) {
                       mockupUploadTitle = `Waiting for ${action.pending}.`;
                     } else if (mockupApprovalRejected) {
@@ -3314,33 +3292,26 @@ const EngagedProjectActions = ({ user }) => {
                       mockupConfirmTitle =
                         quoteWorkflowBlockedMessage ||
                         "Quote workflows are not configured yet.";
-                    } else if (
-                      isQuoteGraphicsAction &&
-                      !quoteAllowsMockupWorkflowStatus &&
-                      !quoteMockupCompletionFallback
-                    ) {
+                    } else if (isQuoteGraphicsAction && !quoteMockupRequirement.isRequired) {
                       mockupConfirmTitle =
-                        "Mockup completion for quote is only available while status is Pending Mockup.";
-                    } else if (
-                      isQuoteGraphicsAction &&
-                      !quoteDepartmentalEngagementComplete
-                    ) {
+                        "Mockup is not marked as required for this quote.";
+                    } else if (isQuoteGraphicsAction && !quoteDepartmentalEngagementComplete) {
                       mockupConfirmTitle =
                         "Departmental engagement must be completed first.";
                     } else if (isQuoteGraphicsAction && !mockupAlreadySubmitted) {
                       mockupConfirmTitle = "Upload mockup before confirming.";
-                    } else if (
-                      isQuoteGraphicsAction &&
-                      !quoteMockupRequirement.isRequired
-                    ) {
-                      mockupConfirmTitle =
-                        "Mockup is not marked as required for this quote.";
                     } else if (isQuoteGraphicsAction && mockupApprovalRejected) {
                       mockupConfirmTitle =
                         "Client rejected latest mockup. Upload revision first.";
                     } else if (isQuoteGraphicsAction && mockupApprovalPending) {
                       mockupConfirmTitle =
                         "Waiting for Front Desk/Admin client decision.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      quoteMockupAlreadyCompleted
+                    ) {
+                      mockupConfirmTitle =
+                        "Mockup completion has already been confirmed.";
                     } else if (
                       isQuoteGraphicsAction &&
                       quoteMockupStatus === "client_approved"
@@ -3420,8 +3391,12 @@ const EngagedProjectActions = ({ user }) => {
                         {isMockupAction && mockupAlreadySubmitted && (
                           <div className="engaged-action-meta">
                             Latest mockup {mockupVersionLabel}:{" "}
-                            {mockupApprovalConfirmed
-                              ? "Client Approved."
+                            {isQuoteGraphicsAction && quoteMockupCompletionConfirmed
+                              ? "Client Approved. Mockup completion confirmed."
+                              : mockupApprovalConfirmed
+                                ? isQuoteGraphicsAction
+                                  ? "Client Approved. Completion pending."
+                                  : "Client Approved."
                               : mockupApprovalRejected
                                 ? "Client Rejected."
                                 : "Pending Client Decision."}

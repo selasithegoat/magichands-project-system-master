@@ -82,42 +82,9 @@ const defaultChecklist = {
 
 const normalizeChecklist = (checklist) => {
   const next = { ...defaultChecklist, ...(checklist || {}) };
-  const hasCost = Boolean(next.cost);
-  const hasMockup = Boolean(next.mockup);
-  const hasPreviousSamples = Boolean(next.previousSamples);
-  const hasSampleProduction = Boolean(next.sampleProduction);
-  const hasBidSubmission = Boolean(next.bidSubmission);
-  if (
-    !hasCost &&
-    !hasMockup &&
-    !hasPreviousSamples &&
-    !hasSampleProduction &&
-    !hasBidSubmission
-  ) {
+  const hasAtLeastOneRequirement = Object.values(next).some(Boolean);
+  if (!hasAtLeastOneRequirement) {
     next.cost = true;
-  }
-  if (hasBidSubmission) {
-    next.cost = false;
-    next.mockup = false;
-    next.previousSamples = false;
-    next.sampleProduction = false;
-  } else if (hasSampleProduction) {
-    next.cost = false;
-    next.mockup = false;
-    next.previousSamples = false;
-    next.bidSubmission = false;
-  } else if (hasCost) {
-    next.mockup = false;
-    next.previousSamples = false;
-    next.sampleProduction = false;
-    next.bidSubmission = false;
-  } else if (hasMockup) {
-    next.previousSamples = false;
-    next.sampleProduction = false;
-    next.bidSubmission = false;
-  } else if (hasPreviousSamples) {
-    next.sampleProduction = false;
-    next.bidSubmission = false;
   }
   next.cost = Boolean(next.cost);
   next.mockup = Boolean(next.mockup);
@@ -309,23 +276,10 @@ const MinimalQuoteForm = () => {
     if (!requirementKeys.includes(field)) return;
     setFormData((prev) => {
       const currentChecklist = normalizeChecklist(prev.checklist);
-      const nextValue = !currentChecklist[field];
-      const nextChecklist = {
+      const nextChecklist = normalizeChecklist({
         ...currentChecklist,
-        cost: false,
-        mockup: false,
-        previousSamples: false,
-        sampleProduction: false,
-        bidSubmission: false,
-      };
-      if (nextValue) {
-        nextChecklist[field] = true;
-      } else {
-        const fallback = requirementKeys.find(
-          (key) => key !== field && currentChecklist[key],
-        );
-        nextChecklist[fallback || "cost"] = true;
-      }
+        [field]: !currentChecklist[field],
+      });
       return {
         ...prev,
         checklist: nextChecklist,

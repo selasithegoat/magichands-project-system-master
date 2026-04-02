@@ -24,6 +24,7 @@ import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 import {
+  getQuoteProgressPercent,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
   normalizeQuoteStatus,
@@ -290,21 +291,11 @@ const getProjectProgress = (project) => {
   const quoteRequirementMode = isQuoteProject(project)
     ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
     : "none";
-  const map = isQuoteProject(project)
-    ? quoteRequirementMode === "mockup"
-      ? QUOTE_MOCKUP_PROGRESS_MAP
-      : quoteRequirementMode === "previousSamples"
-        ? QUOTE_PREVIOUS_SAMPLES_PROGRESS_MAP
-        : quoteRequirementMode === "sampleProduction"
-          ? QUOTE_SAMPLE_PRODUCTION_PROGRESS_MAP
-          : quoteRequirementMode === "bidSubmission"
-            ? QUOTE_BID_SUBMISSION_PROGRESS_MAP
-      : QUOTE_PROGRESS_MAP
-    : STANDARD_PROGRESS_MAP;
-  const status = isQuoteProject(project)
-    ? getQuoteStatusDisplay(project?.status || "", quoteRequirementMode)
-    : project?.status || "";
-  return map[status] ?? 5;
+  if (isQuoteProject(project)) {
+    return getQuoteProgressPercent(project?.status || "", quoteRequirementMode);
+  }
+  const status = project?.status || "";
+  return STANDARD_PROGRESS_MAP[status] ?? 5;
 };
 
 const formatProjectStatus = (status = "", requirementMode = "") => {

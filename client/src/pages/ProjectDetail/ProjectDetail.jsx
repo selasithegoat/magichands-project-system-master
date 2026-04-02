@@ -30,8 +30,11 @@ import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
+  getQuoteRequirementSummary,
+  getQuoteProgressPercent,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
+  isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import {
@@ -216,6 +219,25 @@ const QUOTE_STEPS_BY_MODE = {
       statuses: ["Pending Client Decision", "Completed", "Finished"],
     },
   ],
+  multi: [
+    { label: "Quote Created", statuses: ["Quote Created"] },
+    {
+      label: "Scope Approval",
+      statuses: ["Pending Scope Approval", "Scope Approval Completed"],
+    },
+    {
+      label: "Requirements",
+      statuses: ["Pending Quote Requirements"],
+    },
+    {
+      label: "Quote Submission",
+      statuses: ["Pending Quote Submission", "Quote Submission Completed"],
+    },
+    {
+      label: "Client Decision",
+      statuses: ["Pending Client Decision", "Completed", "Finished"],
+    },
+  ],
 };
 
 const getQuoteSteps = (mode) =>
@@ -269,6 +291,7 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Quote Requirements",
   "Pending Sample Retrieval",
   "Pending Sample / Work done Retrieval",
   "Pending Mockup",
@@ -384,6 +407,7 @@ const getStatusColor = (status) => {
     case "Finished":
       return "#22c55e"; // Green
     case "Pending Cost Verification":
+    case "Pending Quote Requirements":
     case "Cost Verification Completed":
     case "Cost Verification":
       return "#eab308"; // Yellow/Gold
@@ -1769,49 +1793,24 @@ const QuoteChecklistCard = ({ project }) => {
       checklist[key] = true;
     }
   });
-  const unsupportedKeys = QUOTE_REQUIREMENT_KEYS.filter(
-    (key) =>
-      ![
-        "cost",
-        "mockup",
-        "previousSamples",
-        "sampleProduction",
-        "bidSubmission",
-      ].includes(key) &&
-      checklist[key],
-  );
-  const unsupportedLabels = unsupportedKeys.map(
-    (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
-  );
-  const requirementMode = getQuoteRequirementMode(checklist);
+  const requirementSummary = getQuoteRequirementSummary(checklist);
+  const requirementMode = requirementSummary.mode;
   const isCostOnly = requirementMode === "cost";
   const isMockupOnly = requirementMode === "mockup";
   const isPreviousSamplesOnly = requirementMode === "previousSamples";
   const isSampleProductionOnly = requirementMode === "sampleProduction";
   const isBidSubmissionOnly = requirementMode === "bidSubmission";
-  const enabledRequirements = [
-    "cost",
-    "mockup",
-    "previousSamples",
-    "sampleProduction",
-    "bidSubmission",
-  ].filter((key) => checklist[key]);
-  const effectiveEnabledRequirements = checklist.sampleProduction
-    ? enabledRequirements.filter((key) => key !== "mockup")
-    : enabledRequirements;
-  const hasMultipleRequirements = effectiveEnabledRequirements.length > 1;
+  const effectiveEnabledRequirements =
+    requirementSummary.effectiveEnabledKeys || [];
+  const hasMultipleRequirements = requirementSummary.hasMultipleRequirements;
   const costVerification = project?.quoteDetails?.costVerification || {};
   const amountValue = Number.parseFloat(costVerification?.amount);
   const costVerified = Number.isFinite(amountValue) && amountValue > 0;
   const costNote = String(costVerification?.note || "").trim();
   const blockedMessage =
     requirementMode === "none"
-      ? "Quote requirements are not configured yet."
-      : hasMultipleRequirements
-        ? "Multiple quote requirements are selected. Only one workflow can be active right now."
-        : unsupportedLabels.length > 0
-          ? `Unsupported requirements: ${unsupportedLabels.join(", ")}.`
-          : "Quote requirement workflows are not configured yet.";
+      ? "Select at least one quote requirement to continue."
+      : "";
 
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
@@ -1834,6 +1833,12 @@ const QuoteChecklistCard = ({ project }) => {
   const mockupDecisionStatus = getMockupApprovalStatus(
     latestMockup?.clientApproval || project?.mockup?.clientApproval || {},
   );
+  const mockupCompletionConfirmed = isQuoteMockupCompletionConfirmed(
+    project,
+    requirementMode,
+  );
+  const mockupReadyForSubmission =
+    mockupDecisionStatus === "approved" && mockupCompletionConfirmed;
   const mockupDecisionLabel =
     mockupDecisionStatus === "approved"
       ? "Approved"
@@ -1873,7 +1878,31 @@ const QuoteChecklistCard = ({ project }) => {
   const bidSubmissionIsSensitive = Boolean(bidSubmissionDetails.isSensitive);
   const bidSubmissionReady =
     bidSubmissionIsSensitive || bidSubmissionDocuments.length > 0;
-  const requirementTitle = isMockupOnly
+  const requirementCompletionMap = {
+    cost: !effectiveEnabledRequirements.includes("cost") || costVerified,
+    mockup:
+      !effectiveEnabledRequirements.includes("mockup") || mockupReadyForSubmission,
+    previousSamples:
+      !effectiveEnabledRequirements.includes("previousSamples") ||
+      ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+        previousSamplesStatus,
+      ),
+    sampleProduction:
+      !effectiveEnabledRequirements.includes("sampleProduction") ||
+      ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+        sampleProductionStatus,
+      ),
+    bidSubmission:
+      !effectiveEnabledRequirements.includes("bidSubmission") || bidSubmissionReady,
+  };
+  const pendingRequirementLabels = effectiveEnabledRequirements
+    .filter((key) => !requirementCompletionMap[key])
+    .map((key) => QUOTE_REQUIREMENT_LABELS[key] || key);
+  const readyRequirementCount =
+    effectiveEnabledRequirements.length - pendingRequirementLabels.length;
+  const requirementTitle = hasMultipleRequirements
+    ? "Quote Requirements"
+    : isMockupOnly
     ? "Quote Mockup"
     : isPreviousSamplesOnly
       ? "Quote Samples"
@@ -1888,12 +1917,79 @@ const QuoteChecklistCard = ({ project }) => {
       <div className="card-header">
         <h3 className="card-title">{requirementTitle}</h3>
       </div>
-      {!isCostOnly &&
-      !isMockupOnly &&
-      !isPreviousSamplesOnly &&
-      !isSampleProductionOnly &&
-      !isBidSubmissionOnly ? (
+      {requirementMode === "none" ? (
         <p className="info-subtext">{blockedMessage}</p>
+      ) : hasMultipleRequirements ? (
+        <>
+          <p className="info-subtext">
+            {readyRequirementCount}/{effectiveEnabledRequirements.length} requirements ready
+            before quote submission.
+          </p>
+          {pendingRequirementLabels.length > 0 && (
+            <p className="info-subtext">
+              Pending: {pendingRequirementLabels.join(", ")}
+            </p>
+          )}
+          <div className="info-grid">
+            {effectiveEnabledRequirements.includes("cost") && (
+              <div className="info-item">
+                <h4>COST</h4>
+                <div className="info-text-bold">
+                  {costVerified ? "Verified" : "Pending"}
+                </div>
+                <div className="info-subtext">
+                  {formatAmountLabel(amountValue, costVerification?.currency)}
+                </div>
+              </div>
+            )}
+            {effectiveEnabledRequirements.includes("mockup") && (
+              <div className="info-item">
+                <h4>MOCKUP</h4>
+                <div className="info-text-bold">
+                  {mockupReadyForSubmission
+                    ? "Completed"
+                    : mockupDecisionStatus === "approved"
+                      ? "Completion Pending"
+                      : mockupDecisionLabel}
+                </div>
+                <div className="info-subtext">
+                  {latestMockup?.version ? `Latest v${latestMockup.version}` : "No mockup yet"}
+                </div>
+              </div>
+            )}
+            {effectiveEnabledRequirements.includes("previousSamples") && (
+              <div className="info-item">
+                <h4>PREVIOUS SAMPLE</h4>
+                <div className="info-text-bold">{previousSamplesStatusLabel}</div>
+              </div>
+            )}
+            {effectiveEnabledRequirements.includes("sampleProduction") && (
+              <div className="info-item">
+                <h4>SAMPLE PRODUCTION</h4>
+                <div className="info-text-bold">{sampleProductionStatusLabel}</div>
+                <div className="info-subtext">
+                  Mockup:{" "}
+                  {mockupReadyForSubmission
+                    ? "Completed"
+                    : mockupDecisionStatus === "approved"
+                      ? "Completion Pending"
+                      : mockupDecisionLabel}
+                </div>
+              </div>
+            )}
+            {effectiveEnabledRequirements.includes("bidSubmission") && (
+              <div className="info-item">
+                <h4>BID DOCUMENTS</h4>
+                <div className="info-text-bold">
+                  {bidSubmissionReady ? "Ready" : "Pending"}
+                </div>
+                <div className="info-subtext">
+                  Documents: {bidSubmissionDocuments.length}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       ) : isPreviousSamplesOnly ? (
         <>
           <p className="info-subtext">Status: {previousSamplesStatusLabel}</p>
@@ -3829,135 +3925,7 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
   );
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
-      if (quoteRequirementMode === "mockup") {
-        switch (status) {
-          case "Quote Created":
-            return 5;
-          case "Pending Scope Approval":
-            return 20;
-          case "Scope Approval Completed":
-            return 30;
-          case "Pending Mockup":
-            return 45;
-          case "Mockup Completed":
-            return 55;
-          case "Pending Quote Submission":
-            return 70;
-          case "Quote Submission Completed":
-            return 80;
-          case "Pending Client Decision":
-            return 90;
-          case "Declined":
-          case "Completed":
-          case "Finished":
-            return 100;
-          default:
-            return 0;
-        }
-      }
-      if (quoteRequirementMode === "previousSamples") {
-        switch (status) {
-          case "Quote Created":
-            return 5;
-          case "Pending Scope Approval":
-            return 20;
-          case "Scope Approval Completed":
-            return 30;
-          case "Pending Sample Retrieval":
-          case "Pending Sample / Work done Retrieval":
-            return 45;
-          case "Pending Quote Submission":
-          case "Pending Sample / Work done Sent":
-            return 70;
-          case "Quote Submission Completed":
-            return 80;
-          case "Pending Client Decision":
-            return 90;
-          case "Declined":
-          case "Completed":
-          case "Finished":
-            return 100;
-          default:
-            return 0;
-        }
-      }
-      if (quoteRequirementMode === "sampleProduction") {
-        switch (status) {
-          case "Quote Created":
-            return 5;
-          case "Pending Scope Approval":
-            return 20;
-          case "Scope Approval Completed":
-            return 30;
-          case "Pending Mockup":
-          case "Mockup Completed":
-            return 45;
-          case "Pending Production":
-          case "Pending Sample Production":
-            return 55;
-          case "Pending Quote Submission":
-            return 70;
-          case "Quote Submission Completed":
-            return 80;
-          case "Pending Client Decision":
-            return 90;
-          case "Declined":
-          case "Completed":
-          case "Finished":
-            return 100;
-          default:
-            return 0;
-        }
-      }
-      if (quoteRequirementMode === "bidSubmission") {
-        switch (status) {
-          case "Quote Created":
-            return 5;
-          case "Pending Scope Approval":
-            return 20;
-          case "Scope Approval Completed":
-            return 30;
-          case "Pending Quote Submission":
-          case "Pending Bid Submission / Documents":
-            return 60;
-          case "Quote Submission Completed":
-            return 80;
-          case "Pending Client Decision":
-            return 90;
-          case "Declined":
-          case "Completed":
-          case "Finished":
-            return 100;
-          default:
-            return 0;
-        }
-      }
-      switch (status) {
-        case "Quote Created":
-          return 5;
-        case "Pending Scope Approval":
-          return 20;
-        case "Scope Approval Completed":
-          return 30;
-        case "Pending Cost Verification":
-          return 45;
-        case "Cost Verification Completed":
-          return 55;
-        case "Pending Quote Submission":
-          return 70;
-        case "Quote Submission Completed":
-          return 80;
-        case "Pending Client Decision":
-          return 90;
-        case "Declined":
-          return 100;
-        case "Completed":
-          return 100;
-        case "Finished":
-          return 100;
-        default:
-          return 0;
-      }
+      return getQuoteProgressPercent(status, quoteRequirementMode);
     }
 
     switch (status) {

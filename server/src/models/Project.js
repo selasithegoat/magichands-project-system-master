@@ -56,6 +56,11 @@ const QuoteRequirementItemSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    completionConfirmedAt: Date,
+    completionConfirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     note: {
       type: String,
       default: "",
@@ -73,6 +78,8 @@ const createDefaultQuoteRequirementItem = () => ({
   status: "not_required",
   updatedAt: null,
   updatedBy: null,
+  completionConfirmedAt: null,
+  completionConfirmedBy: null,
   note: "",
   history: [],
 });
@@ -346,6 +353,7 @@ const ProjectSchema = new mongoose.Schema(
         "Quote Created",
         "Pending Scope Approval",
         "Scope Approval Completed",
+        "Pending Quote Requirements",
         "Pending Sample Retrieval",
         "Pending Departmental Meeting",
         "Pending Departmental Engagement",

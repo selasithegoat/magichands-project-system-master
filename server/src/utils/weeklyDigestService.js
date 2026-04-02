@@ -8,6 +8,7 @@ const DIGEST_PREVIEW_LIMIT = 5;
 
 const STATUS_OWNER = {
   "Pending Scope Approval": "Project Lead",
+  "Pending Quote Requirements": "Front Desk / Admin",
   "Pending Mockup": "Graphics",
   "Pending Master Approval": "Administration",
   "Pending Production": "Production",

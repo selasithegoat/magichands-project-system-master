@@ -827,6 +827,8 @@
 
 .mockup-version-links {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.7rem;
 }
 
@@ -835,6 +837,9 @@
   color: var(--primary-color);
   text-decoration: none;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .mockup-version-links a:hover {

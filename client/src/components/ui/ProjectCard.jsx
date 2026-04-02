@@ -6,6 +6,7 @@ import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { renderProjectName } from "../../utils/projectName";
 import {
+  getQuoteProgressPercent,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
   normalizeQuoteStatus,
@@ -145,6 +146,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           textClass: "teal",
         };
       case "Pending Cost Verification":
+      case "Pending Quote Requirements":
       case "Pending Sample Retrieval":
       case "Pending Sample / Work done Retrieval":
       case "Pending Quote Submission":
@@ -241,82 +243,12 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
     Finished: 100,
   };
 
-  const quoteProgressMap = {
-    "Quote Created": 5,
-    "Pending Scope Approval": 20,
-    "Scope Approval Completed": 30,
-    "Pending Cost Verification": 45,
-    "Cost Verification Completed": 55,
-    "Pending Quote Submission": 70,
-    "Quote Submission Completed": 80,
-    "Pending Client Decision": 90,
-    Completed: 100,
-    Finished: 100,
-  };
-  const quoteMockupProgressMap = {
-    "Quote Created": 5,
-    "Pending Scope Approval": 20,
-    "Scope Approval Completed": 30,
-    "Pending Mockup": 45,
-    "Mockup Completed": 55,
-    "Pending Quote Submission": 70,
-    "Quote Submission Completed": 80,
-    "Pending Client Decision": 90,
-    Completed: 100,
-    Finished: 100,
-  };
-  const quotePreviousSamplesProgressMap = {
-    "Quote Created": 5,
-    "Pending Scope Approval": 20,
-    "Scope Approval Completed": 30,
-    "Pending Sample Retrieval": 45,
-    "Pending Sample / Work done Retrieval": 45,
-    "Pending Quote Submission": 70,
-    "Pending Sample / Work done Sent": 70,
-    "Quote Submission Completed": 80,
-    "Pending Client Decision": 90,
-    Completed: 100,
-    Finished: 100,
-  };
-  const quoteSampleProductionProgressMap = {
-    "Quote Created": 5,
-    "Pending Scope Approval": 20,
-    "Scope Approval Completed": 30,
-    "Pending Mockup": 40,
-    "Mockup Completed": 45,
-    "Pending Production": 55,
-    "Pending Sample Production": 55,
-    "Pending Quote Submission": 70,
-    "Quote Submission Completed": 80,
-    "Pending Client Decision": 90,
-    Completed: 100,
-    Finished: 100,
-  };
-  const quoteBidSubmissionProgressMap = {
-    "Quote Created": 5,
-    "Pending Scope Approval": 20,
-    "Scope Approval Completed": 30,
-    "Pending Quote Submission": 60,
-    "Pending Bid Submission / Documents": 60,
-    "Quote Submission Completed": 80,
-    "Pending Client Decision": 90,
-    Completed: 100,
-    Finished: 100,
-  };
-
-  const progressMap =
+  const progress =
     project.projectType === "Quote"
-      ? quoteRequirementMode === "mockup"
-        ? quoteMockupProgressMap
-        : quoteRequirementMode === "previousSamples"
-          ? quotePreviousSamplesProgressMap
-          : quoteRequirementMode === "sampleProduction"
-            ? quoteSampleProductionProgressMap
-            : quoteRequirementMode === "bidSubmission"
-              ? quoteBidSubmissionProgressMap
-        : quoteProgressMap
-      : standardProgressMap;
-  const progress = progressMap[statusToneTarget] ?? progressMap[resolvedStatus] ?? 5;
+      ? getQuoteProgressPercent(displayStatus || resolvedStatus, quoteRequirementMode)
+      : standardProgressMap[statusToneTarget] ??
+        standardProgressMap[resolvedStatus] ??
+        5;
   const leadDisplay = getLeadDisplay(project, "Unassigned");
   const avatarName = getLeadDisplay(project, "U");
   const leadAvatarUrl = getLeadAvatarUrl(project);

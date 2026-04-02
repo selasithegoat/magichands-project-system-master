@@ -33,6 +33,7 @@ const QUOTE_STATUS_OPTIONS = [
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Quote Requirements",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Sample Production",

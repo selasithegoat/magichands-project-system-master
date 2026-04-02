@@ -1936,6 +1936,7 @@ const PROJECT_TYPE_VALUES = new Set([
 const PRIORITY_VALUES = new Set(["Normal", "Urgent"]);
 const QUOTE_ONLY_STATUSES = new Set([
   "Quote Created",
+  "Pending Quote Requirements",
   "Pending Cost Verification",
   "Cost Verification Completed",
   "Pending Sample Retrieval",
@@ -1997,6 +1998,7 @@ const QUOTE_STATUS_FLOW = [
   "Quote Created",
   "Pending Scope Approval",
   "Scope Approval Completed",
+  "Pending Quote Requirements",
   "Pending Mockup",
   "Mockup Completed",
   "Pending Production",
@@ -2016,6 +2018,7 @@ const MASTER_APPROVAL_STATUS_ALIASES = Object.freeze({
 });
 const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
   "pending decision": "Pending Client Decision",
+  "pending quote requirements": "Pending Quote Requirements",
   "decision completed": "Completed",
   "pending sample production": "Pending Production",
   "sample production": "Pending Production",
@@ -2162,12 +2165,6 @@ const QUOTE_REQUIREMENT_DEPARTMENT_STAGE_ACCESS = {
   sampleProduction: new Set(["graphics", "production"]),
   bidSubmission: new Set(),
 };
-const QUOTE_STATUS_SYNC_PENDING_SET = new Set([
-  "Quote Created",
-  "Pending Scope Approval",
-  "Scope Approval Completed",
-  "Pending Cost Verification",
-]);
 const QUOTE_DECISION_STATUS_VALUES = ["pending", "go_ahead", "declined"];
 const QUOTE_DECISION_STATUS_SET = new Set(QUOTE_DECISION_STATUS_VALUES);
 const QUOTE_DECISION_STATUS_ALIASES = {
@@ -2191,11 +2188,15 @@ const QUOTE_DECISION_STATUS_ALIASES = {
 const getAutoProgressedStatus = (status, project = {}) => {
   if (isQuoteProject(project)) {
     const requirementMode = getQuoteRequirementMode(
-      normalizeQuoteDetailsWorkflow({
-        quoteDetailsInput: project?.quoteDetails || {},
-        existingQuoteDetails: project?.quoteDetails || {},
-      }),
+      getNormalizedQuoteDetailsForProject(project),
     );
+    if (requirementMode === "multi") {
+      const progression = {
+        "Scope Approval Completed": "Pending Quote Requirements",
+        "Quote Submission Completed": "Pending Client Decision",
+      };
+      return progression[status] || status;
+    }
     if (requirementMode === "mockup") {
       const progression = {
         "Scope Approval Completed": "Pending Mockup",
@@ -2383,6 +2384,8 @@ const normalizeQuoteRequirementItem = ({ isRequired, item = {} } = {}) => {
     status,
     updatedAt: toDateOrNull(source.updatedAt),
     updatedBy: source.updatedBy || null,
+    completionConfirmedAt: toDateOrNull(source.completionConfirmedAt),
+    completionConfirmedBy: source.completionConfirmedBy || null,
     note: toText(source.note),
     history: normalizedHistory,
   };
@@ -2452,42 +2455,28 @@ const normalizeQuoteDetailsWorkflow = ({
 const getQuoteChecklistState = (quoteDetails = {}) => {
   const checklist = normalizeQuoteChecklistValue(quoteDetails?.checklist || {});
   const enabledKeys = QUOTE_REQUIREMENT_KEYS.filter((key) => checklist[key]);
-  const nonCostRequirements = enabledKeys.filter((key) => key !== "cost");
-  const isCostOnly = enabledKeys.length === 1 && enabledKeys[0] === "cost";
-  const isMockupOnly = enabledKeys.length === 1 && enabledKeys[0] === "mockup";
-  const isPreviousSamplesOnly =
-    enabledKeys.length === 1 && enabledKeys[0] === "previousSamples";
-  const isBidSubmissionOnly =
-    enabledKeys.length === 1 && enabledKeys[0] === "bidSubmission";
-  const isSampleProductionOnly =
-    enabledKeys.includes("sampleProduction") &&
-    enabledKeys.every((key) =>
-      ["sampleProduction", "mockup"].includes(key),
-    );
+  const effectiveEnabledKeys = checklist.sampleProduction
+    ? enabledKeys.filter((key) => key !== "mockup")
+    : enabledKeys;
+  const nonCostRequirements = effectiveEnabledKeys.filter((key) => key !== "cost");
   const mode =
-    enabledKeys.length === 0
+    effectiveEnabledKeys.length === 0
       ? "none"
-      : isCostOnly
-        ? "cost"
-        : isMockupOnly
-          ? "mockup"
-      : isPreviousSamplesOnly
-        ? "previousSamples"
-        : isBidSubmissionOnly
-          ? "bidSubmission"
-        : isSampleProductionOnly
-          ? "sampleProduction"
-          : "unsupported";
+      : effectiveEnabledKeys.length === 1
+        ? effectiveEnabledKeys[0]
+        : "multi";
 
   return {
     checklist,
     enabledKeys,
+    effectiveEnabledKeys,
     nonCostRequirements,
-    isCostOnly,
-    isMockupOnly,
-    isPreviousSamplesOnly,
-    isBidSubmissionOnly,
-    isSampleProductionOnly,
+    hasMultipleRequirements: effectiveEnabledKeys.length > 1,
+    isCostOnly: mode === "cost",
+    isMockupOnly: mode === "mockup",
+    isPreviousSamplesOnly: mode === "previousSamples",
+    isBidSubmissionOnly: mode === "bidSubmission",
+    isSampleProductionOnly: mode === "sampleProduction",
     mode,
   };
 };
@@ -2495,30 +2484,39 @@ const getQuoteChecklistState = (quoteDetails = {}) => {
 const getQuoteRequirementMode = (quoteDetails = {}) =>
   getQuoteChecklistState(quoteDetails).mode;
 
-const isQuoteCostOnlyProject = (project = {}) => {
-  if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
+const getNormalizedQuoteDetailsForProject = (project = {}) =>
+  normalizeQuoteDetailsWorkflow({
     quoteDetailsInput: project?.quoteDetails || {},
     existingQuoteDetails: project?.quoteDetails || {},
   });
+
+const hasQuoteRequirement = (project = {}, requirementKey = "", options = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const { effective = false } = options;
+  const checklistState = getQuoteChecklistState(
+    getNormalizedQuoteDetailsForProject(project),
+  );
+  const keys = effective
+    ? checklistState.effectiveEnabledKeys
+    : checklistState.enabledKeys;
+  return keys.includes(toText(requirementKey));
+};
+
+const isQuoteCostOnlyProject = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   return getQuoteChecklistState(normalizedQuoteDetails).mode === "cost";
 };
 
 const isQuoteMockupOnlyProject = (project = {}) => {
   if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   return getQuoteChecklistState(normalizedQuoteDetails).mode === "mockup";
 };
 
 const isQuotePreviousSamplesOnlyProject = (project = {}) => {
   if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   return (
     getQuoteChecklistState(normalizedQuoteDetails).mode === "previousSamples"
   );
@@ -2526,10 +2524,7 @@ const isQuotePreviousSamplesOnlyProject = (project = {}) => {
 
 const isQuoteSampleProductionOnlyProject = (project = {}) => {
   if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   return (
     getQuoteChecklistState(normalizedQuoteDetails).mode === "sampleProduction"
   );
@@ -2537,10 +2532,7 @@ const isQuoteSampleProductionOnlyProject = (project = {}) => {
 
 const isQuoteBidSubmissionOnlyProject = (project = {}) => {
   if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   return (
     getQuoteChecklistState(normalizedQuoteDetails).mode === "bidSubmission"
   );
@@ -2548,14 +2540,9 @@ const isQuoteBidSubmissionOnlyProject = (project = {}) => {
 
 const isQuoteWorkflowSupported = (project = {}) => {
   if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   const mode = getQuoteChecklistState(normalizedQuoteDetails).mode;
-  return ["cost", "mockup", "previousSamples", "sampleProduction", "bidSubmission"].includes(
-    mode,
-  );
+  return mode !== "none";
 };
 
 const isQuoteMockupApproved = (project = {}) => {
@@ -2565,12 +2552,60 @@ const isQuoteMockupApproved = (project = {}) => {
   );
 };
 
+const isQuoteMockupCompletionConfirmed = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
+  const requirementMode = getQuoteChecklistState(normalizedQuoteDetails).mode;
+  const requirementItem = normalizedQuoteDetails?.requirementItems?.mockup || {};
+
+  if (requirementItem?.completionConfirmedAt || requirementItem?.completionConfirmedBy) {
+    return true;
+  }
+
+  const normalizedStatus = normalizeStatusForStorageByProjectType(
+    project?.status,
+    "Quote",
+  );
+
+  if (normalizedStatus === "Mockup Completed") {
+    return true;
+  }
+
+  if (requirementMode === "mockup") {
+    return [
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      "Completed",
+      "Finished",
+      "Declined",
+    ].includes(normalizedStatus);
+  }
+
+  if (requirementMode === "sampleProduction") {
+    return [
+      "Pending Production",
+      "Pending Sample Production",
+      "Production Completed",
+      "Pending Quote Submission",
+      "Quote Submission Completed",
+      "Pending Client Decision",
+      "Completed",
+      "Finished",
+      "Declined",
+    ].includes(normalizedStatus);
+  }
+
+  return false;
+};
+
+const isQuoteMockupReadyForSubmission = (project = {}) =>
+  isQuoteMockupApproved(project) && isQuoteMockupCompletionConfirmed(project);
+
 const isQuoteCostVerified = (project = {}) => {
   if (!isQuoteProject(project)) return false;
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   const costVerification = normalizedQuoteDetails.costVerification || {};
   const amount = Number.parseFloat(costVerification.amount);
   return Number.isFinite(amount) && amount > 0;
@@ -2585,10 +2620,7 @@ const getQuoteBidSubmissionState = (project = {}) => {
       isReady: false,
     };
   }
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   const bidSubmission = normalizedQuoteDetails?.bidSubmission || {};
   const isSensitive = parseBooleanFlag(bidSubmission.isSensitive, false);
   const documents = normalizeBidSubmissionDocuments(
@@ -2604,10 +2636,7 @@ const getQuoteBidSubmissionState = (project = {}) => {
 };
 
 const getNormalizedQuoteRequirementItems = (project = {}) => {
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
-  });
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   return normalizedQuoteDetails.requirementItems || {};
 };
 
@@ -2626,52 +2655,98 @@ const isQuoteRequirementCompleted = (requirementKey = "", status = "") => {
   return normalizedStatus === QUOTE_REQUIREMENT_APPROVED_STATUS;
 };
 
-const areQuoteRequirementsCompleted = (project = {}) => {
-  if (!isQuoteProject(project)) return false;
+const getQuoteRequirementProgressState = (project = {}) => {
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
+  const checklistState = getQuoteChecklistState(normalizedQuoteDetails);
+  const requirementItems = normalizedQuoteDetails.requirementItems || {};
+  const bidSubmissionState = getQuoteBidSubmissionState(project);
+  const quoteStatus = normalizeStatusForStorageByProjectType(
+    project?.status,
+    "Quote",
+  );
 
-  const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-    quoteDetailsInput: project?.quoteDetails || {},
-    existingQuoteDetails: project?.quoteDetails || {},
+  const trackStates = checklistState.effectiveEnabledKeys.map((key) => {
+    if (key === "cost") {
+      return {
+        key,
+        isReadyForSubmission: isQuoteCostVerified(project),
+        pendingStatus: "Pending Cost Verification",
+      };
+    }
+
+    if (key === "mockup") {
+      return {
+        key,
+        isReadyForSubmission: isQuoteMockupReadyForSubmission(project),
+        pendingStatus: "Pending Mockup",
+      };
+    }
+
+    if (key === "previousSamples") {
+      const item = requirementItems.previousSamples || {};
+      const status = toText(item.status).toLowerCase() || "assigned";
+      return {
+        key,
+        isReadyForSubmission: [
+          "dept_submitted",
+          "frontdesk_review",
+          "sent_to_client",
+          "client_approved",
+        ].includes(status),
+        pendingStatus: "Pending Sample Retrieval",
+      };
+    }
+
+    if (key === "sampleProduction") {
+      const item = requirementItems.sampleProduction || {};
+      const status = toText(item.status).toLowerCase() || "assigned";
+      return {
+        key,
+        isReadyForSubmission: [
+          "dept_submitted",
+          "frontdesk_review",
+          "sent_to_client",
+          "client_approved",
+        ].includes(status),
+        pendingStatus: isQuoteMockupReadyForSubmission(project)
+          ? "Pending Production"
+          : "Pending Mockup",
+      };
+    }
+
+    if (key === "bidSubmission") {
+      return {
+        key,
+        isReadyForSubmission: bidSubmissionState.isReady,
+        pendingStatus: "Pending Quote Submission",
+      };
+    }
+
+    return {
+      key,
+      isReadyForSubmission: false,
+      pendingStatus: "Pending Quote Requirements",
+    };
   });
-  const { mode } = getQuoteChecklistState(normalizedQuoteDetails);
-  if (mode === "cost") {
-    const amount = Number.parseFloat(
-      normalizedQuoteDetails?.costVerification?.amount,
-    );
-    return Number.isFinite(amount) && amount > 0;
-  }
-  if (mode === "mockup") {
-    return isQuoteMockupApproved(project);
-  }
-  if (mode === "previousSamples") {
-    const requirementItem =
-      normalizedQuoteDetails?.requirementItems?.previousSamples || {};
-    const requirementStatus =
-      toText(requirementItem.status).toLowerCase() || "assigned";
-    return ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
-      requirementStatus,
-    );
-  }
-  if (mode === "bidSubmission") {
-    const bidSubmission = normalizedQuoteDetails?.bidSubmission || {};
-    const isSensitive = parseBooleanFlag(bidSubmission.isSensitive, false);
-    const documents = normalizeBidSubmissionDocuments(
-      bidSubmission.documents || [],
-    );
-    return isSensitive || documents.length > 0;
-  }
-  if (mode === "sampleProduction") {
-    const requirementItem =
-      normalizedQuoteDetails?.requirementItems?.sampleProduction || {};
-    const requirementStatus =
-      toText(requirementItem.status).toLowerCase() || "assigned";
-    return ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
-      requirementStatus,
-    );
-  }
 
-  return false;
+  const allRequirementsReadyForSubmission =
+    trackStates.length > 0 &&
+    trackStates.every((track) => Boolean(track.isReadyForSubmission));
+
+  return {
+    normalizedQuoteDetails,
+    checklistState,
+    trackStates,
+    allRequirementsReadyForSubmission,
+    missingRequirementKeys: trackStates
+      .filter((track) => !track.isReadyForSubmission)
+      .map((track) => track.key),
+    currentStatus: quoteStatus,
+  };
 };
+
+const areQuoteRequirementsCompleted = (project = {}) =>
+  getQuoteRequirementProgressState(project).allRequirementsReadyForSubmission;
 
 const syncQuoteProjectStatusByRequirements = (project = {}) => {
   if (!isQuoteProject(project)) {
@@ -2684,205 +2759,37 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
   }
 
   const previousStatus = toText(project?.status);
-  const requirementMode = getQuoteRequirementMode(
-    normalizeQuoteDetailsWorkflow({
-      quoteDetailsInput: project?.quoteDetails || {},
-      existingQuoteDetails: project?.quoteDetails || {},
-    }),
-  );
+  const quoteState = getQuoteRequirementProgressState(project);
+  const requirementMode = quoteState.checklistState.mode;
+  const lockedStatuses = new Set(["Completed", "Finished", "Declined"]);
 
-  if (requirementMode === "mockup") {
+  if (lockedStatuses.has(previousStatus)) {
     return {
       changed: false,
       fromStatus: previousStatus,
       toStatus: previousStatus,
-      allRequirementsCompleted: isQuoteMockupApproved(project),
+      allRequirementsCompleted: quoteState.allRequirementsReadyForSubmission,
     };
   }
 
-  if (requirementMode === "previousSamples") {
-    const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-      quoteDetailsInput: project?.quoteDetails || {},
-      existingQuoteDetails: project?.quoteDetails || {},
-    });
-    const requirementItem =
-      normalizedQuoteDetails?.requirementItems?.previousSamples || {};
-    const requirementStatus = toText(requirementItem.status).toLowerCase() || "assigned";
-    const lockedStatuses = new Set(["Completed", "Finished", "Declined"]);
-    if (lockedStatuses.has(previousStatus)) {
-      return {
-        changed: false,
-        fromStatus: previousStatus,
-        toStatus: previousStatus,
-        allRequirementsCompleted:
-          ["sent_to_client", "client_approved"].includes(requirementStatus),
-      };
-    }
-
-    let nextStatus = previousStatus;
-    if (
-      ["assigned", "in_progress", "blocked", "client_revision_requested"].includes(
-        requirementStatus,
-      )
-    ) {
-      nextStatus = "Pending Sample Retrieval";
-    } else if (["dept_submitted", "frontdesk_review"].includes(requirementStatus)) {
-      nextStatus = "Pending Quote Submission";
-    } else if (["sent_to_client", "client_approved"].includes(requirementStatus)) {
-      nextStatus = "Pending Client Decision";
-    }
-
-    if (nextStatus && nextStatus !== previousStatus) {
-      project.status = nextStatus;
-    }
-
-    return {
-      changed: nextStatus !== previousStatus,
-      fromStatus: previousStatus,
-      toStatus: nextStatus,
-      allRequirementsCompleted: ["sent_to_client", "client_approved"].includes(
-        requirementStatus,
-      ),
-    };
-  }
-
-  if (requirementMode === "bidSubmission") {
-    const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-      quoteDetailsInput: project?.quoteDetails || {},
-      existingQuoteDetails: project?.quoteDetails || {},
-    });
-    const requirementItem =
-      normalizedQuoteDetails?.requirementItems?.bidSubmission || {};
-    const requirementStatus = toText(requirementItem.status).toLowerCase() || "assigned";
-    const lockedStatuses = new Set(["Completed", "Finished", "Declined"]);
-    if (lockedStatuses.has(previousStatus)) {
-      return {
-        changed: false,
-        fromStatus: previousStatus,
-        toStatus: previousStatus,
-        allRequirementsCompleted: ["sent_to_client", "client_approved"].includes(
-          requirementStatus,
-        ),
-      };
-    }
-
-    let nextStatus = previousStatus;
-    if (
-      [
-        "assigned",
-        "in_progress",
-        "blocked",
-        "client_revision_requested",
-        "dept_submitted",
-        "frontdesk_review",
-      ].includes(requirementStatus)
-    ) {
-      nextStatus = "Pending Quote Submission";
-    } else if (["sent_to_client", "client_approved"].includes(requirementStatus)) {
-      nextStatus = "Pending Client Decision";
-    }
-
-    if (nextStatus && nextStatus !== previousStatus) {
-      project.status = nextStatus;
-    }
-
-    return {
-      changed: nextStatus !== previousStatus,
-      fromStatus: previousStatus,
-      toStatus: nextStatus,
-      allRequirementsCompleted: ["sent_to_client", "client_approved"].includes(
-        requirementStatus,
-      ),
-    };
-  }
-
-  if (requirementMode === "sampleProduction") {
-    const normalizedQuoteDetails = normalizeQuoteDetailsWorkflow({
-      quoteDetailsInput: project?.quoteDetails || {},
-      existingQuoteDetails: project?.quoteDetails || {},
-    });
-    const requirementItem =
-      normalizedQuoteDetails?.requirementItems?.sampleProduction || {};
-    const requirementStatus = toText(requirementItem.status).toLowerCase() || "assigned";
-    const lockedStatuses = new Set(["Completed", "Finished", "Declined"]);
-    if (lockedStatuses.has(previousStatus)) {
-      return {
-        changed: false,
-        fromStatus: previousStatus,
-        toStatus: previousStatus,
-        allRequirementsCompleted: [
-          "dept_submitted",
-          "frontdesk_review",
-          "sent_to_client",
-          "client_approved",
-        ].includes(requirementStatus),
-      };
-    }
-
-    let nextStatus = previousStatus;
-    if (
-      ["assigned", "in_progress", "blocked", "client_revision_requested"].includes(
-        requirementStatus,
-      )
-    ) {
-      nextStatus = isQuoteMockupApproved(project)
-        ? "Pending Production"
-        : "Pending Mockup";
-    } else if (["dept_submitted", "frontdesk_review"].includes(requirementStatus)) {
-      nextStatus = "Pending Quote Submission";
-    } else if (["sent_to_client", "client_approved"].includes(requirementStatus)) {
-      nextStatus = "Pending Client Decision";
-    }
-
-    if (nextStatus && nextStatus !== previousStatus) {
-      project.status = nextStatus;
-    }
-
-    return {
-      changed: nextStatus !== previousStatus,
-      fromStatus: previousStatus,
-      toStatus: nextStatus,
-      allRequirementsCompleted: [
-        "dept_submitted",
-        "frontdesk_review",
-        "sent_to_client",
-        "client_approved",
-      ].includes(requirementStatus),
-    };
-  }
-
-  if (requirementMode !== "cost") {
-    return {
-      changed: false,
-      fromStatus: previousStatus,
-      toStatus: previousStatus,
-      allRequirementsCompleted: false,
-    };
-  }
-
-  const costVerified = isQuoteCostVerified(project);
   let nextStatus = previousStatus;
-
-  if (costVerified) {
-    if (
-      QUOTE_STATUS_SYNC_PENDING_SET.has(previousStatus) ||
-      previousStatus === "Pending Cost Verification" ||
-      previousStatus === "Pending Quote Request"
-    ) {
-      nextStatus = "Cost Verification Completed";
-    }
-  } else if (
-    [
-      "Cost Verification Completed",
-      "Pending Quote Submission",
-      "Quote Submission Completed",
-      "Pending Client Decision",
-      "Quote Request Completed",
-      "Pending Send Response",
-      "Response Sent",
-    ].includes(previousStatus) &&
-    !project?.invoice?.sent
-  ) {
+  if (project?.invoice?.sent) {
+    nextStatus = "Pending Client Decision";
+  } else if (quoteState.allRequirementsReadyForSubmission) {
+    nextStatus = "Pending Quote Submission";
+  } else if (requirementMode === "multi") {
+    nextStatus = "Pending Quote Requirements";
+  } else if (requirementMode === "mockup") {
+    nextStatus = "Pending Mockup";
+  } else if (requirementMode === "previousSamples") {
+    nextStatus = "Pending Sample Retrieval";
+  } else if (requirementMode === "sampleProduction") {
+    nextStatus = quoteState.trackStates.find(
+      (track) => track.key === "sampleProduction",
+    )?.pendingStatus || "Pending Mockup";
+  } else if (requirementMode === "bidSubmission") {
+    nextStatus = "Pending Quote Submission";
+  } else if (requirementMode === "cost") {
     nextStatus = "Pending Cost Verification";
   }
 
@@ -2894,7 +2801,7 @@ const syncQuoteProjectStatusByRequirements = (project = {}) => {
     changed: nextStatus !== previousStatus,
     fromStatus: previousStatus,
     toStatus: nextStatus,
-    allRequirementsCompleted: costVerified,
+    allRequirementsCompleted: quoteState.allRequirementsReadyForSubmission,
   };
 };
 
@@ -2962,6 +2869,10 @@ const syncQuoteMockupRequirementDecision = ({
     requirementItem.status = normalizedTargetStatus;
     requirementItem.updatedAt = transitionTime;
     requirementItem.updatedBy = actorId || null;
+    if (normalizedTargetStatus !== "client_approved") {
+      requirementItem.completionConfirmedAt = null;
+      requirementItem.completionConfirmedBy = null;
+    }
     requirementItem.note = toText(note);
     project.markModified("quoteDetails.requirementItems");
   }
@@ -5305,13 +5216,6 @@ const createProject = async (req, res) => {
         : finalQuoteDetails;
     if (normalizedProjectType === "Quote") {
       const { mode } = getQuoteChecklistState(normalizedQuoteDetails);
-      if (mode === "unsupported") {
-        return res.status(400).json({
-          code: "QUOTE_REQUIREMENTS_BLOCKED",
-          message:
-            "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements and try again.",
-        });
-      }
       if (mode === "none") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
@@ -6781,7 +6685,7 @@ const updateProjectStatus = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before progressing this quote.",
+          "Quote requirements are not configured yet. Configure at least one quote requirement before progressing this quote.",
       });
     }
 
@@ -6844,6 +6748,25 @@ const updateProjectStatus = async (req, res) => {
     let finalStatus = getAutoProgressedStatus(newStatus, project);
     if (shouldForcePendingMeeting) {
       finalStatus = "Pending Departmental Meeting";
+    }
+
+    if (isQuoteProject(project) && newStatus === "Mockup Completed") {
+      project.quoteDetails = normalizeQuoteDetailsWorkflow({
+        quoteDetailsInput: project.quoteDetails || {},
+        existingQuoteDetails: project.quoteDetails || {},
+      });
+
+      const mockupRequirement = project.quoteDetails?.requirementItems?.mockup || null;
+      const sampleProductionRequirement =
+        project.quoteDetails?.requirementItems?.sampleProduction || null;
+      if (mockupRequirement && (mockupRequirement.isRequired || sampleProductionRequirement?.isRequired)) {
+        mockupRequirement.completionConfirmedAt = new Date();
+        mockupRequirement.completionConfirmedBy = req.user._id || req.user.id;
+        project.markModified("quoteDetails.requirementItems");
+      }
+
+      const statusSync = syncQuoteProjectStatusByRequirements(project);
+      finalStatus = statusSync.toStatus || finalStatus;
     }
 
     const isStandardProject = !isQuoteProject(project);
@@ -7162,49 +7085,63 @@ const transitionQuoteRequirement = async (req, res) => {
       quoteDetailsInput: project.quoteDetails || {},
       existingQuoteDetails: project.quoteDetails || {},
     });
-    const requirementMode = getQuoteRequirementMode(normalizedQuoteDetails);
-    if (requirementMode === "unsupported" || requirementMode === "none") {
+    const checklistState = getQuoteChecklistState(normalizedQuoteDetails);
+    const requirementMode = checklistState.mode;
+    if (requirementMode === "none") {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Quote requirement transitions are disabled until other workflows are ready.",
+          "Quote requirements are not configured yet. Select at least one quote requirement before progressing this quote.",
       });
     }
 
-    if (requirementKey === "cost" && requirementMode !== "cost") {
+    if (requirementKey === "cost" && !checklistState.enabledKeys.includes("cost")) {
       return res.status(400).json({
         message:
-          "Cost requirement transitions are only available for cost-only quotes.",
+          "Cost transitions are only available when Cost is selected for this quote.",
       });
     }
 
     if (
       requirementKey === "mockup" &&
-      !["mockup", "sampleProduction"].includes(requirementMode)
+      !(
+        checklistState.enabledKeys.includes("mockup") ||
+        checklistState.enabledKeys.includes("sampleProduction")
+      )
     ) {
       return res.status(400).json({
         message:
-          "Mockup requirement transitions are only available for mockup-only or sample-production quotes.",
+          "Mockup transitions are only available when Mockup or Sample Production is selected for this quote.",
       });
     }
 
     if (
       requirementKey === "previousSamples" &&
-      requirementMode !== "previousSamples"
+      !checklistState.enabledKeys.includes("previousSamples")
     ) {
       return res.status(400).json({
         message:
-          "Previous sample requirement transitions are only available for previous-sample-only quotes.",
+          "Previous sample transitions are only available when Previous Sample / Work done is selected for this quote.",
       });
     }
 
     if (
       requirementKey === "sampleProduction" &&
-      requirementMode !== "sampleProduction"
+      !checklistState.enabledKeys.includes("sampleProduction")
     ) {
       return res.status(400).json({
         message:
-          "Sample production requirement transitions are only available for sample-production quotes.",
+          "Sample production transitions are only available when Sample Production is selected for this quote.",
+      });
+    }
+
+    if (
+      requirementKey === "bidSubmission" &&
+      !checklistState.enabledKeys.includes("bidSubmission")
+    ) {
+      return res.status(400).json({
+        message:
+          "Bid Submission / Documents transitions are only available when that requirement is selected for this quote.",
       });
     }
 
@@ -7425,11 +7362,16 @@ const updateQuoteCostVerification = async (req, res) => {
       });
     }
 
-    if (!isQuoteCostOnlyProject(project)) {
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    if (!project.quoteDetails?.checklist?.cost) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-based quotes are supported right now. Remove other requirements before verifying cost.",
+          "Cost verification is only available when Cost is selected for this quote.",
       });
     }
 
@@ -7437,11 +7379,6 @@ const updateQuoteCostVerification = async (req, res) => {
     const note = toText(req.body?.note).slice(0, 500);
     const currency = toText(req.body?.currency).slice(0, 10);
     const amount = Number.parseFloat(req.body?.amount);
-
-    project.quoteDetails = normalizeQuoteDetailsWorkflow({
-      quoteDetailsInput: project.quoteDetails || {},
-      existingQuoteDetails: project.quoteDetails || {},
-    });
 
     const previousStatus = project.status;
 
@@ -7468,8 +7405,8 @@ const updateQuoteCostVerification = async (req, res) => {
         sentAt: null,
         sentBy: null,
       };
-      project.status = "Pending Cost Verification";
       project.markModified("quoteDetails.decision");
+      syncQuoteProjectStatusByRequirements(project);
     } else {
       if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({
@@ -7484,10 +7421,7 @@ const updateQuoteCostVerification = async (req, res) => {
         updatedAt: new Date(),
         updatedBy: req.user._id,
       };
-      project.status = getAutoProgressedStatus(
-        "Cost Verification Completed",
-        project,
-      );
+      syncQuoteProjectStatusByRequirements(project);
     }
 
     project.markModified("quoteDetails.costVerification");
@@ -7560,11 +7494,15 @@ const resetQuoteMockup = async (req, res) => {
       });
     }
 
-    if (!isQuoteMockupOnlyProject(project)) {
+    const quoteState = getQuoteChecklistState(
+      getNormalizedQuoteDetailsForProject(project),
+    );
+
+    if (!quoteState.effectiveEnabledKeys.includes("mockup")) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Mockup rework is only available for mockup-only quotes.",
+          "Mockup rework is only available when Mockup is an active quote requirement.",
       });
     }
 
@@ -7593,7 +7531,6 @@ const resetQuoteMockup = async (req, res) => {
       sentBy: null,
     };
 
-    project.status = "Pending Mockup";
     project.markModified("quoteDetails.decision");
 
     const requirementItem = project.quoteDetails?.requirementItems?.mockup;
@@ -7650,6 +7587,10 @@ const resetQuoteMockup = async (req, res) => {
         approvedVersion: null,
       };
     }
+
+    project.status = quoteState.hasMultipleRequirements
+      ? "Pending Quote Requirements"
+      : "Pending Mockup";
 
     await project.save();
 
@@ -7717,11 +7658,15 @@ const resetQuotePreviousSamples = async (req, res) => {
       });
     }
 
-    if (!isQuotePreviousSamplesOnlyProject(project)) {
+    const quoteState = getQuoteChecklistState(
+      getNormalizedQuoteDetailsForProject(project),
+    );
+
+    if (!quoteState.effectiveEnabledKeys.includes("previousSamples")) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Sample rework is only available for previous-sample-only quotes.",
+          "Sample rework is only available when Previous Sample / Work done is selected for this quote.",
       });
     }
 
@@ -7750,7 +7695,6 @@ const resetQuotePreviousSamples = async (req, res) => {
       sentBy: null,
     };
 
-    project.status = "Pending Sample Retrieval";
     project.markModified("quoteDetails.decision");
 
     const requirementItem = project.quoteDetails?.requirementItems?.previousSamples;
@@ -7773,6 +7717,10 @@ const resetQuotePreviousSamples = async (req, res) => {
       requirementItem.note = note || "Sample rework requested.";
       project.markModified("quoteDetails.requirementItems");
     }
+
+    project.status = quoteState.hasMultipleRequirements
+      ? "Pending Quote Requirements"
+      : "Pending Sample Retrieval";
 
     await project.save();
 
@@ -7840,11 +7788,15 @@ const resetQuoteSampleProduction = async (req, res) => {
       });
     }
 
-    if (!isQuoteSampleProductionOnlyProject(project)) {
+    const quoteState = getQuoteChecklistState(
+      getNormalizedQuoteDetailsForProject(project),
+    );
+
+    if (!quoteState.effectiveEnabledKeys.includes("sampleProduction")) {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Sample production rework is only available for sample-production quotes.",
+          "Sample production rework is only available when Sample Production is selected for this quote.",
       });
     }
 
@@ -7873,7 +7825,6 @@ const resetQuoteSampleProduction = async (req, res) => {
       sentBy: null,
     };
 
-    project.status = "Pending Production";
     project.markModified("quoteDetails.decision");
 
     const requirementItem =
@@ -7897,6 +7848,10 @@ const resetQuoteSampleProduction = async (req, res) => {
       requirementItem.note = note || "Sample production rework requested.";
       project.markModified("quoteDetails.requirementItems");
     }
+
+    project.status = quoteState.hasMultipleRequirements
+      ? "Pending Quote Requirements"
+      : "Pending Production";
 
     await project.save();
 
@@ -7972,15 +7927,14 @@ const updateQuoteBidSubmissionDocuments = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before updating documents.",
+          "Quote requirements are not configured yet. Select Bid Submission / Documents before updating this section.",
       });
     }
 
-    const requirementMode = getQuoteRequirementMode(project.quoteDetails);
-    if (requirementMode !== "bidSubmission") {
+    if (!project.quoteDetails?.checklist?.bidSubmission) {
       return res.status(400).json({
         message:
-          "Bid submission documents are only available for bid-submission quotes.",
+          "Bid submission documents are only available when Bid Submission / Documents is selected for this quote.",
       });
     }
 
@@ -8133,7 +8087,7 @@ const updateQuoteDecision = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before validating the decision.",
+          "Quote requirements are not configured yet. Configure at least one quote requirement before validating the decision.",
       });
     }
 
@@ -8276,70 +8230,21 @@ const markInvoiceSent = async (req, res) => {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
-            "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before sending the quote.",
-        });
+            "Quote requirements are not configured yet. Configure at least one quote requirement before sending the quote.",
+          });
       }
-      if (isQuoteCostOnlyProject(project) && !isQuoteCostVerified(project)) {
+      const quoteProgress = getQuoteRequirementProgressState(project);
+      if (!quoteProgress.allRequirementsReadyForSubmission) {
+        const missingLabels = quoteProgress.missingRequirementKeys
+          .map((key) => QUOTE_REQUIREMENT_LABELS[key] || key)
+          .filter(Boolean);
         return res.status(400).json({
-          code: "QUOTE_COST_MISSING",
+          code: "QUOTE_REQUIREMENTS_PENDING",
           message:
-            "Cost verification must be completed before sending the quote.",
+            missingLabels.length > 0
+              ? `Complete all selected quote requirements before sending the quote. Pending: ${missingLabels.join(", ")}.`
+              : "Complete all selected quote requirements before sending the quote.",
         });
-      }
-      if (isQuoteMockupOnlyProject(project) && !isQuoteMockupApproved(project)) {
-        return res.status(400).json({
-          code: "QUOTE_MOCKUP_MISSING",
-          message:
-            "Client-approved mockup is required before sending the quote.",
-        });
-      }
-      if (isQuotePreviousSamplesOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.previousSamples || {};
-        const requirementStatus =
-          toText(requirementItem.status).toLowerCase() || "assigned";
-        const readyStatuses = new Set([
-          "dept_submitted",
-          "frontdesk_review",
-          "sent_to_client",
-          "client_approved",
-        ]);
-        if (!readyStatuses.has(requirementStatus)) {
-          return res.status(400).json({
-            code: "QUOTE_SAMPLES_MISSING",
-            message:
-              "Sample retrieval must be confirmed before sending the quote.",
-          });
-        }
-      }
-      if (isQuoteSampleProductionOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.sampleProduction || {};
-        const requirementStatus =
-          toText(requirementItem.status).toLowerCase() || "assigned";
-        const readyStatuses = new Set([
-          "dept_submitted",
-          "frontdesk_review",
-          "sent_to_client",
-          "client_approved",
-        ]);
-        if (!readyStatuses.has(requirementStatus)) {
-          return res.status(400).json({
-            code: "QUOTE_SAMPLE_PRODUCTION_MISSING",
-            message:
-              "Sample production must be completed before sending the quote.",
-          });
-        }
-      }
-      if (isQuoteBidSubmissionOnlyProject(project)) {
-        const bidState = getQuoteBidSubmissionState(project);
-        if (!bidState.isReady) {
-          return res.status(400).json({
-            code: "QUOTE_BID_DOCS_MISSING",
-            message:
-              "Bid submission documents must be prepared before sending the quote.",
-          });
-        }
       }
     }
 
@@ -8355,84 +8260,33 @@ const markInvoiceSent = async (req, res) => {
       sentBy: req.user._id,
     };
     if (isQuoteProject(project)) {
-      if (isQuotePreviousSamplesOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.previousSamples || null;
-        if (requirementItem?.isRequired) {
+      ["previousSamples", "sampleProduction", "bidSubmission"].forEach(
+        (requirementKey) => {
+          const requirementItem =
+            project.quoteDetails?.requirementItems?.[requirementKey] || null;
+          if (!requirementItem?.isRequired) return;
           const fromStatus =
             toText(requirementItem.status).toLowerCase() || "assigned";
-          if (!["sent_to_client", "client_approved"].includes(fromStatus)) {
-            const transitionTime = new Date();
-            requirementItem.history = Array.isArray(requirementItem.history)
-              ? requirementItem.history
-              : [];
-            requirementItem.history.push({
-              fromStatus,
-              toStatus: "sent_to_client",
-              changedAt: transitionTime,
-              changedBy: req.user._id,
-              note: "Quote sent to client.",
-            });
-            requirementItem.status = "sent_to_client";
-            requirementItem.updatedAt = transitionTime;
-            requirementItem.updatedBy = req.user._id;
-            requirementItem.note = "Quote sent to client.";
-            project.markModified("quoteDetails.requirementItems");
-          }
-        }
-      }
-      if (isQuoteSampleProductionOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.sampleProduction || null;
-        if (requirementItem?.isRequired) {
-          const fromStatus =
-            toText(requirementItem.status).toLowerCase() || "assigned";
-          if (!["sent_to_client", "client_approved"].includes(fromStatus)) {
-            const transitionTime = new Date();
-            requirementItem.history = Array.isArray(requirementItem.history)
-              ? requirementItem.history
-              : [];
-            requirementItem.history.push({
-              fromStatus,
-              toStatus: "sent_to_client",
-              changedAt: transitionTime,
-              changedBy: req.user._id,
-              note: "Quote sent to client.",
-            });
-            requirementItem.status = "sent_to_client";
-            requirementItem.updatedAt = transitionTime;
-            requirementItem.updatedBy = req.user._id;
-            requirementItem.note = "Quote sent to client.";
-            project.markModified("quoteDetails.requirementItems");
-          }
-        }
-      }
-      if (isQuoteBidSubmissionOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.bidSubmission || null;
-        if (requirementItem?.isRequired) {
-          const fromStatus =
-            toText(requirementItem.status).toLowerCase() || "assigned";
-          if (!["sent_to_client", "client_approved"].includes(fromStatus)) {
-            const transitionTime = new Date();
-            requirementItem.history = Array.isArray(requirementItem.history)
-              ? requirementItem.history
-              : [];
-            requirementItem.history.push({
-              fromStatus,
-              toStatus: "sent_to_client",
-              changedAt: transitionTime,
-              changedBy: req.user._id,
-              note: "Quote sent to client.",
-            });
-            requirementItem.status = "sent_to_client";
-            requirementItem.updatedAt = transitionTime;
-            requirementItem.updatedBy = req.user._id;
-            requirementItem.note = "Quote sent to client.";
-            project.markModified("quoteDetails.requirementItems");
-          }
-        }
-      }
+          if (["sent_to_client", "client_approved"].includes(fromStatus)) return;
+
+          const transitionTime = new Date();
+          requirementItem.history = Array.isArray(requirementItem.history)
+            ? requirementItem.history
+            : [];
+          requirementItem.history.push({
+            fromStatus,
+            toStatus: "sent_to_client",
+            changedAt: transitionTime,
+            changedBy: req.user._id,
+            note: "Quote sent to client.",
+          });
+          requirementItem.status = "sent_to_client";
+          requirementItem.updatedAt = transitionTime;
+          requirementItem.updatedBy = req.user._id;
+          requirementItem.note = "Quote sent to client.";
+          project.markModified("quoteDetails.requirementItems");
+        },
+      );
       project.status = getAutoProgressedStatus(
         "Quote Submission Completed",
         project,
@@ -8616,94 +8470,42 @@ const undoInvoiceSent = async (req, res) => {
         quoteDetailsInput: project.quoteDetails || {},
         existingQuoteDetails: project.quoteDetails || {},
       });
-      if (isQuoteCostOnlyProject(project)) {
-        project.status = isQuoteCostVerified(project)
-          ? "Pending Quote Submission"
-          : "Pending Cost Verification";
-      } else if (isQuoteMockupOnlyProject(project)) {
-        project.status = isQuoteMockupApproved(project)
+      ["previousSamples", "sampleProduction", "bidSubmission"].forEach(
+        (requirementKey) => {
+          const requirementItem =
+            project.quoteDetails?.requirementItems?.[requirementKey] || null;
+          if (!requirementItem?.isRequired) return;
+
+          const fromStatus =
+            toText(requirementItem.status).toLowerCase() || "assigned";
+          if (!["sent_to_client", "client_approved"].includes(fromStatus)) return;
+
+          const transitionTime = new Date();
+          requirementItem.history = Array.isArray(requirementItem.history)
+            ? requirementItem.history
+            : [];
+          requirementItem.history.push({
+            fromStatus,
+            toStatus: "dept_submitted",
+            changedAt: transitionTime,
+            changedBy: req.user._id,
+            note: "Quote send status reset.",
+          });
+          requirementItem.status = "dept_submitted";
+          requirementItem.updatedAt = transitionTime;
+          requirementItem.updatedBy = req.user._id;
+          requirementItem.note = "Quote send status reset.";
+          project.markModified("quoteDetails.requirementItems");
+        },
+      );
+
+      const quoteState = getQuoteRequirementProgressState(project);
+      if (quoteState.checklistState.mode === "mockup") {
+        project.status = isQuoteMockupReadyForSubmission(project)
           ? "Pending Quote Submission"
           : "Pending Mockup";
-      } else if (isQuotePreviousSamplesOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.previousSamples || null;
-        if (requirementItem?.isRequired) {
-          const fromStatus =
-            toText(requirementItem.status).toLowerCase() || "assigned";
-          if (["sent_to_client", "client_approved"].includes(fromStatus)) {
-            const transitionTime = new Date();
-            requirementItem.history = Array.isArray(requirementItem.history)
-              ? requirementItem.history
-              : [];
-            requirementItem.history.push({
-              fromStatus,
-              toStatus: "dept_submitted",
-              changedAt: transitionTime,
-              changedBy: req.user._id,
-              note: "Quote send status reset.",
-            });
-            requirementItem.status = "dept_submitted";
-            requirementItem.updatedAt = transitionTime;
-            requirementItem.updatedBy = req.user._id;
-            requirementItem.note = "Quote send status reset.";
-            project.markModified("quoteDetails.requirementItems");
-          }
-        }
-        syncQuoteProjectStatusByRequirements(project);
-      } else if (isQuoteSampleProductionOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.sampleProduction || null;
-        if (requirementItem?.isRequired) {
-          const fromStatus =
-            toText(requirementItem.status).toLowerCase() || "assigned";
-          if (["sent_to_client", "client_approved"].includes(fromStatus)) {
-            const transitionTime = new Date();
-            requirementItem.history = Array.isArray(requirementItem.history)
-              ? requirementItem.history
-              : [];
-            requirementItem.history.push({
-              fromStatus,
-              toStatus: "dept_submitted",
-              changedAt: transitionTime,
-              changedBy: req.user._id,
-              note: "Quote send status reset.",
-            });
-            requirementItem.status = "dept_submitted";
-            requirementItem.updatedAt = transitionTime;
-            requirementItem.updatedBy = req.user._id;
-            requirementItem.note = "Quote send status reset.";
-            project.markModified("quoteDetails.requirementItems");
-          }
-        }
-        syncQuoteProjectStatusByRequirements(project);
-      } else if (isQuoteBidSubmissionOnlyProject(project)) {
-        const requirementItem =
-          project.quoteDetails?.requirementItems?.bidSubmission || null;
-        if (requirementItem?.isRequired) {
-          const fromStatus =
-            toText(requirementItem.status).toLowerCase() || "assigned";
-          if (["sent_to_client", "client_approved"].includes(fromStatus)) {
-            const transitionTime = new Date();
-            requirementItem.history = Array.isArray(requirementItem.history)
-              ? requirementItem.history
-              : [];
-            requirementItem.history.push({
-              fromStatus,
-              toStatus: "dept_submitted",
-              changedAt: transitionTime,
-              changedBy: req.user._id,
-              note: "Quote send status reset.",
-            });
-            requirementItem.status = "dept_submitted";
-            requirementItem.updatedAt = transitionTime;
-            requirementItem.updatedBy = req.user._id;
-            requirementItem.note = "Quote send status reset.";
-            project.markModified("quoteDetails.requirementItems");
-          }
-        }
-        syncQuoteProjectStatusByRequirements(project);
       } else {
-        project.status = "Pending Quote Submission";
+        syncQuoteProjectStatusByRequirements(project);
       }
     }
 
@@ -9704,6 +9506,8 @@ const uploadProjectMockup = async (req, res) => {
         requirementItem.status = "dept_submitted";
         requirementItem.updatedAt = transitionTime;
         requirementItem.updatedBy = req.user._id;
+        requirementItem.completionConfirmedAt = null;
+        requirementItem.completionConfirmedBy = null;
         requirementItem.note = transitionNote;
         project.markModified("quoteDetails.requirementItems");
 
@@ -11917,19 +11721,6 @@ const updateProject = async (req, res) => {
       const { mode, enabledKeys } = getQuoteChecklistState(
         project.quoteDetails || {},
       );
-        if (mode === "unsupported") {
-          console.warn("[updateProject] Quote requirements blocked", {
-            projectId: id,
-            userId: req.user?._id || req.user?.id,
-            projectType: project?.projectType,
-            enabledKeys,
-          });
-          return res.status(400).json({
-            code: "QUOTE_REQUIREMENTS_BLOCKED",
-            message:
-            "Only cost-only, mockup-only, previous-sample-only, sample-production, or bid-submission quotes are supported right now. Remove other requirements before saving.",
-          });
-        }
       if (mode === "none") {
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",

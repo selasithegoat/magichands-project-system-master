@@ -22,7 +22,9 @@ import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard
 import Modal from "../../components/Modal/Modal";
 import {
   getQuoteRequirementMode,
+  getQuoteRequirementSummary,
   getQuoteStatusDisplay,
+  isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "@client/utils/quoteStatus";
 
@@ -233,10 +235,38 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
     "Completed",
     "Finished",
   ],
+  multi: [
+    "Quote Created",
+    "Pending Scope Approval",
+    "Scope Approval Completed",
+    "Pending Quote Requirements",
+    "Pending Quote Submission",
+    "Quote Submission Completed",
+    "Pending Client Decision",
+    "Completed",
+    "Finished",
+  ],
 };
 
 const getQuoteStatusFlow = (mode) =>
   QUOTE_STATUS_FLOW_BY_MODE[mode] || QUOTE_STATUS_FLOW_BY_MODE.cost;
+
+const getQuoteSelectableStatuses = (requirementMode = "", includeOnHold = false) => {
+  const seen = new Set();
+  const options = getQuoteStatusFlow(requirementMode).reduce((accumulator, status) => {
+    const displayStatus = mapQuoteStatusForDisplay(status, true, requirementMode);
+    if (!displayStatus || seen.has(displayStatus)) return accumulator;
+    seen.add(displayStatus);
+    accumulator.push(displayStatus);
+    return accumulator;
+  }, []);
+
+  if (includeOnHold && !seen.has("On Hold")) {
+    options.push("On Hold");
+  }
+
+  return options;
+};
 
 const getStatusFlow = (isQuoteProject, requirementMode = "") =>
   isQuoteProject ? getQuoteStatusFlow(requirementMode) : STANDARD_STATUS_FLOW;
@@ -2403,59 +2433,40 @@ const ProjectDetails = ({ user }) => {
       }
     },
   );
+  const quoteRequirementSummary = isQuoteProject
+    ? getQuoteRequirementSummary(quoteChecklist)
+    : getQuoteRequirementSummary({});
   const quoteRequirementMode = isQuoteProject
-    ? getQuoteRequirementMode(quoteChecklist)
+    ? quoteRequirementSummary.mode
     : "none";
-  const isCostOnlyQuote = isQuoteProject && quoteRequirementMode === "cost";
-  const isMockupOnlyQuote = isQuoteProject && quoteRequirementMode === "mockup";
-  const isPreviousSamplesOnlyQuote =
-    isQuoteProject && quoteRequirementMode === "previousSamples";
-  const isSampleProductionOnlyQuote =
-    isQuoteProject && quoteRequirementMode === "sampleProduction";
-  const isBidSubmissionOnlyQuote =
-    isQuoteProject && quoteRequirementMode === "bidSubmission";
-  const quoteHasUnsupportedRequirements = Object.entries(quoteChecklist).some(
-    ([key, value]) =>
-      ![
-        "cost",
-        "mockup",
-        "previousSamples",
-        "sampleProduction",
-        "bidSubmission",
-      ].includes(key) &&
-      Boolean(value),
-  );
-  const enabledQuoteRequirements = [
-    "cost",
-    "mockup",
-    "previousSamples",
-    "sampleProduction",
-    "bidSubmission",
-  ].filter((key) => quoteChecklist?.[key]);
-  const effectiveEnabledRequirements = quoteChecklist.sampleProduction
-    ? enabledQuoteRequirements.filter((key) => key !== "mockup")
-    : enabledQuoteRequirements;
-  const quoteHasMultipleRequirements = effectiveEnabledRequirements.length > 1;
+  const effectiveEnabledRequirements =
+    quoteRequirementSummary.effectiveEnabledKeys || [];
+  const quoteHasMultipleRequirements =
+    isQuoteProject && quoteRequirementSummary.hasMultipleRequirements;
+  const quoteHasCostRequirement =
+    isQuoteProject && effectiveEnabledRequirements.includes("cost");
+  const quoteHasMockupRequirement =
+    isQuoteProject && effectiveEnabledRequirements.includes("mockup");
+  const quoteHasPreviousSamplesRequirement =
+    isQuoteProject && effectiveEnabledRequirements.includes("previousSamples");
+  const quoteHasSampleProductionRequirement =
+    isQuoteProject && effectiveEnabledRequirements.includes("sampleProduction");
+  const quoteHasBidSubmissionRequirement =
+    isQuoteProject && effectiveEnabledRequirements.includes("bidSubmission");
   const quoteWorkflowBlocked =
-    isQuoteProject &&
-    !isCostOnlyQuote &&
-    !isMockupOnlyQuote &&
-    !isPreviousSamplesOnlyQuote &&
-    !isSampleProductionOnlyQuote &&
-    !isBidSubmissionOnlyQuote;
+    isQuoteProject && quoteRequirementMode === "none";
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
-    ? quoteRequirementMode === "none"
-      ? "Quote requirements are not configured yet."
-      : quoteHasMultipleRequirements
-        ? "Multiple quote requirements are selected. Only one workflow can be active right now."
-        : quoteHasUnsupportedRequirements
-          ? "Quote requirement workflows are not configured yet."
-          : ""
+    ? "Select at least one quote requirement to continue."
     : "";
+  const quoteMockupCompletionConfirmed = isQuoteProject
+    ? isQuoteMockupCompletionConfirmed(project, quoteRequirementMode)
+    : false;
+  const quoteMockupReadyForSubmission =
+    latestMockupDecisionStatus === "approved" && quoteMockupCompletionConfirmed;
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
   const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
   const quoteCostVerified =
-    isCostOnlyQuote &&
+    quoteHasCostRequirement &&
     Number.isFinite(quoteCostAmountValue) &&
     quoteCostAmountValue > 0;
   const quotePreviousSamplesRequirement =
@@ -2509,6 +2520,26 @@ const ProjectDetails = ({ user }) => {
   const quoteBidSubmissionDocCount = quoteBidSubmissionDocuments.length;
   const quoteBidSubmissionReady =
     quoteBidSubmissionIsSensitive || quoteBidSubmissionDocCount > 0;
+  const quoteRequirementCompletionMap = {
+    cost: !quoteHasCostRequirement || quoteCostVerified,
+    mockup: !quoteHasMockupRequirement || quoteMockupReadyForSubmission,
+    previousSamples:
+      !quoteHasPreviousSamplesRequirement ||
+      ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+        quotePreviousSamplesStatus,
+      ),
+    sampleProduction:
+      !quoteHasSampleProductionRequirement ||
+      ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
+        quoteSampleProductionStatus,
+      ),
+    bidSubmission: !quoteHasBidSubmissionRequirement || quoteBidSubmissionReady,
+  };
+  const pendingQuoteRequirementKeys = effectiveEnabledRequirements.filter(
+    (key) => !quoteRequirementCompletionMap[key],
+  );
+  const quoteRequirementsCompletedCount =
+    effectiveEnabledRequirements.length - pendingQuoteRequirementKeys.length;
   const quoteBidSubmissionUpdatedAt =
     quoteBidSubmissionDetails.updatedAt || quoteBidSubmissionRequirement.updatedAt;
   const currentDisplayStatus = mapQuoteStatusForDisplay(
@@ -2824,73 +2855,10 @@ const ProjectDetails = ({ user }) => {
               }}
             >
               {(project.projectType === "Quote"
-                ? isMockupOnlyQuote
-                  ? [
-                      "Quote Created",
-                      "Pending Scope Approval",
-                      "Scope Approval Completed",
-                      "Pending Mockup",
-                      "Mockup Completed",
-                      "Pending Quote Submission",
-                      "Quote Submitted",
-                      "Pending Decision",
-                      "Completed",
-                      "Finished",
-                      ...(isProjectOnHold ? ["On Hold"] : []),
-                    ]
-                  : isPreviousSamplesOnlyQuote
-                    ? [
-                        "Quote Created",
-                        "Pending Scope Approval",
-                        "Scope Approval Completed",
-                        "Pending Sample / Work done Retrieval",
-                        "Pending Sample / Work done Sent",
-                        "Quote Submitted",
-                        "Pending Decision",
-                        "Completed",
-                        "Finished",
-                        ...(isProjectOnHold ? ["On Hold"] : []),
-                      ]
-                  : isSampleProductionOnlyQuote
-                      ? [
-                          "Quote Created",
-                          "Pending Scope Approval",
-                          "Scope Approval Completed",
-                          "Pending Mockup",
-                          "Mockup Completed",
-                          "Pending Sample Production",
-                          "Pending Quote Submission",
-                          "Quote Submitted",
-                          "Pending Decision",
-                          "Completed",
-                          "Finished",
-                          ...(isProjectOnHold ? ["On Hold"] : []),
-                        ]
-                    : isBidSubmissionOnlyQuote
-                      ? [
-                          "Quote Created",
-                          "Pending Scope Approval",
-                          "Scope Approval Completed",
-                          "Pending Bid Submission / Documents",
-                          "Quote Submitted",
-                          "Pending Decision",
-                          "Completed",
-                          "Finished",
-                          ...(isProjectOnHold ? ["On Hold"] : []),
-                        ]
-                  : [
-                      "Quote Created",
-                      "Pending Scope Approval",
-                      "Scope Approval Completed",
-                      "Pending Cost Verification",
-                      "Cost Verified",
-                      "Pending Quote Submission",
-                      "Quote Submitted",
-                      "Pending Decision",
-                      "Completed",
-                      "Finished",
-                      ...(isProjectOnHold ? ["On Hold"] : []),
-                    ]
+                ? getQuoteSelectableStatuses(
+                    quoteRequirementMode,
+                    isProjectOnHold,
+                  )
                 : [
                     "Order Created",
                     "Pending Scope Approval",
@@ -3629,7 +3597,36 @@ const ProjectDetails = ({ user }) => {
                 )}
               </div>
               <div className="checklist-admin-grid quote-requirements-admin-grid">
-                {isCostOnlyQuote && (
+                {quoteHasMultipleRequirements && (
+                  <div className="checklist-admin-item quote-requirement-admin-item is-required">
+                    <div className="quote-requirement-admin-header">
+                      <span className="quote-requirement-admin-title">
+                        Quote Requirements
+                      </span>
+                      <span className="quote-requirement-admin-status">
+                        {quoteRequirementsCompletedCount}/
+                        {effectiveEnabledRequirements.length} Ready
+                      </span>
+                    </div>
+                    {pendingQuoteRequirementKeys.length > 0 && (
+                      <div className="quote-requirement-admin-helper">
+                        Pending:{" "}
+                        {pendingQuoteRequirementKeys
+                          .map((key) =>
+                            ({
+                              cost: "Cost",
+                              mockup: "Mockup",
+                              previousSamples: "Previous Sample / Jobs Done",
+                              sampleProduction: "Sample Production",
+                              bidSubmission: "Bid Submission / Documents",
+                            }[key] || key),
+                          )
+                          .join(", ")}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {quoteHasCostRequirement && (
                   <div
                     className={`checklist-admin-item quote-requirement-admin-item ${
                       quoteCostVerified ? "is-required" : "is-not-required"
@@ -3658,10 +3655,10 @@ const ProjectDetails = ({ user }) => {
                     )}
                   </div>
                 )}
-                {isMockupOnlyQuote && (
+                {quoteHasMockupRequirement && (
                   <div
                     className={`checklist-admin-item quote-requirement-admin-item ${
-                      latestMockupDecisionStatus === "approved"
+                      quoteMockupReadyForSubmission
                         ? "is-required"
                         : "is-not-required"
                     }`}
@@ -3671,8 +3668,10 @@ const ProjectDetails = ({ user }) => {
                         Quote Mockup
                       </span>
                       <span className="quote-requirement-admin-status">
-                        {latestMockupDecisionStatus === "approved"
-                          ? "Approved"
+                        {quoteMockupReadyForSubmission
+                          ? "Completed"
+                          : latestMockupDecisionStatus === "approved"
+                            ? "Approved / Completion Pending"
                           : latestMockupDecisionStatus === "rejected"
                             ? "Rejected"
                             : "Pending"}
@@ -3697,7 +3696,7 @@ const ProjectDetails = ({ user }) => {
                       )}
                   </div>
                 )}
-                {isPreviousSamplesOnlyQuote && (
+                {quoteHasPreviousSamplesRequirement && (
                   <div
                     className={`checklist-admin-item quote-requirement-admin-item ${
                       ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
@@ -3728,7 +3727,7 @@ const ProjectDetails = ({ user }) => {
                     )}
                   </div>
                 )}
-                {isSampleProductionOnlyQuote && (
+                {quoteHasSampleProductionRequirement && (
                   <div
                     className={`checklist-admin-item quote-requirement-admin-item ${
                       ["dept_submitted", "frontdesk_review", "sent_to_client", "client_approved"].includes(
@@ -3748,8 +3747,10 @@ const ProjectDetails = ({ user }) => {
                     </div>
                     <div className="quote-requirement-admin-updated">
                       Mockup:{" "}
-                      {latestMockupDecisionStatus === "approved"
-                        ? "Approved"
+                      {quoteMockupReadyForSubmission
+                        ? "Completed"
+                        : latestMockupDecisionStatus === "approved"
+                          ? "Approved / Completion Pending"
                         : latestMockupDecisionStatus === "rejected"
                           ? "Rejected"
                           : "Pending"}
@@ -3767,7 +3768,7 @@ const ProjectDetails = ({ user }) => {
                     )}
                   </div>
                 )}
-                {isBidSubmissionOnlyQuote && (
+                {quoteHasBidSubmissionRequirement && (
                   <div
                     className={`checklist-admin-item quote-requirement-admin-item ${
                       quoteBidSubmissionReady ? "is-required" : "is-not-required"
