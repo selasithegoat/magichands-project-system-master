@@ -590,7 +590,10 @@ const ProjectSchema = new mongoose.Schema(
       projectCoordinatorSignature: String,
       scopeApproved: Boolean,
       checklist: {
-        cost: Boolean,
+        cost: {
+          type: Boolean,
+          default: true,
+        },
         mockup: Boolean,
         previousSamples: Boolean,
         sampleProduction: Boolean,

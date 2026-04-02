@@ -50,6 +50,9 @@ export const normalizeQuoteStatus = (status = "") =>
 export const normalizeQuoteChecklist = (checklist = {}) =>
   QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
     accumulator[key] = Boolean(checklist?.[key]);
+    if (key === "cost") {
+      accumulator[key] = true;
+    }
     return accumulator;
   }, {});
 

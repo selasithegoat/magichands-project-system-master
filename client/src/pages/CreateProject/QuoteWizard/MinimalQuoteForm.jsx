@@ -86,7 +86,7 @@ const normalizeChecklist = (checklist) => {
   if (!hasAtLeastOneRequirement) {
     next.cost = true;
   }
-  next.cost = Boolean(next.cost);
+  next.cost = true;
   next.mockup = Boolean(next.mockup);
   next.previousSamples = Boolean(next.previousSamples);
   next.sampleProduction = Boolean(next.sampleProduction);
@@ -274,6 +274,7 @@ const MinimalQuoteForm = () => {
       "bidSubmission",
     ];
     if (!requirementKeys.includes(field)) return;
+    if (field === "cost") return;
     setFormData((prev) => {
       const currentChecklist = normalizeChecklist(prev.checklist);
       const nextChecklist = normalizeChecklist({
@@ -848,17 +849,19 @@ const MinimalQuoteForm = () => {
               <span style={{ color: "red" }}>*</span>
             </h3>
             <p className="section-hint">
-              Cost, Mockup, Previous Sample / Jobs Done, Sample Production, and
-              Bid Submission / Documents are available right now.
+              Cost is required for every quote. You can add Mockup, Previous
+              Sample / Jobs Done, Sample Production, and Bid Submission /
+              Documents as additional requirements.
             </p>
             <div className="minimal-quote-checklist-grid">
               <label className="checklist-item">
                 <input
                   type="checkbox"
                   checked={formData.checklist.cost}
-                  onChange={() => handleChecklistChange("cost")}
+                  disabled
+                  readOnly
                 />
-                <span>Cost</span>
+                <span>Cost (Required)</span>
               </label>
               <label className="checklist-item">
                 <input

@@ -2202,7 +2202,7 @@ const QUOTE_REQUIREMENT_KEYS = [
   "bidSubmission",
 ];
 const DEFAULT_QUOTE_CHECKLIST = Object.freeze({
-  cost: false,
+  cost: true,
   mockup: false,
   previousSamples: false,
   sampleProduction: false,
@@ -2464,6 +2464,9 @@ const hasQuoteDecisionRecorded = (project = {}) =>
 const normalizeQuoteChecklistValue = (checklist = {}) =>
   QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
     accumulator[key] = parseBooleanFlag(checklist?.[key], false);
+    if (key === "cost") {
+      accumulator[key] = true;
+    }
     return accumulator;
   }, { ...DEFAULT_QUOTE_CHECKLIST });
 

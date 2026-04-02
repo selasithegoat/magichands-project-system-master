@@ -29,7 +29,7 @@ const normalizeChecklist = (checklist) => {
   if (!hasAtLeastOneRequirement) {
     next.cost = true;
   }
-  next.cost = Boolean(next.cost);
+  next.cost = true;
   next.mockup = Boolean(next.mockup);
   next.previousSamples = Boolean(next.previousSamples);
   next.sampleProduction = Boolean(next.sampleProduction);
