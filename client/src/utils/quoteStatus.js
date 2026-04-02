@@ -1,6 +1,8 @@
 export const QUOTE_STATUS_ALIASES = {
   "Pending Quote Request": "Pending Cost Verification",
   "Quote Request Completed": "Cost Verification Completed",
+  "Pending Cost": "Pending Cost Verification",
+  "Cost Completed": "Cost Verification Completed",
   "Pending Send Response": "Pending Quote Submission",
   "Response Sent": "Pending Client Decision",
   "Pending Bid Submission / Documents": "Pending Quote Submission",
@@ -28,6 +30,7 @@ export const QUOTE_REQUIREMENT_LABELS = {
 
 const QUOTE_MULTI_REQUIREMENT_PENDING_STATUSES = new Set([
   "Scope Approval Completed",
+  "Pending Cost",
   "Pending Cost Verification",
   "Cost Verification Completed",
   "Pending Mockup",
@@ -92,7 +95,8 @@ export const getQuoteRequirementSummary = (checklist = {}) => {
 
 const QUOTE_STATUS_DISPLAY_OVERRIDES = {
   cost: {
-    "Scope Approval Completed": "Pending Cost Verification",
+    "Scope Approval Completed": "Pending Cost",
+    "Pending Cost Verification": "Pending Cost",
     "Cost Verification Completed": "Pending Quote Submission",
     "Quote Submission Completed": "Pending Client Decision",
   },
@@ -143,6 +147,7 @@ const resolveQuoteRequirementMode = (modeOrChecklist, status = "") => {
   if (normalizedStatus.includes("sample production")) return "sampleProduction";
   if (normalizedStatus.includes("production")) return "sampleProduction";
   if (normalizedStatus.includes("mockup")) return "mockup";
+  if (normalizedStatus.includes("cost")) return "cost";
   if (normalizedStatus.includes("sample")) return "previousSamples";
   return "cost";
 };
@@ -213,8 +218,13 @@ export const getQuoteWorkflowJourneySteps = (modeOrChecklist) => {
       },
       {
         key: "cost",
-        label: "Cost Verification",
-        statuses: ["Pending Cost Verification", "Cost Verification Completed"],
+        label: "Cost",
+        statuses: [
+          "Pending Cost",
+          "Pending Cost Verification",
+          "Cost Verification Completed",
+          "Cost Completed",
+        ],
       },
       {
         key: "submission",
@@ -356,7 +366,9 @@ export const QUOTE_PROGRESS_MAP_BY_MODE = {
     "Quote Created": 5,
     "Pending Scope Approval": 20,
     "Scope Approval Completed": 30,
+    "Pending Cost": 45,
     "Pending Cost Verification": 45,
+    "Cost Completed": 55,
     "Cost Verification Completed": 55,
     "Pending Quote Submission": 70,
     "Quote Submission Completed": 80,
@@ -439,6 +451,16 @@ export const getQuoteProgressPercent = (status = "", modeOrChecklist) => {
   const progressMap =
     QUOTE_PROGRESS_MAP_BY_MODE[requirementMode] || QUOTE_PROGRESS_MAP_BY_MODE.cost;
   return progressMap[displayStatus] ?? progressMap[normalizeQuoteStatus(status)] ?? 5;
+};
+
+export const isQuoteCostCompleted = (project = {}) => {
+  const costVerification = project?.quoteDetails?.costVerification || {};
+  if (costVerification?.completedAt || costVerification?.completedBy) {
+    return true;
+  }
+
+  const amount = Number.parseFloat(costVerification?.amount);
+  return Number.isFinite(amount) && amount > 0;
 };
 
 export const isQuoteMockupCompletionConfirmed = (

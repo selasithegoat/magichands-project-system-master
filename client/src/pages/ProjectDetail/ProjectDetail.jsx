@@ -30,6 +30,7 @@ import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
+  isQuoteCostCompleted,
   getQuoteRequirementSummary,
   getQuoteProgressPercent,
   getQuoteRequirementMode,
@@ -120,8 +121,13 @@ const QUOTE_STEPS_BY_MODE = {
       statuses: ["Pending Scope Approval", "Scope Approval Completed"],
     },
     {
-      label: "Cost Verification",
-      statuses: ["Pending Cost Verification", "Cost Verification Completed"],
+      label: "Cost",
+      statuses: [
+        "Pending Cost",
+        "Pending Cost Verification",
+        "Cost Verification Completed",
+        "Cost Completed",
+      ],
     },
     {
       label: "Quote Submission",
@@ -298,7 +304,9 @@ const QUOTE_WORKFLOW_STATUSES = new Set([
   "Mockup Completed",
   "Pending Sample Production",
   "Pending Production",
+  "Pending Cost",
   "Pending Cost Verification",
+  "Cost Completed",
   "Cost Verification Completed",
   "Pending Bid Submission / Documents",
   "Pending Quote Submission",
@@ -406,9 +414,12 @@ const getStatusColor = (status) => {
     case "Completed":
     case "Finished":
       return "#22c55e"; // Green
+    case "Pending Cost":
     case "Pending Cost Verification":
     case "Pending Quote Requirements":
+    case "Cost Completed":
     case "Cost Verification Completed":
+    case "Cost":
     case "Cost Verification":
       return "#eab308"; // Yellow/Gold
     case "Pending Sample Retrieval":
@@ -468,13 +479,6 @@ const normalizeQuoteChecklist = (checklist = {}) =>
     accumulator[key] = Boolean(checklist?.[key]);
     return accumulator;
   }, {});
-
-const formatAmountLabel = (amount, currency = "") => {
-  if (!Number.isFinite(amount) || amount <= 0) return "-";
-  const formattedAmount = amount.toLocaleString("en-US");
-  const trimmedCurrency = String(currency || "").trim();
-  return trimmedCurrency ? `${trimmedCurrency} ${formattedAmount}` : formattedAmount;
-};
 
 const getMockupApprovalStatus = (approval = {}) => {
   const explicit = String(approval?.status || "")
@@ -1804,8 +1808,9 @@ const QuoteChecklistCard = ({ project }) => {
     requirementSummary.effectiveEnabledKeys || [];
   const hasMultipleRequirements = requirementSummary.hasMultipleRequirements;
   const costVerification = project?.quoteDetails?.costVerification || {};
-  const amountValue = Number.parseFloat(costVerification?.amount);
-  const costVerified = Number.isFinite(amountValue) && amountValue > 0;
+  const costUpdatedAt =
+    costVerification?.completedAt || costVerification?.updatedAt || null;
+  const costVerified = isQuoteCostCompleted(project);
   const costNote = String(costVerification?.note || "").trim();
   const blockedMessage =
     requirementMode === "none"
@@ -1935,11 +1940,13 @@ const QuoteChecklistCard = ({ project }) => {
               <div className="info-item">
                 <h4>COST</h4>
                 <div className="info-text-bold">
-                  {costVerified ? "Verified" : "Pending"}
+                  {costVerified ? "Completed" : "Pending"}
                 </div>
-                <div className="info-subtext">
-                  {formatAmountLabel(amountValue, costVerification?.currency)}
-                </div>
+                {costUpdatedAt && (
+                  <div className="info-subtext">
+                    Updated: {formatDateTime(costUpdatedAt)}
+                  </div>
+                )}
               </div>
             )}
             {effectiveEnabledRequirements.includes("mockup") && (
@@ -2098,20 +2105,14 @@ const QuoteChecklistCard = ({ project }) => {
       ) : (
         <>
           <p className="info-subtext">
-            Status: {costVerified ? "Cost Verified" : "Cost Pending"}
+            Status: {costVerified ? "Cost Completed" : "Cost Pending"}
           </p>
           <div className="info-grid">
             <div className="info-item">
-              <h4>AMOUNT</h4>
-              <div className="info-text-bold">
-                {formatAmountLabel(amountValue, costVerification?.currency)}
-              </div>
-            </div>
-            <div className="info-item">
               <h4>UPDATED</h4>
               <div className="info-text-bold">
-                {costVerification?.updatedAt
-                  ? formatDateTime(costVerification.updatedAt)
+                {costUpdatedAt
+                  ? formatDateTime(costUpdatedAt)
                   : "N/A"}
               </div>
             </div>
@@ -4076,6 +4077,7 @@ const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
     Packaging: PackageIcon,
     "Delivery/Pickup": TruckIcon,
     Feedback: CheckCircleIcon,
+    Cost: ClipboardListIcon,
     "Cost Verification": ClipboardListIcon,
     "Sample Retrieval": FolderIcon,
     "Quote Submission": ClockIcon,

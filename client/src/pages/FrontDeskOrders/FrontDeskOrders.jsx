@@ -24,6 +24,7 @@ const ACTION_STATUSES = new Set([
   "Quote Created",
   "Pending Quote Requirements",
   "Pending Mockup",
+  "Pending Cost",
   "Pending Cost Verification",
   "Pending Sample Retrieval",
   "Pending Sample / Work done Retrieval",
@@ -166,6 +167,7 @@ const FrontDeskOrders = () => {
           if (!isQuoteProject(project)) return false;
           const status = resolveProjectStatus(project);
           return [
+            "Pending Cost",
             "Pending Cost Verification",
             "Pending Mockup",
             "Pending Sample Retrieval",

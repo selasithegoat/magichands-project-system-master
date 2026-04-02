@@ -145,6 +145,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#06b6d4",
           textClass: "teal",
         };
+      case "Pending Cost":
       case "Pending Cost Verification":
       case "Pending Quote Requirements":
       case "Pending Sample Retrieval":
@@ -157,6 +158,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           color: "#f97316",
           textClass: "orange",
         };
+      case "Cost Completed":
       case "Cost Verification Completed":
       case "Quote Submission Completed":
         return {

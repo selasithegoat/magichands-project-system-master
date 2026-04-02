@@ -100,6 +100,10 @@ const QUOTE_STATUS_OPTIONS = [
   "Completed",
   "Finished",
 ];
+const STATUS_OPTION_LABELS = {
+  "Pending Cost Verification": "Pending Cost",
+  "Cost Verification Completed": "Cost Completed",
+};
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -870,7 +874,7 @@ const ProjectReminderPanel = ({ project, user }) => {
                       <option value="">Select status</option>
                       {statusOptions.map((status) => (
                         <option key={status} value={status}>
-                          {status}
+                          {STATUS_OPTION_LABELS[status] || status}
                         </option>
                       ))}
                     </select>

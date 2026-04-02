@@ -610,6 +610,11 @@ const ProjectSchema = new mongoose.Schema(
           type: String,
           default: "",
         },
+        completedAt: Date,
+        completedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
         updatedAt: Date,
         updatedBy: {
           type: mongoose.Schema.Types.ObjectId,

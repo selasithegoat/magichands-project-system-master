@@ -670,10 +670,10 @@ const Projects = ({ user }) => {
                 Pending Quote Requirements
               </option>
               <option value="Pending Cost Verification">
-                Pending Cost Verification
+                Pending Cost
               </option>
               <option value="Cost Verification Completed">
-                Cost Verification Completed
+                Cost Completed
               </option>
               <option value="Pending Sample Retrieval">
                 Pending Sample Retrieval

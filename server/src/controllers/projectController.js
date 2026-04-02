@@ -2118,7 +2118,9 @@ const MASTER_APPROVAL_STATUS_ALIASES = Object.freeze({
 const QUOTE_STATUS_ALIAS_TO_STORED = Object.freeze({
   "pending decision": "Pending Client Decision",
   "pending quote requirements": "Pending Quote Requirements",
+  "pending cost": "Pending Cost Verification",
   "decision completed": "Completed",
+  "cost completed": "Cost Verification Completed",
   "pending sample production": "Pending Production",
   "sample production": "Pending Production",
   "sample production completed": "Production Completed",
@@ -2457,6 +2459,8 @@ const normalizeQuoteCostVerification = (value = {}) => {
     amount: Number.isFinite(amount) ? amount : null,
     currency: toText(source.currency),
     note: toText(source.note),
+    completedAt: toDateOrNull(source.completedAt),
+    completedBy: source.completedBy || null,
     updatedAt: toDateOrNull(source.updatedAt),
     updatedBy: source.updatedBy || null,
   };
@@ -2748,6 +2752,9 @@ const isQuoteCostVerified = (project = {}) => {
   if (!isQuoteProject(project)) return false;
   const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
   const costVerification = normalizedQuoteDetails.costVerification || {};
+  if (costVerification.completedAt || costVerification.completedBy) {
+    return true;
+  }
   const amount = Number.parseFloat(costVerification.amount);
   return Number.isFinite(amount) && amount > 0;
 };
@@ -6861,8 +6868,7 @@ const updateProjectStatus = async (req, res) => {
       if (!isQuoteCostVerified(project)) {
         return res.status(400).json({
           code: "QUOTE_COST_MISSING",
-          message:
-            "Cost verification must be recorded before completing this stage.",
+          message: "Complete quote cost before completing this stage.",
         });
       }
     }
@@ -7537,14 +7543,14 @@ const transitionQuoteRequirement = async (req, res) => {
   }
 };
 
-// @desc    Update quote cost verification (Cost requirement)
+// @desc    Complete quote cost (Cost requirement)
 // @route   PATCH /api/projects/:id/quote-cost
 // @access  Private (Admin or Front Desk)
 const updateQuoteCostVerification = async (req, res) => {
   try {
     if (!canManageBilling(req.user)) {
       return res.status(403).json({
-        message: "Not authorized to verify quote cost.",
+        message: "Not authorized to complete quote cost.",
       });
     }
 
@@ -7553,7 +7559,7 @@ const updateQuoteCostVerification = async (req, res) => {
 
     if (!isQuoteProject(project)) {
       return res.status(400).json({
-        message: "Quote cost verification is only available for quote projects.",
+        message: "Quote cost completion is only available for quote projects.",
       });
     }
 
@@ -7566,14 +7572,33 @@ const updateQuoteCostVerification = async (req, res) => {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
         message:
-          "Cost verification is only available when Cost is selected for this quote.",
+          "Cost completion is only available when Cost is selected for this quote.",
       });
     }
 
     const reset = parseBooleanFlag(req.body?.reset, false);
-    const note = toText(req.body?.note).slice(0, 500);
-    const currency = toText(req.body?.currency).slice(0, 10);
-    const amount = Number.parseFloat(req.body?.amount);
+    const nextUpdatedAt = new Date();
+    const previousCostVerification = normalizeQuoteCostVerification(
+      project.quoteDetails?.costVerification || {},
+    );
+    const hasAmountField = Object.prototype.hasOwnProperty.call(req.body || {}, "amount");
+    const nextAmount = hasAmountField
+      ? (() => {
+          const parsedAmount = Number.parseFloat(req.body?.amount);
+          return Number.isFinite(parsedAmount) && parsedAmount > 0
+            ? parsedAmount
+            : null;
+        })()
+      : previousCostVerification.amount;
+    const nextCurrency = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "currency",
+    )
+      ? toText(req.body?.currency).slice(0, 10)
+      : previousCostVerification.currency;
+    const nextNote = Object.prototype.hasOwnProperty.call(req.body || {}, "note")
+      ? toText(req.body?.note).slice(0, 500)
+      : previousCostVerification.note;
 
     const previousStatus = project.status;
 
@@ -7582,7 +7607,9 @@ const updateQuoteCostVerification = async (req, res) => {
         amount: null,
         currency: "",
         note: "",
-        updatedAt: new Date(),
+        completedAt: null,
+        completedBy: null,
+        updatedAt: nextUpdatedAt,
         updatedBy: req.user._id,
       };
       project.quoteDetails.decision = {
@@ -7603,17 +7630,13 @@ const updateQuoteCostVerification = async (req, res) => {
       project.markModified("quoteDetails.decision");
       syncQuoteProjectStatusByRequirements(project);
     } else {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return res.status(400).json({
-          message: "Enter a valid cost amount before submitting.",
-        });
-      }
-
       project.quoteDetails.costVerification = {
-        amount,
-        currency,
-        note,
-        updatedAt: new Date(),
+        amount: nextAmount,
+        currency: nextCurrency,
+        note: nextNote,
+        completedAt: nextUpdatedAt,
+        completedBy: req.user._id,
+        updatedAt: nextUpdatedAt,
         updatedBy: req.user._id,
       };
       syncQuoteProjectStatusByRequirements(project);
@@ -7626,12 +7649,13 @@ const updateQuoteCostVerification = async (req, res) => {
       project._id,
       req.user._id,
       "update",
-      reset ? "Quote cost verification reset." : "Quote cost verified.",
+      reset ? "Quote cost reset." : "Quote cost completed.",
       {
         quoteCost: {
-          amount: reset ? null : amount,
-          currency: reset ? "" : currency,
-          note: reset ? "" : note,
+          amount: reset ? null : nextAmount,
+          currency: reset ? "" : nextCurrency,
+          note: reset ? "" : nextNote,
+          completedAt: reset ? null : nextUpdatedAt,
           reset,
         },
       },
@@ -7655,16 +7679,16 @@ const updateQuoteCostVerification = async (req, res) => {
     await notifyLeadFromAdminOrderManagement({
       req,
       project,
-      title: reset ? "Quote Cost Reset" : "Quote Cost Verified",
+      title: reset ? "Quote Cost Reset" : "Quote Cost Completed",
       message: `Admin ${actorName} ${
-        reset ? "reset" : "verified"
+        reset ? "reset" : "completed"
       } quote cost for project #${projectRef} (${projectName}).`,
       type: "UPDATE",
     });
 
     return res.json(project);
   } catch (error) {
-    console.error("Error updating quote cost verification:", error);
+    console.error("Error updating quote cost:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };

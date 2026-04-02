@@ -103,6 +103,10 @@ const QUOTE_STATUS_OPTIONS = [
   "Completed",
   "Finished",
 ];
+const STATUS_OPTION_LABELS = {
+  "Pending Cost Verification": "Pending Cost",
+  "Cost Verification Completed": "Cost Completed",
+};
 
 const ENGAGED_DEPARTMENT_GROUPS = [
   { id: "graphics", label: "Graphics" },
@@ -1249,7 +1253,7 @@ const ProjectRemindersCard = ({ project, user }) => {
                         <option value="">Select status</option>
                         {statusOptions.map((status) => (
                           <option key={status} value={status}>
-                            {status}
+                            {STATUS_OPTION_LABELS[status] || status}
                           </option>
                         ))}
                       </select>

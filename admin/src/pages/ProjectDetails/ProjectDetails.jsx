@@ -24,6 +24,7 @@ import {
   getQuoteRequirementMode,
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
+  isQuoteCostCompleted,
   isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "@client/utils/quoteStatus";
@@ -106,13 +107,6 @@ const formatSupplySource = (value) => {
   return list.join(", ");
 };
 
-const formatAmountLabel = (amount, currency = "") => {
-  if (!Number.isFinite(amount) || amount <= 0) return "-";
-  const formattedAmount = amount.toLocaleString("en-US");
-  const trimmedCurrency = String(currency || "").trim();
-  return trimmedCurrency ? `${trimmedCurrency} ${formattedAmount}` : formattedAmount;
-};
-
 const STATUS_AUTO_ADVANCE_TARGETS = {
   "Master Approval Completed": "Pending Production",
   "Packaging Completed": "Pending Delivery/Pickup",
@@ -132,7 +126,9 @@ const mapQuoteStatusForDisplay = (
 const mapQuoteStatusForStorage = (status) => {
   const normalized = String(status || "").trim();
   if (normalized === "Pending Decision") return "Pending Client Decision";
+  if (normalized === "Pending Cost") return "Pending Cost Verification";
   if (normalized === "Cost Verified") return "Cost Verification Completed";
+  if (normalized === "Cost Completed") return "Cost Verification Completed";
   if (normalized === "Pending Sample / Work done Retrieval") {
     return "Pending Sample Retrieval";
   }
@@ -260,6 +256,8 @@ const getQuoteStatusOptionLabel = (status, requirementMode = "") => {
   if (!normalized) return normalized;
 
   if (normalized === "Pending Client Decision") return "Pending Decision";
+  if (normalized === "Pending Cost Verification") return "Pending Cost";
+  if (normalized === "Cost Verification Completed") return "Cost Completed";
   if (normalized === "Completed") return "Decision Completed";
 
   if (requirementMode === "sampleProduction") {
@@ -2521,11 +2519,10 @@ const ProjectDetails = ({ user }) => {
   const quoteMockupReadyForSubmission =
     latestMockupDecisionStatus === "approved" && quoteMockupCompletionConfirmed;
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
-  const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
+  const quoteCostUpdatedAt =
+    quoteCostVerification?.completedAt || quoteCostVerification?.updatedAt || null;
   const quoteCostVerified =
-    quoteHasCostRequirement &&
-    Number.isFinite(quoteCostAmountValue) &&
-    quoteCostAmountValue > 0;
+    quoteHasCostRequirement && isQuoteCostCompleted(project);
   const quotePreviousSamplesRequirement =
     project?.quoteDetails?.requirementItems?.previousSamples || {};
   const quotePreviousSamplesStatus = String(
@@ -3700,15 +3697,12 @@ const ProjectDetails = ({ user }) => {
                         Quote Cost
                       </span>
                       <span className="quote-requirement-admin-status">
-                        {quoteCostVerified ? "Verified" : "Pending"}
+                        {quoteCostVerified ? "Completed" : "Pending"}
                       </span>
                     </div>
-                    <div className="quote-requirement-admin-updated">
-                      Amount: {formatAmountLabel(quoteCostAmountValue, quoteCostVerification?.currency)}
-                    </div>
-                    {quoteCostVerification?.updatedAt && (
+                    {quoteCostUpdatedAt && (
                       <div className="quote-requirement-admin-updated">
-                        Updated {formatLastUpdated(quoteCostVerification.updatedAt)}
+                        Updated {formatLastUpdated(quoteCostUpdatedAt)}
                       </div>
                     )}
                     {quoteCostVerification?.note && (

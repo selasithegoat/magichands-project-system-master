@@ -47,6 +47,10 @@ const QUOTE_STATUS_OPTIONS = [
   "Completed",
   "Finished",
 ];
+const STATUS_OPTION_LABELS = {
+  "Pending Cost Verification": "Pending Cost",
+  "Cost Verification Completed": "Cost Completed",
+};
 
 const getStatusOptionsForType = (projectType) =>
   projectType === "Quote" ? QUOTE_STATUS_OPTIONS : PROJECT_STATUS_OPTIONS;
@@ -203,7 +207,7 @@ const ProjectTypeChangeModal = ({
             >
               {statusOptions.map((entry) => (
                 <option key={entry} value={entry}>
-                  {entry}
+                  {STATUS_OPTION_LABELS[entry] || entry}
                 </option>
               ))}
             </select>

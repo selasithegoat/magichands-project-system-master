@@ -8,6 +8,7 @@ import {
   getQuoteRequirementMode,
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
+  isQuoteCostCompleted,
   isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
@@ -205,8 +206,13 @@ const QUOTE_WORKFLOW_STEPS_BY_MODE = {
     },
     {
       key: "cost",
-      label: "Cost Verification",
-      statuses: ["Pending Cost Verification", "Cost Verification Completed"],
+      label: "Cost",
+      statuses: [
+        "Pending Cost",
+        "Pending Cost Verification",
+        "Cost Verification Completed",
+        "Cost Completed",
+      ],
     },
     {
       key: "submission",
@@ -835,9 +841,6 @@ const OrderActions = () => {
   const [sampleApprovalResetInput, setSampleApprovalResetInput] = useState("");
   const [sampleApprovalResetSubmitting, setSampleApprovalResetSubmitting] =
     useState(false);
-  const [quoteCostAmount, setQuoteCostAmount] = useState("");
-  const [quoteCostCurrency, setQuoteCostCurrency] = useState("");
-  const [quoteCostNote, setQuoteCostNote] = useState("");
   const [quoteCostSubmitting, setQuoteCostSubmitting] = useState(false);
   const [quoteCostResetting, setQuoteCostResetting] = useState(false);
   const [quoteCostResetConfirmOpen, setQuoteCostResetConfirmOpen] =
@@ -1218,26 +1221,6 @@ const OrderActions = () => {
     );
   }, [project?._id, project?.projectType, project?.quoteDetails?.decision]);
 
-  useEffect(() => {
-    const isQuote = project?.projectType === "Quote";
-    if (!isQuote) {
-      setQuoteCostAmount("");
-      setQuoteCostCurrency("");
-      setQuoteCostNote("");
-      return;
-    }
-
-    const costVerification = project?.quoteDetails?.costVerification || {};
-    const amountValue = costVerification?.amount;
-    setQuoteCostAmount(
-      amountValue === 0 || Number.isFinite(amountValue)
-        ? String(amountValue)
-        : "",
-    );
-    setQuoteCostCurrency(String(costVerification?.currency || "").trim());
-    setQuoteCostNote(String(costVerification?.note || "").trim());
-  }, [project?._id, project?.projectType, project?.quoteDetails?.costVerification]);
-
   const paymentTypes = useMemo(
     () => new Set((project?.paymentVerifications || []).map((p) => p.type)),
     [project],
@@ -1379,11 +1362,10 @@ const OrderActions = () => {
   const quoteMockupReadyForSubmission =
     mockupApprovalConfirmed && quoteMockupCompletionConfirmed;
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
-  const quoteCostAmountValue = Number.parseFloat(quoteCostVerification?.amount);
+  const quoteCostUpdatedAt =
+    quoteCostVerification?.completedAt || quoteCostVerification?.updatedAt || null;
   const quoteCostVerified =
-    quoteHasCostRequirement &&
-    Number.isFinite(quoteCostAmountValue) &&
-    quoteCostAmountValue > 0;
+    quoteHasCostRequirement && isQuoteCostCompleted(project);
   const quotePreviousSamplesRequirement = useMemo(() => {
     if (!isQuoteProject) {
       return { isRequired: false, status: "not_required", updatedAt: null, note: "" };
@@ -2201,33 +2183,25 @@ const OrderActions = () => {
       );
       return;
     }
-    const amountValue = Number.parseFloat(quoteCostAmount);
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      showToast("Enter a valid cost amount to continue.", "error");
-      return;
-    }
+    if (quoteCostVerified) return;
 
     setQuoteCostSubmitting(true);
     try {
       const res = await fetchWithPortal(`/api/projects/${project._id}/quote-cost`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: amountValue,
-          currency: String(quoteCostCurrency || "").trim(),
-          note: String(quoteCostNote || "").trim(),
-        }),
+        body: JSON.stringify({}),
       });
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        showToast("Quote cost verified.", "success");
+        showToast("Quote cost completed.", "success");
       } else {
         const errorData = await res.json().catch(() => ({}));
-        showToast(errorData.message || "Failed to verify quote cost.", "error");
+        showToast(errorData.message || "Failed to complete quote cost.", "error");
       }
     } catch (error) {
-      console.error("Quote cost verification error:", error);
+      console.error("Quote cost completion error:", error);
       showToast("Network error. Please try again.", "error");
     } finally {
       setQuoteCostSubmitting(false);
@@ -2252,7 +2226,7 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        showToast("Quote cost reset. Cost verification is now pending.", "success");
+        showToast("Quote cost reset. Cost is now pending.", "success");
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(errorData.message || "Failed to reset quote cost.", "error");
@@ -3119,7 +3093,7 @@ const OrderActions = () => {
         "Quote requirement workflows are not configured yet."
       : "",
     quoteHasCostRequirement && !quoteCostVerified
-      ? "Quote cost verification is still pending."
+      ? "Quote cost is still pending."
       : "",
     quoteUsesMockupFlow &&
     !mockupApprovalConfirmed
@@ -3181,6 +3155,7 @@ const OrderActions = () => {
     "Pending Master Approval",
     "Pending Production",
     "Pending Delivery/Pickup",
+    "Pending Cost",
     "Pending Cost Verification",
     "Pending Quote Requirements",
     "Pending Sample Retrieval",
@@ -3351,7 +3326,7 @@ const OrderActions = () => {
       <ConfirmDialog
         isOpen={quoteCostResetConfirmOpen}
         title="Rework Cost?"
-        message="This will move the quote back to Cost Verification and reset quote submission and decision."
+        message="This will move the quote back to Pending Cost and reset quote submission and decision."
         confirmText="Rework Cost"
         cancelText="Cancel"
         type="primary"
@@ -3653,8 +3628,8 @@ const OrderActions = () => {
 
           {isQuoteProject && quoteHasCostRequirement && (
             <div className="action-card">
-              <h3>Cost Verification</h3>
-              <p>Confirm the quote cost before sending the quote.</p>
+              <h3>Cost</h3>
+              <p>Complete the quote cost before sending the quote.</p>
               {quoteWorkflowBlocked ? (
                 <div className="mockup-empty-state">
                   {quoteWorkflowBlockedMessage ||
@@ -3668,73 +3643,35 @@ const OrderActions = () => {
                     }`}
                   >
                     {quoteCostVerified
-                      ? "Quote cost verified"
-                      : "Quote cost verification pending"}
+                      ? "Quote cost completed"
+                      : "Quote cost pending"}
                   </div>
-                  {quoteCostVerification?.updatedAt && (
+                  {quoteCostUpdatedAt && (
                     <p className="mockup-approval-meta">
-                      Updated: {formatDateTime(quoteCostVerification.updatedAt)}
+                      Updated: {formatDateTime(quoteCostUpdatedAt)}
                     </p>
                   )}
-                  <label className="quote-decision-field">
-                    <span>Cost Amount</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={quoteCostAmount}
-                      onChange={(event) => setQuoteCostAmount(event.target.value)}
-                      placeholder="Enter total cost"
-                      disabled={
-                        !canManageBilling ||
-                        quoteCostSubmitting ||
-                        quoteCostResetting
-                      }
-                    />
-                  </label>
-                  <label className="quote-decision-field">
-                    <span>Currency (Optional)</span>
-                    <input
-                      type="text"
-                      value={quoteCostCurrency}
-                      onChange={(event) => setQuoteCostCurrency(event.target.value)}
-                      placeholder="e.g. NGN"
-                      disabled={
-                        !canManageBilling ||
-                        quoteCostSubmitting ||
-                        quoteCostResetting
-                      }
-                    />
-                  </label>
-                  <label className="quote-decision-field">
-                    <span>Note (Optional)</span>
-                    <textarea
-                      rows={2}
-                      value={quoteCostNote}
-                      onChange={(event) => setQuoteCostNote(event.target.value)}
-                      placeholder="Add any cost notes for the client."
-                      disabled={
-                        !canManageBilling ||
-                        quoteCostSubmitting ||
-                        quoteCostResetting
-                      }
-                    />
-                  </label>
+                  {!quoteCostVerified && (
+                    <p className="mockup-approval-meta">
+                      Use Complete Cost once the quote cost is ready.
+                    </p>
+                  )}
                   <div className="billing-actions">
                     <button
                       className="action-btn complete-btn"
                       onClick={handleQuoteCostVerification}
                       disabled={
                         !canManageBilling ||
+                        quoteCostVerified ||
                         quoteCostSubmitting ||
                         quoteCostResetting
                       }
                     >
                       {quoteCostSubmitting
-                        ? "Saving..."
+                        ? "Completing..."
                         : quoteCostVerified
-                          ? "Update Cost"
-                          : "Verify Cost"}
+                          ? "Cost Completed"
+                          : "Complete Cost"}
                     </button>
                     {quoteDecisionStatus === "declined" && (
                       <button
@@ -4179,7 +4116,7 @@ const OrderActions = () => {
             )}
             {isQuoteProject && quoteCostMissing && (
               <p className="mockup-approval-meta">
-                Verify quote cost before sending the quote to the client.
+                Complete quote cost before sending the quote to the client.
               </p>
             )}
             {isQuoteProject && quoteMockupMissing && (
