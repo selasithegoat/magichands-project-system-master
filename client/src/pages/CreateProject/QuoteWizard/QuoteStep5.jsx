@@ -61,7 +61,18 @@ const QuoteStep5 = ({
     setIsCreating(false);
 
     if (result.success) {
-      triggerToast("Project Created Successfully!", "success");
+      const emailMessage = result?.isNewProject
+        ? result?.emailNotification?.message || "Order created successfully."
+        : "";
+      const successMessage = emailMessage
+        ? `Project Created Successfully! ${emailMessage}`
+        : "Project Created Successfully!";
+      triggerToast(
+        successMessage,
+        result?.isNewProject && result?.emailNotification?.status !== "sent"
+          ? "error"
+          : "success",
+      );
       setTimeout(() => onComplete(), 2000);
     } else {
       setError(result.message || "Something went wrong.");

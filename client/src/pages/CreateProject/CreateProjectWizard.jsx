@@ -476,7 +476,11 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         const data = await res.json();
         setCreatedOrderNumber(data.orderId || formData.orderId || "New Order");
         setShowSuccessModal(true);
-        return { success: true };
+        return {
+          success: true,
+          emailNotification: data.emailNotification || null,
+          isNewProject: !editingId,
+        };
       } else {
         const err = await res.json();
         return { success: false, message: err.message };

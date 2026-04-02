@@ -108,6 +108,7 @@ COOKIE_SAMESITE=lax
 # Email (optional)
 SMTP_USER=your-smtp-user
 SMTP_PASS=your-smtp-pass
+ORDER_CREATION_NOTIFICATION_EMAIL=ops@example.com
 ```
 
 ## LAN Hostnames (Optional)

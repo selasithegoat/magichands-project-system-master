@@ -36,6 +36,7 @@ const {
   buildFeedbackSmsMessage,
 } = require("../utils/smsPromptService");
 const { sendSms } = require("../utils/arkeselSmsClient");
+const { sendProjectCreationEmail } = require("../utils/projectCreationEmailService");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -1720,6 +1721,20 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+
+const getRequestBaseUrl = (req) => {
+  const forwardedProto = Array.isArray(req?.headers?.["x-forwarded-proto"])
+    ? req.headers["x-forwarded-proto"][0]
+    : req?.headers?.["x-forwarded-proto"];
+  const protocol = toText(forwardedProto) || toText(req?.protocol) || "http";
+  const host =
+    typeof req?.get === "function"
+      ? toText(req.get("host"))
+      : toText(req?.headers?.host);
+
+  if (!host) return "";
+  return `${protocol}://${host}`;
+};
 const normalizeProjectIndicator = (value) => {
   const trimmed = toText(value);
   return trimmed ? trimmed.toUpperCase() : "";
@@ -5524,7 +5539,31 @@ const createProject = async (req, res) => {
       );
     }
 
-    res.status(201).json(savedProject);
+    const requestBaseUrl = getRequestBaseUrl(req);
+    let emailNotification = {
+      skipped: false,
+      sent: false,
+      status: "failed",
+      message: "Order created, but notification email failed to send.",
+    };
+
+    try {
+      emailNotification = await sendProjectCreationEmail({
+        projectId: savedProject._id,
+        creator: req.user,
+        requestBaseUrl,
+      });
+    } catch (emailError) {
+      console.error("Failed to send project creation email:", emailError);
+    }
+
+    const responsePayload = savedProject.toObject
+      ? savedProject.toObject()
+      : savedProject;
+    responsePayload.emailNotification = emailNotification;
+
+    res.status(201).json(responsePayload);
+    return;
   } catch (error) {
     console.error("Error creating project:", error);
     // [DEBUG] Log full validation error details

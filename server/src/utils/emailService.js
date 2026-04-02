@@ -286,10 +286,21 @@ const buildDefaultEmailHtml = (subject, text, options = {}) => {
  * @param {string} to - Recipient email address
  * @param {string} subject - Email subject
  * @param {string} text - Plain text content
- * @param {string} html - HTML content (optional)
+ * @param {string|object} htmlOrOptions - HTML content or options object
+ * @param {object} extraOptions - Additional options (optional)
  */
-const sendEmail = async (to, subject, text, html) => {
+const sendEmail = async (to, subject, text, htmlOrOptions, extraOptions = {}) => {
   try {
+    const options =
+      htmlOrOptions && typeof htmlOrOptions === "object" && !Array.isArray(htmlOrOptions)
+        ? htmlOrOptions
+        : extraOptions;
+    const html =
+      typeof htmlOrOptions === "string" ? htmlOrOptions : toText(options.html);
+    const customAttachments = Array.isArray(options.attachments)
+      ? options.attachments.filter(Boolean)
+      : [];
+
     // Higher compatibility config for Gmail
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -310,15 +321,18 @@ const sendEmail = async (to, subject, text, html) => {
       text: toText(text) || toText(subject),
       html:
         html || buildDefaultEmailHtml(subject, text, { includeLogo }),
-      attachments: includeLogo
-        ? [
+      attachments: [
+        ...(includeLogo
+          ? [
             {
               filename: path.basename(logoPath),
               path: logoPath,
               cid: EMAIL_LOGO_CID,
             },
           ]
-        : undefined,
+          : []),
+        ...customAttachments,
+      ],
     });
 
     return true;

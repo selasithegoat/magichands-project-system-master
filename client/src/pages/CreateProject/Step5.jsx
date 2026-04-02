@@ -196,7 +196,18 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
     setIsCreating(false);
 
     if (result.success) {
-      triggerToast("Project Created Successfully!", "success");
+      const emailMessage = result?.isNewProject
+        ? result?.emailNotification?.message || "Order created successfully."
+        : "";
+      const successMessage = emailMessage
+        ? `Project Created Successfully! ${emailMessage}`
+        : "Project Created Successfully!";
+      triggerToast(
+        successMessage,
+        result?.isNewProject && result?.emailNotification?.status !== "sent"
+          ? "error"
+          : "success",
+      );
       // Wait for toast to be visible before navigating
       setTimeout(() => {
         if (onComplete) onComplete();
