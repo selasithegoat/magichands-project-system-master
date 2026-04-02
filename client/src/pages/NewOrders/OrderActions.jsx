@@ -1346,6 +1346,33 @@ const OrderActions = () => {
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? "Select at least one quote requirement to continue."
     : "";
+  const quoteMockupRequirement = useMemo(() => {
+    if (!isQuoteProject) {
+      return {
+        isRequired: false,
+        status: "not_required",
+        updatedAt: null,
+        note: "",
+      };
+    }
+
+    return project?.quoteDetails?.requirementItems?.mockup || {
+      isRequired: Boolean(quoteUsesMockupFlow),
+      status: quoteUsesMockupFlow ? "assigned" : "not_required",
+      updatedAt: null,
+      note: "",
+    };
+  }, [
+    isQuoteProject,
+    project?.quoteDetails?.requirementItems,
+    quoteUsesMockupFlow,
+  ]);
+  const quoteMockupStatus = String(quoteMockupRequirement?.status || "")
+    .trim()
+    .toLowerCase() || (quoteUsesMockupFlow ? "assigned" : "not_required");
+  const quoteMockupStatusLabel = formatQuoteRequirementStatusLabel(
+    quoteMockupStatus,
+  );
   const quoteMockupCompletionConfirmed = isQuoteProject
     ? isQuoteMockupCompletionConfirmed(project, quoteRequirementMode)
     : false;
@@ -3279,12 +3306,25 @@ const OrderActions = () => {
   const activeMockupIsImage = activeMockupVersion
     ? isImageAsset(activeMockupVersion.fileUrl, activeMockupVersion.fileType)
     : false;
+  const quoteCanDecideOnMockupVersions =
+    canManageMockupApproval &&
+    Boolean(latestMockupVersion?.fileUrl) &&
+    quoteUsesMockupFlow &&
+    !quoteWorkflowBlocked &&
+    Boolean(quoteMockupRequirement?.isRequired) &&
+    [
+      "assigned",
+      "in_progress",
+      "blocked",
+      "dept_submitted",
+      "frontdesk_review",
+      "client_revision_requested",
+      "client_approved",
+    ].includes(quoteMockupStatus);
 
   const canDecideOnMockupVersions =
     canManageMockupApproval &&
-    ((isQuoteProject &&
-      (quoteHasMockupRequirement || quoteHasSampleProductionRequirement) &&
-      quoteWorkflowStatus === "Pending Mockup") ||
+    ((isQuoteProject && quoteCanDecideOnMockupVersions) ||
       (!isQuoteProject && project?.status === "Pending Mockup"));
 
   if (loading) {
@@ -3715,7 +3755,7 @@ const OrderActions = () => {
             </div>
           )}
 
-          {isQuoteProject && quoteHasMockupRequirement && (
+          {isQuoteProject && quoteUsesMockupFlow && (
             <div className="action-card">
               <h3>Mockup Requirement</h3>
               <p>
@@ -3748,6 +3788,20 @@ const OrderActions = () => {
                   {latestMockupVersion?.uploadedAt && (
                     <p className="mockup-approval-meta">
                       Updated: {formatDateTime(latestMockupVersion.uploadedAt)}
+                    </p>
+                  )}
+                  <p className="mockup-approval-meta">
+                    Requirement status: {quoteMockupStatusLabel}
+                  </p>
+                  {quoteMockupRequirement.updatedAt && (
+                    <p className="mockup-approval-meta">
+                      Requirement updated:{" "}
+                      {formatDateTime(quoteMockupRequirement.updatedAt)}
+                    </p>
+                  )}
+                  {quoteMockupRequirement.note && (
+                    <p className="mockup-approval-meta">
+                      Note: {quoteMockupRequirement.note}
                     </p>
                   )}
                   {quoteDecisionStatus === "declined" && (
