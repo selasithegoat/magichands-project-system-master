@@ -10,12 +10,20 @@ import {
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
-import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
+import {
+  getFullName,
+  getLeadDisplay,
+  getLeadSearchText,
+} from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
 import {
+  getQuoteRequirementSummary,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
+  isQuoteMockupCompletionConfirmed,
+  normalizeQuoteChecklist,
+  normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import "./EngagedProjects.css";
 
@@ -102,6 +110,164 @@ const isScopeApprovalComplete = (status) =>
   Boolean(status && SCOPE_APPROVAL_READY_STATUSES.has(status));
 const normalizeBatchStatus = (status) =>
   String(status || "").trim().toLowerCase();
+const QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES = new Set([
+  "assigned",
+  "in_progress",
+  "client_revision_requested",
+  "blocked",
+]);
+const QUOTE_SAMPLE_PRODUCTION_COMPLETE_STATUSES = new Set([
+  "dept_submitted",
+  "frontdesk_review",
+  "sent_to_client",
+  "client_approved",
+  "completed",
+]);
+const STANDARD_DEPARTMENT_COMPLETION_STATUS_SETS = {
+  Graphics: new Set([
+    "Mockup Completed",
+    "Pending Master Approval",
+    "Master Approval Completed",
+    "Pending Production",
+    "Production Completed",
+    "Pending Quality Control",
+    "Quality Control Completed",
+    "Pending Photography",
+    "Photography Completed",
+    "Pending Packaging",
+    "Packaging Completed",
+    "Pending Delivery/Pickup",
+    "Delivered",
+    "Pending Feedback",
+    "Feedback Completed",
+    "Completed",
+    "Finished",
+    "In Progress",
+  ]),
+  Production: new Set([
+    "Production Completed",
+    "Pending Quality Control",
+    "Quality Control Completed",
+    "Pending Photography",
+    "Photography Completed",
+    "Pending Packaging",
+    "Packaging Completed",
+    "Pending Delivery/Pickup",
+    "Delivered",
+    "Pending Feedback",
+    "Feedback Completed",
+    "Completed",
+    "Finished",
+    "In Progress",
+  ]),
+  Photography: new Set([
+    "Photography Completed",
+    "Pending Packaging",
+    "Packaging Completed",
+    "Pending Delivery/Pickup",
+    "Delivered",
+    "Pending Feedback",
+    "Feedback Completed",
+    "Completed",
+    "Finished",
+    "In Progress",
+  ]),
+  Stores: new Set([
+    "Packaging Completed",
+    "Pending Delivery/Pickup",
+    "Delivered",
+    "Pending Feedback",
+    "Feedback Completed",
+    "Completed",
+    "Finished",
+    "In Progress",
+  ]),
+};
+
+const normalizeObjectId = (value) => {
+  if (!value) return "";
+  if (typeof value === "object" && value._id) return String(value._id);
+  return String(value);
+};
+
+const getMockupApprovalStatus = (approval = {}) => {
+  const explicit = String(approval?.status || "")
+    .trim()
+    .toLowerCase();
+  if (["pending", "approved", "rejected"].includes(explicit)) {
+    return explicit;
+  }
+  if (approval?.isApproved) return "approved";
+  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+    return "rejected";
+  }
+  return "pending";
+};
+
+const getMockupVersions = (mockup = {}) => {
+  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
+  const normalized = rawVersions
+    .map((entry, index) => {
+      const parsedVersion = Number.parseInt(entry?.version, 10);
+      const version =
+        Number.isFinite(parsedVersion) && parsedVersion > 0
+          ? parsedVersion
+          : index + 1;
+      return {
+        version,
+        fileUrl: String(entry?.fileUrl || "").trim(),
+        uploadedAt: entry?.uploadedAt || null,
+        clientApproval: {
+          status: getMockupApprovalStatus(entry?.clientApproval || {}),
+        },
+      };
+    })
+    .filter((entry) => entry.fileUrl);
+
+  if (normalized.length === 0 && mockup?.fileUrl) {
+    const parsedVersion = Number.parseInt(mockup?.version, 10);
+    normalized.push({
+      version:
+        Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1,
+      fileUrl: String(mockup.fileUrl || "").trim(),
+      uploadedAt: mockup.uploadedAt || null,
+      clientApproval: {
+        status: getMockupApprovalStatus(mockup?.clientApproval || {}),
+      },
+    });
+  }
+
+  return normalized.sort((left, right) => {
+    if (left.version !== right.version) return left.version - right.version;
+    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
+    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
+    return leftTime - rightTime;
+  });
+};
+
+const getQuoteRequirementState = (project = {}, key = "") => {
+  const quoteDetails = project?.quoteDetails || {};
+  const checklistRequired = Boolean(quoteDetails?.checklist?.[key]);
+  const rawItems =
+    quoteDetails?.requirementItems &&
+    typeof quoteDetails.requirementItems === "object"
+      ? quoteDetails.requirementItems
+      : {};
+  const rawItem =
+    rawItems?.[key] && typeof rawItems[key] === "object" ? rawItems[key] : {};
+  const rawStatus = String(rawItem?.status || "").trim().toLowerCase();
+  const isRequired = Boolean(rawItem?.isRequired) || checklistRequired;
+  const status = isRequired
+    ? rawStatus && rawStatus !== "not_required"
+      ? rawStatus
+      : "assigned"
+    : "not_required";
+
+  return {
+    isRequired,
+    status,
+  };
+};
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
@@ -116,6 +282,7 @@ const EngagedProjects = ({ user }) => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [departmentFilter, setDepartmentFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [kpiFilter, setKpiFilter] = useState("all");
   const [historyProjectIdQuery, setHistoryProjectIdQuery] = useState("");
   const [historyDeptFilter, setHistoryDeptFilter] = useState("All");
 
@@ -279,38 +446,6 @@ const EngagedProjects = ({ user }) => {
   };
 
   // Filter logic
-  const filteredProjects = useMemo(() => {
-    return projects.filter((project) => {
-      // Status filter
-      if (statusFilter !== "All" && project.status !== statusFilter) {
-        return false;
-      }
-
-      // Search filter (Project ID, Project Name, Lead)
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const projectId = (project.orderId || project._id).toLowerCase();
-        const projectName = (project.details?.projectName || "").toLowerCase();
-        const lead = getLeadSearchText(project);
-
-        if (
-          !projectId.includes(query) &&
-          !projectName.includes(query) &&
-          !lead.includes(query)
-        ) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [projects, statusFilter, searchQuery]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter, departmentFilter, searchQuery]);
-
   useEffect(() => {
     setHistoryPage(1);
     setHistoryDeptFilter("All");
@@ -319,13 +454,6 @@ const EngagedProjects = ({ user }) => {
   useEffect(() => {
     setHistoryPage(1);
   }, [historyProjectIdQuery, historyDeptFilter]);
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
-  const paginatedProjects = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProjects.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredProjects, currentPage]);
 
   const filteredHistoryProjects = useMemo(() => {
     return historyProjects.filter((project) => {
@@ -404,6 +532,317 @@ const EngagedProjects = ({ user }) => {
       .filter((dept) => projectHasDept(project, dept))
       .map((dept) => ({ dept, ...STATUS_ACTIONS[dept] }));
   };
+
+  const getProjectLeadMatch = (project) => {
+    const currentUserId = normalizeObjectId(user?._id || user?.id);
+    const projectLeadId = normalizeObjectId(project?.projectLeadId);
+    return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
+  };
+
+  const getRelevantDepartmentTokens = (dept) => {
+    if (dept === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
+    if (dept === "Stores") return STORES_SUB_DEPARTMENTS;
+    if (dept === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
+    if (dept === "Production") return productionSubDepts;
+    return [];
+  };
+
+  const getMatchedProjectDepartments = (project, dept) => {
+    const relevantTokens = getRelevantDepartmentTokens(dept);
+    if (!relevantTokens.length) return [];
+    const projectDepartments = Array.isArray(project?.departments)
+      ? project.departments
+      : [];
+    return projectDepartments.filter((token) => relevantTokens.includes(token));
+  };
+
+  const isDepartmentAcknowledged = (project, dept) => {
+    const matchedDepartments = getMatchedProjectDepartments(project, dept);
+    if (!matchedDepartments.length) return false;
+    const acknowledged = new Set(
+      (Array.isArray(project?.acknowledgements) ? project.acknowledgements : [])
+        .map((entry) => entry?.department)
+        .filter(Boolean),
+    );
+    return matchedDepartments.some((token) => acknowledged.has(token));
+  };
+
+  const canDepartmentTakeAction = (project, dept) => {
+    const isProjectLead = getProjectLeadMatch(project);
+    if (isProjectLead && dept !== "Graphics") return false;
+    if (dept === "Graphics" && isProjectLead) {
+      return true;
+    }
+    return isDepartmentAcknowledged(project, dept);
+  };
+
+  const resolveQuoteChecklist = (projectRecord) => {
+    const base = normalizeQuoteChecklist(
+      projectRecord?.quoteDetails?.checklist || {},
+    );
+    const sampleProductionSelected = Boolean(base.sampleProduction);
+    const requirementItems =
+      projectRecord?.quoteDetails?.requirementItems || {};
+
+    Object.keys(base).forEach((key) => {
+      if (!base[key] && requirementItems?.[key]?.isRequired) {
+        if (sampleProductionSelected && key === "mockup") return;
+        base[key] = true;
+      }
+    });
+
+    return base;
+  };
+
+  const getQuoteSummaryForProject = (project) =>
+    getQuoteRequirementSummary(resolveQuoteChecklist(project));
+
+  const getEffectiveQuoteMockupRequirement = (project) => {
+    const summary = getQuoteSummaryForProject(project);
+    const base = getQuoteRequirementState(project, "mockup");
+    if (summary.includesSampleProduction) {
+      return {
+        ...base,
+        isRequired: true,
+        status: base.status === "not_required" ? "assigned" : base.status,
+      };
+    }
+    return base;
+  };
+
+  const isQuoteDepartmentActionCompleted = (project, dept) => {
+    const summary = getQuoteSummaryForProject(project);
+
+    if (dept === "Graphics") {
+      if (!summary.includesMockup) return false;
+      return isQuoteMockupCompletionConfirmed(project, summary.mode);
+    }
+
+    if (dept === "Production") {
+      if (!summary.includesSampleProduction) return false;
+      const requirement = getQuoteRequirementState(project, "sampleProduction");
+      return QUOTE_SAMPLE_PRODUCTION_COMPLETE_STATUSES.has(requirement.status);
+    }
+
+    return false;
+  };
+
+  const isDepartmentActionCompleted = (project, dept) => {
+    if (project?.projectType === "Quote") {
+      return isQuoteDepartmentActionCompleted(project, dept);
+    }
+    return Boolean(
+      STANDARD_DEPARTMENT_COMPLETION_STATUS_SETS[dept]?.has(project?.status),
+    );
+  };
+
+  const isGraphicsMockupWaitingForUpload = (project) => {
+    if (!projectHasDept(project, "Graphics")) return false;
+    if (!canDepartmentTakeAction(project, "Graphics")) return false;
+
+    const mockupVersions = getMockupVersions(project?.mockup || {});
+    const latestMockupVersion =
+      mockupVersions.length > 0 ? mockupVersions[mockupVersions.length - 1] : null;
+    const latestApprovalStatus =
+      latestMockupVersion?.clientApproval?.status ||
+      getMockupApprovalStatus(project?.mockup?.clientApproval || {});
+
+    if (project?.projectType === "Quote") {
+      const normalizedQuoteStatus = String(
+        normalizeQuoteStatus(project?.status || ""),
+      ).trim();
+      if (!isScopeApprovalComplete(normalizedQuoteStatus)) return false;
+
+      const summary = getQuoteSummaryForProject(project);
+      if (!summary.includesMockup) return false;
+      if (isQuoteMockupCompletionConfirmed(project, summary.mode)) return false;
+
+      const requirement = getEffectiveQuoteMockupRequirement(project);
+      if (!requirement.isRequired) return false;
+      if (!QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES.has(requirement.status)) {
+        return false;
+      }
+
+      if (!latestMockupVersion?.fileUrl) return true;
+      return latestApprovalStatus === "rejected";
+    }
+
+    if (project?.status !== "Pending Mockup") return false;
+    if (!latestMockupVersion?.fileUrl) return true;
+    return latestApprovalStatus === "rejected";
+  };
+
+  const activeDepartmentAssignments = projects.flatMap((project) =>
+    getDeptActionsForProject(project).map((action) => ({
+      project,
+      dept: action.dept,
+    })),
+  );
+  const actionableDepartmentAssignments = activeDepartmentAssignments.filter(
+    ({ project, dept }) =>
+      !(getProjectLeadMatch(project) && dept !== "Graphics"),
+  );
+
+  const pendingAcceptanceCount = actionableDepartmentAssignments.filter(
+    ({ project, dept }) =>
+      isScopeApprovalComplete(project?.status) &&
+      !(dept === "Graphics" && getProjectLeadMatch(project)) &&
+      !isDepartmentAcknowledged(project, dept),
+  ).length;
+  const projectMatchesPendingAcceptance = (project) =>
+    actionableDepartmentAssignments.some(
+      (assignment) =>
+        assignment.project?._id === project?._id &&
+        isScopeApprovalComplete(assignment.project?.status) &&
+        !isDepartmentAcknowledged(assignment.project, assignment.dept),
+    );
+  const projectMatchesCompletedAction = (project) =>
+    actionableDepartmentAssignments.some(
+      (assignment) =>
+        assignment.project?._id === project?._id &&
+        isDepartmentActionCompleted(assignment.project, assignment.dept),
+    );
+  const getProjectAcknowledgementRows = (project) => {
+    const projectDepartments = Array.isArray(project?.departments)
+      ? project.departments
+      : [];
+    const ackEntries = Array.isArray(project?.acknowledgements)
+      ? project.acknowledgements
+      : [];
+    const relevantDepartments =
+      departmentFilter === "All"
+        ? userEngagedDepts.filter((dept) => projectHasDept(project, dept))
+        : userEngagedDepts
+            .filter((dept) => dept === departmentFilter)
+            .filter((dept) => projectHasDept(project, dept));
+
+    return relevantDepartments
+      .map((dept) => {
+        const matchedTokens = getRelevantDepartmentTokens(dept).filter((token) =>
+          projectDepartments.includes(token),
+        );
+        if (!matchedTokens.length) return null;
+
+        const matchedAcknowledgements = ackEntries.filter((entry) =>
+          matchedTokens.includes(entry?.department),
+        );
+        if (!matchedAcknowledgements.length) return null;
+
+        const names = Array.from(
+          new Set(
+            matchedAcknowledgements
+              .map((entry) => getFullName(entry?.user))
+              .filter(Boolean),
+          ),
+        );
+        if (!names.length) return null;
+
+        return {
+          dept,
+          label: dept,
+          names,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const departmentActionCompletedCount = actionableDepartmentAssignments.filter(
+    ({ project, dept }) => isDepartmentActionCompleted(project, dept),
+  ).length;
+  const departmentActionTotalCount = actionableDepartmentAssignments.length;
+  const departmentCompletionPercent =
+    departmentActionTotalCount > 0
+      ? Math.round(
+          (departmentActionCompletedCount / departmentActionTotalCount) * 100,
+        )
+      : 0;
+
+  const canShowMockupUploadKpi =
+    userEngagedDepts.includes("Graphics") &&
+    ["All", "Graphics"].includes(departmentFilter);
+  const waitingForMockupUploadCount = canShowMockupUploadKpi
+    ? projects.filter((project) => isGraphicsMockupWaitingForUpload(project))
+        .length
+    : 0;
+  const engagedContextLabel =
+    departmentFilter === "All"
+      ? "your engaged departments"
+      : `${departmentFilter.toLowerCase()} work`;
+  const kpiFilterLabels = {
+    all: "All Active Projects",
+    pendingAcceptance: "Pending Acceptance",
+    waitingMockup: "Waiting for Mockup Upload",
+    completedActions: "Department Completion",
+  };
+
+  useEffect(() => {
+    if (kpiFilter === "waitingMockup" && !canShowMockupUploadKpi) {
+      setKpiFilter("all");
+    }
+  }, [kpiFilter, canShowMockupUploadKpi]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter((project) => {
+      if (
+        kpiFilter === "pendingAcceptance" &&
+        !projectMatchesPendingAcceptance(project)
+      ) {
+        return false;
+      }
+
+      if (
+        kpiFilter === "waitingMockup" &&
+        !isGraphicsMockupWaitingForUpload(project)
+      ) {
+        return false;
+      }
+
+      if (
+        kpiFilter === "completedActions" &&
+        !projectMatchesCompletedAction(project)
+      ) {
+        return false;
+      }
+
+      if (statusFilter !== "All" && project.status !== statusFilter) {
+        return false;
+      }
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const projectId = (project.orderId || project._id).toLowerCase();
+        const projectName = (project.details?.projectName || "").toLowerCase();
+        const lead = getLeadSearchText(project);
+
+        if (
+          !projectId.includes(query) &&
+          !projectName.includes(query) &&
+          !lead.includes(query)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    projects,
+    kpiFilter,
+    statusFilter,
+    searchQuery,
+  ]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, departmentFilter, searchQuery, kpiFilter]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const paginatedProjects = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProjects.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProjects, currentPage]);
 
   const handleCompleteStatus = async (project, action) => {
     const actionKey = `${project._id}:${action.complete}`;
@@ -744,6 +1183,72 @@ const EngagedProjects = ({ user }) => {
         </button>
       </div>
 
+      {activeTab === "active" && (
+        <div className="engaged-kpi-grid">
+          <button
+            type="button"
+            className={`engaged-kpi-card warning ${kpiFilter === "pendingAcceptance" ? "active" : ""}`}
+            onClick={() =>
+              setKpiFilter((current) =>
+                current === "pendingAcceptance" ? "all" : "pendingAcceptance",
+              )
+            }
+            aria-pressed={kpiFilter === "pendingAcceptance"}
+          >
+            <div className="engaged-kpi-header">
+              <span>Pending Acceptance</span>
+              <strong>{pendingAcceptanceCount}</strong>
+            </div>
+            <p>
+              Department engagements ready for your acknowledgement across{" "}
+              {engagedContextLabel}.
+            </p>
+          </button>
+
+          {canShowMockupUploadKpi && (
+            <button
+              type="button"
+              className={`engaged-kpi-card info ${kpiFilter === "waitingMockup" ? "active" : ""}`}
+              onClick={() =>
+                setKpiFilter((current) =>
+                  current === "waitingMockup" ? "all" : "waitingMockup",
+                )
+              }
+              aria-pressed={kpiFilter === "waitingMockup"}
+            >
+              <div className="engaged-kpi-header">
+                <span>Waiting for Mockup Upload</span>
+                <strong>{waitingForMockupUploadCount}</strong>
+              </div>
+              <p>
+                Graphics projects currently waiting for a first mockup upload or
+                a revised upload.
+              </p>
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={`engaged-kpi-card success ${kpiFilter === "completedActions" ? "active" : ""}`}
+            onClick={() =>
+              setKpiFilter((current) =>
+                current === "completedActions" ? "all" : "completedActions",
+              )
+            }
+            aria-pressed={kpiFilter === "completedActions"}
+          >
+            <div className="engaged-kpi-header">
+              <span>Department Completion</span>
+              <strong>{departmentCompletionPercent}%</strong>
+            </div>
+            <p>
+              {departmentActionCompletedCount} of {departmentActionTotalCount}{" "}
+              active department actions are already completed.
+            </p>
+          </button>
+        </div>
+      )}
+
       {/* Filter Controls */}
       {activeTab === "active" ? (
         <div className="filter-controls">
@@ -793,6 +1298,12 @@ const EngagedProjects = ({ user }) => {
 
           <div className="filter-results">
             Showing {filteredProjects.length} of {projects.length} projects
+            {kpiFilter !== "all" && (
+              <>
+                {" "}
+                • KPI Filter: {kpiFilterLabels[kpiFilter] || "Active"}
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -900,6 +1411,8 @@ const EngagedProjects = ({ user }) => {
                       userEngagedDepts.includes("Production") && mockupUrl;
                     const projectVersion = getProjectVersion(project);
                     const showVersionTag = projectVersion > 1;
+                    const acknowledgementRows =
+                      getProjectAcknowledgementRows(project);
 
                     return (
                       <tr
@@ -938,14 +1451,29 @@ const EngagedProjects = ({ user }) => {
                         <td
                           className="project-id-cell"
                         >
-                          <div className="project-id-with-version">
-                            <span>
-                              {project.orderId || project._id.slice(-6).toUpperCase()}
-                            </span>
-                            {showVersionTag && (
-                              <span className="project-version-chip">
-                                v{projectVersion}
+                          <div className="project-id-stack">
+                            <div className="project-id-with-version">
+                              <span>
+                                {project.orderId || project._id.slice(-6).toUpperCase()}
                               </span>
+                              {showVersionTag && (
+                                <span className="project-version-chip">
+                                  v{projectVersion}
+                                </span>
+                              )}
+                            </div>
+                            {acknowledgementRows.length > 0 && (
+                              <div className="engagement-ack-list">
+                                {acknowledgementRows.map((ackRow) => (
+                                  <span
+                                    key={`${project._id}-${ackRow.dept}`}
+                                    className="engagement-ack-chip"
+                                    title={`${ackRow.label} acknowledged by ${ackRow.names.join(", ")}`}
+                                  >
+                                    {ackRow.label}: {ackRow.names.join(", ")}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </td>
