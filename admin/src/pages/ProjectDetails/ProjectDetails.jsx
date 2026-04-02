@@ -218,7 +218,8 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
     "Scope Approval Completed",
     "Pending Mockup",
     "Mockup Completed",
-    "Pending Sample Production",
+    "Pending Production",
+    "Production Completed",
     "Pending Quote Submission",
     "Quote Submission Completed",
     "Pending Client Decision",
@@ -251,18 +252,64 @@ const QUOTE_STATUS_FLOW_BY_MODE = {
 const getQuoteStatusFlow = (mode) =>
   QUOTE_STATUS_FLOW_BY_MODE[mode] || QUOTE_STATUS_FLOW_BY_MODE.cost;
 
-const getQuoteSelectableStatuses = (requirementMode = "", includeOnHold = false) => {
-  const seen = new Set();
-  const options = getQuoteStatusFlow(requirementMode).reduce((accumulator, status) => {
-    const displayStatus = mapQuoteStatusForDisplay(status, true, requirementMode);
-    if (!displayStatus || seen.has(displayStatus)) return accumulator;
-    seen.add(displayStatus);
-    accumulator.push(displayStatus);
-    return accumulator;
-  }, []);
+const QUOTE_STATUS_OPTION_VALUE_REQUIREMENTS_COMPLETED =
+  "__quote_requirements_completed__";
 
-  if (includeOnHold && !seen.has("On Hold")) {
-    options.push("On Hold");
+const getQuoteStatusOptionLabel = (status, requirementMode = "") => {
+  const normalized = String(status || "").trim();
+  if (!normalized) return normalized;
+
+  if (normalized === "Pending Client Decision") return "Pending Decision";
+  if (normalized === "Completed") return "Decision Completed";
+
+  if (requirementMode === "sampleProduction") {
+    if (normalized === "Pending Production") return "Pending Sample Production";
+    if (normalized === "Production Completed") {
+      return "Sample Production Completed";
+    }
+  }
+
+  if (requirementMode === "previousSamples") {
+    if (normalized === "Pending Sample Retrieval") {
+      return "Pending Sample / Work done Retrieval";
+    }
+  }
+
+  return normalized;
+};
+
+const getQuoteSelectableStatusOptions = (
+  requirementMode = "",
+  includeOnHold = false,
+) => {
+  const baseStatuses = getQuoteStatusFlow(requirementMode);
+  const options = [];
+
+  baseStatuses.forEach((status) => {
+    options.push({
+      value: status,
+      storageValue: status,
+      label: getQuoteStatusOptionLabel(status, requirementMode),
+    });
+
+    if (
+      requirementMode === "multi" &&
+      status === "Pending Quote Submission"
+    ) {
+      options.push({
+        value: QUOTE_STATUS_OPTION_VALUE_REQUIREMENTS_COMPLETED,
+        storageValue: "Pending Quote Submission",
+        label: "Quote Requirement Complete",
+      });
+    }
+  });
+
+  if (includeOnHold) {
+    options.push({
+      value: "On Hold",
+      storageValue: "On Hold",
+      label: "On Hold",
+    });
   }
 
   return options;
@@ -836,6 +883,7 @@ const ProjectDetails = ({ user }) => {
   const [statusConfirmModal, setStatusConfirmModal] = useState({
     open: false,
     targetStatus: "",
+    targetLabel: "",
     phrase: "",
   });
   const [statusConfirmInput, setStatusConfirmInput] = useState("");
@@ -1246,13 +1294,14 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
-  const openStatusConfirmModal = (nextStatus) => {
+  const openStatusConfirmModal = (nextStatus, nextLabel = nextStatus) => {
     if (!project) return;
     const projectId = project?.orderId || project?._id || id;
-    const phrase = buildStatusConfirmPhrase(nextStatus, projectId);
+    const phrase = buildStatusConfirmPhrase(nextLabel, projectId);
     setStatusConfirmModal({
       open: true,
       targetStatus: nextStatus,
+      targetLabel: nextLabel,
       phrase,
     });
     setStatusConfirmInput("");
@@ -1263,6 +1312,7 @@ const ProjectDetails = ({ user }) => {
     setStatusConfirmModal({
       open: false,
       targetStatus: "",
+      targetLabel: "",
       phrase: "",
     });
     setStatusConfirmInput("");
@@ -1283,14 +1333,21 @@ const ProjectDetails = ({ user }) => {
     if (!project) return;
     if (!ensureProjectIsEditable()) return;
 
-    const currentDisplayStatus = mapQuoteStatusForDisplay(
-      project.status,
-      project.projectType === "Quote",
-      getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
-    );
-    if (String(newStatus) === String(currentDisplayStatus)) return;
+    const selectedOption =
+      statusSelectOptions.find((option) => option.value === newStatus) || null;
+    const selectedStatus = selectedOption?.storageValue || newStatus;
+    const selectedLabel = selectedOption?.label || newStatus;
 
-    openStatusConfirmModal(newStatus);
+    const currentStatus = project.projectType === "Quote"
+      ? mapQuoteStatusForStorage(project.status)
+      : project.status;
+
+    if (String(selectedStatus) === String(currentStatus)) return;
+
+    openStatusConfirmModal(
+      selectedStatus,
+      selectedLabel,
+    );
   };
 
   const handleBillingGuardOverride = async () => {
@@ -2542,14 +2599,55 @@ const ProjectDetails = ({ user }) => {
     effectiveEnabledRequirements.length - pendingQuoteRequirementKeys.length;
   const quoteBidSubmissionUpdatedAt =
     quoteBidSubmissionDetails.updatedAt || quoteBidSubmissionRequirement.updatedAt;
+  const statusSelectOptions = isQuoteProject
+    ? getQuoteSelectableStatusOptions(quoteRequirementMode, isProjectOnHold)
+    : [
+        "Order Created",
+        "Pending Scope Approval",
+        "Scope Approval Completed",
+        "Pending Departmental Meeting",
+        "Pending Departmental Engagement",
+        "Departmental Engagement Completed",
+        "Pending Mockup",
+        "Mockup Completed",
+        "Pending Master Approval",
+        "Master Approval Completed",
+        "Pending Production",
+        "Production Completed",
+        "Pending Quality Control",
+        "Quality Control Completed",
+        "Pending Photography",
+        "Photography Completed",
+        "Pending Packaging",
+        "Packaging Completed",
+        "Pending Delivery/Pickup",
+        "Delivered",
+        "Pending Feedback",
+        "Feedback Completed",
+        "Completed",
+        ...(isProjectOnHold ? ["On Hold"] : []),
+      ].map((status) => ({
+        value: status,
+        storageValue: status,
+        label: status,
+      }));
+  const currentStatusSelectValue = isQuoteProject
+    ? mapQuoteStatusForStorage(quoteWorkflowStatus)
+    : project?.status || "";
   const currentDisplayStatus = mapQuoteStatusForDisplay(
     quoteWorkflowStatus,
     isQuoteProject,
     quoteRequirementMode,
   );
+  const currentStatusSelectLabel =
+    statusSelectOptions.find(
+      (option) =>
+        option.value === currentStatusSelectValue ||
+        option.storageValue === currentStatusSelectValue,
+    )?.label || currentDisplayStatus;
   const statusMovementNote = statusConfirmModal.open
     ? getStatusMovementNote(
-        currentDisplayStatus,
+        currentStatusSelectValue,
         statusConfirmModal.targetStatus,
         isQuoteProject,
         quoteRequirementMode,
@@ -2827,11 +2925,7 @@ const ProjectDetails = ({ user }) => {
               className={`status-badge-select ${quoteWorkflowStatus
                 ?.toLowerCase()
                 .replace(/\s+/g, "-")}`}
-              value={mapQuoteStatusForDisplay(
-                quoteWorkflowStatus,
-                isQuoteProject,
-                quoteRequirementMode,
-              )}
+              value={currentStatusSelectValue}
               onChange={(e) => handleStatusChange(e.target.value)}
               disabled={
                 loading ||
@@ -2854,44 +2948,13 @@ const ProjectDetails = ({ user }) => {
                 color: "inherit",
               }}
             >
-              {(project.projectType === "Quote"
-                ? getQuoteSelectableStatuses(
-                    quoteRequirementMode,
-                    isProjectOnHold,
-                  )
-                : [
-                    "Order Created",
-                    "Pending Scope Approval",
-                    "Scope Approval Completed",
-                    "Pending Departmental Meeting",
-                    "Pending Departmental Engagement",
-                    "Departmental Engagement Completed",
-                    "Pending Mockup",
-                    "Mockup Completed",
-                    "Pending Master Approval",
-                    "Master Approval Completed",
-                    "Pending Production",
-                    "Production Completed",
-                    "Pending Quality Control",
-                    "Quality Control Completed",
-                    "Pending Photography",
-                    "Photography Completed",
-                    "Pending Packaging",
-                    "Packaging Completed",
-                    "Pending Delivery/Pickup",
-                    "Delivered",
-                    "Pending Feedback",
-                    "Feedback Completed",
-                    "Completed",
-                    ...(isProjectOnHold ? ["On Hold"] : []),
-                  ]
-              ).map((status) => (
+              {statusSelectOptions.map((statusOption) => (
                 <option
-                  key={status}
-                  value={status}
+                  key={`${statusOption.value}-${statusOption.label}`}
+                  value={statusOption.value}
                   style={{ color: "#1e293b" }}
                 >
-                  {status}
+                  {statusOption.label}
                 </option>
               ))}
             </select>
@@ -5060,13 +5123,15 @@ const ProjectDetails = ({ user }) => {
             <div className="status-confirm-summary-row">
               <span className="status-confirm-summary-label">Current</span>
               <span className="status-confirm-summary-value">
-                {currentDisplayStatus || "N/A"}
+                {currentStatusSelectLabel || currentDisplayStatus || "N/A"}
               </span>
             </div>
             <div className="status-confirm-summary-row">
               <span className="status-confirm-summary-label">New</span>
               <span className="status-confirm-summary-value">
-                {statusConfirmModal.targetStatus || "N/A"}
+                {statusConfirmModal.targetLabel ||
+                  statusConfirmModal.targetStatus ||
+                  "N/A"}
               </span>
             </div>
           </div>
