@@ -81,9 +81,13 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "Cost Verification Completed",
   "Pending Sample Retrieval",
   "Pending Sample / Work done Retrieval",
+  "Pending Quote Requirements",
+  "Pending Sample Production",
+  "Pending Bid Submission / Documents",
   "Pending Quote Submission",
   "Quote Submission Completed",
   "Pending Client Decision",
+  "Declined",
   "Completed",
 ]);
 
@@ -113,8 +117,6 @@ const QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL = "Sample Production";
 const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
   "Quote Created",
   "Pending Scope Approval",
-  "Scope Approval Completed",
-  "Pending Cost Verification",
 ]);
 const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set(["Pending Mockup"]);
 const QUOTE_MOCKUP_SUBMIT_TRANSITIONS = {
@@ -681,6 +683,34 @@ const EngagedProjectActions = ({ user }) => {
     );
   }, [project, engagedSubDepts]);
 
+  const getQuoteActionDepartmentsForCurrentUser = (projectRecord) => {
+    const targetDepartments = Array.isArray(projectRecord?.departments)
+      ? projectRecord.departments
+      : [];
+    return targetDepartments.filter((dept) => engagedSubDepts.includes(dept));
+  };
+
+  const isQuoteDepartmentActionReadyForCurrentUser = (projectRecord) => {
+    if (projectRecord?.projectType !== "Quote") return true;
+
+    const quoteStatus = String(
+      normalizeQuoteStatus(projectRecord?.status || ""),
+    ).trim();
+    if (QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus)) return false;
+    if (isAdminUser) return true;
+
+    const matchedDepartments =
+      getQuoteActionDepartmentsForCurrentUser(projectRecord);
+    if (!matchedDepartments.length) return false;
+
+    const targetAcknowledged = new Set(
+      (projectRecord?.acknowledgements || []).map((ack) => ack.department),
+    );
+    return matchedDepartments.some((departmentName) =>
+      targetAcknowledged.has(departmentName),
+    );
+  };
+
   const acknowledgedDepts = useMemo(
     () => new Set((project?.acknowledgements || []).map((ack) => ack.department)),
     [project],
@@ -803,25 +833,15 @@ const EngagedProjectActions = ({ user }) => {
           },
     [isQuoteProject, project],
   );
-  const quoteDepartmentalEngagementComplete = useMemo(() => {
+  const quoteDepartmentAcknowledgementWindowOpen = useMemo(() => {
     if (!isQuoteProject) return true;
     if (quoteWorkflowBlocked) return false;
     const status = String(quoteWorkflowStatus || "").trim();
-    if (QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(status)) return false;
-
-    const engagedDepartments = Array.isArray(project?.departments)
-      ? project.departments
-      : [];
-    if (engagedDepartments.length === 0) return false;
-    return engagedDepartments.every((departmentName) =>
-      acknowledgedDepts.has(departmentName),
-    );
+    return !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(status);
   }, [
     isQuoteProject,
     quoteWorkflowBlocked,
     quoteWorkflowStatus,
-    project?.departments,
-    acknowledgedDepts,
   ]);
   const invoiceSent = Boolean(project?.invoice?.sent);
   const pendingProductionMissing =
@@ -2262,24 +2282,11 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
-    const quoteStatus = String(targetProject?.status || "").trim();
-    const engagedDepartments = Array.isArray(targetProject?.departments)
-      ? targetProject.departments
-      : [];
-    const targetAcknowledged = new Set(
-      (targetProject?.acknowledgements || []).map((ack) => ack.department),
-    );
-    const departmentalEngagementDone =
-      !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus) &&
-      engagedDepartments.length > 0 &&
-      engagedDepartments.every((departmentName) =>
-        targetAcknowledged.has(departmentName),
-      );
-
-    if (!departmentalEngagementDone) {
+    if (!isQuoteDepartmentActionReadyForCurrentUser(targetProject)) {
       setToast({
         type: "error",
-        message: "Complete departmental engagement before confirming retrieval.",
+        message:
+          "Acknowledge your engaged department before confirming retrieval.",
       });
       return false;
     }
@@ -2370,25 +2377,11 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
-    const quoteStatus = String(targetProject?.status || "").trim();
-    const engagedDepartments = Array.isArray(targetProject?.departments)
-      ? targetProject.departments
-      : [];
-    const targetAcknowledged = new Set(
-      (targetProject?.acknowledgements || []).map((ack) => ack.department),
-    );
-    const departmentalEngagementDone =
-      !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus) &&
-      engagedDepartments.length > 0 &&
-      engagedDepartments.every((departmentName) =>
-        targetAcknowledged.has(departmentName),
-      );
-
-    if (!departmentalEngagementDone) {
+    if (!isQuoteDepartmentActionReadyForCurrentUser(targetProject)) {
       setToast({
         type: "error",
         message:
-          "Complete departmental engagement before submitting sample production.",
+          "Acknowledge your engaged department before submitting sample production.",
       });
       return false;
     }
@@ -2507,24 +2500,10 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
-    const quoteStatus = String(targetProject?.status || "").trim();
-    const engagedDepartments = Array.isArray(targetProject?.departments)
-      ? targetProject.departments
-      : [];
-    const targetAcknowledged = new Set(
-      (targetProject?.acknowledgements || []).map((ack) => ack.department),
-    );
-    const departmentalEngagementDone =
-      !QUOTE_PRE_DEPARTMENTAL_STATUS_SET.has(quoteStatus) &&
-      engagedDepartments.length > 0 &&
-      engagedDepartments.every((departmentName) =>
-        targetAcknowledged.has(departmentName),
-      );
-
-    if (!departmentalEngagementDone) {
+    if (!isQuoteDepartmentActionReadyForCurrentUser(targetProject)) {
       setToast({
         type: "error",
-        message: "Complete departmental engagement before submitting mockup.",
+        message: "Acknowledge your engaged department before submitting mockup.",
       });
       return false;
     }
@@ -3070,6 +3049,16 @@ const EngagedProjectActions = ({ user }) => {
               !(isQuoteProject && ["Stores", "Production"].includes(section.key));
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
+            const quoteSectionAcknowledged = isQuoteProject
+              ? section.subDepts.some((dept) => acknowledgedDepts.has(dept))
+              : true;
+            const quoteSectionActionReady =
+              !isQuoteProject ||
+              isAdminUser ||
+              (
+                quoteDepartmentAcknowledgementWindowOpen &&
+                quoteSectionAcknowledged
+              );
 
             return (
               <section key={section.key} className="engaged-section">
@@ -3124,7 +3113,10 @@ const EngagedProjectActions = ({ user }) => {
                         const canAcknowledge =
                           !isAcknowledged &&
                           !isProjectLeadForProject &&
-                          isScopeApprovalComplete(quoteWorkflowStatus);
+                          (
+                            !isQuoteProject ||
+                            quoteDepartmentAcknowledgementWindowOpen
+                          );
                         return (
                           <div key={dept} className="engaged-ack-row">
                             <div className="engaged-ack-info">
@@ -3148,7 +3140,8 @@ const EngagedProjectActions = ({ user }) => {
                                   ? "Already acknowledged"
                                   : isProjectLeadForProject
                                     ? "Project leads cannot take engagement actions on their own projects here."
-                                  : isScopeApprovalComplete(quoteWorkflowStatus)
+                                  : !isQuoteProject ||
+                                      quoteDepartmentAcknowledgementWindowOpen
                                     ? "Confirm engagement"
                                     : "Scope approval must be completed"
                               }
@@ -3193,7 +3186,7 @@ const EngagedProjectActions = ({ user }) => {
                       isQuoteGraphicsAction &&
                       !quoteWorkflowBlocked &&
                       quoteMockupRequirement.isRequired &&
-                      quoteDepartmentalEngagementComplete;
+                      quoteSectionActionReady;
                     const mockupAlreadySubmitted = Boolean(mockupUrl);
                     const mockupApprovalPending =
                       isMockupAction && mockupApprovalStatus === "pending";
@@ -3264,10 +3257,10 @@ const EngagedProjectActions = ({ user }) => {
                         "Mockup is not marked as required for this quote.";
                     } else if (
                       isQuoteGraphicsAction &&
-                      !quoteDepartmentalEngagementComplete
+                      !quoteSectionActionReady
                     ) {
                       mockupUploadTitle =
-                        "Departmental engagement must be completed first.";
+                        "Acknowledge your engaged department first.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteCanUploadMockupRequirement
@@ -3295,9 +3288,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (isQuoteGraphicsAction && !quoteMockupRequirement.isRequired) {
                       mockupConfirmTitle =
                         "Mockup is not marked as required for this quote.";
-                    } else if (isQuoteGraphicsAction && !quoteDepartmentalEngagementComplete) {
+                    } else if (isQuoteGraphicsAction && !quoteSectionActionReady) {
                       mockupConfirmTitle =
-                        "Departmental engagement must be completed first.";
+                        "Acknowledge your engaged department first.";
                     } else if (isQuoteGraphicsAction && !mockupAlreadySubmitted) {
                       mockupConfirmTitle = "Upload mockup before confirming.";
                     } else if (isQuoteGraphicsAction && mockupApprovalRejected) {
@@ -3577,7 +3570,7 @@ const EngagedProjectActions = ({ user }) => {
                     const canConfirmRetrieved =
                       !quoteWorkflowBlocked &&
                       quotePreviousSamplesRequirement.isRequired &&
-                      quoteDepartmentalEngagementComplete &&
+                      quoteSectionActionReady &&
                       QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(
                         quotePreviousSamplesStatus,
                       ) &&
@@ -3595,9 +3588,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (!quotePreviousSamplesRequirement.isRequired) {
                       retrievalTitle =
                         "Previous Sample / Jobs Done is not required for this quote.";
-                    } else if (!quoteDepartmentalEngagementComplete) {
+                    } else if (!quoteSectionActionReady) {
                       retrievalTitle =
-                        "Departmental engagement must be completed first.";
+                        "Acknowledge your engaged department first.";
                     } else if (
                       ["dept_submitted", "frontdesk_review"].includes(
                         quotePreviousSamplesStatus,
@@ -3660,7 +3653,7 @@ const EngagedProjectActions = ({ user }) => {
                     const canSubmitSampleProduction =
                       !quoteWorkflowBlocked &&
                       quoteSampleProductionRequirement.isRequired &&
-                      quoteDepartmentalEngagementComplete &&
+                      quoteSectionActionReady &&
                       quoteMockupReadyForSampleProduction &&
                       sampleProductionTransitions.length > 0 &&
                       !isProjectLeadForProject &&
@@ -3678,9 +3671,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (!quoteSampleProductionRequirement.isRequired) {
                       sampleProductionTitle =
                         `${QUOTE_REQUIREMENT_SAMPLE_PRODUCTION_LABEL} is not required for this quote.`;
-                    } else if (!quoteDepartmentalEngagementComplete) {
+                    } else if (!quoteSectionActionReady) {
                       sampleProductionTitle =
-                        "Departmental engagement must be completed first.";
+                        "Acknowledge your engaged department first.";
                     } else if (!quoteMockupReadyForSampleProduction) {
                       sampleProductionTitle =
                         "Front Desk must approve mockup and mockup must be completed first.";

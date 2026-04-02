@@ -85,6 +85,17 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   "In Progress",
   "Completed",
   "On Hold",
+  "Pending Cost Verification",
+  "Cost Verification Completed",
+  "Pending Sample Retrieval",
+  "Pending Sample / Work done Retrieval",
+  "Pending Quote Requirements",
+  "Pending Sample Production",
+  "Pending Bid Submission / Documents",
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
+  "Declined",
 ]);
 
 const isScopeApprovalComplete = (status) =>

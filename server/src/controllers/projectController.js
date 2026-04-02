@@ -555,6 +555,105 @@ const getMissingDepartmentAcknowledgements = (project) => {
   return missing;
 };
 
+const getAcknowledgedDepartmentTokens = (project = {}) =>
+  new Set(
+    (project?.acknowledgements || [])
+      .map((ack) => normalizeDepartmentValue(ack?.department))
+      .filter(Boolean),
+  );
+
+const getMatchedProjectDepartmentTokensForUser = ({
+  project,
+  user,
+  allowedDepartments = [],
+} = {}) => {
+  const projectTokens = toDepartmentArray(project?.departments)
+    .map(normalizeDepartmentValue)
+    .filter(Boolean);
+  const userTokens = toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .filter(Boolean);
+
+  if (!projectTokens.length || !userTokens.length) return [];
+
+  const allowedCanonicalDepartments = new Set(
+    toDepartmentArray(allowedDepartments)
+      .map(canonicalizeDepartment)
+      .filter(Boolean),
+  );
+
+  return Array.from(
+    new Set(
+      projectTokens.filter((projectToken) => {
+        const projectCanonical = canonicalizeDepartment(projectToken);
+        if (
+          allowedCanonicalDepartments.size > 0 &&
+          !allowedCanonicalDepartments.has(projectCanonical)
+        ) {
+          return false;
+        }
+
+        return userTokens.some((userToken) => {
+          if (userToken === projectToken) return true;
+
+          const userCanonical = canonicalizeDepartment(userToken);
+          if (!userCanonical || userCanonical !== projectCanonical) {
+            return false;
+          }
+
+          if (userCanonical === "production") {
+            return userToken === "production" || projectToken === "production";
+          }
+
+          return true;
+        });
+      }),
+    ),
+  );
+};
+
+const getQuoteDepartmentEngagementGuard = ({
+  project,
+  user,
+  allowedDepartments = [],
+} = {}) => {
+  if (!isQuoteProject(project)) return null;
+
+  if (!isQuoteScopeApprovalReadyForDepartments(project)) {
+    return {
+      code: "QUOTE_SCOPE_APPROVAL_REQUIRED",
+      missing: [],
+      message:
+        "Scope approval must be completed before departments can acknowledge or take action on this quote.",
+    };
+  }
+
+  if (user?.role === "admin") return null;
+
+  const matchedDepartmentTokens = getMatchedProjectDepartmentTokensForUser({
+    project,
+    user,
+    allowedDepartments,
+  });
+
+  if (!matchedDepartmentTokens.length) return null;
+
+  const acknowledgedDepartmentTokens = getAcknowledgedDepartmentTokens(project);
+  if (
+    matchedDepartmentTokens.some((departmentToken) =>
+      acknowledgedDepartmentTokens.has(departmentToken),
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    code: "QUOTE_DEPARTMENT_ACKNOWLEDGEMENT_REQUIRED",
+    missing: matchedDepartmentTokens,
+    message: `Acknowledge your engaged department first before taking action on this quote. Pending acknowledgement: ${matchedDepartmentTokens.join(", ")}.`,
+  };
+};
+
 const isUserAssignedProjectLead = (user, project) => {
   if (!user || !project) return false;
   const userId = toObjectIdString(user._id || user.id);
@@ -2050,6 +2149,22 @@ const normalizeStatusForStorageByProjectType = (status = "", projectType = "") =
   const aliasKey = normalizedStatus.toLowerCase();
   return QUOTE_STATUS_ALIAS_TO_STORED[aliasKey] || normalizedStatus;
 };
+
+const QUOTE_PRE_SCOPE_APPROVAL_STATUSES = new Set([
+  "Quote Created",
+  "Pending Scope Approval",
+]);
+
+const isQuoteScopeApprovalReadyForDepartments = (project = {}) => {
+  if (!isQuoteProject(project)) return false;
+  const normalizedStatus = normalizeStatusForStorageByProjectType(
+    project?.status,
+    "Quote",
+  );
+  if (!normalizedStatus) return false;
+  return !QUOTE_PRE_SCOPE_APPROVAL_STATUSES.has(normalizedStatus);
+};
+
 const getStatusFlowForProjectType = (projectType = "") =>
   projectType === "Quote" ? QUOTE_STATUS_FLOW : STANDARD_STATUS_FLOW;
 const isStatusAtOrAfterMeetingGate = (status = "", projectType = "") => {
@@ -2248,11 +2363,37 @@ const getAutoProgressedStatus = (status, project = {}) => {
 };
 
 const isMockupWorkflowStatusAllowed = (project = {}, status = "") => {
+  if (isQuoteProject(project)) {
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    const requirementItem =
+      project.quoteDetails?.requirementItems?.mockup || null;
+    const requirementStatus =
+      toText(requirementItem?.status).toLowerCase() || "assigned";
+
+    if (!requirementItem?.isRequired) return false;
+
+    return [
+      "assigned",
+      "in_progress",
+      "blocked",
+      "dept_submitted",
+      "frontdesk_review",
+      "client_revision_requested",
+      "client_approved",
+    ].includes(requirementStatus);
+  }
+
   return status === "Pending Mockup";
 };
 
-const getMockupWorkflowStatusMessage = () =>
-  "Mockup action is only allowed while status is Pending Mockup.";
+const getMockupWorkflowStatusMessage = (project = {}) =>
+  isQuoteProject(project)
+    ? "Mockup action is only allowed after scope approval and while the quote mockup workflow is active."
+    : "Mockup action is only allowed while status is Pending Mockup.";
 
 const formatQuoteRequirementStatusLabel = (status = "") => {
   const normalized = toText(status).toLowerCase();
@@ -6535,6 +6676,33 @@ const updateProjectStatus = async (req, res) => {
       "Master Approval Completed": "Pending Master Approval",
       "Quality Control Completed": "Pending Quality Control",
     };
+    const departmentManagedStatusTargets = {
+      "Mockup Completed": ["graphics"],
+      "Production Completed": ["production"],
+      "Photography Completed": ["photography"],
+      "Packaging Completed": ["stores"],
+    };
+
+    if (
+      isQuoteProject(project) &&
+      Object.prototype.hasOwnProperty.call(
+        departmentManagedStatusTargets,
+        newStatus,
+      )
+    ) {
+      const engagementGuard = getQuoteDepartmentEngagementGuard({
+        project,
+        user: req.user,
+        allowedDepartments: departmentManagedStatusTargets[newStatus],
+      });
+      if (engagementGuard) {
+        return res.status(400).json({
+          code: engagementGuard.code,
+          missing: engagementGuard.missing,
+          message: engagementGuard.message,
+        });
+      }
+    }
 
     if (adminOnlyStageCompletions.has(newStatus)) {
       if (!isAdmin) {
@@ -7087,6 +7255,10 @@ const transitionQuoteRequirement = async (req, res) => {
     });
     const checklistState = getQuoteChecklistState(normalizedQuoteDetails);
     const requirementMode = checklistState.mode;
+    const userDepartmentSet = getUserCanonicalDepartments(req.user);
+    const isFrontDeskUser = userDepartmentSet.has(
+      canonicalizeDepartment(FRONT_DESK_DEPARTMENT),
+    );
     if (requirementMode === "none") {
       return res.status(400).json({
         code: "QUOTE_REQUIREMENTS_BLOCKED",
@@ -7151,6 +7323,29 @@ const transitionQuoteRequirement = async (req, res) => {
           "Quote requirement transitions are disabled for this requirement.",
       });
     }
+
+    const isDepartmentStageTransition =
+      QUOTE_REQUIREMENT_DEPARTMENT_STAGES.has(toStatus) && requirementKey !== "cost";
+    if (
+      isDepartmentStageTransition &&
+      (isEngagedPortalMutation || !isFrontDeskUser)
+    ) {
+      const engagementGuard = getQuoteDepartmentEngagementGuard({
+        project,
+        user: req.user,
+        allowedDepartments: Array.from(
+          QUOTE_REQUIREMENT_DEPARTMENT_STAGE_ACCESS[requirementKey] || [],
+        ),
+      });
+      if (engagementGuard) {
+        return res.status(400).json({
+          code: engagementGuard.code,
+          missing: engagementGuard.missing,
+          message: engagementGuard.message,
+        });
+      }
+    }
+
     project.quoteDetails = normalizedQuoteDetails;
 
     const requirementItem =
@@ -9332,6 +9527,21 @@ const uploadProjectMockup = async (req, res) => {
         .json({ message: "Not authorized to upload mockups" });
     }
 
+    if (isQuoteProject(project)) {
+      const engagementGuard = getQuoteDepartmentEngagementGuard({
+        project,
+        user: req.user,
+        allowedDepartments: ["graphics"],
+      });
+      if (engagementGuard) {
+        return res.status(400).json({
+          code: engagementGuard.code,
+          missing: engagementGuard.missing,
+          message: engagementGuard.message,
+        });
+      }
+    }
+
     if (!isMockupWorkflowStatusAllowed(project, project.status)) {
       return res.status(400).json({
         message: getMockupWorkflowStatusMessage(project),
@@ -9634,6 +9844,21 @@ const deleteProjectMockupVersion = async (req, res) => {
       return res.status(403).json({
         message: "Not authorized to delete mockups",
       });
+    }
+
+    if (isQuoteProject(project)) {
+      const engagementGuard = getQuoteDepartmentEngagementGuard({
+        project,
+        user: req.user,
+        allowedDepartments: ["graphics"],
+      });
+      if (engagementGuard) {
+        return res.status(400).json({
+          code: engagementGuard.code,
+          missing: engagementGuard.missing,
+          message: engagementGuard.message,
+        });
+      }
     }
 
     if (!isMockupWorkflowStatusAllowed(project, project.status)) {
@@ -12662,9 +12887,15 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
   // Quote workflow statuses that occur after scope approval
   "Pending Cost Verification",
   "Cost Verification Completed",
+  "Pending Sample Retrieval",
+  "Pending Sample / Work done Retrieval",
+  "Pending Quote Requirements",
+  "Pending Sample Production",
+  "Pending Bid Submission / Documents",
   "Pending Quote Submission",
   "Quote Submission Completed",
   "Pending Client Decision",
+  "Declined",
 ]);
 
 // @desc    Acknowledge project engagement by a department
@@ -12695,7 +12926,11 @@ const acknowledgeProject = async (req, res) => {
       });
     }
 
-    if (!SCOPE_APPROVAL_READY_STATUSES.has(project.status)) {
+    const scopeApprovalReady =
+      isQuoteProject(project)
+        ? isQuoteScopeApprovalReadyForDepartments(project)
+        : SCOPE_APPROVAL_READY_STATUSES.has(project.status);
+    if (!scopeApprovalReady) {
       return res.status(400).json({
         message:
           "Scope approval must be completed before engagement can be accepted.",
