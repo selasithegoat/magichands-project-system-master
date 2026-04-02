@@ -55,6 +55,7 @@
 }
 
 .frontdesk-kpi-card {
+  appearance: none;
   padding: 1.1rem 1.2rem;
   border-radius: 18px;
   border: 1px solid var(--border-color);
@@ -64,12 +65,29 @@
   flex-direction: column;
   gap: 0.5rem;
   min-height: 130px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .frontdesk-kpi-card p {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.85rem;
+}
+
+.frontdesk-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.frontdesk-kpi-card.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16);
 }
 
 .frontdesk-kpi-header {

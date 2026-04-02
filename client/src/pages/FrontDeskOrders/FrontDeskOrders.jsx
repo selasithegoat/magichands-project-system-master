@@ -1,112 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import OrdersList from "../NewOrders/OrdersList";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
-  getQuoteRequirementMode,
-  getQuoteStatusDisplay,
-} from "../../utils/quoteStatus";
+  CLOSED_ORDER_STATUSES,
+  hasPendingClientMockupApproval,
+  hasOrderBillingBlock,
+  matchesOrdersManagementKpi,
+  resolveOrderManagementStatus,
+} from "../../utils/ordersManagementKpis";
 import "./FrontDeskOrders.css";
 
-const CLOSED_STATUSES = new Set([
-  "Completed",
-  "Finished",
-  "Delivered",
-  "Feedback Completed",
-]);
-
-const ACTION_STATUSES = new Set([
-  "Order Created",
-  "Pending Acceptance",
-  "Pending Scope Approval",
-  "Pending Departmental Meeting",
-  "Pending Departmental Engagement",
-  "Quote Created",
-  "Pending Quote Requirements",
-  "Pending Mockup",
-  "Pending Cost",
-  "Pending Cost Verification",
-  "Pending Sample Retrieval",
-  "Pending Sample / Work done Retrieval",
-  "Pending Quote Submission",
-  "Pending Sample / Work done Sent",
-  "Quote Submission Completed",
-  "Pending Client Decision",
-  "Pending Feedback",
-]);
-
-const getSampleApprovalStatus = (sampleApproval = {}) => {
-  const explicit = String(sampleApproval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (explicit === "approved") return "approved";
-  if (explicit === "rejected") return "rejected";
-  if (sampleApproval?.approvedAt || sampleApproval?.approvedBy) return "approved";
-  return "pending";
-};
-
-const formatDate = (value) => {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-};
-
-const getOrderLabel = (project) => {
-  const raw =
-    project?.orderId || project?.orderRef?.orderNumber || project?._id || "";
-  if (!raw) return "Order";
-  return raw.startsWith("#") ? raw : `#${raw}`;
-};
-
-const isQuoteProject = (project) => project?.projectType === "Quote";
-const resolveProjectStatus = (project) =>
-  isQuoteProject(project)
-    ? getQuoteStatusDisplay(
-        project?.status || "",
-        getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
-      )
-    : project?.status || "";
-
-const hasBillingBlock = (project) => {
-  if (!project || isQuoteProject(project)) return false;
-  const status = project.status || "";
-  const invoiceSent = Boolean(project.invoice?.sent);
-  const paymentTypes = new Set(
-    (project.paymentVerifications || []).map((entry) => entry?.type),
-  );
-  const hasAnyPayment = paymentTypes.size > 0;
-  const hasFullOrAuthorized =
-    paymentTypes.has("full_payment") || paymentTypes.has("authorized");
-
-  if (["Pending Master Approval", "Pending Production"].includes(status)) {
-    return !invoiceSent || !hasAnyPayment;
-  }
-
-  if (["Pending Packaging", "Pending Delivery/Pickup"].includes(status)) {
-    return !hasFullOrAuthorized;
-  }
-
-  return false;
-};
-
-const getDeliveryRisk = (project) => {
-  if (!project?.details?.deliveryDate) return { risk: false, overdue: false };
-  const deliveryDate = new Date(project.details.deliveryDate);
-  if (Number.isNaN(deliveryDate.getTime())) return { risk: false, overdue: false };
-  const now = new Date();
-  const diffMs = deliveryDate.getTime() - now.getTime();
-  const risk = diffMs <= 72 * 60 * 60 * 1000;
-  return { risk, overdue: diffMs < 0 };
-};
-
 const FrontDeskOrders = () => {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [activeKpi, setActiveKpi] = useState("all");
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -135,8 +42,8 @@ const FrontDeskOrders = () => {
   const billingBlocks = useMemo(
     () =>
       orders.filter((project) => {
-        const status = resolveProjectStatus(project);
-        return !CLOSED_STATUSES.has(status) && hasBillingBlock(project);
+        const status = resolveOrderManagementStatus(project);
+        return !CLOSED_ORDER_STATUSES.has(status) && hasOrderBillingBlock(project);
       }).length,
     [orders],
   );
@@ -144,8 +51,7 @@ const FrontDeskOrders = () => {
     () =>
       orders.filter(
         (project) => {
-          const status = resolveProjectStatus(project);
-          return !CLOSED_STATUSES.has(status) && ACTION_STATUSES.has(status);
+          return matchesOrdersManagementKpi(project, "actions");
         },
       ).length,
     [orders],
@@ -154,8 +60,7 @@ const FrontDeskOrders = () => {
     () =>
       orders.filter(
         (project) => {
-          const status = resolveProjectStatus(project);
-          return !CLOSED_STATUSES.has(status) && getDeliveryRisk(project).risk;
+          return matchesOrdersManagementKpi(project, "delivery");
         },
       ).length,
     [orders],
@@ -164,22 +69,7 @@ const FrontDeskOrders = () => {
     () =>
       orders.filter(
         (project) => {
-          if (!isQuoteProject(project)) return false;
-          const status = resolveProjectStatus(project);
-          return [
-            "Pending Cost",
-            "Pending Cost Verification",
-            "Pending Mockup",
-            "Pending Sample Retrieval",
-            "Pending Sample / Work done Retrieval",
-            "Pending Sample Production",
-            "Pending Bid Submission / Documents",
-            "Pending Quote Requirements",
-            "Pending Quote Submission",
-            "Pending Sample / Work done Sent",
-            "Quote Submission Completed",
-            "Pending Client Decision",
-          ].includes(status);
+          return matchesOrdersManagementKpi(project, "quotes");
         },
       ).length,
     [orders],
@@ -188,8 +78,7 @@ const FrontDeskOrders = () => {
     () =>
       orders.filter(
         (project) => {
-          const status = resolveProjectStatus(project);
-          return !CLOSED_STATUSES.has(status) && status === "Pending Mockup";
+          return matchesOrdersManagementKpi(project, "mockup");
         },
       ).length,
     [orders],
@@ -197,12 +86,13 @@ const FrontDeskOrders = () => {
   const samplePending = useMemo(
     () =>
       orders.filter((project) => {
-        const status = resolveProjectStatus(project);
-        if (CLOSED_STATUSES.has(status)) return false;
-        const required = Boolean(project?.sampleRequirement?.isRequired);
-        if (!required) return false;
-        return getSampleApprovalStatus(project?.sampleApproval || {}) !== "approved";
+        return matchesOrdersManagementKpi(project, "sample");
       }).length,
+    [orders],
+  );
+  const clientMockupApproval = useMemo(
+    () =>
+      orders.filter((project) => hasPendingClientMockupApproval(project)).length,
     [orders],
   );
 
@@ -243,6 +133,13 @@ const FrontDeskOrders = () => {
       tone: "neutral",
     },
     {
+      key: "mockupApproval",
+      label: "Client Mockup Approval",
+      value: clientMockupApproval,
+      description: "Uploaded mockups waiting for Front Desk/Admin approval",
+      tone: "info",
+    },
+    {
       key: "sample",
       label: "Sample Approval",
       value: samplePending,
@@ -250,6 +147,8 @@ const FrontDeskOrders = () => {
       tone: "success",
     },
   ];
+  const activeKpiLabel =
+    kpiCards.find((card) => card.key === activeKpi)?.label || "All Orders";
 
   return (
     <div className="frontdesk-orders-page">
@@ -261,23 +160,33 @@ const FrontDeskOrders = () => {
             All orders and history in one organized workspace.
           </p>
         </div>
-        <div className="frontdesk-orders-chip">All Orders & History</div>
+        <div className="frontdesk-orders-chip">
+          {activeKpi === "all" ? "All Orders & History" : `Filtered: ${activeKpiLabel}`}
+        </div>
       </div>
 
       <div className="frontdesk-kpi-grid">
         {kpiCards.map((card) => (
-          <div key={card.key} className={`frontdesk-kpi-card ${card.tone}`}>
+          <button
+            type="button"
+            key={card.key}
+            className={`frontdesk-kpi-card ${card.tone} ${activeKpi === card.key ? "active" : ""}`}
+            onClick={() =>
+              setActiveKpi((current) => (current === card.key ? "all" : card.key))
+            }
+            aria-pressed={activeKpi === card.key}
+          >
             <div className="frontdesk-kpi-header">
               <span>{card.label}</span>
               <strong>{loading ? "..." : card.value}</strong>
             </div>
             <p>{card.description}</p>
-          </div>
+          </button>
         ))}
       </div>
 
       <div className="frontdesk-orders-content">
-        <OrdersList />
+        <OrdersList kpiFilter={activeKpi} />
       </div>
     </div>
   );

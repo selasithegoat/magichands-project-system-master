@@ -9,6 +9,7 @@ import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
 } from "../../utils/quoteStatus";
+import { matchesOrdersManagementKpi } from "../../utils/ordersManagementKpis";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 10;
@@ -32,7 +33,18 @@ const getFeedbackAttachmentName = (attachment) => {
   return parts[parts.length - 1] || "Attachment";
 };
 
-const OrdersList = () => {
+const KPI_FILTER_LABELS = {
+  all: "All Orders",
+  billing: "Billing Blocks",
+  actions: "Next-Step Actions",
+  delivery: "Delivery Risk",
+  quotes: "Quote Responses",
+  mockup: "Mockup Pending",
+  mockupApproval: "Client Mockup Approval",
+  sample: "Sample Approval",
+};
+
+const OrdersList = ({ kpiFilter = "all" }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
   const [allOrders, setAllOrders] = useState([]);
@@ -470,6 +482,12 @@ const OrdersList = () => {
     }))
     .filter((group) => group.activeProjects.length > 0)
     .filter((group) => {
+      if (kpiFilter === "all") return true;
+      return group.activeProjects.some((project) =>
+        matchesOrdersManagementKpi(project, kpiFilter),
+      );
+    })
+    .filter((group) => {
       const orderNumber = String(group?.orderNumber || "").toLowerCase();
       const clientText = String(
         getGroupClient(group, group.activeProjects) || "",
@@ -875,6 +893,11 @@ const OrdersList = () => {
               <option value="Assigned">Assigned</option>
               <option value="Unassigned">Unassigned</option>
             </select>
+            {kpiFilter !== "all" && (
+              <div className="orders-kpi-filter-chip">
+                KPI Filter: {KPI_FILTER_LABELS[kpiFilter] || "Active"}
+              </div>
+            )}
           </div>
 
           {loading ? (

@@ -107,6 +107,18 @@
   box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.12);
 }
 
+.orders-kpi-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--primary-rgb), 0.25);
+  background: rgba(var(--primary-rgb), 0.08);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 /* Orders Table */
 .orders-table {
   width: 100%;
