@@ -10,12 +10,43 @@
 }
 
 .admin-reminder-alert-modal {
+  position: relative;
   width: min(560px, 100%);
   border-radius: 18px;
   border: 1px solid #1e293b;
   background: #0f172a;
   box-shadow: 0 28px 72px rgba(2, 6, 23, 0.58);
   padding: 1.25rem 1.2rem;
+}
+
+.admin-reminder-alert-close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.9rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-reminder-alert-close:hover {
+  background: #0f4c81;
+  border-color: #2563eb;
+  color: #f8fafc;
+}
+
+.admin-reminder-alert-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .admin-reminder-alert-eyebrow {

@@ -550,13 +550,18 @@ const snoozeReminder = async (req, res) => {
       return res.status(403).json({ message: "Not authorized to snooze reminder." });
     }
 
-    if (reminder.status !== "scheduled") {
+    const normalizedStatus = String(reminder.status || "").trim().toLowerCase();
+    const canSnoozeTriggeredReminder =
+      normalizedStatus === "completed" &&
+      Boolean(reminder.lastTriggeredAt || reminder.completedAt);
+
+    if (normalizedStatus !== "scheduled" && !canSnoozeTriggeredReminder) {
       return res
         .status(400)
-        .json({ message: "Only scheduled reminders can be snoozed." });
+        .json({ message: "Only scheduled or ongoing reminders can be snoozed." });
     }
 
-    if (!reminder.nextTriggerAt) {
+    if (!reminder.nextTriggerAt && !canSnoozeTriggeredReminder) {
       return res.status(400).json({
         message: "This reminder is waiting for its target stage and cannot be snoozed yet.",
       });
@@ -564,7 +569,11 @@ const snoozeReminder = async (req, res) => {
 
     const minutes = toPositiveInt(req.body?.minutes, 60, 60 * 24 * 14);
     const nextTriggerAt = new Date(Date.now() + minutes * 60 * 1000);
+    reminder.status = "scheduled";
+    reminder.isActive = true;
     reminder.nextTriggerAt = nextTriggerAt;
+    reminder.completedAt = null;
+    reminder.cancelledAt = null;
     reminder.processing = false;
     reminder.processingAt = null;
     reminder.lastError = "";

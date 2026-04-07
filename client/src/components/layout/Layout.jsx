@@ -172,6 +172,7 @@ const Layout = ({
   const [reminderActionError, setReminderActionError] = useState("");
   const queuedReminderNotificationIdsRef = useRef(new Set());
   const handledReminderNotificationIdsRef = useRef(new Set());
+  const dismissedReminderNotificationIdsRef = useRef(new Set());
   const reminderSoundIdRef = useRef("");
 
   // [New] Native Notification Permission Logic
@@ -296,6 +297,11 @@ const Layout = ({
     const unreadMap = new Map(
       unreadReminderNotifications.map((item) => [item.notificationId, item]),
     );
+    dismissedReminderNotificationIdsRef.current = new Set(
+      Array.from(dismissedReminderNotificationIdsRef.current).filter((id) =>
+        unreadIds.has(id),
+      ),
+    );
 
     setReminderQueue((prev) => {
       const next = prev
@@ -305,6 +311,9 @@ const Layout = ({
 
       for (const item of unreadReminderNotifications) {
         if (handledReminderNotificationIdsRef.current.has(item.notificationId)) {
+          continue;
+        }
+        if (dismissedReminderNotificationIdsRef.current.has(item.notificationId)) {
           continue;
         }
         if (queueSet.has(item.notificationId)) continue;
@@ -332,9 +341,27 @@ const Layout = ({
         ),
       );
       setNotificationCount((prev) => Math.max(0, prev - 1));
+      dismissedReminderNotificationIdsRef.current.delete(notificationId);
     } catch (error) {
       console.error("Error marking reminder notification as read:", error);
     }
+  };
+
+  const dismissReminderAlert = () => {
+    const notificationId = toEntityId(activeReminderAlert?.notificationId);
+    if (!notificationId) {
+      setActiveReminderAlert(null);
+      setReminderActionError("");
+      return;
+    }
+
+    dismissedReminderNotificationIdsRef.current.add(notificationId);
+    queuedReminderNotificationIdsRef.current.delete(notificationId);
+    setReminderQueue((prev) =>
+      prev.filter((item) => item.notificationId !== notificationId),
+    );
+    setActiveReminderAlert(null);
+    setReminderActionError("");
   };
 
   const processReminderAlertAction = async (actionType) => {
@@ -475,6 +502,7 @@ const Layout = ({
       lastIdsRef.current = new Set();
       queuedReminderNotificationIdsRef.current = new Set();
       handledReminderNotificationIdsRef.current = new Set();
+      dismissedReminderNotificationIdsRef.current = new Set();
       setReminderQueue([]);
       setActiveReminderAlert(null);
       setReminderActionError("");
@@ -570,6 +598,7 @@ const Layout = ({
         setActiveReminderAlert(null);
         setReminderActionError("");
         queuedReminderNotificationIdsRef.current = new Set();
+        dismissedReminderNotificationIdsRef.current = new Set();
       }
     } catch (err) {
       console.error("Error marking all read:", err);
@@ -592,6 +621,7 @@ const Layout = ({
         setActiveReminderAlert(null);
         setReminderActionError("");
         queuedReminderNotificationIdsRef.current = new Set();
+        dismissedReminderNotificationIdsRef.current = new Set();
       }
     } catch (err) {
       console.error("Error clearing notifications:", err);
@@ -762,6 +792,7 @@ const Layout = ({
         onStop={() => processReminderAlertAction("stop")}
         onComplete={() => processReminderAlertAction("complete")}
         onNavigateProject={handleReminderNavigate}
+        onClose={dismissReminderAlert}
       />
 
       {/* Mobile Drawer */}

@@ -24,6 +24,7 @@ const ReminderAlertModal = ({
   onStop,
   onComplete,
   onNavigateProject,
+  onClose,
 }) => {
   if (!reminder) return null;
 
@@ -42,6 +43,15 @@ const ReminderAlertModal = ({
         aria-modal="true"
         aria-label="Reminder alert"
       >
+        <button
+          type="button"
+          className="reminder-alert-close"
+          onClick={onClose}
+          disabled={loading}
+          aria-label="Close reminder alert"
+        >
+          X
+        </button>
         <p className="reminder-alert-eyebrow">
           <span className="reminder-alert-eyebrow-icon" aria-hidden="true">
             <ReminderBellIcon width="14" height="14" color="currentColor" />

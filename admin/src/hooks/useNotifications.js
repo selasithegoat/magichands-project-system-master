@@ -33,6 +33,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
   const isFirstLoadRef = useRef(true);
   const queuedReminderNotificationIdsRef = useRef(new Set());
   const handledReminderNotificationIdsRef = useRef(new Set());
+  const dismissedReminderNotificationIdsRef = useRef(new Set());
   const reminderSoundIdRef = useRef("");
 
   const syncReminderQueueFromNotifications = useCallback((notificationList = []) => {
@@ -67,6 +68,11 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     const unreadIds = new Set(
       unreadReminderNotifications.map((item) => item.notificationId),
     );
+    dismissedReminderNotificationIdsRef.current = new Set(
+      Array.from(dismissedReminderNotificationIdsRef.current).filter((id) =>
+        unreadIds.has(id),
+      ),
+    );
 
     setReminderQueue((prev) => {
       const next = prev.filter((item) => unreadIds.has(item.notificationId));
@@ -74,6 +80,9 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
 
       for (const item of unreadReminderNotifications) {
         if (handledReminderNotificationIdsRef.current.has(item.notificationId)) {
+          continue;
+        }
+        if (dismissedReminderNotificationIdsRef.current.has(item.notificationId)) {
           continue;
         }
         if (queueSet.has(item.notificationId)) continue;
@@ -132,6 +141,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     if (!normalizedId) return;
 
     queuedReminderNotificationIdsRef.current.delete(normalizedId);
+    dismissedReminderNotificationIdsRef.current.delete(normalizedId);
     setReminderQueue((prev) =>
       prev.filter((item) => item.notificationId !== normalizedId),
     );
@@ -172,6 +182,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
         previousUnreadCountRef.current = next;
         return next;
       });
+      dismissedReminderNotificationIdsRef.current.delete(normalizedId);
 
       return true;
     } catch (error) {
@@ -179,6 +190,23 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
       return false;
     }
   }, []);
+
+  const handleReminderDismiss = useCallback(() => {
+    const notificationId = String(activeReminderAlert?.notificationId || "");
+    if (!notificationId) {
+      setActiveReminderAlert(null);
+      setReminderActionError("");
+      return;
+    }
+
+    dismissedReminderNotificationIdsRef.current.add(notificationId);
+    queuedReminderNotificationIdsRef.current.delete(notificationId);
+    setReminderQueue((prev) =>
+      prev.filter((item) => item.notificationId !== notificationId),
+    );
+    setActiveReminderAlert(null);
+    setReminderActionError("");
+  }, [activeReminderAlert]);
 
   const handleReminderAlertAction = useCallback(
     async (actionType) => {
@@ -314,6 +342,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     isFirstLoadRef.current = true;
     queuedReminderNotificationIdsRef.current = new Set();
     handledReminderNotificationIdsRef.current = new Set();
+    dismissedReminderNotificationIdsRef.current = new Set();
     setReminderQueue([]);
     setActiveReminderAlert(null);
     setReminderActionError("");
@@ -342,6 +371,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
       setActiveReminderAlert(null);
       setReminderActionError("");
       queuedReminderNotificationIdsRef.current = new Set();
+      dismissedReminderNotificationIdsRef.current = new Set();
     } catch (error) {
       console.error("Error marking all as read:", error);
     }
@@ -362,6 +392,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
       setActiveReminderAlert(null);
       setReminderActionError("");
       queuedReminderNotificationIdsRef.current = new Set();
+      dismissedReminderNotificationIdsRef.current = new Set();
     } catch (error) {
       console.error("Error clearing notifications:", error);
     }
@@ -380,6 +411,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     reminderActionError,
     handleReminderAlertAction,
     handleReminderNavigate,
+    handleReminderDismiss,
   };
 };
 
