@@ -182,6 +182,8 @@ const isCorporateProject = (project) =>
 const isEmergencyProject = (project) =>
   getProjectPriorityValue(project) === "urgent" ||
   getProjectTypeValue(project).includes("emergency");
+const isHistoryProject = (project) =>
+  HISTORY_PROJECT_STATUSES.has(project?.status || "");
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -565,16 +567,17 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
       projects.filter(
         (project) =>
           !isPendingAcceptanceProject(project) &&
-          !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+          !isHistoryProject(project),
       ),
     [projects],
   );
 
   const completedProjects = useMemo(
-    () =>
-      projects.filter((project) =>
-        HISTORY_PROJECT_STATUSES.has(project.status || ""),
-      ),
+    () => projects.filter((project) => isHistoryProject(project)),
+    [projects],
+  );
+  const totalLiveProjects = useMemo(
+    () => projects.filter((project) => !isHistoryProject(project)).length,
     [projects],
   );
 
@@ -586,18 +589,25 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
       const deliveryDate = new Date(project.details.deliveryDate);
       return (
         deliveryDate < today &&
-        !OVERDUE_EXCLUDED_STATUSES.has(project.status || "")
+        !OVERDUE_EXCLUDED_STATUSES.has(project.status || "") &&
+        !isHistoryProject(project)
       );
     });
   }, [projects]);
 
   const emergencyProjects = useMemo(
-    () => projects.filter((project) => isEmergencyProject(project)),
+    () =>
+      projects.filter(
+        (project) => isEmergencyProject(project) && !isHistoryProject(project),
+      ),
     [projects],
   );
 
   const pendingDeliveryProjects = useMemo(
-    () => projects.filter((project) => isPendingDeliveryProject(project)),
+    () =>
+      projects.filter(
+        (project) => isPendingDeliveryProject(project) && !isHistoryProject(project),
+      ),
     [projects],
   );
 
@@ -787,7 +797,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
     : "";
 
   const greetingName = user?.firstName || user?.name || "User";
-  const totalProjectsLabel = `${projects.length} total projects`;
+  const totalProjectsLabel = `${totalLiveProjects} total projects`;
 
   const renderProject = (project) => {
     const projectId = toEntityId(project?._id || project?.id);

@@ -316,8 +316,7 @@ const buildProjectCreationEmailHtml = ({ project, creatorName, requestBaseUrl })
             <div style="margin-top:10px;font-size:16px;line-height:1.6;color:#e2e8f0;">
               A new ${escapeHtml((project?.projectType || "Project").toLowerCase())} order was successfully created by ${escapeHtml(
                 creatorName || "Front Desk",
-              )}.
-            </div>
+              )}</div>
             ${
               portalUrl
                 ? `<div style="margin-top:14px;font-size:14px;color:#bfdbfe;">Open order: <a href="${escapeHtml(

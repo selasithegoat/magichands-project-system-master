@@ -31,6 +31,8 @@ const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
+const isHistoryProject = (project) =>
+  HISTORY_PROJECT_STATUSES.has(project?.status || "");
 
 const OngoingProjects = ({
   onNavigateDetail,
@@ -153,43 +155,46 @@ const OngoingProjects = ({
 
     switch (viewMode) {
       case "completed":
-        return projects.filter((project) =>
-          HISTORY_PROJECT_STATUSES.has(project.status || ""),
-        );
+        return projects.filter((project) => isHistoryProject(project));
       case "overdue":
         return projects.filter((project) => {
           if (!project?.details?.deliveryDate) return false;
           const deliveryDate = new Date(project.details.deliveryDate);
           return (
             deliveryDate < today &&
-            !OVERDUE_EXCLUDED_STATUSES.has(project.status || "")
+            !OVERDUE_EXCLUDED_STATUSES.has(project.status || "") &&
+            !isHistoryProject(project)
           );
         });
       case "emergencies":
-        return projects.filter((project) => isEmergencyProject(project));
+        return projects.filter(
+          (project) => isEmergencyProject(project) && !isHistoryProject(project),
+        );
       case "pending-delivery":
         return projects.filter(
-          (project) => project?.status === "Pending Delivery/Pickup",
+          (project) =>
+            project?.status === "Pending Delivery/Pickup" &&
+            !isHistoryProject(project),
         );
       case "quotes":
         return projects.filter(
           (project) =>
             isQuoteProject(project) &&
-            !HISTORY_PROJECT_STATUSES.has(project.status || "") &&
+            !isHistoryProject(project) &&
             !isPendingAcceptanceProject(project),
         );
       case "corporate":
         return projects.filter(
           (project) =>
             isCorporateProject(project) &&
-            !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+            !isHistoryProject(project),
         );
       case "active":
       default:
         return projects.filter(
           (project) =>
             !isPendingAcceptanceProject(project) &&
-            !HISTORY_PROJECT_STATUSES.has(project.status || ""),
+            !isHistoryProject(project),
         );
     }
   }, [projects, viewMode]);
