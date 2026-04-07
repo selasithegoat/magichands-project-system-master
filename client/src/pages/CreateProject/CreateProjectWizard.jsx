@@ -12,7 +12,7 @@ import {
   normalizeReferenceAttachments,
 } from "../../utils/referenceAttachments";
 import {
-  normalizeProjectIndicator,
+  formatProjectIndicatorInput,
   resolveProjectNameForForm,
 } from "../../utils/projectName";
 
@@ -356,7 +356,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
     setFormData((prev) => {
       const next = { ...prev, ...updates };
       if (Object.prototype.hasOwnProperty.call(updates, "projectIndicator")) {
-        next.projectIndicator = normalizeProjectIndicator(
+        next.projectIndicator = formatProjectIndicatorInput(
           updates.projectIndicator,
         );
       }

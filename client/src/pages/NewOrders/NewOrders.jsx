@@ -21,8 +21,8 @@ import {
   getReferenceFileNote,
 } from "../../utils/referenceAttachments";
 import {
+  formatProjectIndicatorInput,
   formatProjectDisplayName,
-  normalizeProjectIndicator,
   resolveProjectNameForForm,
 } from "../../utils/projectName";
 import "./NewOrders.css";
@@ -390,7 +390,7 @@ const NewOrders = () => {
     const { name, value } = e.target;
     setFormData((prev) => {
       const nextValue =
-        name === "projectIndicator" ? normalizeProjectIndicator(value) : value;
+        name === "projectIndicator" ? formatProjectIndicatorInput(value) : value;
       const next = { ...prev, [name]: nextValue };
       if (name === "projectType" && value !== "Corporate Job") {
         next.corporateEmergency = false;

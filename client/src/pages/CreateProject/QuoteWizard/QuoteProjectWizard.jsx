@@ -11,7 +11,7 @@ import "../WizardLayout.css";
 import "./QuoteProjectWizard.css";
 import { normalizeReferenceAttachments } from "../../../utils/referenceAttachments";
 import {
-  normalizeProjectIndicator,
+  formatProjectIndicatorInput,
   resolveProjectNameForForm,
 } from "../../../utils/projectName";
 
@@ -297,7 +297,7 @@ const QuoteProjectWizard = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     const normalizedValue =
-      name === "projectIndicator" ? normalizeProjectIndicator(value) : value;
+      name === "projectIndicator" ? formatProjectIndicatorInput(value) : value;
 
     // Handle nested state updates helper
     if (name.includes(".")) {

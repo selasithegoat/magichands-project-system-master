@@ -21,8 +21,8 @@ import {
   getReferenceFileNote,
 } from "../../../utils/referenceAttachments";
 import {
+  formatProjectIndicatorInput,
   formatProjectDisplayName,
-  normalizeProjectIndicator,
   resolveProjectNameForForm,
 } from "../../../utils/projectName";
 import "./MinimalQuoteForm.css";
@@ -261,7 +261,7 @@ const MinimalQuoteForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     const nextValue =
-      name === "projectIndicator" ? normalizeProjectIndicator(value) : value;
+      name === "projectIndicator" ? formatProjectIndicatorInput(value) : value;
     setFormData((prev) => ({ ...prev, [name]: nextValue }));
   };
 

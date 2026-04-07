@@ -3,6 +3,9 @@ import React from "react";
 const normalizeText = (value) =>
   typeof value === "string" ? value.trim() : "";
 
+export const formatProjectIndicatorInput = (value) =>
+  typeof value === "string" ? value.toUpperCase() : "";
+
 export const normalizeProjectIndicator = (value) => {
   const trimmed = normalizeText(value);
   return trimmed ? trimmed.toUpperCase() : "";
