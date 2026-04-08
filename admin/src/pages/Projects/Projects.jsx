@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import "./Projects.css";
@@ -29,6 +29,87 @@ const POST_DELIVERY_PROJECT_STATUSES = new Set([
   "Finished",
   "Declined",
 ]);
+const FINISHED_STATUS_QUERY_VALUES = new Set([
+  "completed",
+  "finished",
+  "declined",
+  "closed",
+  "archive",
+  "archived",
+]);
+
+const ACTIVE_STATUS_OPTIONS = [
+  { value: "All", label: "All Active Statuses" },
+  { value: "__PENDING__", label: "Pending Acceptance" },
+  { value: "__DELIVERY__", label: "Pending Delivery" },
+  { value: "__QUOTE__", label: "Quotes" },
+  { value: "__CORPORATE__", label: "Corporate Projects" },
+  { value: "__EMERGENCY__", label: "Emergencies" },
+  { value: "__URGENT__", label: "Critical / Overdue" },
+  { value: "Draft", label: "Draft" },
+  { value: "New Order", label: "New Order" },
+  { value: "Order Created", label: "Order Created" },
+  { value: "Pending Approval", label: "Pending Approval" },
+  { value: "Pending Scope Approval", label: "Pending Scope Approval" },
+  {
+    value: "Pending Departmental Meeting",
+    label: "Pending Departmental Meeting",
+  },
+  {
+    value: "Pending Departmental Engagement",
+    label: "Pending Departmental Engagement",
+  },
+  {
+    value: "Departmental Engagement Completed",
+    label: "Departmental Engagement Completed",
+  },
+  { value: "Pending Mockup", label: "Pending Mockup" },
+  { value: "Pending Master Approval", label: "Pending Master Approval" },
+  { value: "Pending Production", label: "Pending Production" },
+  { value: "Pending Quality Control", label: "Pending Quality Control" },
+  { value: "Pending Photography", label: "Pending Photography" },
+  { value: "Pending Packaging", label: "Pending Packaging" },
+  { value: "Pending Delivery/Pickup", label: "Pending Delivery/Pickup" },
+  { value: "On Hold", label: "On Hold" },
+  { value: "In Progress", label: "In Progress" },
+  { value: "Pending Feedback", label: "Pending Feedback" },
+  { value: "Feedback Completed", label: "Feedback Completed" },
+  { value: "Delivered", label: "Delivered" },
+  { value: "Quote Created", label: "Quote Created" },
+  {
+    value: "Pending Quote Requirements",
+    label: "Pending Quote Requirements",
+  },
+  { value: "Pending Cost Verification", label: "Pending Cost" },
+  {
+    value: "Cost Verification Completed",
+    label: "Cost Completed",
+  },
+  {
+    value: "Pending Sample Retrieval",
+    label: "Pending Sample Retrieval",
+  },
+  {
+    value: "Pending Quote Submission",
+    label: "Pending Quote Submission",
+  },
+  {
+    value: "Pending Bid Submission / Documents",
+    label: "Pending Bid Submission / Documents",
+  },
+  {
+    value: "Quote Submission Completed",
+    label: "Quote Submission Completed",
+  },
+  { value: "Pending Client Decision", label: "Pending Client Decision" },
+];
+
+const FINISHED_STATUS_OPTIONS = [
+  { value: "All", label: "All Finished Statuses" },
+  { value: "Completed", label: "Completed" },
+  { value: "Finished", label: "Finished" },
+  { value: "Declined", label: "Declined" },
+];
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
@@ -43,6 +124,8 @@ const getProjectStatusDisplay = (project) =>
         getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
       )
     : project?.status || "";
+const isClosedProject = (project) =>
+  CLOSED_PROJECT_STATUSES.has(getProjectStatusDisplay(project));
 
 const isUrgentProject = (project) => {
   const deliveryDateValue = project?.details?.deliveryDate;
@@ -60,10 +143,75 @@ const isUrgentProject = (project) => {
   );
 };
 
+const getDefaultFilterStatus = (mode) => "All";
+
+const getMappedStatusFilter = (normalizedStatus, mode) => {
+  if (!normalizedStatus) return null;
+
+  if (mode === "finished") {
+    if (normalizedStatus === "completed") return "Completed";
+    if (normalizedStatus === "finished") return "Finished";
+    if (normalizedStatus === "declined") return "Declined";
+    if (
+      normalizedStatus === "closed" ||
+      normalizedStatus === "archive" ||
+      normalizedStatus === "archived"
+    ) {
+      return "All";
+    }
+    return null;
+  }
+
+  if (normalizedStatus === "active") return "All";
+  if (normalizedStatus === "pending") return "__PENDING__";
+  if (normalizedStatus === "delivery" || normalizedStatus === "pending-delivery")
+    return "__DELIVERY__";
+  if (normalizedStatus === "quote" || normalizedStatus === "quotes")
+    return "__QUOTE__";
+  if (normalizedStatus === "corporate" || normalizedStatus === "corporates")
+    return "__CORPORATE__";
+  if (normalizedStatus === "emergency" || normalizedStatus === "emergencies")
+    return "__EMERGENCY__";
+  if (
+    normalizedStatus === "critical" ||
+    normalizedStatus === "urgent" ||
+    normalizedStatus === "overdue"
+  ) {
+    return "__URGENT__";
+  }
+
+  return ACTIVE_STATUS_OPTIONS.some(
+    (option) => option.value === normalizedStatus || option.value.toLowerCase() === normalizedStatus,
+  )
+    ? ACTIVE_STATUS_OPTIONS.find(
+        (option) =>
+          option.value === normalizedStatus ||
+          option.value.toLowerCase() === normalizedStatus,
+      )?.value || null
+    : null;
+};
+
+const getPageConfig = (mode) =>
+  mode === "finished"
+    ? {
+        title: "Finished Projects",
+        description:
+          "Completed, finished, and declined projects are archived here.",
+        loadingLabel: "Loading finished projects...",
+        emptyLabel: "No finished projects found matching filter.",
+        statusOptions: FINISHED_STATUS_OPTIONS,
+      }
+    : {
+        title: "Projects",
+        description: "Active projects currently moving through production.",
+        loadingLabel: "Loading active projects...",
+        emptyLabel: "No active projects found matching filter.",
+        statusOptions: ACTIVE_STATUS_OPTIONS,
+      };
+
 const Projects = ({ user }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [projects, setProjects] = useState([]);
   const [groupedOrders, setGroupedOrders] = useState([]);
   const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
   const [collapsingOrderGroups, setCollapsingOrderGroups] = useState({});
@@ -76,13 +224,15 @@ const Projects = ({ user }) => {
   });
 
   // Pagination & Filter State
-  // Pagination & Filter State
-  const [filterStatus, setFilterStatus] = useState("All");
+  const [viewMode, setViewMode] = useState("active");
+  const [filterStatus, setFilterStatus] = useState(getDefaultFilterStatus("active"));
   const [searchQuery, setSearchQuery] = useState("");
   const [clientFilter, setClientFilter] = useState("All");
   const [leadFilter, setLeadFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const isFinishedView = viewMode === "finished";
+  const pageConfig = getPageConfig(viewMode);
 
   const openProjectDetails = (project) => {
     const projectId = project?._id;
@@ -150,9 +300,7 @@ const Projects = ({ user }) => {
       if (projectsRes.ok) {
         const data = await projectsRes.json();
         projectsData = Array.isArray(data) ? data : [];
-        setProjects(projectsData);
       } else {
-        setProjects([]);
         console.error("Failed to fetch projects");
       }
 
@@ -165,7 +313,6 @@ const Projects = ({ user }) => {
       }
     } catch (err) {
       console.error("Error fetching projects:", err);
-      setProjects([]);
       setGroupedOrders([]);
     } finally {
       setLoading(false);
@@ -177,37 +324,33 @@ const Projects = ({ user }) => {
   }, []);
 
   useEffect(() => {
+    const viewQuery = searchParams.get("view");
     const statusQuery = searchParams.get("status");
+    let nextViewMode = viewQuery === "finished" ? "finished" : "active";
+
+    if (statusQuery) {
+      const normalizedStatus = statusQuery.trim().toLowerCase();
+      if (FINISHED_STATUS_QUERY_VALUES.has(normalizedStatus)) {
+        nextViewMode = "finished";
+      }
+    }
+
+    setViewMode(nextViewMode);
 
     if (!statusQuery) {
-      setFilterStatus("All");
+      setFilterStatus(getDefaultFilterStatus(nextViewMode));
       setCurrentPage(1);
       return;
     }
 
     const normalized = statusQuery.trim().toLowerCase();
-    const mappedStatus =
-      normalized === "active"
-        ? "__ACTIVE__"
-        : normalized === "pending"
-          ? "__PENDING__"
-          : normalized === "delivery" || normalized === "pending-delivery"
-            ? "__DELIVERY__"
-            : normalized === "quote" || normalized === "quotes"
-              ? "__QUOTE__"
-              : normalized === "corporate" || normalized === "corporates"
-                ? "__CORPORATE__"
-              : normalized === "emergency" || normalized === "emergencies"
-                ? "__EMERGENCY__"
-          : normalized === "completed"
-            ? "Completed"
-            : normalized === "critical" ||
-                normalized === "urgent" ||
-                normalized === "overdue"
-              ? "__URGENT__"
-              : null;
+    const mappedStatus = getMappedStatusFilter(normalized, nextViewMode);
 
-    if (!mappedStatus) return;
+    if (!mappedStatus) {
+      setFilterStatus(getDefaultFilterStatus(nextViewMode));
+      setCurrentPage(1);
+      return;
+    }
 
     setFilterStatus(mappedStatus);
     setCurrentPage(1);
@@ -296,6 +439,25 @@ const Projects = ({ user }) => {
   const getGroupProjects = (group) =>
     Array.isArray(group?.projects) ? group.projects : [];
 
+  const projectCounts = useMemo(
+    () =>
+      groupedOrders.reduce(
+        (counts, group) => {
+          const projectsInGroup = Array.isArray(group?.projects) ? group.projects : [];
+          projectsInGroup.forEach((project) => {
+            if (isClosedProject(project)) {
+              counts.finished += 1;
+            } else {
+              counts.active += 1;
+            }
+          });
+          return counts;
+        },
+        { active: 0, finished: 0 },
+      ),
+    [groupedOrders],
+  );
+
   const getGroupClient = (group, projects = []) =>
     group?.client ||
     projects.find((project) => project?.details?.client)?.details?.client ||
@@ -331,6 +493,9 @@ const Projects = ({ user }) => {
     const projectStatus = getProjectStatusDisplay(project);
 
     if (filterStatus === "All") return true;
+    if (isFinishedView) {
+      return projectStatus === filterStatus;
+    }
     if (filterStatus === "__ACTIVE__") {
       return !CLOSED_PROJECT_STATUSES.has(projectStatus);
     }
@@ -354,16 +519,68 @@ const Projects = ({ user }) => {
     if (filterStatus === "__URGENT__") {
       return isUrgentProject(project);
     }
-    if (filterStatus === "Completed") {
-      return CLOSED_PROJECT_STATUSES.has(projectStatus);
-    }
     return projectStatus === filterStatus;
+  };
+
+  const modeScopedOrderGroups = useMemo(
+    () =>
+      groupedOrders
+        .map((group) => {
+          const scopedProjects = getGroupProjects(group).filter((project) =>
+            isFinishedView ? isClosedProject(project) : !isClosedProject(project),
+          );
+
+          if (scopedProjects.length === 0) return null;
+
+          return {
+            ...group,
+            projects: scopedProjects,
+          };
+        })
+        .filter(Boolean),
+    [groupedOrders, isFinishedView],
+  );
+
+  const statusScopedOrderGroups = useMemo(
+    () =>
+      modeScopedOrderGroups
+        .map((group) => {
+          const scopedProjects = getGroupProjects(group).filter((project) =>
+            matchesStatusFilter(project),
+          );
+
+          if (scopedProjects.length === 0) return null;
+
+          return {
+            ...group,
+            projects: scopedProjects,
+          };
+        })
+        .filter(Boolean),
+    [filterStatus, modeScopedOrderGroups],
+  );
+
+  const handleViewModeChange = (nextViewMode) => {
+    if (nextViewMode === viewMode) return;
+
+    const params = new URLSearchParams(searchParams);
+    if (nextViewMode === "finished") {
+      params.set("view", "finished");
+    } else {
+      params.delete("view");
+    }
+    params.delete("status");
+
+    const queryString = params.toString();
+    navigate(queryString ? `/projects?${queryString}` : "/projects", {
+      replace: true,
+    });
   };
 
   // Derived Lists
   const uniqueClients = [
     ...new Set(
-      groupedOrders
+      modeScopedOrderGroups
         .map((group) => getGroupClient(group, getGroupProjects(group)))
         .filter((c) => c && c.trim() !== ""),
     ),
@@ -371,7 +588,7 @@ const Projects = ({ user }) => {
 
   const uniqueLeads = [
     ...new Set(
-      groupedOrders.flatMap((group) =>
+      modeScopedOrderGroups.flatMap((group) =>
         getGroupProjects(group).map((project) => getLeadDisplay(project, "")),
       ),
     ),
@@ -380,7 +597,7 @@ const Projects = ({ user }) => {
     .sort();
 
   // Filter Logic
-  const filteredOrderGroups = groupedOrders.filter((group) => {
+  const filteredOrderGroups = statusScopedOrderGroups.filter((group) => {
     const projectsInGroup = getGroupProjects(group);
     if (projectsInGroup.length === 0) return false;
 
@@ -406,12 +623,6 @@ const Projects = ({ user }) => {
       );
       if (!hasLead) return false;
     }
-
-    const hasStatus = projectsInGroup.some((project) =>
-      matchesStatusFilter(project),
-    );
-    if (!hasStatus) return false;
-
     return true;
   });
 
@@ -575,10 +786,32 @@ const Projects = ({ user }) => {
   return (
     <div className="projects-page">
       <div className="projects-header">
-        <h1>
-          <ProjectsIcon className="text-secondary" /> Projects
-        </h1>
-        {/* Add Filter/Search here later */}
+        <div className="projects-header-copy">
+          <h1>
+            <ProjectsIcon className="text-secondary" /> {pageConfig.title}
+          </h1>
+          <p>{pageConfig.description}</p>
+        </div>
+        <div className="projects-view-toggle" aria-label="Project views">
+          <button
+            type="button"
+            className={`projects-view-btn ${
+              !isFinishedView ? "active" : ""
+            }`}
+            onClick={() => handleViewModeChange("active")}
+          >
+            Active Projects ({projectCounts.active})
+          </button>
+          <button
+            type="button"
+            className={`projects-view-btn ${
+              isFinishedView ? "active" : ""
+            }`}
+            onClick={() => handleViewModeChange("finished")}
+          >
+            Finished Projects ({projectCounts.finished})
+          </button>
+        </div>
       </div>
 
       <div className="projects-table-container">
@@ -622,74 +855,11 @@ const Projects = ({ user }) => {
               }}
               className="filter-pill"
             >
-              <option value="All">All Status</option>
-              <option value="__ACTIVE__">Active Projects</option>
-              <option value="__PENDING__">Pending Acceptance</option>
-              <option value="__DELIVERY__">Pending Delivery</option>
-              <option value="__QUOTE__">Quotes</option>
-              <option value="__CORPORATE__">Corporate Projects</option>
-              <option value="__EMERGENCY__">Emergencies</option>
-              <option value="__URGENT__">Critical / Overdue</option>
-              <option value="Draft">Draft</option>
-              <option value="New Order">New Order</option>
-              <option value="Order Created">Order Created</option>
-              <option value="Pending Approval">Pending Approval</option>
-              <option value="Pending Scope Approval">
-                Pending Scope Approval
-              </option>
-              <option value="Pending Departmental Meeting">
-                Pending Departmental Meeting
-              </option>
-              <option value="Pending Departmental Engagement">
-                Pending Departmental Engagement
-              </option>
-              <option value="Departmental Engagement Completed">
-                Departmental Engagement Completed
-              </option>
-              <option value="Pending Mockup">Pending Mockup</option>
-              <option value="Pending Master Approval">
-                Pending Master Approval
-              </option>
-              <option value="Pending Production">Pending Production</option>
-              <option value="Pending Quality Control">
-                Pending Quality Control
-              </option>
-              <option value="Pending Photography">Pending Photography</option>
-              <option value="Pending Packaging">Pending Packaging</option>
-              <option value="Pending Delivery/Pickup">
-                Pending Delivery/Pickup
-              </option>
-              <option value="On Hold">On Hold</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Pending Feedback">Pending Feedback</option>
-              <option value="Feedback Completed">Feedback Completed</option>
-              <option value="Completed">Completed</option>
-              <option value="Delivered">Delivered</option>
-              <option value="Quote Created">Quote Created</option>
-              <option value="Pending Quote Requirements">
-                Pending Quote Requirements
-              </option>
-              <option value="Pending Cost Verification">
-                Pending Cost
-              </option>
-              <option value="Cost Verification Completed">
-                Cost Completed
-              </option>
-              <option value="Pending Sample Retrieval">
-                Pending Sample Retrieval
-              </option>
-              <option value="Pending Quote Submission">
-                Pending Quote Submission
-              </option>
-              <option value="Pending Bid Submission / Documents">
-                Pending Bid Submission / Documents
-              </option>
-              <option value="Quote Submission Completed">
-                Quote Submission Completed
-              </option>
-              <option value="Pending Client Decision">
-                Pending Client Decision
-              </option>
+              {pageConfig.statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
 
             {/* Client Filter */}
@@ -733,9 +903,9 @@ const Projects = ({ user }) => {
         </div>
 
         {loading ? (
-          <div className="loading-state">Loading orders...</div>
+          <div className="loading-state">{pageConfig.loadingLabel}</div>
         ) : filteredOrderGroups.length === 0 ? (
-          <div className="empty-state">No orders found matching filter.</div>
+          <div className="empty-state">{pageConfig.emptyLabel}</div>
         ) : (
           <>
             <table className="projects-table">
