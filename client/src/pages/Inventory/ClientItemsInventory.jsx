@@ -6,7 +6,7 @@ import Spinner from "../../components/ui/Spinner";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { DEPARTMENTS, PRODUCTION_SUB_DEPARTMENTS } from "../../constants/departments";
 
-const ROWS_PER_PAGE = 10;
+const ROWS_PER_PAGE = 15;
 const PRODUCTION_OPTIONS = Array.from(
   new Set(
     PRODUCTION_SUB_DEPARTMENTS.map((id) => {

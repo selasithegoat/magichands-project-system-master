@@ -6,7 +6,7 @@ import Spinner from "../../components/ui/Spinner";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { DEPARTMENTS } from "../../constants/departments";
 
-const ROWS_PER_PAGE = 10;
+const ROWS_PER_PAGE = 15;
 const ROOT_DEPARTMENTS = [
   "Administration",
   "Front Desk",

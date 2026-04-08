@@ -18,7 +18,7 @@ const Clients = ({ user }) => {
   const [projectStatusFilter, setProjectStatusFilter] = useState("all");
   const [expandedClients, setExpandedClients] = useState(new Set());
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 15;
 
   const fetchClients = async () => {
     try {

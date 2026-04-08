@@ -19,7 +19,7 @@ const EndOfDayUpdate = ({ user }) => {
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
 
   useEffect(() => {
     // Redirect if user is loaded but not Front Desk

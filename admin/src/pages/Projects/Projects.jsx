@@ -230,7 +230,7 @@ const Projects = ({ user }) => {
   const [clientFilter, setClientFilter] = useState("All");
   const [leadFilter, setLeadFilter] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const isFinishedView = viewMode === "finished";
   const pageConfig = getPageConfig(viewMode);
 

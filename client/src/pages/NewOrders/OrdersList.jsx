@@ -12,7 +12,7 @@ import {
 import { matchesOrdersManagementKpi } from "../../utils/ordersManagementKpis";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
-const ALL_ORDERS_PAGE_SIZE = 10;
+const ALL_ORDERS_PAGE_SIZE = 15;
 const GROUP_ROW_TRANSITION_MS = 220;
 const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
@@ -61,6 +61,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     assignment: "All",
   });
   const [allOrdersPage, setAllOrdersPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const [historyFilters, setHistoryFilters] = useState({
     orderId: "",
     client: "",
@@ -149,6 +150,10 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     allFilters.status,
     allFilters.assignment,
   ]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historyFilters.orderId, historyFilters.client, historyFilters.lead]);
 
   useEffect(
     () => () => {
@@ -568,12 +573,32 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     allOrdersPageStart,
     allOrdersPageEnd,
   );
+  const historyTotalPages = Math.max(
+    1,
+    Math.ceil(historyOrdersFiltered.length / ALL_ORDERS_PAGE_SIZE),
+  );
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages);
+  const historyPageStart = (safeHistoryPage - 1) * ALL_ORDERS_PAGE_SIZE;
+  const historyPageEnd = Math.min(
+    historyPageStart + ALL_ORDERS_PAGE_SIZE,
+    historyOrdersFiltered.length,
+  );
+  const paginatedHistoryOrders = historyOrdersFiltered.slice(
+    historyPageStart,
+    historyPageEnd,
+  );
 
   useEffect(() => {
     if (allOrdersPage > allOrdersTotalPages) {
       setAllOrdersPage(allOrdersTotalPages);
     }
   }, [allOrdersPage, allOrdersTotalPages]);
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages) {
+      setHistoryPage(historyTotalPages);
+    }
+  }, [historyPage, historyTotalPages]);
 
   useEffect(() => {
     setExpandedOrderGroups((prev) => {
@@ -1228,70 +1253,105 @@ const OrdersList = ({ kpiFilter = "all" }) => {
               No finished orders found matching filters.
             </div>
           ) : (
-            <table className="orders-table">
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Client</th>
-                  <th>Project Name</th>
-                  <th>Status</th>
-                  <th>Assignment Status</th>
-                  <th>Created Date</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyOrdersFiltered.map((order) => (
-                  <tr key={order._id}>
-                    <td>
-                      <div className="order-id-cell">
-                        <span className="order-id-value">
-                          {order.orderId || "N/A"}
-                        </span>
-                        {getVersionNumber(order) > 1 && (
-                          <span className="order-id-version">
-                            Version v{getVersionNumber(order)}
-                          </span>
-                        )}
-                        <span className="order-id-lead">
-                          {getLeadDisplay(order, "Unassigned")}
-                        </span>
-                      </div>
-                    </td>
-                    <td>{order.details?.client || "-"}</td>
-                    <td>
-                      {renderProjectName(order.details, null, "Untitled")}
-                    </td>
-                    <td>
-                      <span
-                        className={`status-badge ${getStatusClass(order.status)}`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`assignment-badge ${order.projectLeadId ? "assigned" : "unassigned"}`}
-                      >
-                        {getAssignmentStatus(order)}
-                      </span>
-                    </td>
-                    <td>{formatDate(order.createdAt)}</td>
-                    <td>
-                      {canReopenFromHistory(order) && (
-                        <button
-                          className="action-btn reopen-btn"
-                          onClick={() => handleReopenProject(order._id)}
-                          style={{ marginLeft: "0.5rem" }}
-                        >
-                          Reopen
-                        </button>
-                      )}
-                    </td>
+            <>
+              <table className="orders-table">
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Client</th>
+                    <th>Project Name</th>
+                    <th>Status</th>
+                    <th>Assignment Status</th>
+                    <th>Created Date</th>
+                    <th>Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedHistoryOrders.map((order) => (
+                    <tr key={order._id}>
+                      <td>
+                        <div className="order-id-cell">
+                          <span className="order-id-value">
+                            {order.orderId || "N/A"}
+                          </span>
+                          {getVersionNumber(order) > 1 && (
+                            <span className="order-id-version">
+                              Version v{getVersionNumber(order)}
+                            </span>
+                          )}
+                          <span className="order-id-lead">
+                            {getLeadDisplay(order, "Unassigned")}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{order.details?.client || "-"}</td>
+                      <td>
+                        {renderProjectName(order.details, null, "Untitled")}
+                      </td>
+                      <td>
+                        <span
+                          className={`status-badge ${getStatusClass(order.status)}`}
+                        >
+                          {order.status}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`assignment-badge ${order.projectLeadId ? "assigned" : "unassigned"}`}
+                        >
+                          {getAssignmentStatus(order)}
+                        </span>
+                      </td>
+                      <td>{formatDate(order.createdAt)}</td>
+                      <td>
+                        {canReopenFromHistory(order) && (
+                          <button
+                            className="action-btn reopen-btn"
+                            onClick={() => handleReopenProject(order._id)}
+                            style={{ marginLeft: "0.5rem" }}
+                          >
+                            Reopen
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {historyTotalPages > 1 && (
+                <div className="orders-pagination">
+                  <span className="orders-pagination-summary">
+                    Showing {historyPageStart + 1}-{historyPageEnd} of{" "}
+                    {historyOrdersFiltered.length} orders
+                  </span>
+                  <div className="orders-pagination-controls">
+                    <button
+                      className="action-btn orders-pagination-btn"
+                      onClick={() =>
+                        setHistoryPage((prev) => Math.max(1, prev - 1))
+                      }
+                      disabled={safeHistoryPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span className="orders-pagination-page">
+                      Page {safeHistoryPage} of {historyTotalPages}
+                    </span>
+                    <button
+                      className="action-btn orders-pagination-btn"
+                      onClick={() =>
+                        setHistoryPage((prev) =>
+                          Math.min(historyTotalPages, prev + 1),
+                        )
+                      }
+                      disabled={safeHistoryPage === historyTotalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
