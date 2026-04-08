@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import useAdaptivePolling from "@client/hooks/useAdaptivePolling";
 import {
   initNotificationSound,
   playNotificationSound,
 } from "../utils/notificationSound";
 import { formatProjectDisplayName } from "../utils/projectName";
+
+const NOTIFICATION_POLL_INTERVAL_MS = 15000;
+const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -301,12 +305,11 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     initNotificationSound();
   }, []);
 
-  useEffect(() => {
-    fetchNotifications();
-
-    const interval = setInterval(fetchNotifications, 5000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  useAdaptivePolling(fetchNotifications, {
+    enabled: Boolean(userId),
+    intervalMs: NOTIFICATION_POLL_INTERVAL_MS,
+    hiddenIntervalMs: HIDDEN_NOTIFICATION_POLL_INTERVAL_MS,
+  });
 
   useEffect(() => {
     const currentUserId = String(userId || "");

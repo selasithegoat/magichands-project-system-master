@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "./StageBottleneckAlert.css";
 import { renderProjectName } from "../../utils/projectName";
+import useAdaptivePolling from "@client/hooks/useAdaptivePolling";
 
 const DEFAULT_THRESHOLD_DAYS = 14;
-const POLL_INTERVAL_MS = 60 * 1000;
+const POLL_INTERVAL_MS = 3 * 60 * 1000;
+const HIDDEN_POLL_INTERVAL_MS = 10 * 60 * 1000;
 const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DISMISS_STORAGE_KEY = "admin_stage_bottleneck_dismissed_at_v1";
 
@@ -107,11 +109,10 @@ const StageBottleneckAlert = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchBottlenecks();
-    const intervalId = window.setInterval(fetchBottlenecks, POLL_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [fetchBottlenecks]);
+  useAdaptivePolling(fetchBottlenecks, {
+    intervalMs: POLL_INTERVAL_MS,
+    hiddenIntervalMs: HIDDEN_POLL_INTERVAL_MS,
+  });
 
   const alertSignature = useMemo(
     () => buildAlertSignature(bottlenecks),

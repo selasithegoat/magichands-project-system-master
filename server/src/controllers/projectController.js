@@ -6476,7 +6476,7 @@ const getProjects = async (req, res) => {
         .populate("endOfDayUpdateBy", "firstName lastName department")
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
         .sort({ createdAt: -1 }),
-    );
+    ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
 
@@ -6628,7 +6628,7 @@ const getOrderGroups = async (req, res) => {
         )
         .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
         .sort({ createdAt: -1 }),
-    );
+    ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
     const groups = buildOrderGroups(projects, { collapseRevisions });
@@ -6669,7 +6669,7 @@ const getOrderGroupByNumber = async (req, res) => {
           )
           .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
           .sort({ createdAt: -1 }),
-      );
+      ).lean();
 
     const accessibleProjects = await findGroupedProjects(scopedQuery);
 
@@ -8449,6 +8449,56 @@ const transitionQuoteRequirement = async (req, res) => {
     return res.json(project);
   } catch (error) {
     console.error("Error transitioning quote requirement:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get lightweight dashboard counts for the current user
+// @route   GET /api/projects/dashboard-counts
+// @access  Private
+const getDashboardCounts = async (req, res) => {
+  try {
+    const { query: activeAccessQuery } = buildProjectAccessQuery(req);
+    const activeProjectsQuery = mergeQueryWithCondition(activeAccessQuery, {
+      status: { $ne: "Finished" },
+    });
+
+    const engagedRequest = {
+      ...req,
+      query: {
+        ...(req.query || {}),
+        mode: "engaged",
+      },
+    };
+    const engagedDepartmentFilters = resolveEngagedDepartmentFilters(
+      req.user?.department,
+    );
+    const engagedProjectsQuery =
+      engagedDepartmentFilters.length > 0
+        ? mergeQueryWithCondition(buildProjectAccessQuery(engagedRequest).query, {
+            status: {
+              $nin: [
+                "Completed",
+                "Delivered",
+                "Pending Feedback",
+                "Feedback Completed",
+                "Finished",
+              ],
+            },
+          })
+        : null;
+
+    const [activeProjects, engagedProjects] = await Promise.all([
+      Project.countDocuments(activeProjectsQuery),
+      engagedProjectsQuery ? Project.countDocuments(engagedProjectsQuery) : 0,
+    ]);
+
+    return res.json({
+      activeProjects,
+      engagedProjects,
+    });
+  } catch (error) {
+    console.error("Error fetching dashboard counts:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -15114,6 +15164,7 @@ const updateProjectBatchStatus = async (req, res) => {
 module.exports = {
   createProject,
   getProjects,
+  getDashboardCounts,
   getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,

@@ -25,8 +25,10 @@ import {
   playNotificationSound,
 } from "../../utils/notificationSound";
 import { formatProjectDisplayName } from "../../utils/projectName";
+import useAdaptivePolling from "../../hooks/useAdaptivePolling";
 
-const NOTIFICATION_POLL_INTERVAL_MS = 5000;
+const NOTIFICATION_POLL_INTERVAL_MS = 15000;
+const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
 let notificationBootstrapUserId = "";
 
 const toEntityId = (value) => {
@@ -510,13 +512,14 @@ const Layout = ({
 
     // Always fetch once on mount so the unread dot is in sync across route changes.
     fetchNotifications(true);
-
-    const interval = setInterval(
-      () => fetchNotifications(false),
-      NOTIFICATION_POLL_INTERVAL_MS,
-    );
-    return () => clearInterval(interval);
   }, [user]);
+
+  useAdaptivePolling(() => fetchNotifications(false), {
+    enabled: Boolean(user?._id),
+    intervalMs: NOTIFICATION_POLL_INTERVAL_MS,
+    hiddenIntervalMs: HIDDEN_NOTIFICATION_POLL_INTERVAL_MS,
+    runImmediately: false,
+  });
 
   useEffect(() => {
     const currentUserId = String(user?._id || "");

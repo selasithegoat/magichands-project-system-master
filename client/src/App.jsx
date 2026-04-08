@@ -9,12 +9,6 @@ import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import useTheme from "./hooks/useTheme";
 import { buildPortalUrl } from "./utils/portalNavigation";
-import {
-  PRODUCTION_SUB_DEPARTMENTS,
-  GRAPHICS_SUB_DEPARTMENTS,
-  STORES_SUB_DEPARTMENTS,
-  PHOTOGRAPHY_SUB_DEPARTMENTS,
-} from "./constants/departments";
 
 // Lazy Loaded Pages
 const Login = lazy(() => import("./pages/Login/Login"));
@@ -68,7 +62,7 @@ const PendingAssignments = lazy(
 );
 const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
-const APP_SPLASH_DURATION_MS = 3000;
+const APP_SPLASH_DURATION_MS = 1200;
 const THEME_STORAGE_KEY = "mh-client-theme";
 
 const normalizeThemePreference = (value) => {
@@ -180,89 +174,19 @@ function App() {
     syncThemePreference(normalizedLegacy, { silent: true });
   }, [accountKey, user?.themePreference, syncThemePreference]);
 
-  // Fetch project count
-  const fetchProjectCount = async () => {
+  const fetchDashboardCounts = async () => {
     try {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects/dashboard-counts", {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (res.ok) {
         const data = await res.json();
-        // Count active projects (exclude history status)
-        const active = data.filter((p) => p.status !== "Finished");
-        setProjectCount(active.length);
+        setProjectCount(Number(data?.activeProjects) || 0);
+        setEngagedCount(Number(data?.engagedProjects) || 0);
       }
     } catch (err) {
-      console.error("Failed to update project count", err);
-    }
-  };
-
-  // [New] Fetch engaged project count for user's department(s)
-  const fetchEngagedCount = async (userData) => {
-    const rawDepts = userData?.department || user?.department || [];
-    const userDepts = Array.isArray(rawDepts)
-      ? rawDepts
-      : rawDepts
-        ? [rawDepts]
-        : [];
-
-    // Map user's departments to sub-departments (same logic as EngagedProjects.jsx)
-    const hasGraphicsParent = userDepts.includes("Graphics/Design");
-    const hasStoresParent = userDepts.includes("Stores");
-    const hasPhotographyParent = userDepts.includes("Photography");
-
-    const productionSubDepts = userDepts.filter((d) =>
-      PRODUCTION_SUB_DEPARTMENTS.includes(d),
-    );
-    const hasGraphics =
-      hasGraphicsParent ||
-      userDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
-    const hasStores =
-      hasStoresParent ||
-      userDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
-    const hasPhotography =
-      hasPhotographyParent ||
-      userDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
-
-    let subDepts = [];
-    if (productionSubDepts.length > 0) {
-      subDepts = [...subDepts, ...productionSubDepts];
-    }
-    if (hasGraphics) {
-      subDepts = [...subDepts, ...GRAPHICS_SUB_DEPARTMENTS];
-    }
-    if (hasStores) {
-      subDepts = [...subDepts, ...STORES_SUB_DEPARTMENTS];
-    }
-    if (hasPhotography) {
-      subDepts = [...subDepts, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
-    }
-
-    const uniqueSubDepts = Array.from(new Set(subDepts));
-
-    if (uniqueSubDepts.length === 0) {
-      setEngagedCount(0);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/projects?mode=engaged");
-      if (res.ok) {
-        const data = await res.json();
-        // Count projects where any of the user's sub-departments are engaged
-        const engaged = data.filter((p) => {
-          if (!p.departments || p.departments.length === 0) return false;
-          return (
-            p.departments.some((dept) => uniqueSubDepts.includes(dept)) &&
-            p.status !== "Completed" &&
-            p.status !== "Delivered" &&
-            p.status !== "Pending Feedback" &&
-            p.status !== "Feedback Completed" &&
-            p.status !== "Finished"
-          );
-        });
-        setEngagedCount(engaged.length);
-      }
-    } catch (err) {
-      console.error("Failed to update engaged count", err);
+      console.error("Failed to update dashboard counts", err);
     }
   };
 
@@ -277,7 +201,6 @@ function App() {
         const userData = await res.json();
         if (userData) {
           setUser(userData);
-          fetchProjectCount(); // Fetch count when user is loaded
           if (showSplash) {
             setShowPostLoginSplash(true);
           }
@@ -313,10 +236,18 @@ function App() {
 
   // [New] Fetch engaged count when user changes
   React.useEffect(() => {
-    if (user?.department?.length) {
-      fetchEngagedCount(user);
+    if (user?._id) {
+      fetchDashboardCounts();
+    } else {
+      setProjectCount(0);
+      setEngagedCount(0);
     }
-  }, [user]);
+  }, [
+    user?._id,
+    Array.isArray(user?.department)
+      ? user.department.join("|")
+      : user?.department || "",
+  ]);
 
   React.useEffect(() => {
     if (!showPostLoginSplash) {
@@ -439,7 +370,7 @@ function App() {
                 user={user} // Pass user to Dashboard
                 onNavigateProject={(id) => navigate(`/detail/${id}`)}
                 onCreateProject={() => navigate("/create")}
-                onProjectChange={fetchProjectCount} // Refresh count on change
+                onProjectChange={fetchDashboardCounts} // Refresh counts on change
               />
             </ProtectedLayout>
           }
@@ -513,7 +444,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <CreateProjectWizard onProjectCreate={fetchProjectCount} />
+              <CreateProjectWizard onProjectCreate={fetchDashboardCounts} />
             </ProtectedLayout>
           }
         />
@@ -527,7 +458,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <ProjectDetail user={user} onProjectChange={fetchProjectCount} />
+              <ProjectDetail user={user} onProjectChange={fetchDashboardCounts} />
             </ProtectedLayout>
           }
         />
@@ -545,7 +476,7 @@ function App() {
                 onNavigateDetail={(id) => navigate(`/detail/${id}`)}
                 onBack={() => navigate("/client")}
                 onCreateProject={() => navigate("/create")}
-                onProjectChange={fetchProjectCount} // Refresh count on change
+                onProjectChange={fetchDashboardCounts} // Refresh counts on change
               />
             </ProtectedLayout>
           }

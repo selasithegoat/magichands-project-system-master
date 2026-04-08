@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./GlobalSmsPrompt.css";
 import { formatProjectDisplayName } from "../../utils/projectName";
+import useAdaptivePolling from "../../hooks/useAdaptivePolling";
 
-const POLL_INTERVAL_MS = 30000;
+const POLL_INTERVAL_MS = 60000;
+const HIDDEN_POLL_INTERVAL_MS = 5 * 60000;
 const MAX_VISIBLE_PROMPTS = 3;
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
@@ -84,12 +86,11 @@ const GlobalSmsPrompt = ({ user }) => {
     }
   };
 
-  useEffect(() => {
-    if (!canManageSms) return undefined;
-    fetchPrompts();
-    const timer = window.setInterval(fetchPrompts, POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [canManageSms]);
+  useAdaptivePolling(fetchPrompts, {
+    enabled: canManageSms,
+    intervalMs: POLL_INTERVAL_MS,
+    hiddenIntervalMs: HIDDEN_POLL_INTERVAL_MS,
+  });
 
   useEffect(() => {
     setDrafts((prev) => {
