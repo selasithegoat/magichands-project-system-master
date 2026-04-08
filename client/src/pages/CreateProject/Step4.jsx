@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import TextArea from "../../components/ui/TextArea";
@@ -11,6 +11,8 @@ import "./Step4.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import {
+  appendProductionRiskSuggestionHistory,
+  buildProductionRiskInputSignature,
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
 } from "../../utils/productionRiskAi";
@@ -23,6 +25,11 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const [showAiReviewModal, setShowAiReviewModal] = useState(false);
   const [pendingAiSuggestions, setPendingAiSuggestions] = useState([]);
   const [aiNotice, setAiNotice] = useState(null);
+  const [aiRequestSession, setAiRequestSession] = useState({
+    inputSignature: "",
+    retryCount: 0,
+    shownSuggestions: [],
+  });
   const responsibleOptions = [
     { label: "Magic Hands", value: "MH" },
     { label: "Client", value: "Client" },
@@ -104,11 +111,27 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
   const uncontrollableFactors = formData.uncontrollableFactors || [];
   const productionRisks = formData.productionRisks || [];
+  const riskInputSignature = useMemo(
+    () => buildProductionRiskInputSignature(formData),
+    [formData],
+  );
   const hasValidProductionRisk = productionRisks.some(
     (risk) =>
       (risk.description && risk.description.trim()) ||
       (risk.preventive && risk.preventive.trim()),
   );
+
+  useEffect(() => {
+    setAiRequestSession((prev) =>
+      prev.inputSignature === riskInputSignature
+        ? prev
+        : {
+            inputSignature: riskInputSignature,
+            retryCount: 0,
+            shownSuggestions: [],
+          },
+    );
+  }, [riskInputSignature]);
 
   const handleNextStep = () => {
     if (!hasValidProductionRisk) {
@@ -125,11 +148,24 @@ const Step4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
     setAiNotice(null);
 
     try {
-      const suggestions = await requestProductionRiskSuggestions(formData);
+      const { suggestions } = await requestProductionRiskSuggestions(formData, {
+        currentProjectId: formData?._id || "",
+        currentLineageId: formData?.lineageId?._id || formData?.lineageId || "",
+        retryCount: aiRequestSession.retryCount,
+        shownSuggestions: aiRequestSession.shownSuggestions,
+      });
       const { addedCount, addedSuggestions } = mergeProductionRiskSuggestions(
         formData.productionRisks || [],
         suggestions,
       );
+      setAiRequestSession((prev) => ({
+        inputSignature: riskInputSignature,
+        retryCount: prev.retryCount + 1,
+        shownSuggestions: appendProductionRiskSuggestionHistory(
+          prev.shownSuggestions,
+          addedSuggestions,
+        ),
+      }));
 
       if (addedCount === 0) {
         setAiNotice({

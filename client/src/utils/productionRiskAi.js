@@ -152,11 +152,39 @@ const normalizeDepartmentId = (value) => {
   return "";
 };
 
+const normalizeSuggestionFacet = (value) => {
+  const key = normalizeLookupKey(value);
+  if (!key) return "";
+
+  const FACET_LOOKUP = {
+    artwork: "artwork",
+    art: "artwork",
+    setup: "setup",
+    material: "material",
+    finishing: "finishing",
+    install: "installation",
+    installation: "installation",
+    schedule: "schedule",
+    timeline: "schedule",
+    handoff: "handoff",
+    "hand off": "handoff",
+    vendor: "vendor",
+    supplier: "vendor",
+  };
+
+  return FACET_LOOKUP[key] || "";
+};
+
+const normalizeSuggestionItemRef = (value) => normalizeText(value);
+
 const normalizeSuggestions = (value) =>
   toSafeArray(value)
     .map((item) => ({
       description: normalizeText(item?.description),
       preventive: normalizeText(item?.preventive),
+      facet: normalizeSuggestionFacet(item?.facet),
+      department: normalizeDepartmentId(item?.department),
+      itemRef: normalizeSuggestionItemRef(item?.itemRef),
     }))
     .filter((item) => item.description && item.preventive);
 
@@ -314,13 +342,85 @@ const buildProjectPayload = (formData = {}) => {
   };
 };
 
-export const requestProductionRiskSuggestions = async (formData = {}) => {
+const buildRequestMetaPayload = (requestMeta = {}) => {
+  const retryCount = toNumberOrNull(requestMeta?.retryCount);
+
+  return {
+    currentProjectId: normalizeText(requestMeta?.currentProjectId),
+    currentLineageId: normalizeText(requestMeta?.currentLineageId),
+    retryCount:
+      retryCount !== null && retryCount >= 0 ? Math.floor(retryCount) : 0,
+    shownSuggestions: toSafeArray(requestMeta?.shownSuggestions)
+      .map((item) => ({
+        description: normalizeText(item?.description),
+        facet: normalizeSuggestionFacet(item?.facet),
+      }))
+      .filter((item) => item.description),
+  };
+};
+
+export const buildProductionRiskInputSignature = (formData = {}) => {
+  const payload = buildProjectPayload(formData);
+  const signaturePayload = {
+    projectName: payload.details?.projectName || "",
+    briefOverview: payload.details?.briefOverview || "",
+    supplySource: payload.details?.supplySource || "",
+    deliveryDate: payload.details?.deliveryDate || "",
+    deliveryTime: payload.details?.deliveryTime || "",
+    deliveryLocation: payload.details?.deliveryLocation || "",
+    departments: [...toSafeArray(payload.productionDepartments)].sort(),
+    items: toSafeArray(payload.items).map((item) => ({
+      description: item.description,
+      breakdown: item.breakdown,
+      quantity: item.quantity,
+      department: item.department,
+      departmentRaw: item.departmentRaw,
+    })),
+  };
+
+  return JSON.stringify(signaturePayload);
+};
+
+export const appendProductionRiskSuggestionHistory = (
+  currentHistory = [],
+  suggestions = [],
+) => {
+  const seen = new Set();
+  const merged = [];
+
+  [
+    ...toSafeArray(currentHistory).map((item) => ({
+      description: normalizeText(item?.description),
+      facet: normalizeSuggestionFacet(item?.facet),
+    })),
+    ...normalizeSuggestions(suggestions).map((item) => ({
+      description: item.description,
+      facet: item.facet || "",
+    })),
+  ].forEach((item) => {
+    const key = `${item.description.toLowerCase()}::${item.facet || ""}`;
+    if (!item.description || seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      description: item.description,
+      facet: item.facet || "",
+    });
+  });
+
+  return merged.slice(-30);
+};
+
+export const requestProductionRiskSuggestions = async (
+  formData = {},
+  requestMeta = {},
+) => {
   const response = await fetch("/api/projects/ai/production-risk-suggestions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({
       projectData: buildProjectPayload(formData),
+      requestMeta: buildRequestMetaPayload(requestMeta),
     }),
   });
 
@@ -332,7 +432,18 @@ export const requestProductionRiskSuggestions = async (formData = {}) => {
     );
   }
 
-  return normalizeSuggestions(payload?.suggestions);
+  return {
+    suggestions: normalizeSuggestions(payload?.suggestions),
+    source: normalizeText(payload?.source),
+    meta: {
+      matchedHistoryCount:
+        toNumberOrNull(payload?.meta?.matchedHistoryCount) || 0,
+      coveredFacets: toSafeArray(payload?.meta?.coveredFacets)
+        .map(normalizeSuggestionFacet)
+        .filter(Boolean),
+      retryCount: toNumberOrNull(payload?.meta?.retryCount) || 0,
+    },
+  };
 };
 
 export const mergeProductionRiskSuggestions = (
@@ -369,10 +480,16 @@ export const mergeProductionRiskSuggestions = (
       id: `ai-risk-${timestampSeed}-${addedCount}`,
       description: item.description,
       preventive: item.preventive,
+      facet: item.facet || "",
+      department: item.department || "",
+      itemRef: item.itemRef || "",
     });
     addedSuggestions.push({
       description: item.description,
       preventive: item.preventive,
+      facet: item.facet || "",
+      department: item.department || "",
+      itemRef: item.itemRef || "",
     });
     addedCount += 1;
   });

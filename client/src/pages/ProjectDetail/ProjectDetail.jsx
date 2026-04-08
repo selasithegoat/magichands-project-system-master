@@ -46,6 +46,8 @@ import {
 } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import {
+  appendProductionRiskSuggestionHistory,
+  buildProductionRiskInputSignature,
   mergeProductionRiskSuggestions,
   requestProductionRiskSuggestions,
 } from "../../utils/productionRiskAi";
@@ -3542,11 +3544,20 @@ const ProductionRisksCard = ({
   const [showAiReviewModal, setShowAiReviewModal] = useState(false);
   const [pendingAiSuggestions, setPendingAiSuggestions] = useState([]);
   const [aiNotice, setAiNotice] = useState(null);
+  const [aiRequestSession, setAiRequestSession] = useState({
+    inputSignature: "",
+    retryCount: 0,
+    shownSuggestions: [],
+  });
 
   // Confirmation Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const getRiskEntryId = (risk) => risk?._id || risk?.id || "";
+  const riskInputSignature = useMemo(
+    () => buildProductionRiskInputSignature(project || {}),
+    [project],
+  );
 
   // Reset form when modal opens
   useEffect(() => {
@@ -3561,6 +3572,18 @@ const ProductionRisksCard = ({
       }
     }
   }, [showModal, editingRisk]);
+
+  useEffect(() => {
+    setAiRequestSession((prev) =>
+      prev.inputSignature === riskInputSignature
+        ? prev
+        : {
+            inputSignature: riskInputSignature,
+            retryCount: 0,
+            shownSuggestions: [],
+          },
+    );
+  }, [riskInputSignature]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -3627,11 +3650,24 @@ const ProductionRisksCard = ({
     setAiNotice(null);
 
     try {
-      const suggestions = await requestProductionRiskSuggestions(project);
+      const { suggestions } = await requestProductionRiskSuggestions(project, {
+        currentProjectId: project?._id || projectId || "",
+        currentLineageId: project?.lineageId?._id || project?.lineageId || "",
+        retryCount: aiRequestSession.retryCount,
+        shownSuggestions: aiRequestSession.shownSuggestions,
+      });
       const { addedCount, addedSuggestions } = mergeProductionRiskSuggestions(
         risks,
         suggestions,
       );
+      setAiRequestSession((prev) => ({
+        inputSignature: riskInputSignature,
+        retryCount: prev.retryCount + 1,
+        shownSuggestions: appendProductionRiskSuggestionHistory(
+          prev.shownSuggestions,
+          addedSuggestions,
+        ),
+      }));
 
       if (addedCount === 0) {
         setAiNotice({

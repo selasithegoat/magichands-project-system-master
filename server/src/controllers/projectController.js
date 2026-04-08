@@ -3347,6 +3347,504 @@ const normalizeProductionDepartment = (value) => {
   return "";
 };
 
+const RISK_FACETS = [
+  "artwork",
+  "setup",
+  "material",
+  "finishing",
+  "installation",
+  "schedule",
+  "handoff",
+  "vendor",
+];
+
+const RISK_FACET_LOOKUP = {
+  artwork: "artwork",
+  art: "artwork",
+  setup: "setup",
+  material: "material",
+  finishing: "finishing",
+  finish: "finishing",
+  installation: "installation",
+  install: "installation",
+  schedule: "schedule",
+  timeline: "schedule",
+  handoff: "handoff",
+  handoffs: "handoff",
+  vendor: "vendor",
+  supplier: "vendor",
+};
+
+const ITEM_FAMILY_RULES = [
+  {
+    id: "flag-banner",
+    label: "Flags / Banners",
+    keywords: [
+      "flag",
+      "flags",
+      "banner",
+      "banners",
+      "backdrop",
+      "feather flag",
+      "fabric stand",
+    ],
+  },
+  {
+    id: "sticker-label",
+    label: "Stickers / Labels",
+    keywords: ["sticker", "stickers", "label", "labels", "decal", "decals", "wrap"],
+  },
+  {
+    id: "garment-apparel",
+    label: "Garments / Apparel",
+    keywords: [
+      "shirt",
+      "shirts",
+      "t shirt",
+      "tshirt",
+      "hoodie",
+      "hoodies",
+      "jersey",
+      "uniform",
+      "cap",
+      "hat",
+      "garment",
+      "apparel",
+      "wear",
+    ],
+  },
+  {
+    id: "card",
+    label: "Cards / Badges",
+    keywords: [
+      "card",
+      "cards",
+      "business card",
+      "business cards",
+      "id card",
+      "badge",
+      "badges",
+      "lanyard",
+      "pvc",
+    ],
+  },
+  {
+    id: "rigid-sign-acrylic",
+    label: "Rigid Signs / Acrylic",
+    keywords: [
+      "sign",
+      "signage",
+      "panel",
+      "panels",
+      "acrylic",
+      "foam board",
+      "forex",
+      "sintra",
+      "lightbox",
+      "rigid",
+    ],
+  },
+  {
+    id: "fabrication-wood",
+    label: "Fabrication / Wood",
+    keywords: [
+      "wood",
+      "wooden",
+      "mdf",
+      "plywood",
+      "frame",
+      "metal",
+      "fabrication",
+      "weld",
+      "welding",
+      "cutout",
+      "carving",
+    ],
+  },
+  {
+    id: "installation",
+    label: "Installation",
+    keywords: [
+      "install",
+      "installation",
+      "mount",
+      "mounted",
+      "site",
+      "wayfinding",
+      "wall branding",
+      "fitment",
+    ],
+  },
+];
+
+const ITEM_FAMILY_RISK_TEMPLATES = {
+  "flag-banner": [
+    {
+      facet: "material",
+      description:
+        "Fabric stretch or pole-pocket sizing can distort the final flag/banner tension.",
+      preventive:
+        "Validate finished dimensions, hem allowances, and hardware fit on a pilot sample before bulk sewing or finishing.",
+    },
+    {
+      facet: "finishing",
+      description:
+        "Flag/banner edge finishing can fray or curl if stitching and heat finishing are mismatched.",
+      preventive:
+        "Approve one finished sample with the exact stitch, hem, and finishing method before the main run.",
+    },
+  ],
+  "sticker-label": [
+    {
+      facet: "material",
+      description:
+        "Sticker/label adhesive performance may fail on textured, dusty, or low-energy surfaces.",
+      preventive:
+        "Confirm the real application surface and run adhesion tests on a representative sample before production.",
+    },
+    {
+      facet: "setup",
+      description:
+        "Kiss-cut depth or registration setup can make sticker/label weeding slow or inconsistent.",
+      preventive:
+        "Lock contour-cut settings and test peel/weeding on a short sample sheet before the full run.",
+    },
+  ],
+  "garment-apparel": [
+    {
+      facet: "material",
+      description:
+        "Garment fabric blend and surface finish can change transfer, print, or embroidery holdout.",
+      preventive:
+        "Verify the actual garment fabric composition and approve a strike-off on the final stock before production.",
+    },
+    {
+      facet: "finishing",
+      description:
+        "Garment size sorting and fold/packing can introduce mix-ups after decoration is complete.",
+      preventive:
+        "Use a size-based packing checklist and end-of-line verification before sealing finished garments.",
+    },
+  ],
+  card: [
+    {
+      facet: "setup",
+      description:
+        "Card trim and slot/alignment tolerances can drift and make finished cards look inconsistent.",
+      preventive:
+        "Approve a first-piece card against trim and slot position checkpoints before batch finishing.",
+    },
+    {
+      facet: "finishing",
+      description:
+        "Card lamination and stacking can trap dust or leave surface marks on finished pieces.",
+      preventive:
+        "Control lamination cleanliness and inspect finished stacks at batch intervals before packing.",
+    },
+  ],
+  "rigid-sign-acrylic": [
+    {
+      facet: "material",
+      description:
+        "Rigid sign/acrylic substrate flatness and masking quality can affect print adhesion and finish.",
+      preventive:
+        "Inspect sheet flatness, surface prep, and masking quality before printing or fabrication starts.",
+    },
+    {
+      facet: "installation",
+      description:
+        "Rigid sign/acrylic mounting details can fail if fixing method and site conditions are assumed.",
+      preventive:
+        "Confirm mounting hardware, wall type, and measured install positions before final fabrication.",
+    },
+  ],
+  "fabrication-wood": [
+    {
+      facet: "setup",
+      description:
+        "Fabrication/wood tolerance stacking can create assembly gaps after cutting and joining.",
+      preventive:
+        "Add first-piece assembly checks and hold-point measurements before releasing full fabrication.",
+    },
+    {
+      facet: "finishing",
+      description:
+        "Wood/fabrication finishing may expose surface defects that were not obvious during raw processing.",
+      preventive:
+        "Approve a sample finish panel and inspect all visible surfaces before paint or coating is completed.",
+    },
+  ],
+  installation: [
+    {
+      facet: "installation",
+      description:
+        "Installation access windows and site readiness can delay final placement even after production is complete.",
+      preventive:
+        "Confirm site access, permits, and readiness checkpoints before dispatching finished work.",
+    },
+    {
+      facet: "handoff",
+      description:
+        "Installation jobs can miss critical hardware or layout notes during production-to-site handoff.",
+      preventive:
+        "Send installers a signed install pack with hardware list, layout drawing, and site notes before dispatch.",
+    },
+  ],
+};
+
+const CONSTRAINT_RISK_TEMPLATES = {
+  rush: [
+    {
+      facet: "schedule",
+      description:
+        "Compressed timelines may remove setup verification time and increase late rework risk.",
+      preventive:
+        "Freeze approval checkpoints early and reserve protected buffer time for first-piece validation.",
+    },
+  ],
+  outsourced: [
+    {
+      facet: "vendor",
+      description:
+        "Outsourced steps may diverge from internal specs if the vendor brief is not production-ready.",
+      preventive:
+        "Share a signed production brief with visuals, tolerances, and QC checkpoints before release to vendor.",
+    },
+  ],
+  "vendor-dependent": [
+    {
+      facet: "vendor",
+      description:
+        "Vendor or supplier dependency can delay the job if material readiness is assumed without confirmation.",
+      preventive:
+        "Confirm stock, turnaround, and escalation contacts with the vendor before locking the production plan.",
+    },
+  ],
+  "client-supplied": [
+    {
+      facet: "material",
+      description:
+        "Client-supplied materials may behave differently from standard stock and cause process instability.",
+      preventive:
+        "Run incoming material QA and approve a sample output on the supplied stock before the full run.",
+    },
+  ],
+  "high-volume": [
+    {
+      facet: "setup",
+      description:
+        "High-volume production can amplify small setup errors into large rework quantities.",
+      preventive:
+        "Lock a first-piece approval and scheduled in-run QC checkpoints before scaling up batch volume.",
+    },
+  ],
+  "multi-department": [
+    {
+      facet: "handoff",
+      description:
+        "Multi-department jobs can lose critical production notes between design, output, finishing, and delivery.",
+      preventive:
+        "Use a stage handoff checklist with measurable acceptance criteria before each downstream release.",
+    },
+  ],
+  installation: [
+    {
+      facet: "installation",
+      description:
+        "Installation sequencing can fail if site measurement, hardware, and final output are not aligned.",
+      preventive:
+        "Confirm final measurements, fixing method, and delivery order before packaging the install set.",
+    },
+  ],
+};
+
+const normalizeRiskFacet = (value) => {
+  const token = normalizeTextToken(value);
+  if (!token) return "";
+  return RISK_FACET_LOOKUP[token] || "";
+};
+
+const inferRiskFacetFromSuggestion = (suggestion = {}) => {
+  const explicitFacet = normalizeRiskFacet(suggestion?.facet);
+  if (explicitFacet) return explicitFacet;
+
+  const text = `${toText(suggestion?.description)} ${toText(suggestion?.preventive)}`.toLowerCase();
+
+  if (/artwork|file|mockup|font|proof|approval|icc|profile/.test(text)) {
+    return "artwork";
+  }
+  if (/setup|registration|align|first-piece|makeready|jig|fixture|calibrat/.test(text)) {
+    return "setup";
+  }
+  if (/material|substrate|fabric|stock|sheet|adhesion|lamination|humidity|moisture|surface/.test(text)) {
+    return "material";
+  }
+  if (/finish|packing|packaging|trim|lamination|fold|stitch|stack|scuff/.test(text)) {
+    return "finishing";
+  }
+  if (/install|mount|site|dispatch|hardware|fitment/.test(text)) {
+    return "installation";
+  }
+  if (/delay|timeline|schedule|dispatch|lead time|late|buffer/.test(text)) {
+    return "schedule";
+  }
+  if (/handoff|handover|between departments|release|upstream|downstream/.test(text)) {
+    return "handoff";
+  }
+  if (/vendor|supplier|third-party|third party|outsource|external/.test(text)) {
+    return "vendor";
+  }
+
+  return "";
+};
+
+const resolveItemFamilyRule = (value = "") => {
+  const normalized = normalizeTextToken(value);
+  if (!normalized) return null;
+
+  return (
+    ITEM_FAMILY_RULES.find((rule) =>
+      rule.keywords.some((keyword) => normalized.includes(normalizeTextToken(keyword))),
+    ) || null
+  );
+};
+
+const buildRiskItemInsight = (item = {}, index = 0) => {
+  const subject = normalizeRiskItemSubject(item);
+  const combinedText = [
+    subject,
+    toText(item?.description),
+    toText(item?.breakdown),
+    toText(item?.department),
+    toText(item?.departmentRaw),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const familyRule = resolveItemFamilyRule(combinedText);
+  const departmentId = normalizeProductionDepartment(
+    item?.department || item?.departmentRaw,
+  );
+  const quantity =
+    typeof item?.quantity === "number"
+      ? item.quantity
+      : Number.isFinite(Number(item?.qty))
+        ? Number(item?.qty)
+        : null;
+
+  return {
+    itemRef: subject || `Item ${index + 1}`,
+    subject: subject || `Item ${index + 1}`,
+    familyId: familyRule?.id || "",
+    familyLabel: familyRule?.label || "",
+    department: departmentId,
+    departmentLabel: PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId,
+    quantity,
+  };
+};
+
+const buildProcessConstraintTags = (context = {}, itemInsights = []) => {
+  const tags = new Set();
+  const supplySource = toText(context.supplySource).toLowerCase();
+  const priority = toText(context.priority).toLowerCase();
+  const deliveryDate = toDateOrNull(context.deliveryDate);
+  const now = new Date();
+  const totalQty = itemInsights.reduce(
+    (sum, item) => sum + (Number.isFinite(item.quantity) ? item.quantity : 0),
+    0,
+  );
+
+  if (
+    /urgent|rush|critical|emergency/.test(priority) ||
+    (deliveryDate && deliveryDate.getTime() - now.getTime() <= 3 * 24 * 60 * 60 * 1000)
+  ) {
+    tags.add("rush");
+  }
+
+  if (context.productionDepartments.length > 1) {
+    tags.add("multi-department");
+  }
+
+  if (
+    context.productionDepartments.some((dept) =>
+      ["outside-production", "local-outsourcing", "overseas"].includes(dept),
+    )
+  ) {
+    tags.add("outsourced");
+    tags.add("vendor-dependent");
+  }
+
+  if (supplySource.includes("purchase")) {
+    tags.add("vendor-dependent");
+  }
+  if (supplySource.includes("client-supply")) {
+    tags.add("client-supplied");
+  }
+  if (context.productionDepartments.includes("installation")) {
+    tags.add("installation");
+  }
+  if (
+    itemInsights.some(
+      (item) => item.familyId === "installation" || item.familyId === "rigid-sign-acrylic",
+    )
+  ) {
+    tags.add("installation");
+  }
+  if (totalQty >= 300 || itemInsights.some((item) => Number(item.quantity) >= 100)) {
+    tags.add("high-volume");
+  }
+
+  return Array.from(tags);
+};
+
+const buildRequiredRiskFacets = (context = {}, itemInsights = [], constraintTags = []) => {
+  const required = [];
+  const addFacet = (facet) => {
+    const normalized = normalizeRiskFacet(facet);
+    if (normalized && !required.includes(normalized)) {
+      required.push(normalized);
+    }
+  };
+
+  addFacet("setup");
+  addFacet("material");
+  addFacet("schedule");
+
+  if (
+    context.productionDepartments.includes("graphics") ||
+    itemInsights.some((item) => ["flag-banner", "sticker-label", "garment-apparel", "card"].includes(item.familyId))
+  ) {
+    addFacet("artwork");
+  }
+
+  if (
+    itemInsights.some((item) =>
+      ["flag-banner", "garment-apparel", "card", "rigid-sign-acrylic", "fabrication-wood"].includes(
+        item.familyId,
+      ),
+    )
+  ) {
+    addFacet("finishing");
+  }
+
+  if (constraintTags.includes("installation")) {
+    addFacet("installation");
+  }
+
+  if (constraintTags.includes("multi-department")) {
+    addFacet("handoff");
+  }
+
+  if (
+    constraintTags.some((tag) =>
+      ["outsourced", "vendor-dependent", "client-supplied"].includes(tag),
+    )
+  ) {
+    addFacet("vendor");
+  }
+
+  return required;
+};
+
 const inferPreventiveMeasureFromDescription = (description = "") => {
   const text = description.toLowerCase();
 
@@ -3380,7 +3878,7 @@ const inferPreventiveMeasureFromDescription = (description = "") => {
 
 const sanitizeRiskSuggestions = (value, limit = Number.POSITIVE_INFINITY) => {
   const uniqueDescriptions = new Set();
-  const acceptedDescriptionTokenSets = [];
+  const acceptedEntries = [];
   const cleaned = [];
 
   toSafeArray(value).forEach((item) => {
@@ -3394,26 +3892,41 @@ const sanitizeRiskSuggestions = (value, limit = Number.POSITIVE_INFINITY) => {
     if (uniqueDescriptions.has(descriptionKey)) return;
 
     const descriptionTokens = buildRiskTokenSet(description, 4);
-    const isNearDuplicate = acceptedDescriptionTokenSets.some(
-      (tokenSet) => computeTokenOverlapRatio(descriptionTokens, tokenSet) >= 0.78,
+    const preventiveTokens = buildRiskTokenSet(preventive, 4);
+    const isNearDuplicate = acceptedEntries.some(
+      (entry) =>
+        computeTokenOverlapRatio(descriptionTokens, entry.descriptionTokens) >=
+          0.78 ||
+        (computeTokenOverlapRatio(descriptionTokens, entry.descriptionTokens) >=
+          0.62 &&
+          computeTokenOverlapRatio(preventiveTokens, entry.preventiveTokens) >=
+            0.62),
     );
     if (isNearDuplicate) return;
 
+    const facet = inferRiskFacetFromSuggestion(item);
+    const department = normalizeProductionDepartment(item?.department);
+    const itemRef = toText(item?.itemRef);
+
     uniqueDescriptions.add(descriptionKey);
-    if (descriptionTokens.size > 0) {
-      acceptedDescriptionTokenSets.push(descriptionTokens);
-    }
+    acceptedEntries.push({
+      descriptionTokens,
+      preventiveTokens,
+    });
 
     cleaned.push({
       description: description.slice(0, 160),
       preventive: preventive.slice(0, 220),
+      facet,
+      department,
+      itemRef: itemRef.slice(0, 80),
     });
   });
 
   return cleaned.slice(0, limit);
 };
 
-const buildRiskSuggestionContext = (projectData = {}) => {
+const buildRiskSuggestionContext = (projectData = {}, requestMeta = {}) => {
   const details =
     projectData?.details && typeof projectData.details === "object"
       ? projectData.details
@@ -3479,13 +3992,50 @@ const buildRiskSuggestionContext = (projectData = {}) => {
     .filter((factor) => factor.description)
     .slice(0, 12);
 
-  const existingRiskDescriptions = toSafeArray(projectData?.productionRisks)
-    .map((risk) => toText(risk?.description))
+  const existingRisks = toSafeArray(projectData?.productionRisks)
+    .map((risk) => ({
+      description: toText(risk?.description),
+      preventive: toText(risk?.preventive),
+      facet: inferRiskFacetFromSuggestion(risk),
+    }))
+    .filter((risk) => risk.description)
+    .slice(0, 20);
+  const existingRiskDescriptions = existingRisks
+    .map((risk) => risk.description)
     .filter(Boolean);
   const supplySourceRaw =
     details && Object.prototype.hasOwnProperty.call(details, "supplySource")
       ? details.supplySource
       : projectData?.supplySource;
+  const supplySource = toSupplySourceText(supplySourceRaw);
+  const itemInsights = items
+    .map((item, index) => buildRiskItemInsight(item, index))
+    .filter((item) => item.subject)
+    .slice(0, 12);
+  const constraintTags = buildProcessConstraintTags(
+    {
+      priority: toText(projectData?.priority) || "Normal",
+      deliveryDate: toText(details?.deliveryDate || projectData?.deliveryDate),
+      supplySource,
+      productionDepartments,
+    },
+    itemInsights,
+  );
+  const requiredFacets = buildRequiredRiskFacets(
+    { productionDepartments },
+    itemInsights,
+    constraintTags,
+  );
+  const previousShownSuggestions = toSafeArray(requestMeta?.shownSuggestions)
+    .map((entry) => ({
+      description: toText(entry?.description),
+      facet: normalizeRiskFacet(entry?.facet),
+    }))
+    .filter((entry) => entry.description)
+    .slice(-20);
+  const previousShownDescriptions = previousShownSuggestions.map(
+    (entry) => entry.description,
+  );
 
   return {
     projectType: toText(projectData?.projectType) || "Standard",
@@ -3494,7 +4044,7 @@ const buildRiskSuggestionContext = (projectData = {}) => {
     briefOverview: toText(details?.briefOverview || projectData?.briefOverview),
     client: toText(details?.client || projectData?.client),
     contactType: toText(details?.contactType || projectData?.contactType),
-    supplySource: toSupplySourceText(supplySourceRaw),
+    supplySource,
     deliveryDate: toText(details?.deliveryDate || projectData?.deliveryDate),
     deliveryTime: toText(details?.deliveryTime || projectData?.deliveryTime),
     deliveryLocation: toText(
@@ -3506,8 +4056,23 @@ const buildRiskSuggestionContext = (projectData = {}) => {
       (deptId) => PRODUCTION_DEPARTMENT_LABELS[deptId] || deptId,
     ),
     items,
+    itemInsights,
+    itemFamilyIds: Array.from(
+      new Set(itemInsights.map((item) => item.familyId).filter(Boolean)),
+    ),
+    constraintTags,
+    requiredFacets,
     uncontrollableFactors,
+    existingRisks,
     existingRiskDescriptions,
+    previousShownSuggestions,
+    previousShownDescriptions,
+    retryCount: Math.max(
+      0,
+      Number.parseInt(requestMeta?.retryCount, 10) || 0,
+    ),
+    currentProjectId: toText(requestMeta?.currentProjectId),
+    currentLineageId: toText(requestMeta?.currentLineageId),
   };
 };
 
@@ -3518,12 +4083,23 @@ const filterExistingRiskSuggestions = (
   const existingDescriptionSet = new Set(
     existingRiskDescriptions.map((description) => description.toLowerCase()),
   );
+  const existingDescriptionTokenSets = existingRiskDescriptions
+    .map((description) => buildRiskTokenSet(description, 4))
+    .filter((tokenSet) => tokenSet.size > 0);
 
   return sanitizeRiskSuggestions(suggestions, Number.POSITIVE_INFINITY).filter(
     (suggestion) => {
       const key = suggestion.description.toLowerCase();
       if (existingDescriptionSet.has(key)) return false;
+      const suggestionTokens = buildRiskTokenSet(suggestion.description, 4);
+      const isNearDuplicate = existingDescriptionTokenSets.some(
+        (tokenSet) => computeTokenOverlapRatio(suggestionTokens, tokenSet) >= 0.78,
+      );
+      if (isNearDuplicate) return false;
       existingDescriptionSet.add(key);
+      if (suggestionTokens.size > 0) {
+        existingDescriptionTokenSets.push(suggestionTokens);
+      }
       return true;
     },
   );
@@ -3583,6 +4159,15 @@ const buildRiskContextKeywordSet = (context = {}) => {
     addTokens(item?.departmentRaw, 3);
   });
 
+  toSafeArray(context.itemInsights).forEach((item) => {
+    addTokens(item?.subject, 4);
+    addTokens(item?.familyLabel, 4);
+    addTokens(item?.departmentLabel, 3);
+  });
+
+  toSafeArray(context.constraintTags).forEach((tag) => addTokens(tag, 3));
+  toSafeArray(context.requiredFacets).forEach((facet) => addTokens(facet, 3));
+
   toSafeArray(context.uncontrollableFactors).forEach((factor) => {
     addTokens(factor?.description, 4);
     addTokens(factor?.responsible, 3);
@@ -3593,12 +4178,16 @@ const buildRiskContextKeywordSet = (context = {}) => {
 
 const scoreRiskSuggestionAgainstContext = (
   suggestion = {},
+  context = {},
   contextKeywordSet = new Set(),
 ) => {
   const description = toText(suggestion.description);
   const preventive = toText(suggestion.preventive);
   if (!description) return Number.NEGATIVE_INFINITY;
 
+  const suggestionFacet = inferRiskFacetFromSuggestion(suggestion);
+  const suggestionDepartment = normalizeProductionDepartment(suggestion?.department);
+  const itemRef = toText(suggestion?.itemRef);
   let score = 0;
   buildRiskTokenSet(description, 3).forEach((token) => {
     if (contextKeywordSet.has(token)) score += 2;
@@ -3606,6 +4195,23 @@ const scoreRiskSuggestionAgainstContext = (
   buildRiskTokenSet(preventive, 3).forEach((token) => {
     if (contextKeywordSet.has(token)) score += 1;
   });
+
+  if (suggestionFacet && toSafeArray(context.requiredFacets).includes(suggestionFacet))
+    score += 3;
+  if (
+    suggestionDepartment &&
+    toSafeArray(context.productionDepartments).includes(suggestionDepartment)
+  ) {
+    score += 2.5;
+  }
+  if (itemRef) {
+    const itemRefTokens = buildRiskTokenSet(itemRef, 3);
+    const hasItemMatch = toSafeArray(context.itemInsights).some((item) => {
+      const subjectTokens = buildRiskTokenSet(item?.subject, 3);
+      return computeTokenOverlapRatio(itemRefTokens, subjectTokens) >= 0.5;
+    });
+    if (hasItemMatch) score += 2.5;
+  }
 
   if (/^\[[^\]]+\]/.test(description)) score += 1;
   if (description.length >= 48) score += 0.5;
@@ -3633,18 +4239,46 @@ const prioritizeRiskSuggestions = (
     return sanitized.slice(0, limit);
   }
 
-  return sanitized
+  const scored = sanitized
     .map((suggestion, index) => ({
       suggestion,
       index,
-      score: scoreRiskSuggestionAgainstContext(suggestion, contextKeywordSet),
+      score: scoreRiskSuggestionAgainstContext(
+        suggestion,
+        context,
+        contextKeywordSet,
+      ),
     }))
     .sort((left, right) => {
       if (right.score !== left.score) return right.score - left.score;
       return left.index - right.index;
-    })
-    .map((entry) => entry.suggestion)
-    .slice(0, limit);
+    });
+
+  const selected = [];
+  const usedIndexes = new Set();
+  const desiredFacets = toSafeArray(context.requiredFacets).length
+    ? toSafeArray(context.requiredFacets)
+    : RISK_FACETS;
+
+  desiredFacets.forEach((facet) => {
+    const matched = scored.find(
+      (entry, index) =>
+        !usedIndexes.has(index) &&
+        inferRiskFacetFromSuggestion(entry.suggestion) === facet,
+    );
+    if (!matched) return;
+    const matchedIndex = scored.indexOf(matched);
+    usedIndexes.add(matchedIndex);
+    selected.push(matched.suggestion);
+  });
+
+  scored.forEach((entry, index) => {
+    if (selected.length >= limit || usedIndexes.has(index)) return;
+    usedIndexes.add(index);
+    selected.push(entry.suggestion);
+  });
+
+  return selected.slice(0, limit);
 };
 
 const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
@@ -4063,8 +4697,10 @@ const buildGlobalItemSubjects = (items = []) => {
 
 const buildDepartmentScopedFallbackSuggestion = ({
   template,
+  departmentId = "",
   departmentLabel,
   itemSubject,
+  itemRef = "",
   projectName,
 }) => {
   if (!itemSubject) {
@@ -4072,19 +4708,182 @@ const buildDepartmentScopedFallbackSuggestion = ({
       return {
         description: `[${departmentLabel}] ${stripSentencePeriod(template.description)} for "${projectName}".`,
         preventive: `${stripSentencePeriod(template.preventive)} for "${projectName}".`,
+        facet: normalizeRiskFacet(template?.facet) || inferRiskFacetFromSuggestion(template),
+        department: departmentId,
+        itemRef: itemRef || projectName,
       };
     }
 
     return {
       description: `[${departmentLabel}] ${template.description}`,
       preventive: template.preventive,
+      facet: normalizeRiskFacet(template?.facet) || inferRiskFacetFromSuggestion(template),
+      department: departmentId,
+      itemRef,
     };
   }
 
   return {
     description: `[${departmentLabel}] ${stripSentencePeriod(template.description)} for "${itemSubject}".`,
     preventive: `${stripSentencePeriod(template.preventive)} for "${itemSubject}".`,
+    facet: normalizeRiskFacet(template?.facet) || inferRiskFacetFromSuggestion(template),
+    department: departmentId,
+    itemRef: itemRef || itemSubject,
   };
+};
+
+const scoreContextOverlap = (left = [], right = []) => {
+  const rightSet = new Set(toSafeArray(right).filter(Boolean));
+  return toSafeArray(left).filter((entry) => rightSet.has(entry)).length;
+};
+
+const buildContextItemTokenSet = (context = {}) => {
+  const tokenSet = new Set();
+  toSafeArray(context.itemInsights).forEach((item) => {
+    buildRiskTokenSet(item?.subject, 3).forEach((token) => tokenSet.add(token));
+    buildRiskTokenSet(item?.familyLabel, 3).forEach((token) => tokenSet.add(token));
+  });
+  return tokenSet;
+};
+
+const preferLatestRiskHistoryProject = (currentProject, candidateProject) => {
+  if (!currentProject) return candidateProject;
+  if (candidateProject?.isLatestVersion && !currentProject?.isLatestVersion) {
+    return candidateProject;
+  }
+  if (!candidateProject?.isLatestVersion && currentProject?.isLatestVersion) {
+    return currentProject;
+  }
+
+  const currentVersion = Number(currentProject?.versionNumber) || 1;
+  const candidateVersion = Number(candidateProject?.versionNumber) || 1;
+  if (candidateVersion !== currentVersion) {
+    return candidateVersion > currentVersion ? candidateProject : currentProject;
+  }
+
+  const currentTimestamp = new Date(
+    currentProject?.updatedAt || currentProject?.createdAt || 0,
+  ).getTime();
+  const candidateTimestamp = new Date(
+    candidateProject?.updatedAt || candidateProject?.createdAt || 0,
+  ).getTime();
+  return candidateTimestamp >= currentTimestamp ? candidateProject : currentProject;
+};
+
+const scoreHistoricalRiskMatch = (candidateContext = {}, currentContext = {}) => {
+  const candidateTokens = buildContextItemTokenSet(candidateContext);
+  const currentTokens = buildContextItemTokenSet(currentContext);
+
+  let score = 0;
+  score +=
+    scoreContextOverlap(
+      candidateContext.productionDepartments,
+      currentContext.productionDepartments,
+    ) * 10;
+  score += scoreContextOverlap(candidateContext.itemFamilyIds, currentContext.itemFamilyIds) * 8;
+  score += computeTokenOverlapRatio(candidateTokens, currentTokens) * 6;
+  score += scoreContextOverlap(candidateContext.constraintTags, currentContext.constraintTags) * 2;
+
+  if (
+    candidateContext.projectType &&
+    candidateContext.projectType === currentContext.projectType
+  ) {
+    score += 2;
+  }
+  if (
+    candidateContext.supplySource &&
+    candidateContext.supplySource === currentContext.supplySource
+  ) {
+    score += 2;
+  }
+
+  return score;
+};
+
+const fetchHistoricalRiskExamples = async (context = {}) => {
+  const currentProjectId = toText(context.currentProjectId);
+  const currentLineageId = toText(context.currentLineageId);
+  const projectDocs = await Project.find({ "productionRisks.0": { $exists: true } })
+    .select(
+      "_id lineageId versionNumber isLatestVersion projectType priority details departments items productionRisks createdAt updatedAt",
+    )
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .limit(250)
+    .lean();
+
+  const latestByLineage = new Map();
+  projectDocs.forEach((project) => {
+    const lineageKey =
+      toObjectIdString(project?.lineageId) || toObjectIdString(project?._id);
+    if (!lineageKey) return;
+    latestByLineage.set(
+      lineageKey,
+      preferLatestRiskHistoryProject(latestByLineage.get(lineageKey), project),
+    );
+  });
+
+  return Array.from(latestByLineage.values())
+    .filter((project) => {
+      const projectId = toObjectIdString(project?._id);
+      const lineageId =
+        toObjectIdString(project?.lineageId) || toObjectIdString(project?._id);
+      if (currentProjectId && projectId === currentProjectId) return false;
+      if (
+        currentLineageId &&
+        (lineageId === currentLineageId || projectId === currentLineageId)
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map((project) => {
+      const candidateContext = buildRiskSuggestionContext(project);
+      const score = scoreHistoricalRiskMatch(candidateContext, context);
+      const exampleRisks = filterExistingRiskSuggestions(
+        candidateContext.existingRisks,
+        [
+          ...context.existingRiskDescriptions,
+          ...context.previousShownDescriptions,
+        ],
+      ).slice(0, 2);
+
+      return {
+        project,
+        candidateContext,
+        score,
+        exampleRisks,
+      };
+    })
+    .filter((entry) => entry.score > 0 && entry.exampleRisks.length > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      const rightTime = new Date(
+        right.project?.updatedAt || right.project?.createdAt || 0,
+      ).getTime();
+      const leftTime = new Date(
+        left.project?.updatedAt || left.project?.createdAt || 0,
+      ).getTime();
+      return rightTime - leftTime;
+    })
+    .slice(0, 5)
+    .map((entry) => ({
+      projectId: toObjectIdString(entry.project?._id),
+      projectName: entry.candidateContext.projectName || "Unnamed Project",
+      projectType: entry.candidateContext.projectType,
+      productionDepartments: entry.candidateContext.productionDepartmentLabels.slice(
+        0,
+        4,
+      ),
+      itemSubjects: entry.candidateContext.itemInsights
+        .map((item) => item.subject)
+        .filter(Boolean)
+        .slice(0, 3),
+      exampleRisks: entry.exampleRisks.map((risk) => ({
+        facet: risk.facet || "",
+        description: risk.description,
+        preventive: risk.preventive,
+      })),
+    }));
 };
 
 const buildFallbackRiskSuggestions = (context) => {
@@ -4120,24 +4919,67 @@ const buildFallbackRiskSuggestions = (context) => {
         itemSubjectPool.length > 0
           ? itemSubjectPool[index % itemSubjectPool.length]
           : "";
+      const matchingInsight = toSafeArray(context.itemInsights).find(
+        (item) =>
+          item.department === departmentId && item.subject === itemSubject,
+      );
 
       fallbackSuggestions.push(
         buildDepartmentScopedFallbackSuggestion({
           template,
+          departmentId,
           departmentLabel: label,
           itemSubject,
+          itemRef: matchingInsight?.itemRef || itemSubject,
           projectName: context.projectName,
         }),
       );
     });
   });
 
+  toSafeArray(context.itemInsights).forEach((item) => {
+    const familyTemplates = ITEM_FAMILY_RISK_TEMPLATES[item.familyId] || [];
+    familyTemplates.forEach((template) => {
+      fallbackSuggestions.push({
+        description: `[${item.departmentLabel || item.familyLabel || "Production"}] ${stripSentencePeriod(
+          template.description,
+        )} for "${item.subject}".`,
+        preventive: `${stripSentencePeriod(template.preventive)} for "${item.subject}".`,
+        facet: normalizeRiskFacet(template?.facet) || inferRiskFacetFromSuggestion(template),
+        department: item.department || "",
+        itemRef: item.itemRef,
+      });
+    });
+  });
+
+  toSafeArray(context.constraintTags).forEach((tag) => {
+    const templates = CONSTRAINT_RISK_TEMPLATES[tag] || [];
+    const primaryItem = toSafeArray(context.itemInsights)[0];
+    templates.forEach((template) => {
+      fallbackSuggestions.push({
+        description: primaryItem?.subject
+          ? `${stripSentencePeriod(template.description)} for "${primaryItem.subject}".`
+          : template.description,
+        preventive: primaryItem?.subject
+          ? `${stripSentencePeriod(template.preventive)} for "${primaryItem.subject}".`
+          : template.preventive,
+        facet: normalizeRiskFacet(template?.facet) || inferRiskFacetFromSuggestion(template),
+        department: primaryItem?.department || "",
+        itemRef: primaryItem?.itemRef || "",
+      });
+    });
+  });
+
   const filteredSuggestions = filterExistingRiskSuggestions(
     fallbackSuggestions,
-    context.existingRiskDescriptions,
+    [...context.existingRiskDescriptions, ...context.previousShownDescriptions],
   );
 
-  return shuffleArray(filteredSuggestions).slice(0, MAX_RISK_SUGGESTIONS);
+  return prioritizeRiskSuggestions(
+    shuffleArray(filteredSuggestions),
+    context,
+    MAX_RISK_SUGGESTIONS,
+  );
 };
 
 const getFetchClient = async () => {
@@ -4162,6 +5004,15 @@ const buildAiRiskPrompt = (context = {}) => {
       contactType: context.contactType || "",
       supplySource: context.supplySource || "",
     },
+    retryContext: {
+      retryCount: context.retryCount || 0,
+      priorSessionSuggestions: toSafeArray(context.previousShownSuggestions)
+        .slice(-8)
+        .map((entry) => ({
+          description: entry.description,
+          facet: entry.facet || "",
+        })),
+    },
     productionDepartments: toSafeArray(context.productionDepartmentLabels).slice(
       0,
       12,
@@ -4177,6 +5028,15 @@ const buildAiRiskPrompt = (context = {}) => {
             : null,
         department: toText(item?.departmentRaw || item?.department),
       })),
+    itemInsights: toSafeArray(context.itemInsights).slice(0, 12).map((item) => ({
+      itemRef: item.itemRef,
+      subject: item.subject,
+      family: item.familyLabel || item.familyId || "",
+      department: item.departmentLabel || item.department || "",
+      quantity: Number.isFinite(item.quantity) ? item.quantity : null,
+    })),
+    constraints: toSafeArray(context.constraintTags).slice(0, 10),
+    requiredFacets: toSafeArray(context.requiredFacets).slice(0, 8),
     uncontrollableFactors: toSafeArray(context.uncontrollableFactors)
       .slice(0, 8)
       .map((factor) => ({
@@ -4184,22 +5044,27 @@ const buildAiRiskPrompt = (context = {}) => {
         responsible: toText(factor?.responsible),
         status: toText(factor?.status),
       })),
-    existingRisks: toSafeArray(context.existingRiskDescriptions).slice(0, 15),
+    existingRisks: toSafeArray(context.existingRisks).slice(0, 15),
+    similarProjectPatterns: toSafeArray(context.historyExamples).slice(0, 5),
   };
 
   return [
     "Analyze the project snapshot and suggest production execution risks.",
     "Return STRICT JSON only. Do not wrap in markdown.",
     "Required format:",
-    '{"suggestions":[{"description":"...","preventive":"..."}]}',
+    '{"suggestions":[{"facet":"...","department":"...","itemRef":"...","description":"...","preventive":"..."}]}',
     "",
     "Rules:",
-    "- Return 3 to 5 suggestions.",
+    "- Return 4 to 5 suggestions.",
+    `- Use only these facet values: ${RISK_FACETS.join(", ")}.`,
+    "- Each description must mention the relevant item or production type for this project.",
     "- Each description must be specific to this project (items, departments, timeline, or constraints).",
     "- Each preventive measure must be actionable and directly mitigate its paired risk.",
     "- Keep description <= 160 chars and preventive <= 220 chars.",
+    "- Spread suggestions across different facets instead of repeating one failure mode.",
     "- Avoid generic wording and avoid repeating/paraphrasing any existing risk.",
-    "- Cover different failure points (artwork/specs, production setup, material/process, and schedule/hand-off).",
+    "- Avoid repeating or closely paraphrasing prior session suggestions.",
+    "- Use similar project patterns only as inspiration. Do not copy their wording.",
     "",
     "Project snapshot JSON:",
     JSON.stringify(projectSnapshot, null, 2),
@@ -4355,7 +5220,7 @@ const requestAiRiskSuggestions = async (context) => {
             {
               role: "system",
               content:
-                "You are a senior production planner for print and fabrication workflows. Return only valid JSON with concrete, project-specific risk + preventive pairs.",
+                "You are a senior production planner for print and fabrication workflows. Return only valid JSON with concrete, project-specific, facet-diverse risk and preventive pairs.",
             },
             {
               role: "user",
@@ -10969,7 +11834,11 @@ const suggestProductionRisks = async (req, res) => {
       req.body?.projectData && typeof req.body.projectData === "object"
         ? req.body.projectData
         : {};
-    const context = buildRiskSuggestionContext(projectData);
+    const requestMeta =
+      req.body?.requestMeta && typeof req.body.requestMeta === "object"
+        ? req.body.requestMeta
+        : {};
+    let context = buildRiskSuggestionContext(projectData, requestMeta);
 
     if (
       !context.projectName &&
@@ -10989,18 +11858,36 @@ const suggestProductionRisks = async (req, res) => {
       });
     }
 
+    let historyExamples = [];
+    try {
+      historyExamples = await fetchHistoricalRiskExamples(context);
+    } catch (error) {
+      console.error(
+        "Historical production risk lookup failed, continuing without history:",
+        error?.message || error,
+      );
+    }
+    context = {
+      ...context,
+      historyExamples,
+    };
+
     let suggestions = [];
     let source = "fallback";
     let openAiError = null;
     let ollamaError = null;
     let usedOpenAi = false;
     let usedOllama = false;
+    const blockedDescriptions = [
+      ...context.existingRiskDescriptions,
+      ...context.previousShownDescriptions,
+    ];
 
     try {
       const aiSuggestions = await requestAiRiskSuggestions(context);
       suggestions = filterExistingRiskSuggestions(
         aiSuggestions,
-        context.existingRiskDescriptions,
+        blockedDescriptions,
       );
       if (suggestions.length > 0) {
         usedOpenAi = true;
@@ -11020,7 +11907,7 @@ const suggestProductionRisks = async (req, res) => {
         const filteredOllamaSuggestions = filterExistingRiskSuggestions(
           ollamaSuggestions,
           [
-            ...context.existingRiskDescriptions,
+            ...blockedDescriptions,
             ...suggestions.map((entry) => entry.description),
           ],
         );
@@ -11051,7 +11938,7 @@ const suggestProductionRisks = async (req, res) => {
       suggestions = mergeRiskSuggestions(suggestions, fallbackSuggestions);
       suggestions = filterExistingRiskSuggestions(
         suggestions,
-        context.existingRiskDescriptions,
+        blockedDescriptions,
       );
       suggestions = prioritizeRiskSuggestions(
         suggestions,
@@ -11093,7 +11980,21 @@ const suggestProductionRisks = async (req, res) => {
       });
     }
 
-    res.json({ suggestions, source });
+    res.json({
+      suggestions,
+      source,
+      meta: {
+        matchedHistoryCount: historyExamples.length,
+        coveredFacets: Array.from(
+          new Set(
+            suggestions
+              .map((suggestion) => inferRiskFacetFromSuggestion(suggestion))
+              .filter(Boolean),
+          ),
+        ),
+        retryCount: context.retryCount || 0,
+      },
+    });
   } catch (error) {
     console.error("Error suggesting production risks:", error);
     res.status(500).json({ message: "Server Error" });
