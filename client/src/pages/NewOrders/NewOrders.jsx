@@ -170,19 +170,59 @@ const NewOrders = () => {
         });
         if (!res.ok) return;
         const data = await res.json();
-        const map = new Map();
-        (Array.isArray(data) ? data : [])
-          .map((client) => formatClientName(client?.name || ""))
-          .filter(Boolean)
-          .forEach((name) => {
-            const key = normalizeClientName(name);
+        const suggestionsMap = new Map();
+
+        (Array.isArray(data) ? data : []).forEach((client) => {
+          const fallbackName = formatClientName(client?.name || "");
+          const projects = Array.isArray(client?.projects) ? client.projects : [];
+
+          if (projects.length === 0) {
+            const key = normalizeClientName(fallbackName);
+            if (!key || suggestionsMap.has(key)) return;
+            suggestionsMap.set(key, {
+              key,
+              name: fallbackName,
+              createdAt: 0,
+              autofill: {
+                clientEmail: "",
+                clientPhone: "",
+              },
+            });
+            return;
+          }
+
+          projects.forEach((project) => {
+            const projectClientName = formatClientName(
+              project?.details?.client || fallbackName,
+            );
+            const key = normalizeClientName(projectClientName);
             if (!key) return;
-            if (!map.has(key)) {
-              map.set(key, name);
+
+            const createdAt = Date.parse(project?.createdAt || "") || 0;
+            const nextSuggestion = {
+              key,
+              name: projectClientName,
+              createdAt,
+              autofill: {
+                clientEmail: String(project?.details?.clientEmail || "").trim(),
+                clientPhone: String(project?.details?.clientPhone || "").trim(),
+              },
+            };
+            const existingSuggestion = suggestionsMap.get(key);
+
+            if (
+              !existingSuggestion ||
+              nextSuggestion.createdAt > existingSuggestion.createdAt
+            ) {
+              suggestionsMap.set(key, nextSuggestion);
             }
           });
-        const names = Array.from(map.values()).sort((a, b) => a.localeCompare(b));
-        setClientSuggestions(names);
+        });
+
+        const suggestions = Array.from(suggestionsMap.values()).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
+        setClientSuggestions(suggestions);
       } catch (e) {
         console.error("Failed to fetch clients", e);
       }
@@ -261,9 +301,10 @@ const NewOrders = () => {
 
   const clientSuggestionMap = useMemo(() => {
     const map = {};
-    clientSuggestions.forEach((name) => {
-      const key = normalizeClientName(name);
-      if (key) map[key] = name;
+    clientSuggestions.forEach((suggestion) => {
+      if (suggestion?.key) {
+        map[suggestion.key] = suggestion;
+      }
     });
     return map;
   }, [clientSuggestions]);
@@ -271,22 +312,27 @@ const NewOrders = () => {
   const resolveClientName = (value = "") => {
     const key = normalizeClientName(value);
     if (!key) return "";
-    return clientSuggestionMap[key] || formatClientName(value);
+    return clientSuggestionMap[key]?.name || formatClientName(value);
   };
 
   const filteredClientSuggestions = useMemo(() => {
     const query = normalizeClientName(formData.clientName);
     if (!query) return clientSuggestions;
-    return clientSuggestions.filter((name) =>
-      normalizeClientName(name).includes(query),
+    return clientSuggestions.filter((suggestion) =>
+      String(suggestion?.key || "").includes(query),
     );
   }, [clientSuggestions, formData.clientName]);
 
   const showClientDropdown =
     isClientDropdownOpen && filteredClientSuggestions.length > 0;
 
-  const handleClientSuggestionSelect = (name) => {
-    setFormData((prev) => ({ ...prev, clientName: name }));
+  const handleClientSuggestionSelect = (suggestion) => {
+    setFormData((prev) => ({
+      ...prev,
+      clientName: suggestion?.name || "",
+      clientEmail: suggestion?.autofill?.clientEmail || "",
+      clientPhone: suggestion?.autofill?.clientPhone || "",
+    }));
     setIsClientDropdownOpen(false);
   };
 
@@ -881,17 +927,17 @@ const NewOrders = () => {
                     </span>
                     {showClientDropdown && (
                       <div className="client-suggestions" role="listbox">
-                        {filteredClientSuggestions.map((name) => (
+                        {filteredClientSuggestions.map((suggestion) => (
                           <button
-                            key={name}
+                            key={suggestion.key}
                             type="button"
                             className="client-suggestion-item"
                             onMouseDown={(event) => {
                               event.preventDefault();
-                              handleClientSuggestionSelect(name);
+                              handleClientSuggestionSelect(suggestion);
                             }}
                           >
-                            {name}
+                            {suggestion.name}
                           </button>
                         ))}
                       </div>
