@@ -35,7 +35,6 @@ import {
   getQuoteProgressPercent,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
-  isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import {
@@ -1840,12 +1839,7 @@ const QuoteChecklistCard = ({ project }) => {
   const mockupDecisionStatus = getMockupApprovalStatus(
     latestMockup?.clientApproval || project?.mockup?.clientApproval || {},
   );
-  const mockupCompletionConfirmed = isQuoteMockupCompletionConfirmed(
-    project,
-    requirementMode,
-  );
-  const mockupReadyForSubmission =
-    mockupDecisionStatus === "approved" && mockupCompletionConfirmed;
+  const mockupReadyForSubmission = mockupDecisionStatus === "approved";
   const mockupDecisionLabel =
     mockupDecisionStatus === "approved"
       ? "Approved"
@@ -1956,10 +1950,10 @@ const QuoteChecklistCard = ({ project }) => {
                 <h4>MOCKUP</h4>
                 <div className="info-text-bold">
                   {mockupReadyForSubmission
-                    ? "Completed"
-                    : mockupDecisionStatus === "approved"
-                      ? "Completion Pending"
-                      : mockupDecisionLabel}
+                    ? "Approved"
+                    : mockupDecisionStatus === "rejected"
+                      ? "Rejected"
+                      : "Pending"}
                 </div>
                 <div className="info-subtext">
                   {latestMockup?.version ? `Latest v${latestMockup.version}` : "No mockup yet"}
@@ -1979,10 +1973,10 @@ const QuoteChecklistCard = ({ project }) => {
                 <div className="info-subtext">
                   Mockup:{" "}
                   {mockupReadyForSubmission
-                    ? "Completed"
-                    : mockupDecisionStatus === "approved"
-                      ? "Completion Pending"
-                      : mockupDecisionLabel}
+                    ? "Approved"
+                    : mockupDecisionStatus === "rejected"
+                      ? "Rejected"
+                      : "Pending"}
                 </div>
               </div>
             )}

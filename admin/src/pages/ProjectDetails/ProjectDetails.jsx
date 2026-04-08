@@ -25,7 +25,6 @@ import {
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
   isQuoteCostCompleted,
-  isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "@client/utils/quoteStatus";
 
@@ -2513,11 +2512,8 @@ const ProjectDetails = ({ user }) => {
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
     ? "Select at least one quote requirement to continue."
     : "";
-  const quoteMockupCompletionConfirmed = isQuoteProject
-    ? isQuoteMockupCompletionConfirmed(project, quoteRequirementMode)
-    : false;
   const quoteMockupReadyForSubmission =
-    latestMockupDecisionStatus === "approved" && quoteMockupCompletionConfirmed;
+    latestMockupDecisionStatus === "approved";
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
   const quoteCostUpdatedAt =
     quoteCostVerification?.completedAt || quoteCostVerification?.updatedAt || null;
@@ -3726,9 +3722,7 @@ const ProjectDetails = ({ user }) => {
                       </span>
                       <span className="quote-requirement-admin-status">
                         {quoteMockupReadyForSubmission
-                          ? "Completed"
-                          : latestMockupDecisionStatus === "approved"
-                            ? "Approved / Completion Pending"
+                          ? "Approved / Ready for Quote"
                           : latestMockupDecisionStatus === "rejected"
                             ? "Rejected"
                             : "Pending"}
@@ -3805,9 +3799,7 @@ const ProjectDetails = ({ user }) => {
                     <div className="quote-requirement-admin-updated">
                       Mockup:{" "}
                       {quoteMockupReadyForSubmission
-                        ? "Completed"
-                        : latestMockupDecisionStatus === "approved"
-                          ? "Approved / Completion Pending"
+                        ? "Approved / Ready"
                         : latestMockupDecisionStatus === "rejected"
                           ? "Rejected"
                           : "Pending"}

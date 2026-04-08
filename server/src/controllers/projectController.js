@@ -2710,8 +2710,11 @@ const isQuoteWorkflowSupported = (project = {}) => {
 
 const isQuoteMockupApproved = (project = {}) => {
   if (!isQuoteProject(project)) return false;
+  const latestVersion = getLatestMockupVersion(project);
   return (
-    getMockupApprovalStatus(project?.mockup?.clientApproval || {}) === "approved"
+    getMockupApprovalStatus(
+      latestVersion?.clientApproval || project?.mockup?.clientApproval || {},
+    ) === "approved"
   );
 };
 
@@ -2764,7 +2767,7 @@ const isQuoteMockupCompletionConfirmed = (project = {}) => {
 };
 
 const isQuoteMockupReadyForSubmission = (project = {}) =>
-  isQuoteMockupApproved(project) && isQuoteMockupCompletionConfirmed(project);
+  isQuoteMockupApproved(project);
 
 const isQuoteCostVerified = (project = {}) => {
   if (!isQuoteProject(project)) return false;

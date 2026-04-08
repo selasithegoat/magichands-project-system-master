@@ -9,7 +9,6 @@ import {
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
   isQuoteCostCompleted,
-  isQuoteMockupCompletionConfirmed,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -1356,11 +1355,7 @@ const OrderActions = () => {
   const quoteMockupStatusLabel = formatQuoteRequirementStatusLabel(
     quoteMockupStatus,
   );
-  const quoteMockupCompletionConfirmed = isQuoteProject
-    ? isQuoteMockupCompletionConfirmed(project, quoteRequirementMode)
-    : false;
-  const quoteMockupReadyForSubmission =
-    mockupApprovalConfirmed && quoteMockupCompletionConfirmed;
+  const quoteMockupReadyForSubmission = mockupApprovalConfirmed;
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
   const quoteCostUpdatedAt =
     quoteCostVerification?.completedAt || quoteCostVerification?.updatedAt || null;
@@ -1472,11 +1467,21 @@ const OrderActions = () => {
   const pendingQuoteRequirementLabels = pendingQuoteRequirementKeys.map(
     (key) => QUOTE_REQUIREMENT_LABELS[key] || key,
   );
+  const pendingQuoteRequirementActionLabels = pendingQuoteRequirementKeys.map(
+    (key) =>
+      ({
+        cost: "quote cost",
+        mockup: "mockup approval",
+        previousSamples: "sample retrieval",
+        sampleProduction: "sample production",
+        bidSubmission: "bid submission documents",
+      }[key] || (QUOTE_REQUIREMENT_LABELS[key] || key).toLowerCase()),
+  );
   const quoteSubmissionBlockedReason = quoteWorkflowBlocked
     ? quoteWorkflowBlockedMessage ||
       "Select at least one quote requirement to continue."
-    : pendingQuoteRequirementLabels.length > 0
-      ? `Complete ${pendingQuoteRequirementLabels.join(", ")} before sending the quote.`
+    : pendingQuoteRequirementActionLabels.length > 0
+      ? `Complete ${pendingQuoteRequirementActionLabels.join(", ")} before sending the quote.`
       : "";
   const canSubmitQuote =
     isQuoteProject &&
@@ -3096,10 +3101,8 @@ const OrderActions = () => {
       ? "Quote cost is still pending."
       : "",
     quoteUsesMockupFlow &&
-    !mockupApprovalConfirmed
+    mockupApprovalPending
       ? "Client mockup approval is still pending."
-      : quoteUsesMockupFlow && !quoteMockupCompletionConfirmed
-        ? "Graphics mockup completion is still pending."
       : "",
     quoteHasSampleProductionRequirement && !quoteSampleProductionCompleted
       ? "Sample production is still pending."
@@ -3696,7 +3699,7 @@ const OrderActions = () => {
             <div className="action-card">
               <h3>Mockup Requirement</h3>
               <p>
-                Confirm client approval for the mockup before sending the quote.
+                Confirm client approval for the latest mockup before sending the quote.
               </p>
               {quoteWorkflowBlocked ? (
                 <div className="mockup-empty-state">
@@ -3715,9 +3718,7 @@ const OrderActions = () => {
                     }`}
                   >
                     {quoteMockupReadyForSubmission
-                      ? "Mockup completed after client approval"
-                      : mockupApprovalConfirmed
-                        ? "Client approved mockup - Graphics completion pending"
+                      ? "Client approved mockup - ready for quote submission"
                       : mockupApprovalRejected
                         ? "Mockup rejected by client"
                         : "Client mockup approval pending"}
@@ -4121,9 +4122,7 @@ const OrderActions = () => {
             )}
             {isQuoteProject && quoteMockupMissing && (
               <p className="mockup-approval-meta">
-                {mockupApprovalConfirmed
-                  ? "Graphics must confirm mockup completion before sending the quote to the client."
-                  : "Confirm mockup approval before sending the quote to the client."}
+                Confirm mockup approval before sending the quote to the client.
               </p>
             )}
             {isQuoteProject && quotePreviousSamplesMissing && (
@@ -4388,9 +4387,9 @@ const OrderActions = () => {
                 >
                   Latest: {latestMockupVersionLabel}{" "}
                   {quoteUsesMockupFlow && quoteMockupReadyForSubmission
-                    ? "Client Approved - Mockup Complete"
+                    ? "Client Approved - Ready for Quote"
                     : mockupApprovalConfirmed
-                      ? "Client Approved - Completion Pending"
+                      ? "Client Approved"
                     : mockupApprovalRejected
                       ? "Client Rejected"
                       : "Pending Client Approval"}
@@ -4871,15 +4870,7 @@ const OrderActions = () => {
                   quoteMockupReadyForSubmission &&
                   latestMockupVersion && (
                   <span className="status-tag invoice">
-                    {latestMockupVersionLabel} Mockup Complete
-                  </span>
-                )}
-                {quoteUsesMockupFlow &&
-                  !quoteMockupReadyForSubmission &&
-                  mockupApprovalConfirmed &&
-                  latestMockupVersion && (
-                  <span className="status-tag caution">
-                    {latestMockupVersionLabel} Mockup Completion Pending
+                    {latestMockupVersionLabel} Mockup Approved
                   </span>
                 )}
                 {mockupApprovalPending && latestMockupVersion && (
@@ -4921,11 +4912,12 @@ const OrderActions = () => {
                 {isQuoteProject && !quoteWorkflowBlocked && quoteCostMissing && (
                   <span className="status-tag caution">Quote Cost Pending</span>
                 )}
-                {isQuoteProject && !quoteWorkflowBlocked && quoteMockupMissing && (
+                {isQuoteProject &&
+                  !quoteWorkflowBlocked &&
+                  quoteMockupMissing &&
+                  !mockupApprovalRejected && (
                   <span className="status-tag caution">
-                    {mockupApprovalConfirmed
-                      ? "Mockup Completion Pending"
-                      : "Mockup Approval Pending"}
+                    Mockup Approval Pending
                   </span>
                 )}
                 {isQuoteProject &&
