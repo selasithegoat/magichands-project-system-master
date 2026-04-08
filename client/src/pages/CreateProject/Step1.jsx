@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
+import TextArea from "../../components/ui/TextArea";
 import Select from "../../components/ui/Select";
 import CardOption from "../../components/ui/CardOption";
 import UserAvatar from "../../components/ui/UserAvatar";
@@ -425,6 +426,17 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               </small>
             </div>
           )}
+
+          <div className="brief-overview-section">
+            <TextArea
+              className="brief-overview-card"
+              label="BRIEF OVERVIEW"
+              value={formData.briefOverview || ""}
+              onChange={(e) => handleChange("briefOverview", e.target.value)}
+              placeholder="High-level summary (e.g. '3 Large banners for stage background')"
+              rows={4}
+            />
+          </div>
 
           {/* Reference Materials Section */}
           <div className="reference-section" style={{ marginTop: "1.5rem" }}>

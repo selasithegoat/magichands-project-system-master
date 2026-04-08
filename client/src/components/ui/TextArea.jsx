@@ -1,7 +1,15 @@
 import React from "react";
 import "./TextArea.css";
 
-const TextArea = ({ label, placeholder, value, onChange, className = "" }) => {
+const TextArea = ({
+  label,
+  placeholder,
+  value,
+  onChange,
+  className = "",
+  rows = 3,
+  ...rest
+}) => {
   return (
     <div className={`textarea-wrapper ${className}`}>
       {label && <label className="textarea-label">{label}</label>}
@@ -11,7 +19,8 @@ const TextArea = ({ label, placeholder, value, onChange, className = "" }) => {
           placeholder={placeholder}
           value={value}
           onChange={onChange}
-          rows={3}
+          rows={rows}
+          {...rest}
         />
         <div className="resize-handle">
           <svg

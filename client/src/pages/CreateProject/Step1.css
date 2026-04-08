@@ -222,6 +222,46 @@
   font-size: 0.8rem;
 }
 
+.brief-overview-section {
+  margin-top: 1.5rem;
+}
+
+.brief-overview-card .textarea-label {
+  letter-spacing: 0.06em;
+}
+
+.brief-overview-card .textarea-container {
+  position: relative;
+}
+
+.brief-overview-card .textarea-container::before {
+  content: "Use this space for a clean summary of the request.";
+  display: block;
+  margin-bottom: 0.55rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.brief-overview-card .textarea-field {
+  min-height: 118px;
+  padding: 0.9rem 1rem 1.1rem;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--primary-color) 18%, var(--border-color));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary-soft) 28%, #fff) 0%, var(--bg-input) 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.brief-overview-card .textarea-field::placeholder {
+  color: color-mix(in srgb, var(--text-secondary) 82%, transparent);
+}
+
+.brief-overview-card .textarea-field:focus {
+  box-shadow:
+    0 0 0 3px rgba(var(--primary-rgb), 0.12),
+    0 14px 28px rgba(37, 99, 235, 0.08);
+}
+
 /* Footer */
 .step-footer {
   padding: 16px 24px;
