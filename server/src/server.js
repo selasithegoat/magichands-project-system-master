@@ -293,6 +293,30 @@ const setUploadSecurityHeaders = (res, filePath) => {
   }
 };
 
+const setPortalBuildHeaders = (res, filePath) => {
+  const extension = path.extname(filePath || "").toLowerCase();
+  const basename = path.basename(filePath || "").toLowerCase();
+
+  if (extension === ".html" || basename === "sw.js") {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    return;
+  }
+
+  res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+};
+
+const sendPortalIndex = (res, distPath) =>
+  res.sendFile(path.join(distPath, "index.html"), {
+    headers: {
+      "Cache-Control": "no-store, max-age=0",
+    },
+  });
+
+const isStaticAssetRequest = (req) => {
+  const requestPath = String(req.path || req.originalUrl || "").split("?")[0];
+  return Boolean(path.extname(requestPath));
+};
+
 // Trust proxy for ngrok/production (required for secure cookies behind proxy)
 app.set("trust proxy", 1);
 
@@ -430,7 +454,9 @@ const hasOpsBuild = fs.existsSync(opsDistPath);
 const hasInventoryBuild = fs.existsSync(inventoryDistPath);
 
 if (hasAdminBuild) {
-  const adminStatic = express.static(adminDistPath);
+  const adminStatic = express.static(adminDistPath, {
+    setHeaders: setPortalBuildHeaders,
+  });
   app.use((req, res, next) => {
     if (isAdminHost(req)) {
       return adminStatic(req, res, next);
@@ -440,7 +466,9 @@ if (hasAdminBuild) {
 }
 
 if (hasOpsBuild) {
-  const opsStatic = express.static(opsDistPath);
+  const opsStatic = express.static(opsDistPath, {
+    setHeaders: setPortalBuildHeaders,
+  });
   app.use((req, res, next) => {
     if (isOpsHost(req)) {
       return opsStatic(req, res, next);
@@ -450,7 +478,9 @@ if (hasOpsBuild) {
 }
 
 if (hasInventoryBuild) {
-  const inventoryStatic = express.static(inventoryDistPath);
+  const inventoryStatic = express.static(inventoryDistPath, {
+    setHeaders: setPortalBuildHeaders,
+  });
   app.use((req, res, next) => {
     if (isInventoryHost(req)) {
       return inventoryStatic(req, res, next);
@@ -461,20 +491,37 @@ if (hasInventoryBuild) {
 
 // Mobile/IP fallback: allow /admin on non-admin hosts to serve admin app
 if (hasAdminBuild) {
-  app.use("/admin", express.static(adminDistPath));
+  app.use(
+    "/admin",
+    express.static(adminDistPath, {
+      setHeaders: setPortalBuildHeaders,
+    }),
+  );
 }
 
 // Fallback path for ops wallboard
 if (hasOpsBuild) {
-  app.use("/ops", express.static(opsDistPath));
+  app.use(
+    "/ops",
+    express.static(opsDistPath, {
+      setHeaders: setPortalBuildHeaders,
+    }),
+  );
 }
 
 if (hasInventoryBuild) {
-  app.use("/inventory", express.static(inventoryDistPath));
+  app.use(
+    "/inventory",
+    express.static(inventoryDistPath, {
+      setHeaders: setPortalBuildHeaders,
+    }),
+  );
 }
 
 if (hasClientBuild) {
-  const clientStatic = express.static(clientDistPath);
+  const clientStatic = express.static(clientDistPath, {
+    setHeaders: setPortalBuildHeaders,
+  });
   app.use((req, res, next) => {
     if (isClientHost(req)) {
       return clientStatic(req, res, next);
@@ -486,38 +533,42 @@ if (hasClientBuild) {
 // SPA fallbacks
 if (hasAdminBuild || hasClientBuild || hasOpsBuild || hasInventoryBuild) {
   app.get(/^\/admin(\/.*)?$/, (req, res, next) => {
+    if (isStaticAssetRequest(req)) return next();
     if (!isAdminHost(req) && hasAdminBuild) {
-      return res.sendFile(path.join(adminDistPath, "index.html"));
+      return sendPortalIndex(res, adminDistPath);
     }
     return next();
   });
 
   app.get(/^\/ops(\/.*)?$/, (req, res, next) => {
+    if (isStaticAssetRequest(req)) return next();
     if (hasOpsBuild) {
-      return res.sendFile(path.join(opsDistPath, "index.html"));
+      return sendPortalIndex(res, opsDistPath);
     }
     return next();
   });
 
   app.get(/^\/inventory(\/.*)?$/, (req, res, next) => {
+    if (isStaticAssetRequest(req)) return next();
     if (hasInventoryBuild) {
-      return res.sendFile(path.join(inventoryDistPath, "index.html"));
+      return sendPortalIndex(res, inventoryDistPath);
     }
     return next();
   });
 
   app.get(/^\/(?!api|uploads).*/, (req, res, next) => {
+    if (isStaticAssetRequest(req)) return next();
     if (isAdminHost(req) && hasAdminBuild) {
-      return res.sendFile(path.join(adminDistPath, "index.html"));
+      return sendPortalIndex(res, adminDistPath);
     }
     if (isOpsHost(req) && hasOpsBuild) {
-      return res.sendFile(path.join(opsDistPath, "index.html"));
+      return sendPortalIndex(res, opsDistPath);
     }
     if (isInventoryHost(req) && hasInventoryBuild) {
-      return res.sendFile(path.join(inventoryDistPath, "index.html"));
+      return sendPortalIndex(res, inventoryDistPath);
     }
     if (isClientHost(req) && hasClientBuild) {
-      return res.sendFile(path.join(clientDistPath, "index.html"));
+      return sendPortalIndex(res, clientDistPath);
     }
     return next();
   });
