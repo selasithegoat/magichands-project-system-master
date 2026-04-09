@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import FolderIcon from "../../components/icons/FolderIcon";
 import TrashIcon from "../../components/icons/TrashIcon";
@@ -25,6 +25,12 @@ import {
   formatProjectDisplayName,
   resolveProjectNameForForm,
 } from "../../utils/projectName";
+import {
+  clearNewOrderDraft,
+  loadNewOrderDraft,
+  saveNewOrderDraftFiles,
+  saveNewOrderDraftMeta,
+} from "../../utils/newOrderDraftStorage";
 import "./NewOrders.css";
 
 const REVISION_LOCKED_STATUSES = new Set([
@@ -46,30 +52,139 @@ const formatFileSize = (bytes) => {
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 };
 
-const NewOrders = () => {
+const createEmptyItem = () => ({ description: "", breakdown: "", qty: 1 });
+
+const toDateTimeLocal = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
+const generateOrderNumber = () => {
+  const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+  const randomPart = Math.floor(1000 + Math.random() * 9000);
+  return `ORD-${datePart}-${randomPart}`;
+};
+
+const createNewOrderFormData = ({
+  projectType = "Standard",
+  priority = "Normal",
+  orderNumber = generateOrderNumber(),
+  orderDate = toDateTimeLocal(new Date()),
+} = {}) => ({
+  orderNumber,
+  clientName: "",
+  clientEmail: "",
+  clientPhone: "",
+  contactType: "None",
+  packagingType: "",
+  deliveryLocation: "",
+  projectName: "",
+  projectIndicator: "",
+  briefOverview: "",
+  items: [createEmptyItem()],
+  orderDate,
+  deliveryDate: "",
+  projectType,
+  priority,
+  corporateEmergency: false,
+  projectLeadId: "",
+  assistantLeadId: "",
+  sampleRequired: false,
+});
+
+const normalizeDraftItems = (items) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [createEmptyItem()];
+  }
+
+  return items.map((item) => {
+    const normalizedQty = Number(item?.qty);
+    return {
+      description: String(item?.description || ""),
+      breakdown: String(item?.breakdown || ""),
+      qty:
+        Number.isFinite(normalizedQty) && normalizedQty > 0
+          ? normalizedQty
+          : 1,
+    };
+  });
+};
+
+const normalizeDraftFiles = (files) =>
+  Array.isArray(files)
+    ? files.filter(
+        (file) =>
+          file &&
+          typeof file === "object" &&
+          typeof file.name === "string" &&
+          typeof file.size === "number",
+      )
+    : [];
+
+const normalizeDraftFormData = (draftFormData, fallbackFormData) => {
+  const draft = draftFormData && typeof draftFormData === "object" ? draftFormData : {};
+  const nextProjectType =
+    typeof draft.projectType === "string" && draft.projectType.trim()
+      ? draft.projectType
+      : fallbackFormData.projectType;
+
+  return {
+    ...fallbackFormData,
+    ...draft,
+    orderNumber:
+      typeof draft.orderNumber === "string" && draft.orderNumber.trim()
+        ? draft.orderNumber
+        : fallbackFormData.orderNumber,
+    clientName: typeof draft.clientName === "string" ? draft.clientName : "",
+    clientEmail: typeof draft.clientEmail === "string" ? draft.clientEmail : "",
+    clientPhone: typeof draft.clientPhone === "string" ? draft.clientPhone : "",
+    contactType:
+      typeof draft.contactType === "string" && draft.contactType.trim()
+        ? draft.contactType
+        : fallbackFormData.contactType,
+    packagingType:
+      typeof draft.packagingType === "string" ? draft.packagingType : "",
+    deliveryLocation:
+      typeof draft.deliveryLocation === "string" ? draft.deliveryLocation : "",
+    projectName: typeof draft.projectName === "string" ? draft.projectName : "",
+    projectIndicator:
+      typeof draft.projectIndicator === "string" ? draft.projectIndicator : "",
+    briefOverview:
+      typeof draft.briefOverview === "string" ? draft.briefOverview : "",
+    items: normalizeDraftItems(draft.items),
+    orderDate:
+      typeof draft.orderDate === "string" && draft.orderDate.trim()
+        ? draft.orderDate
+        : fallbackFormData.orderDate,
+    deliveryDate:
+      typeof draft.deliveryDate === "string" ? draft.deliveryDate : "",
+    projectType: nextProjectType,
+    priority:
+      typeof draft.priority === "string" && draft.priority.trim()
+        ? draft.priority
+        : fallbackFormData.priority,
+    corporateEmergency:
+      nextProjectType === "Corporate Job" && Boolean(draft.corporateEmergency),
+    projectLeadId:
+      typeof draft.projectLeadId === "string" ? draft.projectLeadId : "",
+    assistantLeadId:
+      typeof draft.assistantLeadId === "string" ? draft.assistantLeadId : "",
+    sampleRequired: Boolean(draft.sampleRequired),
+  };
+};
+
+const NewOrders = ({ user = null }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    orderNumber: "",
-    clientName: "",
-    clientEmail: "",
-    clientPhone: "",
-    contactType: "None",
-    packagingType: "",
-    deliveryLocation: "",
-    projectName: "",
-    projectIndicator: "",
-    briefOverview: "",
-    items: [{ description: "", breakdown: "", qty: 1 }],
-    orderDate: "",
-    deliveryDate: "",
-    projectType: location.state?.projectType || "Standard",
-    priority: location.state?.priority || "Normal",
-    corporateEmergency: false,
-    projectLeadId: "",
-    assistantLeadId: "",
-    sampleRequired: false,
-  });
+  const [formData, setFormData] = useState(() =>
+    createNewOrderFormData({
+      projectType: location.state?.projectType || "Standard",
+      priority: location.state?.priority || "Normal",
+    }),
+  );
 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
@@ -90,7 +205,14 @@ const NewOrders = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [editingProjectStatus, setEditingProjectStatus] = useState("");
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(user);
+  const [hasResolvedCurrentUser, setHasResolvedCurrentUser] = useState(
+    Boolean(user),
+  );
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  const draftMetaSaveChainRef = useRef(Promise.resolve());
+  const draftFileSaveChainRef = useRef(Promise.resolve());
+  const draftPersistenceDisabledRef = useRef(false);
   const isRevisionMode = Boolean(editingId && location.state?.revisionMode);
   const revisionReturnTo =
     editingId && typeof location.state?.returnTo === "string"
@@ -99,20 +221,60 @@ const NewOrders = () => {
   const isRevisionLocked =
     Boolean(editingId) &&
     REVISION_LOCKED_STATUSES.has(String(editingProjectStatus || ""));
+  const reopenedProject = location.state?.reopenedProject || null;
+  const isCreateMode = !editingId && !reopenedProject;
+  const routeProjectType = location.state?.projectType || "Standard";
+  const routePriority = location.state?.priority || "Normal";
+  const draftAccountKey =
+    String(
+      currentUser?._id || currentUser?.id || currentUser?.email || "default",
+    ).trim() || "default";
 
-  // Fetch users for project lead
   useEffect(() => {
+    let isCancelled = false;
+
+    if (user) {
+      setCurrentUser(user);
+      setHasResolvedCurrentUser(true);
+      return undefined;
+    }
+
+    setHasResolvedCurrentUser(false);
+
     const fetchCurrentUser = async () => {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!isCancelled) {
+            setCurrentUser(null);
+          }
+          return;
+        }
         const data = await res.json();
-        setCurrentUser(data || null);
+        if (!isCancelled) {
+          setCurrentUser(data || null);
+        }
       } catch (e) {
+        if (!isCancelled) {
+          setCurrentUser(null);
+        }
         console.error("Failed to fetch current user", e);
+      } finally {
+        if (!isCancelled) {
+          setHasResolvedCurrentUser(true);
+        }
       }
     };
 
+    fetchCurrentUser();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
+
+  // Fetch users for project lead
+  useEffect(() => {
     const fetchUsers = async () => {
       try {
         const res = await fetch("/api/auth/users");
@@ -228,7 +390,6 @@ const NewOrders = () => {
       }
     };
 
-    fetchCurrentUser();
     fetchUsers();
     fetchExistingOrders();
     fetchClientSuggestions();
@@ -284,14 +445,6 @@ const NewOrders = () => {
       </div>
     </div>
   );
-
-  const toDateTimeLocal = (value) => {
-    if (!value) return "";
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "";
-    const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 16);
-  };
 
   const normalizeClientName = (value = "") =>
     String(value).trim().replace(/\s+/g, " ").toLowerCase();
@@ -380,17 +533,15 @@ const NewOrders = () => {
     setEditingId(editParam || "");
   }, [location.search]);
 
-  // Handle auto-generation OR edit/reopen sync
   useEffect(() => {
-    const generateOrderNumber = () => {
-      const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-      const randomPart = Math.floor(1000 + Math.random() * 9000);
-      return `ORD-${datePart}-${randomPart}`;
-    };
+    let isCancelled = false;
 
     const loadEditProject = async (projectId) => {
-      if (location.state?.reopenedProject?._id === projectId) {
-        applyProjectToForm(location.state.reopenedProject);
+      if (reopenedProject?._id === projectId) {
+        applyProjectToForm(reopenedProject);
+        if (!isCancelled) {
+          setIsDraftHydrated(true);
+        }
         return;
       }
 
@@ -400,37 +551,189 @@ const NewOrders = () => {
         });
         if (res.ok) {
           const data = await res.json();
-          applyProjectToForm(data);
+          if (!isCancelled) {
+            applyProjectToForm(data);
+            setIsDraftHydrated(true);
+          }
         } else {
-          showToast("Unable to load project for editing.", "error");
+          if (!isCancelled) {
+            showToast("Unable to load project for editing.", "error");
+            setIsDraftHydrated(true);
+          }
         }
       } catch (error) {
         console.error("Failed to load project for editing", error);
-        showToast("Unable to load project for editing.", "error");
+        if (!isCancelled) {
+          showToast("Unable to load project for editing.", "error");
+          setIsDraftHydrated(true);
+        }
       }
     };
 
+    const loadCreateModeDraft = async () => {
+      if (!hasResolvedCurrentUser) {
+        return;
+      }
+
+      draftPersistenceDisabledRef.current = false;
+      const fallbackFormData = createNewOrderFormData({
+        projectType: routeProjectType,
+        priority: routePriority,
+      });
+
+      try {
+        const storedDraft = await loadNewOrderDraft(draftAccountKey);
+        if (isCancelled) return;
+
+        if (storedDraft) {
+          setFormData(
+            normalizeDraftFormData(storedDraft.formData, fallbackFormData),
+          );
+          setSelectedFiles(normalizeDraftFiles(storedDraft.selectedFiles));
+          setSelectedFileNotes(
+            storedDraft.selectedFileNotes &&
+              typeof storedDraft.selectedFileNotes === "object"
+              ? storedDraft.selectedFileNotes
+              : {},
+          );
+          setExistingSampleImage(
+            typeof storedDraft.existingSampleImage === "string"
+              ? storedDraft.existingSampleImage
+              : "",
+          );
+          setExistingSampleImageNote(
+            typeof storedDraft.existingSampleImageNote === "string"
+              ? storedDraft.existingSampleImageNote
+              : "",
+          );
+          setExistingAttachments(
+            normalizeReferenceAttachments(storedDraft.existingAttachments || []),
+          );
+        } else {
+          setFormData(fallbackFormData);
+          setSelectedFiles([]);
+          setSelectedFileNotes({});
+          setExistingSampleImage("");
+          setExistingSampleImageNote("");
+          setExistingAttachments([]);
+        }
+      } catch (error) {
+        console.error("Failed to restore New Order draft", error);
+        if (isCancelled) return;
+        setFormData(fallbackFormData);
+        setSelectedFiles([]);
+        setSelectedFileNotes({});
+        setExistingSampleImage("");
+        setExistingSampleImageNote("");
+        setExistingAttachments([]);
+      }
+
+      if (!isCancelled) {
+        setEditingProjectStatus("");
+        setIsDraftHydrated(true);
+      }
+    };
+
+    setIsDraftHydrated(false);
+
     if (editingId) {
+      draftPersistenceDisabledRef.current = true;
       loadEditProject(editingId);
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
-    if (location.state?.reopenedProject) {
-      applyProjectToForm(location.state.reopenedProject);
-      return;
+    if (reopenedProject) {
+      draftPersistenceDisabledRef.current = true;
+      applyProjectToForm(reopenedProject);
+      setIsDraftHydrated(true);
+      return () => {
+        isCancelled = true;
+      };
     }
 
-    const now = new Date();
-    const isoString = toDateTimeLocal(now);
-    setEditingProjectStatus("");
-    setFormData((prev) => ({
-      ...prev,
-      orderNumber: generateOrderNumber(),
-      orderDate: isoString,
-      projectType: location.state?.projectType || prev.projectType,
-      priority: location.state?.priority || prev.priority,
-    }));
-  }, [editingId, location.state]);
+    loadCreateModeDraft();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    draftAccountKey,
+    editingId,
+    hasResolvedCurrentUser,
+    reopenedProject,
+    routePriority,
+    routeProjectType,
+  ]);
+
+  useEffect(() => {
+    if (!isCreateMode || !isDraftHydrated || !hasResolvedCurrentUser) {
+      return undefined;
+    }
+
+    const payload = {
+      formData,
+      selectedFileNotes,
+      existingSampleImage,
+      existingSampleImageNote,
+      existingAttachments,
+    };
+
+    const timerId = window.setTimeout(() => {
+      draftMetaSaveChainRef.current = draftMetaSaveChainRef.current
+        .catch(() => {})
+        .then(() => {
+          if (draftPersistenceDisabledRef.current) return null;
+          return saveNewOrderDraftMeta(draftAccountKey, payload);
+        })
+        .catch((error) => {
+          console.error("Failed to save New Order draft", error);
+        });
+    }, 150);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    draftAccountKey,
+    existingAttachments,
+    existingSampleImage,
+    existingSampleImageNote,
+    formData,
+    hasResolvedCurrentUser,
+    isCreateMode,
+    isDraftHydrated,
+    selectedFileNotes,
+  ]);
+
+  useEffect(() => {
+    if (!isCreateMode || !isDraftHydrated || !hasResolvedCurrentUser) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      draftFileSaveChainRef.current = draftFileSaveChainRef.current
+        .catch(() => {})
+        .then(() => {
+          if (draftPersistenceDisabledRef.current) return null;
+          return saveNewOrderDraftFiles(draftAccountKey, selectedFiles);
+        })
+        .catch((error) => {
+          console.error("Failed to save New Order draft files", error);
+        });
+    }, 150);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    draftAccountKey,
+    hasResolvedCurrentUser,
+    isCreateMode,
+    isDraftHydrated,
+    selectedFiles,
+  ]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -623,35 +926,32 @@ const NewOrders = () => {
       });
 
       if (res.ok) {
+        if (!editingId) {
+          draftPersistenceDisabledRef.current = true;
+          try {
+            await Promise.allSettled([
+              draftMetaSaveChainRef.current,
+              draftFileSaveChainRef.current,
+            ]);
+            await clearNewOrderDraft(draftAccountKey);
+          } catch (error) {
+            console.error("Failed to clear New Order draft", error);
+          }
+        }
+
         showToast(
           editingId
             ? "Order revision updated successfully!"
             : "Order Created Successfully!",
           "success",
         );
-        // Reset form
         if (!editingId) {
-          setFormData({
-            orderNumber: `ORD-${Date.now().toString().slice(-6)}`,
-            clientName: "",
-            clientEmail: "",
-            clientPhone: "",
-            contactType: "None",
-            packagingType: "",
-            deliveryLocation: "",
-            projectName: "",
-            projectIndicator: "",
-            briefOverview: "",
-            items: [{ description: "", breakdown: "", qty: 1 }],
-            orderDate: new Date().toISOString().slice(0, 16),
-            deliveryDate: "",
-            projectType: formData.projectType,
-            priority: formData.priority,
-            corporateEmergency: false,
-            projectLeadId: "",
-            assistantLeadId: "",
-            sampleRequired: false,
-          });
+          setFormData(
+            createNewOrderFormData({
+              projectType: formData.projectType,
+              priority: formData.priority,
+            }),
+          );
           setSelectedFiles([]);
           setSelectedFileNotes({});
           setExistingSampleImage("");

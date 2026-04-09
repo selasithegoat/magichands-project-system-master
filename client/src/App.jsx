@@ -533,7 +533,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <NewOrders />
+              <NewOrders user={user} />
             </ProtectedLayout>
           }
         />
