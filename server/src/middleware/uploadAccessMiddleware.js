@@ -1,5 +1,7 @@
 const Project = require("../models/Project");
 const ProjectUpdate = require("../models/ProjectUpdate");
+const ChatMessage = require("../models/ChatMessage");
+const ChatThread = require("../models/ChatThread");
 const User = require("../models/User");
 
 const PROJECT_ACCESS_FIELDS =
@@ -330,6 +332,36 @@ const canAccessAvatar = (requester, owner) => {
   );
 };
 
+const canAccessChatUpload = (requester, thread) => {
+  if (!requester || !thread) return false;
+  if (requester.role === "admin") return true;
+  if (thread.type === "public") return true;
+
+  const requesterId = toObjectIdString(requester._id || requester.id);
+  if (!requesterId) return false;
+
+  return toDepartmentArray(thread.participants).some(
+    (participant) => toObjectIdString(participant) === requesterId,
+  );
+};
+
+const findChatThreadForFileUrl = async (relativePath) => {
+  const candidateUrls = buildCandidateFileUrls(relativePath);
+  if (candidateUrls.length === 0) return null;
+
+  const message = await ChatMessage.findOne({
+    "attachments.fileUrl": { $in: candidateUrls },
+  })
+    .sort({ createdAt: -1 })
+    .select("thread")
+    .lean();
+
+  const threadId = toObjectIdString(message?.thread);
+  if (!threadId) return null;
+
+  return ChatThread.findById(threadId).select("type participants").lean();
+};
+
 const enforceUploadAccess = async (req, res, next) => {
   try {
     const relativePath = normalizeUploadPath(req.path);
@@ -339,6 +371,22 @@ const enforceUploadAccess = async (req, res, next) => {
 
     const parts = relativePath.split("/");
     const category = parts[0];
+
+    if (category === "chat-media") {
+      const thread = await findChatThreadForFileUrl(relativePath);
+
+      if (!thread && req.user?.role === "admin") {
+        return next();
+      }
+
+      if (!thread || !canAccessChatUpload(req.user, thread)) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to access this file." });
+      }
+
+      return next();
+    }
 
     if (PROJECT_BOUND_CATEGORIES.has(category)) {
       const locator = extractProjectLocator(relativePath);

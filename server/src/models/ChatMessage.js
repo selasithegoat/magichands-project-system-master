@@ -41,6 +41,36 @@ const ChatReferenceSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ChatAttachmentSchema = new mongoose.Schema(
+  {
+    fileUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    fileName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    fileType: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
 const ChatMessageSchema = new mongoose.Schema(
   {
     thread: {
@@ -61,6 +91,10 @@ const ChatMessageSchema = new mongoose.Schema(
     },
     references: {
       type: [ChatReferenceSchema],
+      default: [],
+    },
+    attachments: {
+      type: [ChatAttachmentSchema],
       default: [],
     },
   },

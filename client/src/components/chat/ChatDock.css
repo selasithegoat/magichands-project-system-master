@@ -222,6 +222,22 @@
   color: var(--primary-color);
 }
 
+.chat-dock-toolbar-btn.recording {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.chat-dock-toolbar-btn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.chat-dock-hidden-input {
+  display: none;
+}
+
 .chat-dock-thread-list,
 .chat-dock-results {
   display: flex;
@@ -523,6 +539,83 @@
   margin-top: 0.7rem;
 }
 
+.chat-dock-attachment-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.7rem;
+  margin-top: 0.72rem;
+}
+
+.chat-dock-attachment-card {
+  border-radius: 18px;
+  border: 1px solid rgba(var(--primary-rgb), 0.14);
+  background: color-mix(in srgb, var(--surface-alt) 82%, var(--bg-card));
+  overflow: hidden;
+}
+
+.chat-dock-attachment-preview-link {
+  display: block;
+  color: inherit;
+}
+
+.chat-dock-attachment-image,
+.chat-dock-pending-image {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.chat-dock-attachment-audio,
+.chat-dock-attachment-video,
+.chat-dock-pending-audio,
+.chat-dock-pending-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  background: #000;
+}
+
+.chat-dock-attachment-file-link,
+.chat-dock-pending-file-fallback {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 1rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  background:
+    radial-gradient(circle at top left, rgba(var(--primary-rgb), 0.12), transparent 50%),
+    color-mix(in srgb, var(--surface-alt) 76%, var(--bg-card));
+}
+
+.chat-dock-attachment-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.72rem 0.85rem 0.8rem;
+  font-size: 0.74rem;
+}
+
+.chat-dock-attachment-meta span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.chat-dock-attachment-meta a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .chat-dock-reference-wrap {
   display: flex;
   flex-direction: column;
@@ -556,6 +649,22 @@
 .chat-dock-message-bubble.mine .chat-dock-reference-card {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-attachment-card {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-attachment-file-link,
+.chat-dock-message-bubble.mine .chat-dock-pending-file-fallback {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-attachment-meta span,
+.chat-dock-message-bubble.mine .chat-dock-attachment-meta a {
   color: #f8fafc;
 }
 
@@ -643,6 +752,33 @@
   margin-bottom: 0.72rem;
 }
 
+.chat-dock-recording-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.78rem;
+  padding: 0.68rem 0.82rem;
+  border-radius: 16px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.chat-dock-recording-banner strong {
+  margin-left: auto;
+}
+
+.chat-dock-recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.14);
+  animation: chat-dock-recording-pulse 1.2s ease-in-out infinite;
+}
+
 .chat-dock-project-chip {
   display: inline-flex;
   align-items: center;
@@ -678,6 +814,69 @@
 .chat-dock-results.compact {
   max-height: 168px;
   padding: 0;
+}
+
+.chat-dock-pending-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.72rem;
+  margin-bottom: 0.82rem;
+}
+
+.chat-dock-pending-card {
+  position: relative;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--chat-elevated);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.chat-dock-pending-remove {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.5);
+}
+
+.chat-dock-pending-preview {
+  min-height: 112px;
+  background: color-mix(in srgb, var(--surface-alt) 80%, var(--bg-card));
+}
+
+.chat-dock-pending-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.72rem 0.84rem 0.82rem;
+}
+
+.chat-dock-pending-meta strong,
+.chat-dock-pending-meta small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-dock-pending-meta strong {
+  font-size: 0.79rem;
+  color: var(--text-primary);
+}
+
+.chat-dock-pending-meta small {
+  color: var(--text-secondary);
 }
 
 .chat-dock-result-item.project {
@@ -746,6 +945,19 @@
   box-shadow: none;
 }
 
+@keyframes chat-dock-recording-pulse {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.85;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
 .chat-dock-empty {
   flex: 1;
   display: flex;
@@ -799,6 +1011,12 @@
     left: 16px;
     bottom: 16px;
     padding: 0.75rem 0.92rem;
+  }
+
+  .chat-dock-fab.active {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(18px);
   }
 
   .chat-dock-shell {
@@ -871,6 +1089,10 @@
   .chat-dock-composer {
     padding: 0.9rem 0.95rem 1rem;
   }
+
+  .chat-dock-pending-attachments {
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -937,5 +1159,22 @@
 
   .chat-dock-mobile-back-btn {
     padding: 0.42rem 0.65rem;
+  }
+
+  .chat-dock-composer-toolbar {
+    gap: 0.45rem;
+  }
+
+  .chat-dock-toolbar-btn {
+    padding: 0.54rem 0.76rem;
+    font-size: 0.74rem;
+  }
+
+  .chat-dock-recording-banner {
+    width: 100%;
+  }
+
+  .chat-dock-pending-attachments {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

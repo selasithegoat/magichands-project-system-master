@@ -3,12 +3,14 @@ const ChatThread = require("../models/ChatThread");
 const ChatMessage = require("../models/ChatMessage");
 const Project = require("../models/Project");
 const User = require("../models/User");
+const upload = require("../middleware/upload");
 const { broadcastChatChange } = require("../utils/realtimeHub");
 
 const TEAM_ROOM_SLUG = "team-room";
 const TEAM_ROOM_NAME = "Team Room";
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_REFERENCE_COUNT = 3;
+const MAX_ATTACHMENT_COUNT = 6;
 const DEFAULT_MESSAGE_LIMIT = 50;
 const USER_SEARCH_LIMIT = 20;
 const PROJECT_SEARCH_LIMIT = 12;
@@ -185,6 +187,63 @@ const parseReferencesInput = (value) => {
   }
 };
 
+const resolveAttachmentName = (attachment) => {
+  const explicitName = toText(attachment?.fileName || attachment?.name);
+  if (explicitName) return explicitName;
+
+  const fileUrl = toText(attachment?.fileUrl || attachment?.url);
+  if (!fileUrl) return "";
+
+  const rawName = fileUrl.split("?")[0].split("/").pop() || fileUrl;
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+};
+
+const getAttachmentKind = (attachment) => {
+  const mimeType = toText(attachment?.fileType || attachment?.type).toLowerCase();
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("video/")) return "video";
+
+  const fileName = resolveAttachmentName(attachment).toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(fileName)) return "image";
+  if (/\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(fileName)) return "audio";
+  if (/\.(mp4|mov|avi|mkv|m4v|webm)$/i.test(fileName)) return "video";
+  return "file";
+};
+
+const serializeAttachment = (attachment) => ({
+  fileUrl: toText(attachment?.fileUrl || attachment?.url),
+  fileName: resolveAttachmentName(attachment),
+  fileType: toText(attachment?.fileType || attachment?.type),
+  uploadedAt: attachment?.uploadedAt || null,
+});
+
+const mapChatAttachments = (req, userId) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+  return files
+    .filter((file) => file?.filename)
+    .slice(0, MAX_ATTACHMENT_COUNT)
+    .map((file) => ({
+      fileUrl: `/uploads/${file.filename}`,
+      fileName: file.originalname || "",
+      fileType: file.mimetype || "",
+      uploadedBy: userId || undefined,
+      uploadedAt: new Date(),
+    }));
+};
+
+const cleanupUploadedFilesSafely = async (req) => {
+  try {
+    await upload.cleanupRequestFiles(req);
+  } catch (cleanupError) {
+    console.error("Failed to clean up chat uploads:", cleanupError);
+  }
+};
+
 const buildProjectDisplayName = (project) => {
   const name = toText(project?.details?.projectName || project?.projectName);
   const indicator = toText(
@@ -240,6 +299,9 @@ const serializeMessage = (message, senderMap = {}) => {
     references: Array.isArray(message?.references)
       ? message.references.map((entry) => serializeProjectReference(entry))
       : [],
+    attachments: Array.isArray(message?.attachments)
+      ? message.attachments.map((entry) => serializeAttachment(entry))
+      : [],
     createdAt: message?.createdAt || null,
     updatedAt: message?.updatedAt || null,
   };
@@ -286,7 +348,7 @@ const upsertThreadReadState = (thread, userId, lastReadAt = new Date()) => {
 const buildDirectKey = (userA, userB) =>
   [toIdString(userA), toIdString(userB)].filter(Boolean).sort().join(":");
 
-const buildMessagePreview = (body, references = []) => {
+const buildMessagePreview = (body, references = [], attachments = []) => {
   const trimmedBody = toText(body);
   if (trimmedBody) {
     return trimmedBody.length > 160 ? `${trimmedBody.slice(0, 157)}...` : trimmedBody;
@@ -298,6 +360,19 @@ const buildMessagePreview = (body, references = []) => {
   }
   if (firstReference?.projectName) {
     return `Shared ${firstReference.projectName}`;
+  }
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    const firstAttachmentKind = getAttachmentKind(attachments[0]);
+    if (firstAttachmentKind === "audio") {
+      return attachments.length > 1 ? `Sent ${attachments.length} media files` : "Sent a voice note";
+    }
+    if (firstAttachmentKind === "image") {
+      return attachments.length > 1 ? `Shared ${attachments.length} media files` : "Shared a photo";
+    }
+    if (firstAttachmentKind === "video") {
+      return attachments.length > 1 ? `Shared ${attachments.length} media files` : "Shared a video";
+    }
+    return attachments.length > 1 ? `Shared ${attachments.length} files` : "Shared a file";
   }
   return "Shared a project";
 };
@@ -555,16 +630,19 @@ const sendMessage = async (req, res) => {
     const currentUserId = toIdString(req.user?._id);
     const threadId = toIdString(req.params?.id);
     if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      await cleanupUploadedFilesSafely(req);
       return res.status(400).json({ message: "Invalid chat thread." });
     }
 
     const thread = await ChatThread.findById(threadId);
     if (!thread || !hasThreadAccess(thread, currentUserId)) {
+      await cleanupUploadedFilesSafely(req);
       return res.status(404).json({ message: "Chat thread not found." });
     }
 
     const body = toText(req.body?.body).slice(0, MAX_MESSAGE_LENGTH);
     const rawReferences = parseReferencesInput(req.body?.references);
+    const attachments = mapChatAttachments(req, req.user?._id);
 
     const requestedProjectIds = rawReferences
       .slice(0, MAX_REFERENCE_COUNT)
@@ -588,6 +666,7 @@ const sendMessage = async (req, res) => {
     const references = requestedProjectIds
       .map((projectId) => projectMap[projectId])
       .filter(Boolean)
+      .filter((project) => buildProjectRouteOptions(req.user, project).length > 0)
       .map((project) => ({
         type: "project",
         project: project._id,
@@ -598,10 +677,11 @@ const sendMessage = async (req, res) => {
         status: toText(project?.status),
       }));
 
-    if (!body && references.length === 0) {
+    if (!body && references.length === 0 && attachments.length === 0) {
+      await cleanupUploadedFilesSafely(req);
       return res
         .status(400)
-        .json({ message: "Add a message or attach a project reference." });
+        .json({ message: "Add a message, media attachment, or project reference." });
     }
 
     const message = await ChatMessage.create({
@@ -609,11 +689,12 @@ const sendMessage = async (req, res) => {
       sender: req.user._id,
       body,
       references,
+      attachments,
     });
 
     upsertThreadReadState(thread, currentUserId, message.createdAt || new Date());
     thread.lastMessageAt = message.createdAt || new Date();
-    thread.lastMessagePreview = buildMessagePreview(body, references);
+    thread.lastMessagePreview = buildMessagePreview(body, references, attachments);
     thread.lastMessageSender = req.user._id;
     await thread.save();
 
@@ -647,6 +728,7 @@ const sendMessage = async (req, res) => {
 
     return res.status(201).json({ message: serializedMessage });
   } catch (error) {
+    await cleanupUploadedFilesSafely(req);
     console.error("Error sending chat message:", error);
     return res.status(500).json({ message: "Server error sending message." });
   }

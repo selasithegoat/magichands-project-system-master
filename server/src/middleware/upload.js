@@ -105,6 +105,7 @@ const MEDIA_EXTENSIONS = new Set([
   ".mp3",
   ".wav",
   ".m4a",
+  ".ogg",
 ]);
 const MEDIA_MIME_TYPES = new Set([
   "video/mp4",
@@ -115,6 +116,7 @@ const MEDIA_MIME_TYPES = new Set([
   "audio/wav",
   "audio/x-wav",
   "audio/webm",
+  "audio/ogg",
 ]);
 const FEEDBACK_MEDIA_EXTENSIONS = new Set([
   ...IMAGE_EXTENSIONS,
@@ -159,6 +161,10 @@ const FILE_POLICY_BY_FIELD = {
     mimeTypes: GENERAL_SAFE_MIME_TYPES,
   },
   feedbackAttachments: {
+    extensions: FEEDBACK_MEDIA_EXTENSIONS,
+    mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
+  },
+  chatAttachments: {
     extensions: FEEDBACK_MEDIA_EXTENSIONS,
     mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
   },
@@ -371,23 +377,52 @@ const getOrderId = (req) => {
   return orderId;
 };
 
+const getChatThreadId = (req) => {
+  const candidates = [req.params?.id, req.params?.threadId, req.body?.threadId];
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (value) return value;
+  }
+  return "thread";
+};
+
 const getCategory = (file) => {
   if (file.fieldname === "mockup") return "mockups";
   if (file.fieldname === "sampleImage" || file.fieldname === "attachments")
     return "scope-reference-materials";
   if (file.fieldname === "attachment") return "project-updates";
   if (file.fieldname === "feedbackAttachments") return "client-feedback";
+  if (file.fieldname === "chatAttachments") return "chat-media";
   return "misc";
 };
 
 const getRelativeDir = async (req, file) => {
-  await hydrateProjectMetadata(req);
-
   const now = new Date();
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   const dateFolder = `${month}-${day}`;
+  const category = getCategory(file);
+
+  if (category === "chat-media") {
+    const threadFolder = `thread-${sanitizeSegment(getChatThreadId(req), "thread")}`;
+    const userFolder = `user-${sanitizeSegment(
+      String(req.user?._id || req.user?.id || ""),
+      "user",
+    )}`;
+    const relativeDirFs = path.join(category, year, dateFolder, threadFolder, userFolder);
+    const relativeDirUrl = path.posix.join(
+      category,
+      year,
+      dateFolder,
+      threadFolder,
+      userFolder,
+    );
+
+    return { relativeDirFs, relativeDirUrl };
+  }
+
+  await hydrateProjectMetadata(req);
 
   const orderId = getOrderId(req);
   let projectName = getProjectName(req);
@@ -400,7 +435,6 @@ const getRelativeDir = async (req, file) => {
     "unnamed-project",
   )}`;
 
-  const category = getCategory(file);
   const relativeDirFs = path.join(category, year, dateFolder, projectFolder);
   const relativeDirUrl = path.posix.join(
     category,

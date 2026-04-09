@@ -6,11 +6,21 @@ import UsersIcon from "../icons/UsersIcon";
 import PersonIcon from "../icons/PersonIcon";
 import SearchIcon from "../icons/SearchIcon";
 import FolderIcon from "../icons/FolderIcon";
+import UploadIcon from "../icons/UploadIcon";
 import XIcon from "../icons/XIcon";
 import "./ChatDock.css";
 
 const THREAD_POLL_INTERVAL_MS = 20000;
 const THREAD_HIDDEN_POLL_INTERVAL_MS = 60000;
+const CHAT_ATTACHMENT_MAX_FILES = 6;
+const CHAT_MEDIA_ACCEPT = "image/*,video/*,audio/*";
+const RECORDING_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+  "audio/ogg",
+];
 
 const ChatBubbleIcon = ({ width = 24, height = 24 }) => (
   <svg
@@ -57,6 +67,39 @@ const BackIcon = ({ width = 18, height = 18 }) => (
     strokeLinejoin="round"
   >
     <path d="m15 18-6-6 6-6" />
+  </svg>
+);
+
+const MicrophoneIcon = ({ width = 18, height = 18 }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+    <path d="M12 18v3" />
+    <path d="M8 21h8" />
+  </svg>
+);
+
+const StopRecordingIcon = ({ width = 18, height = 18 }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="6" y="6" width="12" height="12" rx="2.5" />
   </svg>
 );
 
@@ -107,6 +150,99 @@ const buildProjectLabel = (project) => {
   return projectName || "Untitled Project";
 };
 
+const resolveAttachmentUrl = (attachment = {}) => {
+  const rawUrl = toText(attachment?.fileUrl || attachment?.url);
+  if (!rawUrl) return "";
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+    return rawUrl;
+  }
+  if (rawUrl.startsWith("/")) return rawUrl;
+  return `/${rawUrl.replace(/^\/+/, "")}`;
+};
+
+const getAttachmentName = (attachment = {}, fallbackIndex = 0) => {
+  const explicitName = toText(attachment?.fileName || attachment?.name);
+  if (explicitName) return explicitName;
+
+  const attachmentUrl = resolveAttachmentUrl(attachment);
+  if (!attachmentUrl) return `attachment-${fallbackIndex + 1}`;
+
+  const rawName = attachmentUrl.split("?")[0].split("/").pop() || attachmentUrl;
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+};
+
+const getAttachmentType = (attachment = {}, fallbackIndex = 0) => {
+  const mimeType = toText(attachment?.fileType || attachment?.type).toLowerCase();
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("video/")) return "video";
+
+  const attachmentName = getAttachmentName(attachment, fallbackIndex).toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(attachmentName)) return "image";
+  if (/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(attachmentName)) return "audio";
+  if (/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(attachmentName)) return "video";
+  return "file";
+};
+
+const isChatMediaFile = (file) => {
+  const mimeType = toText(file?.type).toLowerCase();
+  return (
+    mimeType.startsWith("image/") ||
+    mimeType.startsWith("audio/") ||
+    mimeType.startsWith("video/")
+  );
+};
+
+const buildPendingFileKey = (file) =>
+  [toText(file?.name), Number(file?.size) || 0, Number(file?.lastModified) || 0].join(":");
+
+const buildPendingAttachmentId = () =>
+  `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const getExtensionForMimeType = (mimeType) => {
+  const normalized = toText(mimeType).toLowerCase();
+  if (normalized.includes("mp4")) return "m4a";
+  if (normalized.includes("mpeg")) return "mp3";
+  if (normalized.includes("ogg")) return "ogg";
+  if (normalized.includes("wav")) return "wav";
+  return "webm";
+};
+
+const createPendingAttachment = (file, source = "upload") => {
+  const previewUrl =
+    typeof URL !== "undefined" &&
+    typeof URL.createObjectURL === "function" &&
+    isChatMediaFile(file)
+      ? URL.createObjectURL(file)
+      : "";
+
+  const baseAttachment = {
+    fileName: file?.name || "Attachment",
+    fileType: file?.type || "",
+  };
+
+  return {
+    id: buildPendingAttachmentId(),
+    file,
+    fileKey: buildPendingFileKey(file),
+    source,
+    previewUrl,
+    name: getAttachmentName(baseAttachment),
+    kind: getAttachmentType(baseAttachment),
+  };
+};
+
+const formatRecordingDuration = (totalSeconds = 0) => {
+  const safeSeconds = Math.max(Number(totalSeconds) || 0, 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
+
 const ChatDock = ({ user }) => {
   const navigate = useNavigate();
   const currentUserId = toIdString(user?._id || user?.id);
@@ -127,7 +263,10 @@ const ChatDock = ({ user }) => {
   const [projectResults, setProjectResults] = useState([]);
   const [projectSearchLoading, setProjectSearchLoading] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [error, setError] = useState("");
   const [projectRoutePicker, setProjectRoutePicker] = useState({
     referenceKey: "",
@@ -142,6 +281,18 @@ const ChatDock = ({ user }) => {
   const messageRequestIdRef = useRef(0);
   const messagesEndRef = useRef(null);
   const projectRouteCacheRef = useRef(new Map());
+  const attachmentInputRef = useRef(null);
+  const pendingAttachmentsRef = useRef([]);
+  const mediaRecorderRef = useRef(null);
+  const recordingStreamRef = useRef(null);
+  const recordingChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const shouldSaveRecordingRef = useRef(true);
+  const isMountedRef = useRef(true);
+  const isRecordingSupported =
+    typeof window !== "undefined" &&
+    typeof window.MediaRecorder === "function" &&
+    Boolean(window.navigator?.mediaDevices?.getUserMedia);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread._id === activeThreadId) || null,
@@ -160,6 +311,139 @@ const ChatDock = ({ user }) => {
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
+
+  const revokePendingAttachmentPreview = useCallback((attachment) => {
+    const previewUrl = attachment?.previewUrl;
+    if (!previewUrl) return;
+
+    try {
+      URL.revokeObjectURL(previewUrl);
+    } catch (revokeError) {
+      console.error("Failed to revoke chat preview URL", revokeError);
+    }
+  }, []);
+
+  const replacePendingAttachments = useCallback(
+    (nextValue) => {
+      setPendingAttachments((prev) => {
+        const nextAttachments =
+          typeof nextValue === "function" ? nextValue(prev) : nextValue;
+        const normalizedNext = Array.isArray(nextAttachments) ? nextAttachments : [];
+        const nextIds = new Set(normalizedNext.map((entry) => entry.id));
+
+        prev.forEach((entry) => {
+          if (!nextIds.has(entry.id)) {
+            revokePendingAttachmentPreview(entry);
+          }
+        });
+
+        return normalizedNext;
+      });
+    },
+    [revokePendingAttachmentPreview],
+  );
+
+  const clearRecordingTimer = useCallback(() => {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
+  const stopRecordingStream = useCallback(() => {
+    const stream = recordingStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+    }
+  }, []);
+
+  const stopActiveRecording = useCallback(
+    (saveRecording) => {
+      shouldSaveRecordingRef.current = Boolean(saveRecording);
+      const recorder = mediaRecorderRef.current;
+
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+        return;
+      }
+
+      clearRecordingTimer();
+      stopRecordingStream();
+      mediaRecorderRef.current = null;
+      recordingChunksRef.current = [];
+      shouldSaveRecordingRef.current = true;
+      if (isMountedRef.current) {
+        setIsRecording(false);
+        setRecordingDuration(0);
+      }
+    },
+    [clearRecordingTimer, stopRecordingStream],
+  );
+
+  const clearPendingAttachments = useCallback(() => {
+    replacePendingAttachments([]);
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
+  }, [replacePendingAttachments]);
+
+  const addPendingFiles = useCallback(
+    (incomingFiles, source = "upload") => {
+      const nextFiles = Array.from(incomingFiles || []).filter(Boolean);
+      if (nextFiles.length === 0) return;
+
+      const acceptedFiles = nextFiles.filter((file) => isChatMediaFile(file));
+      if (acceptedFiles.length !== nextFiles.length) {
+        setError("Only photos, videos, and audio files can be attached in chat.");
+      }
+
+      const existingKeys = new Set(
+        pendingAttachmentsRef.current.map((attachment) => attachment.fileKey),
+      );
+      const uniqueAcceptedFiles = acceptedFiles.filter((file) => {
+        const fileKey = buildPendingFileKey(file);
+        if (existingKeys.has(fileKey)) {
+          return false;
+        }
+        existingKeys.add(fileKey);
+        return true;
+      });
+
+      const availableSlots = CHAT_ATTACHMENT_MAX_FILES - pendingAttachmentsRef.current.length;
+      if (availableSlots <= 0) {
+        setError(
+          `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} media files per message.`,
+        );
+        return;
+      }
+
+      const filesToAttach = uniqueAcceptedFiles.slice(0, availableSlots);
+      if (uniqueAcceptedFiles.length > filesToAttach.length) {
+        setError(
+          `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} media files per message.`,
+        );
+      } else if (filesToAttach.length > 0) {
+        setError("");
+      }
+
+      if (filesToAttach.length === 0) return;
+
+      const draftAttachments = filesToAttach.map((file) =>
+        createPendingAttachment(file, source),
+      );
+      replacePendingAttachments((prev) => [...prev, ...draftAttachments]);
+    },
+    [replacePendingAttachments],
+  );
+
+  const cancelRecording = useCallback(() => {
+    stopActiveRecording(false);
+  }, [stopActiveRecording]);
 
   const resetProjectRoutePicker = useCallback(() => {
     setProjectRoutePicker({
@@ -203,6 +487,28 @@ const ChatDock = ({ user }) => {
       resetProjectRoutePicker();
     }
   }, [isOpen, resetProjectRoutePicker]);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+      shouldSaveRecordingRef.current = false;
+      clearRecordingTimer();
+      stopRecordingStream();
+
+      try {
+        if (mediaRecorderRef.current?.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (recordingError) {
+        console.error("Failed to stop chat recorder during cleanup", recordingError);
+      }
+
+      pendingAttachmentsRef.current.forEach((attachment) => {
+        revokePendingAttachmentPreview(attachment);
+      });
+    },
+    [clearRecordingTimer, revokePendingAttachmentPreview, stopRecordingStream],
+  );
 
   useEffect(() => {
     resetProjectRoutePicker();
@@ -441,6 +747,7 @@ const ChatDock = ({ user }) => {
   };
 
   const handleClose = () => {
+    cancelRecording();
     setIsOpen(false);
     setSidebarMode("threads");
     setProjectPickerOpen(false);
@@ -507,11 +814,136 @@ const ChatDock = ({ user }) => {
     );
   };
 
+  const handleAttachmentInputChange = (event) => {
+    addPendingFiles(event.target.files, "upload");
+    event.target.value = "";
+  };
+
+  const handleRemovePendingAttachment = (attachmentId) => {
+    replacePendingAttachments((prev) =>
+      prev.filter((attachment) => attachment.id !== attachmentId),
+    );
+  };
+
+  const handleStartRecording = async () => {
+    if (sending || isRecording) return;
+    if (!isRecordingSupported) {
+      setError("Audio recording is not supported on this browser.");
+      return;
+    }
+    if (pendingAttachmentsRef.current.length >= CHAT_ATTACHMENT_MAX_FILES) {
+      setError(
+        `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} media files per message.`,
+      );
+      return;
+    }
+
+    try {
+      const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
+      const MediaRecorderCtor = window.MediaRecorder;
+      const preferredMimeType = RECORDING_MIME_CANDIDATES.find((mimeType) =>
+        typeof MediaRecorderCtor.isTypeSupported === "function"
+          ? MediaRecorderCtor.isTypeSupported(mimeType)
+          : true,
+      );
+      const recorder = preferredMimeType
+        ? new MediaRecorderCtor(stream, { mimeType: preferredMimeType })
+        : new MediaRecorderCtor(stream);
+
+      mediaRecorderRef.current = recorder;
+      recordingStreamRef.current = stream;
+      recordingChunksRef.current = [];
+      shouldSaveRecordingRef.current = true;
+      setIsRecording(true);
+      setRecordingDuration(0);
+      setError("");
+
+      const recordingStartedAt = Date.now();
+
+      recorder.addEventListener("dataavailable", (recordingEvent) => {
+        if (recordingEvent.data && recordingEvent.data.size > 0) {
+          recordingChunksRef.current.push(recordingEvent.data);
+        }
+      });
+
+      recorder.addEventListener("stop", () => {
+        const shouldSave = shouldSaveRecordingRef.current;
+        const recordedChunks = [...recordingChunksRef.current];
+        const finalMimeType =
+          recorder.mimeType || preferredMimeType || "audio/webm";
+
+        shouldSaveRecordingRef.current = true;
+        recordingChunksRef.current = [];
+        clearRecordingTimer();
+        stopRecordingStream();
+        mediaRecorderRef.current = null;
+
+        if (isMountedRef.current) {
+          setIsRecording(false);
+          setRecordingDuration(0);
+        }
+
+        if (!shouldSave || recordedChunks.length === 0 || !isMountedRef.current) {
+          return;
+        }
+
+        const recordedBlob = new Blob(recordedChunks, { type: finalMimeType });
+        if (!recordedBlob.size) return;
+
+        const recordedFile = new File(
+          [recordedBlob],
+          `voice-note-${new Date().toISOString().replace(/[:.]/g, "-")}.${getExtensionForMimeType(finalMimeType)}`,
+          {
+            type: finalMimeType,
+            lastModified: Date.now(),
+          },
+        );
+
+        addPendingFiles([recordedFile], "recording");
+      });
+
+      recorder.addEventListener("error", () => {
+        shouldSaveRecordingRef.current = false;
+        setError("Audio recording failed. Please try again.");
+        stopActiveRecording(false);
+      });
+
+      recorder.start();
+      recordingTimerRef.current = window.setInterval(() => {
+        if (!isMountedRef.current) return;
+        setRecordingDuration(
+          Math.max(Math.floor((Date.now() - recordingStartedAt) / 1000), 0),
+        );
+      }, 1000);
+    } catch (recordingError) {
+      console.error("Failed to start chat recording", recordingError);
+      shouldSaveRecordingRef.current = false;
+      clearRecordingTimer();
+      stopRecordingStream();
+      mediaRecorderRef.current = null;
+      setIsRecording(false);
+      setRecordingDuration(0);
+      setError(
+        recordingError?.name === "NotAllowedError"
+          ? "Microphone access was denied."
+          : "Could not start audio recording.",
+      );
+    }
+  };
+
+  const handleStopRecording = () => {
+    stopActiveRecording(true);
+  };
+
   const handleSendMessage = async () => {
-    if (!activeThreadId || sending) return;
+    if (!activeThreadId || sending || isRecording) return;
 
     const trimmedComposer = composer.trim();
-    if (!trimmedComposer && selectedProjects.length === 0) {
+    if (
+      !trimmedComposer &&
+      selectedProjects.length === 0 &&
+      pendingAttachments.length === 0
+    ) {
       return;
     }
 
@@ -519,16 +951,28 @@ const ChatDock = ({ user }) => {
     setError("");
 
     try {
+      const payload = new FormData();
+      if (trimmedComposer) {
+        payload.append("body", trimmedComposer);
+      }
+      if (selectedProjects.length > 0) {
+        payload.append(
+          "references",
+          JSON.stringify(
+            selectedProjects.map((project) => ({
+              projectId: project._id,
+            })),
+          ),
+        );
+      }
+      pendingAttachments.forEach((attachment) => {
+        payload.append("chatAttachments", attachment.file, attachment.name);
+      });
+
       const res = await fetch(`/api/chat/threads/${activeThreadId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          body: trimmedComposer,
-          references: selectedProjects.map((project) => ({
-            projectId: project._id,
-          })),
-        }),
+        body: payload,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -541,6 +985,7 @@ const ChatDock = ({ user }) => {
       }
       setComposer("");
       setSelectedProjects([]);
+      clearPendingAttachments();
       setProjectPickerOpen(false);
       resetProjectRoutePicker();
       await fetchThreads({ focusThreadId: activeThreadId });
@@ -832,6 +1277,9 @@ const ChatDock = ({ user }) => {
                         const references = Array.isArray(message?.references)
                           ? message.references
                           : [];
+                        const attachments = Array.isArray(message?.attachments)
+                          ? message.attachments
+                          : [];
 
                         return (
                           <div
@@ -852,6 +1300,95 @@ const ChatDock = ({ user }) => {
                                 <span>{formatThreadTime(message.createdAt)}</span>
                               </div>
                               {message.body && <p>{message.body}</p>}
+                              {attachments.length > 0 && (
+                                <div className="chat-dock-attachment-stack">
+                                  {attachments.map((attachment, index) => {
+                                    const attachmentUrl = resolveAttachmentUrl(attachment);
+                                    if (!attachmentUrl) return null;
+
+                                    const attachmentName = getAttachmentName(
+                                      attachment,
+                                      index,
+                                    );
+                                    const attachmentType = getAttachmentType(
+                                      attachment,
+                                      index,
+                                    );
+
+                                    return (
+                                      <div
+                                        key={`${message._id}-attachment-${attachmentName}-${index}`}
+                                        className={`chat-dock-attachment-card ${attachmentType}`}
+                                      >
+                                        {attachmentType === "image" && (
+                                          <a
+                                            href={attachmentUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="chat-dock-attachment-preview-link"
+                                          >
+                                            <img
+                                              src={attachmentUrl}
+                                              alt={attachmentName}
+                                              className="chat-dock-attachment-image"
+                                              loading="lazy"
+                                            />
+                                          </a>
+                                        )}
+                                        {attachmentType === "audio" && (
+                                          <audio
+                                            controls
+                                            preload="metadata"
+                                            className="chat-dock-attachment-audio"
+                                          >
+                                            <source
+                                              src={attachmentUrl}
+                                              type={attachment.fileType || undefined}
+                                            />
+                                            Your browser does not support audio playback.
+                                          </audio>
+                                        )}
+                                        {attachmentType === "video" && (
+                                          <video
+                                            controls
+                                            preload="metadata"
+                                            playsInline
+                                            className="chat-dock-attachment-video"
+                                          >
+                                            <source
+                                              src={attachmentUrl}
+                                              type={attachment.fileType || undefined}
+                                            />
+                                            Your browser does not support video playback.
+                                          </video>
+                                        )}
+                                        {attachmentType === "file" && (
+                                          <a
+                                            href={attachmentUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="chat-dock-attachment-file-link"
+                                          >
+                                            <UploadIcon width="16" height="16" />
+                                            <span>Open attachment</span>
+                                          </a>
+                                        )}
+                                        <div className="chat-dock-attachment-meta">
+                                          <span title={attachmentName}>{attachmentName}</span>
+                                          <a
+                                            href={attachmentUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            download
+                                          >
+                                            Download
+                                          </a>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               {references.length > 0 && (
                                 <div className="chat-dock-reference-stack">
                                   {references.map((reference) => {
@@ -938,7 +1475,48 @@ const ChatDock = ({ user }) => {
                         <FolderIcon width="16" height="16" />
                         Link Project
                       </button>
+                      <button
+                        type="button"
+                        className="chat-dock-toolbar-btn"
+                        onClick={() => attachmentInputRef.current?.click()}
+                      >
+                        <UploadIcon width="16" height="16" />
+                        Add Media
+                      </button>
+                      <button
+                        type="button"
+                        className={`chat-dock-toolbar-btn ${
+                          isRecording ? "recording" : ""
+                        }`}
+                        onClick={isRecording ? handleStopRecording : handleStartRecording}
+                        disabled={sending || (!isRecording && !isRecordingSupported)}
+                      >
+                        {isRecording ? (
+                          <StopRecordingIcon width="16" height="16" />
+                        ) : (
+                          <MicrophoneIcon width="16" height="16" />
+                        )}
+                        {isRecording
+                          ? `Stop ${formatRecordingDuration(recordingDuration)}`
+                          : "Voice Note"}
+                      </button>
+                      <input
+                        ref={attachmentInputRef}
+                        type="file"
+                        className="chat-dock-hidden-input"
+                        accept={CHAT_MEDIA_ACCEPT}
+                        multiple
+                        onChange={handleAttachmentInputChange}
+                      />
                     </div>
+
+                    {isRecording && (
+                      <div className="chat-dock-recording-banner" role="status">
+                        <span className="chat-dock-recording-dot" aria-hidden="true" />
+                        <span>Recording voice note</span>
+                        <strong>{formatRecordingDuration(recordingDuration)}</strong>
+                      </div>
+                    )}
 
                     {selectedProjects.length > 0 && (
                       <div className="chat-dock-selected-projects">
@@ -957,6 +1535,82 @@ const ChatDock = ({ user }) => {
                             </span>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {pendingAttachments.length > 0 && (
+                      <div className="chat-dock-pending-attachments">
+                        {pendingAttachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className={`chat-dock-pending-card ${attachment.kind}`}
+                          >
+                            <button
+                              type="button"
+                              className="chat-dock-pending-remove"
+                              onClick={() => handleRemovePendingAttachment(attachment.id)}
+                              aria-label={`Remove ${attachment.name}`}
+                            >
+                              <XIcon width="12" height="12" />
+                            </button>
+                            <div className="chat-dock-pending-preview">
+                              {attachment.kind === "image" && attachment.previewUrl && (
+                                <img
+                                  src={attachment.previewUrl}
+                                  alt={attachment.name}
+                                  className="chat-dock-pending-image"
+                                />
+                              )}
+                              {attachment.kind === "audio" && attachment.previewUrl && (
+                                <audio
+                                  controls
+                                  preload="metadata"
+                                  className="chat-dock-pending-audio"
+                                >
+                                  <source
+                                    src={attachment.previewUrl}
+                                    type={attachment.file?.type || undefined}
+                                  />
+                                  Your browser does not support audio playback.
+                                </audio>
+                              )}
+                              {attachment.kind === "video" && attachment.previewUrl && (
+                                <video
+                                  controls
+                                  preload="metadata"
+                                  playsInline
+                                  className="chat-dock-pending-video"
+                                >
+                                  <source
+                                    src={attachment.previewUrl}
+                                    type={attachment.file?.type || undefined}
+                                  />
+                                  Your browser does not support video playback.
+                                </video>
+                              )}
+                              {attachment.kind === "file" && (
+                                <div className="chat-dock-pending-file-fallback">
+                                  <UploadIcon width="16" height="16" />
+                                  <span>Attachment ready</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="chat-dock-pending-meta">
+                              <strong title={attachment.name}>{attachment.name}</strong>
+                              <small>
+                                {attachment.source === "recording"
+                                  ? "Voice note"
+                                  : attachment.kind === "image"
+                                    ? "Photo"
+                                    : attachment.kind === "video"
+                                      ? "Video"
+                                      : attachment.kind === "audio"
+                                        ? "Audio"
+                                        : "Attachment"}
+                              </small>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -1005,7 +1659,13 @@ const ChatDock = ({ user }) => {
                         type="button"
                         className="chat-dock-send-btn"
                         onClick={() => void handleSendMessage()}
-                        disabled={sending || (!composer.trim() && selectedProjects.length === 0)}
+                        disabled={
+                          sending ||
+                          isRecording ||
+                          (!composer.trim() &&
+                            selectedProjects.length === 0 &&
+                            pendingAttachments.length === 0)
+                        }
                         aria-label="Send chat message"
                       >
                         <SendIcon />

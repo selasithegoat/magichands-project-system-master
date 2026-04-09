@@ -276,6 +276,7 @@ const SAFE_INLINE_UPLOAD_EXTENSIONS = new Set([
   ".mp3",
   ".wav",
   ".m4a",
+  ".ogg",
 ]);
 
 const setUploadSecurityHeaders = (res, filePath) => {
