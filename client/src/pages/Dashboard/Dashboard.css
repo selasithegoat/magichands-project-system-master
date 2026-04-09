@@ -208,6 +208,10 @@
   box-shadow: var(--shadow-soft);
 }
 
+.dashboard-projects-panel{
+  height: fit-content ;
+}
+
 .dashboard-kpi-panel,
 .dashboard-pipeline-card {
   padding: 1rem;

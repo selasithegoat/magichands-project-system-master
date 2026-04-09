@@ -14,7 +14,7 @@ router.get("/", protect, (req, res) => {
   }
 
   res.write(`event: connected\ndata: {"ok": true}\n\n`);
-  addClient(res);
+  addClient(res, { userId: req.user?._id });
 
   req.on("close", () => {
     removeClient(res);

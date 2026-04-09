@@ -4,6 +4,7 @@ import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
 import ReminderAlertModal from "../features/ReminderAlertModal";
+import ChatDock from "../chat/ChatDock";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -1030,6 +1031,8 @@ const Layout = ({
           />
         ))}
       </div>
+
+      {user?._id && <ChatDock user={user} />}
 
       {isFrontDeskUser && (
         <button
