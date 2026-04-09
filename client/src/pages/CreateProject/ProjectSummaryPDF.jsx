@@ -168,6 +168,26 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 1.4,
   },
+  referencePageBody: {
+    flexGrow: 1,
+    paddingTop: 10,
+  },
+  referenceImageFrame: {
+    width: "100%",
+    height: 620,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  referencePageImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
 });
 
 const SUPPLY_SOURCE_LABELS = {
@@ -540,21 +560,17 @@ const ProjectSummaryPDF = ({
               </Text>
             </View>
           </View>
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
+          <View style={styles.referencePageBody}>
             {/* Note: React-PDF Image requires valid source. 
                Since this is client-side generation, relative URLs match browser access through the Vite proxy.
            */}
-            <Image
-              src={imageUrls[sampleImage]}
-              format="png"
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
+            <View style={styles.referenceImageFrame}>
+              <Image
+                src={imageUrls[sampleImage]}
+                format="png"
+                style={styles.referencePageImage}
+              />
+            </View>
             {sampleImageNote && (
               <Text style={styles.referenceCaption}>
                 Note: {sampleImageNote}
@@ -588,21 +604,15 @@ const ProjectSummaryPDF = ({
                 </View>
               </View>
               <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
+                style={styles.referencePageBody}
               >
-                <Image
-                  src={imageUrls[fileUrl]}
-                  format="png"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                  }}
-                />
+                <View style={styles.referenceImageFrame}>
+                  <Image
+                    src={imageUrls[fileUrl]}
+                    format="png"
+                    style={styles.referencePageImage}
+                  />
+                </View>
                 {note && (
                   <Text style={styles.referenceCaption}>Note: {note}</Text>
                 )}
