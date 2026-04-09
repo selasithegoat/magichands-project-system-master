@@ -56,6 +56,7 @@ const EndOfDayUpdate = ({ user }) => {
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleDateString("en-US", {
+      weekday: "long",
       month: "short",
       day: "numeric",
       year: "numeric",
