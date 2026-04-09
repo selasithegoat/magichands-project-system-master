@@ -501,6 +501,13 @@
   margin-top: 0.7rem;
 }
 
+.chat-dock-reference-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
 .chat-dock-reference-card {
   border: 1px solid rgba(var(--primary-rgb), 0.16);
   border-radius: 14px;
@@ -527,6 +534,75 @@
 .chat-dock-message-bubble.mine .chat-dock-reference-card {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+}
+
+.chat-dock-route-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-alt) 80%, var(--bg-card));
+  border: 1px solid rgba(var(--primary-rgb), 0.14);
+}
+
+.chat-dock-route-picker-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.chat-dock-route-picker-hint {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.chat-dock-route-picker-hint.error {
+  color: var(--danger);
+}
+
+.chat-dock-route-pill {
+  border: 1px solid rgba(var(--primary-rgb), 0.22);
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary-color);
+  padding: 0.38rem 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.chat-dock-route-pill:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--primary-rgb), 0.34);
+  background: rgba(var(--primary-rgb), 0.16);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-route-picker {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-route-picker-label,
+.chat-dock-message-bubble.mine .chat-dock-route-picker-hint {
+  color: rgba(248, 250, 252, 0.82);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-route-picker-hint.error {
+  color: #fee2e2;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-route-pill {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
   color: #f8fafc;
 }
 

@@ -12,6 +12,31 @@ const MAX_REFERENCE_COUNT = 3;
 const DEFAULT_MESSAGE_LIMIT = 50;
 const USER_SEARCH_LIMIT = 20;
 const PROJECT_SEARCH_LIMIT = 12;
+const PRODUCTION_SUB_DEPARTMENTS = new Set([
+  "dtf",
+  "uv-dtf",
+  "uv-printing",
+  "engraving",
+  "large-format",
+  "digital-press",
+  "digital-heat-press",
+  "offset-press",
+  "screen-printing",
+  "embroidery",
+  "sublimation",
+  "digital-cutting",
+  "pvc-id",
+  "business-cards",
+  "installation",
+  "overseas",
+  "woodme",
+  "fabrication",
+  "signage",
+  "outside-production",
+]);
+const GRAPHICS_SUB_DEPARTMENTS = new Set(["graphics"]);
+const STORES_SUB_DEPARTMENTS = new Set(["stock", "packaging"]);
+const PHOTOGRAPHY_SUB_DEPARTMENTS = new Set(["photography"]);
 
 const toIdString = (value) => {
   if (!value) return "";
@@ -40,6 +65,104 @@ const toIdString = (value) => {
 };
 
 const toText = (value) => String(value || "").trim();
+
+const toDepartmentArray = (value) =>
+  Array.isArray(value) ? value : value ? [value] : [];
+
+const normalizeDepartmentValue = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const isFrontDeskUser = (user) =>
+  toDepartmentArray(user?.department)
+    .map((entry) => normalizeDepartmentValue(entry))
+    .includes("front desk");
+
+const resolveEngagedRouteDepartments = (departments = []) => {
+  const normalizedDepartments = toDepartmentArray(departments)
+    .map((entry) => normalizeDepartmentValue(entry))
+    .filter(Boolean);
+
+  const hasGraphicsParent = normalizedDepartments.includes("graphics/design");
+  const hasStoresParent = normalizedDepartments.includes("stores");
+  const hasPhotographyParent = normalizedDepartments.includes("photography");
+  const productionSubDepartments = normalizedDepartments.filter((entry) =>
+    PRODUCTION_SUB_DEPARTMENTS.has(entry),
+  );
+  const hasGraphics =
+    hasGraphicsParent ||
+    normalizedDepartments.some((entry) => GRAPHICS_SUB_DEPARTMENTS.has(entry));
+  const hasStores =
+    hasStoresParent ||
+    normalizedDepartments.some((entry) => STORES_SUB_DEPARTMENTS.has(entry));
+  const hasPhotography =
+    hasPhotographyParent ||
+    normalizedDepartments.some((entry) =>
+      PHOTOGRAPHY_SUB_DEPARTMENTS.has(entry),
+    );
+
+  const routeDepartments = [...productionSubDepartments];
+  if (hasGraphics) {
+    routeDepartments.push(...GRAPHICS_SUB_DEPARTMENTS);
+  }
+  if (hasStores) {
+    routeDepartments.push(...STORES_SUB_DEPARTMENTS);
+  }
+  if (hasPhotography) {
+    routeDepartments.push(...PHOTOGRAPHY_SUB_DEPARTMENTS);
+  }
+
+  return Array.from(new Set(routeDepartments));
+};
+
+const hasEngagedDepartmentOverlap = (user, projectDepartments = []) => {
+  const routeDepartments = new Set(resolveEngagedRouteDepartments(user?.department));
+  if (routeDepartments.size === 0) return false;
+
+  return toDepartmentArray(projectDepartments)
+    .map((entry) => normalizeDepartmentValue(entry))
+    .some((entry) => routeDepartments.has(entry));
+};
+
+const isProjectLeadUser = (user, project) => {
+  const currentUserId = toIdString(user?._id || user?.id);
+  const projectLeadId = toIdString(project?.projectLeadId?._id || project?.projectLeadId);
+  return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
+};
+
+const buildProjectRouteOptions = (user, project) => {
+  const projectId = toIdString(project?._id);
+  if (!projectId) return [];
+
+  const routes = [];
+
+  if (isProjectLeadUser(user, project)) {
+    routes.push({
+      key: "detail",
+      label: "Project Detail",
+      path: `/detail/${projectId}`,
+    });
+  }
+
+  if (hasEngagedDepartmentOverlap(user, project?.departments)) {
+    routes.push({
+      key: "engaged",
+      label: "Department",
+      path: `/engaged-projects/actions/${projectId}`,
+    });
+  }
+
+  if (isFrontDeskUser(user)) {
+    routes.push({
+      key: "frontdesk",
+      label: "Front Desk",
+      path: `/new-orders/actions/${projectId}`,
+    });
+  }
+
+  return routes;
+};
 
 const escapeRegex = (value) =>
   String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -591,39 +714,117 @@ const searchProjects = async (req, res) => {
   try {
     const queryText = toText(req.query?.q);
     const regex = queryText ? new RegExp(escapeRegex(queryText), "i") : null;
-    const filter = regex
-      ? {
-          $or: [
-            { orderId: regex },
-            { "details.projectName": regex },
-            { "details.projectIndicator": regex },
-            { "details.client": regex },
-          ],
-        }
-      : {};
+    const searchConditions = regex
+      ? [
+          { orderId: regex },
+          { "details.projectName": regex },
+          { "details.projectIndicator": regex },
+          { "details.client": regex },
+        ]
+      : [];
+    const accessConditions = [];
+
+    if (isFrontDeskUser(req.user)) {
+      accessConditions.push({});
+    } else {
+      const engagedRouteDepartments = resolveEngagedRouteDepartments(
+        req.user?.department,
+      );
+      if (engagedRouteDepartments.length > 0) {
+        accessConditions.push({ departments: { $in: engagedRouteDepartments } });
+      }
+      if (req.user?._id) {
+        accessConditions.push({ projectLeadId: req.user._id });
+      }
+    }
+
+    if (accessConditions.length === 0) {
+      return res.json({ projects: [] });
+    }
+
+    const normalizedAccessQuery =
+      accessConditions.length === 1
+        ? accessConditions[0]
+        : { $or: accessConditions };
+    const filter =
+      searchConditions.length > 0
+        ? {
+            $and: [
+              normalizedAccessQuery,
+              { $or: searchConditions },
+            ],
+          }
+        : normalizedAccessQuery;
 
     const projects = await Project.find(filter)
       .select(
-        "_id orderId status details.projectName details.projectIndicator details.client",
+        "_id orderId status departments projectLeadId details.projectName details.projectIndicator details.client",
       )
       .sort({ updatedAt: -1, createdAt: -1 })
-      .limit(PROJECT_SEARCH_LIMIT)
+      .limit(PROJECT_SEARCH_LIMIT * 3)
       .lean();
 
-    const serializedProjects = projects.map((project) => ({
-      _id: toIdString(project._id),
-      orderId: toText(project.orderId),
-      projectName: toText(project?.details?.projectName),
-      projectIndicator: toText(project?.details?.projectIndicator),
-      client: toText(project?.details?.client),
-      status: toText(project?.status),
-      displayName: buildProjectDisplayName(project),
-    }));
+    const serializedProjects = projects
+      .filter((project) => buildProjectRouteOptions(req.user, project).length > 0)
+      .slice(0, PROJECT_SEARCH_LIMIT)
+      .map((project) => ({
+        _id: toIdString(project._id),
+        orderId: toText(project.orderId),
+        projectName: toText(project?.details?.projectName),
+        projectIndicator: toText(project?.details?.projectIndicator),
+        client: toText(project?.details?.client),
+        status: toText(project?.status),
+        displayName: buildProjectDisplayName(project),
+      }));
 
     return res.json({ projects: serializedProjects });
   } catch (error) {
     console.error("Error searching chat projects:", error);
     return res.status(500).json({ message: "Server error searching projects." });
+  }
+};
+
+const getProjectRoutes = async (req, res) => {
+  try {
+    const projectId = toIdString(req.params?.id);
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return res.status(400).json({ message: "Invalid project reference." });
+    }
+
+    const project = await Project.findById(projectId)
+      .select(
+        "_id orderId status departments projectLeadId details.projectName details.projectIndicator details.client",
+      )
+      .lean();
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    const routes = buildProjectRouteOptions(req.user, project);
+    if (routes.length === 0) {
+      return res.status(403).json({
+        message: "You do not have an eligible route for this linked project.",
+      });
+    }
+
+    return res.json({
+      project: {
+        _id: toIdString(project._id),
+        orderId: toText(project.orderId),
+        projectName: toText(project?.details?.projectName),
+        projectIndicator: toText(project?.details?.projectIndicator),
+        client: toText(project?.details?.client),
+        status: toText(project?.status),
+        displayName: buildProjectDisplayName(project),
+      },
+      routes,
+    });
+  } catch (error) {
+    console.error("Error resolving chat project routes:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error resolving project routes." });
   }
 };
 
@@ -635,4 +836,5 @@ module.exports = {
   markThreadRead,
   searchUsers,
   searchProjects,
+  getProjectRoutes,
 };

@@ -113,10 +113,19 @@ const ChatDock = ({ user }) => {
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [error, setError] = useState("");
+  const [projectRoutePicker, setProjectRoutePicker] = useState({
+    referenceKey: "",
+    projectId: "",
+    projectLabel: "",
+    routes: [],
+    loading: false,
+    error: "",
+  });
   const activeThreadIdRef = useRef("");
   const isOpenRef = useRef(false);
   const messageRequestIdRef = useRef(0);
   const messagesEndRef = useRef(null);
+  const projectRouteCacheRef = useRef(new Map());
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread._id === activeThreadId) || null,
@@ -135,6 +144,17 @@ const ChatDock = ({ user }) => {
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+
+  const resetProjectRoutePicker = useCallback(() => {
+    setProjectRoutePicker({
+      referenceKey: "",
+      projectId: "",
+      projectLabel: "",
+      routes: [],
+      loading: false,
+      error: "",
+    });
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -161,6 +181,16 @@ const ChatDock = ({ user }) => {
       documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      resetProjectRoutePicker();
+    }
+  }, [isOpen, resetProjectRoutePicker]);
+
+  useEffect(() => {
+    resetProjectRoutePicker();
+  }, [activeThreadId, resetProjectRoutePicker]);
 
   const fetchThreads = useCallback(
     async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
@@ -391,12 +421,14 @@ const ChatDock = ({ user }) => {
     setIsOpen(false);
     setSidebarMode("threads");
     setProjectPickerOpen(false);
+    resetProjectRoutePicker();
   };
 
   const handleSelectThread = (threadId) => {
     setActiveThreadId(threadId);
     setSidebarMode("threads");
     setError("");
+    resetProjectRoutePicker();
   };
 
   const handleStartDirectThread = async (recipientId) => {
@@ -416,6 +448,7 @@ const ChatDock = ({ user }) => {
       setSidebarMode("threads");
       setUserQuery("");
       setUserResults([]);
+      resetProjectRoutePicker();
       await fetchThreads({ focusThreadId: nextThreadId });
       setIsOpen(true);
     } catch (threadError) {
@@ -478,6 +511,7 @@ const ChatDock = ({ user }) => {
       setComposer("");
       setSelectedProjects([]);
       setProjectPickerOpen(false);
+      resetProjectRoutePicker();
       await fetchThreads({ focusThreadId: activeThreadId });
       void markThreadRead(activeThreadId);
     } catch (sendError) {
@@ -494,9 +528,96 @@ const ChatDock = ({ user }) => {
     }
   };
 
-  const handleNavigateProject = (projectId) => {
+  const handleSelectProjectRoute = (path) => {
+    if (!path) return;
+    resetProjectRoutePicker();
+    navigate(path);
+  };
+
+  const handleNavigateProject = async (referenceKey, projectId, projectLabel) => {
     if (!projectId) return;
-    navigate(`/detail/${projectId}`);
+
+    if (
+      projectRoutePicker.referenceKey === referenceKey &&
+      !projectRoutePicker.loading
+    ) {
+      resetProjectRoutePicker();
+      return;
+    }
+
+    const applyResolvedRoutes = (routes, nextProjectLabel = projectLabel) => {
+      if (!Array.isArray(routes) || routes.length === 0) {
+        setProjectRoutePicker({
+          referenceKey,
+          projectId,
+          projectLabel: nextProjectLabel,
+          routes: [],
+          loading: false,
+          error: "You do not have an eligible route for this linked project.",
+        });
+        return;
+      }
+
+      if (routes.length === 1) {
+        handleSelectProjectRoute(routes[0].path);
+        return;
+      }
+
+      setProjectRoutePicker({
+        referenceKey,
+        projectId,
+        projectLabel: nextProjectLabel,
+        routes,
+        loading: false,
+        error: "",
+      });
+    };
+
+    const cachedProjectRoutes = projectRouteCacheRef.current.get(projectId);
+    if (cachedProjectRoutes) {
+      applyResolvedRoutes(
+        cachedProjectRoutes.routes,
+        cachedProjectRoutes.projectLabel || projectLabel,
+      );
+      return;
+    }
+
+    setProjectRoutePicker({
+      referenceKey,
+      projectId,
+      projectLabel,
+      routes: [],
+      loading: true,
+      error: "",
+    });
+
+    try {
+      const res = await fetch(`/api/chat/projects/${projectId}/routes`, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to resolve project routes.");
+      }
+
+      const routes = Array.isArray(data?.routes) ? data.routes : [];
+      const resolvedProjectLabel =
+        toText(data?.project?.displayName) || projectLabel || "Linked Project";
+      projectRouteCacheRef.current.set(projectId, {
+        routes,
+        projectLabel: resolvedProjectLabel,
+      });
+      applyResolvedRoutes(routes, resolvedProjectLabel);
+    } catch (routeError) {
+      setProjectRoutePicker({
+        referenceKey,
+        projectId,
+        projectLabel,
+        routes: [],
+        loading: false,
+        error: routeError.message || "Failed to resolve project routes.",
+      });
+    }
   };
 
   return (
@@ -679,19 +800,68 @@ const ChatDock = ({ user }) => {
                               {message.body && <p>{message.body}</p>}
                               {references.length > 0 && (
                                 <div className="chat-dock-reference-stack">
-                                  {references.map((reference) => (
-                                    <button
-                                      key={`${message._id}-${reference.projectId}`}
-                                      type="button"
-                                      className="chat-dock-reference-card"
-                                      onClick={() =>
-                                        handleNavigateProject(reference.projectId)
-                                      }
-                                    >
-                                      <FolderIcon width="16" height="16" />
-                                      <span>{buildProjectLabel(reference)}</span>
-                                    </button>
-                                  ))}
+                                  {references.map((reference) => {
+                                    const referenceKey = `${message._id}-${reference.projectId}`;
+                                    const projectLabel = buildProjectLabel(reference);
+                                    const isRoutePickerOpen =
+                                      projectRoutePicker.referenceKey === referenceKey;
+
+                                    return (
+                                      <div
+                                        key={referenceKey}
+                                        className="chat-dock-reference-wrap"
+                                      >
+                                        <button
+                                          type="button"
+                                          className="chat-dock-reference-card"
+                                          onClick={() =>
+                                            void handleNavigateProject(
+                                              referenceKey,
+                                              reference.projectId,
+                                              projectLabel,
+                                            )
+                                          }
+                                        >
+                                          <FolderIcon width="16" height="16" />
+                                          <span>{projectLabel}</span>
+                                        </button>
+
+                                        {isRoutePickerOpen && (
+                                          <div
+                                            className="chat-dock-route-picker"
+                                            role="group"
+                                            aria-label={`Choose a route for ${projectRoutePicker.projectLabel || projectLabel}`}
+                                          >
+                                            <span className="chat-dock-route-picker-label">
+                                              Open as
+                                            </span>
+                                            {projectRoutePicker.loading ? (
+                                              <span className="chat-dock-route-picker-hint">
+                                                Checking routes...
+                                              </span>
+                                            ) : projectRoutePicker.error ? (
+                                              <span className="chat-dock-route-picker-hint error">
+                                                {projectRoutePicker.error}
+                                              </span>
+                                            ) : (
+                                              projectRoutePicker.routes.map((route) => (
+                                                <button
+                                                  key={`${referenceKey}-${route.key}`}
+                                                  type="button"
+                                                  className="chat-dock-route-pill"
+                                                  onClick={() =>
+                                                    handleSelectProjectRoute(route.path)
+                                                  }
+                                                >
+                                                  {route.label}
+                                                </button>
+                                              ))
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
