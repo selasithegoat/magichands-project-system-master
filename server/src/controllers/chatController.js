@@ -681,7 +681,7 @@ const sendMessage = async (req, res) => {
       await cleanupUploadedFilesSafely(req);
       return res
         .status(400)
-        .json({ message: "Add a message, media attachment, or project reference." });
+        .json({ message: "Add a message, attachment, or project reference." });
     }
 
     const message = await ChatMessage.create({

@@ -13,7 +13,8 @@ import "./ChatDock.css";
 const THREAD_POLL_INTERVAL_MS = 20000;
 const THREAD_HIDDEN_POLL_INTERVAL_MS = 60000;
 const CHAT_ATTACHMENT_MAX_FILES = 6;
-const CHAT_MEDIA_ACCEPT = "image/*,video/*,audio/*";
+const CHAT_ATTACHMENT_ACCEPT =
+  "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
 const RECORDING_MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -21,6 +22,58 @@ const RECORDING_MIME_CANDIDATES = [
   "audio/ogg;codecs=opus",
   "audio/ogg",
 ];
+const CHAT_SAFE_FILE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".csv",
+  ".zip",
+  ".rar",
+  ".7z",
+  ".cdr",
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".ogg",
+]);
+const CHAT_SAFE_FILE_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/x-rar-compressed",
+  "application/x-7z-compressed",
+  "application/cdr",
+  "application/coreldraw",
+  "application/vnd.corel-draw",
+  "application/x-cdr",
+  "application/x-coreldraw",
+  "image/x-cdr",
+]);
+const CHAT_GENERIC_BINARY_MIME_TYPES = new Set([
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
 
 const ChatBubbleIcon = ({ width = 24, height = 24 }) => (
   <svg
@@ -188,12 +241,23 @@ const getAttachmentType = (attachment = {}, fallbackIndex = 0) => {
   return "file";
 };
 
-const isChatMediaFile = (file) => {
+const getFileExtension = (fileName) => {
+  const rawName = toText(fileName).toLowerCase();
+  const extensionIndex = rawName.lastIndexOf(".");
+  return extensionIndex >= 0 ? rawName.slice(extensionIndex) : "";
+};
+
+const isChatAttachmentFile = (file) => {
   const mimeType = toText(file?.type).toLowerCase();
+  const extension = getFileExtension(file?.name);
+
   return (
     mimeType.startsWith("image/") ||
     mimeType.startsWith("audio/") ||
-    mimeType.startsWith("video/")
+    mimeType.startsWith("video/") ||
+    CHAT_SAFE_FILE_MIME_TYPES.has(mimeType) ||
+    CHAT_SAFE_FILE_EXTENSIONS.has(extension) ||
+    (CHAT_GENERIC_BINARY_MIME_TYPES.has(mimeType) && extension === ".cdr")
   );
 };
 
@@ -216,7 +280,9 @@ const createPendingAttachment = (file, source = "upload") => {
   const previewUrl =
     typeof URL !== "undefined" &&
     typeof URL.createObjectURL === "function" &&
-    isChatMediaFile(file)
+    (toText(file?.type).toLowerCase().startsWith("image/") ||
+      toText(file?.type).toLowerCase().startsWith("audio/") ||
+      toText(file?.type).toLowerCase().startsWith("video/"))
       ? URL.createObjectURL(file)
       : "";
 
@@ -397,9 +463,9 @@ const ChatDock = ({ user }) => {
       const nextFiles = Array.from(incomingFiles || []).filter(Boolean);
       if (nextFiles.length === 0) return;
 
-      const acceptedFiles = nextFiles.filter((file) => isChatMediaFile(file));
+      const acceptedFiles = nextFiles.filter((file) => isChatAttachmentFile(file));
       if (acceptedFiles.length !== nextFiles.length) {
-        setError("Only photos, videos, and audio files can be attached in chat.");
+        setError("Only approved attachment formats can be added in chat.");
       }
 
       const existingKeys = new Set(
@@ -417,7 +483,7 @@ const ChatDock = ({ user }) => {
       const availableSlots = CHAT_ATTACHMENT_MAX_FILES - pendingAttachmentsRef.current.length;
       if (availableSlots <= 0) {
         setError(
-          `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} media files per message.`,
+          `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} files per message.`,
         );
         return;
       }
@@ -425,7 +491,7 @@ const ChatDock = ({ user }) => {
       const filesToAttach = uniqueAcceptedFiles.slice(0, availableSlots);
       if (uniqueAcceptedFiles.length > filesToAttach.length) {
         setError(
-          `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} media files per message.`,
+          `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} files per message.`,
         );
       } else if (filesToAttach.length > 0) {
         setError("");
@@ -832,8 +898,8 @@ const ChatDock = ({ user }) => {
       return;
     }
     if (pendingAttachmentsRef.current.length >= CHAT_ATTACHMENT_MAX_FILES) {
-      setError(
-        `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} media files per message.`,
+        setError(
+        `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} files per message.`,
       );
       return;
     }
@@ -1481,7 +1547,7 @@ const ChatDock = ({ user }) => {
                         onClick={() => attachmentInputRef.current?.click()}
                       >
                         <UploadIcon width="16" height="16" />
-                        Add Media
+                        Add File
                       </button>
                       <button
                         type="button"
@@ -1504,7 +1570,7 @@ const ChatDock = ({ user }) => {
                         ref={attachmentInputRef}
                         type="file"
                         className="chat-dock-hidden-input"
-                        accept={CHAT_MEDIA_ACCEPT}
+                        accept={CHAT_ATTACHMENT_ACCEPT}
                         multiple
                         onChange={handleAttachmentInputChange}
                       />

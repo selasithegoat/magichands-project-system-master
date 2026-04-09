@@ -165,8 +165,8 @@ const FILE_POLICY_BY_FIELD = {
     mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
   },
   chatAttachments: {
-    extensions: FEEDBACK_MEDIA_EXTENSIONS,
-    mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
+    extensions: GENERAL_SAFE_EXTENSIONS,
+    mimeTypes: GENERAL_SAFE_MIME_TYPES,
   },
   default: {
     extensions: GENERAL_SAFE_EXTENSIONS,
