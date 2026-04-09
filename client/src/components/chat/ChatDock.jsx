@@ -45,6 +45,21 @@ const SendIcon = ({ width = 18, height = 18 }) => (
   </svg>
 );
 
+const BackIcon = ({ width = 18, height = 18 }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="m15 18-6-6 6-6" />
+  </svg>
+);
+
 const toIdString = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") {
@@ -104,6 +119,7 @@ const ChatDock = ({ user }) => {
   const [composer, setComposer] = useState("");
   const [sending, setSending] = useState(false);
   const [sidebarMode, setSidebarMode] = useState("threads");
+  const [mobilePanelView, setMobilePanelView] = useState("sidebar");
   const [userQuery, setUserQuery] = useState("");
   const [userResults, setUserResults] = useState([]);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
@@ -191,6 +207,12 @@ const ChatDock = ({ user }) => {
   useEffect(() => {
     resetProjectRoutePicker();
   }, [activeThreadId, resetProjectRoutePicker]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      setMobilePanelView("sidebar");
+    }
+  }, [activeThreadId]);
 
   const fetchThreads = useCallback(
     async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
@@ -412,6 +434,7 @@ const ChatDock = ({ user }) => {
   const handleOpen = () => {
     setIsOpen(true);
     setError("");
+    setMobilePanelView(activeThreadId ? "thread" : "sidebar");
     if (threads.length === 0) {
       void fetchThreads({ preserveSelection: false });
     }
@@ -421,12 +444,19 @@ const ChatDock = ({ user }) => {
     setIsOpen(false);
     setSidebarMode("threads");
     setProjectPickerOpen(false);
+    setMobilePanelView("sidebar");
     resetProjectRoutePicker();
+  };
+
+  const handleSidebarModeChange = (mode) => {
+    setSidebarMode(mode);
+    setMobilePanelView("sidebar");
   };
 
   const handleSelectThread = (threadId) => {
     setActiveThreadId(threadId);
     setSidebarMode("threads");
+    setMobilePanelView("thread");
     setError("");
     resetProjectRoutePicker();
   };
@@ -446,6 +476,7 @@ const ChatDock = ({ user }) => {
 
       const nextThreadId = data?.thread?._id || "";
       setSidebarMode("threads");
+      setMobilePanelView("thread");
       setUserQuery("");
       setUserResults([]);
       resetProjectRoutePicker();
@@ -532,6 +563,12 @@ const ChatDock = ({ user }) => {
     if (!path) return;
     resetProjectRoutePicker();
     navigate(path);
+  };
+
+  const handleShowThreadList = () => {
+    setMobilePanelView("sidebar");
+    setSidebarMode("threads");
+    resetProjectRoutePicker();
   };
 
   const handleNavigateProject = async (referenceKey, projectId, projectLabel) => {
@@ -624,7 +661,13 @@ const ChatDock = ({ user }) => {
     <>
       {isOpen && (
         <div className="chat-dock-shell" role="dialog" aria-modal="false">
-          <div className="chat-dock-panel">
+          <div
+            className={`chat-dock-panel ${
+              mobilePanelView === "thread" && activeThread
+                ? "mobile-thread-view"
+                : "mobile-sidebar-view"
+            }`}
+          >
             <div className="chat-dock-sidebar">
               <div className="chat-dock-sidebar-head">
                 <div>
@@ -647,7 +690,7 @@ const ChatDock = ({ user }) => {
                   className={`chat-dock-chip-btn ${
                     sidebarMode === "threads" ? "active" : ""
                   }`}
-                  onClick={() => setSidebarMode("threads")}
+                  onClick={() => handleSidebarModeChange("threads")}
                 >
                   Threads
                 </button>
@@ -656,7 +699,7 @@ const ChatDock = ({ user }) => {
                   className={`chat-dock-chip-btn ${
                     sidebarMode === "users" ? "active" : ""
                   }`}
-                  onClick={() => setSidebarMode("users")}
+                  onClick={() => handleSidebarModeChange("users")}
                 >
                   New DM
                 </button>
@@ -744,11 +787,22 @@ const ChatDock = ({ user }) => {
               {activeThread ? (
                 <>
                   <div className="chat-dock-main-head">
-                    <div className="chat-dock-thread-title">
-                      <span className="chat-dock-thread-badge">
-                        {activeThread.type === "public" ? "Public" : "Direct"}
-                      </span>
-                      <h3>{activeThread.name}</h3>
+                    <div className="chat-dock-main-head-primary">
+                      <button
+                        type="button"
+                        className="chat-dock-mobile-back-btn"
+                        onClick={handleShowThreadList}
+                        aria-label="Back to chats"
+                      >
+                        <BackIcon width="16" height="16" />
+                        <span>Chats</span>
+                      </button>
+                      <div className="chat-dock-thread-title">
+                        <span className="chat-dock-thread-badge">
+                          {activeThread.type === "public" ? "Public" : "Direct"}
+                        </span>
+                        <h3>{activeThread.name}</h3>
+                      </div>
                     </div>
                     {activeThread.counterpart && (
                       <div className="chat-dock-counterpart">
