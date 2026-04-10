@@ -7,6 +7,7 @@ const {
   deleteMessage,
   updateMessage,
   markThreadRead,
+  clearThreadMessages,
   searchUsers,
   searchProjects,
   getProjectRoutes,
@@ -52,5 +53,6 @@ router.patch("/threads/:id/messages/:messageId", protect, updateMessage);
 router.post("/threads/:id/messages/:messageId", protect, updateMessage);
 router.delete("/threads/:id/messages/:messageId", protect, deleteMessage);
 router.post("/threads/:id/read", protect, markThreadRead);
+router.post("/threads/:id/clear", protect, clearThreadMessages);
 
 module.exports = router;

@@ -485,8 +485,11 @@ const ChatDock = ({ user }) => {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [clearThreadTarget, setClearThreadTarget] = useState(null);
   const [deletingMessageId, setDeletingMessageId] = useState("");
+  const [clearingThreadId, setClearingThreadId] = useState("");
   const [openMessageMenuId, setOpenMessageMenuId] = useState("");
+  const [isThreadMenuOpen, setIsThreadMenuOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState("");
   const [editDraft, setEditDraft] = useState("");
   const [savingMessageId, setSavingMessageId] = useState("");
@@ -850,6 +853,25 @@ const ChatDock = ({ user }) => {
   }, [openMessageMenuId]);
 
   useEffect(() => {
+    if (!isThreadMenuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (event.target?.closest?.(".chat-dock-thread-menu-wrap")) {
+        return;
+      }
+      setIsThreadMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [isThreadMenuOpen]);
+
+  useEffect(() => {
     if (
       openMessageMenuId &&
       !messages.some((message) => message?._id === openMessageMenuId)
@@ -865,6 +887,10 @@ const ChatDock = ({ user }) => {
       setEditDraft("");
     }
   }, [editingMessageId, messages, openMessageMenuId]);
+
+  useEffect(() => {
+    setIsThreadMenuOpen(false);
+  }, [activeThreadId]);
 
   useEffect(() => {
     if (!isPublicThread) {
@@ -1216,6 +1242,8 @@ const ChatDock = ({ user }) => {
     setProjectPickerOpen(false);
     setMobilePanelView("sidebar");
     setDeleteTarget(null);
+    setClearThreadTarget(null);
+    setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
@@ -1234,6 +1262,8 @@ const ChatDock = ({ user }) => {
     setMobilePanelView("thread");
     setError("");
     setDeleteTarget(null);
+    setClearThreadTarget(null);
+    setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
@@ -1274,6 +1304,8 @@ const ChatDock = ({ user }) => {
     setMobilePanelView("thread");
     setProjectPickerOpen(false);
     setDeleteTarget(null);
+    setClearThreadTarget(null);
+    setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
@@ -1623,7 +1655,15 @@ const ChatDock = ({ user }) => {
 
   const handleToggleMessageMenu = (messageId) => {
     if (!messageId) return;
+    setIsThreadMenuOpen(false);
     setOpenMessageMenuId((prev) => (prev === messageId ? "" : messageId));
+  };
+
+  const handleToggleThreadMenu = () => {
+    if (!activeThreadId || clearingThreadId) return;
+    setDeleteTarget(null);
+    setOpenMessageMenuId("");
+    setIsThreadMenuOpen((prev) => !prev);
   };
 
   const handleStartEditMessage = (message) => {
@@ -1637,6 +1677,8 @@ const ChatDock = ({ user }) => {
 
     setEditingMessageId(message._id);
     setEditDraft(message?.body || "");
+    setClearThreadTarget(null);
+    setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
     setDeleteTarget(null);
     setError("");
@@ -1707,6 +1749,8 @@ const ChatDock = ({ user }) => {
     setDeleteTarget({
       _id: message._id,
     });
+    setClearThreadTarget(null);
+    setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
     setError("");
   };
@@ -1755,6 +1799,74 @@ const ChatDock = ({ user }) => {
       setError(deleteError.message || "Failed to delete message.");
     } finally {
       setDeletingMessageId("");
+    }
+  };
+
+  const handleRequestClearThread = () => {
+    if (!activeThreadId) return;
+    setClearThreadTarget({
+      _id: activeThreadId,
+    });
+    setDeleteTarget(null);
+    setIsThreadMenuOpen(false);
+    setOpenMessageMenuId("");
+    setEditingMessageId("");
+    setEditDraft("");
+    setError("");
+    resetProjectRoutePicker();
+  };
+
+  const handleCancelClearThread = () => {
+    if (clearingThreadId) return;
+    setClearThreadTarget(null);
+  };
+
+  const handleConfirmClearThread = async () => {
+    const threadId = toIdString(clearThreadTarget?._id || activeThreadId);
+    if (!threadId || clearingThreadId) return;
+
+    setClearingThreadId(threadId);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/chat/threads/${threadId}/clear`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to clear chat messages.");
+      }
+
+      const nextThread = data?.thread;
+      if (nextThread?._id) {
+        setThreads((prev) =>
+          prev.map((thread) =>
+            thread._id === nextThread._id ? { ...thread, ...nextThread } : thread,
+          ),
+        );
+      }
+
+      if (activeThreadIdRef.current === threadId) {
+        setMessages([]);
+      }
+
+      setClearThreadTarget(null);
+      setDeleteTarget(null);
+      setOpenMessageMenuId("");
+      setEditingMessageId("");
+      setEditDraft("");
+      resetProjectRoutePicker();
+
+      await fetchThreads({ focusThreadId: threadId });
+
+      if (isOpenRef.current && activeThreadIdRef.current === threadId) {
+        await fetchMessages(threadId);
+      }
+    } catch (clearError) {
+      setError(clearError.message || "Failed to clear chat messages.");
+    } finally {
+      setClearingThreadId("");
     }
   };
 
@@ -2003,17 +2115,49 @@ const ChatDock = ({ user }) => {
                         <h3>{activeThread.name}</h3>
                       </div>
                     </div>
-                    {activeThread.counterpart && (
-                      <div className="chat-dock-counterpart">
-                        <UserAvatar
-                          name={activeThread.counterpart.name}
-                          src={activeThread.counterpart.avatarUrl}
-                          width="28px"
-                          height="28px"
-                        />
-                        <span>{activeThread.counterpart.name}</span>
+                    <div className="chat-dock-main-head-secondary">
+                      {activeThread.counterpart && (
+                        <div className="chat-dock-counterpart">
+                          <UserAvatar
+                            name={activeThread.counterpart.name}
+                            src={activeThread.counterpart.avatarUrl}
+                            width="28px"
+                            height="28px"
+                          />
+                          <span>{activeThread.counterpart.name}</span>
+                        </div>
+                      )}
+                      <div className="chat-dock-thread-menu-wrap">
+                        <button
+                          type="button"
+                          className="chat-dock-thread-menu-trigger"
+                          onClick={handleToggleThreadMenu}
+                          aria-label="Open chat options"
+                          aria-expanded={isThreadMenuOpen}
+                          title="Chat options"
+                          disabled={clearingThreadId === activeThread._id}
+                        >
+                          <ThreeDotsIcon width="18" height="18" />
+                        </button>
+                        {isThreadMenuOpen && (
+                          <div className="chat-dock-thread-menu" role="menu">
+                            <button
+                              type="button"
+                              className="chat-dock-message-menu-item danger"
+                              onClick={handleRequestClearThread}
+                              disabled={clearingThreadId === activeThread._id}
+                            >
+                              <TrashIcon width={14} height={14} />
+                              <span>
+                                {clearingThreadId === activeThread._id
+                                  ? "Clearing..."
+                                  : "Clear messages"}
+                              </span>
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
 
                   <div className="chat-dock-messages">
@@ -2642,6 +2786,14 @@ const ChatDock = ({ user }) => {
         confirmText={deletingMessageId ? "Deleting..." : "Delete"}
         onConfirm={handleConfirmDeleteMessage}
         onCancel={handleCancelDeleteMessage}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(clearThreadTarget)}
+        title="Clear Messages"
+        message="Clear messages from this chat for your account? This won't affect other users."
+        confirmText={clearingThreadId ? "Clearing..." : "Clear"}
+        onConfirm={handleConfirmClearThread}
+        onCancel={handleCancelClearThread}
       />
     </>
   );

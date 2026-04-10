@@ -15,6 +15,21 @@ const ChatReadStateSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ChatClearedStateSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    clearedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false },
+);
+
 const ChatThreadSchema = new mongoose.Schema(
   {
     type: {
@@ -46,6 +61,10 @@ const ChatThreadSchema = new mongoose.Schema(
     },
     readState: {
       type: [ChatReadStateSchema],
+      default: [],
+    },
+    clearedState: {
+      type: [ChatClearedStateSchema],
       default: [],
     },
     createdBy: {

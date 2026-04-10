@@ -393,6 +393,14 @@ const getLastReadAt = (thread, userId) => {
   );
 };
 
+const getClearedAt = (thread, userId) => {
+  const clearedState = Array.isArray(thread?.clearedState) ? thread.clearedState : [];
+  return (
+    clearedState.find((entry) => toIdString(entry?.user) === userId)?.clearedAt ||
+    null
+  );
+};
+
 const upsertThreadReadState = (thread, userId, lastReadAt = new Date()) => {
   if (!thread || !userId) return;
   const nextReadAt = lastReadAt instanceof Date ? lastReadAt : new Date(lastReadAt);
@@ -415,6 +423,46 @@ const upsertThreadReadState = (thread, userId, lastReadAt = new Date()) => {
   thread.readState = readState;
   thread.markModified("readState");
 };
+
+const upsertThreadClearedState = (thread, userId, clearedAt = new Date()) => {
+  if (!thread || !userId) return;
+  const nextClearedAt =
+    clearedAt instanceof Date ? clearedAt : new Date(clearedAt);
+  const clearedState = Array.isArray(thread.clearedState)
+    ? [...thread.clearedState]
+    : [];
+  const index = clearedState.findIndex(
+    (entry) => toIdString(entry?.user) === userId,
+  );
+
+  if (index >= 0) {
+    clearedState[index] = {
+      ...clearedState[index].toObject?.(),
+      user: clearedState[index].user,
+      clearedAt: nextClearedAt,
+    };
+  } else {
+    clearedState.push({
+      user: new mongoose.Types.ObjectId(userId),
+      clearedAt: nextClearedAt,
+    });
+  }
+
+  thread.clearedState = clearedState;
+  thread.markModified("clearedState");
+};
+
+const toDateValue = (value) => {
+  if (!value) return null;
+  const nextDate = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(nextDate.getTime()) ? null : nextDate;
+};
+
+const getLatestDate = (...values) =>
+  values
+    .map((value) => toDateValue(value))
+    .filter(Boolean)
+    .sort((left, right) => right.getTime() - left.getTime())[0] || null;
 
 const buildDirectKey = (userA, userB) =>
   [toIdString(userA), toIdString(userB)].filter(Boolean).sort().join(":");
@@ -575,7 +623,7 @@ const notifyPublicChatMentions = async ({
   );
 };
 
-const countUnreadMessages = async (threadId, userId, lastReadAt) => {
+const countUnreadMessages = async (threadId, userId, lastReadAt, clearedAt) => {
   if (
     !mongoose.Types.ObjectId.isValid(threadId) ||
     !mongoose.Types.ObjectId.isValid(userId)
@@ -588,8 +636,9 @@ const countUnreadMessages = async (threadId, userId, lastReadAt) => {
     sender: { $ne: new mongoose.Types.ObjectId(userId) },
   };
 
-  if (lastReadAt) {
-    query.createdAt = { $gt: lastReadAt };
+  const visibilityStartAt = getLatestDate(lastReadAt, clearedAt);
+  if (visibilityStartAt) {
+    query.createdAt = { $gt: visibilityStartAt };
   }
 
   return ChatMessage.countDocuments(query);
@@ -656,7 +705,17 @@ const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
   const counterpart = counterpartId ? userMap[counterpartId] || null : null;
   const lastMessageSenderId = toIdString(thread?.lastMessageSender);
   const lastReadAt = getLastReadAt(thread, currentUserId);
-  const unreadCount = await countUnreadMessages(thread._id, currentUserId, lastReadAt);
+  const clearedAt = getClearedAt(thread, currentUserId);
+  const unreadCount = await countUnreadMessages(
+    thread._id,
+    currentUserId,
+    lastReadAt,
+    clearedAt,
+  );
+  const lastMessageAt = toDateValue(thread?.lastMessageAt);
+  const hideLastMessagePreview =
+    Boolean(clearedAt) &&
+    (!lastMessageAt || lastMessageAt.getTime() <= toDateValue(clearedAt)?.getTime());
 
   return {
     _id: toIdString(thread?._id),
@@ -670,9 +729,16 @@ const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
     participants: participantIds
       .map((entry) => userMap[entry])
       .filter(Boolean),
-    lastMessagePreview: toText(thread?.lastMessagePreview),
-    lastMessageAt: thread?.lastMessageAt || thread?.updatedAt || thread?.createdAt || null,
-    lastMessageSender: lastMessageSenderId ? userMap[lastMessageSenderId] || null : null,
+    lastMessagePreview: hideLastMessagePreview
+      ? ""
+      : toText(thread?.lastMessagePreview),
+    lastMessageAt: hideLastMessagePreview
+      ? null
+      : thread?.lastMessageAt || thread?.updatedAt || thread?.createdAt || null,
+    lastMessageSender:
+      hideLastMessagePreview || !lastMessageSenderId
+        ? null
+        : userMap[lastMessageSenderId] || null,
     unreadCount,
   };
 };
@@ -738,7 +804,13 @@ const getThreadMessages = async (req, res) => {
     }
 
     const limit = normalizeLimit(req.query?.limit, DEFAULT_MESSAGE_LIMIT);
-    const messages = await ChatMessage.find({ thread: threadId })
+    const clearedAt = getClearedAt(thread, currentUserId);
+    const messageQuery = { thread: threadId };
+    if (clearedAt) {
+      messageQuery.createdAt = { $gt: clearedAt };
+    }
+
+    const messages = await ChatMessage.find(messageQuery)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate("sender", "_id firstName lastName name avatarUrl role department")
@@ -1224,6 +1296,55 @@ const markThreadRead = async (req, res) => {
   }
 };
 
+const clearThreadMessages = async (req, res) => {
+  try {
+    const currentUserId = toIdString(req.user?._id);
+    const threadId = toIdString(req.params?.id);
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({ message: "Invalid chat thread." });
+    }
+
+    const thread = await ChatThread.findById(threadId);
+    if (!thread || !hasThreadAccess(thread, currentUserId)) {
+      return res.status(404).json({ message: "Chat thread not found." });
+    }
+
+    const clearedAt = new Date();
+    upsertThreadClearedState(thread, currentUserId, clearedAt);
+    upsertThreadReadState(thread, currentUserId, clearedAt);
+    await thread.save();
+
+    const userMap = await loadUsersById([
+      ...(Array.isArray(thread.participants) ? thread.participants : []),
+      thread.lastMessageSender,
+    ]);
+    const serializedThread = await serializeThreadSummary(
+      thread.toObject ? thread.toObject() : thread,
+      currentUserId,
+      userMap,
+    );
+
+    broadcastChatChange(
+      {
+        threadId: toIdString(thread._id),
+        threadType: thread.type,
+        changeType: "thread_cleared",
+      },
+      {
+        userIds: [currentUserId],
+      },
+    );
+
+    return res.json({
+      ok: true,
+      thread: serializedThread,
+    });
+  } catch (error) {
+    console.error("Error clearing chat thread messages:", error);
+    return res.status(500).json({ message: "Server error clearing chat messages." });
+  }
+};
+
 const searchUsers = async (req, res) => {
   try {
     const currentUserId = toIdString(req.user?._id);
@@ -1391,6 +1512,7 @@ module.exports = {
   deleteMessage,
   updateMessage,
   markThreadRead,
+  clearThreadMessages,
   searchUsers,
   searchProjects,
   getProjectRoutes,
