@@ -1,3 +1,4 @@
+const fs = require("fs");
 const mongoose = require("mongoose");
 const ChatThread = require("../models/ChatThread");
 const ChatMessage = require("../models/ChatMessage");
@@ -14,6 +15,8 @@ const MAX_ATTACHMENT_COUNT = 6;
 const DEFAULT_MESSAGE_LIMIT = 50;
 const USER_SEARCH_LIMIT = 20;
 const PROJECT_SEARCH_LIMIT = 12;
+const DELETED_MESSAGE_BODY = "message was deleted.";
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const PRODUCTION_SUB_DEPARTMENTS = new Set([
   "dtf",
   "uv-dtf",
@@ -302,6 +305,9 @@ const serializeMessage = (message, senderMap = {}) => {
     attachments: Array.isArray(message?.attachments)
       ? message.attachments.map((entry) => serializeAttachment(entry))
       : [],
+    isDeleted: Boolean(message?.isDeleted),
+    deletedAt: message?.deletedAt || null,
+    editedAt: message?.editedAt || null,
     createdAt: message?.createdAt || null,
     updatedAt: message?.updatedAt || null,
   };
@@ -437,6 +443,56 @@ const countUnreadMessages = async (threadId, userId, lastReadAt) => {
   }
 
   return ChatMessage.countDocuments(query);
+};
+
+const syncThreadLastMessage = async (thread) => {
+  if (!thread?._id) return;
+
+  const latestMessage = await ChatMessage.findOne({ thread: thread._id })
+    .sort({ createdAt: -1, _id: -1 })
+    .select("body references attachments sender createdAt")
+    .lean();
+
+  if (!latestMessage) {
+    thread.lastMessageAt = null;
+    thread.lastMessagePreview = "";
+    thread.lastMessageSender = null;
+    return;
+  }
+
+  thread.lastMessageAt = latestMessage.createdAt || null;
+  thread.lastMessagePreview = buildMessagePreview(
+    latestMessage.body,
+    latestMessage.references,
+    latestMessage.attachments,
+  );
+  thread.lastMessageSender = latestMessage.sender || null;
+};
+
+const deleteChatAttachmentFiles = async (attachments = []) => {
+  await Promise.all(
+    (Array.isArray(attachments) ? attachments : []).map(async (attachment) => {
+      const filePath = upload.resolveUploadPathFromUrl(attachment?.fileUrl);
+      if (!filePath) return;
+
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (error) {
+        if (error?.code !== "ENOENT") {
+          console.error("Failed to remove deleted chat attachment:", error);
+        }
+      }
+    }),
+  );
+};
+
+const isMessageEditable = (message) => {
+  const createdAt = message?.createdAt ? new Date(message.createdAt) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) {
+    return false;
+  }
+
+  return Date.now() - createdAt.getTime() <= MESSAGE_EDIT_WINDOW_MS;
 };
 
 const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
@@ -734,6 +790,202 @@ const sendMessage = async (req, res) => {
   }
 };
 
+const deleteMessage = async (req, res) => {
+  try {
+    const currentUserId = toIdString(req.user?._id);
+    const threadId = toIdString(req.params?.id);
+    const messageId = toIdString(req.params?.messageId);
+
+    if (
+      !mongoose.Types.ObjectId.isValid(threadId) ||
+      !mongoose.Types.ObjectId.isValid(messageId)
+    ) {
+      return res.status(400).json({ message: "Invalid chat message." });
+    }
+
+    const thread = await ChatThread.findById(threadId);
+    if (!thread || !hasThreadAccess(thread, currentUserId)) {
+      return res.status(404).json({ message: "Chat thread not found." });
+    }
+
+    const message = await ChatMessage.findOne({
+      _id: messageId,
+      thread: threadId,
+    });
+    if (!message) {
+      return res.status(404).json({ message: "Chat message not found." });
+    }
+
+    if (toIdString(message.sender) !== currentUserId) {
+      return res
+        .status(403)
+        .json({ message: "You can only delete your own chat messages." });
+    }
+
+    if (!message.isDeleted) {
+      const existingAttachments = Array.isArray(message.attachments)
+        ? message.attachments.map((entry) =>
+            entry?.toObject ? entry.toObject() : entry,
+          )
+        : [];
+
+      message.body = DELETED_MESSAGE_BODY;
+      message.references = [];
+      message.attachments = [];
+      message.isDeleted = true;
+      message.deletedAt = new Date();
+      message.deletedBy = req.user._id;
+      await message.save();
+
+      await syncThreadLastMessage(thread);
+      await thread.save();
+      await deleteChatAttachmentFiles(existingAttachments);
+    }
+
+    const senderSummary = serializeUserSummary(req.user);
+    const serializedMessage = serializeMessage(
+      {
+        ...message.toObject(),
+        sender: req.user,
+      },
+      { [senderSummary._id]: senderSummary },
+    );
+
+    const participantIds = Array.isArray(thread.participants)
+      ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
+      : [];
+    const targetUserIds =
+      thread.type === "public" ? [] : Array.from(new Set(participantIds));
+
+    broadcastChatChange(
+      {
+        threadId: toIdString(thread._id),
+        threadType: thread.type,
+        messageId: toIdString(message._id),
+        senderId: currentUserId,
+      },
+      {
+        userIds: targetUserIds,
+        broadcast: thread.type === "public",
+      },
+    );
+
+    return res.json({ message: serializedMessage });
+  } catch (error) {
+    console.error("Error deleting chat message:", error);
+    return res.status(500).json({ message: "Server error deleting message." });
+  }
+};
+
+const updateMessage = async (req, res) => {
+  try {
+    const currentUserId = toIdString(req.user?._id);
+    const threadId = toIdString(req.params?.id);
+    const messageId = toIdString(req.params?.messageId);
+
+    if (
+      !mongoose.Types.ObjectId.isValid(threadId) ||
+      !mongoose.Types.ObjectId.isValid(messageId)
+    ) {
+      return res.status(400).json({ message: "Invalid chat message." });
+    }
+
+    const thread = await ChatThread.findById(threadId);
+    if (!thread || !hasThreadAccess(thread, currentUserId)) {
+      return res.status(404).json({ message: "Chat thread not found." });
+    }
+
+    const message = await ChatMessage.findOne({
+      _id: messageId,
+      thread: threadId,
+    });
+    if (!message) {
+      return res.status(404).json({ message: "Chat message not found." });
+    }
+
+    if (toIdString(message.sender) !== currentUserId) {
+      return res
+        .status(403)
+        .json({ message: "You can only edit your own chat messages." });
+    }
+
+    if (message.isDeleted) {
+      return res.status(400).json({ message: "Deleted messages cannot be edited." });
+    }
+
+    if (!isMessageEditable(message)) {
+      return res.status(403).json({
+        message: "Messages can only be edited within 15 minutes of sending.",
+      });
+    }
+
+    const nextBody = toText(req.body?.body).slice(0, MAX_MESSAGE_LENGTH);
+    const hasReferences =
+      Array.isArray(message.references) && message.references.length > 0;
+    const hasAttachments =
+      Array.isArray(message.attachments) && message.attachments.length > 0;
+
+    if (!nextBody && !hasReferences && !hasAttachments) {
+      return res
+        .status(400)
+        .json({ message: "A message cannot be empty after editing." });
+    }
+
+    if (nextBody === toText(message.body)) {
+      const senderSummary = serializeUserSummary(req.user);
+      return res.json({
+        message: serializeMessage(
+          {
+            ...message.toObject(),
+            sender: req.user,
+          },
+          { [senderSummary._id]: senderSummary },
+        ),
+      });
+    }
+
+    message.body = nextBody;
+    message.editedAt = new Date();
+    await message.save();
+
+    await syncThreadLastMessage(thread);
+    await thread.save();
+
+    const senderSummary = serializeUserSummary(req.user);
+    const serializedMessage = serializeMessage(
+      {
+        ...message.toObject(),
+        sender: req.user,
+      },
+      { [senderSummary._id]: senderSummary },
+    );
+
+    const participantIds = Array.isArray(thread.participants)
+      ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
+      : [];
+    const targetUserIds =
+      thread.type === "public" ? [] : Array.from(new Set(participantIds));
+
+    broadcastChatChange(
+      {
+        threadId: toIdString(thread._id),
+        threadType: thread.type,
+        messageId: toIdString(message._id),
+        senderId: currentUserId,
+      },
+      {
+        userIds: targetUserIds,
+        broadcast: thread.type === "public",
+      },
+    );
+
+    return res.json({ message: serializedMessage });
+  } catch (error) {
+    console.error("Error updating chat message:", error);
+    return res.status(500).json({ message: "Server error updating message." });
+  }
+};
+
 const markThreadRead = async (req, res) => {
   try {
     const currentUserId = toIdString(req.user?._id);
@@ -915,6 +1167,8 @@ module.exports = {
   getThreadMessages,
   startDirectThread,
   sendMessage,
+  deleteMessage,
+  updateMessage,
   markThreadRead,
   searchUsers,
   searchProjects,

@@ -4,6 +4,8 @@ const {
   getThreadMessages,
   startDirectThread,
   sendMessage,
+  deleteMessage,
+  updateMessage,
   markThreadRead,
   searchUsers,
   searchProjects,
@@ -46,6 +48,9 @@ router.get("/projects/:id/routes", protect, getProjectRoutes);
 router.post("/direct", protect, startDirectThread);
 router.get("/threads/:id/messages", protect, getThreadMessages);
 router.post("/threads/:id/messages", protect, handleChatUploads, sendMessage);
+router.patch("/threads/:id/messages/:messageId", protect, updateMessage);
+router.post("/threads/:id/messages/:messageId", protect, updateMessage);
+router.delete("/threads/:id/messages/:messageId", protect, deleteMessage);
 router.post("/threads/:id/read", protect, markThreadRead);
 
 module.exports = router;

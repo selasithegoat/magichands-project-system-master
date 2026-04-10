@@ -7,11 +7,15 @@ import PersonIcon from "../icons/PersonIcon";
 import SearchIcon from "../icons/SearchIcon";
 import FolderIcon from "../icons/FolderIcon";
 import UploadIcon from "../icons/UploadIcon";
+import ThreeDotsIcon from "../icons/ThreeDotsIcon";
+import TrashIcon from "../icons/TrashIcon";
 import XIcon from "../icons/XIcon";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import "./ChatDock.css";
 
 const THREAD_POLL_INTERVAL_MS = 20000;
 const THREAD_HIDDEN_POLL_INTERVAL_MS = 60000;
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const CHAT_ATTACHMENT_MAX_FILES = 6;
 const CHAT_ATTACHMENT_ACCEPT =
   "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
@@ -193,6 +197,15 @@ const formatThreadTime = (value) => {
   }).format(date);
 };
 
+const isMessageWithinEditWindow = (message) => {
+  const createdAt = message?.createdAt ? new Date(message.createdAt) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) {
+    return false;
+  }
+
+  return Date.now() - createdAt.getTime() <= MESSAGE_EDIT_WINDOW_MS;
+};
+
 const buildProjectLabel = (project) => {
   const orderId = toText(project?.orderId);
   const projectName = toText(project?.projectName || project?.displayName);
@@ -334,6 +347,12 @@ const ChatDock = ({ user }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingMessageId, setDeletingMessageId] = useState("");
+  const [openMessageMenuId, setOpenMessageMenuId] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState("");
+  const [editDraft, setEditDraft] = useState("");
+  const [savingMessageId, setSavingMessageId] = useState("");
   const [projectRoutePicker, setProjectRoutePicker] = useState({
     referenceKey: "",
     projectId: "",
@@ -587,6 +606,42 @@ const ChatDock = ({ user }) => {
     }
   }, [activeThreadId]);
 
+  useEffect(() => {
+    if (!openMessageMenuId) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (event.target?.closest?.(".chat-dock-message-menu-wrap")) {
+        return;
+      }
+      setOpenMessageMenuId("");
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [openMessageMenuId]);
+
+  useEffect(() => {
+    if (
+      openMessageMenuId &&
+      !messages.some((message) => message?._id === openMessageMenuId)
+    ) {
+      setOpenMessageMenuId("");
+    }
+
+    if (
+      editingMessageId &&
+      !messages.some((message) => message?._id === editingMessageId)
+    ) {
+      setEditingMessageId("");
+      setEditDraft("");
+    }
+  }, [editingMessageId, messages, openMessageMenuId]);
+
   const fetchThreads = useCallback(
     async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
       if (!currentUserId) return;
@@ -819,6 +874,10 @@ const ChatDock = ({ user }) => {
     setSidebarMode("threads");
     setProjectPickerOpen(false);
     setMobilePanelView("sidebar");
+    setDeleteTarget(null);
+    setOpenMessageMenuId("");
+    setEditingMessageId("");
+    setEditDraft("");
     resetProjectRoutePicker();
   };
 
@@ -832,6 +891,10 @@ const ChatDock = ({ user }) => {
     setSidebarMode("threads");
     setMobilePanelView("thread");
     setError("");
+    setDeleteTarget(null);
+    setOpenMessageMenuId("");
+    setEditingMessageId("");
+    setEditDraft("");
     resetProjectRoutePicker();
   };
 
@@ -1068,6 +1131,143 @@ const ChatDock = ({ user }) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void handleSendMessage();
+    }
+  };
+
+  const handleToggleMessageMenu = (messageId) => {
+    if (!messageId) return;
+    setOpenMessageMenuId((prev) => (prev === messageId ? "" : messageId));
+  };
+
+  const handleStartEditMessage = (message) => {
+    if (!message?._id || message?.isDeleted) return;
+
+    if (!isMessageWithinEditWindow(message)) {
+      setOpenMessageMenuId("");
+      setError("Messages can only be edited within 15 minutes of sending.");
+      return;
+    }
+
+    setEditingMessageId(message._id);
+    setEditDraft(message?.body || "");
+    setOpenMessageMenuId("");
+    setDeleteTarget(null);
+    setError("");
+  };
+
+  const handleCancelEditMessage = () => {
+    if (savingMessageId) return;
+    setEditingMessageId("");
+    setEditDraft("");
+  };
+
+  const handleSaveEditedMessage = async () => {
+    const messageId = editingMessageId;
+    if (!activeThreadId || !messageId || savingMessageId) return;
+
+    setSavingMessageId(messageId);
+    setError("");
+    setOpenMessageMenuId("");
+
+    try {
+      const requestUrl = `/api/chat/threads/${activeThreadId}/messages/${messageId}`;
+      const requestPayload = JSON.stringify({ body: editDraft });
+      let res = await fetch(requestUrl, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: requestPayload,
+      });
+
+      if (res.status === 404 || res.status === 405) {
+        res = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: requestPayload,
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to edit message.");
+      }
+
+      const nextMessage = data?.message;
+      if (nextMessage?._id) {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message._id === nextMessage._id ? nextMessage : message,
+          ),
+        );
+      }
+      setEditingMessageId("");
+      setEditDraft("");
+      await fetchThreads({ focusThreadId: activeThreadId });
+    } catch (editError) {
+      setError(editError.message || "Failed to edit message.");
+    } finally {
+      setSavingMessageId("");
+    }
+  };
+
+  const handleRequestDeleteMessage = (message) => {
+    if (!message?._id || message?.isDeleted) return;
+    setDeleteTarget({
+      _id: message._id,
+    });
+    setOpenMessageMenuId("");
+    setError("");
+  };
+
+  const handleCancelDeleteMessage = () => {
+    if (deletingMessageId) return;
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteMessage = async () => {
+    const messageId = toIdString(deleteTarget?._id);
+    if (!activeThreadId || !messageId || deletingMessageId) return;
+
+    setDeletingMessageId(messageId);
+    setError("");
+
+    try {
+      const res = await fetch(
+        `/api/chat/threads/${activeThreadId}/messages/${messageId}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to delete message.");
+      }
+
+      const nextMessage = data?.message;
+      if (nextMessage?._id) {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message._id === nextMessage._id ? nextMessage : message,
+          ),
+        );
+      }
+      setDeleteTarget(null);
+      if (editingMessageId === messageId) {
+        setEditingMessageId("");
+        setEditDraft("");
+      }
+      resetProjectRoutePicker();
+      await fetchThreads({ focusThreadId: activeThreadId });
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete message.");
+    } finally {
+      setDeletingMessageId("");
     }
   };
 
@@ -1341,6 +1541,14 @@ const ChatDock = ({ user }) => {
                       messages.map((message) => {
                         const senderId = toIdString(message?.sender?._id);
                         const isMine = senderId === currentUserId;
+                        const isDeleted = Boolean(message?.isDeleted);
+                        const wasEdited = Boolean(message?.editedAt) && !isDeleted;
+                        const canEditMessage =
+                          isMine && !isDeleted && isMessageWithinEditWindow(message);
+                        const isMenuOpen = openMessageMenuId === message._id;
+                        const isEditingMessage = editingMessageId === message._id;
+                        const isSavingMessage = savingMessageId === message._id;
+                        const isDeletingMessage = deletingMessageId === message._id;
                         const references = Array.isArray(message?.references)
                           ? message.references
                           : [];
@@ -1361,12 +1569,61 @@ const ChatDock = ({ user }) => {
                                 height="30px"
                               />
                             )}
-                            <div className={`chat-dock-message-bubble ${isMine ? "mine" : ""}`}>
+                            <div
+                              className={`chat-dock-message-bubble ${
+                                isMine ? "mine" : ""
+                              } ${isDeleted ? "deleted" : ""}`}
+                            >
                               <div className="chat-dock-message-meta">
                                 <strong>{isMine ? "You" : message?.sender?.name || "User"}</strong>
-                                <span>{formatThreadTime(message.createdAt)}</span>
+                                <div className="chat-dock-message-meta-actions">
+                                  <span>{formatThreadTime(message.createdAt)}</span>
+                                </div>
                               </div>
-                              {message.body && <p>{message.body}</p>}
+                              {isEditingMessage ? (
+                                <div className="chat-dock-message-editor">
+                                  <textarea
+                                    value={editDraft}
+                                    onChange={(event) =>
+                                      setEditDraft(event.target.value)
+                                    }
+                                    rows="3"
+                                    maxLength="4000"
+                                    placeholder="Edit your message..."
+                                  />
+                                  <div className="chat-dock-message-editor-actions">
+                                    <button
+                                      type="button"
+                                      className="chat-dock-inline-btn"
+                                      onClick={handleCancelEditMessage}
+                                      disabled={isSavingMessage}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="chat-dock-inline-btn primary"
+                                      onClick={handleSaveEditedMessage}
+                                      disabled={
+                                        isSavingMessage ||
+                                        editDraft.trim() === toText(message.body)
+                                      }
+                                    >
+                                      {isSavingMessage ? "Saving..." : "Save"}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                message.body && (
+                                  <p
+                                    className={
+                                      isDeleted ? "chat-dock-deleted-text" : ""
+                                    }
+                                  >
+                                    {message.body}
+                                  </p>
+                                )
+                              )}
                               {attachments.length > 0 && (
                                 <div className="chat-dock-attachment-stack">
                                   {attachments.map((attachment, index) => {
@@ -1520,6 +1777,70 @@ const ChatDock = ({ user }) => {
                                       </div>
                                     );
                                   })}
+                                </div>
+                              )}
+                              {(wasEdited || (isMine && !isDeleted)) && (
+                                <div className="chat-dock-message-footer">
+                                  <span className="chat-dock-message-status">
+                                    {wasEdited ? "Edited" : ""}
+                                  </span>
+                                  {isMine && !isDeleted && !isEditingMessage && (
+                                    <div className="chat-dock-message-menu-wrap">
+                                      <button
+                                        type="button"
+                                        className="chat-dock-message-menu-trigger"
+                                        onClick={() =>
+                                          handleToggleMessageMenu(message._id)
+                                        }
+                                        aria-label="Open message options"
+                                        title="Message options"
+                                        disabled={isDeletingMessage}
+                                      >
+                                        <ThreeDotsIcon width="16" height="16" />
+                                      </button>
+                                      {isMenuOpen && (
+                                        <div
+                                          className="chat-dock-message-menu"
+                                          role="menu"
+                                        >
+                                          <button
+                                            type="button"
+                                            className="chat-dock-message-menu-item"
+                                            onClick={() =>
+                                              handleStartEditMessage(message)
+                                            }
+                                            disabled={
+                                              !canEditMessage ||
+                                              isSavingMessage ||
+                                              isDeletingMessage
+                                            }
+                                            title={
+                                              canEditMessage
+                                                ? "Edit message"
+                                                : "Edit is only available within the first 15 minutes."
+                                            }
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="chat-dock-message-menu-item danger"
+                                            onClick={() =>
+                                              handleRequestDeleteMessage(message)
+                                            }
+                                            disabled={isDeletingMessage || isSavingMessage}
+                                          >
+                                            <TrashIcon width={14} height={14} />
+                                            <span>
+                                              {isDeletingMessage
+                                                ? "Deleting..."
+                                                : "Delete"}
+                                            </span>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1765,6 +2086,15 @@ const ChatDock = ({ user }) => {
         <span className="chat-dock-fab-label">Chat</span>
         {unreadTotal > 0 && <span className="chat-dock-fab-badge">{unreadTotal}</span>}
       </button>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="Delete Message"
+        message="Are you sure you want to delete chat? Action can't be reversed"
+        confirmText={deletingMessageId ? "Deleting..." : "Delete"}
+        onConfirm={handleConfirmDeleteMessage}
+        onCancel={handleCancelDeleteMessage}
+      />
     </>
   );
 };

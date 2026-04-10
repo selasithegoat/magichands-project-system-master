@@ -488,6 +488,8 @@
 }
 
 .chat-dock-message-bubble {
+  position: relative;
+  min-width: 250px;
   max-width: min(100%, 430px);
   padding: 0.94rem 1.04rem;
   border-radius: 20px 20px 20px 8px;
@@ -520,7 +522,14 @@
   font-size: 0.78rem;
 }
 
-.chat-dock-message-meta span {
+.chat-dock-message-meta-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: auto;
+}
+
+.chat-dock-message-meta-actions > span {
   font-size: 0.7rem;
   opacity: 0.7;
 }
@@ -530,6 +539,247 @@
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
+}
+
+.chat-dock-message-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.68rem;
+}
+
+.chat-dock-message-editor textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  background: color-mix(in srgb, var(--surface-alt) 88%, var(--bg-card));
+  color: var(--text-primary);
+  padding: 0.82rem 0.88rem;
+  font: inherit;
+  line-height: 1.45;
+  outline: none;
+}
+
+.chat-dock-message-editor textarea:focus {
+  border-color: rgba(var(--primary-rgb), 0.34);
+  box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.1);
+}
+
+.chat-dock-message-editor-actions,
+.chat-dock-message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.chat-dock-message-editor-actions {
+  justify-content: flex-end;
+}
+
+.chat-dock-inline-btn {
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--surface-alt) 86%, var(--bg-card));
+  color: var(--text-secondary);
+  min-height: 34px;
+  padding: 0.48rem 0.8rem;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.chat-dock-inline-btn.primary {
+  border-color: rgba(var(--primary-rgb), 0.26);
+  background: rgba(var(--primary-rgb), 0.14);
+  color: var(--primary-color);
+}
+
+.chat-dock-inline-btn:hover:not(:disabled) {
+  border-color: rgba(var(--primary-rgb), 0.28);
+  color: var(--text-primary);
+}
+
+.chat-dock-inline-btn.primary:hover:not(:disabled) {
+  background: rgba(var(--primary-rgb), 0.2);
+  color: var(--primary-color);
+}
+
+.chat-dock-inline-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.chat-dock-message-footer {
+  margin-top: 0.72rem;
+}
+
+.chat-dock-message-status {
+  min-height: 1rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  opacity: 0.82;
+}
+
+.chat-dock-message-menu-wrap {
+  position: relative;
+  margin-left: auto;
+}
+
+.chat-dock-message-menu-trigger {
+  padding: 0.1rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.chat-dock-message-menu-trigger:hover:not(:disabled) {
+  color: var(--primary-color);
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.chat-dock-message-menu-trigger:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.chat-dock-message-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.55rem);
+  min-width: 156px;
+  padding: 0.36rem;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.45);
+  z-index: 2;
+}
+
+.chat-dock-message-menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  min-height: 38px;
+  padding: 0.52rem 0.64rem;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-start;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.chat-dock-message-menu-item:hover:not(:disabled) {
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary-color);
+}
+
+.chat-dock-message-menu-item.danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--danger);
+}
+
+.chat-dock-message-menu-item:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.chat-dock-message-bubble.deleted {
+  background: color-mix(in srgb, var(--surface-alt) 88%, var(--bg-card));
+  border-color: rgba(15, 23, 42, 0.08);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.chat-dock-message-bubble.mine.deleted {
+  background: color-mix(in srgb, var(--surface-alt) 86%, var(--bg-card));
+  border-color: rgba(15, 23, 42, 0.08);
+  color: var(--text-secondary);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-message-editor textarea {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-message-editor textarea::placeholder {
+  color: rgba(248, 250, 252, 0.66);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-inline-btn {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-inline-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-inline-btn.primary {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-inline-btn.primary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-message-status {
+  color: rgba(248, 250, 252, 0.8);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-message-menu-trigger {
+  color: rgba(248, 250, 252, 0.94);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-message-menu-trigger:hover:not(:disabled) {
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.deleted .chat-dock-message-meta strong,
+.chat-dock-message-bubble.deleted .chat-dock-message-meta span {
+  color: inherit;
+  opacity: 0.78;
+}
+
+.chat-dock-message-bubble.deleted .chat-dock-message-status {
+  color: inherit;
+}
+
+.chat-dock-deleted-text {
+  font-style: italic;
 }
 
 .chat-dock-reference-stack {
