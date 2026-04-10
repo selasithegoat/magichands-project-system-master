@@ -8,9 +8,20 @@ import RefreshIcon from "../icons/RefreshIcon";
 import CheckCircleIcon from "../icons/CheckCircleIcon";
 import SystemIcon from "../icons/SystemIcon";
 import ReminderBellIcon from "../icons/ReminderBellIcon";
+import UsersIcon from "../icons/UsersIcon";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 
-const getNotificationTypeMeta = (type) => {
+const getNotificationTypeMeta = (notification = {}) => {
+  const source = String(notification?.source || "").trim().toLowerCase();
+  if (source.startsWith("chat_mention")) {
+    return {
+      label: "Chat",
+      className: "system",
+      icon: <UsersIcon width="16" height="16" color="currentColor" />,
+    };
+  }
+
+  const type = notification?.type;
   switch (type) {
     case "ASSIGNMENT":
       return {
@@ -254,7 +265,7 @@ const NotificationModal = ({
                 </span>
               </div>
               {unreadNotifications.map((n) => {
-                const typeMeta = getNotificationTypeMeta(n.type);
+                const typeMeta = getNotificationTypeMeta(n);
                 return (
                   <div
                     key={n._id}
@@ -293,7 +304,7 @@ const NotificationModal = ({
                 <span className="section-label">EARLIER</span>
               </div>
               {readNotifications.map((n) => {
-                const typeMeta = getNotificationTypeMeta(n.type);
+                const typeMeta = getNotificationTypeMeta(n);
                 return (
                   <div
                     key={n._id}

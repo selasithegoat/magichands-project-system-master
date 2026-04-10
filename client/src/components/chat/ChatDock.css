@@ -561,6 +561,28 @@
   font-weight: 700;
 }
 
+.chat-dock-mention-button {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.chat-dock-mention-button:hover {
+  background: rgba(var(--primary-rgb), 0.18);
+  transform: translateY(-1px);
+}
+
+.chat-dock-mention-button:focus-visible {
+  outline: 2px solid rgba(var(--primary-rgb), 0.32);
+  outline-offset: 2px;
+}
+
 .chat-dock-message-editor {
   display: flex;
   flex-direction: column;
@@ -784,6 +806,15 @@
 .chat-dock-message-bubble.mine .chat-dock-mention {
   background: rgba(255, 255, 255, 0.16);
   color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-mention-button:hover {
+  background: rgba(255, 255, 255, 0.24);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-mention-button:focus-visible {
+  outline-color: rgba(248, 250, 252, 0.45);
 }
 
 .chat-dock-message-bubble.mine .chat-dock-message-menu-trigger {

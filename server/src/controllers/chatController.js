@@ -6,6 +6,7 @@ const Project = require("../models/Project");
 const User = require("../models/User");
 const upload = require("../middleware/upload");
 const { broadcastChatChange } = require("../utils/realtimeHub");
+const { createNotification } = require("../utils/notificationService");
 
 const TEAM_ROOM_SLUG = "team-room";
 const TEAM_ROOM_NAME = "Team Room";
@@ -18,6 +19,8 @@ const MAX_USER_SEARCH_LIMIT = 500;
 const PROJECT_SEARCH_LIMIT = 12;
 const DELETED_MESSAGE_BODY = "message was deleted.";
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
+const CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH = 160;
 const PRODUCTION_SUB_DEPARTMENTS = new Set([
   "dtf",
   "uv-dtf",
@@ -179,6 +182,43 @@ const normalizeLimit = (value, fallback, max = 100) => {
   return Math.min(Math.max(parsed, 1), max);
 };
 
+const normalizeMentionHandle = (value) =>
+  toText(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.|\.$/g, "");
+
+const buildMentionHandle = (user) =>
+  normalizeMentionHandle(
+    `${toText(user?.firstName)} ${toText(user?.lastName)}`.trim() ||
+      toText(user?.name),
+  );
+
+const extractMentionHandles = (value) => {
+  const content = toText(value);
+  if (!content) return [];
+
+  const handles = [];
+  const seenHandles = new Set();
+  const mentionPattern = /(^|[\s(])@([a-z0-9._-]{1,40})/gi;
+  let match;
+
+  while ((match = mentionPattern.exec(content)) !== null) {
+    const handle = normalizeMentionHandle(match[2]);
+    if (!handle || seenHandles.has(handle)) {
+      continue;
+    }
+
+    seenHandles.add(handle);
+    handles.push(handle);
+  }
+
+  return handles;
+};
+
 const parseReferencesInput = (value) => {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return [];
@@ -260,9 +300,33 @@ const buildProjectDisplayName = (project) => {
   return name || indicator || "Untitled Project";
 };
 
+const getChatThreadDisplayName = (thread) =>
+  toText(thread?.name) ||
+  (toText(thread?.slug) === TEAM_ROOM_SLUG ? TEAM_ROOM_NAME : "Public chat");
+
 const getUserDisplayName = (user) => {
   const fullName = `${toText(user?.firstName)} ${toText(user?.lastName)}`.trim();
   return fullName || toText(user?.name) || "Unknown User";
+};
+
+const buildChatMentionNotificationTitle = (thread) =>
+  `You were mentioned in ${getChatThreadDisplayName(thread)}`;
+
+const buildChatMentionNotificationMessage = (thread, sender, body) => {
+  const senderName = getUserDisplayName(sender);
+  const threadName = getChatThreadDisplayName(thread);
+  const compactBody = toText(body).replace(/\s+/g, " ");
+
+  if (!compactBody) {
+    return `${senderName} mentioned you in ${threadName}.`;
+  }
+
+  const preview =
+    compactBody.length > CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH
+      ? `${compactBody.slice(0, CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH - 3)}...`
+      : compactBody;
+
+  return `${senderName} mentioned you in ${threadName}: "${preview}"`;
 };
 
 const serializeUserSummary = (user) => ({
@@ -424,6 +488,91 @@ const loadUsersById = async (userIds = []) => {
     acc[toIdString(user._id)] = serializeUserSummary(user);
     return acc;
   }, {});
+};
+
+const loadMentionedUsers = async (handles = [], excludedUserId = "") => {
+  const uniqueHandles = Array.from(
+    new Set((Array.isArray(handles) ? handles : []).map((entry) => normalizeMentionHandle(entry)).filter(Boolean)),
+  );
+  if (uniqueHandles.length === 0) {
+    return [];
+  }
+
+  const userFilter = excludedUserId
+    ? { _id: { $ne: excludedUserId } }
+    : {};
+  const users = await User.find(userFilter)
+    .select("_id firstName lastName name")
+    .lean();
+
+  const handleSet = new Set(uniqueHandles);
+  const resolvedUsers = [];
+  const seenUserIds = new Set();
+
+  users.forEach((user) => {
+    const userId = toIdString(user?._id);
+    const handle = buildMentionHandle(user);
+    if (!userId || !handleSet.has(handle) || seenUserIds.has(userId)) {
+      return;
+    }
+
+    seenUserIds.add(userId);
+    resolvedUsers.push(user);
+  });
+
+  return resolvedUsers;
+};
+
+const notifyPublicChatMentions = async ({
+  thread,
+  sender,
+  body,
+  previousBody = "",
+  messageId = "",
+}) => {
+  if (toText(thread?.type) !== "public") {
+    return;
+  }
+
+  const previousHandles = new Set(extractMentionHandles(previousBody));
+  const nextHandles = extractMentionHandles(body).filter(
+    (handle) => !previousHandles.has(handle),
+  );
+  if (nextHandles.length === 0) {
+    return;
+  }
+
+  const senderId = toIdString(sender?._id || sender?.id);
+  const mentionedUsers = await loadMentionedUsers(nextHandles, senderId);
+  if (mentionedUsers.length === 0) {
+    return;
+  }
+
+  const notificationTitle = buildChatMentionNotificationTitle(thread);
+  const notificationMessage = buildChatMentionNotificationMessage(
+    thread,
+    sender,
+    body,
+  );
+  const sourceKey = `${CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX}:${toIdString(messageId) || toIdString(thread?._id)}`;
+
+  await Promise.all(
+    mentionedUsers.map((mentionedUser) =>
+      createNotification(
+        mentionedUser._id,
+        senderId,
+        null,
+        "SYSTEM",
+        notificationTitle,
+        notificationMessage,
+        {
+          source: sourceKey,
+          email: false,
+          push: true,
+        },
+      ),
+    ),
+  );
 };
 
 const countUnreadMessages = async (threadId, userId, lastReadAt) => {
@@ -755,6 +904,20 @@ const sendMessage = async (req, res) => {
     thread.lastMessageSender = req.user._id;
     await thread.save();
 
+    try {
+      await notifyPublicChatMentions({
+        thread,
+        sender: req.user,
+        body,
+        messageId: message._id,
+      });
+    } catch (mentionNotificationError) {
+      console.error(
+        "Error notifying mentioned public chat users:",
+        mentionNotificationError,
+      );
+    }
+
     const senderSummary = serializeUserSummary(req.user);
     const serializedMessage = serializeMessage(
       {
@@ -920,6 +1083,7 @@ const updateMessage = async (req, res) => {
       });
     }
 
+    const previousBody = toText(message.body);
     const nextBody = toText(req.body?.body).slice(0, MAX_MESSAGE_LENGTH);
     const hasReferences =
       Array.isArray(message.references) && message.references.length > 0;
@@ -951,6 +1115,21 @@ const updateMessage = async (req, res) => {
 
     await syncThreadLastMessage(thread);
     await thread.save();
+
+    try {
+      await notifyPublicChatMentions({
+        thread,
+        sender: req.user,
+        body: nextBody,
+        previousBody,
+        messageId: message._id,
+      });
+    } catch (mentionNotificationError) {
+      console.error(
+        "Error notifying mentioned public chat users after edit:",
+        mentionNotificationError,
+      );
+    }
 
     const senderSummary = serializeUserSummary(req.user);
     const serializedMessage = serializeMessage(
@@ -995,13 +1174,45 @@ const markThreadRead = async (req, res) => {
       return res.status(400).json({ message: "Invalid chat thread." });
     }
 
-    const thread = await ChatThread.findById(threadId);
-    if (!thread || !hasThreadAccess(thread, currentUserId)) {
+    const accessFilter = {
+      _id: threadId,
+      $or: [{ type: "public" }, { participants: req.user._id }],
+    };
+    const thread = await ChatThread.findOne(accessFilter).select("_id");
+    if (!thread || !currentUserId) {
       return res.status(404).json({ message: "Chat thread not found." });
     }
 
-    upsertThreadReadState(thread, currentUserId, new Date());
-    await thread.save();
+    const nextReadAt = new Date();
+    const currentUserObjectId = req.user._id;
+    const updateExistingResult = await ChatThread.updateOne(
+      {
+        ...accessFilter,
+        "readState.user": currentUserObjectId,
+      },
+      {
+        $set: {
+          "readState.$.lastReadAt": nextReadAt,
+        },
+      },
+    );
+
+    if (updateExistingResult.matchedCount === 0) {
+      await ChatThread.updateOne(
+        {
+          ...accessFilter,
+          "readState.user": { $ne: currentUserObjectId },
+        },
+        {
+          $push: {
+            readState: {
+              user: currentUserObjectId,
+              lastReadAt: nextReadAt,
+            },
+          },
+        },
+      );
+    }
 
     return res.json({ ok: true });
   } catch (error) {

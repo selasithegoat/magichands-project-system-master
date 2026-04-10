@@ -30,6 +30,8 @@ import useAdaptivePolling from "../../hooks/useAdaptivePolling";
 
 const NOTIFICATION_POLL_INTERVAL_MS = 15000;
 const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
+const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
+const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
 let notificationBootstrapUserId = "";
 
 const toEntityId = (value) => {
@@ -119,6 +121,12 @@ const getNotificationProjectPath = (notification, user) => {
   return `/detail/${projectId}`;
 };
 
+const isChatMentionNotification = (notification) =>
+  String(notification?.source || "")
+    .trim()
+    .toLowerCase()
+    .startsWith(CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX);
+
 // --- Icons ---
 const MenuIcon = () => (
   <svg
@@ -187,6 +195,25 @@ const Layout = ({
     }
   }, []);
 
+  const dispatchOpenChat = (detail = {}) => {
+    window.dispatchEvent(
+      new CustomEvent(CHAT_OPEN_EVENT_NAME, {
+        detail,
+      }),
+    );
+  };
+
+  const handleChatMentionOpen = (notification) => {
+    if (!isChatMentionNotification(notification)) {
+      return false;
+    }
+
+    setIsNotificationOpen(false);
+    setIsMobileMenuOpen(false);
+    dispatchOpenChat({ kind: "public" });
+    return true;
+  };
+
   const showNativeNotification = (notification) => {
     if ("Notification" in window && Notification.permission === "granted") {
       const n = new Notification(notification.title, {
@@ -195,6 +222,10 @@ const Layout = ({
       });
       n.onclick = () => {
         window.focus();
+        if (handleChatMentionOpen(notification)) {
+          n.close();
+          return;
+        }
         if (notification.project) {
           const projectPath = getNotificationProjectPath(notification, user);
           if (projectPath) {
@@ -245,6 +276,7 @@ const Layout = ({
         id,
         message: notification.message,
         type: notification.type === "ASSIGNMENT" ? "warning" : "info",
+        chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
         projectPath,
       },
@@ -675,6 +707,10 @@ const Layout = ({
         setIsNotificationOpen(false);
         setIsMobileMenuOpen(false);
 
+        if (handleChatMentionOpen(notification)) {
+          return;
+        }
+
         // Intelligent Routing based on notification type
         if (projectId) {
           if (String(type || "").toUpperCase() === "REMINDER") {
@@ -1020,6 +1056,11 @@ const Layout = ({
             onClose={() => removeToast(toast.id)}
             duration={5000}
             onClick={() => {
+              if (toast.chatKind) {
+                dispatchOpenChat({ kind: toast.chatKind });
+                removeToast(toast.id);
+                return;
+              }
               const targetPath =
                 toast.projectPath ||
                 (toast.projectId ? `/detail/${toast.projectId}` : "");

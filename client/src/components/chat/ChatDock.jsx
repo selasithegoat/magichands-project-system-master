@@ -17,6 +17,7 @@ const THREAD_POLL_INTERVAL_MS = 20000;
 const THREAD_HIDDEN_POLL_INTERVAL_MS = 60000;
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const CHAT_ATTACHMENT_MAX_FILES = 6;
+const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
 const CHAT_ATTACHMENT_ACCEPT =
   "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
 const RECORDING_MIME_CANDIDATES = [
@@ -278,7 +279,11 @@ const filterMentionUsers = (users, query) => {
   return deduped;
 };
 
-const renderChatMessageBody = (text, keyPrefix) => {
+const renderChatMessageBody = (
+  text,
+  keyPrefix,
+  { currentUserId = "", onMentionClick, resolveMentionUser } = {},
+) => {
   const content = String(text || "");
   if (!content) return content;
 
@@ -300,13 +305,32 @@ const renderChatMessageBody = (text, keyPrefix) => {
       parts.push(leadingText);
     }
 
+    const normalizedHandle = normalizeMentionHandle(mentionText.replace(/^@/, ""));
+    const mentionUser = resolveMentionUser?.(normalizedHandle) || null;
+    const mentionUserId = toIdString(mentionUser?._id || mentionUser?.id);
+    const canOpenMention =
+      Boolean(mentionUserId) &&
+      mentionUserId !== currentUserId &&
+      typeof onMentionClick === "function";
+
     parts.push(
-      <span
-        key={`${keyPrefix}-mention-${mentionStart}`}
-        className="chat-dock-mention"
-      >
-        {mentionText}
-      </span>,
+      canOpenMention ? (
+        <button
+          key={`${keyPrefix}-mention-${mentionStart}`}
+          type="button"
+          className="chat-dock-mention chat-dock-mention-button"
+          onClick={() => onMentionClick(normalizedHandle)}
+        >
+          {mentionText}
+        </button>
+      ) : (
+        <span
+          key={`${keyPrefix}-mention-${mentionStart}`}
+          className="chat-dock-mention"
+        >
+          {mentionText}
+        </span>
+      ),
     );
     lastIndex = mentionStart + mentionText.length;
   }
@@ -469,6 +493,7 @@ const ChatDock = ({ user }) => {
   const [mentionResults, setMentionResults] = useState([]);
   const [mentionSearchLoading, setMentionSearchLoading] = useState(false);
   const [highlightedMentionIndex, setHighlightedMentionIndex] = useState(0);
+  const [publicMentionUsers, setPublicMentionUsers] = useState([]);
   const [projectRoutePicker, setProjectRoutePicker] = useState({
     referenceKey: "",
     projectId: "",
@@ -480,6 +505,7 @@ const ChatDock = ({ user }) => {
   const activeThreadIdRef = useRef("");
   const isOpenRef = useRef(false);
   const messageRequestIdRef = useRef(0);
+  const markReadInFlightRef = useRef(new Set());
   const messagesEndRef = useRef(null);
   const projectRouteCacheRef = useRef(new Map());
   const attachmentInputRef = useRef(null);
@@ -501,6 +527,60 @@ const ChatDock = ({ user }) => {
     [activeThreadId, threads],
   );
   const isPublicThread = activeThread?.type === "public";
+  const currentUserSummary = useMemo(
+    () => ({
+      _id: currentUserId,
+      firstName: user?.firstName,
+      lastName: user?.lastName,
+      name: user?.name,
+      avatarUrl: user?.avatarUrl,
+      role: user?.role,
+      department: Array.isArray(user?.department)
+        ? user.department
+        : user?.department
+          ? [user.department]
+          : [],
+    }),
+    [
+      currentUserId,
+      user?.avatarUrl,
+      user?.department,
+      user?.firstName,
+      user?.lastName,
+      user?.name,
+      user?.role,
+    ],
+  );
+  const mentionUserDirectory = useMemo(() => {
+    const mentionMap = new Map();
+
+    const registerUser = (entry) => {
+      if (!entry) return;
+      const handle = buildMentionHandle(entry);
+      if (!handle || mentionMap.has(handle)) return;
+      mentionMap.set(handle, entry);
+    };
+
+    registerUser(currentUserSummary);
+    publicMentionUsers.forEach(registerUser);
+    mentionResults.forEach(registerUser);
+    userResults.forEach(registerUser);
+    threads.forEach((thread) => {
+      registerUser(thread?.counterpart);
+      (Array.isArray(thread?.participants) ? thread.participants : []).forEach(
+        registerUser,
+      );
+      registerUser(thread?.lastMessageSender);
+    });
+
+    return mentionMap;
+  }, [
+    currentUserSummary,
+    mentionResults,
+    publicMentionUsers,
+    threads,
+    userResults,
+  ]);
   const unreadTotal = useMemo(
     () =>
       threads.reduce((sum, thread) => sum + (Number(thread.unreadCount) || 0), 0),
@@ -790,9 +870,45 @@ const ChatDock = ({ user }) => {
     }
   }, [clearMentionState, isPublicThread]);
 
+  useEffect(() => {
+    if (!isOpen || !isPublicThread) return undefined;
+
+    let isCancelled = false;
+
+    const loadPublicMentionUsers = async () => {
+      try {
+        const res = await fetch("/api/chat/users?limit=500", {
+          credentials: "include",
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load teammates.");
+        }
+
+        if (!isCancelled) {
+          setPublicMentionUsers(Array.isArray(data?.users) ? data.users : []);
+        }
+      } catch (mentionDirectoryError) {
+        if (!isCancelled) {
+          console.error(
+            "Failed to load public chat mention directory",
+            mentionDirectoryError,
+          );
+        }
+      }
+    };
+
+    void loadPublicMentionUsers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUserId, isOpen, isPublicThread]);
+
   const fetchThreads = useCallback(
     async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
-      if (!currentUserId) return;
+      if (!currentUserId) return [];
 
       setThreadsLoading(true);
 
@@ -825,8 +941,10 @@ const ChatDock = ({ user }) => {
           }
           return nextThreads[0]?._id || "";
         });
+        return nextThreads;
       } catch (fetchError) {
         setError(fetchError.message || "Failed to load chats.");
+        return [];
       } finally {
         setThreadsLoading(false);
       }
@@ -835,13 +953,20 @@ const ChatDock = ({ user }) => {
   );
 
   const markThreadRead = useCallback(async (threadId) => {
-    if (!threadId) return;
+    if (!threadId || markReadInFlightRef.current.has(threadId)) return;
+
+    markReadInFlightRef.current.add(threadId);
 
     try {
-      await fetch(`/api/chat/threads/${threadId}/read`, {
+      const res = await fetch(`/api/chat/threads/${threadId}/read`, {
         method: "POST",
         credentials: "include",
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to mark chat thread as read.");
+      }
+
       setThreads((prev) =>
         prev.map((thread) =>
           thread._id === threadId ? { ...thread, unreadCount: 0 } : thread,
@@ -849,6 +974,8 @@ const ChatDock = ({ user }) => {
       );
     } catch (readError) {
       console.error("Failed to mark chat thread as read", readError);
+    } finally {
+      markReadInFlightRef.current.delete(threadId);
     }
   }, []);
 
@@ -1091,7 +1218,7 @@ const ChatDock = ({ user }) => {
     resetProjectRoutePicker();
   };
 
-  const handleStartDirectThread = async (recipientId) => {
+  const handleStartDirectThread = useCallback(async (recipientId) => {
     try {
       const res = await fetch("/api/chat/direct", {
         method: "POST",
@@ -1115,7 +1242,76 @@ const ChatDock = ({ user }) => {
     } catch (threadError) {
       setError(threadError.message || "Failed to open direct chat.");
     }
-  };
+  }, [fetchThreads, resetProjectRoutePicker]);
+
+  const handleOpenPublicThread = useCallback(async () => {
+    setIsOpen(true);
+    setError("");
+    setSidebarMode("threads");
+    setMobilePanelView("thread");
+    setProjectPickerOpen(false);
+    setDeleteTarget(null);
+    setOpenMessageMenuId("");
+    setEditingMessageId("");
+    setEditDraft("");
+    clearMentionState();
+    resetProjectRoutePicker();
+
+    const existingPublicThreadId =
+      threads.find((thread) => thread?.type === "public")?._id || "";
+    if (existingPublicThreadId) {
+      setActiveThreadId(existingPublicThreadId);
+      return;
+    }
+
+    const nextThreads = await fetchThreads({ preserveSelection: false });
+    const publicThreadId =
+      nextThreads.find((thread) => thread?.type === "public")?._id ||
+      nextThreads[0]?._id ||
+      "";
+    setActiveThreadId(publicThreadId);
+  }, [clearMentionState, fetchThreads, resetProjectRoutePicker, threads]);
+
+  const resolveMentionUser = useCallback(
+    (handle) => mentionUserDirectory.get(normalizeMentionHandle(handle)) || null,
+    [mentionUserDirectory],
+  );
+
+  const handleMentionClick = useCallback(
+    (handle) => {
+      const mentionedUser = resolveMentionUser(handle);
+      const mentionedUserId = toIdString(
+        mentionedUser?._id || mentionedUser?.id,
+      );
+      if (!mentionedUserId || mentionedUserId === currentUserId) {
+        return;
+      }
+
+      void handleStartDirectThread(mentionedUserId);
+    },
+    [currentUserId, handleStartDirectThread, resolveMentionUser],
+  );
+
+  useEffect(() => {
+    if (!currentUserId) return undefined;
+
+    const handleOpenChat = (event) => {
+      const chatKind = String(event?.detail?.kind || "public").toLowerCase();
+      const recipientId = toIdString(event?.detail?.recipientId);
+
+      if (chatKind === "direct" && recipientId) {
+        void handleStartDirectThread(recipientId);
+        return;
+      }
+
+      void handleOpenPublicThread();
+    };
+
+    window.addEventListener(CHAT_OPEN_EVENT_NAME, handleOpenChat);
+    return () => {
+      window.removeEventListener(CHAT_OPEN_EVENT_NAME, handleOpenChat);
+    };
+  }, [currentUserId, handleOpenPublicThread, handleStartDirectThread]);
 
   const handleAddProjectReference = (project) => {
     const projectId = toIdString(project?._id);
@@ -1891,6 +2087,13 @@ const ChatDock = ({ user }) => {
                                     {renderChatMessageBody(
                                       message.body,
                                       `${message._id}-body`,
+                                      isPublicThread
+                                        ? {
+                                            currentUserId,
+                                            onMentionClick: handleMentionClick,
+                                            resolveMentionUser,
+                                          }
+                                        : {},
                                     )}
                                   </p>
                                 )
