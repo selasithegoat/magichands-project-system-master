@@ -3,6 +3,9 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const getAuthCookieMaxAgeMs = () =>
+  toPositiveInt(process.env.AUTH_COOKIE_MAX_AGE_MS, 5 * 60 * 1000);
+
 const resolveCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === "production";
   const envSecure = process.env.COOKIE_SECURE;
@@ -10,10 +13,7 @@ const resolveCookieOptions = () => {
     .trim()
     .toLowerCase();
   const cookieDomain = String(process.env.COOKIE_DOMAIN || "").trim();
-  const cookieMaxAgeMs = toPositiveInt(
-    process.env.AUTH_COOKIE_MAX_AGE_MS,
-    5 * 60 * 1000,
-  );
+  const cookieMaxAgeMs = getAuthCookieMaxAgeMs();
 
   // Allow explicit override via env while keeping safe defaults.
   const secure =
@@ -55,4 +55,8 @@ const resolveClearCookieOptions = () => {
   };
 };
 
-module.exports = { resolveCookieOptions, resolveClearCookieOptions };
+module.exports = {
+  resolveCookieOptions,
+  resolveClearCookieOptions,
+  getAuthCookieMaxAgeMs,
+};

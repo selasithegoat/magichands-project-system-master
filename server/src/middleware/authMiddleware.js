@@ -1,6 +1,15 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const { resolveCookieOptions } = require("../utils/cookieOptions");
+const {
+  resolveCookieOptions,
+  resolveClearCookieOptions,
+} = require("../utils/cookieOptions");
+const generateToken = require("../utils/generateToken");
+const {
+  createUserSession,
+  touchUserSession,
+} = require("../utils/userSessionService");
+const { broadcastPresenceChange } = require("../utils/realtimeHub");
 
 const ADMIN_DEPARTMENT_KEY = "administration";
 const INVENTORY_ALLOWED_DEPARTMENTS = new Set([
@@ -117,70 +126,165 @@ const isEngagedPortalRequest = (req) => {
 const isPrivilegedPortalRequest = (req) =>
   isAdminPortalRequest(req) || isOpsPortalRequest(req);
 
-const selectAuthToken = (req) => {
+const getSessionPortalSource = (req) => {
+  if (isAdminPortalRequest(req)) return "admin";
+  if (isOpsPortalRequest(req)) return "ops";
+  if (isInventoryPortalRequest(req)) return "inventory";
+  if (isEngagedPortalRequest(req)) return "engaged";
+  return "client";
+};
+
+const getAuthCookieNameForUser = (user) =>
+  user?.role === "admin" ? "token_admin" : "token_client";
+
+const selectAuthCookie = (req) => {
   if (isPrivilegedPortalRequest(req)) {
-    return req.cookies.token_admin;
+    return {
+      token: req.cookies.token_admin,
+      cookieName: "token_admin",
+    };
   }
 
-  // Client portal: allow admin tokens to access client routes too
-  return req.cookies.token_client || req.cookies.token_admin;
+  if (req.cookies.token_client) {
+    return {
+      token: req.cookies.token_client,
+      cookieName: "token_client",
+    };
+  }
+
+  if (req.cookies.token_admin) {
+    return {
+      token: req.cookies.token_admin,
+      cookieName: "token_admin",
+    };
+  }
+
+  return {
+    token: "",
+    cookieName: "",
+  };
+};
+
+const clearAuthCookieByName = (res, cookieName) => {
+  if (!cookieName) return;
+
+  const clearOptions = resolveClearCookieOptions();
+  res.clearCookie(cookieName, clearOptions);
+  res.cookie(cookieName, "", clearOptions);
+};
+
+const authenticateRequest = async (req, res, { optional = false } = {}) => {
+  const { token, cookieName } = selectAuthCookie(req);
+
+  if (!token) {
+    req.user = null;
+    if (optional) {
+      return false;
+    }
+    res.status(401).json({ message: "Not authorized, no token" });
+    return false;
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      clearAuthCookieByName(res, cookieName);
+      req.user = null;
+      if (optional) {
+        return false;
+      }
+      res.status(401).json({ message: "Not authorized" });
+      return false;
+    }
+
+    if (isAdminPortalRequest(req) && !hasAdminPortalAccess(user)) {
+      req.user = null;
+      if (optional) {
+        return false;
+      }
+      res.status(403).json({
+        message:
+          "Access denied: admin portal is restricted to Administration department admins.",
+      });
+      return false;
+    }
+
+    if (isInventoryPortalRequest(req) && !hasInventoryPortalAccess(user)) {
+      req.user = null;
+      if (optional) {
+        return false;
+      }
+      res.status(403).json({
+        message:
+          "Access denied: inventory portal is restricted to Admin, Front Desk, and Stores users.",
+      });
+      return false;
+    }
+
+    const now = new Date();
+    const rawSessionId =
+      typeof decoded?.sid === "string" ? decoded.sid.trim() : "";
+    let sessionId = rawSessionId;
+    const isLegacyUpgrade = !sessionId;
+
+    if (isLegacyUpgrade) {
+      const createdSession = await createUserSession({
+        userId: user._id,
+        portal: getSessionPortalSource(req),
+        startedAt: now,
+      });
+      sessionId = String(createdSession?.sessionId || "").trim();
+
+      broadcastPresenceChange({
+        userId: String(user._id),
+      });
+    } else {
+      const activeSession = await touchUserSession(sessionId, now);
+      if (!activeSession || String(activeSession.user || "") !== String(user._id)) {
+        clearAuthCookieByName(
+          res,
+          cookieName || getAuthCookieNameForUser(user),
+        );
+        req.user = null;
+        if (optional) {
+          return false;
+        }
+        res.status(401).json({ message: "Not authorized" });
+        return false;
+      }
+    }
+
+    const nextCookieName = getAuthCookieNameForUser(user);
+    res.cookie(
+      nextCookieName,
+      generateToken(user._id, sessionId),
+      resolveCookieOptions(),
+    );
+
+    req.user = user;
+    req.authSession = {
+      sessionId,
+      cookieName: nextCookieName,
+      isLegacyUpgrade,
+    };
+    return true;
+  } catch (error) {
+    console.error(error);
+    clearAuthCookieByName(res, cookieName);
+    req.user = null;
+    if (optional) {
+      return false;
+    }
+    res.status(401).json({ message: "Not authorized" });
+    return false;
+  }
 };
 
 const protect = async (req, res, next) => {
-  let token;
-
-  // Check for token in cookies specifically, prioritizing based on expected context if possible,
-  // but for now we check all.
-  // Note: This middleware protects both Admin and Client routes.
-  // We need to decide which token to use if BOTH exist.
-  // Usually, valid token wins.
-
-  // Prefer token_admin if we are hitting an admin route?
-  // We don't know easily without checking URL.
-  // Let's just grab whichever exists.
-
-  token = selectAuthToken(req);
-
-  if (token) {
-    try {
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // Get user from the token
-      req.user = await User.findById(decoded.id).select("-password");
-      if (!req.user) {
-        return res.status(401).json({ message: "Not authorized" });
-      }
-
-      if (isAdminPortalRequest(req) && !hasAdminPortalAccess(req.user)) {
-        return res.status(403).json({
-          message:
-            "Access denied: admin portal is restricted to Administration department admins.",
-        });
-      }
-
-      if (isInventoryPortalRequest(req) && !hasInventoryPortalAccess(req.user)) {
-        return res.status(403).json({
-          message:
-            "Access denied: inventory portal is restricted to Admin, Front Desk, and Stores users.",
-        });
-      }
-
-      // Decide which cookie updated
-      // If user is admin, refresh token_admin. Else token_client.
-      const cookieName =
-        req.user.role === "admin" ? "token_admin" : "token_client";
-
-      // Sliding Expiration
-      res.cookie(cookieName, token, resolveCookieOptions());
-
-      next();
-    } catch (error) {
-      console.error(error);
-      res.status(401).json({ message: "Not authorized" });
-    }
-  } else {
-    res.status(401).json({ message: "Not authorized, no token" });
+  const isAuthorized = await authenticateRequest(req, res);
+  if (isAuthorized) {
+    next();
   }
 };
 
@@ -194,37 +298,7 @@ const admin = (req, res, next) => {
 };
 
 const checkAuth = async (req, res, next) => {
-  let token;
-  token = selectAuthToken(req);
-
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select("-password");
-      if (!req.user) {
-        return next();
-      }
-
-      if (isAdminPortalRequest(req) && !hasAdminPortalAccess(req.user)) {
-        req.user = null;
-        return next();
-      }
-
-      if (isInventoryPortalRequest(req) && !hasInventoryPortalAccess(req.user)) {
-        req.user = null;
-        return next();
-      }
-
-      // Sliding Expiration (keep session alive)
-      const cookieName =
-        req.user.role === "admin" ? "token_admin" : "token_client";
-
-      res.cookie(cookieName, token, resolveCookieOptions());
-    } catch (error) {
-      // Invalid token - typically we just ignore and treat as guest
-      // but strictly speaking we could clear the cookie here too?
-    }
-  }
+  await authenticateRequest(req, res, { optional: true });
   next();
 };
 
@@ -246,4 +320,7 @@ module.exports = {
   isAdminPortalRequest,
   isInventoryPortalRequest,
   isEngagedPortalRequest,
+  getSessionPortalSource,
+  getAuthCookieNameForUser,
+  selectAuthCookie,
 };

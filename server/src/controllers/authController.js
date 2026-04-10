@@ -9,6 +9,16 @@ const {
   resolveClearCookieOptions,
 } = require("../utils/cookieOptions");
 const { validatePasswordStrength } = require("../utils/passwordPolicy");
+const {
+  createUserSession,
+  markUserSessionLoggedOut,
+} = require("../utils/userSessionService");
+const { broadcastPresenceChange } = require("../utils/realtimeHub");
+const {
+  selectAuthCookie,
+  getSessionPortalSource,
+  getAuthCookieNameForUser,
+} = require("../middleware/authMiddleware");
 
 const normalizeDepartmentArray = (value) => {
   if (Array.isArray(value)) {
@@ -92,18 +102,20 @@ const registerUser = async (req, res) => {
   });
 
   if (user) {
-    const token = generateToken(user._id);
+    const session = await createUserSession({
+      userId: user._id,
+      portal: getSessionPortalSource(req),
+    });
+    const token = generateToken(user._id, session.sessionId);
 
-    // Determine cookie name based on role
-    const cookieName = user.role === "admin" ? "token_admin" : "token_client";
+    const cookieName = getAuthCookieNameForUser(user);
 
     // Send HTTP-only cookie
     res.cookie(cookieName, token, resolveCookieOptions());
 
-    // [REMOVED] Clear any existing opposite token to prevent session leak
-    // const oppositeCookie =
-    //   user.role === "admin" ? "token_client" : "token_admin";
-    // res.clearCookie(oppositeCookie);
+    broadcastPresenceChange({
+      userId: String(user._id),
+    });
 
     res.status(201).json({
       _id: user.id,
@@ -142,19 +154,22 @@ const loginUser = async (req, res) => {
     });
 
     if (user && (await user.matchPassword(password))) {
-      const token = generateToken(user._id);
+      const session = await createUserSession({
+        userId: user._id,
+        portal: getSessionPortalSource(req),
+      });
+      const token = generateToken(user._id, session.sessionId);
 
-      const cookieName = user.role === "admin" ? "token_admin" : "token_client";
+      const cookieName = getAuthCookieNameForUser(user);
 
       // Send HTTP-only cookie
       res.cookie(cookieName, token, resolveCookieOptions());
-
-      // [REMOVED] Strictly clear the opposite token to prevent cross-portal auto-login
-      // const oppositeCookie =
-      //   user.role === "admin" ? "token_client" : "token_admin";
-      // res.clearCookie(oppositeCookie);
       // Also clear legacy token
       res.clearCookie("token");
+
+      broadcastPresenceChange({
+        userId: String(user._id),
+      });
 
       res.json({
         _id: user.id,
@@ -191,15 +206,48 @@ const getMe = async (req, res) => {
 // @desc    Logout user / Clear cookie
 // @route   POST /api/auth/logout
 // @access  Public
-const logoutUser = (req, res) => {
+const logoutUser = async (req, res) => {
+  const { token, cookieName } = selectAuthCookie(req);
   const clearOptions = resolveClearCookieOptions();
-  const cookiesToClear = ["token_admin", "token_client", "token"];
+  const now = new Date();
 
-  cookiesToClear.forEach((cookieName) => {
+  let broadcastUserId = "";
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const sessionId =
+        typeof decoded?.sid === "string" ? decoded.sid.trim() : "";
+
+      if (sessionId) {
+        const session = await markUserSessionLoggedOut(sessionId, now);
+        broadcastUserId = String(session?.user || decoded?.id || "").trim();
+      } else {
+        broadcastUserId = String(decoded?.id || "").trim();
+      }
+    } catch (error) {
+      console.error("Error resolving logout session:", error);
+    }
+  }
+
+  if (cookieName) {
     res.clearCookie(cookieName, clearOptions);
     res.cookie(cookieName, "", clearOptions);
-  });
+  } else {
+    ["token_admin", "token_client"].forEach((entry) => {
+      res.clearCookie(entry, clearOptions);
+      res.cookie(entry, "", clearOptions);
+    });
+  }
 
+  res.clearCookie("token", clearOptions);
+  res.cookie("token", "", clearOptions);
+
+  if (broadcastUserId) {
+    broadcastPresenceChange({
+      userId: broadcastUserId,
+    });
+  }
   res.set("Cache-Control", "no-store");
   res.status(200).json({ message: "Logged out successfully" });
 };

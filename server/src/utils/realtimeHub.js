@@ -103,10 +103,20 @@ const broadcastChatChange = (payload = {}, options = {}) => {
   }
 };
 
+const broadcastPresenceChange = (payload = {}) => {
+  if (clients.size === 0) return;
+  const data = JSON.stringify({ ts: Date.now(), ...payload });
+  const message = `event: presence_changed\ndata: ${data}\n\n`;
+  for (const res of clients) {
+    res.write(message);
+  }
+};
+
 module.exports = {
   addClient,
   removeClient,
   broadcastDataChange,
   broadcastNotificationChange,
   broadcastChatChange,
+  broadcastPresenceChange,
 };

@@ -7,6 +7,7 @@ const User = require("../models/User");
 const upload = require("../middleware/upload");
 const { broadcastChatChange } = require("../utils/realtimeHub");
 const { createNotification } = require("../utils/notificationService");
+const { resolvePresenceMap } = require("../utils/presenceService");
 
 const TEAM_ROOM_SLUG = "team-room";
 const TEAM_ROOM_NAME = "Team Room";
@@ -329,17 +330,29 @@ const buildChatMentionNotificationMessage = (thread, sender, body) => {
   return `${senderName} mentioned you in ${threadName}: "${preview}"`;
 };
 
-const serializeUserSummary = (user) => ({
-  _id: toIdString(user?._id || user?.id),
-  name: getUserDisplayName(user),
-  firstName: toText(user?.firstName),
-  lastName: toText(user?.lastName),
-  avatarUrl: toText(user?.avatarUrl),
-  role: toText(user?.role),
-  department: Array.isArray(user?.department)
-    ? user.department.map((entry) => toText(entry)).filter(Boolean)
-    : [],
-});
+const serializeUserSummary = (user, presenceMap = {}) => {
+  const userId = toIdString(user?._id || user?.id);
+  const presence = presenceMap[userId] || {
+    isOnline: false,
+    lastOnlineAt: null,
+  };
+
+  return {
+    _id: userId,
+    name: getUserDisplayName(user),
+    firstName: toText(user?.firstName),
+    lastName: toText(user?.lastName),
+    avatarUrl: toText(user?.avatarUrl),
+    role: toText(user?.role),
+    department: Array.isArray(user?.department)
+      ? user.department.map((entry) => toText(entry)).filter(Boolean)
+      : [],
+    presence: {
+      isOnline: Boolean(presence?.isOnline),
+      lastOnlineAt: presence?.isOnline ? null : presence?.lastOnlineAt || null,
+    },
+  };
+};
 
 const serializeProjectReference = (reference) => ({
   type: "project",
@@ -531,9 +544,12 @@ const loadUsersById = async (userIds = []) => {
   const users = await User.find({ _id: { $in: dedupedIds } })
     .select("_id firstName lastName name avatarUrl role department")
     .lean();
+  const presenceMap = await resolvePresenceMap(
+    users.map((user) => toIdString(user?._id)),
+  );
 
   return users.reduce((acc, user) => {
-    acc[toIdString(user._id)] = serializeUserSummary(user);
+    acc[toIdString(user._id)] = serializeUserSummary(user, presenceMap);
     return acc;
   }, {});
 };
@@ -1374,9 +1390,12 @@ const searchUsers = async (req, res) => {
       .sort({ firstName: 1, lastName: 1, createdAt: 1 })
       .limit(limit)
       .lean();
+    const presenceMap = await resolvePresenceMap(
+      users.map((user) => toIdString(user?._id)),
+    );
 
     const serializedUsers = users
-      .map((user) => serializeUserSummary(user))
+      .map((user) => serializeUserSummary(user, presenceMap))
       .filter((user) => user._id !== currentUserId);
 
     return res.json({ users: serializedUsers });

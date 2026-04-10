@@ -406,7 +406,9 @@
 
 .chat-dock-thread-copy small,
 .chat-dock-thread-meta small,
-.chat-dock-counterpart span {
+.chat-dock-counterpart-copy small,
+.chat-dock-user-result-copy small,
+.chat-dock-user-presence {
   color: var(--text-secondary);
 }
 
@@ -460,6 +462,63 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.chat-dock-user-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-dock-presence-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #22c55e;
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+.chat-dock-user-result-copy,
+.chat-dock-counterpart-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.chat-dock-user-result-copy {
+  flex: 1;
+}
+
+.chat-dock-user-result-copy strong,
+.chat-dock-counterpart-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-dock-user-result-copy strong {
+  font-size: 0.9rem;
+}
+
+.chat-dock-user-result-copy small,
+.chat-dock-counterpart-copy small,
+.chat-dock-user-presence {
+  font-size: 0.72rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-dock-user-presence.online {
+  color: #22c55e;
 }
 
 .chat-dock-counterpart {
@@ -1340,6 +1399,14 @@
   color: var(--text-primary);
 }
 
+.chat-dock-mention-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .chat-dock-mention-copy small {
   font-size: 0.72rem;
   color: var(--primary-color);
@@ -1532,7 +1599,8 @@
   }
 
   .chat-dock-counterpart {
-    display: none;
+    max-width: min(44vw, 220px);
+    padding: 0.34rem 0.42rem;
   }
 
   .chat-dock-main-head-secondary {
@@ -1624,6 +1692,10 @@
 
   .chat-dock-mobile-back-btn {
     padding: 0.42rem 0.65rem;
+  }
+
+  .chat-dock-counterpart {
+    max-width: 148px;
   }
 
   .chat-dock-composer-toolbar {

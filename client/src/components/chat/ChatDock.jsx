@@ -199,6 +199,66 @@ const formatThreadTime = (value) => {
   }).format(date);
 };
 
+const formatPresenceTimestamp = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+};
+
+const formatPresenceRelativeTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const diffMs = date.getTime() - Date.now();
+  const absDiffMs = Math.abs(diffMs);
+  const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+  const units = [
+    ["day", 24 * 60 * 60 * 1000],
+    ["hour", 60 * 60 * 1000],
+    ["minute", 60 * 1000],
+  ];
+
+  for (const [unit, unitMs] of units) {
+    if (absDiffMs >= unitMs || unit === "minute") {
+      return rtf.format(Math.round(diffMs / unitMs), unit);
+    }
+  }
+
+  return "just now";
+};
+
+const getChatPresenceMeta = (presence) => {
+  if (presence?.isOnline) {
+    return {
+      isOnline: true,
+      label: "Online",
+      title: "Online now",
+    };
+  }
+
+  const exactTimestamp = formatPresenceTimestamp(presence?.lastOnlineAt);
+  const relativeTimestamp = formatPresenceRelativeTime(presence?.lastOnlineAt);
+  if (relativeTimestamp) {
+    return {
+      isOnline: false,
+      label: `Last online ${relativeTimestamp}`,
+      title: exactTimestamp ? `Last online ${exactTimestamp}` : "",
+    };
+  }
+
+  return {
+    isOnline: false,
+    label: "Offline",
+    title: "",
+  };
+};
+
 const isMessageWithinEditWindow = (message) => {
   const createdAt = message?.createdAt ? new Date(message.createdAt) : null;
   if (!createdAt || Number.isNaN(createdAt.getTime())) {
@@ -592,6 +652,32 @@ const ChatDock = ({ user }) => {
     [threads],
   );
 
+  const fetchChatUsers = useCallback(async ({ query = "", limit } = {}) => {
+    const params = new URLSearchParams();
+    const trimmedQuery = toText(query);
+
+    if (trimmedQuery) {
+      params.set("q", trimmedQuery);
+    }
+    if (Number.isFinite(limit) && limit > 0) {
+      params.set("limit", String(limit));
+    }
+
+    const requestUrl = params.toString()
+      ? `/api/chat/users?${params.toString()}`
+      : "/api/chat/users";
+    const res = await fetch(requestUrl, {
+      credentials: "include",
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to load teammates.");
+    }
+
+    return Array.isArray(data?.users) ? data.users : [];
+  }, []);
+
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
@@ -905,17 +991,10 @@ const ChatDock = ({ user }) => {
 
     const loadPublicMentionUsers = async () => {
       try {
-        const res = await fetch("/api/chat/users?limit=500", {
-          credentials: "include",
-        });
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to load teammates.");
-        }
+        const nextUsers = await fetchChatUsers({ limit: 500 });
 
         if (!isCancelled) {
-          setPublicMentionUsers(Array.isArray(data?.users) ? data.users : []);
+          setPublicMentionUsers(nextUsers);
         }
       } catch (mentionDirectoryError) {
         if (!isCancelled) {
@@ -932,7 +1011,7 @@ const ChatDock = ({ user }) => {
     return () => {
       isCancelled = true;
     };
-  }, [currentUserId, isOpen, isPublicThread]);
+  }, [currentUserId, fetchChatUsers, isOpen, isPublicThread]);
 
   const fetchThreads = useCallback(
     async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
@@ -1128,20 +1207,86 @@ const ChatDock = ({ user }) => {
   }, [currentUserId, fetchMessages, fetchThreads, user?.notificationSettings?.sound]);
 
   useEffect(() => {
+    if (!currentUserId) return undefined;
+
+    const handlePresenceChanged = () => {
+      if (!isOpen) return;
+
+      void fetchThreads();
+
+      if (sidebarMode === "users") {
+        void fetchChatUsers({ query: userQuery })
+          .then((nextUsers) => {
+            setUserResults(nextUsers);
+          })
+          .catch((presenceError) => {
+            console.error("Failed to refresh chat user presence", presenceError);
+          });
+      }
+
+      if (isPublicThread) {
+        void fetchChatUsers({ limit: 500 })
+          .then((nextUsers) => {
+            setPublicMentionUsers(nextUsers);
+          })
+          .catch((presenceError) => {
+            console.error(
+              "Failed to refresh public chat user presence",
+              presenceError,
+            );
+          });
+      }
+
+      if (isPublicThread && activeMention) {
+        const rawQuery = toText(activeMention.query).toLowerCase();
+        const mentionSearchQuery =
+          rawQuery.split(/[._-]+/).filter(Boolean)[0] || "";
+
+        void fetchChatUsers({
+          query: mentionSearchQuery,
+          limit: 500,
+        })
+          .then((nextUsers) => {
+            const nextMentionUsers = filterMentionUsers(nextUsers, rawQuery);
+            setMentionResults(nextMentionUsers);
+            setHighlightedMentionIndex((prev) =>
+              nextMentionUsers.length === 0
+                ? 0
+                : Math.min(prev, nextMentionUsers.length - 1),
+            );
+          })
+          .catch((presenceError) => {
+            console.error(
+              "Failed to refresh mention presence suggestions",
+              presenceError,
+            );
+          });
+      }
+    };
+
+    window.addEventListener("mh:presence-changed", handlePresenceChanged);
+    return () => {
+      window.removeEventListener("mh:presence-changed", handlePresenceChanged);
+    };
+  }, [
+    activeMention,
+    currentUserId,
+    fetchChatUsers,
+    fetchThreads,
+    isOpen,
+    isPublicThread,
+    sidebarMode,
+    userQuery,
+  ]);
+
+  useEffect(() => {
     if (sidebarMode !== "users") return undefined;
 
     const timerId = window.setTimeout(async () => {
       setUserSearchLoading(true);
       try {
-        const query = encodeURIComponent(userQuery.trim());
-        const res = await fetch(`/api/chat/users?q=${query}`, {
-          credentials: "include",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to find teammates.");
-        }
-        setUserResults(Array.isArray(data?.users) ? data.users : []);
+        const nextUsers = await fetchChatUsers({ query: userQuery });
+        setUserResults(nextUsers);
         setError("");
       } catch (searchError) {
         setError(searchError.message || "Failed to find teammates.");
@@ -1153,7 +1298,7 @@ const ChatDock = ({ user }) => {
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [sidebarMode, userQuery]);
+  }, [fetchChatUsers, sidebarMode, userQuery]);
 
   useEffect(() => {
     if (!projectPickerOpen) return undefined;
@@ -1193,16 +1338,11 @@ const ChatDock = ({ user }) => {
         const rawQuery = toText(activeMention.query).toLowerCase();
         const mentionSearchQuery =
           rawQuery.split(/[._-]+/).filter(Boolean)[0] || "";
-        const query = encodeURIComponent(mentionSearchQuery);
-        const res = await fetch(`/api/chat/users?q=${query}&limit=500`, {
-          credentials: "include",
+        const users = await fetchChatUsers({
+          query: mentionSearchQuery,
+          limit: 500,
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to find teammates.");
-        }
-
-        const nextUsers = filterMentionUsers(data?.users, rawQuery);
+        const nextUsers = filterMentionUsers(users, rawQuery);
         if (cancelled) return;
         setMentionResults(nextUsers);
         setHighlightedMentionIndex((prev) =>
@@ -1223,7 +1363,7 @@ const ChatDock = ({ user }) => {
       cancelled = true;
       window.clearTimeout(timerId);
     };
-  }, [activeMention, isPublicThread]);
+  }, [activeMention, fetchChatUsers, isPublicThread]);
 
   const handleOpen = () => {
     setIsOpen(true);
@@ -2038,22 +2178,43 @@ const ChatDock = ({ user }) => {
                     {!userSearchLoading && userResults.length === 0 && (
                       <p className="chat-dock-muted">No teammates found.</p>
                     )}
-                    {userResults.map((entry) => (
-                      <button
-                        key={entry._id}
-                        type="button"
-                        className="chat-dock-result-item"
-                        onClick={() => void handleStartDirectThread(entry._id)}
-                      >
-                        <UserAvatar
-                          name={entry.name}
-                          src={entry.avatarUrl}
-                          width="32px"
-                          height="32px"
-                        />
-                        <span>{entry.name}</span>
-                      </button>
-                    ))}
+                    {userResults.map((entry) => {
+                      const presenceMeta = getChatPresenceMeta(entry?.presence);
+                      return (
+                        <button
+                          key={entry._id}
+                          type="button"
+                          className="chat-dock-result-item"
+                          onClick={() => void handleStartDirectThread(entry._id)}
+                        >
+                          <span className="chat-dock-user-avatar-wrap">
+                            <UserAvatar
+                              name={entry.name}
+                              src={entry.avatarUrl}
+                              width="32px"
+                              height="32px"
+                            />
+                            {presenceMeta.isOnline && (
+                              <span
+                                className="chat-dock-presence-dot"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </span>
+                          <span className="chat-dock-user-result-copy">
+                            <strong>{entry.name}</strong>
+                            <small
+                              className={`chat-dock-user-presence ${
+                                presenceMeta.isOnline ? "online" : ""
+                              }`}
+                              title={presenceMeta.title || undefined}
+                            >
+                              {presenceMeta.label}
+                            </small>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -2116,17 +2277,41 @@ const ChatDock = ({ user }) => {
                       </div>
                     </div>
                     <div className="chat-dock-main-head-secondary">
-                      {activeThread.counterpart && (
-                        <div className="chat-dock-counterpart">
-                          <UserAvatar
-                            name={activeThread.counterpart.name}
-                            src={activeThread.counterpart.avatarUrl}
-                            width="28px"
-                            height="28px"
-                          />
-                          <span>{activeThread.counterpart.name}</span>
-                        </div>
-                      )}
+                      {activeThread.counterpart &&
+                        (() => {
+                          const presenceMeta = getChatPresenceMeta(
+                            activeThread.counterpart?.presence,
+                          );
+                          return (
+                            <div className="chat-dock-counterpart">
+                              <span className="chat-dock-user-avatar-wrap">
+                                <UserAvatar
+                                  name={activeThread.counterpart.name}
+                                  src={activeThread.counterpart.avatarUrl}
+                                  width="28px"
+                                  height="28px"
+                                />
+                                {presenceMeta.isOnline && (
+                                  <span
+                                    className="chat-dock-presence-dot"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </span>
+                              <div className="chat-dock-counterpart-copy">
+                                <strong>{activeThread.counterpart.name}</strong>
+                                <small
+                                  className={`chat-dock-user-presence ${
+                                    presenceMeta.isOnline ? "online" : ""
+                                  }`}
+                                  title={presenceMeta.title || undefined}
+                                >
+                                  {presenceMeta.label}
+                                </small>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       <div className="chat-dock-thread-menu-wrap">
                         <button
                           type="button"
@@ -2695,6 +2880,9 @@ const ChatDock = ({ user }) => {
                             ) : (
                               mentionResults.map((entry, index) => {
                                 const mentionHandle = buildMentionHandle(entry);
+                                const presenceMeta = getChatPresenceMeta(
+                                  entry?.presence,
+                                );
                                 return (
                                   <button
                                     key={`${entry._id}-${mentionHandle}`}
@@ -2709,15 +2897,33 @@ const ChatDock = ({ user }) => {
                                       handleSelectMention(entry);
                                     }}
                                   >
-                                    <UserAvatar
-                                      name={entry.name}
-                                      src={entry.avatarUrl}
-                                      width="30px"
-                                      height="30px"
-                                    />
+                                    <span className="chat-dock-user-avatar-wrap">
+                                      <UserAvatar
+                                        name={entry.name}
+                                        src={entry.avatarUrl}
+                                        width="30px"
+                                        height="30px"
+                                      />
+                                      {presenceMeta.isOnline && (
+                                        <span
+                                          className="chat-dock-presence-dot"
+                                          aria-hidden="true"
+                                        />
+                                      )}
+                                    </span>
                                     <span className="chat-dock-mention-copy">
                                       <strong>{entry.name}</strong>
-                                      <small>@{mentionHandle}</small>
+                                      <span className="chat-dock-mention-meta">
+                                        <small>@{mentionHandle}</small>
+                                        <span
+                                          className={`chat-dock-user-presence ${
+                                            presenceMeta.isOnline ? "online" : ""
+                                          }`}
+                                          title={presenceMeta.title || undefined}
+                                        >
+                                          {presenceMeta.label}
+                                        </span>
+                                      </span>
                                     </span>
                                   </button>
                                 );
