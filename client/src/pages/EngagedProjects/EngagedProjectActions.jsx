@@ -154,6 +154,17 @@ const PRODUCTION_MOCKUP_VISIBILITY_STATUSES = new Set([
   "Finished",
   "In Progress",
 ]);
+const SCOPE_REFERENCE_SECTION_KEYS = new Set([
+  "Graphics",
+  "Production",
+  "Photography",
+  "Stores",
+]);
+const APPROVED_MOCKUP_REFERENCE_SECTION_KEYS = new Set([
+  "Production",
+  "Photography",
+  "Stores",
+]);
 
 const BATCH_STATUS_FLOW = [
   "planned",
@@ -907,6 +918,14 @@ const EngagedProjectActions = ({ user }) => {
     () => (Array.isArray(project?.items) ? project.items : []),
     [project?.items],
   );
+  const projectItemTotalQty = useMemo(
+    () =>
+      projectItems.reduce(
+        (total, item) => total + (Number(item?.qty) || 0),
+        0,
+      ),
+    [projectItems],
+  );
   const batches = useMemo(
     () => (Array.isArray(project?.batches) ? project.batches : []),
     [project?.batches],
@@ -976,7 +995,7 @@ const EngagedProjectActions = ({ user }) => {
     (!isAdminUser || isAdminPackagingUser);
   const canCreateBatchNow =
     canCreateBatches && project?.status === "Pending Production";
-  const canShowProductionApprovedMockups = useMemo(() => {
+  const canShowApprovedMockupReference = useMemo(() => {
     if (!project) return false;
     const statusCandidate =
       project.status === "On Hold"
@@ -1135,10 +1154,11 @@ const EngagedProjectActions = ({ user }) => {
   const shouldShowScopeReferenceSection = useMemo(
     () =>
       departmentSections.some(
-        (section) => section.key === "Graphics" || section.key === "Production",
+        (section) => SCOPE_REFERENCE_SECTION_KEYS.has(section.key),
       ),
     [departmentSections],
   );
+  const shouldShowItemBreakdownSection = departmentSections.length > 0;
 
   const briefOverview = useMemo(
     () => String(project?.details?.briefOverview || "").trim(),
@@ -1152,6 +1172,14 @@ const EngagedProjectActions = ({ user }) => {
     }
     return normalized;
   }, [briefOverview]);
+  const displayBriefOverviewLines = useMemo(
+    () =>
+      String(displayBriefOverview || "")
+        .split(/\r?\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    [displayBriefOverview],
+  );
 
   const scopeReferenceItems = useMemo(() => {
     const sampleImage = String(project?.details?.sampleImage || "").trim();
@@ -2689,11 +2717,12 @@ const EngagedProjectActions = ({ user }) => {
       {shouldShowScopeReferenceSection && (
         <section className="engaged-scope-section">
           <div className="engaged-scope-header">
-            <div>
-              <h2>Brief Overview &amp; Reference Materials</h2>
+            <div className="engaged-scope-copy">
+              <span className="engaged-scope-eyebrow">Cross-check workspace</span>
+              <h2>Project Overview &amp; Reference Materials</h2>
               <p>
-                Review the project scope and source files before starting design
-                and production work.
+                Review the project scope and source files before starting work
+                or cross-checking handoffs.
               </p>
             </div>
             <div className="engaged-scope-stats">
@@ -2702,7 +2731,7 @@ const EngagedProjectActions = ({ user }) => {
                 {scopeReferenceItems.length === 1 ? "file" : "files"}
               </span>
               <span className="engaged-scope-pill muted">
-                {displayBriefOverview ? "Brief ready" : "Brief pending"}
+                {displayBriefOverview ? "Overview ready" : "Overview pending"}
               </span>
               {revisionMeta && revisionCount > 0 && (
                 <span className="revision-badge">
@@ -2715,18 +2744,33 @@ const EngagedProjectActions = ({ user }) => {
 
           <div className="engaged-scope-grid">
             <article className="engaged-scope-card">
-              <h3>Brief Overview</h3>
-              {displayBriefOverview ? (
-                <p className="engaged-scope-brief-text">{displayBriefOverview}</p>
+              <div className="engaged-scope-card-header">
+                <span className="engaged-scope-card-kicker">Project brief</span>
+                <h3>Project Overview</h3>
+              </div>
+              {displayBriefOverviewLines.length > 0 ? (
+                <div className="engaged-scope-brief-panel">
+                  {displayBriefOverviewLines.map((line, index) => (
+                    <p
+                      key={`${line}-${index}`}
+                      className="engaged-scope-brief-line"
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
               ) : (
                 <p className="engaged-scope-empty">
-                  No brief overview has been added yet.
+                  No project overview has been added yet.
                 </p>
               )}
             </article>
 
             <article className="engaged-scope-card">
-              <h3>Reference Materials</h3>
+              <div className="engaged-scope-card-header">
+                <span className="engaged-scope-card-kicker">Shared assets</span>
+                <h3>Reference Materials</h3>
+              </div>
               {scopeReferenceItems.length === 0 ? (
                 <p className="engaged-scope-empty">
                   No reference materials uploaded yet.
@@ -2761,9 +2805,14 @@ const EngagedProjectActions = ({ user }) => {
                           )}
                         </div>
                         <div className="engaged-reference-meta">
-                          <span className="engaged-reference-tag">
-                            {item.label}
-                          </span>
+                          <div className="engaged-reference-topline">
+                            <span className="engaged-reference-tag">
+                              {item.label}
+                            </span>
+                            <span className="engaged-reference-action">
+                              Open file
+                            </span>
+                          </div>
                           <span className="engaged-reference-name">{fileName}</span>
                           {note && (
                             <span className="engaged-reference-note">{note}</span>
@@ -2775,6 +2824,55 @@ const EngagedProjectActions = ({ user }) => {
                 </div>
               )}
             </article>
+          </div>
+        </section>
+      )}
+
+      {shouldShowItemBreakdownSection && (
+        <section className="engaged-section">
+          <div className="engaged-section-header">
+            <div>
+              <h2 className="engaged-section-title">Item Breakdown</h2>
+              <p className="engaged-section-subtitle">
+                Review all project items and quantities for quick cross-checks.
+              </p>
+            </div>
+            <div className="engaged-section-tags">
+              <span className="engaged-section-chip">
+                {projectItems.length} {projectItems.length === 1 ? "item" : "items"}
+              </span>
+              <span className="engaged-section-chip">
+                {projectItemTotalQty} total qty
+              </span>
+            </div>
+          </div>
+
+          <div className="engaged-section-grid">
+            <div className="engaged-action-card">
+              {projectItems.length === 0 ? (
+                <p>No item breakdown has been added yet.</p>
+              ) : (
+                <div className="engaged-batch-items">
+                  {projectItems.map((item, index) => {
+                    const itemKey =
+                      String(item?._id || "").trim() ||
+                      `${item?.description || "item"}-${index}`;
+                    const itemBreakdown = String(item?.breakdown || "").trim();
+                    return (
+                      <div key={itemKey} className="engaged-batch-item-row">
+                        <div className="engaged-batch-item-info">
+                          <strong>{item?.description || "Item"}</strong>
+                          <span>Breakdown: {itemBreakdown || "-"}</span>
+                        </div>
+                        <span className="engaged-section-chip">
+                          Qty: {Number(item?.qty) || 0}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </section>
       )}
@@ -3059,6 +3157,14 @@ const EngagedProjectActions = ({ user }) => {
                 quoteDepartmentAcknowledgementWindowOpen &&
                 quoteSectionAcknowledged
               );
+            const canShowApprovedMockupCard =
+              APPROVED_MOCKUP_REFERENCE_SECTION_KEYS.has(section.key);
+            const approvedMockupSupportText =
+              section.key === "Stores"
+                ? "Use the approved mockup from Graphics to cross-check packaging output."
+                : section.key === "Photography"
+                  ? "Use the approved mockup from Graphics to cross-check photography output."
+                  : "Use the approved mockup from Graphics as your production reference.";
 
             return (
               <section key={section.key} className="engaged-section">
@@ -3721,15 +3827,12 @@ const EngagedProjectActions = ({ user }) => {
                     );
                   })()}
 
-                  {section.key === "Production" && (
+                  {canShowApprovedMockupCard && (
                     <div className="engaged-action-card">
                       <h3>Approved Mockup Reference</h3>
-                      <p>
-                        Use the approved mockup from Graphics as your production
-                        reference.
-                      </p>
+                      <p>{approvedMockupSupportText}</p>
 
-                      {!canShowProductionApprovedMockups ? (
+                      {!canShowApprovedMockupReference ? (
                         <div className="engaged-action-meta">
                           Approved mockups will appear here after Master Approval
                           is completed.
