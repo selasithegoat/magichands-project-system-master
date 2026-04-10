@@ -5,6 +5,7 @@ const SOUND_SRC = {
   notification: "/sounds/mh-notification.wav",
   newOrder: "/sounds/mh-new-order.wav",
   reminder: "/sounds/mh-reminder.wav",
+  message: "/sounds/mh-message.mp3",
 };
 
 let hasUserInteraction = false;
@@ -14,16 +15,21 @@ const lastPlayedAt = {
   notification: 0,
   newOrder: 0,
   reminder: 0,
+  message: 0,
 };
 
 const soundCache = {
   notification: null,
   newOrder: null,
   reminder: null,
+  message: null,
 };
 
 const resolveSoundKind = (notificationType) => {
   const normalizedType = String(notificationType || "").toUpperCase();
+  if (normalizedType === "CHAT_MESSAGE" || normalizedType === "MESSAGE") {
+    return "message";
+  }
   if (normalizedType === "REMINDER") return "reminder";
   if (normalizedType === "ASSIGNMENT" || normalizedType === "NEW_ORDER") {
     return "newOrder";
@@ -50,6 +56,30 @@ const getSound = (kind) => {
   return soundCache[kind];
 };
 
+const playSoundKind = async (kind, enabled = true) => {
+  if (!enabled || !hasUserInteraction) return false;
+
+  const now = Date.now();
+  if (now - (lastPlayedAt[kind] || 0) < SOUND_COOLDOWN_MS) {
+    return false;
+  }
+
+  const baseSound = getSound(kind);
+  if (!baseSound) return false;
+
+  lastPlayedAt[kind] = now;
+
+  try {
+    const instance = new Audio(SOUND_SRC[kind]);
+    instance.preload = "auto";
+    instance.volume = SOUND_VOLUME;
+    await instance.play();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const removeUnlockListeners = (handler) => {
   if (typeof window === "undefined") return;
   window.removeEventListener("pointerdown", handler);
@@ -64,10 +94,12 @@ export const initNotificationSound = () => {
     const notificationSound = getSound("notification");
     const newOrderSound = getSound("newOrder");
     const reminderSound = getSound("reminder");
+    const messageSound = getSound("message");
 
     notificationSound?.load?.();
     newOrderSound?.load?.();
     reminderSound?.load?.();
+    messageSound?.load?.();
   };
 
   const handleInteractionUnlock = () => {
@@ -93,26 +125,9 @@ export const playNotificationSound = async (
   notificationType,
   enabled = true,
 ) => {
-  if (!enabled || !hasUserInteraction) return false;
-
   const kind = resolveSoundKind(notificationType);
-  const now = Date.now();
-  if (now - lastPlayedAt[kind] < SOUND_COOLDOWN_MS) {
-    return false;
-  }
-
-  const baseSound = getSound(kind);
-  if (!baseSound) return false;
-
-  lastPlayedAt[kind] = now;
-
-  try {
-    // Clone so repeated alerts can overlap naturally.
-    const instance = baseSound.cloneNode(true);
-    instance.volume = SOUND_VOLUME;
-    await instance.play();
-    return true;
-  } catch {
-    return false;
-  }
+  return playSoundKind(kind, enabled);
 };
+
+export const playMessageSound = async (enabled = true) =>
+  playSoundKind("message", enabled);

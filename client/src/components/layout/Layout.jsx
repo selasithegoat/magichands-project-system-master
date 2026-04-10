@@ -251,7 +251,9 @@ const Layout = ({
     if (!allowPush) return;
     const allowSound = user?.notificationSettings?.sound ?? true;
 
-    playNotificationSound(notification.type, allowSound).catch(() => {});
+    if (!isChatMentionNotification(notification)) {
+      playNotificationSound(notification.type, allowSound).catch(() => {});
+    }
 
     // Show Native Notification
     showNativeNotification(notification);

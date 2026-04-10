@@ -937,6 +937,7 @@ const sendMessage = async (req, res) => {
       {
         threadId: toIdString(thread._id),
         threadType: thread.type,
+        changeType: "message_created",
         messageId: toIdString(message._id),
         senderId: currentUserId,
       },
@@ -1025,6 +1026,7 @@ const deleteMessage = async (req, res) => {
       {
         threadId: toIdString(thread._id),
         threadType: thread.type,
+        changeType: "message_deleted",
         messageId: toIdString(message._id),
         senderId: currentUserId,
       },
@@ -1150,6 +1152,7 @@ const updateMessage = async (req, res) => {
       {
         threadId: toIdString(thread._id),
         threadType: thread.type,
+        changeType: "message_updated",
         messageId: toIdString(message._id),
         senderId: currentUserId,
       },

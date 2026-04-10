@@ -11,6 +11,7 @@ import ThreeDotsIcon from "../icons/ThreeDotsIcon";
 import TrashIcon from "../icons/TrashIcon";
 import XIcon from "../icons/XIcon";
 import ConfirmDialog from "../ui/ConfirmDialog";
+import { playMessageSound } from "../../utils/notificationSound";
 import "./ChatDock.css";
 
 const THREAD_POLL_INTERVAL_MS = 20000;
@@ -506,6 +507,7 @@ const ChatDock = ({ user }) => {
   const isOpenRef = useRef(false);
   const messageRequestIdRef = useRef(0);
   const markReadInFlightRef = useRef(new Set());
+  const playedIncomingMessageIdsRef = useRef(new Set());
   const messagesEndRef = useRef(null);
   const projectRouteCacheRef = useRef(new Map());
   const attachmentInputRef = useRef(null);
@@ -1060,7 +1062,28 @@ const ChatDock = ({ user }) => {
     if (!currentUserId) return undefined;
 
     const handleChatChanged = (event) => {
+      const changeType = String(event?.detail?.changeType || "").toLowerCase();
       const changedThreadId = toIdString(event?.detail?.threadId);
+      const changedMessageId = toIdString(event?.detail?.messageId);
+      const senderId = toIdString(event?.detail?.senderId);
+
+      if (
+        changeType === "message_created" &&
+        changedMessageId &&
+        senderId &&
+        senderId !== currentUserId &&
+        !playedIncomingMessageIdsRef.current.has(changedMessageId)
+      ) {
+        playedIncomingMessageIdsRef.current.add(changedMessageId);
+        if (playedIncomingMessageIdsRef.current.size > 250) {
+          playedIncomingMessageIdsRef.current.clear();
+          playedIncomingMessageIdsRef.current.add(changedMessageId);
+        }
+
+        const allowSound = user?.notificationSettings?.sound ?? true;
+        playMessageSound(allowSound).catch(() => {});
+      }
+
       void fetchThreads();
 
       if (
@@ -1076,7 +1099,7 @@ const ChatDock = ({ user }) => {
     return () => {
       window.removeEventListener("mh:chat-changed", handleChatChanged);
     };
-  }, [currentUserId, fetchMessages, fetchThreads]);
+  }, [currentUserId, fetchMessages, fetchThreads, user?.notificationSettings?.sound]);
 
   useEffect(() => {
     if (sidebarMode !== "users") return undefined;
