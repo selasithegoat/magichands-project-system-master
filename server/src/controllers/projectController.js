@@ -1814,11 +1814,36 @@ const resolveBatchDeliveredQty = (batch, totalQty) => {
   if (Number.isFinite(delivered)) return delivered;
   return totalQty;
 };
+const getProjectItemQtyMap = (project = {}) => {
+  const totals = new Map();
+  (Array.isArray(project?.items) ? project.items : []).forEach((item, index) => {
+    const itemId =
+      toObjectIdString(item?._id) || `__project_item_${index}`;
+    const qty = Number(item?.qty) || 0;
+    if (!itemId || qty <= 0) return;
+    totals.set(itemId, qty);
+  });
+  return totals;
+};
+const hasFullBatchAllocationCoverage = (project) => {
+  const projectItemQtyMap = getProjectItemQtyMap(project);
+  if (projectItemQtyMap.size === 0) return true;
+
+  const allocations = buildBatchAllocationMap(project?.batches || []);
+  for (const [itemId, requiredQty] of projectItemQtyMap.entries()) {
+    if ((allocations.get(itemId) || 0) < requiredQty) {
+      return false;
+    }
+  }
+
+  return true;
+};
 const areAllBatchesProduced = (project) => {
   const batches = Array.isArray(project?.batches) ? project.batches : [];
   if (batches.length === 0) return true;
   const activeBatches = batches.filter((entry) => entry?.status !== "cancelled");
-  if (activeBatches.length === 0) return true;
+  if (activeBatches.length === 0) return false;
+  if (!hasFullBatchAllocationCoverage(project)) return false;
   return activeBatches.every((entry) => {
     const status = normalizeBatchStatus(entry?.status);
     if (!status || !BATCH_PRODUCED_STATUS_SET.has(status)) return false;
@@ -1833,7 +1858,8 @@ const areAllBatchesDelivered = (project) => {
   const batches = Array.isArray(project?.batches) ? project.batches : [];
   if (batches.length === 0) return true;
   const activeBatches = batches.filter((entry) => entry?.status !== "cancelled");
-  if (activeBatches.length === 0) return true;
+  if (activeBatches.length === 0) return false;
+  if (!hasFullBatchAllocationCoverage(project)) return false;
   return activeBatches.every((entry) => {
     const status = normalizeBatchStatus(entry?.status);
     if (status !== "delivered") return false;
@@ -1842,6 +1868,47 @@ const areAllBatchesDelivered = (project) => {
     const deliveredQty = resolveBatchDeliveredQty(entry, totalQty);
     return deliveredQty >= totalQty;
   });
+};
+const getBatchProgressGuard = (project, targetStatus = "") => {
+  if (isQuoteProject(project)) return null;
+  if (!Array.isArray(project?.batches) || project.batches.length === 0) {
+    return null;
+  }
+
+  const flow = STANDARD_STATUS_FLOW;
+  const pendingProductionIndex = flow.indexOf("Pending Production");
+  const pendingDeliveryIndex = flow.indexOf("Pending Delivery/Pickup");
+  const targetIndex = flow.indexOf(toText(targetStatus));
+
+  if (targetIndex === -1) return null;
+
+  if (
+    pendingProductionIndex !== -1 &&
+    targetIndex > pendingProductionIndex &&
+    !areAllBatchesProduced(project)
+  ) {
+    return {
+      code: "BATCH_PRODUCTION_INCOMPLETE",
+      targetStatus,
+      message:
+        "All project quantities must be assigned to active batches and fully produced before this project can move past Pending Production.",
+    };
+  }
+
+  if (
+    pendingDeliveryIndex !== -1 &&
+    targetIndex > pendingDeliveryIndex &&
+    !areAllBatchesDelivered(project)
+  ) {
+    return {
+      code: "BATCH_DELIVERY_INCOMPLETE",
+      targetStatus,
+      message:
+        "All project quantities must be assigned to active batches and fully delivered before this project can move past Pending Delivery/Pickup.",
+    };
+  }
+
+  return null;
 };
 const reconcileProjectStatusForBatchProduction = async (
   project,
@@ -7854,34 +7921,10 @@ const updateProjectStatus = async (req, res) => {
     }
 
     const isStandardProject = !isQuoteProject(project);
-    if (isStandardProject && project?.batches?.length > 0) {
-      const flow = STANDARD_STATUS_FLOW;
-      const pendingProductionIndex = flow.indexOf("Pending Production");
-      const pendingDeliveryIndex = flow.indexOf("Pending Delivery/Pickup");
-      const finalIndex = flow.indexOf(finalStatus);
-      if (
-        pendingProductionIndex !== -1 &&
-        finalIndex > pendingProductionIndex &&
-        !areAllBatchesProduced(project)
-      ) {
-        return res.status(400).json({
-          code: "BATCH_PRODUCTION_INCOMPLETE",
-          targetStatus: finalStatus,
-          message:
-            "All batches must be produced before this project can move past Pending Production.",
-        });
-      }
-      if (
-        pendingDeliveryIndex !== -1 &&
-        finalIndex > pendingDeliveryIndex &&
-        !areAllBatchesDelivered(project)
-      ) {
-        return res.status(400).json({
-          code: "BATCH_DELIVERY_INCOMPLETE",
-          targetStatus: finalStatus,
-          message:
-            "All batches must be delivered before this project can move past Pending Delivery/Pickup.",
-        });
+    if (isStandardProject) {
+      const batchProgressGuard = getBatchProgressGuard(project, finalStatus);
+      if (batchProgressGuard) {
+        return res.status(400).json(batchProgressGuard);
       }
     }
 
@@ -10317,6 +10360,12 @@ const updateProjectType = async (req, res) => {
       updatedAt: now,
       updatedBy: req.user._id,
     };
+    if (hadStatusChange) {
+      const batchProgressGuard = getBatchProgressGuard(project, nextStatus);
+      if (batchProgressGuard) {
+        return res.status(400).json(batchProgressGuard);
+      }
+    }
     if (requestedType === "Quote") {
       project.quoteDetails = normalizeQuoteDetailsWorkflow({
         quoteDetailsInput: project.quoteDetails || {},
@@ -12992,6 +13041,13 @@ const updateProject = async (req, res) => {
       });
     }
 
+    if (requestedStatus) {
+      const batchProgressGuard = getBatchProgressGuard(project, project.status);
+      if (batchProgressGuard) {
+        return res.status(400).json(batchProgressGuard);
+      }
+    }
+
     if (workstreamCode !== undefined) {
       project.workstreamCode = normalizeOptionalText(workstreamCode);
       detailsChanged = true;
@@ -15095,15 +15151,7 @@ const updateProjectBatchStatus = async (req, res) => {
       batch.cancellation.reason = toText(req.body?.reason);
     }
 
-    const activeBatches = batches.filter((entry) => entry.status !== "cancelled");
-    const allDelivered = activeBatches.length > 0 &&
-      activeBatches.every((entry) => {
-        if (normalizeBatchStatus(entry?.status) !== "delivered") return false;
-        const totalQty = getBatchTotalQty(entry);
-        if (totalQty <= 0) return true;
-        const deliveredQty = resolveBatchDeliveredQty(entry, totalQty);
-        return deliveredQty >= totalQty;
-      });
+    const allDelivered = areAllBatchesDelivered(project);
 
     if (allDelivered) {
       const currentStatus = toText(project.status);
