@@ -258,6 +258,15 @@ const formatBatchQty = (qty, totalQty) => {
   const suffix = totalQty > 0 ? `/${totalQty}` : "";
   return `${qty}${suffix}`;
 };
+const formatDeliveredOutOfTotal = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return "";
+  if (totalQty > 0) return `${qty} out of ${totalQty} delivered`;
+  return `${qty} delivered`;
+};
+const getBatchQtyLeft = (qty, totalQty) => {
+  if (!Number.isFinite(qty) || totalQty <= 0) return null;
+  return Math.max(totalQty - qty, 0);
+};
 
 const formatQuoteRequirementStatus = (status = "") => {
   const normalized = String(status || "").trim().toLowerCase();
@@ -1159,6 +1168,12 @@ const EngagedProjectActions = ({ user }) => {
     [departmentSections],
   );
   const shouldShowItemBreakdownSection = departmentSections.length > 0;
+  const batchPackagingQtyLeft = useMemo(() => {
+    if (!batchPackagingModal.batch) return null;
+    const totalQty = getBatchTotalQty(batchPackagingModal.batch);
+    const enteredQty = Number(batchPackagingQty);
+    return getBatchQtyLeft(enteredQty, totalQty);
+  }, [batchPackagingModal.batch, batchPackagingQty]);
 
   const briefOverview = useMemo(
     () => String(project?.details?.briefOverview || "").trim(),
@@ -3006,16 +3021,36 @@ const EngagedProjectActions = ({ user }) => {
                 const statusLabel = getBatchStatusLabel(batch?.status);
                 const nextStatus = getNextBatchStatus(batch?.status);
                 const batchTotalQty = getBatchTotalQty(batch);
+                const overallProjectQty =
+                  projectItemTotalQty > 0 ? projectItemTotalQty : batchTotalQty;
                 const producedQtyValue = Number(batch?.packaging?.receivedQty);
                 const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
                 const producedQtyLabel = formatBatchQty(
                   producedQtyValue,
                   batchTotalQty,
                 );
-                const deliveredQtyLabel = formatBatchQty(
+                const deliveredQtyLabel = formatDeliveredOutOfTotal(
                   deliveredQtyValue,
+                  overallProjectQty,
+                );
+                const deliveredQtyLeft = getBatchQtyLeft(
+                  deliveredQtyValue,
+                  overallProjectQty,
+                );
+                const producedQtyLeft = getBatchQtyLeft(
+                  producedQtyValue,
                   batchTotalQty,
                 );
+                const latestQtyLeft =
+                  deliveredQtyLeft !== null
+                    ? deliveredQtyLeft
+                    : producedQtyLeft;
+                const latestQtyLeftLabel =
+                  deliveredQtyLeft !== null
+                    ? "Qty Left After Delivery"
+                    : producedQtyLeft !== null
+                      ? "Qty Left After Production"
+                      : "";
                 const canAdvance =
                   Boolean(nextStatus) &&
                   !isProjectLeadForProject &&
@@ -3061,7 +3096,12 @@ const EngagedProjectActions = ({ user }) => {
                     )}
                     {deliveredQtyLabel && (
                       <div className="engaged-batch-meta">
-                        Delivered Qty: {deliveredQtyLabel}
+                        Delivery Progress: {deliveredQtyLabel}
+                      </div>
+                    )}
+                    {latestQtyLeft !== null && (
+                      <div className="engaged-batch-meta">
+                        {latestQtyLeftLabel}: {latestQtyLeft}
                       </div>
                     )}
                     {batch?.status === "delivered" && batch?.delivery?.deliveredAt && (
@@ -4399,6 +4439,11 @@ const EngagedProjectActions = ({ user }) => {
                 onChange={(event) => setBatchPackagingQty(event.target.value)}
                 placeholder="Enter produced quantity"
               />
+              {batchPackagingQtyLeft !== null && (
+                <div className="file-hint file-hint-spaced-sm">
+                  Qty left after this handoff: {batchPackagingQtyLeft}
+                </div>
+              )}
             </div>
             <div className="modal-actions">
               <button

@@ -434,6 +434,15 @@ const formatBatchQty = (qty, totalQty) => {
   const suffix = totalQty > 0 ? `/${totalQty}` : "";
   return `${qty}${suffix}`;
 };
+const formatDeliveredOutOfTotal = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return "";
+  if (totalQty > 0) return `${qty} out of ${totalQty} delivered`;
+  return `${qty} delivered`;
+};
+const getBatchQtyLeft = (qty, totalQty) => {
+  if (!Number.isFinite(qty) || totalQty <= 0) return null;
+  return Math.max(totalQty - qty, 0);
+};
 const QUOTE_REQUIREMENT_LABELS = {
   cost: "Cost",
   mockup: "Mockup",
@@ -922,6 +931,14 @@ const OrderActions = () => {
   const hasBatches = batches.length > 0;
   const batchItemMap = useMemo(
     () => buildProjectItemMap(project?.items || []),
+    [project?.items],
+  );
+  const projectItemTotalQty = useMemo(
+    () =>
+      (Array.isArray(project?.items) ? project.items : []).reduce(
+        (acc, item) => acc + (Number(item?.qty) || 0),
+        0,
+      ),
     [project?.items],
   );
   const deliveredBatchCount = useMemo(
@@ -3476,16 +3493,36 @@ const OrderActions = () => {
                     const statusLabel = getBatchStatusLabel(batch?.status);
                     const summary = buildBatchItemSummary(batch, batchItemMap);
                     const batchTotalQty = getBatchTotalQty(batch);
+                    const overallProjectQty =
+                      projectItemTotalQty > 0 ? projectItemTotalQty : batchTotalQty;
                     const producedQtyValue = Number(batch?.packaging?.receivedQty);
                     const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
                     const producedQtyLabel = formatBatchQty(
                       producedQtyValue,
                       batchTotalQty,
                     );
-                    const deliveredQtyLabel = formatBatchQty(
+                    const deliveredQtyLabel = formatDeliveredOutOfTotal(
                       deliveredQtyValue,
+                      overallProjectQty,
+                    );
+                    const deliveredQtyLeft = getBatchQtyLeft(
+                      deliveredQtyValue,
+                      overallProjectQty,
+                    );
+                    const producedQtyLeft = getBatchQtyLeft(
+                      producedQtyValue,
                       batchTotalQty,
                     );
+                    const latestQtyLeft =
+                      deliveredQtyLeft !== null
+                        ? deliveredQtyLeft
+                        : producedQtyLeft;
+                    const latestQtyLeftLabel =
+                      deliveredQtyLeft !== null
+                        ? "Qty Left After Delivery"
+                        : producedQtyLeft !== null
+                          ? "Qty Left After Production"
+                          : "";
                     const canDeliver =
                       batch?.status === "packaged" && canMarkDelivered;
                     return (
@@ -3513,7 +3550,12 @@ const OrderActions = () => {
                         )}
                         {deliveredQtyLabel && (
                           <div className="batch-delivery-meta">
-                            Delivered Qty: {deliveredQtyLabel}
+                            Delivery Progress: {deliveredQtyLabel}
+                          </div>
+                        )}
+                        {latestQtyLeft !== null && (
+                          <div className="batch-delivery-meta">
+                            {latestQtyLeftLabel}: {latestQtyLeft}
                           </div>
                         )}
                         {batch?.status === "delivered" &&

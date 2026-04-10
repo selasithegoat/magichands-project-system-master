@@ -476,6 +476,15 @@ const formatBatchQty = (qty, totalQty) => {
   const suffix = totalQty > 0 ? `/${totalQty}` : "";
   return `${qty}${suffix}`;
 };
+const formatDeliveredOutOfTotal = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return "";
+  if (totalQty > 0) return `${qty} out of ${totalQty} delivered`;
+  return `${qty} delivered`;
+};
+const getBatchQtyLeft = (qty, totalQty) => {
+  if (!Number.isFinite(qty) || totalQty <= 0) return null;
+  return Math.max(totalQty - qty, 0);
+};
 
 
 const normalizeQuoteDecisionStatus = (value) => {
@@ -4251,15 +4260,45 @@ const ProjectDetails = ({ user }) => {
                   const isUpdating = batchStatusUpdatingId === batchId;
                   const summary = buildBatchItemSummary(batch, batchItemMap);
                   const batchTotalQty = getBatchTotalQty(batch);
+                  const overallProjectQty =
+                    batchProgress?.totalQty > 0
+                      ? batchProgress.totalQty
+                      : batchTotalQty;
                   const producedQtyValue = Number(batch?.packaging?.receivedQty);
                   const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
                   const producedQtyLabel = formatBatchQty(
                     producedQtyValue,
                     batchTotalQty,
                   );
-                  const deliveredQtyLabel = formatBatchQty(
+                  const deliveredQtyLabel = formatDeliveredOutOfTotal(
                     deliveredQtyValue,
+                    overallProjectQty,
+                  );
+                  const deliveredQtyLeft = getBatchQtyLeft(
+                    deliveredQtyValue,
+                    overallProjectQty,
+                  );
+                  const producedQtyLeft = getBatchQtyLeft(
+                    producedQtyValue,
                     batchTotalQty,
+                  );
+                  const latestQtyLeft =
+                    deliveredQtyLeft !== null
+                      ? deliveredQtyLeft
+                      : producedQtyLeft;
+                  const latestQtyLeftLabel =
+                    deliveredQtyLeft !== null
+                      ? "Qty Left After Delivery"
+                      : producedQtyLeft !== null
+                        ? "Qty Left After Production"
+                        : "";
+                  const enteredPackagingQtyLeft = getBatchQtyLeft(
+                    Number(batchPackagingQty[batchId]),
+                    batchTotalQty,
+                  );
+                  const enteredDeliveryQtyLeft = getBatchQtyLeft(
+                    Number(batchDeliveryQty[batchId]),
+                    overallProjectQty,
                   );
                   return (
                     <div key={batchId || batch?.label} className="batch-admin-item">
@@ -4283,7 +4322,12 @@ const ProjectDetails = ({ user }) => {
                           <span>Produced Qty: {producedQtyLabel}</span>
                         )}
                         {deliveredQtyLabel && (
-                          <span>Delivered Qty: {deliveredQtyLabel}</span>
+                          <span>Delivery Progress: {deliveredQtyLabel}</span>
+                        )}
+                        {latestQtyLeft !== null && (
+                          <span>
+                            {latestQtyLeftLabel}: {latestQtyLeft}
+                          </span>
                         )}
                       </div>
                       <div className="batch-admin-controls">
@@ -4323,6 +4367,12 @@ const ProjectDetails = ({ user }) => {
                               placeholder="Enter produced quantity"
                               disabled={isUpdating}
                             />
+                            {enteredPackagingQtyLeft !== null && (
+                              <small className="batch-admin-field-hint">
+                                Qty left after packaging confirmation:{" "}
+                                {enteredPackagingQtyLeft}
+                              </small>
+                            )}
                           </label>
                         )}
 
@@ -4338,12 +4388,17 @@ const ProjectDetails = ({ user }) => {
                                   setBatchDeliveryQty((prev) => ({
                                     ...prev,
                                     [batchId]: event.target.value,
-                                  }))
-                                }
-                                placeholder="Enter delivered quantity"
-                                disabled={isUpdating}
-                              />
-                            </label>
+                                }))
+                              }
+                              placeholder="Enter delivered quantity"
+                              disabled={isUpdating}
+                            />
+                            {enteredDeliveryQtyLeft !== null && (
+                              <small className="batch-admin-field-hint">
+                                Qty left after delivery: {enteredDeliveryQtyLeft}
+                              </small>
+                            )}
+                          </label>
                             <label className="batch-admin-field">
                               <span>Recipient (Optional)</span>
                               <input
