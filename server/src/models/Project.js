@@ -129,6 +129,11 @@ const ProjectBatchSchema = new mongoose.Schema(
       enum: BATCH_STATUSES,
       default: "planned",
     },
+    productionSubDepartment: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     production: {
       startedAt: Date,
       completedAt: Date,

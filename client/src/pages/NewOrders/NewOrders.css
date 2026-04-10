@@ -642,6 +642,12 @@
   color: var(--text-secondary);
 }
 
+.batch-delivery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .batch-delivery-empty {
   font-size: 0.8rem;
   color: var(--text-secondary);

@@ -319,6 +319,7 @@ const EngagedProjects = ({ user }) => {
       ? [user.department]
       : [];
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
+  const hasProductionParent = userDepartments.includes("Production");
   const hasStoresParent = userDepartments.includes("Stores");
   const hasPhotographyParent = userDepartments.includes("Photography");
   const hasPackagingRole =
@@ -330,11 +331,20 @@ const EngagedProjects = ({ user }) => {
       PRODUCTION_SUB_DEPARTMENTS.includes(d),
     );
   }, [userDepartments]);
+  const effectiveProductionSubDepts = useMemo(
+    () =>
+      hasProductionParent
+        ? PRODUCTION_SUB_DEPARTMENTS
+        : productionSubDepts,
+    [hasProductionParent, productionSubDepts],
+  );
 
   // Determine all engaged departments the user belongs to
   const userEngagedDepts = useMemo(() => {
     const found = [];
-    if (productionSubDepts.length > 0) found.push("Production");
+    if (hasProductionParent || effectiveProductionSubDepts.length > 0) {
+      found.push("Production");
+    }
     if (
       hasGraphicsParent ||
       userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
@@ -353,7 +363,8 @@ const EngagedProjects = ({ user }) => {
     return found;
   }, [
     userDepartments,
-    productionSubDepts,
+    hasProductionParent,
+    effectiveProductionSubDepts,
     hasGraphicsParent,
     hasStoresParent,
     hasPhotographyParent,
@@ -365,12 +376,12 @@ const EngagedProjects = ({ user }) => {
     if (departmentFilter === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
     if (departmentFilter === "Stores") return STORES_SUB_DEPARTMENTS;
     if (departmentFilter === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
-    if (departmentFilter === "Production") return productionSubDepts;
+    if (departmentFilter === "Production") return effectiveProductionSubDepts;
 
     // If "All" or default, aggregate from all user's engaged departments
     let aggregated = [];
-    if (productionSubDepts.length > 0)
-      aggregated = [...aggregated, ...productionSubDepts];
+    if (effectiveProductionSubDepts.length > 0)
+      aggregated = [...aggregated, ...effectiveProductionSubDepts];
     if (userEngagedDepts.includes("Graphics"))
       aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
     if (userEngagedDepts.includes("Stores"))
@@ -379,7 +390,7 @@ const EngagedProjects = ({ user }) => {
       aggregated = [...aggregated, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
 
     return aggregated;
-  }, [userEngagedDepts, departmentFilter, productionSubDepts]);
+  }, [userEngagedDepts, departmentFilter, effectiveProductionSubDepts]);
 
   // Determine user's primary label for the current view
   const primaryDeptLabel = useMemo(() => {
@@ -515,7 +526,7 @@ const EngagedProjects = ({ user }) => {
     if (dept === "Graphics")
       return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
     if (dept === "Production")
-      return projDepts.some((d) => productionSubDepts.includes(d));
+      return projDepts.some((d) => effectiveProductionSubDepts.includes(d));
     if (dept === "Photography")
       return projDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
     if (dept === "Stores")
@@ -543,7 +554,7 @@ const EngagedProjects = ({ user }) => {
     if (dept === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
     if (dept === "Stores") return STORES_SUB_DEPARTMENTS;
     if (dept === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
-    if (dept === "Production") return productionSubDepts;
+    if (dept === "Production") return effectiveProductionSubDepts;
     return [];
   };
 

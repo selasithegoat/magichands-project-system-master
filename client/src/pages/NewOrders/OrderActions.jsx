@@ -1756,6 +1756,8 @@ const OrderActions = () => {
   const handleBatchDeliveryComplete = async (batch) => {
     if (!canMarkDelivered || !project || !batch) return false;
     try {
+      const batchStatus = String(batch?.status || "").trim().toLowerCase();
+      const isDeliveryCorrection = batchStatus === "delivered";
       const deliveredQty = Number(batchDeliveryQty);
       const res = await fetchWithPortal(
         `/api/projects/${project._id}/batches/${batch.batchId}/status`,
@@ -1773,7 +1775,12 @@ const OrderActions = () => {
       if (res.ok) {
         const updated = await res.json();
         setProject(updated);
-        showToast("Batch delivered successfully.", "success");
+        showToast(
+          isDeliveryCorrection
+            ? "Batch delivery updated."
+            : "Batch delivered successfully.",
+          "success",
+        );
         return true;
       }
       const errorData = await res.json().catch(() => ({}));
@@ -3479,7 +3486,7 @@ const OrderActions = () => {
           {!isQuoteProject && hasBatches ? (
             <div className="action-card batch-delivery-card">
               <h3>Batch Deliveries</h3>
-              <p>Confirm delivery for each packaged batch.</p>
+              <p>Confirm delivery for each packaged batch and correct delivered records when needed.</p>
               <div className="batch-delivery-progress">
                 {batchDeliveryProgressLabel}
               </div>
@@ -3524,7 +3531,8 @@ const OrderActions = () => {
                           ? "Qty Left After Production"
                           : "";
                     const canDeliver =
-                      batch?.status === "packaged" && canMarkDelivered;
+                      ["packaged", "delivered"].includes(batch?.status) &&
+                      canMarkDelivered;
                     return (
                       <div
                         key={batch?.batchId || batch?.label || statusLabel}
@@ -3582,14 +3590,18 @@ const OrderActions = () => {
                             Cancelled batch
                           </div>
                         )}
-                        {batch?.status === "packaged" && (
-                          <button
-                            className="action-btn complete-btn"
-                            onClick={() => openBatchDeliveryModal(batch)}
-                            disabled={!canDeliver}
-                          >
-                            Confirm Batch Delivery
-                          </button>
+                        {["packaged", "delivered"].includes(batch?.status) && (
+                          <div className="batch-delivery-actions">
+                            <button
+                              className="action-btn complete-btn"
+                              onClick={() => openBatchDeliveryModal(batch)}
+                              disabled={!canDeliver}
+                            >
+                              {batch?.status === "delivered"
+                                ? "Edit Batch Delivery"
+                                : "Confirm Batch Delivery"}
+                            </button>
+                          </div>
                         )}
                         {batch?.status !== "packaged" &&
                           batch?.status !== "delivered" &&
@@ -5431,7 +5443,12 @@ const OrderActions = () => {
         <div className="confirm-modal-overlay" onClick={closeBatchDeliveryModal}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-modal-header">
-              <h3>Confirm Batch Delivery</h3>
+              <h3>
+                {String(batchDeliveryModal.batch?.status || "").trim().toLowerCase() ===
+                "delivered"
+                  ? "Edit Batch Delivery"
+                  : "Confirm Batch Delivery"}
+              </h3>
               <p>{project.orderId || project._id || "Project"}</p>
             </div>
             <p className="confirm-modal-text">
@@ -5509,7 +5526,13 @@ const OrderActions = () => {
                       getBatchTotalQty(batchDeliveryModal.batch))
                 }
               >
-                {batchDeliverySubmitting ? "Confirming..." : "Confirm Delivery"}
+                {batchDeliverySubmitting
+                  ? "Saving..."
+                  : String(batchDeliveryModal.batch?.status || "")
+                      .trim()
+                      .toLowerCase() === "delivered"
+                    ? "Save Delivery"
+                    : "Confirm Delivery"}
               </button>
             </div>
           </div>

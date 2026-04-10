@@ -193,6 +193,11 @@ const BATCH_ACTION_LABELS = {
 };
 const BATCH_PRODUCTION_STATUS_SET = new Set(["in_production", "produced"]);
 const BATCH_PACKAGING_STATUS_SET = new Set(["in_packaging", "packaged"]);
+const BATCH_PACKAGING_EDITABLE_STATUS_SET = new Set([
+  "in_packaging",
+  "packaged",
+  "delivered",
+]);
 const BATCH_PRODUCTION_COMPLETE_STATUS_SET = new Set([
   "produced",
   "in_packaging",
@@ -212,6 +217,10 @@ const getNextBatchStatus = (status) => {
 };
 const normalizeBatchStatus = (status) =>
   String(status || "").trim().toLowerCase();
+const normalizeProductionSubDepartmentToken = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return PRODUCTION_SUB_DEPARTMENTS.includes(normalized) ? normalized : "";
+};
 
 const buildBatchAllocationTotals = (batches = []) =>
   (Array.isArray(batches) ? batches : []).reduce((acc, batch) => {
@@ -620,6 +629,8 @@ const EngagedProjectActions = ({ user }) => {
   const [batchFormOpen, setBatchFormOpen] = useState(false);
   const [batchLabel, setBatchLabel] = useState("");
   const [batchEditingId, setBatchEditingId] = useState("");
+  const [batchProductionSubDepartment, setBatchProductionSubDepartment] =
+    useState("");
   const [batchItemAllocations, setBatchItemAllocations] = useState({});
   const [batchCreating, setBatchCreating] = useState(false);
   const [batchUpdatingId, setBatchUpdatingId] = useState("");
@@ -636,6 +647,7 @@ const EngagedProjectActions = ({ user }) => {
     : user?.department
       ? [user.department]
       : [];
+  const hasProductionParent = userDepartments.includes("Production");
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");
   const hasPhotographyParent = userDepartments.includes("Photography");
@@ -643,10 +655,19 @@ const EngagedProjectActions = ({ user }) => {
   const productionSubDepts = useMemo(() => {
     return userDepartments.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
   }, [userDepartments]);
+  const effectiveProductionSubDepts = useMemo(
+    () =>
+      hasProductionParent
+        ? PRODUCTION_SUB_DEPARTMENTS
+        : productionSubDepts,
+    [hasProductionParent, productionSubDepts],
+  );
 
   const userEngagedDepts = useMemo(() => {
     const found = [];
-    if (productionSubDepts.length > 0) found.push("Production");
+    if (hasProductionParent || effectiveProductionSubDepts.length > 0) {
+      found.push("Production");
+    }
     if (
       hasGraphicsParent ||
       userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
@@ -665,7 +686,8 @@ const EngagedProjectActions = ({ user }) => {
     return found;
   }, [
     userDepartments,
-    productionSubDepts,
+    hasProductionParent,
+    effectiveProductionSubDepts,
     hasGraphicsParent,
     hasStoresParent,
     hasPhotographyParent,
@@ -673,8 +695,8 @@ const EngagedProjectActions = ({ user }) => {
 
   const engagedSubDepts = useMemo(() => {
     let aggregated = [];
-    if (productionSubDepts.length > 0)
-      aggregated = [...aggregated, ...productionSubDepts];
+    if (effectiveProductionSubDepts.length > 0)
+      aggregated = [...aggregated, ...effectiveProductionSubDepts];
     if (userEngagedDepts.includes("Graphics"))
       aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
     if (userEngagedDepts.includes("Stores"))
@@ -682,18 +704,13 @@ const EngagedProjectActions = ({ user }) => {
     if (userEngagedDepts.includes("Photography"))
       aggregated = [...aggregated, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
     return Array.from(new Set(aggregated));
-  }, [userEngagedDepts, productionSubDepts]);
+  }, [userEngagedDepts, effectiveProductionSubDepts]);
 
   const isAdminUser = user?.role === "admin";
-  const hasProductionRole =
-    userDepartments.includes("Production") ||
-    userDepartments.some((dept) => PRODUCTION_SUB_DEPARTMENTS.includes(dept));
   const hasPackagingRole =
     userDepartments.includes("Stores") ||
     userDepartments.some((dept) => STORES_SUB_DEPARTMENTS.includes(dept));
   const isAdminPackagingUser = isAdminUser && hasPackagingRole;
-  const canCreateBatches = !isAdminUser && hasProductionRole;
-  const canManageProductionBatches = !isAdminUser && hasProductionRole;
   const canManagePackagingBatches = hasPackagingRole;
 
   const projectEngagedSubDepts = useMemo(() => {
@@ -702,6 +719,26 @@ const EngagedProjectActions = ({ user }) => {
       engagedSubDepts.includes(dept),
     );
   }, [project, engagedSubDepts]);
+  const projectProductionSubDepts = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (project?.departments || []).filter((dept) =>
+            PRODUCTION_SUB_DEPARTMENTS.includes(dept),
+          ),
+        ),
+      ),
+    [project?.departments],
+  );
+  const batchProductionSubDepartmentOptions = useMemo(
+    () =>
+      projectProductionSubDepts.filter((dept) => productionSubDepts.includes(dept)),
+    [projectProductionSubDepts, productionSubDepts],
+  );
+  const canCreateBatches =
+    !isAdminUser && batchProductionSubDepartmentOptions.length > 0;
+  const canManageProductionBatches =
+    !isAdminUser && batchProductionSubDepartmentOptions.length > 0;
 
   const getQuoteActionDepartmentsForCurrentUser = (projectRecord) => {
     const targetDepartments = Array.isArray(projectRecord?.departments)
@@ -939,6 +976,10 @@ const EngagedProjectActions = ({ user }) => {
     () => (Array.isArray(project?.batches) ? project.batches : []),
     [project?.batches],
   );
+  const batchAccessSummary = useMemo(
+    () => project?.batchAccessSummary || null,
+    [project?.batchAccessSummary],
+  );
   const hasBatches = batches.length > 0;
   const activeBatches = useMemo(
     () => batches.filter((batch) => batch?.status !== "cancelled"),
@@ -948,17 +989,27 @@ const EngagedProjectActions = ({ user }) => {
     () => buildProjectItemMap(projectItems),
     [projectItems],
   );
-  const batchAllocationTotals = useMemo(
-    () => buildBatchAllocationTotals(batches),
-    [batches],
-  );
+  const batchAllocationTotals = useMemo(() => {
+    if (batchAccessSummary?.allocationByItem) {
+      return batchAccessSummary.allocationByItem;
+    }
+    return buildBatchAllocationTotals(batches);
+  }, [batchAccessSummary, batches]);
   const batchFormAllocationTotals = useMemo(() => {
     if (!batchEditingId) return batchAllocationTotals;
-    const trimmed = String(batchEditingId);
-    const filtered = batches.filter(
-      (batch) => String(batch?.batchId || "") !== trimmed,
+    const editingBatch = batches.find(
+      (batch) => String(batch?.batchId || "") === String(batchEditingId),
     );
-    return buildBatchAllocationTotals(filtered);
+    if (!editingBatch) return batchAllocationTotals;
+
+    const nextTotals = { ...batchAllocationTotals };
+    (Array.isArray(editingBatch?.items) ? editingBatch.items : []).forEach((entry) => {
+      const itemId = String(entry?.itemId || entry?._id || "");
+      if (!itemId) return;
+      const qty = Number(entry?.qty) || 0;
+      nextTotals[itemId] = Math.max((nextTotals[itemId] || 0) - qty, 0);
+    });
+    return nextTotals;
   }, [batchEditingId, batchAllocationTotals, batches]);
   const batchRemainingByItem = useMemo(() => {
     const remaining = {};
@@ -989,13 +1040,21 @@ const EngagedProjectActions = ({ user }) => {
     [projectItems, batchRemainingByItem],
   );
   const batchProductionComplete = useMemo(() => {
+    if (typeof batchAccessSummary?.productionComplete === "boolean") {
+      return batchAccessSummary.productionComplete;
+    }
     if (activeBatches.length === 0) return true;
     return activeBatches.every((batch) =>
       BATCH_PRODUCTION_COMPLETE_STATUS_SET.has(
         normalizeBatchStatus(batch?.status),
       ),
     );
-  }, [activeBatches]);
+  }, [activeBatches, batchAccessSummary]);
+  const nextBatchNumber = useMemo(() => {
+    const totalCount = Number(batchAccessSummary?.totalCount);
+    if (Number.isFinite(totalCount) && totalCount >= 0) return totalCount + 1;
+    return batches.length + 1;
+  }, [batchAccessSummary, batches.length]);
   const totalBatchCountLabel = activeBatches.length || hasBatches
     ? `${activeBatches.length} active`
     : "No batches";
@@ -1148,7 +1207,7 @@ const EngagedProjectActions = ({ user }) => {
       buildSection("Graphics", "Graphics", GRAPHICS_SUB_DEPARTMENTS);
     }
     if (userEngagedDepts.includes("Production")) {
-      buildSection("Production", "Production", productionSubDepts);
+      buildSection("Production", "Production", effectiveProductionSubDepts);
     }
     if (userEngagedDepts.includes("Stores")) {
       buildSection("Stores", "Stores", STORES_SUB_DEPARTMENTS);
@@ -1158,7 +1217,7 @@ const EngagedProjectActions = ({ user }) => {
     }
 
     return sections;
-  }, [project, projectEngagedSubDepts, userEngagedDepts, productionSubDepts]);
+  }, [project, projectEngagedSubDepts, userEngagedDepts, effectiveProductionSubDepts]);
 
   const shouldShowScopeReferenceSection = useMemo(
     () =>
@@ -1599,6 +1658,7 @@ const EngagedProjectActions = ({ user }) => {
     setBatchFormOpen(false);
     setBatchLabel("");
     setBatchEditingId("");
+    setBatchProductionSubDepartment("");
     setBatchItemAllocations({});
   };
 
@@ -1626,6 +1686,14 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
+    if (batchProductionSubDepartmentOptions.length === 0) {
+      setToast({
+        type: "error",
+        message:
+          "Your account must belong to an engaged production subdepartment to create batches for this project.",
+      });
+      return;
+    }
     if (projectItems.length === 0) {
       setToast({
         type: "error",
@@ -1634,7 +1702,12 @@ const EngagedProjectActions = ({ user }) => {
       return;
     }
     setBatchEditingId("");
-    setBatchLabel(`Batch ${batches.length + 1}`);
+    setBatchLabel(`Batch ${nextBatchNumber}`);
+    setBatchProductionSubDepartment(
+      batchProductionSubDepartmentOptions.length === 1
+        ? batchProductionSubDepartmentOptions[0]
+        : "",
+    );
     setBatchItemAllocations({});
     setBatchFormOpen(true);
   };
@@ -1649,8 +1722,27 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
+    if (batchProductionSubDepartmentOptions.length === 0) {
+      setToast({
+        type: "error",
+        message:
+          "Your account must belong to this batch's engaged production subdepartment to edit it.",
+      });
+      return;
+    }
     setBatchEditingId(String(batch.batchId || ""));
     setBatchLabel(String(batch.label || ""));
+    const existingBatchProductionSubDepartment =
+      normalizeProductionSubDepartmentToken(batch?.productionSubDepartment);
+    setBatchProductionSubDepartment(
+      batchProductionSubDepartmentOptions.includes(
+        existingBatchProductionSubDepartment,
+      )
+        ? existingBatchProductionSubDepartment
+        : batchProductionSubDepartmentOptions.length === 1
+          ? batchProductionSubDepartmentOptions[0]
+          : "",
+    );
     const allocations = {};
     (Array.isArray(batch.items) ? batch.items : []).forEach((entry) => {
       const itemId = String(entry?.itemId || entry?._id || "");
@@ -1676,6 +1768,7 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleSaveBatch = async () => {
     if (!project) return;
+    const isEditingBatch = Boolean(batchEditingId);
     if (isProjectLeadForProject) {
       setToast({
         type: "error",
@@ -1684,7 +1777,7 @@ const EngagedProjectActions = ({ user }) => {
       });
       return;
     }
-    if (!canCreateBatchNow) {
+    if (!isEditingBatch && !canCreateBatchNow) {
       setToast({
         type: "error",
         message:
@@ -1708,6 +1801,23 @@ const EngagedProjectActions = ({ user }) => {
       return;
     }
 
+    const resolvedBatchProductionSubDepartment =
+      batchProductionSubDepartmentOptions.includes(batchProductionSubDepartment)
+        ? batchProductionSubDepartment
+        : batchProductionSubDepartmentOptions.length === 1
+          ? batchProductionSubDepartmentOptions[0]
+          : "";
+    if (!resolvedBatchProductionSubDepartment) {
+      setToast({
+        type: "error",
+        message:
+          batchProductionSubDepartmentOptions.length > 1
+            ? "Select the production subdepartment responsible for this batch."
+            : "Your account must belong to an engaged production subdepartment to manage batches for this project.",
+      });
+      return;
+    }
+
     const endpoint = batchEditingId
       ? `/api/projects/${project._id}/batches/${batchEditingId}?source=engaged`
       : `/api/projects/${project._id}/batches?source=engaged`;
@@ -1721,6 +1831,7 @@ const EngagedProjectActions = ({ user }) => {
         body: JSON.stringify({
           label,
           items: itemsPayload,
+          productionSubDepartment: resolvedBatchProductionSubDepartment,
         }),
       });
       if (res.ok) {
@@ -1752,6 +1863,7 @@ const EngagedProjectActions = ({ user }) => {
     batch,
     nextStatus,
     extraPayload = {},
+    options = {},
   ) => {
     if (!project || !batch || !nextStatus) return false;
     setBatchUpdatingId(String(batch.batchId || ""));
@@ -1767,7 +1879,9 @@ const EngagedProjectActions = ({ user }) => {
       if (res.ok) {
         setToast({
           type: "success",
-          message: `Batch moved to ${getBatchStatusLabel(nextStatus)}.`,
+          message:
+            options.successMessage ||
+            `Batch moved to ${getBatchStatusLabel(nextStatus)}.`,
         });
         await fetchProject();
         return true;
@@ -1811,6 +1925,9 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleConfirmBatchPackaging = async () => {
     if (!batchPackagingModal.batch) return;
+    const batchStatus = normalizeBatchStatus(batchPackagingModal.batch?.status);
+    const isPackagingCorrection =
+      batchStatus && batchStatus !== "produced";
     const totalQty = getBatchTotalQty(batchPackagingModal.batch);
     const receivedQtyValue = Number(batchPackagingQty);
     if (!Number.isFinite(receivedQtyValue) || receivedQtyValue <= 0) {
@@ -1833,6 +1950,11 @@ const EngagedProjectActions = ({ user }) => {
       batchPackagingModal.batch,
       "in_packaging",
       { receivedQty: receivedQtyValue },
+      {
+        successMessage: isPackagingCorrection
+          ? "Batch produced quantity updated."
+          : "Batch received in packaging.",
+      },
     );
     setBatchPackagingSubmitting(false);
     if (updated) {
@@ -1854,7 +1976,24 @@ const EngagedProjectActions = ({ user }) => {
       openBatchPackagingModal(batch);
       return;
     }
-    await submitBatchStatusUpdate(batch, nextStatus);
+    const extraPayload = {};
+    const isProductionStage = BATCH_PRODUCTION_STATUS_SET.has(nextStatus);
+    const existingBatchProductionSubDepartment =
+      normalizeProductionSubDepartmentToken(batch?.productionSubDepartment);
+    if (isProductionStage && !existingBatchProductionSubDepartment) {
+      if (batchProductionSubDepartmentOptions.length === 1) {
+        extraPayload.productionSubDepartment =
+          batchProductionSubDepartmentOptions[0];
+      } else {
+        setToast({
+          type: "error",
+          message:
+            "Edit this batch and select its production subdepartment before updating production progress.",
+        });
+        return;
+      }
+    }
+    await submitBatchStatusUpdate(batch, nextStatus, extraPayload);
   };
 
   const handleSubmitUpdate = async () => {
@@ -2942,8 +3081,39 @@ const EngagedProjectActions = ({ user }) => {
                   className="input-field"
                   value={batchLabel}
                   onChange={(event) => setBatchLabel(event.target.value)}
-                  placeholder={`Batch ${batches.length + 1}`}
+                  placeholder={`Batch ${nextBatchNumber}`}
                 />
+              </div>
+              <div className="form-group">
+                <label>Production Subdepartment</label>
+                {batchProductionSubDepartmentOptions.length > 1 ? (
+                  <select
+                    className="input-field"
+                    value={batchProductionSubDepartment}
+                    onChange={(event) =>
+                      setBatchProductionSubDepartment(event.target.value)
+                    }
+                  >
+                    <option value="">Select subdepartment</option>
+                    {batchProductionSubDepartmentOptions.map((dept) => (
+                      <option key={dept} value={dept}>
+                        {getDepartmentLabel(dept)}
+                      </option>
+                    ))}
+                  </select>
+                ) : batchProductionSubDepartmentOptions.length === 1 ? (
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={getDepartmentLabel(batchProductionSubDepartmentOptions[0])}
+                    readOnly
+                  />
+                ) : (
+                  <div className="engaged-warning-banner">
+                    Your account is not assigned to an engaged production
+                    subdepartment for this project.
+                  </div>
+                )}
               </div>
               <div className="engaged-batch-items">
                 {projectItems.length === 0 && (
@@ -3001,7 +3171,13 @@ const EngagedProjectActions = ({ user }) => {
                   type="button"
                   className="btn-primary"
                   onClick={handleSaveBatch}
-                  disabled={batchCreating || projectItems.length === 0}
+                  disabled={
+                    batchCreating ||
+                    projectItems.length === 0 ||
+                    batchProductionSubDepartmentOptions.length === 0 ||
+                    (batchProductionSubDepartmentOptions.length > 1 &&
+                      !batchProductionSubDepartment)
+                  }
                 >
                   {batchCreating
                     ? "Saving..."
@@ -3055,14 +3231,20 @@ const EngagedProjectActions = ({ user }) => {
                   Boolean(nextStatus) &&
                   !isProjectLeadForProject &&
                   (!isAdminUser || isAdminPackagingUser) &&
-                  ((hasProductionRole &&
+                  ((canManageProductionBatches &&
                     BATCH_PRODUCTION_STATUS_SET.has(nextStatus)) ||
                     (hasPackagingRole &&
                       BATCH_PACKAGING_STATUS_SET.has(nextStatus)));
                 const canEditBatch =
                   !isProjectLeadForProject &&
-                  batch?.status === "planned" &&
-                  canCreateBatches;
+                  batch?.status !== "cancelled" &&
+                  canManageProductionBatches;
+                const canEditPackagingRecord =
+                  !isProjectLeadForProject &&
+                  canManagePackagingBatches &&
+                  BATCH_PACKAGING_EDITABLE_STATUS_SET.has(
+                    normalizeBatchStatus(batch?.status),
+                  );
                 const isUpdating = batchUpdatingId === batchId;
 
                 return (
@@ -3081,6 +3263,14 @@ const EngagedProjectActions = ({ user }) => {
                         {statusLabel}
                       </span>
                     </div>
+                    {batch?.productionSubDepartment && (
+                      <div className="engaged-batch-meta">
+                        <span>
+                          Production:{" "}
+                          {getDepartmentLabel(batch.productionSubDepartment)}
+                        </span>
+                      </div>
+                    )}
                     <div className="engaged-batch-meta">
                       {batch?.createdAt && (
                         <span>Created: {formatUpdateDateTime(batch.createdAt)}</span>
@@ -3127,6 +3317,16 @@ const EngagedProjectActions = ({ user }) => {
                           Edit Batch
                         </button>
                       )}
+                      {canEditPackagingRecord && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => openBatchPackagingModal(batch)}
+                          disabled={batchPackagingSubmitting || isUpdating}
+                        >
+                          Edit Produced Qty
+                        </button>
+                      )}
                       {canAdvance && (
                         <button
                           type="button"
@@ -3154,7 +3354,11 @@ const EngagedProjectActions = ({ user }) => {
             ) : (
               <div className="engaged-action-card engaged-batch-empty-card">
                 <h3>No batches yet</h3>
-                <p>Split production into smaller batches to track progress.</p>
+                <p>
+                  {Number(batchAccessSummary?.totalCount) > 0
+                    ? "No batches are assigned to your production subdepartment yet."
+                    : "Split production into smaller batches to track progress."}
+                </p>
                 {canCreateBatches && !batchFormOpen && !isProjectLeadForProject && (
                   <button
                     type="button"
@@ -4411,7 +4615,11 @@ const EngagedProjectActions = ({ user }) => {
       {batchPackagingModal.open && batchPackagingModal.batch && (
         <div className="modal-overlay" onClick={closeBatchPackagingModal}>
           <div className="modal-content" onClick={(event) => event.stopPropagation()}>
-            <h3 className="modal-title">Confirm Batch Handoff</h3>
+            <h3 className="modal-title">
+              {normalizeBatchStatus(batchPackagingModal.batch?.status) === "produced"
+                ? "Confirm Batch Handoff"
+                : "Edit Produced Quantity"}
+            </h3>
             <p className="acknowledge-confirm-text">
               <strong>Batch:</strong>{" "}
               {batchPackagingModal.batch?.label || "Batch"}
@@ -4467,7 +4675,12 @@ const EngagedProjectActions = ({ user }) => {
                       getBatchTotalQty(batchPackagingModal.batch))
                 }
               >
-                {batchPackagingSubmitting ? "Confirming..." : "Confirm Handoff"}
+                {batchPackagingSubmitting
+                  ? "Saving..."
+                  : normalizeBatchStatus(batchPackagingModal.batch?.status) ===
+                      "produced"
+                    ? "Confirm Handoff"
+                    : "Save Produced Qty"}
               </button>
             </div>
           </div>

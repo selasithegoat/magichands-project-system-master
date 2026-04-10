@@ -796,6 +796,9 @@ const resolveEngagedDepartmentFilters = (departments = []) => {
 
     if (token === "production") {
       filters.add("production");
+      PRODUCTION_SUB_DEPARTMENT_TOKENS.forEach((subDeptToken) =>
+        filters.add(subDeptToken),
+      );
     }
   });
 
@@ -1790,6 +1793,130 @@ const isPackagingUser = (user) =>
   toDepartmentArray(user?.department)
     .map(normalizeDepartmentValue)
     .some((token) => STORES_DEPARTMENT_TOKENS.has(token));
+const normalizeProductionSubDepartmentToken = (value) => {
+  const token = normalizeDepartmentValue(value);
+  return PRODUCTION_SUB_DEPARTMENT_TOKENS.has(token) ? token : "";
+};
+const getUserProductionSubDepartmentTokens = (user = {}) =>
+  Array.from(
+    new Set(
+      toDepartmentArray(user?.department)
+        .map(normalizeProductionSubDepartmentToken)
+        .filter(Boolean),
+    ),
+  );
+const getProjectProductionSubDepartmentTokens = (project = {}) =>
+  Array.from(
+    new Set(
+      toDepartmentArray(project?.departments)
+        .map(normalizeProductionSubDepartmentToken)
+        .filter(Boolean),
+    ),
+  );
+const getAllowedBatchProductionSubDepartmentTokens = ({
+  project,
+  user,
+  isAdmin = false,
+} = {}) => {
+  const projectTokens = getProjectProductionSubDepartmentTokens(project);
+  if (projectTokens.length === 0) return [];
+  if (isAdmin) return projectTokens;
+
+  const userTokens = new Set(getUserProductionSubDepartmentTokens(user));
+  return projectTokens.filter((token) => userTokens.has(token));
+};
+const resolveBatchProductionSubDepartmentToken = ({
+  project,
+  user,
+  requestedToken = "",
+  existingToken = "",
+  isAdmin = false,
+} = {}) => {
+  const allowedTokens = getAllowedBatchProductionSubDepartmentTokens({
+    project,
+    user,
+    isAdmin,
+  });
+  const normalizedRequested = normalizeProductionSubDepartmentToken(requestedToken);
+  const normalizedExisting = normalizeProductionSubDepartmentToken(existingToken);
+
+  if (normalizedRequested) {
+    if (!allowedTokens.includes(normalizedRequested)) {
+      return {
+        ok: false,
+        message: "Select a valid engaged production subdepartment for this batch.",
+      };
+    }
+    return { ok: true, token: normalizedRequested };
+  }
+
+  if (normalizedExisting && allowedTokens.includes(normalizedExisting)) {
+    return { ok: true, token: normalizedExisting };
+  }
+
+  if (allowedTokens.length === 1) {
+    return { ok: true, token: allowedTokens[0] };
+  }
+
+  if (allowedTokens.length === 0) {
+    return {
+      ok: false,
+      message: isAdmin
+        ? "This project must have an engaged production subdepartment before batches can be assigned."
+        : "Your account must belong to an engaged production subdepartment to manage batches for this project.",
+    };
+  }
+
+  return {
+    ok: false,
+    message: "Select the production subdepartment responsible for this batch.",
+  };
+};
+const canUserAccessBatchByProductionSubDepartment = ({
+  user,
+  batch,
+} = {}) => {
+  if (isAdminUser(user) || isPackagingUser(user) || isFrontDeskUser(user)) {
+    return true;
+  }
+
+  const userTokens = new Set(getUserProductionSubDepartmentTokens(user));
+  if (userTokens.size === 0) return false;
+
+  const batchToken = normalizeProductionSubDepartmentToken(
+    batch?.productionSubDepartment,
+  );
+  if (!batchToken) {
+    return (
+      toObjectIdString(batch?.createdBy) !== "" &&
+      toObjectIdString(batch?.createdBy) ===
+        toObjectIdString(user?._id || user?.id)
+    );
+  }
+  return userTokens.has(batchToken);
+};
+const getVisibleProjectBatchesForUser = ({ project, user } = {}) => {
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  if (batches.length === 0) return batches;
+
+  if (isAdminUser(user) || isPackagingUser(user) || isFrontDeskUser(user)) {
+    return batches;
+  }
+
+  return batches.filter((batch) =>
+    canUserAccessBatchByProductionSubDepartment({ user, batch }),
+  );
+};
+const applyVisibleProjectBatchesForUser = (project, user) => {
+  if (!project) return project;
+  const batchAccessSummary = buildProjectBatchAccessSummary(project);
+  project.batchAccessSummary = batchAccessSummary;
+  if (project._doc) {
+    project._doc.batchAccessSummary = batchAccessSummary;
+  }
+  project.batches = getVisibleProjectBatchesForUser({ project, user });
+  return project;
+};
 const normalizeBatchStatus = (value) => {
   const token = String(value || "").trim().toLowerCase();
   return BATCH_STATUS_SET.has(token) ? token : "";
@@ -1972,6 +2099,8 @@ const getNextBatchStatus = (status) => {
   if (index < 0) return "";
   return BATCH_STATUS_FLOW[index + 1] || "";
 };
+const getBatchStatusIndex = (status) =>
+  BATCH_STATUS_FLOW.indexOf(normalizeBatchStatus(status));
 const buildBatchAllocationMap = (batches = [], options = {}) => {
   const totals = new Map();
   const excludeBatchId = String(options.excludeBatchId || "");
@@ -1987,6 +2116,28 @@ const buildBatchAllocationMap = (batches = [], options = {}) => {
     });
   });
   return totals;
+};
+const buildProjectBatchAccessSummary = (project = {}) => {
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  const activeBatches = batches.filter(
+    (batch) => normalizeBatchStatus(batch?.status) !== "cancelled",
+  );
+  const allocationByItem = {};
+  buildBatchAllocationMap(batches).forEach((qty, itemId) => {
+    allocationByItem[itemId] = qty;
+  });
+  return {
+    totalCount: batches.length,
+    activeCount: activeBatches.length,
+    productionComplete:
+      activeBatches.length === 0 ||
+      activeBatches.every((batch) =>
+        BATCH_PRODUCED_STATUS_SET.has(
+          normalizeBatchStatus(batch?.status),
+        ),
+      ),
+    allocationByItem,
+  };
 };
 const normalizeBatchItemsPayload = (items = []) =>
   (Array.isArray(items) ? items : [])
@@ -6546,6 +6697,9 @@ const getProjects = async (req, res) => {
     ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
+    if (String(req.query.mode || "").toLowerCase() === "engaged") {
+      projects.forEach((project) => applyVisibleProjectBatchesForUser(project, req.user));
+    }
 
     if (groupByOrder) {
       const groups = buildOrderGroups(projects, { collapseRevisions });
@@ -6889,6 +7043,12 @@ const getProjectById = async (req, res) => {
       }
 
       normalizeProjectStatusFields(project);
+      if (
+        String(req.query.mode || "").toLowerCase() === "engaged" ||
+        String(req.query.source || "").toLowerCase() === "engaged"
+      ) {
+        applyVisibleProjectBatchesForUser(project, req.user);
+      }
       res.json(project);
     } else {
       res.status(404).json({ message: "Project not found" });
@@ -14882,7 +15042,7 @@ const createProjectBatch = async (req, res) => {
       });
     }
 
-    const { label, items } = req.body || {};
+    const { label, items, productionSubDepartment } = req.body || {};
     const validation = validateBatchItems(items, project);
     if (!validation.ok) {
       return res.status(400).json({ message: validation.message });
@@ -14897,6 +15057,15 @@ const createProjectBatch = async (req, res) => {
     const batchCount = Array.isArray(project.batches) ? project.batches.length : 0;
     const fallbackLabel = `Batch ${batchCount + 1}`;
     const batchLabel = toText(label) || fallbackLabel;
+    const batchProductionSubDepartment = resolveBatchProductionSubDepartmentToken({
+      project,
+      user: req.user,
+      requestedToken: productionSubDepartment,
+      isAdmin,
+    });
+    if (!batchProductionSubDepartment.ok) {
+      return res.status(400).json({ message: batchProductionSubDepartment.message });
+    }
     const batchId = new mongoose.Types.ObjectId().toString();
     const now = new Date();
 
@@ -14905,6 +15074,7 @@ const createProjectBatch = async (req, res) => {
       label: batchLabel,
       items: validation.items,
       status: "planned",
+      productionSubDepartment: batchProductionSubDepartment.token,
       createdBy: req.user?._id || req.user?.id,
       createdAt: now,
       updatedAt: now,
@@ -14934,7 +15104,7 @@ const createProjectBatch = async (req, res) => {
   }
 };
 
-// @desc    Update batch label/items (before production unless admin)
+// @desc    Update batch label/items after creation
 // @route   PATCH /api/projects/:id/batches/:batchId
 // @access  Private (Production/Admin)
 const updateProjectBatch = async (req, res) => {
@@ -14955,14 +15125,22 @@ const updateProjectBatch = async (req, res) => {
     if (!batch) {
       return res.status(404).json({ message: "Batch not found." });
     }
-
-    if (!isAdmin && batch.status !== "planned") {
-      return res.status(400).json({
-        message: "Batch items can only be edited before production starts.",
+    if (
+      !isAdmin &&
+      !canUserAccessBatchByProductionSubDepartment({ user: req.user, batch })
+    ) {
+      return res.status(403).json({
+        message: "You can only manage batches assigned to your production subdepartment.",
       });
     }
 
-    const { label, items } = req.body || {};
+    if (batch.status === "cancelled") {
+      return res.status(400).json({
+        message: "Cancelled batches cannot be edited.",
+      });
+    }
+
+    const { label, items, productionSubDepartment } = req.body || {};
     if (typeof label === "string" && label.trim()) {
       batch.label = label.trim();
     }
@@ -14974,10 +15152,47 @@ const updateProjectBatch = async (req, res) => {
       if (!validation.ok) {
         return res.status(400).json({ message: validation.message });
       }
+      const nextBatchTotalQty = validation.items.reduce(
+        (acc, entry) => acc + (Number(entry?.qty) || 0),
+        0,
+      );
+      const existingReceivedQty = Number(batch?.packaging?.receivedQty);
+      if (
+        Number.isFinite(existingReceivedQty) &&
+        existingReceivedQty > nextBatchTotalQty
+      ) {
+        return res.status(400).json({
+          message:
+            "Batch quantity cannot be lower than the quantity already confirmed by Packaging.",
+        });
+      }
+      const existingDeliveredQty = Number(batch?.delivery?.deliveredQty);
+      if (
+        Number.isFinite(existingDeliveredQty) &&
+        existingDeliveredQty > nextBatchTotalQty
+      ) {
+        return res.status(400).json({
+          message:
+            "Batch quantity cannot be lower than the quantity already confirmed by Front Desk delivery.",
+        });
+      }
       batch.items = validation.items;
     }
+    const batchProductionSubDepartment = resolveBatchProductionSubDepartmentToken({
+      project,
+      user: req.user,
+      requestedToken: productionSubDepartment,
+      existingToken: batch?.productionSubDepartment,
+      isAdmin,
+    });
+    if (!batchProductionSubDepartment.ok) {
+      return res.status(400).json({ message: batchProductionSubDepartment.message });
+    }
+    batch.productionSubDepartment = batchProductionSubDepartment.token;
 
     batch.updatedAt = new Date();
+    await reconcileProjectStatusForBatchProduction(project, req.user);
+    await reconcileProjectStatusForBatchDelivery(project, req.user);
     project.markModified("batches");
     await project.save();
 
@@ -14996,7 +15211,7 @@ const updateProjectBatch = async (req, res) => {
   }
 };
 
-// @desc    Update batch status with strict stage order
+// @desc    Update batch status or correct stage records
 // @route   PATCH /api/projects/:id/batches/:batchId/status
 // @access  Private (Stage owners/Admin)
 const updateProjectBatchStatus = async (req, res) => {
@@ -15016,6 +15231,21 @@ const updateProjectBatchStatus = async (req, res) => {
     if (!nextStatus) {
       return res.status(400).json({ message: "Invalid batch status." });
     }
+    const currentStatus = normalizeBatchStatus(batch.status);
+    const currentStatusIndex = getBatchStatusIndex(currentStatus);
+    const requestedStatusIndex = getBatchStatusIndex(nextStatus);
+    const isPackagingCorrection =
+      nextStatus === "in_packaging" &&
+      currentStatusIndex !== -1 &&
+      requestedStatusIndex !== -1 &&
+      currentStatusIndex >= requestedStatusIndex;
+    const isDeliveryCorrection =
+      nextStatus === "delivered" &&
+      currentStatusIndex !== -1 &&
+      requestedStatusIndex !== -1 &&
+      currentStatusIndex >= requestedStatusIndex;
+    const isStageRecordCorrection =
+      isPackagingCorrection || isDeliveryCorrection;
 
     const receivedQty =
       nextStatus === "in_packaging"
@@ -15070,13 +15300,26 @@ const updateProjectBatchStatus = async (req, res) => {
       }
 
       const expectedNext = getNextBatchStatus(batch.status);
-      if (nextStatus !== expectedNext) {
+      if (!isStageRecordCorrection && nextStatus !== expectedNext) {
         return res.status(400).json({
           message: `Batch status must follow strict order. Next status should be "${expectedNext}".`,
         });
       }
 
-      const owner = BATCH_STAGE_OWNER[nextStatus];
+      const owner = isPackagingCorrection
+        ? "packaging"
+        : isDeliveryCorrection
+          ? "frontdesk"
+          : BATCH_STAGE_OWNER[nextStatus];
+      if (
+        owner === "production" &&
+        !canUserAccessBatchByProductionSubDepartment({ user: req.user, batch })
+      ) {
+        return res.status(403).json({
+          message:
+            "You can only update production batches assigned to your production subdepartment.",
+        });
+      }
       if (owner === "production" && !isProductionUser(req.user)) {
         return res.status(403).json({
           message: "Only Production can update this batch stage.",
@@ -15095,13 +15338,28 @@ const updateProjectBatchStatus = async (req, res) => {
     }
 
     const now = new Date();
-    batch.status = nextStatus;
+    batch.status = isStageRecordCorrection ? currentStatus : nextStatus;
     batch.updatedAt = now;
     batch.production = batch.production || {};
     batch.packaging = batch.packaging || {};
     batch.delivery = batch.delivery || {};
     batch.cancellation = batch.cancellation || {};
     batch.handoffs = Array.isArray(batch.handoffs) ? batch.handoffs : [];
+    if (isAdmin || BATCH_STAGE_OWNER[nextStatus] === "production") {
+      const batchProductionSubDepartment = resolveBatchProductionSubDepartmentToken({
+        project,
+        user: req.user,
+        requestedToken: req.body?.productionSubDepartment,
+        existingToken: batch?.productionSubDepartment,
+        isAdmin,
+      });
+      if (!batchProductionSubDepartment.ok) {
+        return res.status(400).json({
+          message: batchProductionSubDepartment.message,
+        });
+      }
+      batch.productionSubDepartment = batchProductionSubDepartment.token;
+    }
 
     if (nextStatus === "in_production") {
       if (!batch.production.startedAt) batch.production.startedAt = now;
@@ -15118,12 +15376,14 @@ const updateProjectBatchStatus = async (req, res) => {
         batch.packaging.receivedQty = receivedQty;
       }
       batch.packaging.by = req.user?._id || req.user?.id;
-      batch.handoffs.push({
-        fromDept: "Production",
-        toDept: "Packaging",
-        at: now,
-        by: req.user?._id || req.user?.id,
-      });
+      if (!isStageRecordCorrection) {
+        batch.handoffs.push({
+          fromDept: "Production",
+          toDept: "Packaging",
+          at: now,
+          by: req.user?._id || req.user?.id,
+        });
+      }
     }
     if (nextStatus === "packaged") {
       if (!batch.packaging.receivedAt) batch.packaging.receivedAt = now;
@@ -15131,19 +15391,23 @@ const updateProjectBatchStatus = async (req, res) => {
       batch.packaging.by = req.user?._id || req.user?.id;
     }
     if (nextStatus === "delivered") {
-      batch.delivery.deliveredAt = now;
+      if (!isStageRecordCorrection || !batch.delivery.deliveredAt) {
+        batch.delivery.deliveredAt = now;
+      }
       if (deliveredQty) {
         batch.delivery.deliveredQty = deliveredQty;
       }
       batch.delivery.deliveredBy = req.user?._id || req.user?.id;
       batch.delivery.recipient = toText(req.body?.recipient);
       batch.delivery.notes = toText(req.body?.notes);
-      batch.handoffs.push({
-        fromDept: "Packaging",
-        toDept: "Delivery",
-        at: now,
-        by: req.user?._id || req.user?.id,
-      });
+      if (!isStageRecordCorrection) {
+        batch.handoffs.push({
+          fromDept: "Packaging",
+          toDept: "Delivery",
+          at: now,
+          by: req.user?._id || req.user?.id,
+        });
+      }
     }
     if (nextStatus === "cancelled") {
       batch.cancellation.cancelledAt = now;
@@ -15180,25 +15444,48 @@ const updateProjectBatchStatus = async (req, res) => {
     project.markModified("batches");
     await project.save();
 
-    await logActivity(
-      project._id,
-      req.user,
-      "batch_status_updated",
-      `Batch ${batch.label || batch.batchId} moved to ${nextStatus}`,
-      { batchId: batch.batchId, status: nextStatus },
-    );
+    if (isStageRecordCorrection) {
+      const correctionLabel =
+        nextStatus === "in_packaging"
+          ? "packaging details"
+          : "delivery details";
+      await logActivity(
+        project._id,
+        req.user,
+        "batch_record_updated",
+        `Batch ${batch.label || batch.batchId} ${correctionLabel} updated`,
+        {
+          batchId: batch.batchId,
+          status: batch.status,
+          correctionStage: nextStatus,
+        },
+      );
+    } else {
+      await logActivity(
+        project._id,
+        req.user,
+        "batch_status_updated",
+        `Batch ${batch.label || batch.batchId} moved to ${nextStatus}`,
+        { batchId: batch.batchId, status: nextStatus },
+      );
+    }
 
     const actorName = getUserDisplayName(req.user);
     const projectRef = getProjectDisplayRef(project);
     const projectName = getProjectDisplayName(project);
     const batchLabel = toText(batch?.label) || batch?.batchId || "Batch";
+    const adminNotificationMessage = isStageRecordCorrection
+      ? nextStatus === "in_packaging"
+        ? `Admin ${actorName} updated packaging details for ${batchLabel} on project #${projectRef} (${projectName}).`
+        : `Admin ${actorName} updated delivery details for ${batchLabel} on project #${projectRef} (${projectName}).`
+      : `Admin ${actorName} moved ${batchLabel} to ${formatBatchStatusLabel(
+          nextStatus,
+        )} for project #${projectRef} (${projectName}).`;
     await notifyLeadFromAdminOrderManagement({
       req,
       project,
       title: "Batch Status Updated",
-      message: `Admin ${actorName} moved ${batchLabel} to ${formatBatchStatusLabel(
-        nextStatus,
-      )} for project #${projectRef} (${projectName}).`,
+      message: adminNotificationMessage,
       type: "UPDATE",
     });
 
