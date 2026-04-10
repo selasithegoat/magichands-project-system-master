@@ -14,6 +14,7 @@ const MAX_REFERENCE_COUNT = 3;
 const MAX_ATTACHMENT_COUNT = 6;
 const DEFAULT_MESSAGE_LIMIT = 50;
 const USER_SEARCH_LIMIT = 20;
+const MAX_USER_SEARCH_LIMIT = 500;
 const PROJECT_SEARCH_LIMIT = 12;
 const DELETED_MESSAGE_BODY = "message was deleted.";
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
@@ -172,10 +173,10 @@ const buildProjectRouteOptions = (user, project) => {
 const escapeRegex = (value) =>
   String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const normalizeLimit = (value, fallback) => {
+const normalizeLimit = (value, fallback, max = 100) => {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(Math.max(parsed, 1), 100);
+  return Math.min(Math.max(parsed, 1), max);
 };
 
 const parseReferencesInput = (value) => {
@@ -1013,6 +1014,11 @@ const searchUsers = async (req, res) => {
   try {
     const currentUserId = toIdString(req.user?._id);
     const queryText = toText(req.query?.q);
+    const limit = normalizeLimit(
+      req.query?.limit,
+      USER_SEARCH_LIMIT,
+      MAX_USER_SEARCH_LIMIT,
+    );
     const regex = queryText ? new RegExp(escapeRegex(queryText), "i") : null;
     const filter = {
       _id: { $ne: req.user._id },
@@ -1020,6 +1026,7 @@ const searchUsers = async (req, res) => {
 
     if (regex) {
       filter.$or = [
+        { name: regex },
         { firstName: regex },
         { lastName: regex },
         { employeeId: regex },
@@ -1030,7 +1037,7 @@ const searchUsers = async (req, res) => {
     const users = await User.find(filter)
       .select("_id firstName lastName name avatarUrl role department")
       .sort({ firstName: 1, lastName: 1, createdAt: 1 })
-      .limit(USER_SEARCH_LIMIT)
+      .limit(limit)
       .lean();
 
     const serializedUsers = users

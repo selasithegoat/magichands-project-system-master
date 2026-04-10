@@ -107,7 +107,11 @@
   margin-bottom: 1.25rem;
   border: 1px solid color-mix(in srgb, var(--warning) 38%, var(--border));
   border-radius: 16px;
-  background: linear-gradient(120deg, color-mix(in srgb, var(--warning) 18%, var(--surface)) 0%, var(--surface) 65%);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--warning) 18%, var(--surface)) 0%,
+    var(--surface) 65%
+  );
   box-shadow: var(--shadow-soft);
   padding: 0.95rem;
 }
@@ -208,8 +212,8 @@
   box-shadow: var(--shadow-soft);
 }
 
-.dashboard-projects-panel{
-  height: fit-content ;
+.dashboard-projects-panel {
+  height: fit-content;
 }
 
 .dashboard-kpi-panel,
@@ -260,17 +264,15 @@
   cursor: pointer;
   color: var(--text);
   text-align: left;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   animation: dashboard-emergency-pump 2s ease-in-out infinite;
 }
 
 [data-theme="dark"] .dashboard-kpi-card-emergency {
   --emergency-accent: #f87171;
-  border-color: color-mix(
-    in srgb,
-    var(--emergency-accent) 72%,
-    var(--border)
-  );
+  border-color: color-mix(in srgb, var(--emergency-accent) 72%, var(--border));
   background-color: rgba(248, 113, 113, 0.24);
   background-image: linear-gradient(
     122deg,
@@ -451,7 +453,8 @@
 }
 
 [data-theme="dark"] .dashboard-kpi-icon {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-tertiary) 45%, transparent);
+  box-shadow: 0 0 0 1px
+    color-mix(in srgb, var(--text-tertiary) 45%, transparent);
 }
 
 [data-theme="dark"] .dashboard-kpi-icon.emergency {
@@ -692,7 +695,10 @@
   );
   padding: 0.75rem;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .dashboard-project-item.project-emergency {
@@ -1140,7 +1146,8 @@
 
 .dashboard-workload-row.active {
   border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 36%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--primary) 36%, transparent);
 }
 
 .dashboard-workload-head {
@@ -1233,15 +1240,13 @@
   100% {
     box-shadow:
       0 0 0 0 color-mix(in srgb, var(--emergency-accent) 18%, transparent),
-      0 12px 24px
-        color-mix(in srgb, var(--emergency-accent) 28%, transparent),
+      0 12px 24px color-mix(in srgb, var(--emergency-accent) 28%, transparent),
       0 0 18px color-mix(in srgb, var(--emergency-accent) 18%, transparent);
   }
   50% {
     box-shadow:
       0 0 0 6px color-mix(in srgb, var(--emergency-accent) 30%, transparent),
-      0 16px 30px
-        color-mix(in srgb, var(--emergency-accent) 45%, transparent),
+      0 16px 30px color-mix(in srgb, var(--emergency-accent) 45%, transparent),
       0 0 26px color-mix(in srgb, var(--emergency-accent) 26%, transparent);
   }
 }
@@ -1251,19 +1256,16 @@
   100% {
     box-shadow:
       0 0 0 0 color-mix(in srgb, var(--emergency-accent) 22%, transparent),
-      0 14px 26px
-        color-mix(in srgb, var(--emergency-accent) 40%, transparent),
+      0 14px 26px color-mix(in srgb, var(--emergency-accent) 40%, transparent),
       0 0 22px color-mix(in srgb, var(--emergency-accent) 28%, transparent);
   }
   50% {
     box-shadow:
       0 0 0 8px color-mix(in srgb, var(--emergency-accent) 40%, transparent),
-      0 18px 34px
-        color-mix(in srgb, var(--emergency-accent) 60%, transparent),
+      0 18px 34px color-mix(in srgb, var(--emergency-accent) 60%, transparent),
       0 0 36px color-mix(in srgb, var(--emergency-accent) 38%, transparent);
   }
 }
-
 
 .dashboard-drawer-backdrop {
   position: fixed;
@@ -1274,7 +1276,9 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 220ms ease, visibility 220ms ease;
+  transition:
+    opacity 220ms ease,
+    visibility 220ms ease;
 }
 
 .dashboard-drawer-backdrop.open {

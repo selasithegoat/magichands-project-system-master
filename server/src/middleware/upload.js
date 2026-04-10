@@ -44,7 +44,9 @@ if (scanCommand) {
     `Upload malware scanning enabled via "${scanCommand}" with timeout ${uploadScanTimeoutMs}ms`,
   );
 } else {
-  console.log("Upload malware scanning is disabled (UPLOAD_SCAN_COMMAND not set).");
+  console.log(
+    "Upload malware scanning is disabled (UPLOAD_SCAN_COMMAND not set).",
+  );
 }
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
@@ -122,7 +124,10 @@ const FEEDBACK_MEDIA_EXTENSIONS = new Set([
   ...IMAGE_EXTENSIONS,
   ...MEDIA_EXTENSIONS,
 ]);
-const FEEDBACK_MEDIA_MIME_TYPES = new Set([...IMAGE_MIME_TYPES, ...MEDIA_MIME_TYPES]);
+const FEEDBACK_MEDIA_MIME_TYPES = new Set([
+  ...IMAGE_MIME_TYPES,
+  ...MEDIA_MIME_TYPES,
+]);
 
 const GENERAL_SAFE_EXTENSIONS = new Set([
   ...IMAGE_EXTENSIONS,
@@ -218,7 +223,10 @@ const resolveUploadPathFromUrl = (fileUrl) => {
   if (!relative) return "";
   const resolved = path.join(uploadDir, relative);
   const relativeToUploadDir = path.relative(uploadDir, resolved);
-  if (relativeToUploadDir.startsWith("..") || path.isAbsolute(relativeToUploadDir)) {
+  if (
+    relativeToUploadDir.startsWith("..") ||
+    path.isAbsolute(relativeToUploadDir)
+  ) {
     return "";
   }
   return resolved;
@@ -314,7 +322,10 @@ const hydrateProjectMetadata = async (req) => {
         req._resolvedProjectName = resolvedProjectName;
       }
     } catch (error) {
-      console.error("Failed to resolve project metadata for upload path:", error);
+      console.error(
+        "Failed to resolve project metadata for upload path:",
+        error,
+      );
     } finally {
       req._uploadMetadataHydrated = true;
     }
@@ -410,7 +421,13 @@ const getRelativeDir = async (req, file) => {
       String(req.user?._id || req.user?.id || ""),
       "user",
     )}`;
-    const relativeDirFs = path.join(category, year, dateFolder, threadFolder, userFolder);
+    const relativeDirFs = path.join(
+      category,
+      year,
+      dateFolder,
+      threadFolder,
+      userFolder,
+    );
     const relativeDirUrl = path.posix.join(
       category,
       year,

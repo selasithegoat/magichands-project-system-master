@@ -206,6 +206,118 @@ const isMessageWithinEditWindow = (message) => {
   return Date.now() - createdAt.getTime() <= MESSAGE_EDIT_WINDOW_MS;
 };
 
+const normalizeMentionHandle = (value) =>
+  toText(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.|\.$/g, "");
+
+const buildMentionHandle = (user) => {
+  const fullName =
+    `${toText(user?.firstName)} ${toText(user?.lastName)}`.trim() ||
+    toText(user?.name);
+  return normalizeMentionHandle(fullName);
+};
+
+const getActiveMention = (text, caretPosition) => {
+  if (!Number.isFinite(caretPosition)) return null;
+
+  const safeText = String(text || "");
+  const safeCaret = Math.max(0, Math.min(caretPosition, safeText.length));
+  const textBeforeCaret = safeText.slice(0, safeCaret);
+  const match = textBeforeCaret.match(/(^|[\s(])@([a-z0-9._-]{0,40})$/i);
+
+  if (!match) return null;
+
+  const leadingText = match[1] || "";
+  const rawQuery = match[2] || "";
+  const tokenStart = safeCaret - match[0].length + leadingText.length;
+
+  return {
+    start: tokenStart,
+    end: safeCaret,
+    query: rawQuery.toLowerCase(),
+  };
+};
+
+const filterMentionUsers = (users, query) => {
+  const normalizedQuery = toText(query).toLowerCase();
+  const deduped = [];
+  const seenHandles = new Set();
+
+  (Array.isArray(users) ? users : []).forEach((user) => {
+    const handle = buildMentionHandle(user);
+    if (!handle || seenHandles.has(handle)) return;
+
+    if (normalizedQuery) {
+      const compactName = toText(user?.name || `${user?.firstName || ""} ${user?.lastName || ""}`)
+        .toLowerCase()
+        .replace(/\s+/g, "");
+      const spacedName = toText(
+        user?.name || `${user?.firstName || ""} ${user?.lastName || ""}`,
+      ).toLowerCase();
+      const relaxedQuery = normalizedQuery.replace(/[._-]+/g, " ");
+      const compactQuery = normalizedQuery.replace(/[._-]+/g, "");
+
+      if (
+        !handle.includes(normalizedQuery) &&
+        !spacedName.includes(relaxedQuery) &&
+        !compactName.includes(compactQuery)
+      ) {
+        return;
+      }
+    }
+
+    seenHandles.add(handle);
+    deduped.push(user);
+  });
+
+  return deduped;
+};
+
+const renderChatMessageBody = (text, keyPrefix) => {
+  const content = String(text || "");
+  if (!content) return content;
+
+  const parts = [];
+  const mentionPattern = /(^|[\s(])(@[a-z0-9._-]+)/gi;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = mentionPattern.exec(content)) !== null) {
+    const leadingText = match[1] || "";
+    const mentionText = match[2] || "";
+    const mentionStart = match.index + leadingText.length;
+
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+
+    if (leadingText) {
+      parts.push(leadingText);
+    }
+
+    parts.push(
+      <span
+        key={`${keyPrefix}-mention-${mentionStart}`}
+        className="chat-dock-mention"
+      >
+        {mentionText}
+      </span>,
+    );
+    lastIndex = mentionStart + mentionText.length;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : content;
+};
+
 const buildProjectLabel = (project) => {
   const orderId = toText(project?.orderId);
   const projectName = toText(project?.projectName || project?.displayName);
@@ -353,6 +465,10 @@ const ChatDock = ({ user }) => {
   const [editingMessageId, setEditingMessageId] = useState("");
   const [editDraft, setEditDraft] = useState("");
   const [savingMessageId, setSavingMessageId] = useState("");
+  const [activeMention, setActiveMention] = useState(null);
+  const [mentionResults, setMentionResults] = useState([]);
+  const [mentionSearchLoading, setMentionSearchLoading] = useState(false);
+  const [highlightedMentionIndex, setHighlightedMentionIndex] = useState(0);
   const [projectRoutePicker, setProjectRoutePicker] = useState({
     referenceKey: "",
     projectId: "",
@@ -367,6 +483,7 @@ const ChatDock = ({ user }) => {
   const messagesEndRef = useRef(null);
   const projectRouteCacheRef = useRef(new Map());
   const attachmentInputRef = useRef(null);
+  const composerTextareaRef = useRef(null);
   const pendingAttachmentsRef = useRef([]);
   const mediaRecorderRef = useRef(null);
   const recordingStreamRef = useRef(null);
@@ -383,6 +500,7 @@ const ChatDock = ({ user }) => {
     () => threads.find((thread) => thread._id === activeThreadId) || null,
     [activeThreadId, threads],
   );
+  const isPublicThread = activeThread?.type === "public";
   const unreadTotal = useMemo(
     () =>
       threads.reduce((sum, thread) => sum + (Number(thread.unreadCount) || 0), 0),
@@ -606,6 +724,30 @@ const ChatDock = ({ user }) => {
     }
   }, [activeThreadId]);
 
+  const clearMentionState = useCallback(() => {
+    setActiveMention(null);
+    setMentionResults([]);
+    setMentionSearchLoading(false);
+    setHighlightedMentionIndex(0);
+  }, []);
+
+  const syncComposerMentionState = useCallback(
+    (nextValue, nextCaretPosition) => {
+      if (!isPublicThread) {
+        clearMentionState();
+        return;
+      }
+
+      const nextMention = getActiveMention(nextValue, nextCaretPosition);
+      setActiveMention(nextMention);
+      setHighlightedMentionIndex(0);
+      if (!nextMention) {
+        setMentionResults([]);
+      }
+    },
+    [clearMentionState, isPublicThread],
+  );
+
   useEffect(() => {
     if (!openMessageMenuId) return undefined;
 
@@ -641,6 +783,12 @@ const ChatDock = ({ user }) => {
       setEditDraft("");
     }
   }, [editingMessageId, messages, openMessageMenuId]);
+
+  useEffect(() => {
+    if (!isPublicThread) {
+      clearMentionState();
+    }
+  }, [clearMentionState, isPublicThread]);
 
   const fetchThreads = useCallback(
     async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
@@ -859,9 +1007,52 @@ const ChatDock = ({ user }) => {
     };
   }, [projectPickerOpen, projectQuery]);
 
+  useEffect(() => {
+    if (!isPublicThread || !activeMention) return undefined;
+
+    let cancelled = false;
+    const timerId = window.setTimeout(async () => {
+      setMentionSearchLoading(true);
+      try {
+        const rawQuery = toText(activeMention.query).toLowerCase();
+        const mentionSearchQuery =
+          rawQuery.split(/[._-]+/).filter(Boolean)[0] || "";
+        const query = encodeURIComponent(mentionSearchQuery);
+        const res = await fetch(`/api/chat/users?q=${query}&limit=500`, {
+          credentials: "include",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to find teammates.");
+        }
+
+        const nextUsers = filterMentionUsers(data?.users, rawQuery);
+        if (cancelled) return;
+        setMentionResults(nextUsers);
+        setHighlightedMentionIndex((prev) =>
+          nextUsers.length === 0 ? 0 : Math.min(prev, nextUsers.length - 1),
+        );
+      } catch (mentionError) {
+        if (cancelled) return;
+        console.error("Failed to load mention suggestions", mentionError);
+        setMentionResults([]);
+      } finally {
+        if (!cancelled) {
+          setMentionSearchLoading(false);
+        }
+      }
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
+  }, [activeMention, isPublicThread]);
+
   const handleOpen = () => {
     setIsOpen(true);
     setError("");
+    clearMentionState();
     setMobilePanelView(activeThreadId ? "thread" : "sidebar");
     if (threads.length === 0) {
       void fetchThreads({ preserveSelection: false });
@@ -878,6 +1069,7 @@ const ChatDock = ({ user }) => {
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
+    clearMentionState();
     resetProjectRoutePicker();
   };
 
@@ -895,6 +1087,7 @@ const ChatDock = ({ user }) => {
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
+    clearMentionState();
     resetProjectRoutePicker();
   };
 
@@ -1065,6 +1258,42 @@ const ChatDock = ({ user }) => {
     stopActiveRecording(true);
   };
 
+  const handleSelectMention = useCallback(
+    (user) => {
+      const mentionHandle = buildMentionHandle(user);
+      if (!mentionHandle || !activeMention) return;
+
+      const mentionText = `@${mentionHandle}`;
+      const nextComposer =
+        `${composer.slice(0, activeMention.start)}${mentionText} ` +
+        composer.slice(activeMention.end);
+      const nextCaretPosition = activeMention.start + mentionText.length + 1;
+
+      setComposer(nextComposer);
+      clearMentionState();
+
+      window.requestAnimationFrame(() => {
+        composerTextareaRef.current?.focus();
+        composerTextareaRef.current?.setSelectionRange(
+          nextCaretPosition,
+          nextCaretPosition,
+        );
+      });
+    },
+    [activeMention, clearMentionState, composer],
+  );
+
+  const handleComposerChange = (event) => {
+    const nextValue = event.target.value;
+    const nextCaretPosition = event.target.selectionStart;
+    setComposer(nextValue);
+    syncComposerMentionState(nextValue, nextCaretPosition);
+  };
+
+  const handleComposerSelect = (event) => {
+    syncComposerMentionState(event.target.value, event.target.selectionStart);
+  };
+
   const handleSendMessage = async () => {
     if (!activeThreadId || sending || isRecording) return;
 
@@ -1114,6 +1343,7 @@ const ChatDock = ({ user }) => {
         setMessages((prev) => [...prev, nextMessage]);
       }
       setComposer("");
+      clearMentionState();
       setSelectedProjects([]);
       clearPendingAttachments();
       setProjectPickerOpen(false);
@@ -1128,6 +1358,44 @@ const ChatDock = ({ user }) => {
   };
 
   const handleComposerKeyDown = (event) => {
+    if (isPublicThread && activeMention) {
+      if (event.key === "ArrowDown" && mentionResults.length > 0) {
+        event.preventDefault();
+        setHighlightedMentionIndex((prev) => (prev + 1) % mentionResults.length);
+        return;
+      }
+
+      if (event.key === "ArrowUp" && mentionResults.length > 0) {
+        event.preventDefault();
+        setHighlightedMentionIndex(
+          (prev) => (prev - 1 + mentionResults.length) % mentionResults.length,
+        );
+        return;
+      }
+
+      if (
+        (event.key === "Enter" || event.key === "Tab") &&
+        mentionResults.length > 0
+      ) {
+        event.preventDefault();
+        handleSelectMention(
+          mentionResults[
+            Math.max(
+              0,
+              Math.min(highlightedMentionIndex, mentionResults.length - 1),
+            )
+          ],
+        );
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        clearMentionState();
+        return;
+      }
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void handleSendMessage();
@@ -1620,7 +1888,10 @@ const ChatDock = ({ user }) => {
                                       isDeleted ? "chat-dock-deleted-text" : ""
                                     }
                                   >
-                                    {message.body}
+                                    {renderChatMessageBody(
+                                      message.body,
+                                      `${message._id}-body`,
+                                    )}
                                   </p>
                                 )
                               )}
@@ -2036,9 +2307,60 @@ const ChatDock = ({ user }) => {
                     )}
 
                     <div className="chat-dock-compose-row">
+                      {isPublicThread && activeMention && (
+                        <div className="chat-dock-mention-picker">
+                          <div className="chat-dock-mention-picker-head">
+                            <span>Mention teammate</span>
+                            <small>Use @ in Team Room</small>
+                          </div>
+                          <div className="chat-dock-mention-picker-list">
+                            {mentionSearchLoading ? (
+                              <p className="chat-dock-muted">
+                                Finding teammates...
+                              </p>
+                            ) : mentionResults.length === 0 ? (
+                              <p className="chat-dock-muted">
+                                No teammate matches that mention.
+                              </p>
+                            ) : (
+                              mentionResults.map((entry, index) => {
+                                const mentionHandle = buildMentionHandle(entry);
+                                return (
+                                  <button
+                                    key={`${entry._id}-${mentionHandle}`}
+                                    type="button"
+                                    className={`chat-dock-mention-item ${
+                                      index === highlightedMentionIndex
+                                        ? "active"
+                                        : ""
+                                    }`}
+                                    onPointerDown={(event) => {
+                                      event.preventDefault();
+                                      handleSelectMention(entry);
+                                    }}
+                                  >
+                                    <UserAvatar
+                                      name={entry.name}
+                                      src={entry.avatarUrl}
+                                      width="30px"
+                                      height="30px"
+                                    />
+                                    <span className="chat-dock-mention-copy">
+                                      <strong>{entry.name}</strong>
+                                      <small>@{mentionHandle}</small>
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <textarea
+                        ref={composerTextareaRef}
                         value={composer}
-                        onChange={(event) => setComposer(event.target.value)}
+                        onChange={handleComposerChange}
+                        onSelect={handleComposerSelect}
                         onKeyDown={handleComposerKeyDown}
                         placeholder={`Message ${activeThread.name}`}
                         rows="2"
