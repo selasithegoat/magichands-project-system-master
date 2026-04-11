@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
-import { renderProjectName } from "../../utils/projectName";
+import {
+  formatProjectDisplayName,
+  renderProjectName,
+} from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import {
   getQuoteRequirementMode,
@@ -57,6 +60,8 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   const [allFilters, setAllFilters] = useState({
     orderId: "",
     client: "",
+    projectName: "",
+    lead: "",
     status: "All",
     assignment: "All",
   });
@@ -65,6 +70,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   const [historyFilters, setHistoryFilters] = useState({
     orderId: "",
     client: "",
+    projectName: "",
     lead: "",
   });
 
@@ -147,13 +153,20 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   }, [
     allFilters.orderId,
     allFilters.client,
+    allFilters.projectName,
+    allFilters.lead,
     allFilters.status,
     allFilters.assignment,
   ]);
 
   useEffect(() => {
     setHistoryPage(1);
-  }, [historyFilters.orderId, historyFilters.client, historyFilters.lead]);
+  }, [
+    historyFilters.orderId,
+    historyFilters.client,
+    historyFilters.projectName,
+    historyFilters.lead,
+  ]);
 
   useEffect(
     () => () => {
@@ -309,8 +322,11 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   const getGroupClient = (group, projects = []) =>
     group?.client || projects.find((project) => project?.details?.client)?.details?.client || "-";
 
-  const getGroupLeadText = (group, projects = []) => {
-    const groupedLeads = Array.isArray(group?.leads) ? group.leads.filter(Boolean) : [];
+  const getGroupLeadText = (group, projects = [], includeGroupedLeads = true) => {
+    const groupedLeads =
+      includeGroupedLeads && Array.isArray(group?.leads)
+        ? group.leads.filter(Boolean)
+        : [];
     if (groupedLeads.length > 0) return groupedLeads.join(", ");
 
     const derivedLeads = Array.from(
@@ -323,6 +339,15 @@ const OrdersList = ({ kpiFilter = "all" }) => {
 
     return derivedLeads.length > 0 ? derivedLeads.join(", ") : "Unassigned";
   };
+
+  const getProjectNameSearchText = (project = {}) =>
+    String(formatProjectDisplayName(project?.details || {}, null, "") || "").toLowerCase();
+
+  const getProjectsSearchText = (projects = []) =>
+    projects
+      .map((project) => getProjectNameSearchText(project))
+      .filter(Boolean)
+      .join(" ");
 
   const getGroupStatusMeta = (projects = []) => {
     const statuses = Array.from(
@@ -497,6 +522,12 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       const clientText = String(
         getGroupClient(group, group.activeProjects) || "",
       ).toLowerCase();
+      const projectText = getProjectsSearchText(group.activeProjects);
+      const leadText = getGroupLeadText(
+        group,
+        group.activeProjects,
+        false,
+      ).toLowerCase();
 
       if (
         allFilters.orderId &&
@@ -509,6 +540,17 @@ const OrdersList = ({ kpiFilter = "all" }) => {
         allFilters.client &&
         !clientText.includes(allFilters.client.toLowerCase())
       ) {
+        return false;
+      }
+
+      if (
+        allFilters.projectName &&
+        !projectText.includes(allFilters.projectName.toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (allFilters.lead && !leadText.includes(allFilters.lead.toLowerCase())) {
         return false;
       }
 
@@ -550,6 +592,13 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       !order.details?.client
         ?.toLowerCase()
         .includes(historyFilters.client.toLowerCase())
+    )
+      return false;
+    if (
+      historyFilters.projectName &&
+      !getProjectNameSearchText(order).includes(
+        historyFilters.projectName.toLowerCase(),
+      )
     )
       return false;
     if (historyFilters.lead) {
@@ -884,6 +933,24 @@ const OrdersList = ({ kpiFilter = "all" }) => {
               value={allFilters.client}
               onChange={(e) =>
                 setAllFilters({ ...allFilters, client: e.target.value })
+              }
+              className="filter-input"
+            />
+            <input
+              type="text"
+              placeholder="Project Name..."
+              value={allFilters.projectName}
+              onChange={(e) =>
+                setAllFilters({ ...allFilters, projectName: e.target.value })
+              }
+              className="filter-input"
+            />
+            <input
+              type="text"
+              placeholder="Lead..."
+              value={allFilters.lead}
+              onChange={(e) =>
+                setAllFilters({ ...allFilters, lead: e.target.value })
               }
               className="filter-input"
             />
@@ -1231,6 +1298,18 @@ const OrdersList = ({ kpiFilter = "all" }) => {
                 setHistoryFilters({
                   ...historyFilters,
                   orderId: e.target.value,
+                })
+              }
+              className="filter-input"
+            />
+            <input
+              type="text"
+              placeholder="Project Name..."
+              value={historyFilters.projectName}
+              onChange={(e) =>
+                setHistoryFilters({
+                  ...historyFilters,
+                  projectName: e.target.value,
                 })
               }
               className="filter-input"
