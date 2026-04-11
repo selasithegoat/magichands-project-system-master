@@ -78,6 +78,25 @@ const normalizeContactType = (value) => {
   return String(rawValue || "").trim();
 };
 
+const normalizeClientMockupFiles = (formData = {}) => {
+  if (Array.isArray(formData.clientMockups)) {
+    return formData.clientMockups.filter(
+      (file) => file && typeof file?.name === "string",
+    );
+  }
+
+  if (formData.clientMockup && typeof formData.clientMockup?.name === "string") {
+    return [formData.clientMockup];
+  }
+
+  return [];
+};
+
+const normalizeClientMockupNotes = (formData = {}) =>
+  formData.clientMockupNotes && typeof formData.clientMockupNotes === "object"
+    ? formData.clientMockupNotes
+    : {};
+
 const CreateProjectWizard = ({ onProjectCreate }) => {
   const navigate = useNavigate();
   const location = useLocation(); // Get location for query params
@@ -163,8 +182,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       sampleRequired: false,
       corporateEmergency: false,
       files: [],
-      clientMockup: null,
-      clientMockupNote: "",
+      clientMockups: [],
+      clientMockupNotes: {},
       attachments: [],
       sampleImage: "",
       sampleImageNote: "",
@@ -296,8 +315,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
               data.details?.contactType || data.contactType || "",
             ),
             briefOverview: data.details?.briefOverview || "", // [NEW] Map brief overview
-            clientMockup: null,
-            clientMockupNote: "",
+            clientMockups: [],
+            clientMockupNotes: {},
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             sampleImageNote: data.details?.sampleImageNote || "",
             attachments: normalizeReferenceAttachments(
@@ -400,7 +419,10 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       Object.keys(formData).forEach((key) => {
         if (
           key === "files" ||
+          key === "clientMockups" ||
+          key === "clientMockupNotes" ||
           key === "clientMockup" ||
+          key === "clientMockupNote" ||
           key === "fileNotes" ||
           key === "contactType" ||
           key === "corporateEmergency"
@@ -471,12 +493,20 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         payload.append("sampleImageNote", sampleNote);
       }
 
-      if (
-        formData.clientMockup &&
-        typeof formData.clientMockup.name === "string"
-      ) {
-        payload.append("clientMockup", formData.clientMockup);
-        payload.append("clientMockupNote", formData.clientMockupNote || "");
+      const clientMockupFiles = normalizeClientMockupFiles(formData);
+      const clientMockupNotes = normalizeClientMockupNotes(formData);
+      if (clientMockupFiles.length > 0) {
+        clientMockupFiles.forEach((file) => {
+          payload.append("clientMockup", file);
+        });
+        payload.append(
+          "clientMockupNotes",
+          JSON.stringify(
+            clientMockupFiles.map(
+              (file) => clientMockupNotes[buildFileKey(file)] || "",
+            ),
+          ),
+        );
       }
 
       const res = await fetch(url, {

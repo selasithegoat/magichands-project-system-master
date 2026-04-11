@@ -81,7 +81,7 @@ const enforceProjectNotOnHold = requireProjectNotOnHold({ paramName: "id" });
 const maxFileSizeMb = upload.maxFileSizeMb || 50;
 const projectUploadFields = [
   { name: "sampleImage", maxCount: 1 },
-  { name: "clientMockup", maxCount: 1 },
+  { name: "clientMockup", maxCount: 10 },
   { name: "attachments", maxCount: 10 },
 ];
 

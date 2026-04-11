@@ -99,9 +99,18 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const existingAttachments = normalizeReferenceAttachments(
     formData.attachments || [],
   );
-  const hasClientMockup =
-    Boolean(formData.clientMockup) &&
-    typeof formData.clientMockup?.name === "string";
+  const clientMockupFiles = Array.isArray(formData.clientMockups)
+    ? formData.clientMockups.filter(
+        (file) => file && typeof file?.name === "string",
+      )
+    : formData.clientMockup && typeof formData.clientMockup?.name === "string"
+      ? [formData.clientMockup]
+      : [];
+  const clientMockupNotes =
+    formData.clientMockupNotes && typeof formData.clientMockupNotes === "object"
+      ? formData.clientMockupNotes
+      : {};
+  const hasClientMockup = clientMockupFiles.length > 0;
   const existingReferenceItems = [
     ...(formData.sampleImage
       ? [
@@ -440,53 +449,69 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
           {!isEditing && (
             <div className="reference-section" style={{ marginTop: "1.5rem" }}>
               <label className="section-label">Client Mockup</label>
-              {!hasClientMockup ? (
-                <div
-                  className="file-upload-multi"
-                  style={{ marginTop: "0.5rem" }}
+              <div
+                className="file-upload-multi"
+                style={{ marginTop: "0.5rem" }}
+              >
+                <input
+                  ref={clientMockupInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const nextFiles = Array.from(e.target.files || []);
+                    const seen = new Set(
+                      clientMockupFiles.map((file) => buildFileKey(file)),
+                    );
+                    const mergedFiles = [
+                      ...clientMockupFiles,
+                      ...nextFiles.filter((file) => {
+                        const key = buildFileKey(file);
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                      }),
+                    ];
+                    setFormData({
+                      clientMockups: mergedFiles,
+                      clientMockupNotes,
+                      clientMockup: null,
+                      clientMockupNote: "",
+                    });
+                    e.target.value = null;
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => clientMockupInputRef.current?.click()}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "var(--primary-color)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
                 >
-                  <input
-                    ref={clientMockupInputRef}
-                    type="file"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const nextFile = e.target.files?.[0] || null;
-                      setFormData({
-                        clientMockup: nextFile,
-                        clientMockupNote: nextFile ? formData.clientMockupNote || "" : "",
-                      });
-                      e.target.value = null;
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => clientMockupInputRef.current?.click()}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: "var(--primary-color)",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    <FolderIcon width="16" height="16" />
-                    Upload Client Mockup
-                  </button>
-                  <div
-                    style={{
-                      marginTop: "0.5rem",
-                      fontSize: "0.8rem",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    Use this for client-supplied artwork that Graphics may validate or revise.
-                  </div>
+                  <FolderIcon width="16" height="16" />
+                  {hasClientMockup
+                    ? "Add Client Mockups"
+                    : "Upload Client Mockups"}
+                </button>
+                <div
+                  style={{
+                    marginTop: "0.5rem",
+                    fontSize: "0.8rem",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  Use this for client-supplied artwork that Graphics may validate or revise.
                 </div>
-              ) : (
+              </div>
+              {hasClientMockup && (
                 <div
                   style={{
                     marginTop: "1rem",
@@ -495,104 +520,130 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                     gap: "1rem",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: "relative",
-                        aspectRatio: "1",
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        border: "1px solid var(--border-color)",
-                        background: "#f8fafc",
-                      }}
-                    >
-                      {formData.clientMockup.type?.startsWith("image/") ? (
-                        <img
-                          src={URL.createObjectURL(formData.clientMockup)}
-                          alt="Client mockup"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            height: "100%",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "0.5rem",
-                            textAlign: "center",
-                          }}
-                        >
-                          <FolderIcon width="24" height="24" color="#64748b" />
-                          <span
-                            style={{
-                              fontSize: "0.7rem",
-                              marginTop: "0.25rem",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            {formData.clientMockup.name}
-                          </span>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormData({
-                            clientMockup: null,
-                            clientMockupNote: "",
-                          })
-                        }
+                  {clientMockupFiles.map((file) => {
+                    const fileKey = buildFileKey(file);
+                    return (
+                      <div
+                        key={fileKey}
                         style={{
-                          position: "absolute",
-                          top: "4px",
-                          right: "4px",
-                          background: "rgba(239, 68, 68, 0.9)",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "50%",
-                          width: "20px",
-                          height: "20px",
                           display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                          fontSize: "12px",
+                          flexDirection: "column",
+                          gap: "0.5rem",
                         }}
                       >
-                        &times;
-                      </button>
-                    </div>
-                    <textarea
-                      placeholder="Add note for Graphics..."
-                      value={formData.clientMockupNote || ""}
-                      onChange={(e) =>
-                        setFormData({ clientMockupNote: e.target.value })
-                      }
-                      rows="2"
-                      style={{
-                        width: "100%",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "8px",
-                        padding: "0.4rem 0.5rem",
-                        fontSize: "0.75rem",
-                        color: "var(--text-primary)",
-                        background: "var(--bg-input)",
-                        resize: "vertical",
-                      }}
-                    />
-                  </div>
+                        <div
+                          style={{
+                            position: "relative",
+                            aspectRatio: "1",
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            border: "1px solid var(--border-color)",
+                            background: "#f8fafc",
+                          }}
+                        >
+                          {file.type?.startsWith("image/") ? (
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt="Client mockup"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                height: "100%",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "0.5rem",
+                                textAlign: "center",
+                              }}
+                            >
+                              <FolderIcon width="24" height="24" color="#64748b" />
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  marginTop: "0.25rem",
+                                  wordBreak: "break-all",
+                                }}
+                              >
+                                {file.name}
+                              </span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextFiles = clientMockupFiles.filter(
+                                (entry) => buildFileKey(entry) !== fileKey,
+                              );
+                              const nextNotes = { ...clientMockupNotes };
+                              delete nextNotes[fileKey];
+                              setFormData({
+                                clientMockups: nextFiles,
+                                clientMockupNotes: nextNotes,
+                                clientMockup: null,
+                                clientMockupNote: "",
+                              });
+                            }}
+                            style={{
+                              position: "absolute",
+                              top: "4px",
+                              right: "4px",
+                              background: "rgba(239, 68, 68, 0.9)",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "50%",
+                              width: "20px",
+                              height: "20px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                            }}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                        <textarea
+                          placeholder="Add note for Graphics..."
+                          value={
+                            clientMockupNotes[fileKey] ||
+                            (clientMockupFiles.length === 1
+                              ? formData.clientMockupNote || ""
+                              : "")
+                          }
+                          onChange={(e) =>
+                            setFormData({
+                              clientMockups: clientMockupFiles,
+                              clientMockupNotes: {
+                                ...clientMockupNotes,
+                                [fileKey]: e.target.value,
+                              },
+                              clientMockup: null,
+                              clientMockupNote: "",
+                            })
+                          }
+                          rows="2"
+                          style={{
+                            width: "100%",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "8px",
+                            padding: "0.4rem 0.5rem",
+                            fontSize: "0.75rem",
+                            color: "var(--text-primary)",
+                            background: "var(--bg-input)",
+                            resize: "vertical",
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -60,6 +60,17 @@ const formatFileSize = (bytes) => {
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 };
 
+const mergeUniqueFiles = (existingFiles, incomingFiles) => {
+  const seen = new Set(existingFiles.map((file) => buildFileKey(file)));
+  const dedupedIncoming = incomingFiles.filter((file) => {
+    const key = buildFileKey(file);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return [...existingFiles, ...dedupedIncoming];
+};
+
 const toEntityId = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") {
@@ -103,8 +114,8 @@ const MinimalQuoteForm = () => {
   const [editingId, setEditingId] = useState("");
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [selectedClientMockup, setSelectedClientMockup] = useState(null);
-  const [selectedClientMockupNote, setSelectedClientMockupNote] = useState("");
+  const [selectedClientMockups, setSelectedClientMockups] = useState([]);
+  const [selectedClientMockupNotes, setSelectedClientMockupNotes] = useState({});
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
@@ -173,8 +184,8 @@ const MinimalQuoteForm = () => {
     setExistingAttachments(
       normalizeReferenceAttachments(details.attachments || []),
     );
-    setSelectedClientMockup(null);
-    setSelectedClientMockupNote("");
+    setSelectedClientMockups([]);
+    setSelectedClientMockupNotes({});
   };
 
   useEffect(() => {
@@ -494,9 +505,17 @@ const MinimalQuoteForm = () => {
         formPayload.append("sampleImage", imageFile);
       }
 
-      if (selectedClientMockup) {
-        formPayload.append("clientMockup", selectedClientMockup);
-        formPayload.append("clientMockupNote", selectedClientMockupNote.trim());
+      if (selectedClientMockups.length > 0) {
+        selectedClientMockups.forEach((file) => {
+          formPayload.append("clientMockup", file);
+        });
+        const clientMockupNotes = selectedClientMockups.map(
+          (file) => selectedClientMockupNotes[buildFileKey(file)] || "",
+        );
+        formPayload.append(
+          "clientMockupNotes",
+          JSON.stringify(clientMockupNotes),
+        );
       }
 
       const sampleNote = imageFile
@@ -920,71 +939,93 @@ const MinimalQuoteForm = () => {
                   type="file"
                   id="quote-client-mockup"
                   style={{ display: "none" }}
+                  multiple
                   onChange={(e) => {
-                    const nextFile = e.target.files?.[0] || null;
-                    setSelectedClientMockup(nextFile);
-                    if (!nextFile) {
-                      setSelectedClientMockupNote("");
+                    const nextFiles = Array.from(e.target.files || []);
+                    if (nextFiles.length > 0) {
+                      setSelectedClientMockups((current) =>
+                        mergeUniqueFiles(current, nextFiles),
+                      );
                     }
                     e.target.value = null;
                   }}
                 />
 
-                {!selectedClientMockup && (
-                  <div
-                    className="reference-dropzone"
-                    onClick={() =>
-                      document.getElementById("quote-client-mockup").click()
-                    }
-                    style={{ cursor: "pointer" }}
-                  >
-                    <div className="dropzone-icon">
-                      <UploadIcon />
-                    </div>
-                    <div>
-                      <p>Upload client mockup</p>
-                      <span>Keep this separate from general references</span>
-                    </div>
+                <div
+                  className="reference-dropzone"
+                  onClick={() =>
+                    document.getElementById("quote-client-mockup").click()
+                  }
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className="dropzone-icon">
+                    <UploadIcon />
                   </div>
-                )}
+                  <div>
+                    <p>
+                      {selectedClientMockups.length > 0
+                        ? "Add client mockups"
+                        : "Upload client mockups"}
+                    </p>
+                    <span>Keep this separate from general references</span>
+                  </div>
+                </div>
 
-                {selectedClientMockup && (
+                {selectedClientMockups.length > 0 && (
                   <div className="reference-files-grid">
-                    <div className="reference-file-tile">
-                      <div className="file-icon">
-                        {selectedClientMockup.type.startsWith("image/") ? (
-                          <img
-                            src={URL.createObjectURL(selectedClientMockup)}
-                            alt="client mockup preview"
+                    {selectedClientMockups.map((file) => {
+                      const fileKey = buildFileKey(file);
+                      return (
+                        <div key={fileKey} className="reference-file-tile">
+                          <div className="file-icon">
+                            {file.type.startsWith("image/") ? (
+                              <img
+                                src={URL.createObjectURL(file)}
+                                alt="client mockup preview"
+                              />
+                            ) : (
+                              <FolderIcon />
+                            )}
+                          </div>
+                          <div className="file-info" title={file.name}>
+                            <span className="file-name">{file.name}</span>
+                            <span className="file-size">
+                              {formatFileSize(file.size)}
+                            </span>
+                          </div>
+                          <textarea
+                            className="reference-file-note"
+                            placeholder="Add note for Graphics..."
+                            value={selectedClientMockupNotes[fileKey] || ""}
+                            onChange={(e) =>
+                              setSelectedClientMockupNotes((current) => ({
+                                ...current,
+                                [fileKey]: e.target.value,
+                              }))
+                            }
+                            rows="2"
                           />
-                        ) : (
-                          <FolderIcon />
-                        )}
-                      </div>
-                      <div className="file-info" title={selectedClientMockup.name}>
-                        <span className="file-name">{selectedClientMockup.name}</span>
-                        <span className="file-size">
-                          {formatFileSize(selectedClientMockup.size)}
-                        </span>
-                      </div>
-                      <textarea
-                        className="reference-file-note"
-                        placeholder="Add note for Graphics..."
-                        value={selectedClientMockupNote}
-                        onChange={(e) => setSelectedClientMockupNote(e.target.value)}
-                        rows="2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedClientMockup(null);
-                          setSelectedClientMockupNote("");
-                        }}
-                        className="file-remove-btn"
-                      >
-                        &times;
-                      </button>
-                    </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedClientMockups((current) =>
+                                current.filter(
+                                  (entry) => buildFileKey(entry) !== fileKey,
+                                ),
+                              );
+                              setSelectedClientMockupNotes((current) => {
+                                const next = { ...current };
+                                delete next[fileKey];
+                                return next;
+                              });
+                            }}
+                            className="file-remove-btn"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

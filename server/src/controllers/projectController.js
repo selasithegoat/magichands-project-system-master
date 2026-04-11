@@ -263,12 +263,15 @@ const buildInitialClientMockupVersions = (req, userId) => {
   const files = Array.isArray(req.files?.clientMockup)
     ? req.files.clientMockup
     : [];
-  const note = toText(req.body?.clientMockupNote || req.body?.mockupNote);
+  const notes = normalizeAttachmentNotes(req.body?.clientMockupNotes);
+  const sharedNote = toText(req.body?.clientMockupNote || req.body?.mockupNote);
+  const baseUploadTime = new Date();
 
   return files
     .filter((file) => file?.filename)
-    .map((file) =>
-      buildMockupVersionRecord(
+    .map((file, index) => {
+      const note = notes[index] || sharedNote;
+      return buildMockupVersionRecord(
         {
           version: 1,
           fileUrl: `/uploads/${file.filename}`,
@@ -276,7 +279,7 @@ const buildInitialClientMockupVersions = (req, userId) => {
           fileType: file.mimetype || "",
           note,
           uploadedBy: userId || undefined,
-          uploadedAt: new Date(),
+          uploadedAt: new Date(baseUploadTime.getTime() + index),
           source: "client",
           intakeUpload: true,
           graphicsReview: {
@@ -297,8 +300,8 @@ const buildInitialClientMockupVersions = (req, userId) => {
           },
         },
         1,
-      ),
-    );
+      );
+    });
 };
 
 const cleanupUploadedFilesSafely = async (req) => {
