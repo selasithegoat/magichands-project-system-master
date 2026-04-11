@@ -103,6 +103,8 @@ const MinimalQuoteForm = () => {
   const [editingId, setEditingId] = useState("");
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedClientMockup, setSelectedClientMockup] = useState(null);
+  const [selectedClientMockupNote, setSelectedClientMockupNote] = useState("");
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
@@ -171,6 +173,8 @@ const MinimalQuoteForm = () => {
     setExistingAttachments(
       normalizeReferenceAttachments(details.attachments || []),
     );
+    setSelectedClientMockup(null);
+    setSelectedClientMockupNote("");
   };
 
   useEffect(() => {
@@ -488,6 +492,11 @@ const MinimalQuoteForm = () => {
 
       if (imageFile) {
         formPayload.append("sampleImage", imageFile);
+      }
+
+      if (selectedClientMockup) {
+        formPayload.append("clientMockup", selectedClientMockup);
+        formPayload.append("clientMockupNote", selectedClientMockupNote.trim());
       }
 
       const sampleNote = imageFile
@@ -899,6 +908,90 @@ const MinimalQuoteForm = () => {
           </div>
 
           <div className="divider"></div>
+
+          {!editingId && (
+            <>
+              <div className="minimal-quote-form-section">
+                <h3 className="section-subtitle">Client Mockup</h3>
+                <p className="section-hint">
+                  Upload client-provided artwork or mockup so Graphics can validate it or revise it later.
+                </p>
+                <input
+                  type="file"
+                  id="quote-client-mockup"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const nextFile = e.target.files?.[0] || null;
+                    setSelectedClientMockup(nextFile);
+                    if (!nextFile) {
+                      setSelectedClientMockupNote("");
+                    }
+                    e.target.value = null;
+                  }}
+                />
+
+                {!selectedClientMockup && (
+                  <div
+                    className="reference-dropzone"
+                    onClick={() =>
+                      document.getElementById("quote-client-mockup").click()
+                    }
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className="dropzone-icon">
+                      <UploadIcon />
+                    </div>
+                    <div>
+                      <p>Upload client mockup</p>
+                      <span>Keep this separate from general references</span>
+                    </div>
+                  </div>
+                )}
+
+                {selectedClientMockup && (
+                  <div className="reference-files-grid">
+                    <div className="reference-file-tile">
+                      <div className="file-icon">
+                        {selectedClientMockup.type.startsWith("image/") ? (
+                          <img
+                            src={URL.createObjectURL(selectedClientMockup)}
+                            alt="client mockup preview"
+                          />
+                        ) : (
+                          <FolderIcon />
+                        )}
+                      </div>
+                      <div className="file-info" title={selectedClientMockup.name}>
+                        <span className="file-name">{selectedClientMockup.name}</span>
+                        <span className="file-size">
+                          {formatFileSize(selectedClientMockup.size)}
+                        </span>
+                      </div>
+                      <textarea
+                        className="reference-file-note"
+                        placeholder="Add note for Graphics..."
+                        value={selectedClientMockupNote}
+                        onChange={(e) => setSelectedClientMockupNote(e.target.value)}
+                        rows="2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedClientMockup(null);
+                          setSelectedClientMockupNote("");
+                        }}
+                        className="file-remove-btn"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="divider"></div>
+            </>
+          )}
 
           {/* Reference Materials */}
           <div className="minimal-quote-form-section">

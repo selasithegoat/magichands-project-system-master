@@ -187,6 +187,8 @@ const NewOrders = ({ user = null }) => {
   );
 
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedClientMockup, setSelectedClientMockup] = useState(null);
+  const [selectedClientMockupNote, setSelectedClientMockupNote] = useState("");
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
@@ -526,6 +528,8 @@ const NewOrders = ({ user = null }) => {
     setExistingAttachments(
       normalizeReferenceAttachments(project.details?.attachments || []),
     );
+    setSelectedClientMockup(null);
+    setSelectedClientMockupNote("");
   };
 
   useEffect(() => {
@@ -596,6 +600,8 @@ const NewOrders = ({ user = null }) => {
               ? storedDraft.selectedFileNotes
               : {},
           );
+          setSelectedClientMockup(null);
+          setSelectedClientMockupNote("");
           setExistingSampleImage(
             typeof storedDraft.existingSampleImage === "string"
               ? storedDraft.existingSampleImage
@@ -613,6 +619,8 @@ const NewOrders = ({ user = null }) => {
           setFormData(fallbackFormData);
           setSelectedFiles([]);
           setSelectedFileNotes({});
+          setSelectedClientMockup(null);
+          setSelectedClientMockupNote("");
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
@@ -623,6 +631,8 @@ const NewOrders = ({ user = null }) => {
         setFormData(fallbackFormData);
         setSelectedFiles([]);
         setSelectedFileNotes({});
+        setSelectedClientMockup(null);
+        setSelectedClientMockupNote("");
         setExistingSampleImage("");
         setExistingSampleImageNote("");
         setExistingAttachments([]);
@@ -910,6 +920,11 @@ const NewOrders = ({ user = null }) => {
       formPayload.append("sampleImage", imageFile);
     }
 
+    if (selectedClientMockup) {
+      formPayload.append("clientMockup", selectedClientMockup);
+      formPayload.append("clientMockupNote", selectedClientMockupNote.trim());
+    }
+
     const sampleNote = imageFile
       ? getFileNote(imageFile)
       : existingSampleImage
@@ -954,6 +969,8 @@ const NewOrders = ({ user = null }) => {
           );
           setSelectedFiles([]);
           setSelectedFileNotes({});
+          setSelectedClientMockup(null);
+          setSelectedClientMockupNote("");
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
@@ -1186,6 +1203,91 @@ const NewOrders = ({ user = null }) => {
                 </div>
               </div>
             </div>
+
+            {isCreateMode && (
+              <>
+                <div className="divider"></div>
+
+                <div className="form-section">
+                  <h2 className="section-title">Client Mockup</h2>
+                  <p className="section-hint">
+                    Upload client-provided artwork or mockup here so Graphics can validate it or revise it later.
+                  </p>
+
+                  {!selectedClientMockup && (
+                    <div
+                      className="reference-dropzone"
+                      onClick={() =>
+                        document.getElementById("new-order-client-mockup").click()
+                      }
+                      style={{ cursor: "pointer" }}
+                    >
+                      <div className="dropzone-icon">
+                        <UploadIcon />
+                      </div>
+                      <div>
+                        <p>Upload client mockup</p>
+                        <span>Use this only for client-supplied mockup/artwork files</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    id="new-order-client-mockup"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const nextFile = e.target.files?.[0] || null;
+                      setSelectedClientMockup(nextFile);
+                      if (!nextFile) {
+                        setSelectedClientMockupNote("");
+                      }
+                      e.target.value = null;
+                    }}
+                  />
+
+                  {selectedClientMockup && (
+                    <div className="reference-files-grid">
+                      <div className="reference-file-tile">
+                        <div className="file-icon">
+                          {selectedClientMockup.type.startsWith("image/") ? (
+                            <img
+                              src={URL.createObjectURL(selectedClientMockup)}
+                              alt="client mockup preview"
+                            />
+                          ) : (
+                            <FolderIcon />
+                          )}
+                        </div>
+                        <div className="file-info" title={selectedClientMockup.name}>
+                          <span className="file-name">{selectedClientMockup.name}</span>
+                          <span className="file-size">
+                            {formatFileSize(selectedClientMockup.size)}
+                          </span>
+                        </div>
+                        <textarea
+                          className="reference-file-note"
+                          placeholder="Add note for Graphics..."
+                          value={selectedClientMockupNote}
+                          onChange={(e) => setSelectedClientMockupNote(e.target.value)}
+                          rows="2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedClientMockup(null);
+                            setSelectedClientMockupNote("");
+                          }}
+                          className="file-remove-btn"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             <div className="divider"></div>
 

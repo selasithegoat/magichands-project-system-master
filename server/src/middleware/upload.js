@@ -157,6 +157,14 @@ const FILE_POLICY_BY_FIELD = {
       ...CORELDRAW_MIME_TYPES,
     ]),
   },
+  clientMockup: {
+    extensions: new Set([...IMAGE_EXTENSIONS, ".pdf", ...CORELDRAW_EXTENSIONS]),
+    mimeTypes: new Set([
+      ...IMAGE_MIME_TYPES,
+      "application/pdf",
+      ...CORELDRAW_MIME_TYPES,
+    ]),
+  },
   attachments: {
     extensions: GENERAL_SAFE_EXTENSIONS,
     mimeTypes: GENERAL_SAFE_MIME_TYPES,
@@ -398,7 +406,8 @@ const getChatThreadId = (req) => {
 };
 
 const getCategory = (file) => {
-  if (file.fieldname === "mockup") return "mockups";
+  if (file.fieldname === "mockup" || file.fieldname === "clientMockup")
+    return "mockups";
   if (file.fieldname === "sampleImage" || file.fieldname === "attachments")
     return "scope-reference-materials";
   if (file.fieldname === "attachment") return "project-updates";

@@ -163,6 +163,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       sampleRequired: false,
       corporateEmergency: false,
       files: [],
+      clientMockup: null,
+      clientMockupNote: "",
       attachments: [],
       sampleImage: "",
       sampleImageNote: "",
@@ -294,6 +296,8 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
               data.details?.contactType || data.contactType || "",
             ),
             briefOverview: data.details?.briefOverview || "", // [NEW] Map brief overview
+            clientMockup: null,
+            clientMockupNote: "",
             sampleImage: data.details?.sampleImage || "", // [NEW] Map sample image
             sampleImageNote: data.details?.sampleImageNote || "",
             attachments: normalizeReferenceAttachments(
@@ -396,6 +400,7 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
       Object.keys(formData).forEach((key) => {
         if (
           key === "files" ||
+          key === "clientMockup" ||
           key === "fileNotes" ||
           key === "contactType" ||
           key === "corporateEmergency"
@@ -464,6 +469,14 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
             ? formData.sampleImageNote || ""
             : "";
         payload.append("sampleImageNote", sampleNote);
+      }
+
+      if (
+        formData.clientMockup &&
+        typeof formData.clientMockup.name === "string"
+      ) {
+        payload.append("clientMockup", formData.clientMockup);
+        payload.append("clientMockupNote", formData.clientMockupNote || "");
       }
 
       const res = await fetch(url, {

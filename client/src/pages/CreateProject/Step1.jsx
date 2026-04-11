@@ -20,7 +20,6 @@ import {
   normalizeReferenceAttachments,
   getReferenceFileName,
   getReferenceFileUrl,
-  getReferenceFileNote,
 } from "../../utils/referenceAttachments";
 
 const normalizeSupplySourceSelection = (value) => {
@@ -90,6 +89,7 @@ const normalizeContactTypeSelection = (value) => {
 
 const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const fileInputRef = useRef(null);
+  const clientMockupInputRef = useRef(null);
   const [leads, setLeads] = useState([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const selectedSupplySources = normalizeSupplySourceSelection(
@@ -99,6 +99,9 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const existingAttachments = normalizeReferenceAttachments(
     formData.attachments || [],
   );
+  const hasClientMockup =
+    Boolean(formData.clientMockup) &&
+    typeof formData.clientMockup?.name === "string";
   const existingReferenceItems = [
     ...(formData.sampleImage
       ? [
@@ -158,10 +161,6 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
 
   const selectedLeadValue =
     formData.lead?.value || formData.lead?._id || formData.lead || "";
-  const leadDisplayName =
-    formData.leadLabel ||
-    leads.find((l) => l.value === formData.lead)?.label ||
-    "Assigned Lead";
 
   const handleNextStep = () => {
     // Basic Validation
@@ -437,6 +436,167 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
               rows={4}
             />
           </div>
+
+          {!isEditing && (
+            <div className="reference-section" style={{ marginTop: "1.5rem" }}>
+              <label className="section-label">Client Mockup</label>
+              {!hasClientMockup ? (
+                <div
+                  className="file-upload-multi"
+                  style={{ marginTop: "0.5rem" }}
+                >
+                  <input
+                    ref={clientMockupInputRef}
+                    type="file"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const nextFile = e.target.files?.[0] || null;
+                      setFormData({
+                        clientMockup: nextFile,
+                        clientMockupNote: nextFile ? formData.clientMockupNote || "" : "",
+                      });
+                      e.target.value = null;
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => clientMockupInputRef.current?.click()}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      background: "var(--primary-color)",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <FolderIcon width="16" height="16" />
+                    Upload Client Mockup
+                  </button>
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      fontSize: "0.8rem",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    Use this for client-supplied artwork that Graphics may validate or revise.
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    marginTop: "1rem",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                    gap: "1rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "relative",
+                        aspectRatio: "1",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: "1px solid var(--border-color)",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      {formData.clientMockup.type?.startsWith("image/") ? (
+                        <img
+                          src={URL.createObjectURL(formData.clientMockup)}
+                          alt="Client mockup"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            height: "100%",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "0.5rem",
+                            textAlign: "center",
+                          }}
+                        >
+                          <FolderIcon width="24" height="24" color="#64748b" />
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              marginTop: "0.25rem",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {formData.clientMockup.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            clientMockup: null,
+                            clientMockupNote: "",
+                          })
+                        }
+                        style={{
+                          position: "absolute",
+                          top: "4px",
+                          right: "4px",
+                          background: "rgba(239, 68, 68, 0.9)",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                    <textarea
+                      placeholder="Add note for Graphics..."
+                      value={formData.clientMockupNote || ""}
+                      onChange={(e) =>
+                        setFormData({ clientMockupNote: e.target.value })
+                      }
+                      rows="2"
+                      style={{
+                        width: "100%",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "8px",
+                        padding: "0.4rem 0.5rem",
+                        fontSize: "0.75rem",
+                        color: "var(--text-primary)",
+                        background: "var(--bg-input)",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Reference Materials Section */}
           <div className="reference-section" style={{ marginTop: "1.5rem" }}>

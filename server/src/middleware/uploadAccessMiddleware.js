@@ -248,6 +248,7 @@ const findProjectForFileUrl = async (relativePath) => {
       { "details.attachments.fileUrl": { $in: candidateUrls } },
       { "details.attachments.url": { $in: candidateUrls } },
       { "mockup.fileUrl": { $in: candidateUrls } },
+      { "mockup.versions.fileUrl": { $in: candidateUrls } },
       { "feedbacks.attachments.fileUrl": { $in: candidateUrls } },
     ],
   })

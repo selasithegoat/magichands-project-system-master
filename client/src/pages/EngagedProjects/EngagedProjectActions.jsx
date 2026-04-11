@@ -22,6 +22,19 @@ import {
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import {
+  getLatestMockupVersion,
+  getMockupApprovalStatus,
+  getMockupVersions,
+  getMockupVersionSourceLabel,
+  getMockupWorkflowLabel,
+  getMockupWorkflowState,
+  isClientProvidedMockupVersion,
+  isMockupAwaitingGraphicsValidation,
+  isMockupClientRejected,
+  isMockupPendingClientApproval,
+  isMockupReadyForCompletion,
+} from "../../utils/mockupWorkflow";
+import {
   normalizeReferenceAttachments,
   getReferenceFileName,
 } from "../../utils/referenceAttachments";
@@ -354,20 +367,6 @@ const normalizeObjectId = (value) => {
   return String(value);
 };
 
-const getMockupApprovalStatus = (approval = {}) => {
-  const explicit = String(approval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
-    return explicit;
-  }
-  if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
-    return "rejected";
-  }
-  return "pending";
-};
-
 const getSampleApprovalStatus = (sampleApproval = {}) => {
   const explicit = String(sampleApproval?.status || "")
     .trim()
@@ -500,64 +499,6 @@ const resolveEngagedWorkflow = (status = "") => {
   }));
 };
 
-const getMockupVersions = (mockup = {}) => {
-  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
-  const normalized = rawVersions
-    .map((entry, index) => {
-      const parsedVersion = Number.parseInt(entry?.version, 10);
-      const version =
-        Number.isFinite(parsedVersion) && parsedVersion > 0
-          ? parsedVersion
-          : index + 1;
-      const decisionStatus = getMockupApprovalStatus(entry?.clientApproval || {});
-      return {
-        entryId: entry?._id || entry?.id || null,
-        version,
-        fileUrl: String(entry?.fileUrl || "").trim(),
-        fileName: String(entry?.fileName || "").trim(),
-        fileType: String(entry?.fileType || "").trim(),
-        uploadedAt: entry?.uploadedAt || null,
-        clientApproval: {
-          status: decisionStatus,
-          rejectionReason: String(
-            entry?.clientApproval?.rejectionReason ||
-              entry?.clientApproval?.note ||
-              "",
-          ).trim(),
-        },
-      };
-    })
-    .filter((entry) => entry.fileUrl);
-
-  if (normalized.length === 0 && mockup?.fileUrl) {
-    const parsedVersion = Number.parseInt(mockup?.version, 10);
-    normalized.push({
-      entryId: mockup?._id || mockup?.id || null,
-      version:
-        Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1,
-      fileUrl: String(mockup.fileUrl || "").trim(),
-      fileName: String(mockup.fileName || "").trim(),
-      fileType: String(mockup.fileType || "").trim(),
-      uploadedAt: mockup.uploadedAt || null,
-      clientApproval: {
-        status: getMockupApprovalStatus(mockup?.clientApproval || {}),
-        rejectionReason: String(
-          mockup?.clientApproval?.rejectionReason ||
-            mockup?.clientApproval?.note ||
-            "",
-        ).trim(),
-      },
-    });
-  }
-
-  return normalized.sort((left, right) => {
-    if (left.version !== right.version) return left.version - right.version;
-    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
-    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
-    return leftTime - rightTime;
-  });
-};
-
 const isImageMockupAsset = (fileUrl = "", fileType = "") => {
   const normalizedType = String(fileType || "").toLowerCase();
   if (normalizedType.startsWith("image/")) return true;
@@ -619,6 +560,8 @@ const EngagedProjectActions = ({ user }) => {
   const [mockupFiles, setMockupFiles] = useState([]);
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
+  const [clientMockupValidationSubmitting, setClientMockupValidationSubmitting] =
+    useState(false);
   const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
   const [productionMockupIndex, setProductionMockupIndex] = useState(0);
   const [mockupDeleteModal, setMockupDeleteModal] = useState({
@@ -820,18 +763,8 @@ const EngagedProjectActions = ({ user }) => {
   const quoteRequirementMode = isQuoteProject
     ? quoteRequirementSummary.mode
     : "none";
-  const effectiveEnabledRequirements =
-    quoteRequirementSummary.effectiveEnabledKeys || [];
-  const quoteHasCostRequirement =
-    isQuoteProject && quoteRequirementSummary.includesCost;
-  const quoteHasMockupWorkflow =
-    isQuoteProject && quoteRequirementSummary.includesMockup;
-  const quoteHasPreviousSamplesRequirement =
-    isQuoteProject && quoteRequirementSummary.includesPreviousSamples;
   const quoteHasSampleProductionRequirement =
     isQuoteProject && quoteRequirementSummary.includesSampleProduction;
-  const quoteHasBidSubmissionRequirement =
-    isQuoteProject && quoteRequirementSummary.includesBidSubmission;
   const quoteWorkflowBlocked =
     isQuoteProject && quoteRequirementMode === "none";
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
@@ -1073,36 +1006,32 @@ const EngagedProjectActions = ({ user }) => {
   }, [project, project?.status, project?.hold?.previousStatus]);
   const canDeleteMockup = userEngagedDepts.includes("Graphics");
 
-  const mockupUrl = project?.mockup?.fileUrl;
-  const mockupName = project?.mockup?.fileName || "Approved Mockup";
-  const mockupType = project?.mockup?.fileType || "";
-  const mockupVersionRaw = Number.parseInt(project?.mockup?.version, 10);
-  const mockupVersionLabel =
-    Number.isFinite(mockupVersionRaw) && mockupVersionRaw > 0
-      ? `v${mockupVersionRaw}`
-      : "Latest";
-  const mockupApprovalStatus = getMockupApprovalStatus(
-    project?.mockup?.clientApproval || {},
-  );
-  const mockupRejectionReason = String(
-    project?.mockup?.clientApproval?.rejectionReason ||
-      project?.mockup?.clientApproval?.note ||
-      "",
-  ).trim();
   const mockupVersions = useMemo(
     () => getMockupVersions(project?.mockup || {}),
     [project?.mockup],
   );
+  const latestMockupVersion = getLatestMockupVersion(project?.mockup || {});
+  const mockupUrl = latestMockupVersion?.fileUrl || project?.mockup?.fileUrl || "";
+  const mockupName = latestMockupVersion?.fileName || project?.mockup?.fileName || "Approved Mockup";
+  const mockupType = latestMockupVersion?.fileType || project?.mockup?.fileType || "";
+  const mockupVersionLabel = latestMockupVersion
+    ? `${getMockupVersionSourceLabel(latestMockupVersion)} v${latestMockupVersion.version}`
+    : "Latest";
+  const mockupAwaitingGraphicsValidation =
+    isMockupAwaitingGraphicsValidation(latestMockupVersion);
+  const mockupApprovalRejected = isMockupClientRejected(latestMockupVersion);
+  const mockupReadyForCompletion = isMockupReadyForCompletion(latestMockupVersion);
+  const mockupRejectionReason = String(
+    latestMockupVersion?.clientApproval?.rejectionReason ||
+      latestMockupVersion?.clientApproval?.note ||
+      "",
+  ).trim();
   const mockupCarouselVersions = useMemo(
     () => mockupVersions.slice().reverse(),
     [mockupVersions],
   );
   const approvedMockupVersions = useMemo(
-    () =>
-      mockupVersions.filter(
-        (entry) =>
-          getMockupApprovalStatus(entry.clientApproval || {}) === "approved",
-      ),
+    () => mockupVersions.filter((entry) => isMockupReadyForCompletion(entry)),
     [mockupVersions],
   );
   const approvedMockupCarousel = useMemo(
@@ -1116,14 +1045,14 @@ const EngagedProjectActions = ({ user }) => {
     approvedMockupCarousel[0] ||
     null;
   const activeMockupVersionLabel = activeMockupVersion
-    ? `v${activeMockupVersion.version}`
+    ? `${getMockupVersionSourceLabel(activeMockupVersion)} v${activeMockupVersion.version}`
     : mockupVersionLabel;
   const activeMockupFileUrl = activeMockupVersion?.fileUrl || mockupUrl || "";
   const activeMockupFileName =
     activeMockupVersion?.fileName || mockupName || "Mockup File";
   const activeMockupFileType = activeMockupVersion?.fileType || mockupType || "";
   const activeApprovedMockupLabel = activeApprovedMockup
-    ? `v${activeApprovedMockup.version}`
+    ? `${getMockupVersionSourceLabel(activeApprovedMockup)} v${activeApprovedMockup.version}`
     : "Approved";
   const activeApprovedMockupUrl = activeApprovedMockup?.fileUrl || "";
   const activeApprovedMockupName =
@@ -1132,6 +1061,10 @@ const EngagedProjectActions = ({ user }) => {
   const activeMockupDecision = getMockupApprovalStatus(
     activeMockupVersion?.clientApproval || {},
   );
+  const activeMockupWorkflowState = getMockupWorkflowState(activeMockupVersion);
+  const activeMockupWorkflowLabel = getMockupWorkflowLabel(activeMockupVersion, {
+    readyForQuote: isQuoteProject && isMockupReadyForCompletion(activeMockupVersion),
+  });
   const activeMockupDecisionReason = String(
     activeMockupVersion?.clientApproval?.rejectionReason || "",
   ).trim();
@@ -1143,9 +1076,6 @@ const EngagedProjectActions = ({ user }) => {
     activeApprovedMockupUrl,
     activeApprovedMockupType,
   );
-  const isImageMockup = isImageMockupAsset(mockupUrl, mockupType);
-  const isPdfMockup =
-    mockupType === "application/pdf" || /\.pdf$/i.test(mockupUrl || "");
   const activeApprovedIsPdf =
     activeApprovedMockupType === "application/pdf" ||
     /\.pdf$/i.test(activeApprovedMockupUrl || "");
@@ -1174,7 +1104,7 @@ const EngagedProjectActions = ({ user }) => {
     isQuoteProject &&
     !quoteWorkflowBlocked &&
     Boolean(mockupUrl) &&
-    mockupApprovalStatus === "approved" &&
+    mockupReadyForCompletion &&
     quoteMockupCompletionConfirmed;
   const workflowJourney = useMemo(
     () =>
@@ -2354,6 +2284,62 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const handleValidateClientMockup = async (targetProject) => {
+    if (!targetProject?._id) return false;
+
+    const targetLatestMockupVersion = getLatestMockupVersion(
+      targetProject?.mockup || {},
+    );
+    if (!isClientProvidedMockupVersion(targetLatestMockupVersion)) {
+      setToast({
+        type: "error",
+        message: "Latest mockup is not a client-provided mockup.",
+      });
+      return false;
+    }
+
+    if (!isMockupAwaitingGraphicsValidation(targetLatestMockupVersion)) {
+      setToast({
+        type: "error",
+        message: "Client mockup no longer needs Graphics validation.",
+      });
+      return false;
+    }
+
+    setClientMockupValidationSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${targetProject._id}/mockup/validate-client?source=engaged`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setProject(updatedProject);
+        setToast({
+          type: "success",
+          message: `${getMockupVersionSourceLabel(targetLatestMockupVersion)} v${targetLatestMockupVersion.version} validated. Workflow updated.`,
+        });
+        return true;
+      }
+
+      const errorData = await res.json().catch(() => ({}));
+      setToast({
+        type: "error",
+        message: errorData.message || "Failed to validate client mockup.",
+      });
+      return false;
+    } catch (error) {
+      console.error("Error validating client mockup:", error);
+      setToast({ type: "error", message: "An unexpected error occurred." });
+      return false;
+    } finally {
+      setClientMockupValidationSubmitting(false);
+    }
+  };
+
   const handleConfirmMockupDelete = async () => {
     if (!mockupDeleteModal.open || !mockupDeleteModal.version) return;
     if (!project?._id) return;
@@ -2568,22 +2554,26 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
-    const targetMockupApprovalStatus = getMockupApprovalStatus(
-      targetProject?.mockup?.clientApproval || {},
+    const targetLatestMockupVersion = getLatestMockupVersion(
+      targetProject?.mockup || {},
     );
+    const targetMockupAwaitingGraphicsValidation =
+      isMockupAwaitingGraphicsValidation(targetLatestMockupVersion);
     const targetMockupCompletionConfirmed = isQuoteMockupCompletionConfirmed(
       targetProject,
       quoteRequirementMode,
     );
     if (
-      !targetProject?.mockup?.fileUrl ||
-      targetMockupApprovalStatus !== "approved" ||
+      !targetLatestMockupVersion?.fileUrl ||
+      !isMockupReadyForCompletion(targetLatestMockupVersion) ||
       !targetMockupCompletionConfirmed
     ) {
       setToast({
         type: "error",
         message:
-          "Front Desk must approve mockup and mockup must be completed before sample production can begin.",
+          targetMockupAwaitingGraphicsValidation
+            ? "Graphics must validate or revise the client-provided mockup before sample production can begin."
+            : "Front Desk must approve mockup and mockup must be completed before sample production can begin.",
       });
       return false;
     }
@@ -2698,10 +2688,10 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
-    const targetMockupApprovalStatus = getMockupApprovalStatus(
-      targetProject?.mockup?.clientApproval || {},
+    const targetLatestMockupVersion = getLatestMockupVersion(
+      targetProject?.mockup || {},
     );
-    if (targetMockupApprovalStatus === "rejected") {
+    if (isMockupClientRejected(targetLatestMockupVersion)) {
       setToast({
         type: "error",
         message:
@@ -2709,11 +2699,13 @@ const EngagedProjectActions = ({ user }) => {
       });
       return false;
     }
-    if (targetMockupApprovalStatus !== "approved") {
+    if (!isMockupReadyForCompletion(targetLatestMockupVersion)) {
       setToast({
         type: "error",
         message:
-          "Front Desk/Admin must confirm client approval before Graphics can confirm completion.",
+          isMockupAwaitingGraphicsValidation(targetLatestMockupVersion)
+            ? "Validate the client-provided mockup or upload a Graphics revision before confirming completion."
+            : "Front Desk/Admin must confirm client approval before Graphics can confirm completion.",
       });
       return false;
     }
@@ -2790,15 +2782,17 @@ const EngagedProjectActions = ({ user }) => {
   const mockupModalTitle = isAppendUpload
     ? "Upload More Mockups"
     : hasMockupOnProject
-      ? mockupApprovalStatus === "rejected"
+      ? mockupApprovalRejected || mockupAwaitingGraphicsValidation
         ? "Upload Revised Mockup"
         : "Upload Mockup Revision"
       : "Upload Approved Mockup";
   const mockupModalHint = isAppendUpload
     ? `Add more mockups to ${mockupVersionLabel} before client decision.`
     : hasMockupOnProject
-      ? mockupApprovalStatus === "rejected"
+      ? mockupApprovalRejected
         ? `Latest ${mockupVersionLabel} was rejected. Upload a revised mockup.`
+        : mockupAwaitingGraphicsValidation
+          ? `Client mockup ${mockupVersionLabel} is awaiting Graphics validation. Upload a revised version if changes are needed.`
         : "Upload a new revision if updates were requested."
       : "Upload the approved mockup file for review.";
   const revisionMeta = getRevisionMeta(project);
@@ -3538,12 +3532,12 @@ const EngagedProjectActions = ({ user }) => {
                       quoteMockupRequirement.isRequired &&
                       quoteSectionActionReady;
                     const mockupAlreadySubmitted = Boolean(mockupUrl);
+                    const clientMockupAwaitingValidation =
+                      isMockupAction && mockupAwaitingGraphicsValidation;
                     const mockupApprovalPending =
-                      isMockupAction && mockupApprovalStatus === "pending";
+                      isMockupAction && isMockupPendingClientApproval(latestMockupVersion);
                     const mockupApprovalRejected =
-                      isMockupAction && mockupApprovalStatus === "rejected";
-                    const mockupApprovalConfirmed =
-                      isMockupAction && mockupApprovalStatus === "approved";
+                      isMockupAction && isMockupClientRejected(latestMockupVersion);
                     const quoteMockupAlreadyCompleted =
                       isQuoteGraphicsAction && quoteMockupCompletionConfirmed;
                     const quoteCanUploadMockupRequirement =
@@ -3563,7 +3557,7 @@ const EngagedProjectActions = ({ user }) => {
                     const canConfirmMockupCompletion =
                       isMockupAction &&
                       mockupAlreadySubmitted &&
-                      mockupApprovalConfirmed &&
+                      mockupReadyForCompletion &&
                       !quoteMockupAlreadyCompleted &&
                       (isQuoteGraphicsAction
                         ? quoteAllowsMockupWorkflowStatus
@@ -3573,6 +3567,14 @@ const EngagedProjectActions = ({ user }) => {
                       (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
                       (isQuoteGraphicsAction
                         ? quoteCanUploadMockupRequirement
+                        : isPending);
+                    const canValidateClientMockupNow =
+                      clientMockupAwaitingValidation &&
+                      !clientMockupValidationSubmitting &&
+                      !isUpdating &&
+                      (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
+                      (isQuoteGraphicsAction
+                        ? quoteAllowsMockupWorkflowStatus
                         : isPending);
 
                     let disabledReason = "";
@@ -3622,6 +3624,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (mockupApprovalRejected) {
                       mockupUploadTitle =
                         "Client rejected latest mockup. Upload a revised version.";
+                    } else if (clientMockupAwaitingValidation) {
+                      mockupUploadTitle =
+                        "Upload a Graphics revision if the client-provided mockup needs changes.";
                     } else if (mockupAlreadySubmitted) {
                       mockupUploadTitle =
                         "Upload a new revision if changes are needed.";
@@ -3646,6 +3651,9 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (isQuoteGraphicsAction && mockupApprovalRejected) {
                       mockupConfirmTitle =
                         "Client rejected latest mockup. Upload revision first.";
+                    } else if (isQuoteGraphicsAction && clientMockupAwaitingValidation) {
+                      mockupConfirmTitle =
+                        "Validate the client-provided mockup or upload a Graphics revision first.";
                     } else if (isQuoteGraphicsAction && mockupApprovalPending) {
                       mockupConfirmTitle =
                         "Waiting for Front Desk/Admin client decision.";
@@ -3668,9 +3676,33 @@ const EngagedProjectActions = ({ user }) => {
                     } else if (!isQuoteGraphicsAction && mockupApprovalRejected) {
                       mockupConfirmTitle =
                         "Client rejected latest mockup. Upload revision first.";
+                    } else if (!isQuoteGraphicsAction && clientMockupAwaitingValidation) {
+                      mockupConfirmTitle =
+                        "Validate the client-provided mockup or upload a Graphics revision first.";
                     } else if (!isQuoteGraphicsAction && mockupApprovalPending) {
                       mockupConfirmTitle =
                         "Waiting for Front Desk/Admin client decision.";
+                    }
+
+                    let validateClientMockupTitle = "Validate the client-provided mockup";
+                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                      validateClientMockupTitle =
+                        "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
+                      validateClientMockupTitle =
+                        quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet.";
+                    } else if (isQuoteGraphicsAction && !quoteMockupRequirement.isRequired) {
+                      validateClientMockupTitle =
+                        "Mockup is not marked as required for this quote.";
+                    } else if (isQuoteGraphicsAction && !quoteSectionActionReady) {
+                      validateClientMockupTitle =
+                        "Acknowledge your engaged department first.";
+                    } else if (!mockupAlreadySubmitted) {
+                      validateClientMockupTitle = "Upload mockup before validating.";
+                    } else if (!clientMockupAwaitingValidation) {
+                      validateClientMockupTitle =
+                        "Latest mockup no longer needs Graphics validation.";
                     }
 
                     return (
@@ -3682,20 +3714,36 @@ const EngagedProjectActions = ({ user }) => {
                         <h3>{action.dept} Stage</h3>
                         <p>
                           {isMockupAction
-                            ? isQuoteGraphicsAction
-                              ? "Upload mockup for Front Desk/client review. Confirm completion only after Front Desk records client approval."
-                              : "Upload the approved mockup and confirm completion."
+                            ? clientMockupAwaitingValidation
+                              ? "Review the client-provided mockup. Validate it to continue immediately or upload a Graphics revision."
+                              : isQuoteGraphicsAction
+                                ? "Upload mockup for Front Desk/client review. Confirm completion only after Front Desk records client approval."
+                                : "Upload the approved mockup and confirm completion."
                             : "Confirm this stage is complete for the project."}
                         </p>
                         {isMockupAction ? (
                           <div className="mockup-action-stack">
+                            {clientMockupAwaitingValidation && (
+                              <button
+                                className="complete-btn confirm-btn"
+                                onClick={() => handleValidateClientMockup(project)}
+                                disabled={!canValidateClientMockupNow}
+                                title={validateClientMockupTitle}
+                              >
+                                {clientMockupValidationSubmitting
+                                  ? "Validating..."
+                                  : `Validate ${mockupVersionLabel}`}
+                              </button>
+                            )}
                             <button
                               className="complete-btn"
                               onClick={() => openMockupModal(project, action)}
                               disabled={!canUploadMockup}
                               title={mockupUploadTitle}
                             >
-                              {mockupApprovalRejected
+                              {clientMockupAwaitingValidation
+                                ? `Upload Revised Mockup (${mockupVersionLabel})`
+                                : mockupApprovalRejected
                                 ? `Upload Revision (${mockupVersionLabel})`
                                 : mockupAlreadySubmitted
                                   ? "Upload Revision"
@@ -3735,14 +3783,11 @@ const EngagedProjectActions = ({ user }) => {
                           <div className="engaged-action-meta">
                             Latest mockup {mockupVersionLabel}:{" "}
                             {isQuoteGraphicsAction && quoteMockupCompletionConfirmed
-                              ? "Client Approved. Mockup completion confirmed."
-                              : mockupApprovalConfirmed
-                                ? isQuoteGraphicsAction
-                                  ? "Client Approved. Completion pending."
-                                  : "Client Approved."
-                              : mockupApprovalRejected
-                                ? "Client Rejected."
-                                : "Pending Client Decision."}
+                              ? "Mockup completion confirmed."
+                              : getMockupWorkflowLabel(latestMockupVersion, {
+                                  readyForQuote:
+                                    isQuoteGraphicsAction && mockupReadyForCompletion,
+                                })}
                             {mockupApprovalRejected && mockupRejectionReason
                               ? ` Reason: ${mockupRejectionReason}`
                               : ""}
@@ -3825,16 +3870,24 @@ const EngagedProjectActions = ({ user }) => {
                             <div className="graphics-carousel-caption">
                               <strong>{activeMockupVersionLabel}</strong>
                               <span>{activeMockupFileName}</span>
+                              {activeMockupVersion?.graphicsReview?.reviewedAt && (
+                                <span>
+                                  Reviewed: {formatUpdateDateTime(activeMockupVersion.graphicsReview.reviewedAt)}
+                                </span>
+                              )}
                             </div>
 
                             <div
-                              className={`graphics-mockup-status ${activeMockupDecision}`}
+                              className={`graphics-mockup-status ${
+                                activeMockupWorkflowState === "client_approved" ||
+                                activeMockupWorkflowState === "graphics_validated"
+                                  ? "approved"
+                                  : activeMockupWorkflowState === "client_rejected"
+                                    ? "rejected"
+                                    : "pending"
+                              }`}
                             >
-                              {activeMockupDecision === "approved"
-                                ? "Client Approved"
-                                : activeMockupDecision === "rejected"
-                                  ? "Client Rejected"
-                                  : "Pending Client Decision"}
+                              {activeMockupWorkflowLabel}
                             </div>
                             {activeMockupDecision === "rejected" &&
                               activeMockupDecisionReason && (
@@ -3842,12 +3895,22 @@ const EngagedProjectActions = ({ user }) => {
                                   Reason: {activeMockupDecisionReason}
                                 </div>
                               )}
+                            {activeMockupVersion?.graphicsReview?.note && (
+                              <div className="graphics-mockup-reason">
+                                Graphics note: {activeMockupVersion.graphicsReview.note}
+                              </div>
+                            )}
 
                             <div className="graphics-carousel-track">
                               {mockupCarouselVersions.map((version, index) => {
-                                const decision = getMockupApprovalStatus(
-                                  version.clientApproval || {},
-                                );
+                                const workflowState = getMockupWorkflowState(version);
+                                const decision =
+                                  workflowState === "client_approved" ||
+                                  workflowState === "graphics_validated"
+                                    ? "approved"
+                                    : workflowState === "client_rejected"
+                                      ? "rejected"
+                                      : "pending";
                                 return (
                                   <button
                                     key={
@@ -3861,7 +3924,7 @@ const EngagedProjectActions = ({ user }) => {
                                     } status-${decision}`}
                                     onClick={() => setMockupCarouselIndex(index)}
                                   >
-                                    v{version.version}
+                                    {getMockupVersionSourceLabel(version)} v{version.version}
                                   </button>
                                 );
                               })}
@@ -4179,11 +4242,13 @@ const EngagedProjectActions = ({ user }) => {
                       ) : (
                         <div className="engaged-action-meta">
                           {mockupUrl
-                            ? mockupApprovalStatus === "rejected"
+                            ? mockupApprovalRejected
                               ? `Latest mockup ${mockupVersionLabel} was rejected. Await revised upload from Graphics.`
+                              : mockupAwaitingGraphicsValidation
+                                ? `Client mockup ${mockupVersionLabel} is awaiting Graphics validation or revision.`
                               : isQuoteProject
-                                ? "Mockup must be client-approved and confirmed complete before sample production begins."
-                                : "Latest mockup is pending client approval."
+                                ? "Mockup must be ready and confirmed complete before sample production begins."
+                                : "Latest mockup is not approved for downstream production yet."
                             : isQuoteProject
                               ? "Approved mockup is not available yet for sample production."
                               : "Approved mockup is not available yet."}

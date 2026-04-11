@@ -21,6 +21,7 @@ const {
   updateQuoteDecision,
   uploadProjectMockup,
   deleteProjectMockupVersion,
+  validateClientProjectMockup,
   approveProjectMockup,
   rejectProjectMockup,
   getPendingSmsPrompts,
@@ -80,6 +81,7 @@ const enforceProjectNotOnHold = requireProjectNotOnHold({ paramName: "id" });
 const maxFileSizeMb = upload.maxFileSizeMb || 50;
 const projectUploadFields = [
   { name: "sampleImage", maxCount: 1 },
+  { name: "clientMockup", maxCount: 1 },
   { name: "attachments", maxCount: 10 },
 ];
 
@@ -322,6 +324,12 @@ router.delete(
   protect,
   enforceProjectNotOnHold,
   deleteProjectMockupVersion,
+);
+router.post(
+  "/:id/mockup/validate-client",
+  protect,
+  enforceProjectNotOnHold,
+  validateClientProjectMockup,
 );
 router.post(
   "/:id/mockup/approve",

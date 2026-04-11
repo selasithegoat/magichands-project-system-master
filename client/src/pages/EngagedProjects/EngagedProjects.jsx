@@ -25,6 +25,11 @@ import {
   normalizeQuoteChecklist,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
+import {
+  getLatestMockupVersion,
+  isMockupAwaitingGraphicsValidation,
+  isMockupClientRejected,
+} from "../../utils/mockupWorkflow";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -190,61 +195,6 @@ const normalizeObjectId = (value) => {
   return String(value);
 };
 
-const getMockupApprovalStatus = (approval = {}) => {
-  const explicit = String(approval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (["pending", "approved", "rejected"].includes(explicit)) {
-    return explicit;
-  }
-  if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
-    return "rejected";
-  }
-  return "pending";
-};
-
-const getMockupVersions = (mockup = {}) => {
-  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
-  const normalized = rawVersions
-    .map((entry, index) => {
-      const parsedVersion = Number.parseInt(entry?.version, 10);
-      const version =
-        Number.isFinite(parsedVersion) && parsedVersion > 0
-          ? parsedVersion
-          : index + 1;
-      return {
-        version,
-        fileUrl: String(entry?.fileUrl || "").trim(),
-        uploadedAt: entry?.uploadedAt || null,
-        clientApproval: {
-          status: getMockupApprovalStatus(entry?.clientApproval || {}),
-        },
-      };
-    })
-    .filter((entry) => entry.fileUrl);
-
-  if (normalized.length === 0 && mockup?.fileUrl) {
-    const parsedVersion = Number.parseInt(mockup?.version, 10);
-    normalized.push({
-      version:
-        Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1,
-      fileUrl: String(mockup.fileUrl || "").trim(),
-      uploadedAt: mockup.uploadedAt || null,
-      clientApproval: {
-        status: getMockupApprovalStatus(mockup?.clientApproval || {}),
-      },
-    });
-  }
-
-  return normalized.sort((left, right) => {
-    if (left.version !== right.version) return left.version - right.version;
-    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
-    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
-    return leftTime - rightTime;
-  });
-};
-
 const getQuoteRequirementState = (project = {}, key = "") => {
   const quoteDetails = project?.quoteDetails || {};
   const checklistRequired = Boolean(quoteDetails?.checklist?.[key]);
@@ -276,7 +226,6 @@ const EngagedProjects = ({ user }) => {
   const [historyProjects, setHistoryProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [statusUpdating, setStatusUpdating] = useState(null);
 
   // Filter State
   const [statusFilter, setStatusFilter] = useState("All");
@@ -651,12 +600,7 @@ const EngagedProjects = ({ user }) => {
     if (!projectHasDept(project, "Graphics")) return false;
     if (!canDepartmentTakeAction(project, "Graphics")) return false;
 
-    const mockupVersions = getMockupVersions(project?.mockup || {});
-    const latestMockupVersion =
-      mockupVersions.length > 0 ? mockupVersions[mockupVersions.length - 1] : null;
-    const latestApprovalStatus =
-      latestMockupVersion?.clientApproval?.status ||
-      getMockupApprovalStatus(project?.mockup?.clientApproval || {});
+    const latestMockupVersion = getLatestMockupVersion(project?.mockup || {});
 
     if (project?.projectType === "Quote") {
       const normalizedQuoteStatus = String(
@@ -675,12 +619,18 @@ const EngagedProjects = ({ user }) => {
       }
 
       if (!latestMockupVersion?.fileUrl) return true;
-      return latestApprovalStatus === "rejected";
+      return (
+        isMockupAwaitingGraphicsValidation(latestMockupVersion) ||
+        isMockupClientRejected(latestMockupVersion)
+      );
     }
 
     if (project?.status !== "Pending Mockup") return false;
     if (!latestMockupVersion?.fileUrl) return true;
-    return latestApprovalStatus === "rejected";
+    return (
+      isMockupAwaitingGraphicsValidation(latestMockupVersion) ||
+      isMockupClientRejected(latestMockupVersion)
+    );
   };
 
   const activeDepartmentAssignments = projects.flatMap((project) =>
@@ -856,8 +806,6 @@ const EngagedProjects = ({ user }) => {
   }, [filteredProjects, currentPage]);
 
   const handleCompleteStatus = async (project, action) => {
-    const actionKey = `${project._id}:${action.complete}`;
-    setStatusUpdating(actionKey);
     try {
       const res = await fetch(`/api/projects/${project._id}/status`, {
         method: "PATCH",
@@ -887,28 +835,7 @@ const EngagedProjects = ({ user }) => {
         message: "An unexpected error occurred.",
       });
       return false;
-    } finally {
-      setStatusUpdating(null);
     }
-  };
-
-  const handleOpenUpdateModal = (project) => {
-    setSelectedProject(project);
-    // Get only relevant sub-departments for this project
-    const engagedDepts = project.departments.filter((dept) =>
-      engagedSubDepts.includes(dept),
-    );
-    setUpdateForm({
-      content: "",
-      category:
-        departmentFilter !== "All"
-          ? departmentFilter
-          : userEngagedDepts.length > 0
-            ? userEngagedDepts[0]
-            : "Production",
-      department: engagedDepts.length > 0 ? engagedDepts[0] : "",
-    });
-    setShowUpdateModal(true);
   };
 
   const handleSubmitUpdate = async (e) => {
@@ -986,19 +913,6 @@ const EngagedProjects = ({ user }) => {
     }
   };
 
-  const openAcknowledgeModal = (project, department) => {
-    if (!isScopeApprovalComplete(project.status)) {
-      setToast({
-        type: "error",
-        message: "Scope approval must be completed before engagement can be accepted.",
-      });
-      return;
-    }
-    setAcknowledgeTarget({ project, department });
-    setAcknowledgeInput("");
-    setShowAcknowledgeModal(true);
-  };
-
   const closeAcknowledgeModal = () => {
     setShowAcknowledgeModal(false);
     setAcknowledgeTarget(null);
@@ -1027,13 +941,6 @@ const EngagedProjects = ({ user }) => {
     setCompleteTarget({ project, action });
     setCompleteInput("");
     setShowCompleteModal(true);
-  };
-
-  const openMockupModal = (project, action) => {
-    setMockupTarget({ project, action });
-    setMockupFiles([]);
-    setMockupNote("");
-    setShowMockupModal(true);
   };
 
   const closeCompleteModal = () => {
@@ -1415,11 +1322,6 @@ const EngagedProjects = ({ user }) => {
                     const revisionCount = getRevisionCount(project);
                     const emergency = isEmergency(project);
                     const approaching = isApproachingDelivery(project);
-                    const deptActions = getDeptActionsForProject(project);
-                    const mockup = project.mockup || {};
-                    const mockupUrl = mockup.fileUrl;
-                    const canViewMockup =
-                      userEngagedDepts.includes("Production") && mockupUrl;
                     const projectVersion = getProjectVersion(project);
                     const showVersionTag = projectVersion > 1;
                     const acknowledgementRows =

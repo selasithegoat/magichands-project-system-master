@@ -766,6 +766,25 @@ const ProjectSchema = new mongoose.Schema(
       note: String,
       uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       uploadedAt: Date,
+      source: {
+        type: String,
+        enum: ["client", "graphics"],
+        default: "graphics",
+      },
+      intakeUpload: {
+        type: Boolean,
+        default: false,
+      },
+      graphicsReview: {
+        status: {
+          type: String,
+          enum: ["pending", "validated", "superseded", "not_required"],
+          default: "not_required",
+        },
+        reviewedAt: Date,
+        reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        note: String,
+      },
       version: {
         type: Number,
         default: 1,
@@ -800,6 +819,25 @@ const ProjectSchema = new mongoose.Schema(
           note: String,
           uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
           uploadedAt: Date,
+          source: {
+            type: String,
+            enum: ["client", "graphics"],
+            default: "graphics",
+          },
+          intakeUpload: {
+            type: Boolean,
+            default: false,
+          },
+          graphicsReview: {
+            status: {
+              type: String,
+              enum: ["pending", "validated", "superseded", "not_required"],
+              default: "not_required",
+            },
+            reviewedAt: Date,
+            reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            note: String,
+          },
           clientApproval: {
             status: {
               type: String,

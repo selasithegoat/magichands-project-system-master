@@ -38,6 +38,14 @@ import {
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 import {
+  getLatestMockupVersion,
+  getMockupVersions,
+  getMockupVersionSourceLabel,
+  getMockupWorkflowLabel,
+  getMockupWorkflowState,
+  isMockupReadyForCompletion,
+} from "../../utils/mockupWorkflow";
+import {
   getGroupedLeadDisplayRows,
   getLeadAvatarUrl,
   getLeadDisplay,
@@ -480,86 +488,6 @@ const normalizeQuoteChecklist = (checklist = {}) =>
     accumulator[key] = Boolean(checklist?.[key]);
     return accumulator;
   }, {});
-
-const getMockupApprovalStatus = (approval = {}) => {
-  const explicit = String(approval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
-    return explicit;
-  }
-  if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
-    return "rejected";
-  }
-  return "pending";
-};
-
-const getMockupVersions = (mockup = {}) => {
-  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
-  const normalized = rawVersions
-    .map((entry, index) => {
-      const parsedVersion = Number.parseInt(entry?.version, 10);
-      const version =
-        Number.isFinite(parsedVersion) && parsedVersion > 0
-          ? parsedVersion
-          : index + 1;
-      const approvalStatus = getMockupApprovalStatus(entry?.clientApproval || {});
-      return {
-        entryId: entry?._id || entry?.id || null,
-        version,
-        fileUrl: String(entry?.fileUrl || "").trim(),
-        fileName: String(entry?.fileName || "").trim(),
-        fileType: String(entry?.fileType || "").trim(),
-        note: String(entry?.note || "").trim(),
-        uploadedAt: entry?.uploadedAt || null,
-        clientApproval: {
-          status: approvalStatus,
-          approvedAt: entry?.clientApproval?.approvedAt || null,
-          rejectedAt: entry?.clientApproval?.rejectedAt || null,
-          rejectionReason: String(
-            entry?.clientApproval?.rejectionReason ||
-              entry?.clientApproval?.note ||
-              "",
-          ).trim(),
-        },
-      };
-    })
-    .filter((entry) => entry.fileUrl);
-
-  if (normalized.length === 0 && mockup?.fileUrl) {
-    const parsedVersion = Number.parseInt(mockup?.version, 10);
-    const version =
-      Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
-    const approvalStatus = getMockupApprovalStatus(mockup?.clientApproval || {});
-    normalized.push({
-      entryId: mockup?._id || mockup?.id || null,
-      version,
-      fileUrl: String(mockup.fileUrl || "").trim(),
-      fileName: String(mockup.fileName || "").trim(),
-      fileType: String(mockup.fileType || "").trim(),
-      note: String(mockup.note || "").trim(),
-      uploadedAt: mockup.uploadedAt || null,
-      clientApproval: {
-        status: approvalStatus,
-        approvedAt: mockup?.clientApproval?.approvedAt || null,
-        rejectedAt: mockup?.clientApproval?.rejectedAt || null,
-        rejectionReason: String(
-          mockup?.clientApproval?.rejectionReason ||
-            mockup?.clientApproval?.note ||
-            "",
-        ).trim(),
-      },
-    });
-  }
-
-  return normalized.sort((left, right) => {
-    if (left.version !== right.version) return left.version - right.version;
-    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
-    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
-    return leftTime - rightTime;
-  });
-};
 
 const getSampleApprovalStatus = (sampleApproval = {}) => {
   const explicit = String(sampleApproval?.status || "")
@@ -1800,7 +1728,6 @@ const QuoteChecklistCard = ({ project }) => {
   });
   const requirementSummary = getQuoteRequirementSummary(checklist);
   const requirementMode = requirementSummary.mode;
-  const isCostOnly = requirementMode === "cost";
   const isMockupOnly = requirementMode === "mockup";
   const isPreviousSamplesOnly = requirementMode === "previousSamples";
   const isSampleProductionOnly = requirementMode === "sampleProduction";
@@ -1831,21 +1758,12 @@ const QuoteChecklistCard = ({ project }) => {
       });
   };
 
-  const mockupVersions = getMockupVersions(project?.mockup || {});
-  const latestMockup =
-    mockupVersions.length > 0
-      ? mockupVersions[mockupVersions.length - 1]
-      : null;
-  const mockupDecisionStatus = getMockupApprovalStatus(
-    latestMockup?.clientApproval || project?.mockup?.clientApproval || {},
-  );
-  const mockupReadyForSubmission = mockupDecisionStatus === "approved";
-  const mockupDecisionLabel =
-    mockupDecisionStatus === "approved"
-      ? "Approved"
-      : mockupDecisionStatus === "rejected"
-        ? "Rejected"
-        : "Pending";
+  const latestMockup = getLatestMockupVersion(project?.mockup || {});
+  const mockupDecisionStatus = getMockupWorkflowState(latestMockup);
+  const mockupReadyForSubmission = isMockupReadyForCompletion(latestMockup);
+  const mockupDecisionLabel = getMockupWorkflowLabel(latestMockup, {
+    readyForQuote: mockupReadyForSubmission,
+  });
   const previousSamplesRequirement =
     project?.quoteDetails?.requirementItems?.previousSamples || {};
   const previousSamplesStatus = String(
@@ -1948,15 +1866,11 @@ const QuoteChecklistCard = ({ project }) => {
             {effectiveEnabledRequirements.includes("mockup") && (
               <div className="info-item">
                 <h4>MOCKUP</h4>
-                <div className="info-text-bold">
-                  {mockupReadyForSubmission
-                    ? "Approved"
-                    : mockupDecisionStatus === "rejected"
-                      ? "Rejected"
-                      : "Pending"}
-                </div>
+                <div className="info-text-bold">{mockupDecisionLabel}</div>
                 <div className="info-subtext">
-                  {latestMockup?.version ? `Latest v${latestMockup.version}` : "No mockup yet"}
+                  {latestMockup?.version
+                    ? `Latest ${getMockupVersionSourceLabel(latestMockup)} v${latestMockup.version}`
+                    : "No mockup yet"}
                 </div>
               </div>
             )}
@@ -1971,12 +1885,7 @@ const QuoteChecklistCard = ({ project }) => {
                 <h4>SAMPLE PRODUCTION</h4>
                 <div className="info-text-bold">{sampleProductionStatusLabel}</div>
                 <div className="info-subtext">
-                  Mockup:{" "}
-                  {mockupReadyForSubmission
-                    ? "Approved"
-                    : mockupDecisionStatus === "rejected"
-                      ? "Rejected"
-                      : "Pending"}
+                  Mockup: {mockupDecisionLabel}
                 </div>
               </div>
             )}
@@ -2061,7 +1970,7 @@ const QuoteChecklistCard = ({ project }) => {
             </div>
           )}
           <p className="info-subtext">
-            Production submits the sample after mockup approval before quote
+            Production submits the sample after the mockup is cleared before quote
             submission.
           </p>
         </>
@@ -2072,7 +1981,9 @@ const QuoteChecklistCard = ({ project }) => {
             <div className="info-item">
               <h4>LATEST VERSION</h4>
               <div className="info-text-bold">
-                {latestMockup?.version ? `v${latestMockup.version}` : "N/A"}
+                {latestMockup?.version
+                  ? `${getMockupVersionSourceLabel(latestMockup)} v${latestMockup.version}`
+                  : "N/A"}
               </div>
             </div>
             <div className="info-item">
@@ -2083,7 +1994,7 @@ const QuoteChecklistCard = ({ project }) => {
                   : "N/A"}
               </div>
             </div>
-            {mockupDecisionStatus === "rejected" &&
+            {mockupDecisionStatus === "client_rejected" &&
               latestMockup?.clientApproval?.rejectionReason && (
                 <div className="info-item">
                   <h4>REJECTION NOTE</h4>
@@ -3071,42 +2982,34 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
   const visibleMockupVersions = useMemo(() => {
     if (!hideRejected) return mockupVersions;
     return mockupVersions.filter(
-      (entry) => getMockupApprovalStatus(entry.clientApproval || {}) !== "rejected",
+      (entry) => getMockupWorkflowState(entry) !== "client_rejected",
     );
   }, [mockupVersions, hideRejected]);
   const mockupCarouselVersions = useMemo(
     () => visibleMockupVersions.slice().reverse(),
     [visibleMockupVersions],
   );
-
-  useEffect(() => {
-    if (mockupCarouselVersions.length === 0) {
-      setMockupCarouselIndex(0);
-      return;
-    }
-    setMockupCarouselIndex((prev) =>
-      Math.min(Math.max(prev, 0), mockupCarouselVersions.length - 1),
-    );
-  }, [mockupCarouselVersions.length]);
+  const activeMockupCarouselIndex =
+    mockupCarouselVersions.length > 0
+      ? Math.min(mockupCarouselIndex, mockupCarouselVersions.length - 1)
+      : 0;
 
   const latestMockupVersion =
     visibleMockupVersions.length > 0
       ? visibleMockupVersions[visibleMockupVersions.length - 1]
       : null;
-  const latestMockupDecision = getMockupApprovalStatus(
-    latestMockupVersion?.clientApproval || {},
-  );
+  const latestMockupDecision = getMockupWorkflowState(latestMockupVersion);
   const latestMockupLabel = latestMockupVersion
-    ? `v${latestMockupVersion.version}`
+    ? `${getMockupVersionSourceLabel(latestMockupVersion)} v${latestMockupVersion.version}`
     : "";
   const activeMockupVersion =
-    mockupCarouselVersions[mockupCarouselIndex] || mockupCarouselVersions[0] || null;
+    mockupCarouselVersions[activeMockupCarouselIndex] ||
+    mockupCarouselVersions[0] ||
+    null;
 
   if (!activeMockupVersion) return null;
 
-  const activeMockupDecision = getMockupApprovalStatus(
-    activeMockupVersion?.clientApproval || {},
-  );
+  const activeMockupDecision = getMockupWorkflowState(activeMockupVersion);
   const activeMockupFileName =
     activeMockupVersion.fileName ||
     (activeMockupVersion.fileUrl
@@ -3125,9 +3028,28 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
         minute: "2-digit",
       })
     : "";
+  const activeMockupReviewedAt = activeMockupVersion?.graphicsReview?.reviewedAt
+    ? new Date(activeMockupVersion.graphicsReview.reviewedAt).toLocaleString(
+        "en-US",
+        {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        },
+      )
+    : "";
   const activeMockupReason = String(
     activeMockupVersion?.clientApproval?.rejectionReason || "",
   ).trim();
+  const latestMockupTone =
+    latestMockupDecision === "client_approved" ||
+    latestMockupDecision === "graphics_validated"
+      ? "approved"
+      : latestMockupDecision === "client_rejected"
+        ? "rejected"
+        : "pending";
 
   const openPreview = () => {
     if (!activeMockupVersion?.fileUrl) return;
@@ -3141,14 +3063,12 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
       </div>
       <div className="mockup-approval-body">
         <div
-          className={`mockup-approval-status ${latestMockupDecision || "pending"}`}
+          className={`mockup-approval-status ${latestMockupTone}`}
         >
           Latest: {latestMockupLabel || "v1"}{" "}
-          {latestMockupDecision === "approved"
-            ? "Client Approved"
-            : latestMockupDecision === "rejected"
-              ? "Client Rejected"
-              : "Pending Client Approval"}
+          {getMockupWorkflowLabel(latestMockupVersion, {
+            readyForQuote: isMockupReadyForCompletion(latestMockupVersion),
+          })}
         </div>
 
         <div className="mockup-carousel">
@@ -3158,7 +3078,7 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
             onClick={() =>
               setMockupCarouselIndex((previous) => Math.max(previous - 1, 0))
             }
-            disabled={mockupCarouselIndex === 0}
+            disabled={activeMockupCarouselIndex === 0}
             aria-label="Previous mockup"
           >
             {"<"}
@@ -3187,7 +3107,9 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
                 Math.min(previous + 1, mockupCarouselVersions.length - 1),
               )
             }
-            disabled={mockupCarouselIndex >= mockupCarouselVersions.length - 1}
+            disabled={
+              activeMockupCarouselIndex >= mockupCarouselVersions.length - 1
+            }
             aria-label="Next mockup"
           >
             {">"}
@@ -3195,12 +3117,20 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
         </div>
 
         <div className="mockup-carousel-caption">
-          <strong>v{activeMockupVersion.version}</strong>
+          <strong>
+            {getMockupVersionSourceLabel(activeMockupVersion)} v{activeMockupVersion.version}
+          </strong>
           <span>{activeMockupFileName}</span>
           {activeMockupUploadedAt && <span>Uploaded: {activeMockupUploadedAt}</span>}
-          {activeMockupDecision === "rejected" && activeMockupReason && (
+          {activeMockupReviewedAt && <span>Reviewed: {activeMockupReviewedAt}</span>}
+          {activeMockupDecision === "client_rejected" && activeMockupReason && (
             <span className="mockup-approval-meta rejection">
               Reason: {activeMockupReason}
+            </span>
+          )}
+          {activeMockupVersion.graphicsReview?.note && (
+            <span className="mockup-approval-meta">
+              Graphics note: {activeMockupVersion.graphicsReview.note}
             </span>
           )}
         </div>
@@ -3220,7 +3150,14 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
 
         <div className="mockup-carousel-track">
           {mockupCarouselVersions.map((version, index) => {
-            const decision = getMockupApprovalStatus(version.clientApproval || {});
+            const workflowState = getMockupWorkflowState(version);
+            const decision =
+              workflowState === "client_approved" ||
+              workflowState === "graphics_validated"
+                ? "approved"
+                : workflowState === "client_rejected"
+                  ? "rejected"
+                  : "pending";
             return (
               <button
                 key={
@@ -3230,15 +3167,17 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
                 }
                 type="button"
                 className={`mockup-carousel-tab ${
-                  mockupCarouselIndex === index ? "active" : ""
+                  activeMockupCarouselIndex === index ? "active" : ""
                 }`}
                 onClick={() => setMockupCarouselIndex(index)}
               >
                 <span className="mockup-carousel-tab-version">
-                  v{version.version}
+                  {getMockupVersionSourceLabel(version)} v{version.version}
                 </span>
                 <span className={`mockup-carousel-tab-status ${decision}`}>
-                  {decision}
+                  {getMockupWorkflowLabel(version, {
+                    readyForQuote: isMockupReadyForCompletion(version),
+                  })}
                 </span>
               </button>
             );

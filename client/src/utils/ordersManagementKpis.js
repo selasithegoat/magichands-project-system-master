@@ -2,6 +2,10 @@ import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
 } from "./quoteStatus";
+import {
+  getLatestMockupVersion,
+  isMockupPendingClientApproval,
+} from "./mockupWorkflow";
 
 export const CLOSED_ORDER_STATUSES = new Set([
   "Completed",
@@ -50,74 +54,14 @@ export const getOrderSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
-export const getOrderMockupApprovalStatus = (approval = {}) => {
-  const explicit = String(approval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (["pending", "approved", "rejected"].includes(explicit)) {
-    return explicit;
-  }
-  if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
-    return "rejected";
-  }
-  return "pending";
-};
-
-export const getLatestOrderMockupVersion = (mockup = {}) => {
-  const versions = Array.isArray(mockup?.versions) ? mockup.versions : [];
-  const normalizedVersions = versions
-    .map((entry, index) => {
-      const parsedVersion = Number.parseInt(entry?.version, 10);
-      const version =
-        Number.isFinite(parsedVersion) && parsedVersion > 0
-          ? parsedVersion
-          : index + 1;
-      return {
-        version,
-        fileUrl: String(entry?.fileUrl || "").trim(),
-        uploadedAt: entry?.uploadedAt || null,
-        clientApproval: entry?.clientApproval || {},
-      };
-    })
-    .filter((entry) => entry.fileUrl)
-    .sort((left, right) => {
-      if (left.version !== right.version) return left.version - right.version;
-      const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
-      const rightTime = right.uploadedAt
-        ? new Date(right.uploadedAt).getTime()
-        : 0;
-      return leftTime - rightTime;
-    });
-
-  if (normalizedVersions.length > 0) {
-    return normalizedVersions[normalizedVersions.length - 1];
-  }
-
-  if (mockup?.fileUrl) {
-    const parsedVersion = Number.parseInt(mockup?.version, 10);
-    return {
-      version:
-        Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1,
-      fileUrl: String(mockup.fileUrl || "").trim(),
-      uploadedAt: mockup.uploadedAt || null,
-      clientApproval: mockup?.clientApproval || {},
-    };
-  }
-
-  return null;
-};
-
 export const hasPendingClientMockupApproval = (project) => {
   const status = resolveOrderManagementStatus(project);
   if (CLOSED_ORDER_STATUSES.has(status)) return false;
 
-  const latestMockup = getLatestOrderMockupVersion(project?.mockup || {});
+  const latestMockup = getLatestMockupVersion(project?.mockup || {});
   if (!latestMockup?.fileUrl) return false;
 
-  return (
-    getOrderMockupApprovalStatus(latestMockup.clientApproval || {}) === "pending"
-  );
+  return isMockupPendingClientApproval(latestMockup);
 };
 
 export const hasOrderBillingBlock = (project) => {
@@ -184,7 +128,7 @@ export const matchesOrdersManagementKpi = (project, kpiKey) => {
       return hasPendingClientMockupApproval(project);
     case "sample":
       if (CLOSED_ORDER_STATUSES.has(status)) return false;
-      if (!Boolean(project?.sampleRequirement?.isRequired)) return false;
+      if (!project?.sampleRequirement?.isRequired) return false;
       return getOrderSampleApprovalStatus(project?.sampleApproval || {}) !== "approved";
     default:
       return true;

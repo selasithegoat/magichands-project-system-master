@@ -11,6 +11,13 @@ import {
   getQuoteStatusDisplay,
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
+import {
+  getLatestMockupVersion,
+  getMockupVersionSourceLabel,
+  getMockupWorkflowLabel,
+  isMockupAwaitingGraphicsValidation,
+  isMockupPendingClientApproval,
+} from "../../utils/mockupWorkflow";
 
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
@@ -23,20 +30,6 @@ const resolveProjectTypeKey = (project) => {
   if (typeValue.includes("corporate")) return "corporate";
   if (typeValue.includes("quote")) return "quote";
   return "standard";
-};
-
-const getMockupApprovalStatus = (approval = {}) => {
-  const explicit = String(approval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
-    return explicit;
-  }
-  if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
-    return "rejected";
-  }
-  return "pending";
 };
 
 const getSampleApprovalStatus = (sampleApproval = {}) => {
@@ -258,15 +251,14 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
-  const mockupVersionRaw = Number.parseInt(project?.mockup?.version, 10);
-  const mockupVersionLabel =
-    Number.isFinite(mockupVersionRaw) && mockupVersionRaw > 0
-      ? `v${mockupVersionRaw}`
-      : "";
-  const hasUploadedMockup = Boolean(project?.mockup?.fileUrl);
-  const mockupApprovalStatus = getMockupApprovalStatus(
-    project?.mockup?.clientApproval || {},
-  );
+  const latestMockupVersion = getLatestMockupVersion(project?.mockup || {});
+  const hasUploadedMockup = Boolean(latestMockupVersion?.fileUrl);
+  const mockupVersionLabel = latestMockupVersion
+    ? `${getMockupVersionSourceLabel(latestMockupVersion)} v${latestMockupVersion.version}`
+    : "";
+  const showPendingGraphicsValidationTag =
+    project?.status === "Pending Mockup" &&
+    isMockupAwaitingGraphicsValidation(latestMockupVersion);
   const sampleRequirementEnabled =
     project?.projectType !== "Quote" &&
     Boolean(project?.sampleRequirement?.isRequired);
@@ -281,7 +273,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
   const showPendingClientApprovalTag =
     project?.status === "Pending Mockup" &&
     hasUploadedMockup &&
-    mockupApprovalStatus === "pending";
+    isMockupPendingClientApproval(latestMockupVersion);
   const showPendingSampleApprovalTag =
     project?.status === "Pending Production" &&
     sampleApprovalPending;
@@ -332,8 +324,15 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
           {showPendingClientApprovalTag && (
             <span className="status-badge mockup-client-pending">
               {mockupVersionLabel
-                ? `Mockup ${mockupVersionLabel} client approval pending`
+                ? `${mockupVersionLabel} client approval pending`
                 : "Mockup client approval pending"}
+            </span>
+          )}
+          {showPendingGraphicsValidationTag && (
+            <span className="status-badge mockup-client-pending">
+              {mockupVersionLabel
+                ? `${mockupVersionLabel} ${getMockupWorkflowLabel(latestMockupVersion).toLowerCase()}`
+                : "Client mockup awaiting Graphics validation"}
             </span>
           )}
           {corporateEmergencyEnabled && (
