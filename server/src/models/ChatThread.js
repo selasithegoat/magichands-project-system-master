@@ -30,6 +30,24 @@ const ChatClearedStateSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ChatArchiveStateSchema = new mongoose.Schema(
+  {
+    oldestMessageAt: {
+      type: Date,
+      default: null,
+    },
+    newestMessageAt: {
+      type: Date,
+      default: null,
+    },
+    lastSweepAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false },
+);
+
 const ChatThreadSchema = new mongoose.Schema(
   {
     type: {
@@ -66,6 +84,10 @@ const ChatThreadSchema = new mongoose.Schema(
     clearedState: {
       type: [ChatClearedStateSchema],
       default: [],
+    },
+    archive: {
+      type: ChatArchiveStateSchema,
+      default: () => ({}),
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

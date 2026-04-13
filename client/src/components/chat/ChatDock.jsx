@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
 import UserAvatar from "../ui/UserAvatar";
@@ -229,6 +236,38 @@ const isMessageWithinEditWindow = (message) => {
   }
 
   return Date.now() - createdAt.getTime() <= MESSAGE_EDIT_WINDOW_MS;
+};
+
+const getMessageTimestamp = (message) => {
+  const createdAt = message?.createdAt ? new Date(message.createdAt) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) {
+    return 0;
+  }
+
+  return createdAt.getTime();
+};
+
+const compareMessagesAscending = (left, right) => {
+  const timestampDiff = getMessageTimestamp(left) - getMessageTimestamp(right);
+  if (timestampDiff !== 0) {
+    return timestampDiff;
+  }
+
+  return toIdString(left?._id).localeCompare(toIdString(right?._id));
+};
+
+const mergeChatMessages = (...messageSets) => {
+  const mergedById = new Map();
+
+  messageSets.flat().forEach((message) => {
+    const messageId = toIdString(message?._id);
+    if (!messageId) return;
+
+    const previousMessage = mergedById.get(messageId) || {};
+    mergedById.set(messageId, { ...previousMessage, ...message });
+  });
+
+  return Array.from(mergedById.values()).sort(compareMessagesAscending);
 };
 
 const normalizeMentionHandle = (value) =>
@@ -480,6 +519,8 @@ const ChatDock = ({ user }) => {
   const [activeThreadId, setActiveThreadId] = useState("");
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesHasOlder, setMessagesHasOlder] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [composer, setComposer] = useState("");
   const [sending, setSending] = useState(false);
   const [sidebarMode, setSidebarMode] = useState("threads");
@@ -521,9 +562,13 @@ const ChatDock = ({ user }) => {
   const activeThreadIdRef = useRef("");
   const isOpenRef = useRef(false);
   const messageRequestIdRef = useRef(0);
+  const olderMessageRequestIdRef = useRef(0);
   const markReadInFlightRef = useRef(new Set());
   const playedIncomingMessageIdsRef = useRef(new Set());
+  const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messageScrollActionRef = useRef("");
+  const prependScrollStateRef = useRef(null);
   const projectRouteCacheRef = useRef(new Map());
   const attachmentInputRef = useRef(null);
   const composerTextareaRef = useRef(null);
@@ -1036,35 +1081,67 @@ const ChatDock = ({ user }) => {
   }, []);
 
   const fetchMessages = useCallback(
-    async (threadId, { markRead = true } = {}) => {
+    async (threadId, { markRead = true, before = "", mode = "replace" } = {}) => {
       if (!threadId) {
         setMessages([]);
+        setMessagesHasOlder(false);
         return;
       }
 
-      const requestId = messageRequestIdRef.current + 1;
-      messageRequestIdRef.current = requestId;
-      setMessagesLoading(true);
+      const isPrepend = mode === "prepend";
+      const shouldReplace = mode === "replace";
+      const requestIdRef = isPrepend
+        ? olderMessageRequestIdRef
+        : messageRequestIdRef;
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
+
+      if (shouldReplace) {
+        setMessagesLoading(true);
+      }
+      if (isPrepend) {
+        setLoadingOlderMessages(true);
+      }
 
       try {
-        const res = await fetch(
-          `/api/chat/threads/${threadId}/messages?limit=60`,
-          {
-            credentials: "include",
-          },
-        );
+        const params = new URLSearchParams();
+        params.set("limit", "60");
+        if (before) {
+          params.set("before", before);
+        }
+
+        const res = await fetch(`/api/chat/threads/${threadId}/messages?${params}`, {
+          credentials: "include",
+        });
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           throw new Error(data.message || "Failed to load messages.");
         }
 
-        if (messageRequestIdRef.current !== requestId) {
+        if (
+          requestIdRef.current !== requestId ||
+          activeThreadIdRef.current !== threadId
+        ) {
+          if (isPrepend) {
+            messageScrollActionRef.current = "";
+            prependScrollStateRef.current = null;
+          }
           return;
         }
 
         const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
-        setMessages(nextMessages);
+        if (isPrepend) {
+          setMessages((prev) => mergeChatMessages(nextMessages, prev));
+          setMessagesHasOlder(Boolean(data?.hasOlder));
+        } else if (mode === "preserve") {
+          setMessages((prev) => mergeChatMessages(prev, nextMessages));
+        } else {
+          messageScrollActionRef.current = "bottom";
+          setMessages(nextMessages);
+          setMessagesHasOlder(Boolean(data?.hasOlder));
+        }
+
         setError("");
         if (data?.thread?._id) {
           setThreads((prev) =>
@@ -1078,17 +1155,70 @@ const ChatDock = ({ user }) => {
           void markThreadRead(threadId);
         }
       } catch (fetchError) {
-        if (messageRequestIdRef.current === requestId) {
+        if (
+          requestIdRef.current === requestId &&
+          activeThreadIdRef.current === threadId
+        ) {
           setError(fetchError.message || "Failed to load messages.");
         }
+        if (isPrepend) {
+          messageScrollActionRef.current = "";
+          prependScrollStateRef.current = null;
+        }
       } finally {
-        if (messageRequestIdRef.current === requestId) {
-          setMessagesLoading(false);
+        if (requestIdRef.current === requestId) {
+          if (shouldReplace) {
+            setMessagesLoading(false);
+          }
+          if (isPrepend) {
+            setLoadingOlderMessages(false);
+          }
         }
       }
     },
     [markThreadRead],
   );
+
+  const handleLoadOlderMessages = useCallback(() => {
+    if (
+      !activeThreadId ||
+      messages.length === 0 ||
+      !messagesHasOlder ||
+      loadingOlderMessages ||
+      messagesLoading
+    ) {
+      return;
+    }
+
+    const oldestMessage = messages[0];
+    const before = toText(oldestMessage?.createdAt);
+    if (!before) {
+      setMessagesHasOlder(false);
+      return;
+    }
+
+    const messageContainer = messagesContainerRef.current;
+    prependScrollStateRef.current = messageContainer
+      ? {
+          scrollHeight: messageContainer.scrollHeight,
+          scrollTop: messageContainer.scrollTop,
+        }
+      : null;
+    messageScrollActionRef.current = "preserve";
+
+    void fetchMessages(activeThreadId, {
+      markRead: false,
+      before,
+      mode: "prepend",
+    });
+  }, [
+    activeThreadId,
+    fetchMessages,
+    loadingOlderMessages,
+    messages,
+    messagesHasOlder,
+    messagesLoading,
+  ]);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -1104,12 +1234,36 @@ const ChatDock = ({ user }) => {
 
   useEffect(() => {
     if (!isOpen || !activeThreadId) return;
+    setMessages([]);
+    setMessagesHasOlder(false);
+    messageScrollActionRef.current = "";
+    prependScrollStateRef.current = null;
     void fetchMessages(activeThreadId);
   }, [activeThreadId, fetchMessages, isOpen]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+
+    const messageContainer = messagesContainerRef.current;
+    if (
+      messageScrollActionRef.current === "preserve" &&
+      messageContainer &&
+      prependScrollStateRef.current
+    ) {
+      const { scrollHeight, scrollTop } = prependScrollStateRef.current;
+      const delta = messageContainer.scrollHeight - scrollHeight;
+      messageContainer.scrollTop = Math.max(scrollTop + delta, 0);
+      messageScrollActionRef.current = "";
+      prependScrollStateRef.current = null;
+      return;
+    }
+
+    if (messageScrollActionRef.current === "bottom") {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+
+    messageScrollActionRef.current = "";
+    prependScrollStateRef.current = null;
   }, [isOpen, messages]);
 
   useEffect(() => {
@@ -1175,9 +1329,10 @@ const ChatDock = ({ user }) => {
       if (
         isOpenRef.current &&
         changedThreadId &&
-        changedThreadId === activeThreadIdRef.current
+        changedThreadId === activeThreadIdRef.current &&
+        !loadingOlderMessages
       ) {
-        void fetchMessages(changedThreadId);
+        void fetchMessages(changedThreadId, { mode: "preserve" });
       }
     };
 
@@ -1189,6 +1344,7 @@ const ChatDock = ({ user }) => {
     currentUserId,
     fetchMessages,
     fetchThreads,
+    loadingOlderMessages,
     showIncomingPreview,
     user?.notificationSettings?.sound,
   ]);
@@ -1663,7 +1819,8 @@ const ChatDock = ({ user }) => {
 
       const nextMessage = data?.message;
       if (nextMessage) {
-        setMessages((prev) => [...prev, nextMessage]);
+        messageScrollActionRef.current = "bottom";
+        setMessages((prev) => mergeChatMessages(prev, [nextMessage]));
       }
       setComposer("");
       clearMentionState();
@@ -1739,7 +1896,7 @@ const ChatDock = ({ user }) => {
   };
 
   const handleStartEditMessage = (message) => {
-    if (!message?._id || message?.isDeleted) return;
+    if (!message?._id || message?.isDeleted || message?.isArchived) return;
 
     if (!isMessageWithinEditWindow(message)) {
       setOpenMessageMenuId("");
@@ -1817,7 +1974,7 @@ const ChatDock = ({ user }) => {
   };
 
   const handleRequestDeleteMessage = (message) => {
-    if (!message?._id || message?.isDeleted) return;
+    if (!message?._id || message?.isDeleted || message?.isArchived) return;
     setDeleteTarget({
       _id: message._id,
     });
@@ -1921,6 +2078,7 @@ const ChatDock = ({ user }) => {
 
       if (activeThreadIdRef.current === threadId) {
         setMessages([]);
+        setMessagesHasOlder(false);
       }
 
       setClearThreadTarget(null);
@@ -2281,7 +2439,21 @@ const ChatDock = ({ user }) => {
                     </div>
                   </div>
 
-                  <div className="chat-dock-messages">
+                  <div className="chat-dock-messages" ref={messagesContainerRef}>
+                    {(messagesHasOlder || loadingOlderMessages) && messages.length > 0 && (
+                      <div className="chat-dock-load-older-wrap">
+                        <button
+                          type="button"
+                          className="chat-dock-load-older-btn"
+                          onClick={handleLoadOlderMessages}
+                          disabled={loadingOlderMessages || !messagesHasOlder}
+                        >
+                          {loadingOlderMessages
+                            ? "Loading older messages..."
+                            : "Load older messages"}
+                        </button>
+                      </div>
+                    )}
                     {messagesLoading ? (
                       <p className="chat-dock-muted">Loading messages...</p>
                     ) : messages.length === 0 ? (
@@ -2294,6 +2466,7 @@ const ChatDock = ({ user }) => {
                         const senderId = toIdString(message?.sender?._id);
                         const isMine = senderId === currentUserId;
                         const isDeleted = Boolean(message?.isDeleted);
+                        const isArchivedMessage = Boolean(message?.isArchived);
                         const wasEdited = Boolean(message?.editedAt) && !isDeleted;
                         const canEditMessage =
                           isMine && !isDeleted && isMessageWithinEditWindow(message);
@@ -2541,12 +2714,19 @@ const ChatDock = ({ user }) => {
                                   })}
                                 </div>
                               )}
-                              {(wasEdited || (isMine && !isDeleted)) && (
+                              {(wasEdited ||
+                                isArchivedMessage ||
+                                (isMine && !isDeleted && !isArchivedMessage)) && (
                                 <div className="chat-dock-message-footer">
                                   <span className="chat-dock-message-status">
-                                    {wasEdited ? "Edited" : ""}
+                                    {[wasEdited ? "Edited" : "", isArchivedMessage ? "Archived" : ""]
+                                      .filter(Boolean)
+                                      .join(" | ")}
                                   </span>
-                                  {isMine && !isDeleted && !isEditingMessage && (
+                                  {isMine &&
+                                    !isDeleted &&
+                                    !isEditingMessage &&
+                                    !isArchivedMessage && (
                                     <div className="chat-dock-message-menu-wrap">
                                       <button
                                         type="button"

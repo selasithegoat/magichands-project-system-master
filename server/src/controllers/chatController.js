@@ -5,6 +5,16 @@ const ChatMessage = require("../models/ChatMessage");
 const Project = require("../models/Project");
 const User = require("../models/User");
 const upload = require("../middleware/upload");
+const {
+  CHAT_ARCHIVE_AFTER_DAYS,
+  countArchivedMessages,
+  getArchivedMessages,
+  getLatestArchivedMessage,
+  maybeArchiveThreadMessages,
+  removeChatAttachmentIndexEntries,
+  toMessageShapeFromArchiveRecord,
+  upsertChatAttachmentIndexEntries,
+} = require("../services/chatArchiveService");
 const { broadcastChatChange } = require("../utils/realtimeHub");
 const { createNotification } = require("../utils/notificationService");
 const { resolvePresenceMap } = require("../utils/presenceService");
@@ -20,6 +30,7 @@ const MAX_USER_SEARCH_LIMIT = 500;
 const PROJECT_SEARCH_LIMIT = 12;
 const DELETED_MESSAGE_BODY = "message was deleted.";
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+const CHAT_ARCHIVE_WINDOW_MS = CHAT_ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
 const CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH = 160;
 const PRODUCTION_SUB_DEPARTMENTS = new Set([
@@ -386,6 +397,7 @@ const serializeMessage = (message, senderMap = {}) => {
     isDeleted: Boolean(message?.isDeleted),
     deletedAt: message?.deletedAt || null,
     editedAt: message?.editedAt || null,
+    isArchived: Boolean(message?.isArchived),
     createdAt: message?.createdAt || null,
     updatedAt: message?.updatedAt || null,
   };
@@ -476,6 +488,39 @@ const getLatestDate = (...values) =>
     .map((value) => toDateValue(value))
     .filter(Boolean)
     .sort((left, right) => right.getTime() - left.getTime())[0] || null;
+
+const compareMessagesByCreatedAtDesc = (left, right) => {
+  const leftTime = toDateValue(left?.createdAt)?.getTime() || 0;
+  const rightTime = toDateValue(right?.createdAt)?.getTime() || 0;
+  if (leftTime !== rightTime) {
+    return rightTime - leftTime;
+  }
+
+  return toIdString(right?._id).localeCompare(toIdString(left?._id));
+};
+
+const mergeMessagesByCreatedAtDesc = (sources = [], limit = 0) => {
+  const seenMessageIds = new Set();
+  const mergedMessages = [];
+
+  sources
+    .flat()
+    .sort(compareMessagesByCreatedAtDesc)
+    .forEach((entry) => {
+      const messageId = toIdString(entry?._id);
+      if (!messageId || seenMessageIds.has(messageId)) {
+        return;
+      }
+
+      seenMessageIds.add(messageId);
+      mergedMessages.push(entry);
+    });
+
+  if (limit > 0) {
+    return mergedMessages.slice(0, limit);
+  }
+  return mergedMessages;
+};
 
 const buildDirectKey = (userA, userB) =>
   [toIdString(userA), toIdString(userB)].filter(Boolean).sort().join(":");
@@ -639,7 +684,8 @@ const notifyPublicChatMentions = async ({
   );
 };
 
-const countUnreadMessages = async (threadId, userId, lastReadAt, clearedAt) => {
+const countUnreadMessages = async (threadOrId, userId, lastReadAt, clearedAt) => {
+  const threadId = toIdString(threadOrId?._id || threadOrId);
   if (
     !mongoose.Types.ObjectId.isValid(threadId) ||
     !mongoose.Types.ObjectId.isValid(userId)
@@ -657,7 +703,27 @@ const countUnreadMessages = async (threadId, userId, lastReadAt, clearedAt) => {
     query.createdAt = { $gt: visibilityStartAt };
   }
 
-  return ChatMessage.countDocuments(query);
+  const unreadInMongo = await ChatMessage.countDocuments(query);
+  const archivedNewestMessageAt = toDateValue(threadOrId?.archive?.newestMessageAt);
+  const hasPotentialArchivedMessages =
+    Boolean(archivedNewestMessageAt) ||
+    !visibilityStartAt ||
+    Date.now() - visibilityStartAt.getTime() > CHAT_ARCHIVE_WINDOW_MS;
+  if (
+    !hasPotentialArchivedMessages ||
+    (visibilityStartAt &&
+      archivedNewestMessageAt &&
+      archivedNewestMessageAt.getTime() <= visibilityStartAt.getTime())
+  ) {
+    return unreadInMongo;
+  }
+
+  const unreadInArchive = await countArchivedMessages(threadId, {
+    after: visibilityStartAt,
+    excludeSenderId: userId,
+  });
+
+  return unreadInMongo + unreadInArchive;
 };
 
 const syncThreadLastMessage = async (thread) => {
@@ -669,6 +735,18 @@ const syncThreadLastMessage = async (thread) => {
     .lean();
 
   if (!latestMessage) {
+    const latestArchivedMessage = await getLatestArchivedMessage(toIdString(thread._id));
+    if (latestArchivedMessage) {
+      thread.lastMessageAt = latestArchivedMessage.createdAt || null;
+      thread.lastMessagePreview = buildMessagePreview(
+        latestArchivedMessage.body,
+        latestArchivedMessage.references,
+        latestArchivedMessage.attachments,
+      );
+      thread.lastMessageSender = latestArchivedMessage.senderId || null;
+      return;
+    }
+
     thread.lastMessageAt = null;
     thread.lastMessagePreview = "";
     thread.lastMessageSender = null;
@@ -723,7 +801,7 @@ const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
   const lastReadAt = getLastReadAt(thread, currentUserId);
   const clearedAt = getClearedAt(thread, currentUserId);
   const unreadCount = await countUnreadMessages(
-    thread._id,
+    thread,
     currentUserId,
     lastReadAt,
     clearedAt,
@@ -820,21 +898,48 @@ const getThreadMessages = async (req, res) => {
     }
 
     const limit = normalizeLimit(req.query?.limit, DEFAULT_MESSAGE_LIMIT);
+    const beforeDate = req.query?.before ? toDateValue(req.query.before) : null;
+    if (req.query?.before && !beforeDate) {
+      return res.status(400).json({ message: "Invalid chat message cursor." });
+    }
     const clearedAt = getClearedAt(thread, currentUserId);
     const messageQuery = { thread: threadId };
-    if (clearedAt) {
-      messageQuery.createdAt = { $gt: clearedAt };
+    if (clearedAt || beforeDate) {
+      messageQuery.createdAt = {};
+      if (clearedAt) {
+        messageQuery.createdAt.$gt = clearedAt;
+      }
+      if (beforeDate) {
+        messageQuery.createdAt.$lt = beforeDate;
+      }
     }
 
-    const messages = await ChatMessage.find(messageQuery)
-      .sort({ createdAt: -1 })
-      .limit(limit)
+    const internalLimit = limit + 10;
+    const mongoMessages = await ChatMessage.find(messageQuery)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(internalLimit)
       .populate("sender", "_id firstName lastName name avatarUrl role department")
       .lean();
+    const archivedMessages = await getArchivedMessages(threadId, {
+      before: beforeDate,
+      after: clearedAt,
+      limit: internalLimit,
+    });
+    const messagePage = mergeMessagesByCreatedAtDesc(
+      [
+        mongoMessages,
+        archivedMessages.map((entry) => toMessageShapeFromArchiveRecord(entry)),
+      ],
+      limit + 1,
+    );
+    const hasOlder = messagePage.length > limit;
+    const visibleMessages = messagePage.slice(0, limit);
 
     const userIds = [
       ...new Set(
-        messages.map((message) => toIdString(message?.sender?._id || message?.sender)).filter(Boolean),
+        visibleMessages
+          .map((message) => toIdString(message?.sender?._id || message?.sender))
+          .filter(Boolean),
       ),
     ];
     const userMap = await loadUsersById(userIds);
@@ -848,13 +953,14 @@ const getThreadMessages = async (req, res) => {
       currentUserId,
       participantUserMap,
     );
-    const serializedMessages = messages
+    const serializedMessages = visibleMessages
       .reverse()
       .map((message) => serializeMessage(message, userMap));
 
     return res.json({
       thread: serializedThread,
       messages: serializedMessages,
+      hasOlder,
     });
   } catch (error) {
     console.error("Error fetching chat messages:", error);
@@ -991,6 +1097,13 @@ const sendMessage = async (req, res) => {
     thread.lastMessagePreview = buildMessagePreview(body, references, attachments);
     thread.lastMessageSender = req.user._id;
     await thread.save();
+    await upsertChatAttachmentIndexEntries({
+      threadId: thread._id,
+      messageId: message._id,
+      attachments,
+      uploadedBy: req.user._id,
+      uploadedAt: message.createdAt || new Date(),
+    });
 
     try {
       await notifyPublicChatMentions({
@@ -1034,6 +1147,9 @@ const sendMessage = async (req, res) => {
         broadcast: thread.type === "public",
       },
     );
+    void maybeArchiveThreadMessages(thread._id).catch((archiveError) => {
+      console.error("Error archiving older chat messages for active thread:", archiveError);
+    });
 
     return res.status(201).json({ message: serializedMessage });
   } catch (error) {
@@ -1092,6 +1208,7 @@ const deleteMessage = async (req, res) => {
 
       await syncThreadLastMessage(thread);
       await thread.save();
+      await removeChatAttachmentIndexEntries(existingAttachments);
       await deleteChatAttachmentFiles(existingAttachments);
     }
 

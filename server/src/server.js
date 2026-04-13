@@ -25,6 +25,7 @@ const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
+const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 const { startReminderScheduler } = require("./utils/reminderScheduler");
 
@@ -584,6 +585,7 @@ if (hasAdminBuild || hasClientBuild || hasOpsBuild || hasInventoryBuild) {
 // Start Server
 app.listen(PORT, HOST, () => {
   console.log(`Server is running at http://${HOST}:${PORT}`);
+  startChatArchiveScheduler();
   startWeeklyDigestScheduler();
   startReminderScheduler();
 });

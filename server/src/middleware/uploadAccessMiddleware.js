@@ -1,6 +1,7 @@
 const Project = require("../models/Project");
 const ProjectUpdate = require("../models/ProjectUpdate");
 const ChatMessage = require("../models/ChatMessage");
+const ChatAttachmentIndex = require("../models/ChatAttachmentIndex");
 const ChatThread = require("../models/ChatThread");
 const User = require("../models/User");
 
@@ -349,6 +350,18 @@ const canAccessChatUpload = (requester, thread) => {
 const findChatThreadForFileUrl = async (relativePath) => {
   const candidateUrls = buildCandidateFileUrls(relativePath);
   if (candidateUrls.length === 0) return null;
+
+  const indexedAttachment = await ChatAttachmentIndex.findOne({
+    fileUrl: { $in: candidateUrls },
+  })
+    .sort({ uploadedAt: -1, createdAt: -1 })
+    .select("thread")
+    .lean();
+
+  const indexedThreadId = toObjectIdString(indexedAttachment?.thread);
+  if (indexedThreadId) {
+    return ChatThread.findById(indexedThreadId).select("type participants").lean();
+  }
 
   const message = await ChatMessage.findOne({
     "attachments.fileUrl": { $in: candidateUrls },
