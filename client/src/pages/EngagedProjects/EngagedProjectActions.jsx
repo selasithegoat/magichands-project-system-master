@@ -31,6 +31,7 @@ import {
   isClientProvidedMockupVersion,
   isMockupAwaitingGraphicsValidation,
   isMockupClientRejected,
+  isMockupGraphicsValidated,
   isMockupPendingClientApproval,
   isMockupReadyForCompletion,
 } from "../../utils/mockupWorkflow";
@@ -561,6 +562,8 @@ const EngagedProjectActions = ({ user }) => {
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
   const [clientMockupValidationSubmitting, setClientMockupValidationSubmitting] =
+    useState(false);
+  const [clientMockupValidationResetSubmitting, setClientMockupValidationResetSubmitting] =
     useState(false);
   const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
   const [productionMockupIndex, setProductionMockupIndex] = useState(0);
@@ -2340,6 +2343,62 @@ const EngagedProjectActions = ({ user }) => {
     }
   };
 
+  const handleUndoClientMockupValidation = async (targetProject) => {
+    if (!targetProject?._id) return false;
+
+    const targetLatestMockupVersion = getLatestMockupVersion(
+      targetProject?.mockup || {},
+    );
+    if (!isClientProvidedMockupVersion(targetLatestMockupVersion)) {
+      setToast({
+        type: "error",
+        message: "Latest mockup is not a client-provided mockup.",
+      });
+      return false;
+    }
+
+    if (!isMockupGraphicsValidated(targetLatestMockupVersion)) {
+      setToast({
+        type: "error",
+        message: "Client mockup is not currently validated.",
+      });
+      return false;
+    }
+
+    setClientMockupValidationResetSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${targetProject._id}/mockup/undo-client-validation?source=engaged`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (res.ok) {
+        const updatedProject = await res.json();
+        setProject(updatedProject);
+        setToast({
+          type: "success",
+          message: `${getMockupVersionSourceLabel(targetLatestMockupVersion)} v${targetLatestMockupVersion.version} validation undone. Review is pending again.`,
+        });
+        return true;
+      }
+
+      const errorData = await res.json().catch(() => ({}));
+      setToast({
+        type: "error",
+        message: errorData.message || "Failed to undo client mockup validation.",
+      });
+      return false;
+    } catch (error) {
+      console.error("Error undoing client mockup validation:", error);
+      setToast({ type: "error", message: "An unexpected error occurred." });
+      return false;
+    } finally {
+      setClientMockupValidationResetSubmitting(false);
+    }
+  };
+
   const handleConfirmMockupDelete = async () => {
     if (!mockupDeleteModal.open || !mockupDeleteModal.version) return;
     if (!project?._id) return;
@@ -3534,6 +3593,8 @@ const EngagedProjectActions = ({ user }) => {
                     const mockupAlreadySubmitted = Boolean(mockupUrl);
                     const clientMockupAwaitingValidation =
                       isMockupAction && mockupAwaitingGraphicsValidation;
+                    const clientMockupValidated =
+                      isMockupAction && isMockupGraphicsValidated(latestMockupVersion);
                     const mockupApprovalPending =
                       isMockupAction && isMockupPendingClientApproval(latestMockupVersion);
                     const mockupApprovalRejected =
@@ -3576,6 +3637,12 @@ const EngagedProjectActions = ({ user }) => {
                       (isQuoteGraphicsAction
                         ? quoteAllowsMockupWorkflowStatus
                         : isPending);
+                    const canUndoClientMockupValidationNow =
+                      clientMockupValidated &&
+                      !clientMockupValidationResetSubmitting &&
+                      !isUpdating &&
+                      (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
+                      (isQuoteGraphicsAction ? quoteAllowsMockupWorkflowStatus : true);
 
                     let disabledReason = "";
                     if (!isQuoteGraphicsAction && !isPending) {
@@ -3705,6 +3772,26 @@ const EngagedProjectActions = ({ user }) => {
                         "Latest mockup no longer needs Graphics validation.";
                     }
 
+                    let undoClientMockupValidationTitle =
+                      "Undo Graphics validation and return this mockup to pending review";
+                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                      undoClientMockupValidationTitle =
+                        "Project leads cannot take engagement actions on their own projects here.";
+                    } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
+                      undoClientMockupValidationTitle =
+                        quoteWorkflowBlockedMessage ||
+                        "Quote workflows are not configured yet.";
+                    } else if (isQuoteGraphicsAction && !quoteMockupRequirement.isRequired) {
+                      undoClientMockupValidationTitle =
+                        "Mockup is not marked as required for this quote.";
+                    } else if (isQuoteGraphicsAction && !quoteSectionActionReady) {
+                      undoClientMockupValidationTitle =
+                        "Acknowledge your engaged department first.";
+                    } else if (!clientMockupValidated) {
+                      undoClientMockupValidationTitle =
+                        "Latest mockup is not currently Graphics validated.";
+                    }
+
                     return (
                       <div
                         className={`engaged-action-card ${
@@ -3716,6 +3803,8 @@ const EngagedProjectActions = ({ user }) => {
                           {isMockupAction
                             ? clientMockupAwaitingValidation
                               ? "Review the client-provided mockup. Validate it to continue immediately or upload a Graphics revision."
+                              : clientMockupValidated
+                                ? "Client mockup is validated and cleared. Undo validation if Graphics needs to review it again, or continue the workflow."
                               : isQuoteGraphicsAction
                                 ? "Upload mockup for Front Desk/client review. Confirm completion only after Front Desk records client approval."
                                 : "Upload the approved mockup and confirm completion."
@@ -3733,6 +3822,18 @@ const EngagedProjectActions = ({ user }) => {
                                 {clientMockupValidationSubmitting
                                   ? "Validating..."
                                   : `Validate ${mockupVersionLabel}`}
+                              </button>
+                            )}
+                            {clientMockupValidated && (
+                              <button
+                                className="complete-btn"
+                                onClick={() => handleUndoClientMockupValidation(project)}
+                                disabled={!canUndoClientMockupValidationNow}
+                                title={undoClientMockupValidationTitle}
+                              >
+                                {clientMockupValidationResetSubmitting
+                                  ? "Undoing..."
+                                  : `Undo Validation (${mockupVersionLabel})`}
                               </button>
                             )}
                             <button

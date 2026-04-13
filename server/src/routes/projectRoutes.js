@@ -22,6 +22,7 @@ const {
   uploadProjectMockup,
   deleteProjectMockupVersion,
   validateClientProjectMockup,
+  undoClientProjectMockupValidation,
   approveProjectMockup,
   rejectProjectMockup,
   getPendingSmsPrompts,
@@ -330,6 +331,12 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   validateClientProjectMockup,
+);
+router.post(
+  "/:id/mockup/undo-client-validation",
+  protect,
+  enforceProjectNotOnHold,
+  undoClientProjectMockupValidation,
 );
 router.post(
   "/:id/mockup/approve",

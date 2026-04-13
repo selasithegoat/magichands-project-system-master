@@ -37,6 +37,7 @@ const ActivityLogSchema = new mongoose.Schema(
         "engagement_unacknowledge", // [NEW]
         "mockup_upload", // [NEW]
         "mockup_validation", // [NEW]
+        "mockup_validation_reset", // [NEW]
         "mockup_approval", // [NEW]
         "mockup_rejection", // [NEW]
         "mockup_delete", // [NEW]

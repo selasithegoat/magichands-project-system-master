@@ -12132,6 +12132,229 @@ const validateClientProjectMockup = async (req, res) => {
   }
 };
 
+// @desc    Undo Graphics validation for the latest client-provided mockup
+// @route   POST /api/projects/:id/mockup/undo-client-validation
+// @access  Private (Graphics/Design or Admin)
+const undoClientProjectMockupValidation = async (req, res) => {
+  try {
+    if (!canValidateClientMockup(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to undo client mockup validation.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+
+    if (isQuoteProject(project)) {
+      if (!isMockupWorkflowStatusAllowed(project, project.status)) {
+        return res.status(400).json({
+          message: getMockupWorkflowStatusMessage(project),
+        });
+      }
+
+      const engagementGuard = getQuoteDepartmentEngagementGuard({
+        project,
+        user: req.user,
+        allowedDepartments: ["graphics"],
+      });
+      if (engagementGuard) {
+        return res.status(400).json({
+          code: engagementGuard.code,
+          missing: engagementGuard.missing,
+          message: engagementGuard.message,
+        });
+      }
+    }
+
+    const normalizedVersions = getNormalizedMockupVersions(project);
+    if (!normalizedVersions.length) {
+      return res.status(400).json({
+        message: "No mockup has been uploaded yet.",
+      });
+    }
+
+    const latestVersion = normalizedVersions[normalizedVersions.length - 1];
+    if (!latestVersion?.fileUrl) {
+      return res.status(400).json({
+        message: "No mockup has been uploaded yet.",
+      });
+    }
+
+    if (!isClientProvidedMockupVersion(latestVersion)) {
+      return res.status(400).json({
+        message: "Latest mockup is not a client-provided mockup.",
+      });
+    }
+
+    const versionLabel = buildMockupVersionLabel(latestVersion.version);
+    const reviewStatus = getMockupGraphicsReviewStatus(
+      latestVersion.graphicsReview || {},
+      latestVersion.source,
+      latestVersion.intakeUpload,
+    );
+
+    if (reviewStatus === "pending") {
+      return res.status(400).json({
+        message: `Client mockup ${versionLabel} is already pending Graphics validation.`,
+      });
+    }
+
+    if (reviewStatus === "superseded") {
+      return res.status(400).json({
+        message: `Client mockup ${versionLabel} has already been replaced by a Graphics revision.`,
+      });
+    }
+
+    ensureProjectMockupVersions(project);
+    const versionEntry = project.mockup.versions.find((entry) =>
+      latestVersion?.entryId
+        ? toObjectIdString(entry?._id) === toObjectIdString(latestVersion.entryId)
+        : Number.parseInt(entry?.version, 10) === latestVersion.version,
+    );
+
+    if (!versionEntry?.fileUrl) {
+      return res.status(400).json({
+        message: "Latest client mockup is not available.",
+      });
+    }
+
+    const undoNote = toText(req.body?.note);
+    const resetNote =
+      undoNote || `Graphics validation undone for client mockup ${versionLabel}.`;
+
+    versionEntry.source = "client";
+    versionEntry.intakeUpload = parseBooleanFlag(versionEntry.intakeUpload, true);
+    versionEntry.graphicsReview = buildMockupGraphicsReviewState(
+      {
+        status: "pending",
+        reviewedAt: null,
+        reviewedBy: null,
+        note: resetNote,
+      },
+      "client",
+      true,
+    );
+
+    syncProjectMockupFromVersion(project, versionEntry, {
+      approvedVersion: null,
+    });
+
+    const previousStatus = project.status;
+    let quoteMockupDecisionSync = null;
+
+    if (isQuoteProject(project)) {
+      quoteMockupDecisionSync = syncQuoteMockupRequirementDecision({
+        project,
+        targetStatus: "in_progress",
+        actorId: req.user._id,
+        note: resetNote,
+      });
+
+      project.quoteDetails = normalizeQuoteDetailsWorkflow({
+        quoteDetailsInput: project.quoteDetails || {},
+        existingQuoteDetails: project.quoteDetails || {},
+      });
+
+      const mockupRequirement = project.quoteDetails?.requirementItems?.mockup;
+      if (mockupRequirement) {
+        mockupRequirement.completionConfirmedAt = null;
+        mockupRequirement.completionConfirmedBy = null;
+        mockupRequirement.note = resetNote;
+        project.markModified("quoteDetails.requirementItems");
+      }
+    } else if (project.status !== "Pending Mockup") {
+      project.status = "Pending Mockup";
+    }
+
+    await project.save();
+
+    const validationFileName = toText(versionEntry?.fileName);
+    const validationFileSuffix = validationFileName
+      ? ` (${validationFileName})`
+      : "";
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_validation_reset",
+      `Graphics validation undone for client mockup ${versionLabel}${validationFileSuffix}.`,
+      {
+        mockupValidationReset: {
+          version: latestVersion.version,
+          entryId: toObjectIdString(versionEntry?._id),
+          note: undoNote,
+          fileName: validationFileName,
+          source: "client",
+        },
+      },
+    );
+
+    if (quoteMockupDecisionSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "update",
+        `Quote requirement 'Mockup' moved from ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.fromStatus,
+        )} to ${formatQuoteRequirementStatusLabel(
+          quoteMockupDecisionSync.toStatus,
+        )} after Graphics validation was undone.`,
+        {
+          quoteRequirement: {
+            key: "mockup",
+            label: "Mockup",
+            fromStatus: quoteMockupDecisionSync.fromStatus,
+            toStatus: quoteMockupDecisionSync.toStatus,
+            note: resetNote,
+          },
+        },
+      );
+    }
+
+    if (quoteMockupDecisionSync?.statusSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${quoteMockupDecisionSync.statusSync.toStatus}`,
+        {
+          statusChange: {
+            from: quoteMockupDecisionSync.statusSync.fromStatus,
+            to: quoteMockupDecisionSync.statusSync.toStatus,
+          },
+        },
+      );
+    } else if (!isQuoteProject(project) && previousStatus !== project.status) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${project.status}`,
+        {
+          statusChange: {
+            from: previousStatus,
+            to: project.status,
+          },
+        },
+      );
+    }
+
+    await createProjectSystemUpdateAndSnapshot({
+      project,
+      authorId: req.user._id || req.user.id,
+      category: "Graphics",
+      content: `Graphics validation undone for client mockup ${versionLabel}. Review required again.`,
+    });
+
+    const populatedProject = await buildProjectResponseQuery(project._id);
+    res.json(populatedProject || project);
+  } catch (error) {
+    console.error("Error undoing client mockup validation:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Add feedback to project
 // @route   POST /api/projects/:id/feedback
 // @access  Private (Front Desk / Admin)
@@ -15937,6 +16160,7 @@ module.exports = {
   uploadProjectMockup,
   deleteProjectMockupVersion,
   validateClientProjectMockup,
+  undoClientProjectMockupValidation,
   approveProjectMockup,
   rejectProjectMockup,
   resetProjectMockupDecision,
