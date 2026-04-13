@@ -805,6 +805,22 @@ const ProjectSchema = new mongoose.Schema(
         rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         rejectionReason: String,
         note: String,
+        rejectionAttachment: {
+          fileUrl: String,
+          fileName: String,
+          fileType: String,
+          uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          uploadedAt: Date,
+        },
+        rejectionAttachments: [
+          {
+            fileUrl: String,
+            fileName: String,
+            fileType: String,
+            uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            uploadedAt: Date,
+          },
+        ],
         approvedVersion: Number,
       },
       versions: [
@@ -854,6 +870,22 @@ const ProjectSchema = new mongoose.Schema(
             rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
             rejectionReason: String,
             note: String,
+            rejectionAttachment: {
+              fileUrl: String,
+              fileName: String,
+              fileType: String,
+              uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+              uploadedAt: Date,
+            },
+            rejectionAttachments: [
+              {
+                fileUrl: String,
+                fileName: String,
+                fileType: String,
+                uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+                uploadedAt: Date,
+              },
+            ],
           },
         },
       ],

@@ -158,6 +158,30 @@ const handleFeedbackUploads = (req, res, next) => {
   });
 };
 
+const handleAttachmentUpload = (req, res, next) => {
+  upload.array("attachment", 10)(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ message: `File too large. Max limit is ${maxFileSizeMb}MB.` });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+
+    Promise.resolve(upload.scanRequestFiles(req))
+      .then(() => next())
+      .catch(async (scanError) => {
+        await upload.cleanupRequestFiles(req);
+        return res.status(400).json({
+          message:
+            scanError?.message ||
+            "Uploaded file failed security checks. Please upload a different file.",
+        });
+      });
+  });
+};
+
 const handleBidSubmissionUploads = (req, res, next) => {
   upload.array("bidDocuments", 10)(req, res, (err) => {
     if (err) {
@@ -348,6 +372,7 @@ router.post(
   "/:id/mockup/reject",
   protect,
   enforceProjectNotOnHold,
+  handleAttachmentUpload,
   rejectProjectMockup,
 );
 router.post(

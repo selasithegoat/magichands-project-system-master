@@ -6,6 +6,38 @@ const MOCKUP_GRAPHICS_REVIEW_STATUS_SET = new Set([
   "not_required",
 ]);
 
+const getAttachmentNameFromUrl = (fileUrl = "") => {
+  const rawName = String(fileUrl || "")
+    .split("?")[0]
+    .split("/")
+    .pop();
+  if (!rawName) return "";
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+};
+
+const normalizeMockupAttachment = (attachment = {}) => {
+  const fileUrl = String(attachment?.fileUrl || attachment?.url || "").trim();
+  if (!fileUrl) return null;
+  return {
+    fileUrl,
+    fileName:
+      String(attachment?.fileName || attachment?.name || "").trim() ||
+      getAttachmentNameFromUrl(fileUrl),
+    fileType: String(attachment?.fileType || attachment?.type || "").trim(),
+    uploadedBy: attachment?.uploadedBy || null,
+    uploadedAt: attachment?.uploadedAt || null,
+  };
+};
+
+const normalizeMockupAttachmentList = (attachments = []) => {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.map(normalizeMockupAttachment).filter(Boolean);
+};
+
 export const getMockupApprovalStatus = (approval = {}) => {
   const explicit = String(approval?.status || "")
     .trim()
@@ -14,7 +46,13 @@ export const getMockupApprovalStatus = (approval = {}) => {
     return explicit;
   }
   if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
+  if (
+    approval?.rejectedAt ||
+    approval?.rejectedBy ||
+    approval?.rejectionReason ||
+    approval?.rejectionAttachment?.fileUrl ||
+    normalizeMockupAttachmentList(approval?.rejectionAttachments).length > 0
+  ) {
     return "rejected";
   }
   return "pending";
@@ -64,6 +102,12 @@ export const getMockupVersions = (mockup = {}) => {
       );
       const intakeUpload = Boolean(entry?.intakeUpload ?? source === "client");
       const approvalStatus = getMockupApprovalStatus(entry?.clientApproval || {});
+      const rejectionAttachments = normalizeMockupAttachmentList(
+        entry?.clientApproval?.rejectionAttachments,
+      );
+      const rejectionAttachment =
+        rejectionAttachments[0] ||
+        normalizeMockupAttachment(entry?.clientApproval?.rejectionAttachment || {});
 
       return {
         entryId: entry?._id || entry?.id || null,
@@ -99,6 +143,8 @@ export const getMockupVersions = (mockup = {}) => {
               "",
           ).trim(),
           note: String(entry?.clientApproval?.note || "").trim(),
+          rejectionAttachment,
+          rejectionAttachments,
         },
       };
     })
@@ -114,6 +160,12 @@ export const getMockupVersions = (mockup = {}) => {
     );
     const intakeUpload = Boolean(mockup?.intakeUpload ?? source === "client");
     const approvalStatus = getMockupApprovalStatus(mockup?.clientApproval || {});
+    const rejectionAttachments = normalizeMockupAttachmentList(
+      mockup?.clientApproval?.rejectionAttachments,
+    );
+    const rejectionAttachment =
+      rejectionAttachments[0] ||
+      normalizeMockupAttachment(mockup?.clientApproval?.rejectionAttachment || {});
     normalized.push({
       entryId: mockup?._id || mockup?.id || null,
       version,
@@ -148,6 +200,8 @@ export const getMockupVersions = (mockup = {}) => {
             "",
         ).trim(),
         note: String(mockup?.clientApproval?.note || "").trim(),
+        rejectionAttachment,
+        rejectionAttachments,
       },
     });
   }

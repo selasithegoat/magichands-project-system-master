@@ -1071,6 +1071,13 @@ const EngagedProjectActions = ({ user }) => {
   const activeMockupDecisionReason = String(
     activeMockupVersion?.clientApproval?.rejectionReason || "",
   ).trim();
+  const activeMockupRejectionAttachments = normalizeReferenceAttachments(
+    Array.isArray(activeMockupVersion?.clientApproval?.rejectionAttachments)
+      ? activeMockupVersion.clientApproval.rejectionAttachments
+      : activeMockupVersion?.clientApproval?.rejectionAttachment
+        ? [activeMockupVersion.clientApproval.rejectionAttachment]
+        : [],
+  );
   const activeMockupIsImage = isImageMockupAsset(
     activeMockupFileUrl,
     activeMockupFileType,
@@ -3994,6 +4001,26 @@ const EngagedProjectActions = ({ user }) => {
                               activeMockupDecisionReason && (
                                 <div className="graphics-mockup-reason">
                                   Reason: {activeMockupDecisionReason}
+                                </div>
+                              )}
+                            {activeMockupDecision === "rejected" &&
+                              activeMockupRejectionAttachments.length > 0 && (
+                                <div className="graphics-mockup-links">
+                                  {activeMockupRejectionAttachments.map(
+                                    (attachment, index) => (
+                                      <a
+                                        key={`${attachment.fileUrl}-${index}`}
+                                        className="graphics-mockup-link"
+                                        href={attachment.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        Rejection file:{" "}
+                                        {getReferenceFileName(attachment) ||
+                                          `Attachment ${index + 1}`}
+                                      </a>
+                                    ),
+                                  )}
                                 </div>
                               )}
                             {activeMockupVersion?.graphicsReview?.note && (

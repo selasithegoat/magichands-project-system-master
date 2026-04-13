@@ -204,6 +204,21 @@ const normalizeAttachmentItem = (value) => {
   };
 };
 
+const normalizeStoredAttachmentRecord = (value) => {
+  const normalized = normalizeAttachmentItem(value);
+  if (!normalized) return null;
+  return {
+    ...normalized,
+    uploadedBy: value?.uploadedBy || null,
+    uploadedAt: value?.uploadedAt ? new Date(value.uploadedAt) : null,
+  };
+};
+
+const normalizeStoredAttachmentList = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeStoredAttachmentRecord).filter(Boolean);
+};
+
 const normalizeAttachmentList = (value) => {
   if (!Array.isArray(value)) return [];
   return value.map(normalizeAttachmentItem).filter(Boolean);
@@ -259,6 +274,18 @@ const mapBidSubmissionDocuments = (req, userId) => {
     }));
 };
 
+const mapAttachmentUploads = (req, userId) =>
+  upload
+    .getUploadedFiles(req)
+    .filter((file) => file?.filename)
+    .map((file) => ({
+      fileUrl: `/uploads/${file.filename}`,
+      fileName: file.originalname || "",
+      fileType: file.mimetype || "",
+      uploadedBy: userId || undefined,
+      uploadedAt: new Date(),
+    }));
+
 const buildInitialClientMockupVersions = (req, userId) => {
   const files = Array.isArray(req.files?.clientMockup)
     ? req.files.clientMockup
@@ -297,6 +324,8 @@ const buildInitialClientMockupVersions = (req, userId) => {
             rejectedBy: null,
             rejectionReason: "",
             note: "",
+            rejectionAttachment: null,
+            rejectionAttachments: [],
           },
         },
         1,
@@ -6020,7 +6049,9 @@ const getMockupApprovalStatus = (approval = {}) => {
   if (
     approval?.rejectedAt ||
     approval?.rejectedBy ||
-    toText(approval?.rejectionReason)
+    toText(approval?.rejectionReason) ||
+    toText(approval?.rejectionAttachment?.fileUrl) ||
+    normalizeStoredAttachmentList(approval?.rejectionAttachments).length > 0
   ) {
     return "rejected";
   }
@@ -6113,6 +6144,12 @@ const buildMockupVersionRecord = (entry = {}, fallbackVersion = 1) => {
       rejectedBy: entry?.clientApproval?.rejectedBy || null,
       rejectionReason: toText(entry?.clientApproval?.rejectionReason),
       note: toText(entry?.clientApproval?.note),
+      rejectionAttachment: normalizeStoredAttachmentRecord(
+        entry?.clientApproval?.rejectionAttachment,
+      ),
+      rejectionAttachments: normalizeStoredAttachmentList(
+        entry?.clientApproval?.rejectionAttachments,
+      ),
     },
   };
 };
@@ -6161,6 +6198,12 @@ const ensureProjectMockupVersions = (project = {}) => {
         rejectionReason:
           project.mockup?.clientApproval?.rejectionReason || "",
         note: project.mockup?.clientApproval?.note || "",
+        rejectionAttachment: normalizeStoredAttachmentRecord(
+          project.mockup?.clientApproval?.rejectionAttachment,
+        ),
+        rejectionAttachments: normalizeStoredAttachmentList(
+          project.mockup?.clientApproval?.rejectionAttachments,
+        ),
       },
     });
   }
@@ -6207,6 +6250,13 @@ const syncProjectMockupFromVersion = (
     rejectedBy: versionEntry?.clientApproval?.rejectedBy || null,
     rejectionReason: versionEntry?.clientApproval?.rejectionReason || "",
     note: versionEntry?.clientApproval?.note || "",
+    rejectionAttachment:
+      normalizeStoredAttachmentRecord(
+        versionEntry?.clientApproval?.rejectionAttachment,
+      ) || null,
+    rejectionAttachments: normalizeStoredAttachmentList(
+      versionEntry?.clientApproval?.rejectionAttachments,
+    ),
     approvedVersion: approvedVersion ?? null,
   };
 };
@@ -6236,6 +6286,8 @@ const resetProjectMockupState = (project = {}) => {
     rejectedBy: null,
     rejectionReason: "",
     note: "",
+    rejectionAttachment: null,
+    rejectionAttachments: [],
     approvedVersion: null,
   };
 };
@@ -9283,6 +9335,8 @@ const resetQuoteMockup = async (req, res) => {
           rejectedBy: req.user._id,
           rejectionReason: note || "Mockup rework requested.",
           note: note || "Mockup rework requested.",
+          rejectionAttachment: null,
+          rejectionAttachments: [],
         };
       }
     }
@@ -9297,6 +9351,8 @@ const resetQuoteMockup = async (req, res) => {
         rejectedBy: req.user._id,
         rejectionReason: note || "Mockup rework requested.",
         note: note || "Mockup rework requested.",
+        rejectionAttachment: null,
+        rejectionAttachments: [],
         approvedVersion: null,
       };
     }
@@ -11155,6 +11211,8 @@ const uploadProjectMockup = async (req, res) => {
           rejectedBy: null,
           rejectionReason: "",
           note: "",
+          rejectionAttachment: null,
+          rejectionAttachments: [],
         },
       };
     });
@@ -11599,6 +11657,8 @@ const approveProjectMockup = async (req, res) => {
       rejectedBy: null,
       rejectionReason: "",
       note: approvalNote,
+      rejectionAttachment: null,
+      rejectionAttachments: [],
     };
 
     versionEntry.clientApproval = approvalState;
@@ -11728,27 +11788,33 @@ const approveProjectMockup = async (req, res) => {
 // @route   POST /api/projects/:id/mockup/reject
 // @access  Private (Front Desk or Admin)
 const rejectProjectMockup = async (req, res) => {
+  let persistedRejectionAttachment = false;
   try {
     if (!canManageMockupApproval(req.user)) {
+      await cleanupUploadedFilesSafely(req);
       return res.status(403).json({
         message: "Not authorized to reject mockups.",
       });
     }
 
     const project = await Project.findById(req.params.id);
-    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) {
+      await cleanupUploadedFilesSafely(req);
+      return;
+    }
+
+    const rejectWithCleanup = async (status, message) => {
+      await cleanupUploadedFilesSafely(req);
+      return res.status(status).json({ message });
+    };
 
     if (!isMockupWorkflowStatusAllowed(project, project.status)) {
-      return res.status(400).json({
-        message: getMockupWorkflowStatusMessage(project),
-      });
+      return rejectWithCleanup(400, getMockupWorkflowStatusMessage(project));
     }
 
     const normalizedVersions = getNormalizedMockupVersions(project);
     if (!normalizedVersions.length) {
-      return res.status(400).json({
-        message: "No mockup has been uploaded yet.",
-      });
+      return rejectWithCleanup(400, "No mockup has been uploaded yet.");
     }
 
     const latestVersion = normalizedVersions[normalizedVersions.length - 1];
@@ -11761,6 +11827,8 @@ const rejectProjectMockup = async (req, res) => {
         : latestVersion.version;
 
     const rejectionReason = toText(req.body?.reason);
+    const rejectionAttachments = mapAttachmentUploads(req, req.user?._id);
+    const primaryRejectionAttachment = rejectionAttachments[0] || null;
 
     ensureProjectMockupVersions(project);
 
@@ -11779,16 +11847,14 @@ const rejectProjectMockup = async (req, res) => {
     }
 
     if (!versionEntry?.fileUrl) {
-      return res.status(400).json({
-        message: "Selected mockup version is not available.",
-      });
+      return rejectWithCleanup(400, "Selected mockup version is not available.");
     }
 
     if (isClientProvidedMockupVersion(versionEntry)) {
-      return res.status(400).json({
-        message:
-          "Client-provided mockups must be validated or revised by Graphics before Front Desk review.",
-      });
+      return rejectWithCleanup(
+        400,
+        "Client-provided mockups must be validated or revised by Graphics before Front Desk review.",
+      );
     }
 
     requestedVersion =
@@ -11808,6 +11874,8 @@ const rejectProjectMockup = async (req, res) => {
       rejectedBy: req.user._id,
       rejectionReason,
       note: rejectionReason,
+      rejectionAttachment: primaryRejectionAttachment,
+      rejectionAttachments,
     };
 
     versionEntry.clientApproval = decisionState;
@@ -11838,9 +11906,13 @@ const rejectProjectMockup = async (req, res) => {
     }
 
     await project.save();
+    persistedRejectionAttachment = rejectionAttachments.length > 0;
 
     const rejectionFileName = toText(versionEntry?.fileName);
     const rejectionFileSuffix = rejectionFileName ? ` (${rejectionFileName})` : "";
+    const rejectionAttachmentNames = rejectionAttachments
+      .map((attachment) => toText(attachment?.fileName))
+      .filter(Boolean);
 
     await logActivity(
       project._id,
@@ -11853,6 +11925,8 @@ const rejectProjectMockup = async (req, res) => {
           reason: rejectionReason,
           entryId: toObjectIdString(versionEntry?._id),
           fileName: rejectionFileName,
+          rejectionAttachmentNames,
+          rejectionAttachments,
         },
       },
     );
@@ -11917,6 +11991,9 @@ const rejectProjectMockup = async (req, res) => {
     const populatedProject = await buildProjectResponseQuery(project._id);
     res.json(populatedProject || project);
   } catch (error) {
+    if (!persistedRejectionAttachment) {
+      await cleanupUploadedFilesSafely(req);
+    }
     console.error("Error rejecting mockup:", error);
     res.status(500).json({ message: "Server Error" });
   }
@@ -14295,6 +14372,8 @@ const resetProjectMockupDecision = async (req, res) => {
       rejectedBy: null,
       rejectionReason: "",
       note: "",
+      rejectionAttachment: null,
+      rejectionAttachments: [],
     };
 
     versionEntry.clientApproval = resetState;

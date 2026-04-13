@@ -48,6 +48,7 @@ const SAMPLE_APPROVAL_RESET_PHRASE =
   "I confirm sample approval should be reset to pending";
 const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
+const MOCKUP_REJECTION_MAX_FILES = 10;
 const REVISION_LOCKED_STATUSES = new Set([
   "Completed",
   "Delivered",
@@ -697,6 +698,7 @@ const OrderActions = () => {
   });
   const [mockupRejectionInput, setMockupRejectionInput] = useState("");
   const [mockupRejectionReason, setMockupRejectionReason] = useState("");
+  const [mockupRejectionFiles, setMockupRejectionFiles] = useState([]);
   const [mockupRejectionSubmitting, setMockupRejectionSubmitting] =
     useState(false);
   const [mockupDecisionResetModal, setMockupDecisionResetModal] = useState({
@@ -2465,6 +2467,7 @@ const OrderActions = () => {
     });
     setMockupRejectionInput("");
     setMockupRejectionReason("");
+    setMockupRejectionFiles([]);
   };
 
   const closeMockupRejectionModal = () => {
@@ -2475,6 +2478,31 @@ const OrderActions = () => {
     });
     setMockupRejectionInput("");
     setMockupRejectionReason("");
+    setMockupRejectionFiles([]);
+  };
+
+  const handleMockupRejectionFileChange = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    setMockupRejectionFiles((prev) => {
+      const merged = [...prev, ...selectedFiles];
+      if (merged.length > MOCKUP_REJECTION_MAX_FILES) {
+        showToast(
+          `You can attach up to ${MOCKUP_REJECTION_MAX_FILES} files for a mockup rejection.`,
+          "error",
+        );
+        return merged.slice(0, MOCKUP_REJECTION_MAX_FILES);
+      }
+      return merged;
+    });
+    event.target.value = "";
+  };
+
+  const handleRemoveMockupRejectionFile = (indexToRemove) => {
+    setMockupRejectionFiles((prev) =>
+      prev.filter((_, fileIndex) => fileIndex !== indexToRemove),
+    );
   };
 
   const openMockupDecisionResetModal = (version) => {
@@ -2555,16 +2583,21 @@ const OrderActions = () => {
 
     setMockupRejectionSubmitting(true);
     try {
+      const payload = new FormData();
+      payload.append("version", String(mockupRejectionModal.version.version));
+      if (mockupRejectionModal.version.entryId) {
+        payload.append("entryId", String(mockupRejectionModal.version.entryId));
+      }
+      payload.append("reason", mockupRejectionReason.trim());
+      mockupRejectionFiles.forEach((file) => {
+        payload.append("attachment", file);
+      });
+
       const res = await fetchWithPortal(
         `/api/projects/${project._id}/mockup/reject`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            version: mockupRejectionModal.version.version,
-            entryId: mockupRejectionModal.version.entryId,
-            reason: mockupRejectionReason.trim(),
-          }),
+          body: payload,
         },
       );
 
@@ -2578,7 +2611,13 @@ const OrderActions = () => {
           } marked as rejected.`,
           "success",
         );
-        closeMockupRejectionModal();
+        setMockupRejectionModal({
+          open: false,
+          version: null,
+        });
+        setMockupRejectionInput("");
+        setMockupRejectionReason("");
+        setMockupRejectionFiles([]);
       } else {
         const errorData = await res.json().catch(() => ({}));
         showToast(
@@ -3177,6 +3216,13 @@ const OrderActions = () => {
       activeMockupVersion.fileUrl?.split("/").pop() ||
       `Mockup v${activeMockupVersion.version}`
     : "";
+  const activeMockupRejectionAttachments = Array.isArray(
+    activeMockupVersion?.clientApproval?.rejectionAttachments,
+  )
+    ? activeMockupVersion.clientApproval.rejectionAttachments
+    : activeMockupVersion?.clientApproval?.rejectionAttachment
+      ? [activeMockupVersion.clientApproval.rejectionAttachment]
+      : [];
   const activeMockupIsImage = activeMockupVersion
     ? isImageAsset(activeMockupVersion.fileUrl, activeMockupVersion.fileType)
     : false;
@@ -4420,6 +4466,17 @@ const OrderActions = () => {
                   <a href={activeMockupVersion.fileUrl} download>
                     Download
                   </a>
+                  {activeMockupDecision === "rejected" &&
+                    activeMockupRejectionAttachments.map((attachment, index) => (
+                      <a
+                        key={`${attachment.fileUrl}-${index}`}
+                        href={attachment.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Rejection: {getFeedbackAttachmentName(attachment)}
+                      </a>
+                    ))}
                 </div>
 
                 {canDecideOnActiveMockupVersion && (
@@ -5236,6 +5293,42 @@ const OrderActions = () => {
                 onChange={(e) => setMockupRejectionReason(e.target.value)}
                 placeholder="Why did client reject this mockup? (optional)"
               />
+            </div>
+            <div className="confirm-input-group">
+              <label>Rejection Files (Optional)</label>
+              <input
+                type="file"
+                className="feedback-media-input"
+                multiple
+                onChange={handleMockupRejectionFileChange}
+              />
+              <div className="feedback-upload-hint">
+                Attach marked-up artwork, feedback screenshots, or any files the
+                client shared to explain the rejection.
+              </div>
+              {mockupRejectionFiles.length > 0 && (
+                <div className="feedback-selected-files">
+                  {mockupRejectionFiles.map((file, index) => (
+                    <div
+                      className="feedback-selected-file"
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                    >
+                      <span>
+                        {file.name}
+                        {formatFileSize(file.size)
+                          ? ` (${formatFileSize(file.size)})`
+                          : ""}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMockupRejectionFile(index)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="confirm-actions">
               <button className="action-btn" onClick={closeMockupRejectionModal}>

@@ -3043,6 +3043,13 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
   const activeMockupReason = String(
     activeMockupVersion?.clientApproval?.rejectionReason || "",
   ).trim();
+  const activeMockupRejectionAttachments = Array.isArray(
+    activeMockupVersion?.clientApproval?.rejectionAttachments,
+  )
+    ? activeMockupVersion.clientApproval.rejectionAttachments
+    : activeMockupVersion?.clientApproval?.rejectionAttachment
+      ? [activeMockupVersion.clientApproval.rejectionAttachment]
+      : [];
   const latestMockupTone =
     latestMockupDecision === "client_approved" ||
     latestMockupDecision === "graphics_validated"
@@ -3146,6 +3153,17 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
           <a href={activeMockupVersion.fileUrl} download>
             Download
           </a>
+          {activeMockupDecision === "client_rejected" &&
+            activeMockupRejectionAttachments.map((attachment, index) => (
+              <a
+                key={`${attachment.fileUrl}-${index}`}
+                href={attachment.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Rejection: {getAttachmentName(attachment, index)}
+              </a>
+            ))}
         </div>
 
         <div className="mockup-carousel-track">
