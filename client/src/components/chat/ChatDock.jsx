@@ -24,13 +24,6 @@ const INCOMING_PREVIEW_HIDE_MS = 4800;
 const INCOMING_PREVIEW_EXIT_MS = 240;
 const CHAT_ATTACHMENT_ACCEPT =
   "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
-const RECORDING_MIME_CANDIDATES = [
-  "audio/webm;codecs=opus",
-  "audio/webm",
-  "audio/mp4",
-  "audio/ogg;codecs=opus",
-  "audio/ogg",
-];
 const CHAT_SAFE_FILE_EXTENSIONS = new Set([
   ".jpg",
   ".jpeg",
@@ -129,39 +122,6 @@ const BackIcon = ({ width = 18, height = 18 }) => (
     strokeLinejoin="round"
   >
     <path d="m15 18-6-6 6-6" />
-  </svg>
-);
-
-const MicrophoneIcon = ({ width = 18, height = 18 }) => (
-  <svg
-    width={width}
-    height={height}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
-    <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-    <path d="M12 18v3" />
-    <path d="M8 21h8" />
-  </svg>
-);
-
-const StopRecordingIcon = ({ width = 18, height = 18 }) => (
-  <svg
-    width={width}
-    height={height}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="6" y="6" width="12" height="12" rx="2.5" />
   </svg>
 );
 
@@ -484,16 +444,7 @@ const buildPendingFileKey = (file) =>
 const buildPendingAttachmentId = () =>
   `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const getExtensionForMimeType = (mimeType) => {
-  const normalized = toText(mimeType).toLowerCase();
-  if (normalized.includes("mp4")) return "m4a";
-  if (normalized.includes("mpeg")) return "mp3";
-  if (normalized.includes("ogg")) return "ogg";
-  if (normalized.includes("wav")) return "wav";
-  return "webm";
-};
-
-const createPendingAttachment = (file, source = "upload") => {
+const createPendingAttachment = (file) => {
   const previewUrl =
     typeof URL !== "undefined" &&
     typeof URL.createObjectURL === "function" &&
@@ -512,18 +463,10 @@ const createPendingAttachment = (file, source = "upload") => {
     id: buildPendingAttachmentId(),
     file,
     fileKey: buildPendingFileKey(file),
-    source,
     previewUrl,
     name: getAttachmentName(baseAttachment),
     kind: getAttachmentType(baseAttachment),
   };
-};
-
-const formatRecordingDuration = (totalSeconds = 0) => {
-  const safeSeconds = Math.max(Number(totalSeconds) || 0, 0);
-  const minutes = Math.floor(safeSeconds / 60);
-  const seconds = safeSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
 const ChatDock = ({ user }) => {
@@ -550,8 +493,6 @@ const ChatDock = ({ user }) => {
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
   const [error, setError] = useState("");
   const [incomingPreview, setIncomingPreview] = useState(null);
   const [incomingPreviewVisible, setIncomingPreviewVisible] = useState(false);
@@ -587,18 +528,8 @@ const ChatDock = ({ user }) => {
   const attachmentInputRef = useRef(null);
   const composerTextareaRef = useRef(null);
   const pendingAttachmentsRef = useRef([]);
-  const mediaRecorderRef = useRef(null);
-  const recordingStreamRef = useRef(null);
-  const recordingChunksRef = useRef([]);
-  const recordingTimerRef = useRef(null);
-  const shouldSaveRecordingRef = useRef(true);
-  const isMountedRef = useRef(true);
   const incomingPreviewHideTimerRef = useRef(null);
   const incomingPreviewClearTimerRef = useRef(null);
-  const isRecordingSupported =
-    typeof window !== "undefined" &&
-    typeof window.MediaRecorder === "function" &&
-    Boolean(window.navigator?.mediaDevices?.getUserMedia);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread._id === activeThreadId) || null,
@@ -796,44 +727,6 @@ const ChatDock = ({ user }) => {
     [revokePendingAttachmentPreview],
   );
 
-  const clearRecordingTimer = useCallback(() => {
-    if (recordingTimerRef.current) {
-      window.clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-  }, []);
-
-  const stopRecordingStream = useCallback(() => {
-    const stream = recordingStreamRef.current;
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      recordingStreamRef.current = null;
-    }
-  }, []);
-
-  const stopActiveRecording = useCallback(
-    (saveRecording) => {
-      shouldSaveRecordingRef.current = Boolean(saveRecording);
-      const recorder = mediaRecorderRef.current;
-
-      if (recorder && recorder.state !== "inactive") {
-        recorder.stop();
-        return;
-      }
-
-      clearRecordingTimer();
-      stopRecordingStream();
-      mediaRecorderRef.current = null;
-      recordingChunksRef.current = [];
-      shouldSaveRecordingRef.current = true;
-      if (isMountedRef.current) {
-        setIsRecording(false);
-        setRecordingDuration(0);
-      }
-    },
-    [clearRecordingTimer, stopRecordingStream],
-  );
-
   const clearPendingAttachments = useCallback(() => {
     replacePendingAttachments([]);
     if (attachmentInputRef.current) {
@@ -842,7 +735,7 @@ const ChatDock = ({ user }) => {
   }, [replacePendingAttachments]);
 
   const addPendingFiles = useCallback(
-    (incomingFiles, source = "upload") => {
+    (incomingFiles) => {
       const nextFiles = Array.from(incomingFiles || []).filter(Boolean);
       if (nextFiles.length === 0) return;
 
@@ -882,17 +775,11 @@ const ChatDock = ({ user }) => {
 
       if (filesToAttach.length === 0) return;
 
-      const draftAttachments = filesToAttach.map((file) =>
-        createPendingAttachment(file, source),
-      );
+      const draftAttachments = filesToAttach.map((file) => createPendingAttachment(file));
       replacePendingAttachments((prev) => [...prev, ...draftAttachments]);
     },
     [replacePendingAttachments],
   );
-
-  const cancelRecording = useCallback(() => {
-    stopActiveRecording(false);
-  }, [stopActiveRecording]);
 
   const resetProjectRoutePicker = useCallback(() => {
     setProjectRoutePicker({
@@ -939,31 +826,12 @@ const ChatDock = ({ user }) => {
 
   useEffect(
     () => () => {
-      isMountedRef.current = false;
-      shouldSaveRecordingRef.current = false;
-      clearRecordingTimer();
-      stopRecordingStream();
-
-      try {
-        const recorder = mediaRecorderRef.current;
-        if (recorder && recorder.state !== "inactive") {
-          recorder.stop();
-        }
-      } catch (recordingError) {
-        console.error("Failed to stop chat recorder during cleanup", recordingError);
-      }
-
       clearIncomingPreviewTimers();
       pendingAttachmentsRef.current.forEach((attachment) => {
         revokePendingAttachmentPreview(attachment);
       });
     },
-    [
-      clearIncomingPreviewTimers,
-      clearRecordingTimer,
-      revokePendingAttachmentPreview,
-      stopRecordingStream,
-    ],
+    [clearIncomingPreviewTimers, revokePendingAttachmentPreview],
   );
 
   useEffect(() => {
@@ -1496,7 +1364,6 @@ const ChatDock = ({ user }) => {
   };
 
   const handleClose = () => {
-    cancelRecording();
     setIsOpen(false);
     setSidebarMode("threads");
     setProjectPickerOpen(false);
@@ -1704,7 +1571,7 @@ const ChatDock = ({ user }) => {
   };
 
   const handleAttachmentInputChange = (event) => {
-    addPendingFiles(event.target.files, "upload");
+    addPendingFiles(event.target.files);
     event.target.value = "";
   };
 
@@ -1712,116 +1579,6 @@ const ChatDock = ({ user }) => {
     replacePendingAttachments((prev) =>
       prev.filter((attachment) => attachment.id !== attachmentId),
     );
-  };
-
-  const handleStartRecording = async () => {
-    if (sending || isRecording) return;
-    if (!isRecordingSupported) {
-      setError("Audio recording is not supported on this browser.");
-      return;
-    }
-    if (pendingAttachmentsRef.current.length >= CHAT_ATTACHMENT_MAX_FILES) {
-        setError(
-        `You can attach up to ${CHAT_ATTACHMENT_MAX_FILES} files per message.`,
-      );
-      return;
-    }
-
-    try {
-      const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
-      const MediaRecorderCtor = window.MediaRecorder;
-      const preferredMimeType = RECORDING_MIME_CANDIDATES.find((mimeType) =>
-        typeof MediaRecorderCtor.isTypeSupported === "function"
-          ? MediaRecorderCtor.isTypeSupported(mimeType)
-          : true,
-      );
-      const recorder = preferredMimeType
-        ? new MediaRecorderCtor(stream, { mimeType: preferredMimeType })
-        : new MediaRecorderCtor(stream);
-
-      mediaRecorderRef.current = recorder;
-      recordingStreamRef.current = stream;
-      recordingChunksRef.current = [];
-      shouldSaveRecordingRef.current = true;
-      setIsRecording(true);
-      setRecordingDuration(0);
-      setError("");
-
-      const recordingStartedAt = Date.now();
-
-      recorder.addEventListener("dataavailable", (recordingEvent) => {
-        if (recordingEvent.data && recordingEvent.data.size > 0) {
-          recordingChunksRef.current.push(recordingEvent.data);
-        }
-      });
-
-      recorder.addEventListener("stop", () => {
-        const shouldSave = shouldSaveRecordingRef.current;
-        const recordedChunks = [...recordingChunksRef.current];
-        const finalMimeType =
-          recorder.mimeType || preferredMimeType || "audio/webm";
-
-        shouldSaveRecordingRef.current = true;
-        recordingChunksRef.current = [];
-        clearRecordingTimer();
-        stopRecordingStream();
-        mediaRecorderRef.current = null;
-
-        if (isMountedRef.current) {
-          setIsRecording(false);
-          setRecordingDuration(0);
-        }
-
-        if (!shouldSave || recordedChunks.length === 0 || !isMountedRef.current) {
-          return;
-        }
-
-        const recordedBlob = new Blob(recordedChunks, { type: finalMimeType });
-        if (!recordedBlob.size) return;
-
-        const recordedFile = new File(
-          [recordedBlob],
-          `voice-note-${new Date().toISOString().replace(/[:.]/g, "-")}.${getExtensionForMimeType(finalMimeType)}`,
-          {
-            type: finalMimeType,
-            lastModified: Date.now(),
-          },
-        );
-
-        addPendingFiles([recordedFile], "recording");
-      });
-
-      recorder.addEventListener("error", () => {
-        shouldSaveRecordingRef.current = false;
-        setError("Audio recording failed. Please try again.");
-        stopActiveRecording(false);
-      });
-
-      recorder.start();
-      recordingTimerRef.current = window.setInterval(() => {
-        if (!isMountedRef.current) return;
-        setRecordingDuration(
-          Math.max(Math.floor((Date.now() - recordingStartedAt) / 1000), 0),
-        );
-      }, 1000);
-    } catch (recordingError) {
-      console.error("Failed to start chat recording", recordingError);
-      shouldSaveRecordingRef.current = false;
-      clearRecordingTimer();
-      stopRecordingStream();
-      mediaRecorderRef.current = null;
-      setIsRecording(false);
-      setRecordingDuration(0);
-      setError(
-        recordingError?.name === "NotAllowedError"
-          ? "Microphone access was denied."
-          : "Could not start audio recording.",
-      );
-    }
-  };
-
-  const handleStopRecording = () => {
-    stopActiveRecording(true);
   };
 
   const handleSelectMention = useCallback(
@@ -1861,7 +1618,7 @@ const ChatDock = ({ user }) => {
   };
 
   const handleSendMessage = async () => {
-    if (!activeThreadId || sending || isRecording) return;
+    if (!activeThreadId || sending) return;
 
     const trimmedComposer = composer.trim();
     if (
@@ -2876,23 +2633,6 @@ const ChatDock = ({ user }) => {
                         <UploadIcon width="16" height="16" />
                         Add File
                       </button>
-                      <button
-                        type="button"
-                        className={`chat-dock-toolbar-btn ${
-                          isRecording ? "recording" : ""
-                        }`}
-                        onClick={isRecording ? handleStopRecording : handleStartRecording}
-                        disabled={sending || (!isRecording && !isRecordingSupported)}
-                      >
-                        {isRecording ? (
-                          <StopRecordingIcon width="16" height="16" />
-                        ) : (
-                          <MicrophoneIcon width="16" height="16" />
-                        )}
-                        {isRecording
-                          ? `Stop ${formatRecordingDuration(recordingDuration)}`
-                          : "Voice Note"}
-                      </button>
                       <input
                         ref={attachmentInputRef}
                         type="file"
@@ -2902,14 +2642,6 @@ const ChatDock = ({ user }) => {
                         onChange={handleAttachmentInputChange}
                       />
                     </div>
-
-                    {isRecording && (
-                      <div className="chat-dock-recording-banner" role="status">
-                        <span className="chat-dock-recording-dot" aria-hidden="true" />
-                        <span>Recording voice note</span>
-                        <strong>{formatRecordingDuration(recordingDuration)}</strong>
-                      </div>
-                    )}
 
                     {selectedProjects.length > 0 && (
                       <div className="chat-dock-selected-projects">
@@ -2991,9 +2723,7 @@ const ChatDock = ({ user }) => {
                             <div className="chat-dock-pending-meta">
                               <strong title={attachment.name}>{attachment.name}</strong>
                               <small>
-                                {attachment.source === "recording"
-                                  ? "Voice note"
-                                  : attachment.kind === "image"
+                                {attachment.kind === "image"
                                     ? "Photo"
                                     : attachment.kind === "video"
                                       ? "Video"
@@ -3126,7 +2856,6 @@ const ChatDock = ({ user }) => {
                         onClick={() => void handleSendMessage()}
                         disabled={
                           sending ||
-                          isRecording ||
                           (!composer.trim() &&
                             selectedProjects.length === 0 &&
                             pendingAttachments.length === 0)
