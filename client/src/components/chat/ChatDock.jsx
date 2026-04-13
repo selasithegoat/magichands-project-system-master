@@ -19,6 +19,8 @@ const THREAD_HIDDEN_POLL_INTERVAL_MS = 60000;
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const CHAT_ATTACHMENT_MAX_FILES = 6;
 const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
+const INCOMING_PREVIEW_HIDE_MS = 4800;
+const INCOMING_PREVIEW_EXIT_MS = 240;
 const CHAT_ATTACHMENT_ACCEPT =
   "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
 const RECORDING_MIME_CANDIDATES = [
@@ -284,6 +286,10 @@ const buildMentionHandle = (user) => {
   return normalizeMentionHandle(fullName);
 };
 
+const getChatUserDisplayName = (entry) =>
+  toText(entry?.name) ||
+  `${toText(entry?.firstName)} ${toText(entry?.lastName)}`.trim();
+
 const getActiveMention = (text, caretPosition) => {
   if (!Number.isFinite(caretPosition)) return null;
 
@@ -544,6 +550,8 @@ const ChatDock = ({ user }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [error, setError] = useState("");
+  const [incomingPreview, setIncomingPreview] = useState(null);
+  const [incomingPreviewVisible, setIncomingPreviewVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [clearThreadTarget, setClearThreadTarget] = useState(null);
   const [deletingMessageId, setDeletingMessageId] = useState("");
@@ -582,6 +590,8 @@ const ChatDock = ({ user }) => {
   const recordingTimerRef = useRef(null);
   const shouldSaveRecordingRef = useRef(true);
   const isMountedRef = useRef(true);
+  const incomingPreviewHideTimerRef = useRef(null);
+  const incomingPreviewClearTimerRef = useRef(null);
   const isRecordingSupported =
     typeof window !== "undefined" &&
     typeof window.MediaRecorder === "function" &&
@@ -689,6 +699,68 @@ const ChatDock = ({ user }) => {
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
+
+  const clearIncomingPreviewTimers = useCallback(() => {
+    if (incomingPreviewHideTimerRef.current) {
+      window.clearTimeout(incomingPreviewHideTimerRef.current);
+      incomingPreviewHideTimerRef.current = null;
+    }
+    if (incomingPreviewClearTimerRef.current) {
+      window.clearTimeout(incomingPreviewClearTimerRef.current);
+      incomingPreviewClearTimerRef.current = null;
+    }
+  }, []);
+
+  const dismissIncomingPreview = useCallback(
+    (immediate = false) => {
+      clearIncomingPreviewTimers();
+      setIncomingPreviewVisible(false);
+      if (immediate) {
+        setIncomingPreview(null);
+        return;
+      }
+
+      incomingPreviewClearTimerRef.current = window.setTimeout(() => {
+        setIncomingPreview(null);
+        incomingPreviewClearTimerRef.current = null;
+      }, INCOMING_PREVIEW_EXIT_MS);
+    },
+    [clearIncomingPreviewTimers],
+  );
+
+  const showIncomingPreview = useCallback(
+    (preview) => {
+      const threadId = toIdString(preview?.threadId);
+      const senderName = toText(preview?.senderName);
+      const messagePreview = toText(preview?.messagePreview);
+
+      if (!threadId || !senderName || !messagePreview) {
+        return;
+      }
+
+      clearIncomingPreviewTimers();
+      setIncomingPreview({
+        token: `${toIdString(preview?.messageId) || threadId}-${Date.now()}`,
+        threadId,
+        messageId: toIdString(preview?.messageId),
+        senderName,
+        senderAvatarUrl: toText(preview?.senderAvatarUrl),
+        messagePreview,
+        threadName: toText(preview?.threadName),
+      });
+      setIncomingPreviewVisible(true);
+
+      incomingPreviewHideTimerRef.current = window.setTimeout(() => {
+        setIncomingPreviewVisible(false);
+        incomingPreviewHideTimerRef.current = null;
+        incomingPreviewClearTimerRef.current = window.setTimeout(() => {
+          setIncomingPreview(null);
+          incomingPreviewClearTimerRef.current = null;
+        }, INCOMING_PREVIEW_EXIT_MS);
+      }, INCOMING_PREVIEW_HIDE_MS);
+    },
+    [clearIncomingPreviewTimers],
+  );
 
   const revokePendingAttachmentPreview = useCallback((attachment) => {
     const previewUrl = attachment?.previewUrl;
@@ -878,11 +950,17 @@ const ChatDock = ({ user }) => {
         console.error("Failed to stop chat recorder during cleanup", recordingError);
       }
 
+      clearIncomingPreviewTimers();
       pendingAttachmentsRef.current.forEach((attachment) => {
         revokePendingAttachmentPreview(attachment);
       });
     },
-    [clearRecordingTimer, revokePendingAttachmentPreview, stopRecordingStream],
+    [
+      clearIncomingPreviewTimers,
+      clearRecordingTimer,
+      revokePendingAttachmentPreview,
+      stopRecordingStream,
+    ],
   );
 
   useEffect(() => {
@@ -1171,12 +1249,14 @@ const ChatDock = ({ user }) => {
       const changedThreadId = toIdString(event?.detail?.threadId);
       const changedMessageId = toIdString(event?.detail?.messageId);
       const senderId = toIdString(event?.detail?.senderId);
-
-      if (
+      const isIncomingMessage =
         changeType === "message_created" &&
         changedMessageId &&
         senderId &&
-        senderId !== currentUserId &&
+        senderId !== currentUserId;
+
+      if (
+        isIncomingMessage &&
         !playedIncomingMessageIdsRef.current.has(changedMessageId)
       ) {
         playedIncomingMessageIdsRef.current.add(changedMessageId);
@@ -1189,7 +1269,37 @@ const ChatDock = ({ user }) => {
         playMessageSound(allowSound).catch(() => {});
       }
 
-      void fetchThreads();
+      void fetchThreads().then((nextThreads) => {
+        if (!isIncomingMessage || isOpenRef.current || !changedThreadId) {
+          return;
+        }
+
+        const changedThread = nextThreads.find(
+          (thread) => toIdString(thread?._id) === changedThreadId,
+        );
+        const sender = changedThread?.lastMessageSender || null;
+        const previewSenderId = toIdString(sender?._id || sender);
+        const senderName =
+          getChatUserDisplayName(sender) ||
+          getChatUserDisplayName(changedThread?.counterpart) ||
+          "New message";
+        const messagePreview =
+          toText(changedThread?.lastMessagePreview) || "Sent a message";
+
+        if (!changedThread || (previewSenderId && previewSenderId !== senderId)) {
+          return;
+        }
+
+        showIncomingPreview({
+          threadId: changedThreadId,
+          messageId: changedMessageId,
+          threadName: changedThread?.name,
+          senderName,
+          senderAvatarUrl:
+            toText(sender?.avatarUrl) || toText(changedThread?.counterpart?.avatarUrl),
+          messagePreview,
+        });
+      });
 
       if (
         isOpenRef.current &&
@@ -1204,7 +1314,13 @@ const ChatDock = ({ user }) => {
     return () => {
       window.removeEventListener("mh:chat-changed", handleChatChanged);
     };
-  }, [currentUserId, fetchMessages, fetchThreads, user?.notificationSettings?.sound]);
+  }, [
+    currentUserId,
+    fetchMessages,
+    fetchThreads,
+    showIncomingPreview,
+    user?.notificationSettings?.sound,
+  ]);
 
   useEffect(() => {
     if (!currentUserId) return undefined;
@@ -1366,6 +1482,7 @@ const ChatDock = ({ user }) => {
   }, [activeMention, fetchChatUsers, isPublicThread]);
 
   const handleOpen = () => {
+    dismissIncomingPreview(true);
     setIsOpen(true);
     setError("");
     clearMentionState();
@@ -1397,6 +1514,7 @@ const ChatDock = ({ user }) => {
   };
 
   const handleSelectThread = (threadId) => {
+    dismissIncomingPreview(true);
     setActiveThreadId(threadId);
     setSidebarMode("threads");
     setMobilePanelView("thread");
@@ -1413,6 +1531,7 @@ const ChatDock = ({ user }) => {
 
   const handleStartDirectThread = useCallback(async (recipientId) => {
     try {
+      dismissIncomingPreview(true);
       const res = await fetch("/api/chat/direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1435,9 +1554,10 @@ const ChatDock = ({ user }) => {
     } catch (threadError) {
       setError(threadError.message || "Failed to open direct chat.");
     }
-  }, [fetchThreads, resetProjectRoutePicker]);
+  }, [dismissIncomingPreview, fetchThreads, resetProjectRoutePicker]);
 
   const handleOpenPublicThread = useCallback(async () => {
+    dismissIncomingPreview(true);
     setIsOpen(true);
     setError("");
     setSidebarMode("threads");
@@ -1465,7 +1585,59 @@ const ChatDock = ({ user }) => {
       nextThreads[0]?._id ||
       "";
     setActiveThreadId(publicThreadId);
-  }, [clearMentionState, fetchThreads, resetProjectRoutePicker, threads]);
+  }, [
+    clearMentionState,
+    dismissIncomingPreview,
+    fetchThreads,
+    resetProjectRoutePicker,
+    threads,
+  ]);
+
+  const handleIncomingPreviewOpen = useCallback(async () => {
+    const threadId = toIdString(incomingPreview?.threadId);
+    dismissIncomingPreview(true);
+
+    if (!threadId) {
+      setIsOpen(true);
+      setError("");
+      clearMentionState();
+      setMobilePanelView(activeThreadIdRef.current ? "thread" : "sidebar");
+      if (threads.length === 0) {
+        await fetchThreads({ preserveSelection: false });
+      }
+      return;
+    }
+
+    setIsOpen(true);
+    setError("");
+    setSidebarMode("threads");
+    setMobilePanelView("thread");
+    setProjectPickerOpen(false);
+    setDeleteTarget(null);
+    setClearThreadTarget(null);
+    setIsThreadMenuOpen(false);
+    setOpenMessageMenuId("");
+    setEditingMessageId("");
+    setEditDraft("");
+    clearMentionState();
+    resetProjectRoutePicker();
+
+    if (threads.some((thread) => thread?._id === threadId)) {
+      setActiveThreadId(threadId);
+      void markThreadRead(threadId);
+      return;
+    }
+
+    await fetchThreads({ focusThreadId: threadId });
+  }, [
+    clearMentionState,
+    dismissIncomingPreview,
+    fetchThreads,
+    incomingPreview?.threadId,
+    markThreadRead,
+    resetProjectRoutePicker,
+    threads,
+  ]);
 
   const resolveMentionUser = useCallback(
     (handle) => mentionUserDirectory.get(normalizeMentionHandle(handle)) || null,
@@ -2972,9 +3144,44 @@ const ChatDock = ({ user }) => {
         </div>
       )}
 
+      {incomingPreview && (
+        <button
+          key={incomingPreview.token}
+          type="button"
+          className={`chat-dock-incoming-preview ${
+            incomingPreviewVisible ? "visible" : "closing"
+          }`}
+          onClick={() => void handleIncomingPreviewOpen()}
+          aria-label={`Open chat from ${incomingPreview.senderName}`}
+        >
+          <div className="chat-dock-incoming-preview-head">
+            <span className="chat-dock-incoming-preview-avatar">
+              <UserAvatar
+                name={incomingPreview.senderName}
+                src={incomingPreview.senderAvatarUrl}
+                width="44px"
+                height="44px"
+              />
+            </span>
+            <span className="chat-dock-incoming-preview-copy">
+              <strong>{incomingPreview.senderName}</strong>
+              {incomingPreview.threadName &&
+                incomingPreview.threadName !== incomingPreview.senderName && (
+                  <small>{incomingPreview.threadName}</small>
+                )}
+            </span>
+          </div>
+          <p className="chat-dock-incoming-preview-message">
+            {incomingPreview.messagePreview}
+          </p>
+        </button>
+      )}
+
       <button
         type="button"
-        className={`chat-dock-fab ${isOpen ? "active" : ""}`}
+        className={`chat-dock-fab ${isOpen ? "active" : ""} ${
+          incomingPreviewVisible ? "has-preview" : ""
+        }`}
         onClick={isOpen ? handleClose : handleOpen}
         aria-label={isOpen ? "Close chat" : "Open chat"}
       >
