@@ -9,6 +9,11 @@ import {
 } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import {
+  formatQuoteDecisionStatus,
+  getQuoteDecisionState,
+  hasFinalQuoteDecision,
+} from "../../utils/quoteDecision";
+import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
 } from "../../utils/quoteStatus";
@@ -314,6 +319,27 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       );
     }
     return project.status;
+  };
+
+  const renderProjectStatus = (project) => {
+    const displayStatus = getProjectDisplayStatus(project);
+    const quoteDecisionState = getQuoteDecisionState(project);
+    const showQuoteDecisionMeta =
+      project?.projectType === "Quote" &&
+      hasFinalQuoteDecision(quoteDecisionState.status);
+
+    return (
+      <div className="order-status-cell">
+        <span className={`status-badge ${getStatusClass(displayStatus)}`}>
+          {displayStatus}
+        </span>
+        {showQuoteDecisionMeta && (
+          <span className="order-status-meta">
+            Client decision: {formatQuoteDecisionStatus(quoteDecisionState.status)}
+          </span>
+        )}
+      </div>
+    );
   };
 
   const getActiveGroupProjects = (group) =>
@@ -702,11 +728,6 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   const canMarkDelivered =
     currentUser?.role === "admin" ||
     currentUser?.department?.includes("Front Desk");
-  const canManageFeedback = canMarkDelivered;
-  const canAddFeedbackFor = (order) =>
-    ["Pending Feedback", "Feedback Completed", "Delivered"].includes(
-      order.status,
-    );
 
   const handleDeliveryComplete = async (order) => {
     if (!canMarkDelivered) return;
@@ -735,11 +756,6 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     }
   };
 
-  const openDeliveryModal = (order) => {
-    setDeliveryInput("");
-    setDeliveryModal({ open: true, project: order });
-  };
-
   const closeDeliveryModal = () => {
     if (deliverySubmitting) return;
     setDeliveryModal({ open: false, project: null });
@@ -757,13 +773,6 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       setDeliveryModal({ open: false, project: null });
       setDeliveryInput("");
     }
-  };
-
-  const openFeedbackModal = (order) => {
-    setFeedbackType("Positive");
-    setFeedbackNotes("");
-    setFeedbackFiles([]);
-    setFeedbackModal({ open: true, project: order });
   };
 
   const closeFeedbackModal = () => {
@@ -1076,13 +1085,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
                             )}
                           </td>
                           <td>{primaryProject.projectType || "Standard"}</td>
-                          <td>
-                            <span
-                              className={`status-badge ${getStatusClass(getProjectDisplayStatus(primaryProject))}`}
-                            >
-                              {getProjectDisplayStatus(primaryProject)}
-                            </span>
-                          </td>
+                          <td>{renderProjectStatus(primaryProject)}</td>
                           <td>{formatDate(primaryProject.createdAt || createdDate)}</td>
                           <td>
                             <button
@@ -1214,13 +1217,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
                                 )}
                               </td>
                               <td>{order.projectType || "Standard"}</td>
-                              <td>
-                                <span
-                                  className={`status-badge ${getStatusClass(getProjectDisplayStatus(order))}`}
-                                >
-                                  {getProjectDisplayStatus(order)}
-                                </span>
-                              </td>
+                              <td>{renderProjectStatus(order)}</td>
                               <td>{formatDate(order.createdAt)}</td>
                               <td>
                                 <button
@@ -1368,11 +1365,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
                         {renderProjectName(order.details, null, "Untitled")}
                       </td>
                       <td>
-                        <span
-                          className={`status-badge ${getStatusClass(order.status)}`}
-                        >
-                          {order.status}
-                        </span>
+                        {renderProjectStatus(order)}
                       </td>
                       <td>
                         <span

@@ -2575,7 +2575,12 @@ const QUOTE_REQUIREMENT_DEPARTMENT_STAGE_ACCESS = {
   sampleProduction: new Set(["graphics", "production"]),
   bidSubmission: new Set(),
 };
-const QUOTE_DECISION_STATUS_VALUES = ["pending", "go_ahead", "declined"];
+const QUOTE_DECISION_STATUS_VALUES = [
+  "pending",
+  "go_ahead",
+  "declined",
+  "no_response",
+];
 const QUOTE_DECISION_STATUS_SET = new Set(QUOTE_DECISION_STATUS_VALUES);
 const QUOTE_DECISION_STATUS_ALIASES = {
   pending: "pending",
@@ -2593,6 +2598,14 @@ const QUOTE_DECISION_STATUS_ALIASES = {
   cancel: "declined",
   cancelled: "declined",
   no: "declined",
+  "no_response": "no_response",
+  "no-response": "no_response",
+  noresponse: "no_response",
+  "no response": "no_response",
+  no_reply: "no_response",
+  "no-reply": "no_response",
+  noreply: "no_response",
+  unresponsive: "no_response",
 };
 
 const getAutoProgressedStatus = (status, project = {}) => {
@@ -2737,7 +2750,9 @@ const getNormalizedQuoteDecision = (project = {}) => {
 };
 
 const hasQuoteDecisionRecorded = (project = {}) =>
-  ["go_ahead", "declined"].includes(getNormalizedQuoteDecision(project).status);
+  ["go_ahead", "declined", "no_response"].includes(
+    getNormalizedQuoteDecision(project).status,
+  );
 
 const normalizeQuoteChecklistValue = (checklist = {}) =>
   QUOTE_REQUIREMENT_KEYS.reduce((accumulator, key) => {
@@ -9829,7 +9844,9 @@ const updateQuoteDecision = async (req, res) => {
     let nextStatus = previousStatus;
     if (normalizedDecision === "pending") {
       nextStatus = "Pending Client Decision";
-    } else if (normalizedDecision === "declined" || normalizedDecision === "go_ahead") {
+    } else if (
+      ["declined", "go_ahead", "no_response"].includes(normalizedDecision)
+    ) {
       nextStatus = "Completed";
     }
 
@@ -9843,6 +9860,8 @@ const updateQuoteDecision = async (req, res) => {
         ? "Go Ahead"
         : normalizedDecision === "declined"
           ? "Declined"
+          : normalizedDecision === "no_response"
+            ? "No Response"
           : "Pending";
 
     await logActivity(

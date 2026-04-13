@@ -327,6 +327,20 @@
   color: #0ea5e9;
 }
 
+.order-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.order-status-meta {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 /* Assignment Badges */
 .assignment-badge {
   display: inline-block;

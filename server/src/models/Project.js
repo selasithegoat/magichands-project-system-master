@@ -689,7 +689,7 @@ const ProjectSchema = new mongoose.Schema(
       decision: {
         status: {
           type: String,
-          enum: ["pending", "go_ahead", "declined"],
+          enum: ["pending", "go_ahead", "declined", "no_response"],
           default: "pending",
         },
         note: String,

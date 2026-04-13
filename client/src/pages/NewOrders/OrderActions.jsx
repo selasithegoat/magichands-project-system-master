@@ -5,6 +5,11 @@ import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
 import {
+  formatQuoteDecisionStatus,
+  getQuoteDecisionState,
+  hasFinalQuoteDecision,
+} from "../../utils/quoteDecision";
+import {
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
   isQuoteCostCompleted,
@@ -493,12 +498,6 @@ const QUOTE_CONVERSION_STATUS_OPTIONS = [
   "Completed",
   "Finished",
 ];
-const QUOTE_DECISION_STATUS_LABELS = {
-  pending: "Pending Decision",
-  go_ahead: "Go Ahead",
-  declined: "Declined",
-};
-
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((item) => BILLING_REQUIREMENT_LABELS[item] || item)
@@ -536,46 +535,6 @@ const formatProjectStatusForDisplay = (
   if (normalizedQuote === "Pending Client Decision") return "Pending Decision";
   return normalizedQuote;
 };
-
-const normalizeQuoteDecisionStatus = (value) => {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (
-    [
-      "go_ahead",
-      "go-ahead",
-      "goahead",
-      "proceed",
-      "accepted",
-      "approved",
-      "yes",
-    ].includes(normalized)
-  ) {
-    return "go_ahead";
-  }
-  if (
-    ["declined", "rejected", "cancelled", "cancel", "no"].includes(
-      normalized,
-    )
-  ) {
-    return "declined";
-  }
-  return "pending";
-};
-
-const getQuoteDecisionState = (project = {}) => {
-  const decision = project?.quoteDetails?.decision || {};
-  return {
-    status: normalizeQuoteDecisionStatus(decision?.status),
-    note: String(decision?.note || "").trim(),
-    validatedAt: decision?.validatedAt || null,
-    convertedAt: decision?.convertedAt || null,
-    convertedToType: String(decision?.convertedToType || "").trim(),
-  };
-};
-
-const formatQuoteDecisionStatus = (value) =>
-  QUOTE_DECISION_STATUS_LABELS[normalizeQuoteDecisionStatus(value)] ||
-  "Pending Decision";
 
 const getPendingProductionBillingMissing = ({ invoiceSent, paymentTypes }) => {
   const missing = [];
@@ -1411,8 +1370,7 @@ const OrderActions = () => {
     [project],
   );
   const quoteDecisionStatus = quoteDecisionState.status;
-  const quoteDecisionTaken =
-    isQuoteProject && ["go_ahead", "declined"].includes(quoteDecisionStatus);
+  const quoteDecisionTaken = isQuoteProject && hasFinalQuoteDecision(quoteDecisionStatus);
   const canValidateQuoteDecision =
     isQuoteProject &&
     canManageBilling &&
@@ -2790,7 +2748,7 @@ const OrderActions = () => {
 
   const handleValidateQuoteDecision = async (decisionStatus) => {
     if (!project || !isQuoteProject || !canManageBilling) return;
-    if (!["go_ahead", "declined", "pending"].includes(decisionStatus)) return;
+    if (!["go_ahead", "declined", "no_response", "pending"].includes(decisionStatus)) return;
 
     setQuoteDecisionSubmitting(true);
     try {
@@ -2814,6 +2772,8 @@ const OrderActions = () => {
             ? "Quote decision validated: client will proceed."
             : decisionStatus === "declined"
               ? "Quote decision validated: client declined."
+              : decisionStatus === "no_response"
+                ? "Quote decision validated: no client response. Quote completed."
               : "Quote decision reset to pending.",
           "success",
         );
@@ -4134,7 +4094,7 @@ const OrderActions = () => {
                   className={`mockup-approval-status ${
                     quoteDecisionStatus === "go_ahead"
                       ? "approved"
-                      : quoteDecisionStatus === "declined"
+                      : ["declined", "no_response"].includes(quoteDecisionStatus)
                         ? "rejected"
                         : "pending"
                   }`}
@@ -4154,7 +4114,7 @@ const OrderActions = () => {
                     rows={2}
                     value={quoteDecisionNote}
                     onChange={(event) => setQuoteDecisionNote(event.target.value)}
-                    placeholder="Client confirmed they will proceed / declined."
+                    placeholder="Client confirmed they will proceed / declined / gave no response."
                     disabled={
                       !canManageBilling ||
                       quoteWorkflowBlocked ||
@@ -4187,6 +4147,17 @@ const OrderActions = () => {
                       }
                     >
                       {quoteDecisionSubmitting ? "Saving..." : "Client Declined"}
+                    </button>
+                    <button
+                      className="action-btn"
+                      onClick={() => handleValidateQuoteDecision("no_response")}
+                      disabled={
+                        !canManageBilling ||
+                        quoteDecisionSubmitting ||
+                        quoteConversionSubmitting
+                      }
+                    >
+                      {quoteDecisionSubmitting ? "Saving..." : "No Response"}
                     </button>
                     {quoteDecisionTaken && (
                       <button
@@ -4950,6 +4921,8 @@ const OrderActions = () => {
                         ? "invoice"
                         : quoteDecisionStatus === "declined"
                           ? "rejection"
+                          : quoteDecisionStatus === "no_response"
+                            ? "caution"
                           : "caution"
                     }`}
                   >
