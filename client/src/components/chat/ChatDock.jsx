@@ -22,8 +22,15 @@ import { playMessageSound } from "../../utils/notificationSound";
 import { resolvePortalSource } from "../../utils/portalSource";
 import "./ChatDock.css";
 
-const THREAD_POLL_INTERVAL_MS = 20000;
-const THREAD_HIDDEN_POLL_INTERVAL_MS = 60000;
+const THREAD_OPEN_POLL_INTERVAL_MS = 20000;
+const THREAD_IDLE_POLL_INTERVAL_MS = 45000;
+const THREAD_HIDDEN_OPEN_POLL_INTERVAL_MS = 60000;
+const THREAD_HIDDEN_IDLE_POLL_INTERVAL_MS = 120000;
+const THREAD_FETCH_DEDUPE_MS = 1200;
+const MESSAGE_FETCH_DEDUPE_MS = 900;
+const USER_SEARCH_CACHE_MS = 30000;
+const PROJECT_SEARCH_CACHE_MS = 20000;
+const LOCAL_CHANGE_MATCH_WINDOW_MS = 5000;
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const CHAT_ATTACHMENT_MAX_FILES = 6;
 const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
@@ -268,6 +275,282 @@ const mergeChatMessages = (...messageSets) => {
   });
 
   return Array.from(mergedById.values()).sort(compareMessagesAscending);
+};
+
+const buildChatMessagePreview = (message = {}) => {
+  const body = toText(message?.body);
+  if (body) {
+    return body.length > 160 ? `${body.slice(0, 157)}...` : body;
+  }
+
+  const references = Array.isArray(message?.references) ? message.references : [];
+  const firstReference = references[0] || null;
+  if (firstReference?.orderId) {
+    return `Shared project #${firstReference.orderId}`;
+  }
+  if (firstReference?.projectName) {
+    return `Shared ${firstReference.projectName}`;
+  }
+
+  const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+  if (attachments.length > 0) {
+    const firstAttachmentType = getAttachmentType(attachments[0]);
+    if (firstAttachmentType === "image") {
+      return attachments.length > 1 ? `Shared ${attachments.length} media files` : "Shared a photo";
+    }
+    if (firstAttachmentType === "video") {
+      return attachments.length > 1 ? `Shared ${attachments.length} media files` : "Shared a video";
+    }
+    if (firstAttachmentType === "audio") {
+      return attachments.length > 1 ? `Sent ${attachments.length} media files` : "Sent an audio file";
+    }
+    return attachments.length > 1 ? `Shared ${attachments.length} files` : "Shared a file";
+  }
+
+  return "Shared a project";
+};
+
+const getThreadActivityTimestamp = (thread) => {
+  const lastMessageAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt) : null;
+  if (lastMessageAt && !Number.isNaN(lastMessageAt.getTime())) {
+    return lastMessageAt.getTime();
+  }
+
+  const updatedAt = thread?.updatedAt ? new Date(thread.updatedAt) : null;
+  if (updatedAt && !Number.isNaN(updatedAt.getTime())) {
+    return updatedAt.getTime();
+  }
+
+  return 0;
+};
+
+const compareThreadsByActivityDesc = (left, right) =>
+  getThreadActivityTimestamp(right) - getThreadActivityTimestamp(left);
+
+const areStringArraysEqual = (left, right) => {
+  const safeLeft = Array.isArray(left) ? left : [];
+  const safeRight = Array.isArray(right) ? right : [];
+  if (safeLeft.length !== safeRight.length) return false;
+
+  return safeLeft.every((entry, index) => toText(entry) === toText(safeRight[index]));
+};
+
+const areUserSummariesEqual = (left, right) => {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+
+  return (
+    toIdString(left?._id) === toIdString(right?._id) &&
+    toText(left?.name) === toText(right?.name) &&
+    toText(left?.firstName) === toText(right?.firstName) &&
+    toText(left?.lastName) === toText(right?.lastName) &&
+    toText(left?.avatarUrl) === toText(right?.avatarUrl) &&
+    toText(left?.role) === toText(right?.role) &&
+    areStringArraysEqual(left?.department, right?.department) &&
+    Boolean(left?.presence?.isOnline) === Boolean(right?.presence?.isOnline) &&
+    toText(left?.presence?.lastOnlineAt) === toText(right?.presence?.lastOnlineAt)
+  );
+};
+
+const areThreadSummariesEqual = (left, right) => {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+
+  const leftParticipants = Array.isArray(left?.participants) ? left.participants : [];
+  const rightParticipants = Array.isArray(right?.participants) ? right.participants : [];
+
+  return (
+    toIdString(left?._id) === toIdString(right?._id) &&
+    toText(left?.type) === toText(right?.type) &&
+    toText(left?.name) === toText(right?.name) &&
+    toText(left?.slug) === toText(right?.slug) &&
+    toText(left?.lastMessagePreview) === toText(right?.lastMessagePreview) &&
+    toText(left?.lastMessageAt) === toText(right?.lastMessageAt) &&
+    Number(left?.unreadCount) === Number(right?.unreadCount) &&
+    areUserSummariesEqual(left?.counterpart, right?.counterpart) &&
+    areUserSummariesEqual(left?.lastMessageSender, right?.lastMessageSender) &&
+    leftParticipants.length === rightParticipants.length &&
+    leftParticipants.every((entry, index) =>
+      areUserSummariesEqual(entry, rightParticipants[index]),
+    )
+  );
+};
+
+const mergeThreadLists = (previousThreads, nextThreads) => {
+  const safePreviousThreads = Array.isArray(previousThreads) ? previousThreads : [];
+  const safeNextThreads = Array.isArray(nextThreads) ? nextThreads : [];
+  if (safePreviousThreads.length === 0) {
+    return safeNextThreads;
+  }
+
+  const previousById = new Map(
+    safePreviousThreads.map((thread) => [toIdString(thread?._id), thread]),
+  );
+  let changed = safePreviousThreads.length !== safeNextThreads.length;
+
+  const mergedThreads = safeNextThreads.map((thread, index) => {
+    const threadId = toIdString(thread?._id);
+    const previousThread = previousById.get(threadId);
+    if (!previousThread) {
+      changed = true;
+      return thread;
+    }
+
+    if (toIdString(safePreviousThreads[index]?._id) !== threadId) {
+      changed = true;
+    }
+
+    if (areThreadSummariesEqual(previousThread, thread)) {
+      return previousThread;
+    }
+
+    changed = true;
+    return thread;
+  });
+
+  return changed ? mergedThreads : safePreviousThreads;
+};
+
+const resolveNextActiveThreadId = (
+  previousThreadId,
+  nextThreads,
+  { preserveSelection = true, focusThreadId = "" } = {},
+) => {
+  const safeThreads = Array.isArray(nextThreads) ? nextThreads : [];
+
+  if (focusThreadId && safeThreads.some((thread) => thread._id === focusThreadId)) {
+    return focusThreadId;
+  }
+  if (
+    preserveSelection &&
+    previousThreadId &&
+    safeThreads.some((thread) => thread._id === previousThreadId)
+  ) {
+    return previousThreadId;
+  }
+  return safeThreads[0]?._id || "";
+};
+
+const applyPresencePatchToUser = (user, presencePatch) => {
+  if (!user || !presencePatch) return user;
+  if (toIdString(user?._id) !== presencePatch.userId) {
+    return user;
+  }
+
+  const currentPresence = {
+    isOnline: Boolean(user?.presence?.isOnline),
+    lastOnlineAt: toText(user?.presence?.lastOnlineAt) || null,
+  };
+  if (
+    currentPresence.isOnline === presencePatch.presence.isOnline &&
+    currentPresence.lastOnlineAt === (toText(presencePatch.presence.lastOnlineAt) || null)
+  ) {
+    return user;
+  }
+
+  return {
+    ...user,
+    presence: {
+      isOnline: presencePatch.presence.isOnline,
+      lastOnlineAt: presencePatch.presence.lastOnlineAt,
+    },
+  };
+};
+
+const applyPresencePatchToList = (list, presencePatch) => {
+  const safeList = Array.isArray(list) ? list : [];
+  let changed = false;
+
+  const nextList = safeList.map((entry) => {
+    const nextEntry = applyPresencePatchToUser(entry, presencePatch);
+    if (nextEntry !== entry) {
+      changed = true;
+    }
+    return nextEntry;
+  });
+
+  return changed ? nextList : safeList;
+};
+
+const applyPresencePatchToThreads = (threads, presencePatch) => {
+  const safeThreads = Array.isArray(threads) ? threads : [];
+  let changed = false;
+
+  const nextThreads = safeThreads.map((thread) => {
+    const nextCounterpart = applyPresencePatchToUser(thread?.counterpart, presencePatch);
+    const nextLastMessageSender = applyPresencePatchToUser(
+      thread?.lastMessageSender,
+      presencePatch,
+    );
+    const nextParticipants = applyPresencePatchToList(thread?.participants, presencePatch);
+
+    if (
+      nextCounterpart === thread?.counterpart &&
+      nextLastMessageSender === thread?.lastMessageSender &&
+      nextParticipants === (Array.isArray(thread?.participants) ? thread.participants : [])
+    ) {
+      return thread;
+    }
+
+    changed = true;
+    return {
+      ...thread,
+      counterpart: nextCounterpart,
+      lastMessageSender: nextLastMessageSender,
+      participants: nextParticipants,
+    };
+  });
+
+  return changed ? nextThreads : safeThreads;
+};
+
+const upsertThreadIntoList = (threads, incomingThread) => {
+  const safeThreads = Array.isArray(threads) ? threads : [];
+  if (!incomingThread?._id) {
+    return safeThreads;
+  }
+
+  let found = false;
+  const nextThreads = safeThreads
+    .map((thread) => {
+      if (thread._id !== incomingThread._id) {
+        return thread;
+      }
+      found = true;
+      return { ...thread, ...incomingThread };
+    })
+    .concat(found ? [] : [incomingThread])
+    .sort(compareThreadsByActivityDesc);
+
+  return mergeThreadLists(safeThreads, nextThreads);
+};
+
+const updateThreadsAfterLocalMessage = (threads, threadId, message) => {
+  const safeThreads = Array.isArray(threads) ? threads : [];
+  const normalizedThreadId = toIdString(threadId);
+  if (!normalizedThreadId || !message?._id) {
+    return safeThreads;
+  }
+
+  let found = false;
+  const nextThreads = safeThreads
+    .map((thread) => {
+      if (toIdString(thread?._id) !== normalizedThreadId) {
+        return thread;
+      }
+
+      found = true;
+      return {
+        ...thread,
+        lastMessagePreview: buildChatMessagePreview(message),
+        lastMessageAt: message.createdAt || thread.lastMessageAt,
+        lastMessageSender: message.sender || thread.lastMessageSender,
+        unreadCount: 0,
+      };
+    })
+    .sort(compareThreadsByActivityDesc);
+
+  return found ? mergeThreadLists(safeThreads, nextThreads) : safeThreads;
 };
 
 const normalizeMentionHandle = (value) =>
@@ -563,8 +846,22 @@ const ChatDock = ({ user }) => {
   const isOpenRef = useRef(false);
   const messageRequestIdRef = useRef(0);
   const olderMessageRequestIdRef = useRef(0);
+  const threadFetchStateRef = useRef({
+    promise: null,
+    data: [],
+    fetchedAt: 0,
+  });
+  const messageFetchStateRef = useRef(new Map());
+  const chatUserSearchCacheRef = useRef(new Map());
+  const chatProjectSearchCacheRef = useRef(new Map());
   const markReadInFlightRef = useRef(new Set());
   const playedIncomingMessageIdsRef = useRef(new Set());
+  const recentLocalChangeRef = useRef({
+    changeType: "",
+    threadId: "",
+    messageId: "",
+    at: 0,
+  });
   const messagesContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messageScrollActionRef = useRef("");
@@ -641,7 +938,91 @@ const ChatDock = ({ user }) => {
     [threads],
   );
 
-  const fetchChatUsers = useCallback(async ({ query = "", limit } = {}) => {
+  const updateThreadsState = useCallback((nextValue) => {
+    setThreads((prev) => {
+      const resolvedNextThreads =
+        typeof nextValue === "function" ? nextValue(prev) : nextValue;
+      const normalizedNextThreads = Array.isArray(resolvedNextThreads)
+        ? resolvedNextThreads
+        : [];
+
+      threadFetchStateRef.current = {
+        ...threadFetchStateRef.current,
+        data: normalizedNextThreads,
+        fetchedAt: Date.now(),
+      };
+
+      return normalizedNextThreads;
+    });
+  }, []);
+
+  const invalidateMessageFetchCache = useCallback((threadId = "") => {
+    const normalizedThreadId = toIdString(threadId);
+    if (!normalizedThreadId) {
+      messageFetchStateRef.current.clear();
+      return;
+    }
+
+    Array.from(messageFetchStateRef.current.keys()).forEach((key) => {
+      if (key.startsWith(`${normalizedThreadId}|`)) {
+        messageFetchStateRef.current.delete(key);
+      }
+    });
+  }, []);
+
+  const cancelPendingMessageLoads = useCallback(() => {
+    messageRequestIdRef.current += 1;
+    olderMessageRequestIdRef.current += 1;
+    messageScrollActionRef.current = "";
+    prependScrollStateRef.current = null;
+  }, []);
+
+  const recordLocalChatChange = useCallback(
+    ({ changeType = "", threadId = "", messageId = "" } = {}) => {
+      recentLocalChangeRef.current = {
+        changeType: toText(changeType).toLowerCase(),
+        threadId: toIdString(threadId),
+        messageId: toIdString(messageId),
+        at: Date.now(),
+      };
+    },
+    [],
+  );
+
+  const isRecentLocalChatChange = useCallback(
+    ({ changeType = "", threadId = "", messageId = "" } = {}) => {
+      const recentChange = recentLocalChangeRef.current;
+      if (!recentChange?.at) {
+        return false;
+      }
+
+      if (Date.now() - recentChange.at > LOCAL_CHANGE_MATCH_WINDOW_MS) {
+        return false;
+      }
+
+      if (recentChange.changeType !== toText(changeType).toLowerCase()) {
+        return false;
+      }
+
+      if (recentChange.threadId !== toIdString(threadId)) {
+        return false;
+      }
+
+      const normalizedMessageId = toIdString(messageId);
+      if (
+        recentChange.messageId &&
+        normalizedMessageId &&
+        recentChange.messageId !== normalizedMessageId
+      ) {
+        return false;
+      }
+
+      return true;
+    },
+    [],
+  );
+
+  const fetchChatUsers = useCallback(async ({ query = "", limit, force = false } = {}) => {
     const params = new URLSearchParams();
     const trimmedQuery = toText(query);
 
@@ -652,19 +1033,112 @@ const ChatDock = ({ user }) => {
       params.set("limit", String(limit));
     }
 
+    const cacheKey = `${trimmedQuery.toLowerCase()}|${
+      Number.isFinite(limit) && limit > 0 ? limit : "default"
+    }`;
+    const cacheEntry = chatUserSearchCacheRef.current.get(cacheKey);
+    const now = Date.now();
+
+    if (!force && cacheEntry?.promise) {
+      return cacheEntry.promise;
+    }
+    if (
+      !force &&
+      Array.isArray(cacheEntry?.data) &&
+      now - (cacheEntry?.fetchedAt || 0) < USER_SEARCH_CACHE_MS
+    ) {
+      return cacheEntry.data;
+    }
+
     const requestUrl = params.toString()
       ? `/api/chat/users?${params.toString()}`
       : "/api/chat/users";
-    const res = await fetch(requestUrl, {
-      credentials: "include",
-    });
-    const data = await res.json().catch(() => ({}));
+    const requestPromise = (async () => {
+      const res = await fetch(requestUrl, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      throw new Error(data.message || "Failed to load teammates.");
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load teammates.");
+      }
+
+      const nextUsers = Array.isArray(data?.users) ? data.users : [];
+      chatUserSearchCacheRef.current.set(cacheKey, {
+        data: nextUsers,
+        fetchedAt: Date.now(),
+        promise: null,
+      });
+
+      return nextUsers;
+    })();
+
+    chatUserSearchCacheRef.current.set(cacheKey, {
+      ...(cacheEntry || {}),
+      promise: requestPromise,
+    });
+
+    try {
+      return await requestPromise;
+    } catch (error) {
+      if (chatUserSearchCacheRef.current.get(cacheKey)?.promise === requestPromise) {
+        chatUserSearchCacheRef.current.delete(cacheKey);
+      }
+      throw error;
+    }
+  }, []);
+
+  const fetchChatProjects = useCallback(async ({ query = "", force = false } = {}) => {
+    const trimmedQuery = toText(query);
+    const cacheKey = trimmedQuery.toLowerCase();
+    const cacheEntry = chatProjectSearchCacheRef.current.get(cacheKey);
+    const now = Date.now();
+
+    if (!force && cacheEntry?.promise) {
+      return cacheEntry.promise;
+    }
+    if (
+      !force &&
+      Array.isArray(cacheEntry?.data) &&
+      now - (cacheEntry?.fetchedAt || 0) < PROJECT_SEARCH_CACHE_MS
+    ) {
+      return cacheEntry.data;
     }
 
-    return Array.isArray(data?.users) ? data.users : [];
+    const requestUrl = `/api/chat/projects?q=${encodeURIComponent(trimmedQuery)}`;
+    const requestPromise = (async () => {
+      const res = await fetch(requestUrl, {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to find projects.");
+      }
+
+      const nextProjects = Array.isArray(data?.projects) ? data.projects : [];
+      chatProjectSearchCacheRef.current.set(cacheKey, {
+        data: nextProjects,
+        fetchedAt: Date.now(),
+        promise: null,
+      });
+
+      return nextProjects;
+    })();
+
+    chatProjectSearchCacheRef.current.set(cacheKey, {
+      ...(cacheEntry || {}),
+      promise: requestPromise,
+    });
+
+    try {
+      return await requestPromise;
+    } catch (error) {
+      if (chatProjectSearchCacheRef.current.get(cacheKey)?.promise === requestPromise) {
+        chatProjectSearchCacheRef.current.delete(cacheKey);
+      }
+      throw error;
+    }
   }, []);
 
   useEffect(() => {
@@ -1008,12 +1482,49 @@ const ChatDock = ({ user }) => {
   }, [currentUserId, fetchChatUsers, isOpen, isPublicThread]);
 
   const fetchThreads = useCallback(
-    async ({ preserveSelection = true, focusThreadId = "" } = {}) => {
+    async ({
+      preserveSelection = true,
+      focusThreadId = "",
+      force = false,
+      showLoading = false,
+      minIntervalMs = THREAD_FETCH_DEDUPE_MS,
+    } = {}) => {
       if (!currentUserId) return [];
 
-      setThreadsLoading(true);
+      const cachedState = threadFetchStateRef.current;
+      const now = Date.now();
 
-      try {
+      if (!force && cachedState?.promise) {
+        const nextThreads = await cachedState.promise;
+        setActiveThreadId((prev) =>
+          resolveNextActiveThreadId(prev, nextThreads, {
+            preserveSelection,
+            focusThreadId,
+          }),
+        );
+        return nextThreads;
+      }
+
+      if (
+        !force &&
+        Array.isArray(cachedState?.data) &&
+        cachedState.data.length > 0 &&
+        now - (cachedState?.fetchedAt || 0) < minIntervalMs
+      ) {
+        setActiveThreadId((prev) =>
+          resolveNextActiveThreadId(prev, cachedState.data, {
+            preserveSelection,
+            focusThreadId,
+          }),
+        );
+        return cachedState.data;
+      }
+
+      if (showLoading) {
+        setThreadsLoading(true);
+      }
+
+      const requestPromise = (async () => {
         const res = await fetch("/api/chat/threads", {
           credentials: "include",
         });
@@ -1024,33 +1535,47 @@ const ChatDock = ({ user }) => {
         }
 
         const nextThreads = Array.isArray(data?.threads) ? data.threads : [];
-        setThreads(nextThreads);
+        updateThreadsState((prev) => mergeThreadLists(prev, nextThreads));
         setError("");
-        setActiveThreadId((prev) => {
-          if (
-            focusThreadId &&
-            nextThreads.some((thread) => thread._id === focusThreadId)
-          ) {
-            return focusThreadId;
-          }
-          if (
-            preserveSelection &&
-            prev &&
-            nextThreads.some((thread) => thread._id === prev)
-          ) {
-            return prev;
-          }
-          return nextThreads[0]?._id || "";
-        });
+        setActiveThreadId((prev) =>
+          resolveNextActiveThreadId(prev, nextThreads, {
+            preserveSelection,
+            focusThreadId,
+          }),
+        );
+
+        threadFetchStateRef.current = {
+          promise: null,
+          data: nextThreads,
+          fetchedAt: Date.now(),
+        };
+
         return nextThreads;
+      })();
+
+      threadFetchStateRef.current = {
+        ...cachedState,
+        promise: requestPromise,
+      };
+
+      try {
+        return await requestPromise;
       } catch (fetchError) {
+        if (threadFetchStateRef.current?.promise === requestPromise) {
+          threadFetchStateRef.current = {
+            ...threadFetchStateRef.current,
+            promise: null,
+          };
+        }
         setError(fetchError.message || "Failed to load chats.");
         return [];
       } finally {
-        setThreadsLoading(false);
+        if (showLoading) {
+          setThreadsLoading(false);
+        }
       }
     },
-    [currentUserId],
+    [currentUserId, updateThreadsState],
   );
 
   const markThreadRead = useCallback(async (threadId) => {
@@ -1068,7 +1593,7 @@ const ChatDock = ({ user }) => {
         throw new Error(data.message || "Failed to mark chat thread as read.");
       }
 
-      setThreads((prev) =>
+      updateThreadsState((prev) =>
         prev.map((thread) =>
           thread._id === threadId ? { ...thread, unreadCount: 0 } : thread,
         ),
@@ -1078,10 +1603,20 @@ const ChatDock = ({ user }) => {
     } finally {
       markReadInFlightRef.current.delete(threadId);
     }
-  }, []);
+  }, [updateThreadsState]);
 
   const fetchMessages = useCallback(
-    async (threadId, { markRead = true, before = "", mode = "replace" } = {}) => {
+    async (
+      threadId,
+      {
+        markRead = true,
+        before = "",
+        mode = "replace",
+        force = false,
+        showLoading = false,
+        minIntervalMs = MESSAGE_FETCH_DEDUPE_MS,
+      } = {},
+    ) => {
       if (!threadId) {
         setMessages([]);
         setMessagesHasOlder(false);
@@ -1090,20 +1625,76 @@ const ChatDock = ({ user }) => {
 
       const isPrepend = mode === "prepend";
       const shouldReplace = mode === "replace";
+      const requestKey = `${threadId}|${before || "latest"}`;
+      const cachedState = messageFetchStateRef.current.get(requestKey);
+      const now = Date.now();
       const requestIdRef = isPrepend
         ? olderMessageRequestIdRef
         : messageRequestIdRef;
       const requestId = requestIdRef.current + 1;
       requestIdRef.current = requestId;
 
-      if (shouldReplace) {
+      const applyMessageResponse = (responseData) => {
+        if (activeThreadIdRef.current !== threadId) {
+          return;
+        }
+
+        const nextMessages = Array.isArray(responseData?.messages)
+          ? responseData.messages
+          : [];
+
+        if (isPrepend) {
+          setMessages((prev) => mergeChatMessages(nextMessages, prev));
+          setMessagesHasOlder(Boolean(responseData?.hasOlder));
+        } else if (mode === "preserve") {
+          setMessages((prev) => mergeChatMessages(prev, nextMessages));
+        } else {
+          messageScrollActionRef.current = "bottom";
+          setMessages(nextMessages);
+          setMessagesHasOlder(Boolean(responseData?.hasOlder));
+        }
+
+        if (responseData?.thread?._id) {
+          updateThreadsState((prev) =>
+            upsertThreadIntoList(prev, responseData.thread),
+          );
+        }
+
+        if (markRead) {
+          void markThreadRead(threadId);
+        }
+      };
+
+      if (!force && cachedState?.promise) {
+        if (markRead) {
+          void cachedState.promise.then(() => {
+            if (activeThreadIdRef.current === threadId) {
+              void markThreadRead(threadId);
+            }
+          });
+        }
+        return cachedState.promise;
+      }
+
+      if (
+        !force &&
+        cachedState?.data &&
+        now - (cachedState?.fetchedAt || 0) < minIntervalMs
+      ) {
+        if (shouldReplace || mode === "preserve") {
+          applyMessageResponse(cachedState.data);
+        }
+        return cachedState.data;
+      }
+
+      if (shouldReplace && showLoading) {
         setMessagesLoading(true);
       }
       if (isPrepend) {
         setLoadingOlderMessages(true);
       }
 
-      try {
+      const requestPromise = (async () => {
         const params = new URLSearchParams();
         params.set("limit", "60");
         if (before) {
@@ -1119,6 +1710,12 @@ const ChatDock = ({ user }) => {
           throw new Error(data.message || "Failed to load messages.");
         }
 
+        messageFetchStateRef.current.set(requestKey, {
+          data,
+          fetchedAt: Date.now(),
+          promise: null,
+        });
+
         if (
           requestIdRef.current !== requestId ||
           activeThreadIdRef.current !== threadId
@@ -1127,33 +1724,22 @@ const ChatDock = ({ user }) => {
             messageScrollActionRef.current = "";
             prependScrollStateRef.current = null;
           }
-          return;
+          return data;
         }
 
-        const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
-        if (isPrepend) {
-          setMessages((prev) => mergeChatMessages(nextMessages, prev));
-          setMessagesHasOlder(Boolean(data?.hasOlder));
-        } else if (mode === "preserve") {
-          setMessages((prev) => mergeChatMessages(prev, nextMessages));
-        } else {
-          messageScrollActionRef.current = "bottom";
-          setMessages(nextMessages);
-          setMessagesHasOlder(Boolean(data?.hasOlder));
-        }
-
+        applyMessageResponse(data);
         setError("");
-        if (data?.thread?._id) {
-          setThreads((prev) =>
-            prev.map((thread) =>
-              thread._id === data.thread._id ? { ...thread, ...data.thread } : thread,
-            ),
-          );
-        }
 
-        if (markRead) {
-          void markThreadRead(threadId);
-        }
+        return data;
+      })();
+
+      messageFetchStateRef.current.set(requestKey, {
+        ...(cachedState || {}),
+        promise: requestPromise,
+      });
+
+      try {
+        return await requestPromise;
       } catch (fetchError) {
         if (
           requestIdRef.current === requestId &&
@@ -1165,9 +1751,13 @@ const ChatDock = ({ user }) => {
           messageScrollActionRef.current = "";
           prependScrollStateRef.current = null;
         }
+        if (messageFetchStateRef.current.get(requestKey)?.promise === requestPromise) {
+          messageFetchStateRef.current.delete(requestKey);
+        }
+        return null;
       } finally {
         if (requestIdRef.current === requestId) {
-          if (shouldReplace) {
+          if (shouldReplace && showLoading) {
             setMessagesLoading(false);
           }
           if (isPrepend) {
@@ -1176,7 +1766,7 @@ const ChatDock = ({ user }) => {
         }
       }
     },
-    [markThreadRead],
+    [markThreadRead, updateThreadsState],
   );
 
   const handleLoadOlderMessages = useCallback(() => {
@@ -1222,14 +1812,21 @@ const ChatDock = ({ user }) => {
 
   useEffect(() => {
     if (!currentUserId) return;
-    void fetchThreads({ preserveSelection: false });
+    void fetchThreads({
+      preserveSelection: false,
+      force: true,
+      showLoading: true,
+    });
   }, [currentUserId, fetchThreads]);
 
   useAdaptivePolling(() => fetchThreads(), {
     enabled: Boolean(currentUserId),
-    intervalMs: THREAD_POLL_INTERVAL_MS,
-    hiddenIntervalMs: THREAD_HIDDEN_POLL_INTERVAL_MS,
+    intervalMs: isOpen ? THREAD_OPEN_POLL_INTERVAL_MS : THREAD_IDLE_POLL_INTERVAL_MS,
+    hiddenIntervalMs: isOpen
+      ? THREAD_HIDDEN_OPEN_POLL_INTERVAL_MS
+      : THREAD_HIDDEN_IDLE_POLL_INTERVAL_MS,
     runImmediately: false,
+    refetchOnFocus: isOpen,
   });
 
   useEffect(() => {
@@ -1238,7 +1835,7 @@ const ChatDock = ({ user }) => {
     setMessagesHasOlder(false);
     messageScrollActionRef.current = "";
     prependScrollStateRef.current = null;
-    void fetchMessages(activeThreadId);
+    void fetchMessages(activeThreadId, { showLoading: true });
   }, [activeThreadId, fetchMessages, isOpen]);
 
   useLayoutEffect(() => {
@@ -1274,6 +1871,17 @@ const ChatDock = ({ user }) => {
       const changedThreadId = toIdString(event?.detail?.threadId);
       const changedMessageId = toIdString(event?.detail?.messageId);
       const senderId = toIdString(event?.detail?.senderId);
+      const isThreadMutatingChange = [
+        "message_created",
+        "message_updated",
+        "message_deleted",
+        "thread_cleared",
+      ].includes(changeType);
+      const isOwnRecentLocalChange = isRecentLocalChatChange({
+        changeType,
+        threadId: changedThreadId,
+        messageId: changedMessageId,
+      });
       const isIncomingMessage =
         changeType === "message_created" &&
         changedMessageId &&
@@ -1294,7 +1902,16 @@ const ChatDock = ({ user }) => {
         playMessageSound(allowSound).catch(() => {});
       }
 
-      void fetchThreads().then((nextThreads) => {
+      if (isThreadMutatingChange && changedThreadId) {
+        invalidateMessageFetchCache(changedThreadId);
+      }
+
+      void fetchThreads({
+        minIntervalMs:
+          isThreadMutatingChange && !isOwnRecentLocalChange
+            ? 0
+            : THREAD_FETCH_DEDUPE_MS,
+      }).then((nextThreads) => {
         if (!isIncomingMessage || isOpenRef.current || !changedThreadId) {
           return;
         }
@@ -1330,9 +1947,13 @@ const ChatDock = ({ user }) => {
         isOpenRef.current &&
         changedThreadId &&
         changedThreadId === activeThreadIdRef.current &&
-        !loadingOlderMessages
+        !loadingOlderMessages &&
+        !isOwnRecentLocalChange
       ) {
-        void fetchMessages(changedThreadId, { mode: "preserve" });
+        void fetchMessages(changedThreadId, {
+          mode: changeType === "thread_cleared" ? "replace" : "preserve",
+          minIntervalMs: 0,
+        });
       }
     };
 
@@ -1344,6 +1965,8 @@ const ChatDock = ({ user }) => {
     currentUserId,
     fetchMessages,
     fetchThreads,
+    invalidateMessageFetchCache,
+    isRecentLocalChatChange,
     loadingOlderMessages,
     showIncomingPreview,
     user?.notificationSettings?.sound,
@@ -1352,75 +1975,44 @@ const ChatDock = ({ user }) => {
   useEffect(() => {
     if (!currentUserId) return undefined;
 
-    const handlePresenceChanged = () => {
-      if (!isOpen) return;
+    const handlePresenceChanged = (event) => {
+      const userId = toIdString(event?.detail?.userId);
+      if (!userId) return;
 
-      void fetchThreads();
+      const presencePatch = {
+        userId,
+        presence: {
+          isOnline: Boolean(event?.detail?.isOnline),
+          lastOnlineAt: event?.detail?.isOnline
+            ? null
+            : toText(event?.detail?.lastOnlineAt) || null,
+        },
+      };
 
-      if (sidebarMode === "users") {
-        void fetchChatUsers({ query: userQuery })
-          .then((nextUsers) => {
-            setUserResults(nextUsers);
-          })
-          .catch((presenceError) => {
-            console.error("Failed to refresh chat user presence", presenceError);
+      updateThreadsState((prev) => applyPresencePatchToThreads(prev, presencePatch));
+      setUserResults((prev) => applyPresencePatchToList(prev, presencePatch));
+      setPublicMentionUsers((prev) => applyPresencePatchToList(prev, presencePatch));
+      setMentionResults((prev) => applyPresencePatchToList(prev, presencePatch));
+      chatUserSearchCacheRef.current.forEach((entry, cacheKey) => {
+        if (!Array.isArray(entry?.data)) {
+          return;
+        }
+
+        const nextData = applyPresencePatchToList(entry.data, presencePatch);
+        if (nextData !== entry.data) {
+          chatUserSearchCacheRef.current.set(cacheKey, {
+            ...entry,
+            data: nextData,
           });
-      }
-
-      if (isPublicThread) {
-        void fetchChatUsers({ limit: 500 })
-          .then((nextUsers) => {
-            setPublicMentionUsers(nextUsers);
-          })
-          .catch((presenceError) => {
-            console.error(
-              "Failed to refresh public chat user presence",
-              presenceError,
-            );
-          });
-      }
-
-      if (isPublicThread && activeMention) {
-        const rawQuery = toText(activeMention.query).toLowerCase();
-        const mentionSearchQuery =
-          rawQuery.split(/[._-]+/).filter(Boolean)[0] || "";
-
-        void fetchChatUsers({
-          query: mentionSearchQuery,
-          limit: 500,
-        })
-          .then((nextUsers) => {
-            const nextMentionUsers = filterMentionUsers(nextUsers, rawQuery);
-            setMentionResults(nextMentionUsers);
-            setHighlightedMentionIndex((prev) =>
-              nextMentionUsers.length === 0
-                ? 0
-                : Math.min(prev, nextMentionUsers.length - 1),
-            );
-          })
-          .catch((presenceError) => {
-            console.error(
-              "Failed to refresh mention presence suggestions",
-              presenceError,
-            );
-          });
-      }
+        }
+      });
     };
 
     window.addEventListener("mh:presence-changed", handlePresenceChanged);
     return () => {
       window.removeEventListener("mh:presence-changed", handlePresenceChanged);
     };
-  }, [
-    activeMention,
-    currentUserId,
-    fetchChatUsers,
-    fetchThreads,
-    isOpen,
-    isPublicThread,
-    sidebarMode,
-    userQuery,
-  ]);
+  }, [currentUserId, updateThreadsState]);
 
   useEffect(() => {
     if (sidebarMode !== "users") return undefined;
@@ -1449,15 +2041,8 @@ const ChatDock = ({ user }) => {
     const timerId = window.setTimeout(async () => {
       setProjectSearchLoading(true);
       try {
-        const query = encodeURIComponent(projectQuery.trim());
-        const res = await fetch(`/api/chat/projects?q=${query}`, {
-          credentials: "include",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to find projects.");
-        }
-        setProjectResults(Array.isArray(data?.projects) ? data.projects : []);
+        const nextProjects = await fetchChatProjects({ query: projectQuery });
+        setProjectResults(nextProjects);
         setError("");
       } catch (searchError) {
         setError(searchError.message || "Failed to find projects.");
@@ -1469,7 +2054,7 @@ const ChatDock = ({ user }) => {
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [projectPickerOpen, projectQuery]);
+  }, [fetchChatProjects, projectPickerOpen, projectQuery]);
 
   useEffect(() => {
     if (!isPublicThread || !activeMention) return undefined;
@@ -1479,14 +2064,15 @@ const ChatDock = ({ user }) => {
       setMentionSearchLoading(true);
       try {
         const rawQuery = toText(activeMention.query).toLowerCase();
-        const mentionSearchQuery =
-          rawQuery.split(/[._-]+/).filter(Boolean)[0] || "";
-        const users = await fetchChatUsers({
-          query: mentionSearchQuery,
-          limit: 500,
-        });
+        const users =
+          publicMentionUsers.length > 0
+            ? publicMentionUsers
+            : await fetchChatUsers({ limit: 500 });
         const nextUsers = filterMentionUsers(users, rawQuery);
         if (cancelled) return;
+        if (publicMentionUsers.length === 0) {
+          setPublicMentionUsers(users);
+        }
         setMentionResults(nextUsers);
         setHighlightedMentionIndex((prev) =>
           nextUsers.length === 0 ? 0 : Math.min(prev, nextUsers.length - 1),
@@ -1506,7 +2092,7 @@ const ChatDock = ({ user }) => {
       cancelled = true;
       window.clearTimeout(timerId);
     };
-  }, [activeMention, fetchChatUsers, isPublicThread]);
+  }, [activeMention, fetchChatUsers, isPublicThread, publicMentionUsers]);
 
   const handleOpen = () => {
     dismissIncomingPreview(true);
@@ -1515,7 +2101,7 @@ const ChatDock = ({ user }) => {
     clearMentionState();
     setMobilePanelView(activeThreadId ? "thread" : "sidebar");
     if (threads.length === 0) {
-      void fetchThreads({ preserveSelection: false });
+      void fetchThreads({ preserveSelection: false, showLoading: true });
     }
   };
 
@@ -1570,17 +2156,31 @@ const ChatDock = ({ user }) => {
       }
 
       const nextThreadId = data?.thread?._id || "";
+      if (data?.thread?._id) {
+        updateThreadsState((prev) => upsertThreadIntoList(prev, data.thread));
+      } else if (nextThreadId) {
+        await fetchThreads({
+          focusThreadId: nextThreadId,
+          minIntervalMs: 0,
+          showLoading: true,
+        });
+      }
       setSidebarMode("threads");
       setMobilePanelView("thread");
       setUserQuery("");
       setUserResults([]);
       resetProjectRoutePicker();
-      await fetchThreads({ focusThreadId: nextThreadId });
+      setActiveThreadId(nextThreadId);
       setIsOpen(true);
     } catch (threadError) {
       setError(threadError.message || "Failed to open direct chat.");
     }
-  }, [dismissIncomingPreview, fetchThreads, resetProjectRoutePicker]);
+  }, [
+    dismissIncomingPreview,
+    fetchThreads,
+    resetProjectRoutePicker,
+    updateThreadsState,
+  ]);
 
   const handleOpenPublicThread = useCallback(async () => {
     dismissIncomingPreview(true);
@@ -1605,7 +2205,11 @@ const ChatDock = ({ user }) => {
       return;
     }
 
-    const nextThreads = await fetchThreads({ preserveSelection: false });
+    const nextThreads = await fetchThreads({
+      preserveSelection: false,
+      minIntervalMs: 0,
+      showLoading: true,
+    });
     const publicThreadId =
       nextThreads.find((thread) => thread?.type === "public")?._id ||
       nextThreads[0]?._id ||
@@ -1629,7 +2233,11 @@ const ChatDock = ({ user }) => {
       clearMentionState();
       setMobilePanelView(activeThreadIdRef.current ? "thread" : "sidebar");
       if (threads.length === 0) {
-        await fetchThreads({ preserveSelection: false });
+        await fetchThreads({
+          preserveSelection: false,
+          minIntervalMs: 0,
+          showLoading: true,
+        });
       }
       return;
     }
@@ -1654,7 +2262,11 @@ const ChatDock = ({ user }) => {
       return;
     }
 
-    await fetchThreads({ focusThreadId: threadId });
+    await fetchThreads({
+      focusThreadId: threadId,
+      minIntervalMs: 0,
+      showLoading: true,
+    });
   }, [
     clearMentionState,
     dismissIncomingPreview,
@@ -1819,8 +2431,18 @@ const ChatDock = ({ user }) => {
 
       const nextMessage = data?.message;
       if (nextMessage) {
+        cancelPendingMessageLoads();
+        invalidateMessageFetchCache(activeThreadId);
         messageScrollActionRef.current = "bottom";
         setMessages((prev) => mergeChatMessages(prev, [nextMessage]));
+        updateThreadsState((prev) =>
+          updateThreadsAfterLocalMessage(prev, activeThreadId, nextMessage),
+        );
+        recordLocalChatChange({
+          changeType: "message_created",
+          threadId: activeThreadId,
+          messageId: nextMessage._id,
+        });
       }
       setComposer("");
       clearMentionState();
@@ -1828,7 +2450,6 @@ const ChatDock = ({ user }) => {
       clearPendingAttachments();
       setProjectPickerOpen(false);
       resetProjectRoutePicker();
-      await fetchThreads({ focusThreadId: activeThreadId });
       void markThreadRead(activeThreadId);
     } catch (sendError) {
       setError(sendError.message || "Failed to send message.");
@@ -1957,15 +2578,26 @@ const ChatDock = ({ user }) => {
 
       const nextMessage = data?.message;
       if (nextMessage?._id) {
+        cancelPendingMessageLoads();
+        invalidateMessageFetchCache(activeThreadId);
         setMessages((prev) =>
           prev.map((message) =>
             message._id === nextMessage._id ? nextMessage : message,
           ),
         );
+        recordLocalChatChange({
+          changeType: "message_updated",
+          threadId: activeThreadId,
+          messageId: nextMessage._id,
+        });
       }
       setEditingMessageId("");
       setEditDraft("");
-      await fetchThreads({ focusThreadId: activeThreadId });
+      await fetchThreads({
+        focusThreadId: activeThreadId,
+        force: true,
+        minIntervalMs: 0,
+      });
     } catch (editError) {
       setError(editError.message || "Failed to edit message.");
     } finally {
@@ -2011,11 +2643,18 @@ const ChatDock = ({ user }) => {
 
       const nextMessage = data?.message;
       if (nextMessage?._id) {
+        cancelPendingMessageLoads();
+        invalidateMessageFetchCache(activeThreadId);
         setMessages((prev) =>
           prev.map((message) =>
             message._id === nextMessage._id ? nextMessage : message,
           ),
         );
+        recordLocalChatChange({
+          changeType: "message_deleted",
+          threadId: activeThreadId,
+          messageId: nextMessage._id,
+        });
       }
       setDeleteTarget(null);
       if (editingMessageId === messageId) {
@@ -2023,7 +2662,11 @@ const ChatDock = ({ user }) => {
         setEditDraft("");
       }
       resetProjectRoutePicker();
-      await fetchThreads({ focusThreadId: activeThreadId });
+      await fetchThreads({
+        focusThreadId: activeThreadId,
+        force: true,
+        minIntervalMs: 0,
+      });
     } catch (deleteError) {
       setError(deleteError.message || "Failed to delete message.");
     } finally {
@@ -2069,17 +2712,20 @@ const ChatDock = ({ user }) => {
 
       const nextThread = data?.thread;
       if (nextThread?._id) {
-        setThreads((prev) =>
-          prev.map((thread) =>
-            thread._id === nextThread._id ? { ...thread, ...nextThread } : thread,
-          ),
-        );
+        updateThreadsState((prev) => upsertThreadIntoList(prev, nextThread));
       }
 
+      cancelPendingMessageLoads();
+      invalidateMessageFetchCache(threadId);
       if (activeThreadIdRef.current === threadId) {
         setMessages([]);
         setMessagesHasOlder(false);
       }
+
+      recordLocalChatChange({
+        changeType: "thread_cleared",
+        threadId,
+      });
 
       setClearThreadTarget(null);
       setDeleteTarget(null);
@@ -2087,12 +2733,6 @@ const ChatDock = ({ user }) => {
       setEditingMessageId("");
       setEditDraft("");
       resetProjectRoutePicker();
-
-      await fetchThreads({ focusThreadId: threadId });
-
-      if (isOpenRef.current && activeThreadIdRef.current === threadId) {
-        await fetchMessages(threadId);
-      }
     } catch (clearError) {
       setError(clearError.message || "Failed to clear chat messages.");
     } finally {

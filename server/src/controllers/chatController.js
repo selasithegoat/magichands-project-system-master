@@ -365,6 +365,18 @@ const serializeUserSummary = (user, presenceMap = {}) => {
   };
 };
 
+const serializeMessageSenderSummary = (user) => ({
+  _id: toIdString(user?._id || user?.id),
+  name: getUserDisplayName(user),
+  firstName: toText(user?.firstName),
+  lastName: toText(user?.lastName),
+  avatarUrl: toText(user?.avatarUrl),
+  role: toText(user?.role),
+  department: Array.isArray(user?.department)
+    ? user.department.map((entry) => toText(entry)).filter(Boolean)
+    : [],
+});
+
 const serializeProjectReference = (reference) => ({
   type: "project",
   projectId: toIdString(reference?.project),
@@ -380,7 +392,7 @@ const serializeMessage = (message, senderMap = {}) => {
   const sender =
     senderMap[senderId] ||
     (message?.sender && typeof message.sender === "object"
-      ? serializeUserSummary(message.sender)
+      ? serializeMessageSenderSummary(message.sender)
       : null);
 
   return {
@@ -424,6 +436,11 @@ const getClearedAt = (thread, userId) => {
     clearedState.find((entry) => toIdString(entry?.user) === userId)?.clearedAt ||
     null
   );
+};
+
+const getUnreadStateEntry = (thread, userId) => {
+  const unreadState = Array.isArray(thread?.unreadState) ? thread.unreadState : [];
+  return unreadState.find((entry) => toIdString(entry?.user) === userId) || null;
 };
 
 const upsertThreadReadState = (thread, userId, lastReadAt = new Date()) => {
@@ -475,6 +492,115 @@ const upsertThreadClearedState = (thread, userId, clearedAt = new Date()) => {
 
   thread.clearedState = clearedState;
   thread.markModified("clearedState");
+};
+
+const upsertThreadUnreadState = (
+  thread,
+  userId,
+  count = 0,
+  lastUnreadAt = null,
+) => {
+  if (!thread || !userId) return;
+
+  const unreadState = Array.isArray(thread.unreadState) ? [...thread.unreadState] : [];
+  const index = unreadState.findIndex((entry) => toIdString(entry?.user) === userId);
+  const normalizedCount = Math.max(0, Number(count) || 0);
+  const normalizedLastUnreadAt = normalizedCount > 0 ? toDateValue(lastUnreadAt) : null;
+
+  if (index >= 0) {
+    unreadState[index] = {
+      ...unreadState[index].toObject?.(),
+      user: unreadState[index].user,
+      count: normalizedCount,
+      lastUnreadAt: normalizedLastUnreadAt,
+    };
+  } else {
+    unreadState.push({
+      user: new mongoose.Types.ObjectId(userId),
+      count: normalizedCount,
+      lastUnreadAt: normalizedLastUnreadAt,
+    });
+  }
+
+  thread.unreadState = unreadState;
+  thread.markModified("unreadState");
+};
+
+const incrementDirectThreadUnreadState = (
+  thread,
+  senderId,
+  createdAt = new Date(),
+) => {
+  const participantIds = Array.isArray(thread?.participants)
+    ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
+    : [];
+
+  participantIds.forEach((participantId) => {
+    if (participantId === senderId) {
+      upsertThreadUnreadState(thread, participantId, 0, null);
+      return;
+    }
+
+    const currentEntry = getUnreadStateEntry(thread, participantId);
+    upsertThreadUnreadState(
+      thread,
+      participantId,
+      (Number(currentEntry?.count) || 0) + 1,
+      createdAt,
+    );
+  });
+};
+
+const setThreadUnreadStateForUser = async (
+  threadId,
+  userId,
+  count = 0,
+  lastUnreadAt = null,
+) => {
+  const normalizedThreadId = toIdString(threadId);
+  const normalizedUserId = toIdString(userId);
+  if (
+    !mongoose.Types.ObjectId.isValid(normalizedThreadId) ||
+    !mongoose.Types.ObjectId.isValid(normalizedUserId)
+  ) {
+    return;
+  }
+
+  const nextCount = Math.max(0, Number(count) || 0);
+  const nextLastUnreadAt = nextCount > 0 ? toDateValue(lastUnreadAt) : null;
+  const threadObjectId = new mongoose.Types.ObjectId(normalizedThreadId);
+  const userObjectId = new mongoose.Types.ObjectId(normalizedUserId);
+
+  const updateExistingResult = await ChatThread.updateOne(
+    {
+      _id: threadObjectId,
+      "unreadState.user": userObjectId,
+    },
+    {
+      $set: {
+        "unreadState.$.count": nextCount,
+        "unreadState.$.lastUnreadAt": nextLastUnreadAt,
+      },
+    },
+  );
+
+  if (updateExistingResult.matchedCount === 0) {
+    await ChatThread.updateOne(
+      {
+        _id: threadObjectId,
+        "unreadState.user": { $ne: userObjectId },
+      },
+      {
+        $push: {
+          unreadState: {
+            user: userObjectId,
+            count: nextCount,
+            lastUnreadAt: nextLastUnreadAt,
+          },
+        },
+      },
+    );
+  }
 };
 
 const toDateValue = (value) => {
@@ -699,6 +825,15 @@ const countUnreadMessages = async (threadOrId, userId, lastReadAt, clearedAt) =>
   };
 
   const visibilityStartAt = getLatestDate(lastReadAt, clearedAt);
+  const latestThreadMessageAt = getLatestDate(threadOrId?.lastMessageAt);
+  if (
+    visibilityStartAt &&
+    latestThreadMessageAt &&
+    latestThreadMessageAt.getTime() <= visibilityStartAt.getTime()
+  ) {
+    return 0;
+  }
+
   if (visibilityStartAt) {
     query.createdAt = { $gt: visibilityStartAt };
   }
@@ -724,6 +859,32 @@ const countUnreadMessages = async (threadOrId, userId, lastReadAt, clearedAt) =>
   });
 
   return unreadInMongo + unreadInArchive;
+};
+
+const resolveThreadUnreadCount = async (thread, currentUserId, lastReadAt, clearedAt) => {
+  if (!thread || !currentUserId) {
+    return 0;
+  }
+
+  if (toText(thread?.type) === "direct") {
+    const unreadEntry = getUnreadStateEntry(thread, currentUserId);
+    if (unreadEntry) {
+      return Math.max(0, Number(unreadEntry?.count) || 0);
+    }
+  }
+
+  const unreadCount = await countUnreadMessages(
+    thread,
+    currentUserId,
+    lastReadAt,
+    clearedAt,
+  );
+
+  if (toText(thread?.type) === "direct") {
+    await setThreadUnreadStateForUser(thread._id, currentUserId, unreadCount, null);
+  }
+
+  return unreadCount;
 };
 
 const syncThreadLastMessage = async (thread) => {
@@ -800,7 +961,7 @@ const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
   const lastMessageSenderId = toIdString(thread?.lastMessageSender);
   const lastReadAt = getLastReadAt(thread, currentUserId);
   const clearedAt = getClearedAt(thread, currentUserId);
-  const unreadCount = await countUnreadMessages(
+  const unreadCount = await resolveThreadUnreadCount(
     thread,
     currentUserId,
     lastReadAt,
@@ -935,14 +1096,6 @@ const getThreadMessages = async (req, res) => {
     const hasOlder = messagePage.length > limit;
     const visibleMessages = messagePage.slice(0, limit);
 
-    const userIds = [
-      ...new Set(
-        visibleMessages
-          .map((message) => toIdString(message?.sender?._id || message?.sender))
-          .filter(Boolean),
-      ),
-    ];
-    const userMap = await loadUsersById(userIds);
     const participantUserMap = await loadUsersById([
       ...(Array.isArray(thread.participants) ? thread.participants : []),
       thread.lastMessageSender,
@@ -955,7 +1108,7 @@ const getThreadMessages = async (req, res) => {
     );
     const serializedMessages = visibleMessages
       .reverse()
-      .map((message) => serializeMessage(message, userMap));
+      .map((message) => serializeMessage(message));
 
     return res.json({
       thread: serializedThread,
@@ -1001,6 +1154,14 @@ const startDirectThread = async (req, res) => {
           ],
           createdBy: req.user._id,
           readState: [{ user: req.user._id, lastReadAt: new Date() }],
+          unreadState: [
+            { user: req.user._id, count: 0, lastUnreadAt: null },
+            {
+              user: new mongoose.Types.ObjectId(recipientId),
+              count: 0,
+              lastUnreadAt: null,
+            },
+          ],
         });
       } catch (error) {
         if (error?.code === 11000) {
@@ -1093,6 +1254,15 @@ const sendMessage = async (req, res) => {
     });
 
     upsertThreadReadState(thread, currentUserId, message.createdAt || new Date());
+    if (thread.type === "direct") {
+      incrementDirectThreadUnreadState(
+        thread,
+        currentUserId,
+        message.createdAt || new Date(),
+      );
+    } else {
+      upsertThreadUnreadState(thread, currentUserId, 0, null);
+    }
     thread.lastMessageAt = message.createdAt || new Date();
     thread.lastMessagePreview = buildMessagePreview(body, references, attachments);
     thread.lastMessageSender = req.user._id;
@@ -1119,7 +1289,7 @@ const sendMessage = async (req, res) => {
       );
     }
 
-    const senderSummary = serializeUserSummary(req.user);
+    const senderSummary = serializeMessageSenderSummary(req.user);
     const serializedMessage = serializeMessage(
       {
         ...message.toObject(),
@@ -1212,7 +1382,7 @@ const deleteMessage = async (req, res) => {
       await deleteChatAttachmentFiles(existingAttachments);
     }
 
-    const senderSummary = serializeUserSummary(req.user);
+    const senderSummary = serializeMessageSenderSummary(req.user);
     const serializedMessage = serializeMessage(
       {
         ...message.toObject(),
@@ -1304,7 +1474,7 @@ const updateMessage = async (req, res) => {
     }
 
     if (nextBody === toText(message.body)) {
-      const senderSummary = serializeUserSummary(req.user);
+      const senderSummary = serializeMessageSenderSummary(req.user);
       return res.json({
         message: serializeMessage(
           {
@@ -1338,7 +1508,7 @@ const updateMessage = async (req, res) => {
       );
     }
 
-    const senderSummary = serializeUserSummary(req.user);
+    const senderSummary = serializeMessageSenderSummary(req.user);
     const serializedMessage = serializeMessage(
       {
         ...message.toObject(),
@@ -1422,6 +1592,8 @@ const markThreadRead = async (req, res) => {
       );
     }
 
+    await setThreadUnreadStateForUser(threadId, currentUserId, 0, null);
+
     return res.json({ ok: true });
   } catch (error) {
     console.error("Error marking chat thread as read:", error);
@@ -1445,6 +1617,7 @@ const clearThreadMessages = async (req, res) => {
     const clearedAt = new Date();
     upsertThreadClearedState(thread, currentUserId, clearedAt);
     upsertThreadReadState(thread, currentUserId, clearedAt);
+    upsertThreadUnreadState(thread, currentUserId, 0, null);
     await thread.save();
 
     const userMap = await loadUsersById([

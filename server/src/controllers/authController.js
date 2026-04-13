@@ -115,6 +115,8 @@ const registerUser = async (req, res) => {
 
     broadcastPresenceChange({
       userId: String(user._id),
+      isOnline: true,
+      lastOnlineAt: null,
     });
 
     res.status(201).json({
@@ -169,6 +171,8 @@ const loginUser = async (req, res) => {
 
       broadcastPresenceChange({
         userId: String(user._id),
+        isOnline: true,
+        lastOnlineAt: null,
       });
 
       res.json({
@@ -246,6 +250,8 @@ const logoutUser = async (req, res) => {
   if (broadcastUserId) {
     broadcastPresenceChange({
       userId: broadcastUserId,
+      isOnline: false,
+      lastOnlineAt: now.toISOString(),
     });
   }
   res.set("Cache-Control", "no-store");

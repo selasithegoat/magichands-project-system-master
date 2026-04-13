@@ -238,6 +238,8 @@ const authenticateRequest = async (req, res, { optional = false } = {}) => {
 
       broadcastPresenceChange({
         userId: String(user._id),
+        isOnline: true,
+        lastOnlineAt: null,
       });
     } else {
       const activeSession = await touchUserSession(sessionId, now);

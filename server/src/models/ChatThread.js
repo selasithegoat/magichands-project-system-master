@@ -48,6 +48,26 @@ const ChatArchiveStateSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ChatUnreadStateSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    count: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lastUnreadAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false },
+);
+
 const ChatThreadSchema = new mongoose.Schema(
   {
     type: {
@@ -83,6 +103,10 @@ const ChatThreadSchema = new mongoose.Schema(
     },
     clearedState: {
       type: [ChatClearedStateSchema],
+      default: [],
+    },
+    unreadState: {
+      type: [ChatUnreadStateSchema],
       default: [],
     },
     archive: {
