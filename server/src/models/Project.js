@@ -766,6 +766,10 @@ const ProjectSchema = new mongoose.Schema(
       note: String,
       uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       uploadedAt: Date,
+      clientApprovedAtIntake: {
+        type: Boolean,
+        default: false,
+      },
       source: {
         type: String,
         enum: ["client", "graphics"],
@@ -835,6 +839,10 @@ const ProjectSchema = new mongoose.Schema(
           note: String,
           uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
           uploadedAt: Date,
+          clientApprovedAtIntake: {
+            type: Boolean,
+            default: false,
+          },
           source: {
             type: String,
             enum: ["client", "graphics"],

@@ -200,6 +200,10 @@ const NewOrders = ({ user = null }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedClientMockups, setSelectedClientMockups] = useState([]);
   const [selectedClientMockupNotes, setSelectedClientMockupNotes] = useState({});
+  const [selectedApprovedMockups, setSelectedApprovedMockups] = useState([]);
+  const [selectedApprovedMockupNotes, setSelectedApprovedMockupNotes] = useState(
+    {},
+  );
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
@@ -541,6 +545,8 @@ const NewOrders = ({ user = null }) => {
     );
     setSelectedClientMockups([]);
     setSelectedClientMockupNotes({});
+    setSelectedApprovedMockups([]);
+    setSelectedApprovedMockupNotes({});
   };
 
   useEffect(() => {
@@ -613,6 +619,8 @@ const NewOrders = ({ user = null }) => {
           );
           setSelectedClientMockups([]);
           setSelectedClientMockupNotes({});
+          setSelectedApprovedMockups([]);
+          setSelectedApprovedMockupNotes({});
           setExistingSampleImage(
             typeof storedDraft.existingSampleImage === "string"
               ? storedDraft.existingSampleImage
@@ -632,6 +640,8 @@ const NewOrders = ({ user = null }) => {
           setSelectedFileNotes({});
           setSelectedClientMockups([]);
           setSelectedClientMockupNotes({});
+          setSelectedApprovedMockups([]);
+          setSelectedApprovedMockupNotes({});
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
@@ -644,6 +654,8 @@ const NewOrders = ({ user = null }) => {
         setSelectedFileNotes({});
         setSelectedClientMockups([]);
         setSelectedClientMockupNotes({});
+        setSelectedApprovedMockups([]);
+        setSelectedApprovedMockupNotes({});
         setExistingSampleImage("");
         setExistingSampleImageNote("");
         setExistingAttachments([]);
@@ -865,6 +877,18 @@ const NewOrders = ({ user = null }) => {
     setShowConfirmModal(false);
     setIsLoading(true);
 
+    if (
+      selectedClientMockups.length > 0 &&
+      selectedApprovedMockups.length > 0
+    ) {
+      setIsLoading(false);
+      showToast(
+        "Choose either Client Mockup or Already Approved Mockup for this new order.",
+        "error",
+      );
+      return;
+    }
+
     const formPayload = new FormData();
     formPayload.append("orderId", formData.orderNumber);
     formPayload.append("orderDate", formData.orderDate);
@@ -944,6 +968,19 @@ const NewOrders = ({ user = null }) => {
       );
     }
 
+    if (selectedApprovedMockups.length > 0) {
+      selectedApprovedMockups.forEach((file) => {
+        formPayload.append("approvedMockup", file);
+      });
+      const approvedMockupNotes = selectedApprovedMockups.map(
+        (file) => selectedApprovedMockupNotes[buildFileKey(file)] || "",
+      );
+      formPayload.append(
+        "approvedMockupNotes",
+        JSON.stringify(approvedMockupNotes),
+      );
+    }
+
     const sampleNote = imageFile
       ? getFileNote(imageFile)
       : existingSampleImage
@@ -990,6 +1027,8 @@ const NewOrders = ({ user = null }) => {
           setSelectedFileNotes({});
           setSelectedClientMockups([]);
           setSelectedClientMockupNotes({});
+          setSelectedApprovedMockups([]);
+          setSelectedApprovedMockupNotes({});
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
@@ -1012,6 +1051,8 @@ const NewOrders = ({ user = null }) => {
 
   const isEmergency =
     formData.projectType === "Emergency" || formData.priority === "Urgent";
+  const clientMockupSectionLocked = selectedApprovedMockups.length > 0;
+  const approvedMockupSectionLocked = selectedClientMockups.length > 0;
 
   const isCorporate = formData.projectType === "Corporate Job";
   const currentUserDepartments = Array.isArray(currentUser?.department)
@@ -1235,10 +1276,15 @@ const NewOrders = ({ user = null }) => {
 
                   <div
                     className="reference-dropzone"
-                    onClick={() =>
-                      document.getElementById("new-order-client-mockup").click()
-                    }
-                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      if (clientMockupSectionLocked) return;
+                      document.getElementById("new-order-client-mockup").click();
+                    }}
+                    style={{
+                      cursor: clientMockupSectionLocked ? "not-allowed" : "pointer",
+                      opacity: clientMockupSectionLocked ? 0.65 : 1,
+                    }}
+                    aria-disabled={clientMockupSectionLocked}
                   >
                     <div className="dropzone-icon">
                       <UploadIcon />
@@ -1249,7 +1295,11 @@ const NewOrders = ({ user = null }) => {
                           ? "Add client mockups"
                           : "Upload client mockups"}
                       </p>
-                      <span>Use this only for client-supplied mockup/artwork files</span>
+                      <span>
+                        {clientMockupSectionLocked
+                          ? "Clear the already approved mockup selection to use this section"
+                          : "Use this only for client-supplied mockup/artwork files"}
+                      </span>
                     </div>
                   </div>
 
@@ -1258,6 +1308,7 @@ const NewOrders = ({ user = null }) => {
                     id="new-order-client-mockup"
                     style={{ display: "none" }}
                     multiple
+                    disabled={clientMockupSectionLocked}
                     onChange={(e) => {
                       const nextFiles = Array.from(e.target.files || []);
                       if (nextFiles.length > 0) {
@@ -1312,6 +1363,119 @@ const NewOrders = ({ user = null }) => {
                                   ),
                                 );
                                 setSelectedClientMockupNotes((current) => {
+                                  const next = { ...current };
+                                  delete next[fileKey];
+                                  return next;
+                                });
+                              }}
+                              className="file-remove-btn"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="divider"></div>
+
+                <div className="form-section">
+                  <h2 className="section-title">Already Approved Mockup</h2>
+                  <p className="section-hint">
+                    Upload a client-approved mockup here. Graphics will still validate it before the workflow continues.
+                  </p>
+
+                  <div
+                    className="reference-dropzone"
+                    onClick={() => {
+                      if (approvedMockupSectionLocked) return;
+                      document.getElementById("new-order-approved-mockup").click();
+                    }}
+                    style={{
+                      cursor: approvedMockupSectionLocked ? "not-allowed" : "pointer",
+                      opacity: approvedMockupSectionLocked ? 0.65 : 1,
+                    }}
+                    aria-disabled={approvedMockupSectionLocked}
+                  >
+                    <div className="dropzone-icon">
+                      <UploadIcon />
+                    </div>
+                    <div>
+                      <p>
+                        {selectedApprovedMockups.length > 0
+                          ? "Add approved mockups"
+                          : "Upload approved mockups"}
+                      </p>
+                      <span>
+                        {approvedMockupSectionLocked
+                          ? "Clear the client mockup selection to use this section"
+                          : "Use this only for mockups the client has already approved"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <input
+                    type="file"
+                    id="new-order-approved-mockup"
+                    style={{ display: "none" }}
+                    multiple
+                    disabled={approvedMockupSectionLocked}
+                    onChange={(e) => {
+                      const nextFiles = Array.from(e.target.files || []);
+                      if (nextFiles.length > 0) {
+                        setSelectedApprovedMockups((current) =>
+                          mergeUniqueFiles(current, nextFiles),
+                        );
+                      }
+                      e.target.value = null;
+                    }}
+                  />
+
+                  {selectedApprovedMockups.length > 0 && (
+                    <div className="reference-files-grid">
+                      {selectedApprovedMockups.map((file) => {
+                        const fileKey = buildFileKey(file);
+                        return (
+                          <div key={fileKey} className="reference-file-tile">
+                            <div className="file-icon">
+                              {file.type.startsWith("image/") ? (
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt="approved mockup preview"
+                                />
+                              ) : (
+                                <FolderIcon />
+                              )}
+                            </div>
+                            <div className="file-info" title={file.name}>
+                              <span className="file-name">{file.name}</span>
+                              <span className="file-size">
+                                {formatFileSize(file.size)}
+                              </span>
+                            </div>
+                            <textarea
+                              className="reference-file-note"
+                              placeholder="Add note for Graphics..."
+                              value={selectedApprovedMockupNotes[fileKey] || ""}
+                              onChange={(e) =>
+                                setSelectedApprovedMockupNotes((current) => ({
+                                  ...current,
+                                  [fileKey]: e.target.value,
+                                }))
+                              }
+                              rows="2"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedApprovedMockups((current) =>
+                                  current.filter(
+                                    (entry) => buildFileKey(entry) !== fileKey,
+                                  ),
+                                );
+                                setSelectedApprovedMockupNotes((current) => {
                                   const next = { ...current };
                                   delete next[fileKey];
                                   return next;

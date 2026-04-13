@@ -286,12 +286,21 @@ const mapAttachmentUploads = (req, userId) =>
       uploadedAt: new Date(),
     }));
 
-const buildInitialClientMockupVersions = (req, userId) => {
-  const files = Array.isArray(req.files?.clientMockup)
-    ? req.files.clientMockup
-    : [];
-  const notes = normalizeAttachmentNotes(req.body?.clientMockupNotes);
-  const sharedNote = toText(req.body?.clientMockupNote || req.body?.mockupNote);
+const buildInitialIntakeMockupVersions = (
+  req,
+  userId,
+  {
+    fileField = "clientMockup",
+    notesField = "clientMockupNotes",
+    noteCandidates = ["clientMockupNote", "mockupNote"],
+    clientApprovedAtIntake = false,
+  } = {},
+) => {
+  const files = Array.isArray(req.files?.[fileField]) ? req.files[fileField] : [];
+  const notes = normalizeAttachmentNotes(req.body?.[notesField]);
+  const sharedNote = noteCandidates
+    .map((fieldName) => toText(req.body?.[fieldName]))
+    .find(Boolean);
   const baseUploadTime = new Date();
 
   return files
@@ -309,6 +318,7 @@ const buildInitialClientMockupVersions = (req, userId) => {
           uploadedAt: new Date(baseUploadTime.getTime() + index),
           source: "client",
           intakeUpload: true,
+          clientApprovedAtIntake,
           graphicsReview: {
             status: "pending",
             reviewedAt: null,
@@ -6129,6 +6139,10 @@ const buildMockupVersionRecord = (entry = {}, fallbackVersion = 1) => {
     uploadedAt: entry?.uploadedAt ? new Date(entry.uploadedAt) : null,
     source,
     intakeUpload,
+    clientApprovedAtIntake: parseBooleanFlag(
+      entry?.clientApprovedAtIntake,
+      false,
+    ),
     graphicsReview: buildMockupGraphicsReviewState(
       entry?.graphicsReview || {},
       source,
@@ -6176,6 +6190,10 @@ const ensureProjectMockupVersions = (project = {}) => {
           : "graphics",
       ),
       intakeUpload: parseBooleanFlag(project.mockup.intakeUpload, false),
+      clientApprovedAtIntake: parseBooleanFlag(
+        project.mockup.clientApprovedAtIntake,
+        false,
+      ),
       graphicsReview: buildMockupGraphicsReviewState(
         project.mockup.graphicsReview || {},
         getMockupSource(
@@ -6240,6 +6258,10 @@ const syncProjectMockupFromVersion = (
   project.mockup.version = Number.parseInt(versionEntry?.version, 10) || 1;
   project.mockup.source = source;
   project.mockup.intakeUpload = intakeUpload;
+  project.mockup.clientApprovedAtIntake = parseBooleanFlag(
+    versionEntry?.clientApprovedAtIntake,
+    false,
+  );
   project.mockup.graphicsReview = graphicsReview;
   project.mockup.clientApproval = {
     status: approvalStatus,
@@ -6271,6 +6293,7 @@ const resetProjectMockupState = (project = {}) => {
   project.mockup.uploadedAt = null;
   project.mockup.source = "graphics";
   project.mockup.intakeUpload = false;
+  project.mockup.clientApprovedAtIntake = false;
   project.mockup.graphicsReview = buildMockupGraphicsReviewState(
     { status: "not_required" },
     "graphics",
@@ -6728,13 +6751,30 @@ const createProject = async (req, res) => {
     const resolvedSampleImageNote = sampleImagePath
       ? normalizeAttachmentNote(rawSampleImageNote)
       : "";
-    const clientMockupVersions = buildInitialClientMockupVersions(
+    const clientMockupVersions = buildInitialIntakeMockupVersions(
       req,
       req.user?._id,
     );
-    const latestClientMockupVersion =
-      clientMockupVersions.length > 0
-        ? clientMockupVersions[clientMockupVersions.length - 1]
+    const approvedMockupVersions = buildInitialIntakeMockupVersions(req, req.user?._id, {
+      fileField: "approvedMockup",
+      notesField: "approvedMockupNotes",
+      noteCandidates: ["approvedMockupNote"],
+      clientApprovedAtIntake: true,
+    });
+    if (clientMockupVersions.length > 0 && approvedMockupVersions.length > 0) {
+      await cleanupUploadedFilesSafely(req);
+      return res.status(400).json({
+        message:
+          "Choose either Client Mockup or Already Approved Mockup for a new order, not both.",
+      });
+    }
+    const initialMockupVersions =
+      approvedMockupVersions.length > 0
+        ? approvedMockupVersions
+        : clientMockupVersions;
+    const latestInitialMockupVersion =
+      initialMockupVersions.length > 0
+        ? initialMockupVersions[initialMockupVersions.length - 1]
         : null;
 
     // [NEW] Extract time from deliveryDate if deliveryTime is missing
@@ -6898,21 +6938,23 @@ const createProject = async (req, res) => {
         approvedBy: null,
         note: "",
       },
-      ...(latestClientMockupVersion
+      ...(latestInitialMockupVersion
         ? {
             mockup: {
-              fileUrl: latestClientMockupVersion.fileUrl,
-              fileName: latestClientMockupVersion.fileName,
-              fileType: latestClientMockupVersion.fileType,
-              note: latestClientMockupVersion.note,
-              uploadedBy: latestClientMockupVersion.uploadedBy,
-              uploadedAt: latestClientMockupVersion.uploadedAt,
-              source: latestClientMockupVersion.source,
-              intakeUpload: latestClientMockupVersion.intakeUpload,
-              graphicsReview: latestClientMockupVersion.graphicsReview,
-              version: latestClientMockupVersion.version,
-              clientApproval: latestClientMockupVersion.clientApproval,
-              versions: clientMockupVersions,
+              fileUrl: latestInitialMockupVersion.fileUrl,
+              fileName: latestInitialMockupVersion.fileName,
+              fileType: latestInitialMockupVersion.fileType,
+              note: latestInitialMockupVersion.note,
+              uploadedBy: latestInitialMockupVersion.uploadedBy,
+              uploadedAt: latestInitialMockupVersion.uploadedAt,
+              source: latestInitialMockupVersion.source,
+              intakeUpload: latestInitialMockupVersion.intakeUpload,
+              clientApprovedAtIntake:
+                latestInitialMockupVersion.clientApprovedAtIntake,
+              graphicsReview: latestInitialMockupVersion.graphicsReview,
+              version: latestInitialMockupVersion.version,
+              clientApproval: latestInitialMockupVersion.clientApproval,
+              versions: initialMockupVersions,
             },
           }
         : {}),
@@ -6935,24 +6977,33 @@ const createProject = async (req, res) => {
       `Created project #${savedProject.orderId || savedProject._id}`,
     );
 
-    if (latestClientMockupVersion) {
+    if (latestInitialMockupVersion) {
       const versionLabel = buildMockupVersionLabel(
-        latestClientMockupVersion.version,
+        latestInitialMockupVersion.version,
       );
+      const intakeMockupLabel = latestInitialMockupVersion.clientApprovedAtIntake
+        ? "Client-approved mockup"
+        : "Client provided mockup";
+      const intakeMockupUpdateLabel = latestInitialMockupVersion.clientApprovedAtIntake
+        ? "Approved client mockup"
+        : "Client mockup";
       await logActivity(
         savedProject._id,
         req.user.id,
         "mockup_upload",
-        `Client provided mockup ${versionLabel} at intake.`,
+        `${intakeMockupLabel} ${versionLabel} at intake.`,
         {
           mockup: {
-            version: latestClientMockupVersion.version,
-            source: latestClientMockupVersion.source,
+            version: latestInitialMockupVersion.version,
+            source: latestInitialMockupVersion.source,
             intakeUpload: true,
-            fileName: latestClientMockupVersion.fileName,
-            fileUrl: latestClientMockupVersion.fileUrl,
+            clientApprovedAtIntake: Boolean(
+              latestInitialMockupVersion.clientApprovedAtIntake,
+            ),
+            fileName: latestInitialMockupVersion.fileName,
+            fileUrl: latestInitialMockupVersion.fileUrl,
             graphicsReviewStatus:
-              latestClientMockupVersion.graphicsReview?.status || "pending",
+              latestInitialMockupVersion.graphicsReview?.status || "pending",
           },
         },
       );
@@ -6961,7 +7012,7 @@ const createProject = async (req, res) => {
         project: savedProject,
         authorId: req.user._id || req.user.id,
         category: "Graphics",
-        content: `Client mockup ${versionLabel} uploaded at intake. Graphics review pending.`,
+        content: `${intakeMockupUpdateLabel} ${versionLabel} uploaded at intake. Graphics review pending.`,
       });
     }
 

@@ -120,6 +120,7 @@ export const getMockupVersions = (mockup = {}) => {
         uploadedAt: entry?.uploadedAt || null,
         source,
         intakeUpload,
+        clientApprovedAtIntake: Boolean(entry?.clientApprovedAtIntake),
         graphicsReview: {
           status: getMockupGraphicsReviewStatus(
             entry?.graphicsReview || {},
@@ -177,6 +178,7 @@ export const getMockupVersions = (mockup = {}) => {
       uploadedAt: mockup?.uploadedAt || null,
       source,
       intakeUpload,
+      clientApprovedAtIntake: Boolean(mockup?.clientApprovedAtIntake),
       graphicsReview: {
         status: getMockupGraphicsReviewStatus(
           mockup?.graphicsReview || {},
@@ -222,6 +224,10 @@ export const getLatestMockupVersion = (mockup = {}) => {
 export const isClientProvidedMockupVersion = (version = {}) =>
   getMockupSource(version?.source, version?.intakeUpload ? "client" : "graphics") ===
   "client";
+
+export const isClientApprovedAtIntakeMockupVersion = (version = {}) =>
+  isClientProvidedMockupVersion(version) &&
+  Boolean(version?.clientApprovedAtIntake);
 
 export const isGraphicsManagedMockupVersion = (version = {}) =>
   getMockupSource(version?.source, version?.intakeUpload ? "client" : "graphics") ===
@@ -315,4 +321,8 @@ export const getMockupWorkflowLabel = (version = {}, options = {}) => {
 };
 
 export const getMockupVersionSourceLabel = (version = {}) =>
-  isClientProvidedMockupVersion(version) ? "Client" : "Graphics";
+  isClientApprovedAtIntakeMockupVersion(version)
+    ? "Client (Approved)"
+    : isClientProvidedMockupVersion(version)
+      ? "Client"
+      : "Graphics";
