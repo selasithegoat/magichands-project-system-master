@@ -43,12 +43,40 @@ const useRealtimeClient = (enabled = true) => {
       );
     };
 
+    const handleChatChange = (event) => {
+      let detail = {};
+      try {
+        detail = event?.data ? JSON.parse(event.data) : {};
+      } catch {
+        detail = {};
+      }
+      window.dispatchEvent(
+        new CustomEvent("mh:chat-changed", { detail }),
+      );
+    };
+
+    const handlePresenceChange = (event) => {
+      let detail = {};
+      try {
+        detail = event?.data ? JSON.parse(event.data) : {};
+      } catch {
+        detail = {};
+      }
+      window.dispatchEvent(
+        new CustomEvent("mh:presence-changed", { detail }),
+      );
+    };
+
     source.addEventListener("data_changed", handleChange);
     source.addEventListener("notification_changed", handleNotificationChange);
+    source.addEventListener("chat_changed", handleChatChange);
+    source.addEventListener("presence_changed", handlePresenceChange);
 
     return () => {
       source.removeEventListener("data_changed", handleChange);
       source.removeEventListener("notification_changed", handleNotificationChange);
+      source.removeEventListener("chat_changed", handleChatChange);
+      source.removeEventListener("presence_changed", handlePresenceChange);
       source.close();
       sourceRef.current = null;
     };

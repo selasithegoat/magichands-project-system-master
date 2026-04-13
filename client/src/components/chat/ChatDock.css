@@ -87,6 +87,11 @@
   animation: chat-dock-fab-nudge 0.42s ease;
 }
 
+.chat-dock-fab.portal-admin {
+  left: auto;
+  right: 24px;
+}
+
 .chat-dock-incoming-preview {
   position: fixed;
   left: 24px;
@@ -118,6 +123,12 @@
     box-shadow 0.24s ease;
 }
 
+.chat-dock-incoming-preview.portal-admin {
+  left: auto;
+  right: 24px;
+  transform-origin: right bottom;
+}
+
 .chat-dock-incoming-preview::after {
   content: "";
   position: absolute;
@@ -131,6 +142,11 @@
     rgba(var(--primary-rgb), 0.42),
     rgba(var(--primary-rgb), 0)
   );
+}
+
+.chat-dock-incoming-preview.portal-admin::after {
+  left: auto;
+  right: 34px;
 }
 
 .chat-dock-incoming-preview.visible {
@@ -258,6 +274,11 @@
   width: min(97vw, 940px);
   max-height: calc(100vh - 120px);
   overscroll-behavior: contain;
+}
+
+.chat-dock-shell.portal-admin {
+  left: auto;
+  right: 24px;
 }
 
 .chat-dock-panel {
@@ -1680,6 +1701,21 @@
 }
 
 @media (max-width: 768px) {
+  .chat-dock-fab.portal-admin {
+    left: auto;
+    right: 16px;
+  }
+
+  .chat-dock-incoming-preview.portal-admin {
+    left: auto;
+    right: 16px;
+  }
+
+  .chat-dock-shell.portal-admin {
+    left: 10px;
+    right: 10px;
+  }
+
   .chat-dock-incoming-preview {
     left: 16px;
     bottom: 84px;
@@ -1781,6 +1817,21 @@
 }
 
 @media (max-width: 560px) {
+  .chat-dock-fab.portal-admin {
+    left: auto;
+    right: 12px;
+  }
+
+  .chat-dock-incoming-preview.portal-admin {
+    left: 12px;
+    right: 12px;
+  }
+
+  .chat-dock-shell.portal-admin {
+    left: 0;
+    right: 0;
+  }
+
   .chat-dock-incoming-preview {
     left: 12px;
     right: 12px;

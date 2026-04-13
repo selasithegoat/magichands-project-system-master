@@ -12,6 +12,7 @@ import TrashIcon from "../icons/TrashIcon";
 import XIcon from "../icons/XIcon";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { playMessageSound } from "../../utils/notificationSound";
+import { resolvePortalSource } from "../../utils/portalSource";
 import "./ChatDock.css";
 
 const THREAD_POLL_INTERVAL_MS = 20000;
@@ -528,6 +529,8 @@ const formatRecordingDuration = (totalSeconds = 0) => {
 const ChatDock = ({ user }) => {
   const navigate = useNavigate();
   const currentUserId = toIdString(user?._id || user?.id);
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const portalPositionClass = portalSource === "admin" ? "portal-admin" : "";
   const [isOpen, setIsOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
@@ -2283,7 +2286,11 @@ const ChatDock = ({ user }) => {
   return (
     <>
       {isOpen && (
-        <div className="chat-dock-shell" role="dialog" aria-modal="false">
+        <div
+          className={`chat-dock-shell ${portalPositionClass}`}
+          role="dialog"
+          aria-modal="false"
+        >
           <div
             className={`chat-dock-panel ${
               mobilePanelView === "thread" && activeThread
@@ -3148,7 +3155,7 @@ const ChatDock = ({ user }) => {
         <button
           key={incomingPreview.token}
           type="button"
-          className={`chat-dock-incoming-preview ${
+          className={`chat-dock-incoming-preview ${portalPositionClass} ${
             incomingPreviewVisible ? "visible" : "closing"
           }`}
           onClick={() => void handleIncomingPreviewOpen()}
@@ -3179,7 +3186,7 @@ const ChatDock = ({ user }) => {
 
       <button
         type="button"
-        className={`chat-dock-fab ${isOpen ? "active" : ""} ${
+        className={`chat-dock-fab ${portalPositionClass} ${isOpen ? "active" : ""} ${
           incomingPreviewVisible ? "has-preview" : ""
         }`}
         onClick={isOpen ? handleClose : handleOpen}
