@@ -19,6 +19,9 @@ const DEFAULT_FORM = {
   notes: "",
 };
 
+const INVENTORY_IMAGE_MAX_MB =
+  typeof __UPLOAD_MAX_MB__ === "number" ? __UPLOAD_MAX_MB__ : 200;
+
 const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState(DEFAULT_FORM);
   const [imagePreview, setImagePreview] = useState("");
@@ -171,7 +174,9 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
                 </label>
                 <div className="file-meta">
                   <span>{imageName || "No file selected"}</span>
-                  <span className="field-help">PNG or JPG, up to 5MB</span>
+                  <span className="field-help">
+                    PNG or JPG, up to {INVENTORY_IMAGE_MAX_MB}MB
+                  </span>
                 </div>
               </div>
               {imagePreview ? (

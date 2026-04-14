@@ -79,7 +79,7 @@ const {
 const upload = require("../middleware/upload"); // [NEW]
 const enforceProjectNotOnHold = requireProjectNotOnHold({ paramName: "id" });
 
-const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const maxFileSizeMb = upload.maxFileSizeMb;
 const projectUploadFields = [
   { name: "sampleImage", maxCount: 1 },
   { name: "clientMockup", maxCount: 10 },

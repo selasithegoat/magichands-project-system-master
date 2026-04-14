@@ -6,6 +6,23 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
+
+const resolveEnvPath = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (path.isAbsolute(raw)) return raw;
+  return path.resolve(__dirname, "..", raw);
+};
+
+// Load env vars (support DOTENV_FILE for staging/alternate configs)
+const dotenvPath = resolveEnvPath(process.env.DOTENV_FILE);
+const dotenvResult = dotenvPath
+  ? dotenv.config({ path: dotenvPath })
+  : dotenv.config();
+if (dotenvPath && dotenvResult?.error) {
+  dotenv.config();
+}
+
 const connectDB = require("./config/db");
 const createCsrfProtection = require("./middleware/csrfProtection");
 const { protect } = require("./middleware/authMiddleware");
@@ -28,22 +45,6 @@ const { broadcastDataChange } = require("./utils/realtimeHub");
 const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 const { startReminderScheduler } = require("./utils/reminderScheduler");
-
-const resolveEnvPath = (value) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  if (path.isAbsolute(raw)) return raw;
-  return path.resolve(__dirname, "..", raw);
-};
-
-// Load env vars (support DOTENV_FILE for staging/alternate configs)
-const dotenvPath = resolveEnvPath(process.env.DOTENV_FILE);
-const dotenvResult = dotenvPath
-  ? dotenv.config({ path: dotenvPath })
-  : dotenv.config();
-if (dotenvPath && dotenvResult?.error) {
-  dotenv.config();
-}
 
 // Connect to database
 connectDB();
@@ -149,7 +150,7 @@ const AUTH_RATE_LIMIT_MAX_REQUESTS = toPositiveInt(
   process.env.AUTH_RATE_LIMIT_MAX_REQUESTS,
   20,
 );
-const BODY_LIMIT_MB = toPositiveInt(process.env.UPLOAD_MAX_MB, 50);
+const BODY_LIMIT_MB = toPositiveInt(process.env.UPLOAD_MAX_MB, 200);
 
 const normalizeAuthIdentifier = (value) =>
   String(value || "")

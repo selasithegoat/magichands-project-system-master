@@ -14,7 +14,7 @@ const {
 const { protect, admin, checkAuth } = require("../middleware/authMiddleware");
 const upload = require("../middleware/upload");
 
-const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const maxFileSizeMb = upload.maxFileSizeMb;
 const allowSelfRegistration =
   String(process.env.AUTH_ALLOW_SELF_REGISTRATION || "").toLowerCase() === "true";
 

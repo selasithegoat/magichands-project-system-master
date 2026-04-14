@@ -98,7 +98,8 @@ NOTIFICATION_CENTER_PATH=/
 
 # Uploads
 UPLOAD_DIR=C:/magichands-uploads
-UPLOAD_MAX_MB=50
+# Shared upload limit for backend handling and frontend upload messaging
+UPLOAD_MAX_MB=200
 
 # Cookies
 NODE_ENV=development

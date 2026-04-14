@@ -7,7 +7,7 @@ const {
   requireProjectNotOnHold,
 } = require("../middleware/projectHoldMiddleware");
 
-const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const maxFileSizeMb = upload.maxFileSizeMb;
 const enforceProjectNotOnHold = requireProjectNotOnHold({
   paramName: "projectId",
 });

@@ -22,7 +22,7 @@ console.log(`Uploads will be stored in: ${uploadDir}`);
 
 const parsedMaxMb = Number(process.env.UPLOAD_MAX_MB);
 const maxFileSizeMb =
-  Number.isFinite(parsedMaxMb) && parsedMaxMb > 0 ? parsedMaxMb : 50;
+  Number.isFinite(parsedMaxMb) && parsedMaxMb > 0 ? parsedMaxMb : 200;
 
 console.log(`Upload max file size: ${maxFileSizeMb}MB`);
 

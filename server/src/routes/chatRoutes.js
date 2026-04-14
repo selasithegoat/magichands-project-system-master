@@ -16,7 +16,7 @@ const { protect } = require("../middleware/authMiddleware");
 const upload = require("../middleware/upload");
 
 const router = express.Router();
-const maxFileSizeMb = upload.maxFileSizeMb || 50;
+const maxFileSizeMb = upload.maxFileSizeMb;
 
 const handleChatUploads = (req, res, next) => {
   upload.array("chatAttachments", 6)(req, res, (err) => {

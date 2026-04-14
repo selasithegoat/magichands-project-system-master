@@ -17,7 +17,8 @@ import {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CONTACT_PATTERN = /^\+?[0-9()\-\s]{7,20}$/;
-const MAX_AVATAR_SIZE_MB = 5;
+const MAX_AVATAR_SIZE_MB =
+  typeof __UPLOAD_MAX_MB__ === "number" ? __UPLOAD_MAX_MB__ : 200;
 
 const DEFAULT_FORM_DATA = {
   firstName: "",
