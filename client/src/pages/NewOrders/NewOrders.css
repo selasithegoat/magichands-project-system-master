@@ -22,6 +22,12 @@
   font-size: 1rem;
 }
 
+.orders-help-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -0.6rem 0 1rem;
+}
+
 /* Tabs */
 .tabs-container {
   display: flex;
@@ -2389,6 +2395,14 @@
   line-height: 1.2;
 }
 
+.order-actions-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .order-actions-ref {
   margin: 0;
   padding: 0.2rem 0.55rem;
@@ -2963,6 +2977,10 @@
   .order-actions-topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .order-actions-topbar-actions {
+    justify-content: flex-start;
   }
 
   .order-actions-topbar-main {

@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const { HELP_ARTICLES, HELP_CATEGORIES } = require("../data/helpArticles");
+const HelpFeedback = require("../models/HelpFeedback");
 const {
   buildArticleAnswer,
   getUserHelpContext,
@@ -8,6 +10,7 @@ const {
   getProjectContextSearchText,
   getProjectPromptContext,
   resolveProjectContextsForQuestion,
+  searchAccessibleProjectSummaries,
   toPublicProjectContext,
 } = require("../utils/helpProjectContext");
 
@@ -43,6 +46,11 @@ const getFetchClient = async () => {
 };
 
 const toText = (value) => String(value || "").trim();
+
+const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+
+const createAnswerId = () =>
+  `help-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const toPublicArticle = (article) => ({
   id: article.id,
@@ -296,6 +304,11 @@ const getHelpArticles = async (req, res) => {
   });
 
   return res.json({
+    capabilities: {
+      projectSearch: true,
+      feedback: true,
+      projectAwareAnswers: true,
+    },
     categories: HELP_CATEGORIES,
     articles: HELP_ARTICLES.map(toPublicArticle),
     featuredArticleIds: featuredMatches.map((entry) => entry.article.id),
@@ -313,12 +326,17 @@ const askHelpQuestion = async (req, res) => {
     }
 
     const userContext = getUserHelpContext(req.user);
+    const selectedProjectIds = toArray(req.body?.projectIds)
+      .map(toText)
+      .filter(Boolean)
+      .slice(0, 3);
     const {
       projectContexts,
       projectLookupNotes,
     } = await resolveProjectContextsForQuestion({
       question,
       user: req.user,
+      projectIds: selectedProjectIds,
     });
     const projectSearchText = getProjectContextSearchText(projectContexts);
     const contextualQuestion = [question, projectSearchText]
@@ -382,6 +400,7 @@ const askHelpQuestion = async (req, res) => {
     }
 
     return res.json({
+      answerId: createAnswerId(),
       answer,
       source,
       relatedArticles,
@@ -394,7 +413,61 @@ const askHelpQuestion = async (req, res) => {
   }
 };
 
+const getHelpProjects = async (req, res) => {
+  try {
+    const query = toText(req.query?.query).slice(0, 90);
+    const limit = Number.parseInt(req.query?.limit, 10);
+    const projects = await searchAccessibleProjectSummaries({
+      query,
+      user: req.user,
+      limit: Number.isFinite(limit) ? limit : 8,
+    });
+
+    return res.json({ projects });
+  } catch (error) {
+    console.error("Error searching help projects:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const submitHelpFeedback = async (req, res) => {
+  try {
+    const rating = toText(req.body?.rating);
+    if (!["helpful", "not_helpful", "still_confused"].includes(rating)) {
+      return res.status(400).json({ message: "Choose a valid feedback rating." });
+    }
+
+    const projectIds = toArray(req.body?.projectIds)
+      .map(toText)
+      .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
+      .slice(0, 6);
+
+    await HelpFeedback.create({
+      user: req.user._id || req.user.id,
+      rating,
+      question: toText(req.body?.question).slice(0, 700),
+      answerPreview: toText(req.body?.answerPreview).slice(0, 1000),
+      note: toText(req.body?.note).slice(0, 700),
+      source: toText(req.body?.source).slice(0, 40),
+      answerId: toText(req.body?.answerId).slice(0, 80),
+      relatedArticleIds: toArray(req.body?.relatedArticleIds)
+        .map(toText)
+        .filter(Boolean)
+        .slice(0, 10),
+      projectIds,
+      userDepartments: toArray(req.user?.department).map(toText).filter(Boolean),
+    });
+
+    return res.status(201).json({ message: "Thanks for the feedback." });
+  } catch (error) {
+    console.error("Error saving help feedback:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   getHelpArticles,
   askHelpQuestion,
+  getHelpProjects,
+  submitHelpFeedback,
 };

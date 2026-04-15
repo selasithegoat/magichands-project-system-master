@@ -13,6 +13,7 @@ import UserAvatar from "../../../components/ui/UserAvatar";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
 import ClockIcon from "../../../components/icons/ClockIcon";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
+import ContextualHelpLink from "../../../components/features/ContextualHelpLink";
 import {
   buildFileKey,
   normalizeReferenceAttachments,
@@ -578,6 +579,12 @@ const MinimalQuoteForm = () => {
             <h1>{editingId ? "Edit Reopened Quote" : "Create New Quote"}</h1>
             <p className="subtitle">Front Desk entry for new quote requests</p>
           </div>
+          <ContextualHelpLink
+            label="Help with quote"
+            topic="quote-blocked"
+            category="Quotes"
+            question="How do I complete this quote request correctly?"
+          />
         </div>
       </div>
 

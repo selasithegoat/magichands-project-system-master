@@ -1,0 +1,31 @@
+.contextual-help-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px solid rgba(var(--primary-rgb), 0.24);
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  border-radius: 8px;
+  padding: 0.5rem 0.68rem;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  max-width: 100%;
+  white-space: nowrap;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.contextual-help-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contextual-help-link:hover {
+  border-color: var(--border-focus);
+  transform: translateY(-1px);
+}

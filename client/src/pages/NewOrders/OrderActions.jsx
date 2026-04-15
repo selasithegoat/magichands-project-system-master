@@ -29,6 +29,7 @@ import {
   isMockupReadyForCompletion,
 } from "../../utils/mockupWorkflow";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -3323,9 +3324,25 @@ const OrderActions = () => {
             )}
           </span>
         </div>
-        <button className="action-btn" onClick={() => navigate("/new-orders")}>
-          Back to Orders
-        </button>
+        <div className="order-actions-topbar-actions">
+          <ContextualHelpLink
+            label={isQuoteProject ? "Help with quote" : "Help with order"}
+            topic={isQuoteProject ? "quote-blocked" : "production-blocked"}
+            category={isQuoteProject ? "Quotes" : "Orders"}
+            question={
+              isQuoteProject
+                ? "What should I do next on this quote?"
+                : "What should I do next on this order?"
+            }
+            project={project}
+          />
+          <button
+            className="action-btn"
+            onClick={() => navigate("/new-orders")}
+          >
+            Back to Orders
+          </button>
+        </div>
       </header>
 
       <div className="orders-list-container order-actions-workspace">

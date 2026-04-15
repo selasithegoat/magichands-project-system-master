@@ -9,6 +9,7 @@ import {
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
+import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
   getFullName,
@@ -1084,6 +1085,12 @@ const EngagedProjects = ({ user }) => {
             ? "Projects where your department is actively engaged."
             : "Completed or finished projects for your engaged departments."}
         </p>
+        <ContextualHelpLink
+          label="Help with engagement"
+          topic="engagement-issue"
+          category="Engagement"
+          question="How should I handle my department engagement?"
+        />
       </header>
 
       <div className="engaged-tabs">

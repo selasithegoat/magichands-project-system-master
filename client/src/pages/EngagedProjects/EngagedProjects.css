@@ -23,6 +23,10 @@
   font-size: 0.95rem;
 }
 
+.engaged-header .contextual-help-link {
+  margin-top: 0.85rem;
+}
+
 .engaged-tabs {
   display: flex;
   gap: 0.75rem;

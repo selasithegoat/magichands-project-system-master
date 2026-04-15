@@ -13,6 +13,7 @@ import PhoneIcon from "../../components/icons/PhoneIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
 import Select from "../../components/ui/Select";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import {
   buildFileKey,
   normalizeReferenceAttachments,
@@ -1098,6 +1099,12 @@ const NewOrders = ({ user = null }) => {
               )}
             </p>
           </div>
+          <ContextualHelpLink
+            label="Help with intake"
+            topic="production-blocked"
+            category="Orders"
+            question="How do I complete this order intake correctly?"
+          />
         </div>
       </div>
 

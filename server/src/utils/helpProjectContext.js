@@ -1,8 +1,39 @@
+const mongoose = require("mongoose");
 const Project = require("../models/Project");
 
 const MAX_PROJECT_REFERENCE_COUNT = 4;
 const MAX_PROJECT_CONTEXT_COUNT = 3;
 const MAX_LOOKUP_PROJECT_COUNT = 12;
+const MAX_PROJECT_SEARCH_POOL = 80;
+
+const PROJECT_CONTEXT_SELECT_FIELDS = [
+  "orderId",
+  "orderRef",
+  "projectType",
+  "priority",
+  "status",
+  "details",
+  "departments",
+  "items",
+  "batches",
+  "challenges",
+  "hold",
+  "cancellation",
+  "createdBy",
+  "projectLeadId",
+  "assistantLeadId",
+  "quoteDetails",
+  "invoice",
+  "paymentVerifications",
+  "sampleRequirement",
+  "sampleApproval",
+  "mockup.fileName",
+  "mockup.version",
+  "mockup.clientApproval",
+  "endOfDayUpdate",
+  "endOfDayUpdateDate",
+  "updatedAt",
+].join(" ");
 
 const PRODUCTION_DEPARTMENT_TOKENS = new Set([
   "production",
@@ -190,6 +221,44 @@ const buildReferenceLookupConditions = (refs) => {
   });
   return conditions;
 };
+
+const buildLooseSearchConditions = (query) => {
+  const rawQuery = toText(query).slice(0, 90);
+  const cleanedQuery = cleanReferenceToken(rawQuery);
+  const searchValue = cleanedQuery || rawQuery;
+  if (searchValue.length < 2) return [];
+
+  const searchRegex = new RegExp(escapeRegExp(searchValue), "i");
+  const conditions = [
+    { orderId: searchRegex },
+    { "quoteDetails.quoteNumber": searchRegex },
+    { "details.projectName": searchRegex },
+    { "details.projectNameRaw": searchRegex },
+    { "details.projectIndicator": searchRegex },
+    { "details.client": searchRegex },
+  ];
+
+  if (mongoose.Types.ObjectId.isValid(searchValue)) {
+    conditions.push({ _id: searchValue });
+  }
+
+  if (cleanedQuery && cleanedQuery !== rawQuery) {
+    const rawRegex = new RegExp(escapeRegExp(rawQuery), "i");
+    conditions.push({ orderId: rawRegex });
+  }
+
+  return conditions;
+};
+
+const findProjectContextRecords = (criteria, limit = MAX_LOOKUP_PROJECT_COUNT) =>
+  Project.find(criteria)
+    .select(PROJECT_CONTEXT_SELECT_FIELDS)
+    .populate("projectLeadId", "firstName lastName name employeeId department")
+    .populate("assistantLeadId", "firstName lastName name employeeId department")
+    .populate("orderRef", "orderNumber")
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .limit(limit)
+    .lean();
 
 const projectMatchesReference = (project, ref) => {
   const lookup = normalizeReferenceToken(ref.lookup);
@@ -482,7 +551,10 @@ const toPublicProjectContext = (context = {}) => ({
   displayRef: context.displayRef,
   requestedReference: context.requestedReference,
   route: context.route,
+  orderId: context.orderId,
+  quoteNumber: context.quoteNumber,
   projectType: context.projectType,
+  priority: context.priority,
   status: context.status,
   projectName: context.projectName,
   clientName: context.clientName,
@@ -602,9 +674,19 @@ const getProjectPromptContext = (contexts = [], lookupNotes = []) => {
     .join("\n\n");
 };
 
-const resolveProjectContextsForQuestion = async ({ question, user }) => {
+const resolveProjectContextsForQuestion = async ({
+  question,
+  user,
+  projectIds = [],
+}) => {
   const references = parseProjectReferences(question);
-  if (!references.length) {
+  const requestedProjectIds = unique(
+    toArray(projectIds)
+      .map(normalizeObjectId)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id)),
+  ).slice(0, MAX_PROJECT_CONTEXT_COUNT);
+
+  if (!references.length && !requestedProjectIds.length) {
     return {
       references,
       projectContexts: [],
@@ -612,48 +694,31 @@ const resolveProjectContextsForQuestion = async ({ question, user }) => {
     };
   }
 
-  const lookupConditions = buildReferenceLookupConditions(references);
-  const projects = await Project.find({ $or: lookupConditions })
-    .select(
-      [
-        "orderId",
-        "orderRef",
-        "projectType",
-        "priority",
-        "status",
-        "details",
-        "departments",
-        "items",
-        "batches",
-        "challenges",
-        "hold",
-        "cancellation",
-        "createdBy",
-        "projectLeadId",
-        "assistantLeadId",
-        "quoteDetails",
-        "invoice",
-        "paymentVerifications",
-        "sampleRequirement",
-        "sampleApproval",
-        "mockup.fileName",
-        "mockup.version",
-        "mockup.clientApproval",
-        "endOfDayUpdate",
-        "endOfDayUpdateDate",
-        "updatedAt",
-      ].join(" "),
-    )
-    .populate("projectLeadId", "firstName lastName name employeeId department")
-    .populate("assistantLeadId", "firstName lastName name employeeId department")
-    .populate("orderRef", "orderNumber")
-    .sort({ updatedAt: -1, createdAt: -1 })
-    .limit(MAX_LOOKUP_PROJECT_COUNT)
-    .lean();
+  const lookupConditions = [
+    ...buildReferenceLookupConditions(references),
+    ...(requestedProjectIds.length
+      ? [{ _id: { $in: requestedProjectIds } }]
+      : []),
+  ];
+  const projects = await findProjectContextRecords(
+    { $or: lookupConditions },
+    MAX_LOOKUP_PROJECT_COUNT,
+  );
 
   const projectContexts = [];
   const projectLookupNotes = [];
   const usedProjectIds = new Set();
+
+  const addProjectContext = (project, requestedReference = {}) => {
+    if (projectContexts.length >= MAX_PROJECT_CONTEXT_COUNT) return false;
+    const projectId = normalizeObjectId(project?._id);
+    if (!projectId || usedProjectIds.has(projectId)) return false;
+    if (!canUserAccessProjectContext(user, project)) return false;
+
+    usedProjectIds.add(projectId);
+    projectContexts.push(buildProjectContext(project, user, requestedReference));
+    return true;
+  };
 
   references.forEach((reference) => {
     const matchingProjects = projects.filter((project) =>
@@ -683,11 +748,29 @@ const resolveProjectContextsForQuestion = async ({ question, user }) => {
     }
 
     accessibleProjects.forEach((project) => {
-      if (projectContexts.length >= MAX_PROJECT_CONTEXT_COUNT) return;
-      const projectId = normalizeObjectId(project?._id);
-      if (!projectId || usedProjectIds.has(projectId)) return;
-      usedProjectIds.add(projectId);
-      projectContexts.push(buildProjectContext(project, user, reference));
+      addProjectContext(project, reference);
+    });
+  });
+
+  requestedProjectIds.forEach((requestedProjectId) => {
+    const project = projects.find(
+      (entry) => normalizeObjectId(entry?._id) === requestedProjectId,
+    );
+
+    if (!project || !canUserAccessProjectContext(user, project)) {
+      projectLookupNotes.push({
+        reference: requestedProjectId,
+        code: "not_found_or_no_access",
+        message: "I could not find an accessible selected project.",
+      });
+      return;
+    }
+
+    addProjectContext(project, {
+      raw: getDisplayRef(project),
+      display: getDisplayRef(project),
+      lookup: toText(project?.orderId) || requestedProjectId,
+      type: project?.projectType === "Quote" ? "quote" : "order",
     });
   });
 
@@ -698,9 +781,33 @@ const resolveProjectContextsForQuestion = async ({ question, user }) => {
   };
 };
 
+const searchAccessibleProjectSummaries = async ({ query, user, limit = 8 }) => {
+  const numericLimit = Number.isFinite(Number(limit))
+    ? Math.min(12, Math.max(1, Number(limit)))
+    : 8;
+  const conditions = buildLooseSearchConditions(query);
+  const criteria = conditions.length ? { $or: conditions } : {};
+  const projects = await findProjectContextRecords(criteria, MAX_PROJECT_SEARCH_POOL);
+
+  return projects
+    .filter((project) => canUserAccessProjectContext(user, project))
+    .slice(0, numericLimit)
+    .map((project) =>
+      toPublicProjectContext(
+        buildProjectContext(project, user, {
+          raw: getDisplayRef(project),
+          display: getDisplayRef(project),
+          lookup: toText(project?.orderId) || normalizeObjectId(project?._id),
+          type: project?.projectType === "Quote" ? "quote" : "order",
+        }),
+      ),
+    );
+};
+
 module.exports = {
   parseProjectReferences,
   resolveProjectContextsForQuestion,
+  searchAccessibleProjectSummaries,
   getProjectContextSearchText,
   getProjectPromptContext,
   toPublicProjectContext,

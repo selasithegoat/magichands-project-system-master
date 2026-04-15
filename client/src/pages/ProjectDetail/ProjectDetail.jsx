@@ -64,6 +64,7 @@ import {
 } from "../../utils/referenceAttachments";
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
+import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -1222,6 +1223,13 @@ const ProjectDetail = ({ user }) => {
           )}
 
           <div className="header-top-actions">
+            <ContextualHelpLink
+              label="Help with this project"
+              topic="production-blocked"
+              category="Projects"
+              question="What should I do next on this project?"
+              project={project}
+            />
             {/* PDF Download Button - Lazy Loaded */}
             {project && (
               <React.Suspense
@@ -3161,7 +3169,8 @@ const ApprovedMockupCard = ({ project, hideRejected = false }) => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Rejection: {getAttachmentName(attachment, index)}
+                Rejection:{" "}
+                {getReferenceFileName(attachment) || `attachment-${index + 1}`}
               </a>
             ))}
         </div>

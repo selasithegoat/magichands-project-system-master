@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import {
   formatProjectDisplayName,
@@ -908,6 +909,15 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       {toast.show && (
         <div className={`toast-message ${toast.type}`}>{toast.message}</div>
       )}
+
+      <div className="orders-help-row">
+        <ContextualHelpLink
+          label="Help with orders"
+          topic="production-blocked"
+          category="Orders"
+          question="How do I handle the current order workflow?"
+        />
+      </div>
 
       <div className="tabs-container">
         <button
