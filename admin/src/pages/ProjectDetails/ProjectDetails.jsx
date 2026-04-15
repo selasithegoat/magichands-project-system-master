@@ -2392,10 +2392,8 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
-  const resolveFeedbackAttachmentUrl = (attachment = {}) => {
-    const rawUrl = String(
-      attachment?.fileUrl || attachment?.url || attachment?.path || "",
-    ).trim();
+  const resolveExternalFileUrl = (value) => {
+    const rawUrl = String(value || "").trim();
     if (!rawUrl) return "";
     if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
       return rawUrl;
@@ -2403,6 +2401,11 @@ const ProjectDetails = ({ user }) => {
     if (rawUrl.startsWith("/")) return rawUrl;
     return `/${rawUrl.replace(/^\/+/, "")}`;
   };
+
+  const resolveFeedbackAttachmentUrl = (attachment = {}) =>
+    resolveExternalFileUrl(
+      attachment?.fileUrl || attachment?.url || attachment?.path || "",
+    );
 
   const getFeedbackAttachmentName = (attachment = {}, index = 0) => {
     const preferredName = String(
@@ -2449,7 +2452,9 @@ const ProjectDetails = ({ user }) => {
   const activeMockupLabel = activeMockupVersion
     ? `v${activeMockupVersion.version}`
     : "Mockup";
-  const activeMockupFileUrl = activeMockupVersion?.fileUrl || "";
+  const activeMockupFileUrl = resolveExternalFileUrl(
+    activeMockupVersion?.fileUrl || "",
+  );
   const activeMockupFileName =
     activeMockupVersion?.fileName ||
     (activeMockupFileUrl ? activeMockupFileUrl.split("/").pop() : "Mockup");
@@ -2750,16 +2755,16 @@ const ProjectDetails = ({ user }) => {
 
   const normalizeReferenceFileUrl = (value) => {
     if (!value) return "";
-    if (typeof value === "string") return value.trim();
+    if (typeof value === "string") return resolveExternalFileUrl(value);
     if (typeof value === "object") {
-      return String(
+      return resolveExternalFileUrl(
         value.fileUrl ||
           value.url ||
           value.path ||
           value.location ||
           value.filename ||
           "",
-      ).trim();
+      );
     }
     return "";
   };
@@ -3915,11 +3920,10 @@ const ProjectDetails = ({ user }) => {
                             gap: "0.4rem",
                           }}
                         >
-                          <Link
-                            to={fileUrl}
+                          <a
+                            href={fileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            reloadDocument
                             style={{
                               position: "relative",
                               aspectRatio: "1",
@@ -3976,11 +3980,10 @@ const ProjectDetails = ({ user }) => {
                                 </div>
                               </div>
                             )}
-                          </Link>
-                          <Link
-                            to={fileUrl}
+                          </a>
+                          <a
+                            href={fileUrl}
                             download
-                            reloadDocument
                             style={{
                               fontSize: "0.75rem",
                               color: "#38bdf8",
@@ -3989,7 +3992,7 @@ const ProjectDetails = ({ user }) => {
                             }}
                           >
                             Download
-                          </Link>
+                          </a>
                           {note && <div className="reference-note">{note}</div>}
                         </div>
                       );
@@ -4107,22 +4110,20 @@ const ProjectDetails = ({ user }) => {
                 </div>
 
                 <div className="project-mockup-links">
-                  <Link
-                    to={activeMockupFileUrl}
+                  <a
+                    href={activeMockupFileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    reloadDocument
                   >
                     View {activeMockupLabel}
-                  </Link>
-                  <Link
-                    to={activeMockupFileUrl}
+                  </a>
+                  <a
+                    href={activeMockupFileUrl}
                     download
-                    reloadDocument
                     className="download"
                   >
                     Download {activeMockupFileName}
-                  </Link>
+                  </a>
                 </div>
 
                 {activeMockupVersion?.note && (
@@ -4669,12 +4670,11 @@ const ProjectDetails = ({ user }) => {
                           borderTop: "1px solid var(--border-color)",
                         }}
                       >
-                        <Link
-                          to={update.attachments[0].url}
+                        <a
+                          href={resolveExternalFileUrl(update.attachments[0].url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           download
-                          reloadDocument
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -4685,7 +4685,7 @@ const ProjectDetails = ({ user }) => {
                           }}
                         >
                           <DownloadIcon /> {update.attachments[0].name}
-                        </Link>
+                        </a>
                       </div>
                     )}
                   </div>
