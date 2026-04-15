@@ -15,6 +15,7 @@ import SettingsIcon from "../icons/SettingsIcon";
 import LogOutIcon from "../icons/LogOutIcon";
 import ClipboardListIcon from "../icons/ClipboardListIcon";
 import PackageIcon from "../icons/PackageIcon";
+import HelpIcon from "../icons/HelpIcon";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
@@ -155,6 +156,7 @@ const Layout = ({
   onNavigateEndOfDay, // [New]
   onNavigateEngagedProjects, // [New] Production Team
   onNavigateInventory, // [New] Stores Team
+  onNavigateHelp,
   onCreateProject,
   activeView,
   user, // Receive user
@@ -807,6 +809,7 @@ const Layout = ({
         onNavigateEndOfDay={onNavigateEndOfDay} // Pass prop
         onNavigateEngagedProjects={onNavigateEngagedProjects} // [New]
         onNavigateInventory={onNavigateInventory} // [New]
+        onNavigateHelp={onNavigateHelp}
         onToggleMobileMenu={() => setIsMobileMenuOpen(true)}
         onToggleNotification={() => setIsNotificationOpen(!isNotificationOpen)} // Toggle
         notificationCount={notificationCount}
@@ -935,6 +938,20 @@ const Layout = ({
               >
                 <UsersIcon />
                 History
+              </Link>
+              <Link
+                to="#"
+                className={`drawer-item ${activeView === "help" ? "active" : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsMobileMenuOpen(false);
+                  if (typeof onNavigateHelp === "function") {
+                    onNavigateHelp();
+                  }
+                }}
+              >
+                <HelpIcon width={20} height={20} />
+                Help
               </Link>
               {hasStores && (
                 <Link

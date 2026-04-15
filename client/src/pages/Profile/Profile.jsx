@@ -1315,16 +1315,16 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               <h3>Help & Support</h3>
             </div>
             <div className="support-list">
-              <button className="support-btn" type="button">
+              <Link to="/faq" className="support-btn">
                 <HelpIcon /> Browse FAQs <span className="arrow">&gt;</span>
-              </button>
+              </Link>
               <button className="support-btn" type="button">
                 Contact Support <span className="arrow">&gt;</span>
               </button>
             </div>
             <div className="support-tip">
-              <strong>Tip:</strong> You can find more detailed documentation in
-              the Knowledge Base accessible from the main dashboard.
+              <strong>Tip:</strong> Use the help center for project, order,
+              inventory, notification, and billing tutorials.
             </div>
           </div>
 

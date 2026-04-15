@@ -115,6 +115,12 @@
   transform: translateY(-1px);
 }
 
+.icon-btn.active {
+  color: var(--nav-active-text);
+  background: var(--nav-active-bg);
+  border-color: var(--nav-active-bg);
+}
+
 .icon-btn.theme-toggle {
   background: var(--surface-alt);
   color: var(--text-primary);

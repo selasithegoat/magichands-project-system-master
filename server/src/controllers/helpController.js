@@ -1,0 +1,400 @@
+const { HELP_ARTICLES, HELP_CATEGORIES } = require("../data/helpArticles");
+const {
+  buildArticleAnswer,
+  getUserHelpContext,
+  searchHelpArticles,
+} = require("../utils/helpSearch");
+const {
+  getProjectContextSearchText,
+  getProjectPromptContext,
+  resolveProjectContextsForQuestion,
+  toPublicProjectContext,
+} = require("../utils/helpProjectContext");
+
+const HELP_AI_MODEL =
+  process.env.OPENAI_HELP_MODEL || process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
+const HELP_AI_TIMEOUT_MS = Number.isFinite(
+  Number.parseInt(process.env.OPENAI_HELP_TIMEOUT_MS, 10),
+)
+  ? Number.parseInt(process.env.OPENAI_HELP_TIMEOUT_MS, 10)
+  : 12000;
+const HELP_AI_TEMPERATURE = Number.isFinite(
+  Number.parseFloat(process.env.OPENAI_HELP_TEMPERATURE),
+)
+  ? Number.parseFloat(process.env.OPENAI_HELP_TEMPERATURE)
+  : 0.2;
+const OLLAMA_HELP_URL =
+  process.env.OLLAMA_HELP_URL ||
+  process.env.OLLAMA_RISK_URL ||
+  "http://localhost:11434/api/generate";
+const OLLAMA_HELP_MODEL =
+  process.env.OLLAMA_HELP_MODEL || process.env.OLLAMA_RISK_MODEL || "llama3.1:8b";
+const OLLAMA_HELP_TIMEOUT_MS = Number.isFinite(
+  Number.parseInt(process.env.OLLAMA_HELP_TIMEOUT_MS, 10),
+)
+  ? Number.parseInt(process.env.OLLAMA_HELP_TIMEOUT_MS, 10)
+  : 18000;
+const MAX_QUESTION_LENGTH = 600;
+
+const getFetchClient = async () => {
+  if (typeof fetch === "function") return fetch;
+  const nodeFetch = await import("node-fetch");
+  return nodeFetch.default;
+};
+
+const toText = (value) => String(value || "").trim();
+
+const toPublicArticle = (article) => ({
+  id: article.id,
+  title: article.title,
+  category: article.category,
+  audience: article.audience || [],
+  departments: article.departments || [],
+  keywords: article.keywords || [],
+  summary: article.summary,
+  steps: article.steps || [],
+  tips: article.tips || [],
+  relatedRoutes: article.relatedRoutes || [],
+});
+
+const buildHelpPrompt = ({
+  question,
+  articles,
+  userContext,
+  projectContexts = [],
+  projectLookupNotes = [],
+}) => {
+  const contextBlocks = articles.map((article, index) => {
+    const steps = (article.steps || [])
+      .map((step, stepIndex) => `${stepIndex + 1}. ${step}`)
+      .join("\n");
+    const tips = (article.tips || []).map((tip) => `- ${tip}`).join("\n");
+
+    return [
+      `Article ${index + 1}: ${article.title}`,
+      `Category: ${article.category}`,
+      `Summary: ${article.summary}`,
+      steps ? `Steps:\n${steps}` : "",
+      tips ? `Tips:\n${tips}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  });
+  const projectContextBlock = getProjectPromptContext(
+    projectContexts,
+    projectLookupNotes,
+  );
+
+  return [
+    "Answer the user's MagicHands system question using only the approved help articles and authorized project context below.",
+    "If authorized project context is present, use it to tailor the status, blockers, and next checks for that specific project.",
+    "If a project lookup note says the project could not be found or accessed, do not guess whether the project exists.",
+    "If the help articles and project context do not contain enough information, say you could not find an approved tutorial for that exact question and suggest the closest article.",
+    "Do not invent buttons, pages, permissions, or workflow steps.",
+    "Do not claim that you changed, approved, submitted, or updated anything.",
+    "Keep the answer practical and step-by-step. Use plain text.",
+    "",
+    `User role: ${userContext.role || "unknown"}`,
+    `Employee type: ${userContext.employeeType || "unknown"}`,
+    `Departments: ${(userContext.departments || []).join(", ") || "none"}`,
+    "",
+    `Question: ${question}`,
+    "",
+    projectContextBlock,
+    "Approved help articles:",
+    contextBlocks.length
+      ? contextBlocks.join("\n\n---\n\n")
+      : "No matching approved help articles were found.",
+  ].join("\n");
+};
+
+const requestOpenAiHelpAnswer = async ({
+  question,
+  articles = [],
+  userContext,
+  projectContexts = [],
+  projectLookupNotes = [],
+}) => {
+  const apiKey = toText(process.env.OPENAI_API_KEY);
+  if (!apiKey || (articles.length === 0 && projectContexts.length === 0)) {
+    return "";
+  }
+
+  const fetchClient = await getFetchClient();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HELP_AI_TIMEOUT_MS);
+
+  try {
+    const response = await fetchClient("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: HELP_AI_MODEL,
+        temperature: HELP_AI_TEMPERATURE,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are MagicHelp, a concise internal help assistant for the MagicHands project management system. You only answer from approved help content and authorized project context.",
+          },
+          {
+            role: "user",
+            content: buildHelpPrompt({
+              question,
+              articles,
+              userContext,
+              projectContexts,
+              projectLookupNotes,
+            }),
+          },
+        ],
+        max_tokens: 700,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI help request failed: ${response.status} ${errorText}`);
+    }
+
+    const payload = await response.json();
+    const content = payload?.choices?.[0]?.message?.content;
+    if (Array.isArray(content)) {
+      return content
+        .map((part) =>
+          typeof part === "string" ? part : toText(part?.text || part?.value),
+        )
+        .join("")
+        .trim();
+    }
+
+    return toText(content);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const requestOllamaHelpAnswer = async ({
+  question,
+  articles = [],
+  userContext,
+  projectContexts = [],
+  projectLookupNotes = [],
+}) => {
+  if (articles.length === 0 && projectContexts.length === 0) return "";
+
+  const fetchClient = await getFetchClient();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OLLAMA_HELP_TIMEOUT_MS);
+
+  try {
+    const response = await fetchClient(OLLAMA_HELP_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OLLAMA_HELP_MODEL,
+        prompt: buildHelpPrompt({
+          question,
+          articles,
+          userContext,
+          projectContexts,
+          projectLookupNotes,
+        }),
+        stream: false,
+        options: {
+          temperature: 0.2,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Ollama help request failed: ${response.status} ${errorText}`);
+    }
+
+    const payload = await response.json();
+    return toText(payload?.response);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const buildProjectFallbackSection = (projectContexts, projectLookupNotes) => {
+  const sections = [];
+
+  if (projectContexts.length > 0) {
+    projectContexts.forEach((project) => {
+      const blockers = (project.blockers || [])
+        .map((blocker) =>
+          [blocker.label, blocker.detail].filter(Boolean).join(": "),
+        )
+        .join("\n- ");
+      const nextChecks = (project.nextChecks || [])
+        .map((check, index) => `${index + 1}. ${check}`)
+        .join("\n");
+
+      sections.push(
+        [
+          `${project.displayRef} is currently ${project.status || "in the system"}${
+            project.projectName ? ` for ${project.projectName}` : ""
+          }.`,
+          project.clientName ? `Client: ${project.clientName}.` : "",
+          project.projectType ? `Project type: ${project.projectType}.` : "",
+          blockers
+            ? `Likely blockers:\n- ${blockers}`
+            : "I did not find an obvious blocker in the project snapshot.",
+          nextChecks ? `Recommended checks:\n${nextChecks}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    });
+  }
+
+  if (projectLookupNotes.length > 0) {
+    sections.push(projectLookupNotes.map((note) => note.message).join("\n"));
+  }
+
+  return sections.join("\n\n");
+};
+
+const buildFallbackHelpAnswer = (
+  matches,
+  projectContexts = [],
+  projectLookupNotes = [],
+) => {
+  const projectSection = buildProjectFallbackSection(
+    projectContexts,
+    projectLookupNotes,
+  );
+
+  if (!matches.length || matches[0].score < 4) {
+    const fallback = [
+      "I could not find an approved tutorial for that exact question yet.",
+      "Try searching with a workflow keyword such as order, quote, mockup, engagement, reminder, billing, inventory, or profile.",
+    ].join(" ");
+
+    return [projectSection, fallback].filter(Boolean).join("\n\n");
+  }
+
+  const article = matches[0].article;
+  return [projectSection, buildArticleAnswer(article)].filter(Boolean).join("\n\n");
+};
+
+const getHelpArticles = async (req, res) => {
+  const userContext = getUserHelpContext(req.user);
+  const featuredMatches = searchHelpArticles(HELP_ARTICLES, "", userContext, {
+    limit: 6,
+    minScore: 1,
+  });
+
+  return res.json({
+    categories: HELP_CATEGORIES,
+    articles: HELP_ARTICLES.map(toPublicArticle),
+    featuredArticleIds: featuredMatches.map((entry) => entry.article.id),
+  });
+};
+
+const askHelpQuestion = async (req, res) => {
+  try {
+    const question = toText(req.body?.question).slice(0, MAX_QUESTION_LENGTH);
+
+    if (question.length < 3) {
+      return res.status(400).json({
+        message: "Ask a question with at least 3 characters.",
+      });
+    }
+
+    const userContext = getUserHelpContext(req.user);
+    const {
+      projectContexts,
+      projectLookupNotes,
+    } = await resolveProjectContextsForQuestion({
+      question,
+      user: req.user,
+    });
+    const projectSearchText = getProjectContextSearchText(projectContexts);
+    const contextualQuestion = [question, projectSearchText]
+      .filter(Boolean)
+      .join(" ");
+    const matches = searchHelpArticles(
+      HELP_ARTICLES,
+      contextualQuestion,
+      userContext,
+      {
+        limit: 5,
+        minScore: projectContexts.length ? 1 : 2,
+      },
+    );
+    const relatedArticles = matches.map((entry) => toPublicArticle(entry.article));
+    const contextArticles = matches.map((entry) => entry.article);
+
+    let answer = "";
+    let source = "fallback";
+
+    if (
+      projectContexts.length > 0 ||
+      (contextArticles.length > 0 && matches[0].score >= 4)
+    ) {
+      try {
+        answer = await requestOpenAiHelpAnswer({
+          question,
+          articles: contextArticles,
+          userContext,
+          projectContexts,
+          projectLookupNotes,
+        });
+        if (answer) source = "openai";
+      } catch (error) {
+        console.error("OpenAI help answer failed, trying Ollama backup:", error);
+      }
+
+      if (!answer) {
+        try {
+          answer = await requestOllamaHelpAnswer({
+            question,
+            articles: contextArticles,
+            userContext,
+            projectContexts,
+            projectLookupNotes,
+          });
+          if (answer) source = "ollama";
+        } catch (error) {
+          console.error("Ollama help answer failed, using fallback:", error);
+        }
+      }
+    }
+
+    if (!answer) {
+      answer = buildFallbackHelpAnswer(
+        matches,
+        projectContexts,
+        projectLookupNotes,
+      );
+      source = "fallback";
+    }
+
+    return res.json({
+      answer,
+      source,
+      relatedArticles,
+      projectContexts: projectContexts.map(toPublicProjectContext),
+      projectLookupNotes,
+    });
+  } catch (error) {
+    console.error("Error answering help question:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+module.exports = {
+  getHelpArticles,
+  askHelpQuestion,
+};

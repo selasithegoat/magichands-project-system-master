@@ -8,6 +8,7 @@ import {
 } from "../../constants/departments";
 
 import MenuIcon from "../icons/MenuIcon";
+import HelpIcon from "../icons/HelpIcon";
 
 const Header = ({
   activeView,
@@ -21,6 +22,7 @@ const Header = ({
   onNavigateEndOfDay, // [New]
   onNavigateEngagedProjects, // [New] Production Team
   onNavigateInventory, // [New] Stores Team
+  onNavigateHelp,
   onToggleMobileMenu,
   onToggleNotification, // New prop
   notificationCount = 0, // New prop
@@ -182,6 +184,15 @@ const Header = ({
           )}
         </nav>
         <div className="header-actions">
+          <button
+            className={`icon-btn ${activeView === "help" ? "active" : ""}`}
+            onClick={onNavigateHelp}
+            type="button"
+            aria-label="Open help center"
+            title="Help center"
+          >
+            <HelpIcon />
+          </button>
           <button
             className="icon-btn theme-toggle"
             onClick={onToggleTheme}

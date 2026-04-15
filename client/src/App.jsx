@@ -36,6 +36,7 @@ const EngagedProjectActions = lazy(
   () => import("./pages/EngagedProjects/EngagedProjectActions"),
 );
 const Inventory = lazy(() => import("./pages/Inventory/Inventory"));
+const FAQ = lazy(() => import("./pages/FAQ/FAQ"));
 
 import {
   Routes,
@@ -316,6 +317,7 @@ function App() {
         onNavigateEndOfDay={() => navigate("/end-of-day")}
         onNavigateEngagedProjects={() => navigate("/engaged-projects")}
         onNavigateInventory={() => navigate("/inventory")}
+        onNavigateHelp={() => navigate("/faq")}
         onCreateProject={() => navigate("/create")}
         onNavigateAdmin={() => {
           window.location.href = buildPortalUrl("admin");
@@ -604,6 +606,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <Inventory user={user} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/faq"
+          element={
+            <ProtectedLayout
+              activeView="help"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <FAQ user={user} />
             </ProtectedLayout>
           }
         />
