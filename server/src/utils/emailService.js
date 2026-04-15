@@ -281,36 +281,53 @@ const buildDefaultEmailHtml = (subject, text, options = {}) => {
   `.trim();
 };
 
+const resolveEmailOptions = (htmlOrOptions, extraOptions = {}) => {
+  const options =
+    htmlOrOptions && typeof htmlOrOptions === "object" && !Array.isArray(htmlOrOptions)
+      ? htmlOrOptions
+      : extraOptions;
+  const html =
+    typeof htmlOrOptions === "string" ? htmlOrOptions : toText(options.html);
+  const customAttachments = Array.isArray(options.attachments)
+    ? options.attachments.filter(Boolean)
+    : [];
+
+  return {
+    ...options,
+    html,
+    customAttachments,
+  };
+};
+
+const createTransporter = () =>
+  nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
 /**
- * Send an email notification
+ * Send an email notification and return delivery metadata
  * @param {string} to - Recipient email address
  * @param {string} subject - Email subject
  * @param {string} text - Plain text content
  * @param {string|object} htmlOrOptions - HTML content or options object
  * @param {object} extraOptions - Additional options (optional)
  */
-const sendEmail = async (to, subject, text, htmlOrOptions, extraOptions = {}) => {
+const sendEmailDetailed = async (
+  to,
+  subject,
+  text,
+  htmlOrOptions,
+  extraOptions = {},
+) => {
   try {
-    const options =
-      htmlOrOptions && typeof htmlOrOptions === "object" && !Array.isArray(htmlOrOptions)
-        ? htmlOrOptions
-        : extraOptions;
-    const html =
-      typeof htmlOrOptions === "string" ? htmlOrOptions : toText(options.html);
-    const customAttachments = Array.isArray(options.attachments)
-      ? options.attachments.filter(Boolean)
-      : [];
+    const options = resolveEmailOptions(htmlOrOptions, extraOptions);
+    const transporter = createTransporter();
 
-    // Higher compatibility config for Gmail
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const hasCustomHtml = Boolean(toText(html));
+    const hasCustomHtml = Boolean(toText(options.html));
     const logoPath = resolveEmailLogoPath();
     const includeLogo = !hasCustomHtml && Boolean(logoPath);
 
@@ -320,7 +337,15 @@ const sendEmail = async (to, subject, text, htmlOrOptions, extraOptions = {}) =>
       subject,
       text: toText(text) || toText(subject),
       html:
-        html || buildDefaultEmailHtml(subject, text, { includeLogo }),
+        options.html || buildDefaultEmailHtml(subject, text, { includeLogo }),
+      inReplyTo: toText(options.inReplyTo) || undefined,
+      references: Array.isArray(options.references)
+        ? options.references.filter(Boolean)
+        : toText(options.references) || undefined,
+      headers:
+        options.headers && typeof options.headers === "object"
+          ? options.headers
+          : undefined,
       attachments: [
         ...(includeLogo
           ? [
@@ -331,14 +356,45 @@ const sendEmail = async (to, subject, text, htmlOrOptions, extraOptions = {}) =>
             },
           ]
           : []),
-        ...customAttachments,
+        ...options.customAttachments,
       ],
     });
 
-    return true;
+    return {
+      sent: true,
+      messageId: toText(info?.messageId),
+      accepted: Array.isArray(info?.accepted) ? info.accepted : [],
+      rejected: Array.isArray(info?.rejected) ? info.rejected : [],
+      response: toText(info?.response),
+    };
   } catch {
-    return false;
+    return {
+      sent: false,
+      messageId: "",
+      accepted: [],
+      rejected: [],
+      response: "",
+    };
   }
 };
 
-module.exports = { sendEmail };
+/**
+ * Send an email notification
+ * @param {string} to - Recipient email address
+ * @param {string} subject - Email subject
+ * @param {string} text - Plain text content
+ * @param {string|object} htmlOrOptions - HTML content or options object
+ * @param {object} extraOptions - Additional options (optional)
+ */
+const sendEmail = async (to, subject, text, htmlOrOptions, extraOptions = {}) => {
+  const result = await sendEmailDetailed(
+    to,
+    subject,
+    text,
+    htmlOrOptions,
+    extraOptions,
+  );
+  return result.sent;
+};
+
+module.exports = { sendEmail, sendEmailDetailed };

@@ -3,7 +3,7 @@ const path = require("path");
 
 const Project = require("../models/Project");
 const upload = require("../middleware/upload");
-const { sendEmail } = require("./emailService");
+const { sendEmailDetailed } = require("./emailService");
 
 const toText = (value) => (value === null || value === undefined ? "" : String(value).trim());
 
@@ -338,11 +338,267 @@ const buildProjectCreationEmailHtml = ({ project, creatorName, requestBaseUrl })
   `.trim();
 };
 
-const resolveRecipients = () =>
-  toText(process.env.ORDER_CREATION_NOTIFICATION_EMAIL)
-    .split(",")
-    .map((entry) => entry.trim())
+const getProjectItemCount = (items = []) =>
+  (Array.isArray(items) ? items : []).length;
+
+const getProjectItemQtyTotal = (items = []) =>
+  (Array.isArray(items) ? items : []).reduce(
+    (total, item) => total + (Number(item?.qty) || 0),
+    0,
+  );
+
+const formatItemSummary = (item = {}) => {
+  const parts = [];
+  const description = toText(item?.description);
+  const breakdown = toText(item?.breakdown);
+  const qty = Number(item?.qty);
+
+  if (description) parts.push(description);
+  if (breakdown) parts.push(breakdown);
+  if (Number.isFinite(qty) && qty > 0) parts.push(`Qty: ${qty}`);
+
+  return parts.join(" | ") || "N/A";
+};
+
+const buildChangeDetailsSectionHtml = (changeDetails = []) => {
+  const rows = (Array.isArray(changeDetails) ? changeDetails : [])
+    .map((detail) => ({
+      label: toText(detail?.label),
+      before: formatValue(detail?.before),
+      after: formatValue(detail?.after),
+    }))
+    .filter((detail) => detail.label);
+
+  if (!rows.length) return "";
+
+  const rowHtml = rows
+    .map(
+      (detail) => `
+        <tr>
+          <td style="padding:10px 12px;border:1px solid #dbe3ef;background:#f8fafc;width:220px;font-weight:700;color:#0f172a;vertical-align:top;">
+            ${escapeHtml(detail.label)}
+          </td>
+          <td style="padding:10px 12px;border:1px solid #dbe3ef;color:#0f172a;vertical-align:top;">
+            ${escapeHtml(detail.before)}
+          </td>
+          <td style="padding:10px 12px;border:1px solid #dbe3ef;color:#0f172a;vertical-align:top;">
+            ${escapeHtml(detail.after)}
+          </td>
+        </tr>
+      `.trim(),
+    )
+    .join("");
+
+  return `
+    <div style="margin-top:22px;">
+      <div style="font-size:18px;font-weight:800;color:#1e293b;margin:0 0 10px;">What Changed</div>
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse:collapse;border:1px solid #dbe3ef;">
+        <thead>
+          <tr>
+            ${["Field", "Previous", "Current"]
+              .map(
+                (label) => `
+                  <th style="padding:10px 12px;border:1px solid #dbe3ef;background:#e2e8f0;text-align:left;color:#0f172a;font-size:13px;">
+                    ${escapeHtml(label)}
+                  </th>
+                `.trim(),
+              )
+              .join("")}
+          </tr>
+        </thead>
+        <tbody>${rowHtml}</tbody>
+      </table>
+    </div>
+  `.trim();
+};
+
+const buildProjectCreationEmailSubject = (project = {}) => {
+  const subjectPrefix =
+    project?.projectType === "Quote" ? "New Quote Created" : "New Order Created";
+  return `${subjectPrefix}: #${project?.orderId || project?._id} - ${toText(
+    project?.details?.projectName || "Untitled Project",
+  )}`;
+};
+
+const buildProjectRevisionEmailSubject = ({ project, threadSubject = "" }) => {
+  const baseSubject = toText(threadSubject) || buildProjectCreationEmailSubject(project);
+  if (!baseSubject) {
+    return `Order Revision: #${project?.orderId || project?._id || "N/A"}`;
+  }
+  return /^re:/i.test(baseSubject) ? baseSubject : `Re: ${baseSubject}`;
+};
+
+const buildProjectRevisionEmailText = ({
+  project,
+  actorName,
+  revisionParts = [],
+  changeDetails = [],
+  eventType = "update",
+  reopenContext = null,
+}) => {
+  const lines = [
+    eventType === "reopen"
+      ? `Project reopened as revision v${project?.versionNumber || 1}`
+      : `Order revision ${project?.orderRevisionCount || 0}`,
+    `Order ID: ${project?.orderId || project?._id || "N/A"}`,
+    `Project Name: ${project?.details?.projectName || "N/A"}`,
+    `Client: ${project?.details?.client || project?.orderRef?.client || "N/A"}`,
+    `Updated By: ${actorName}`,
+    `Status: ${project?.status || "N/A"}`,
+    `Changed Parts: ${(Array.isArray(revisionParts) ? revisionParts : [])
+      .filter(Boolean)
+      .join(", ") || "N/A"}`,
+  ];
+
+  if (eventType === "reopen") {
+    lines.push(
+      `Version: v${project?.versionNumber || 1}`,
+      `Previous Version: v${Number(reopenContext?.sourceVersion || 0) || "N/A"}`,
+      `Reason: ${toText(reopenContext?.reason) || "N/A"}`,
+    );
+  }
+
+  const detailLines = (Array.isArray(changeDetails) ? changeDetails : [])
+    .map((detail) => {
+      const label = toText(detail?.label);
+      if (!label) return "";
+      const before = formatValue(detail?.before);
+      const after = formatValue(detail?.after);
+      return `- ${label}: ${before} -> ${after}`;
+    })
     .filter(Boolean);
+
+  if (detailLines.length > 0) {
+    lines.push("", "Change Details:", ...detailLines);
+  }
+
+  return lines.join("\n");
+};
+
+const buildProjectRevisionEmailHtml = ({
+  project,
+  actorName,
+  requestBaseUrl,
+  revisionParts = [],
+  changeDetails = [],
+  eventType = "update",
+  reopenContext = null,
+}) => {
+  const portalUrl = resolveBaseUrl(requestBaseUrl)
+    ? joinUrl(resolveBaseUrl(requestBaseUrl), `/new-orders/${project?._id}`)
+    : "";
+  const cleanParts = (Array.isArray(revisionParts) ? revisionParts : []).filter(Boolean);
+  const summarySection = buildSectionHtml("Revision Summary", [
+    ["Project Type", project?.projectType],
+    ["Status", project?.status],
+    ["Order ID", project?.orderId],
+    ["Version", `v${Number(project?.versionNumber || 1)}`],
+    ["Revision Count", project?.orderRevisionCount],
+    [
+      eventType === "reopen" ? "Reopened By" : "Updated By",
+      actorName,
+    ],
+    ["Changed Parts", cleanParts.join(", ") || "N/A"],
+    [
+      eventType === "reopen" ? "Reopened At" : "Updated At",
+      eventType === "reopen"
+        ? project?.reopenMeta?.reopenedAt || project?.createdAt
+        : project?.orderRevisionMeta?.updatedAt || project?.updatedAt,
+    ],
+    [
+      "Reopen Reason",
+      eventType === "reopen" ? toText(reopenContext?.reason) || "N/A" : undefined,
+    ],
+  ]);
+
+  const snapshotSection = buildSectionHtml("Current Order Snapshot", [
+    ["Client", project?.details?.client || project?.orderRef?.client],
+    ["Client Email", project?.details?.clientEmail || project?.orderRef?.clientEmail],
+    ["Client Phone", project?.details?.clientPhone || project?.orderRef?.clientPhone],
+    ["Project Name", project?.details?.projectName],
+    ["Project Indicator", project?.details?.projectIndicator],
+    ["Brief Overview", project?.details?.briefOverview],
+    ["Delivery Date", formatDateTime(project?.details?.deliveryDate)],
+    ["Delivery Time", project?.details?.deliveryTime],
+    ["Delivery Location", project?.details?.deliveryLocation],
+    ["Packaging Type", project?.details?.packagingType],
+    [
+      "Items Summary",
+      `${getProjectItemCount(project?.items)} item(s), ${getProjectItemQtyTotal(project?.items)} total qty`,
+    ],
+  ]);
+
+  const itemsSection = cleanParts.includes("Order Items")
+    ? buildItemsSectionHtml(project?.items || [])
+    : "";
+  const changeSection = buildChangeDetailsSectionHtml(changeDetails);
+
+  return `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${escapeHtml(project?.orderId || project?._id || "Order Revision")}</title>
+      </head>
+      <body style="margin:0;padding:24px;background:#f1f5f9;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+        <div style="max-width:920px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 20px 40px rgba(15,23,42,0.12);">
+          <div style="padding:26px 30px;background:linear-gradient(135deg,#7c2d12 0%,#9a3412 100%);color:#f8fafc;">
+            <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#fdba74;">Order Revision Reply</div>
+            <div style="margin-top:8px;font-size:30px;font-weight:800;line-height:1.2;">${escapeHtml(
+              project?.details?.projectName || project?.orderId || "Order Revision",
+            )}</div>
+            <div style="margin-top:10px;font-size:16px;line-height:1.6;color:#ffedd5;">
+              ${
+                eventType === "reopen"
+                  ? `${escapeHtml(actorName || "Front Desk")} reopened this project as revision v${escapeHtml(
+                      String(project?.versionNumber || 1),
+                    )}.`
+                  : `${escapeHtml(actorName || "Front Desk")} updated this order and recorded a new revision.`
+              }
+              ${cleanParts.length ? ` Changed parts: ${escapeHtml(cleanParts.join(", "))}.` : ""}
+            </div>
+            ${
+              portalUrl
+                ? `<div style="margin-top:14px;font-size:14px;color:#fed7aa;">Open order: <a href="${escapeHtml(
+                    portalUrl,
+                  )}" style="color:#ffedd5;text-decoration:underline;">${escapeHtml(portalUrl)}</a></div>`
+                : ""
+            }
+          </div>
+          <div style="padding:28px 30px 34px;">
+            <div style="font-size:15px;line-height:1.7;color:#334155;">
+              This reply highlights the latest approved change against the prior saved version of the order.
+            </div>
+            ${summarySection}
+            ${changeSection}
+            ${snapshotSection}
+            ${itemsSection}
+          </div>
+        </div>
+      </body>
+    </html>
+  `.trim();
+};
+
+const resolveRecipientList = (primaryEnvKey, fallbackEnvKey = "") =>
+  unique(
+    [primaryEnvKey, fallbackEnvKey]
+      .map((envKey) => toText(process.env[envKey]))
+      .filter(Boolean)
+      .flatMap((value) => value.split(","))
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+
+const resolveRecipients = () =>
+  resolveRecipientList("ORDER_CREATION_NOTIFICATION_EMAIL");
+
+const resolveRevisionRecipients = () =>
+  resolveRecipientList(
+    "ORDER_REVISION_NOTIFICATION_EMAIL",
+    "ORDER_CREATION_NOTIFICATION_EMAIL",
+  );
 
 const loadProjectForEmail = async (projectId) =>
   Project.findById(projectId)
@@ -351,6 +607,105 @@ const loadProjectForEmail = async (projectId) =>
     .populate("assistantLeadId", "firstName lastName email employeeId department")
     .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
     .lean();
+
+const getMessageIdList = (entries = []) =>
+  unique(
+    (Array.isArray(entries) ? entries : [])
+      .map((entry) => toText(entry?.messageId))
+      .filter(Boolean),
+  );
+
+const resolveThreadSourceProject = async (project) => {
+  const threadMessageId = toText(project?.emailNotifications?.orderCreated?.messageId);
+  const lineageId = project?.lineageId?._id || project?.lineageId;
+  const currentProjectId = project?._id?.toString?.() || toText(project?._id);
+
+  if (
+    threadMessageId ||
+    !lineageId ||
+    String(lineageId) === currentProjectId
+  ) {
+    return project;
+  }
+
+  const lineageProject = await loadProjectForEmail(lineageId);
+  return lineageProject || project;
+};
+
+const resolveEmailThread = async (project) => {
+  const threadSource = await resolveThreadSourceProject(project);
+  const orderCreated =
+    threadSource?.emailNotifications?.orderCreated ||
+    project?.emailNotifications?.orderCreated ||
+    {};
+  const references = unique([
+    toText(orderCreated?.messageId),
+    ...getMessageIdList(threadSource?.emailNotifications?.revisions),
+    ...getMessageIdList(project?.emailNotifications?.revisions),
+  ]).filter(Boolean);
+
+  return {
+    threadSource,
+    orderCreated,
+    references,
+    inReplyTo:
+      references[references.length - 1] || toText(orderCreated?.messageId),
+  };
+};
+
+const persistOrderCreatedEmailMetadata = async ({
+  projectId,
+  subject,
+  recipients,
+  messageId,
+}) => {
+  if (!projectId || !toText(messageId)) return;
+
+  await Project.findByIdAndUpdate(projectId, {
+    $set: {
+      "emailNotifications.orderCreated": {
+        sentAt: new Date(),
+        subject: toText(subject),
+        recipients: Array.isArray(recipients) ? recipients.filter(Boolean) : [],
+        messageId: toText(messageId),
+      },
+    },
+  });
+};
+
+const appendRevisionEmailMetadata = async ({
+  projectId,
+  eventType = "update",
+  orderRevisionCount = 0,
+  versionNumber = 1,
+  subject,
+  recipients,
+  messageId,
+  changedParts = [],
+  triggeredBy = null,
+  triggeredByName = "",
+}) => {
+  if (!projectId || !toText(messageId)) return;
+
+  await Project.findByIdAndUpdate(projectId, {
+    $push: {
+      "emailNotifications.revisions": {
+        eventType,
+        orderRevisionCount: Number(orderRevisionCount || 0),
+        versionNumber: Math.max(1, Number(versionNumber || 1)),
+        sentAt: new Date(),
+        subject: toText(subject),
+        recipients: Array.isArray(recipients) ? recipients.filter(Boolean) : [],
+        messageId: toText(messageId),
+        changedParts: unique(
+          (Array.isArray(changedParts) ? changedParts : []).filter(Boolean),
+        ),
+        triggeredBy: triggeredBy || undefined,
+        triggeredByName: toText(triggeredByName),
+      },
+    },
+  });
+};
 
 const sendProjectCreationEmail = async ({ projectId, creator = null, requestBaseUrl = "" } = {}) => {
   const recipients = resolveRecipients();
@@ -399,9 +754,7 @@ const sendProjectCreationEmail = async ({ projectId, creator = null, requestBase
   });
 
   const subjectPrefix = project?.projectType === "Quote" ? "New Quote Created" : "New Order Created";
-  const subject = `${subjectPrefix}: #${project?.orderId || project?._id} - ${toText(
-    project?.details?.projectName || "Untitled Project",
-  )}`;
+  const subject = buildProjectCreationEmailSubject(project);
   const text = [
     `${subjectPrefix}`,
     `Order ID: ${project?.orderId || project?._id || "N/A"}`,
@@ -416,15 +769,23 @@ const sendProjectCreationEmail = async ({ projectId, creator = null, requestBase
     requestBaseUrl,
   });
 
-  const sent = await sendEmail(recipients.join(", "), subject, text, {
+  const delivery = await sendEmailDetailed(recipients.join(", "), subject, text, {
     html,
     attachments,
   });
+  const sent = Boolean(delivery?.sent);
 
   if (!sent) {
     console.error("Project creation email was not sent successfully.", {
       projectId: project?._id?.toString?.() || String(project?._id || ""),
       recipients,
+    });
+  } else {
+    await persistOrderCreatedEmailMetadata({
+      projectId: project._id,
+      subject,
+      recipients,
+      messageId: delivery.messageId,
     });
   }
 
@@ -433,12 +794,118 @@ const sendProjectCreationEmail = async ({ projectId, creator = null, requestBase
     sent,
     status: sent ? "sent" : "failed",
     recipientCount: recipients.length,
+    messageId: toText(delivery?.messageId),
     message: sent
       ? "Notification email sent successfully."
       : "Order created, but notification email failed to send.",
   };
 };
 
+const sendProjectRevisionEmail = async ({
+  projectId,
+  actor = null,
+  requestBaseUrl = "",
+  revisionParts = [],
+  changeDetails = [],
+  eventType = "update",
+  reopenContext = null,
+} = {}) => {
+  const recipients = resolveRevisionRecipients();
+  if (!projectId || recipients.length === 0) {
+    return {
+      skipped: true,
+      sent: false,
+      status: "skipped",
+      message: "Revision email skipped because no recipient is configured.",
+    };
+  }
+
+  const project = await loadProjectForEmail(projectId);
+  if (!project) {
+    return {
+      skipped: true,
+      sent: false,
+      status: "skipped",
+      message: "Revision email skipped because the project could not be loaded.",
+    };
+  }
+
+  const actorName =
+    getUserDisplayName(actor) || getUserDisplayName(project?.createdBy) || "Front Desk";
+  const cleanParts = unique(
+    (Array.isArray(revisionParts) ? revisionParts : []).filter(Boolean),
+  );
+  const thread = await resolveEmailThread(project);
+  const subject = buildProjectRevisionEmailSubject({
+    project,
+    threadSubject: thread?.orderCreated?.subject,
+  });
+  const text = buildProjectRevisionEmailText({
+    project,
+    actorName,
+    revisionParts: cleanParts,
+    changeDetails,
+    eventType,
+    reopenContext,
+  });
+  const html = buildProjectRevisionEmailHtml({
+    project,
+    actorName,
+    requestBaseUrl,
+    revisionParts: cleanParts,
+    changeDetails,
+    eventType,
+    reopenContext,
+  });
+
+  const delivery = await sendEmailDetailed(
+    recipients.join(", "),
+    subject,
+    text,
+    {
+      html,
+      inReplyTo: thread?.inReplyTo,
+      references: thread?.references,
+    },
+  );
+  const sent = Boolean(delivery?.sent);
+
+  if (!sent) {
+    console.error("Project revision email was not sent successfully.", {
+      projectId: project?._id?.toString?.() || String(project?._id || ""),
+      recipients,
+      revisionParts: cleanParts,
+      eventType,
+    });
+  } else {
+    await appendRevisionEmailMetadata({
+      projectId: project._id,
+      eventType,
+      orderRevisionCount: project?.orderRevisionCount,
+      versionNumber: project?.versionNumber,
+      subject,
+      recipients,
+      messageId: delivery.messageId,
+      changedParts: cleanParts,
+      triggeredBy: actor?._id || actor?.id || null,
+      triggeredByName: actorName,
+    });
+  }
+
+  return {
+    skipped: false,
+    sent,
+    status: sent ? "sent" : "failed",
+    recipientCount: recipients.length,
+    messageId: toText(delivery?.messageId),
+    threaded: Boolean(thread?.inReplyTo),
+    message: sent
+      ? "Revision email sent successfully."
+      : "Revision email failed to send.",
+  };
+};
+
 module.exports = {
   sendProjectCreationEmail,
+  sendProjectRevisionEmail,
 };

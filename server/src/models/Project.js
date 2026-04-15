@@ -205,6 +205,76 @@ const ProjectBatchSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ProjectOrderEmailNotificationSchema = new mongoose.Schema(
+  {
+    sentAt: Date,
+    subject: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    recipients: {
+      type: [String],
+      default: [],
+    },
+    messageId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  { _id: false },
+);
+
+const ProjectRevisionEmailNotificationSchema = new mongoose.Schema(
+  {
+    eventType: {
+      type: String,
+      enum: ["update", "reopen"],
+      default: "update",
+    },
+    orderRevisionCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    versionNumber: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    sentAt: Date,
+    subject: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    recipients: {
+      type: [String],
+      default: [],
+    },
+    messageId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    changedParts: {
+      type: [String],
+      default: [],
+    },
+    triggeredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    triggeredByName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  { _id: false },
+);
+
 const ProjectSchema = new mongoose.Schema(
   {
     orderId: {
@@ -530,6 +600,16 @@ const ProjectSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    emailNotifications: {
+      orderCreated: {
+        type: ProjectOrderEmailNotificationSchema,
+        default: () => ({}),
+      },
+      revisions: {
+        type: [ProjectRevisionEmailNotificationSchema],
+        default: [],
+      },
     },
     feedbacks: [
       {

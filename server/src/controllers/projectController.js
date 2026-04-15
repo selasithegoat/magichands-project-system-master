@@ -36,7 +36,10 @@ const {
   buildFeedbackSmsMessage,
 } = require("../utils/smsPromptService");
 const { sendSms } = require("../utils/arkeselSmsClient");
-const { sendProjectCreationEmail } = require("../utils/projectCreationEmailService");
+const {
+  sendProjectCreationEmail,
+  sendProjectRevisionEmail,
+} = require("../utils/projectCreationEmailService");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -5672,6 +5675,55 @@ const getUserDisplayName = (user) => {
   const fullName = `${firstName} ${lastName}`.trim().replace(/\s+/g, " ");
   return fullName || user.name || user.employeeId || "Someone";
 };
+const getOrderItemTotalsSummary = (items = []) => {
+  const list = Array.isArray(items) ? items : [];
+  const totalQty = list.reduce(
+    (sum, item) => sum + (Number(item?.qty) || 0),
+    0,
+  );
+  return `${list.length} item(s), ${totalQty} total qty`;
+};
+const formatRevisionItemSummary = (item = {}) => {
+  const parts = [];
+  const description = toText(item?.description);
+  const breakdown = toText(item?.breakdown);
+  const qty = Number(item?.qty);
+
+  if (description) parts.push(description);
+  if (breakdown) parts.push(breakdown);
+  if (Number.isFinite(qty) && qty > 0) parts.push(`Qty: ${qty}`);
+
+  return parts.join(" | ") || "N/A";
+};
+const sendProjectRevisionEmailSafely = async ({
+  projectId,
+  actor,
+  requestBaseUrl = "",
+  revisionParts = [],
+  changeDetails = [],
+  eventType = "update",
+  reopenContext = null,
+}) => {
+  try {
+    return await sendProjectRevisionEmail({
+      projectId,
+      actor,
+      requestBaseUrl,
+      revisionParts,
+      changeDetails,
+      eventType,
+      reopenContext,
+    });
+  } catch (error) {
+    console.error("Error sending order revision email:", error);
+    return {
+      skipped: false,
+      sent: false,
+      status: "failed",
+      message: "Revision email failed to send.",
+    };
+  }
+};
 const getRequestSource = (req) => toText(req?.query?.source).toLowerCase();
 const isAdminOrderManagementRequest = (req) =>
   getRequestSource(req) === "admin";
@@ -7513,6 +7565,7 @@ const addItemToProject = async (req, res) => {
 
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    const previousItemTotals = getOrderItemTotalsSummary(project?.items);
 
     const newItem = {
       description,
@@ -7545,6 +7598,24 @@ const addItemToProject = async (req, res) => {
         actor: req.user,
         revisionParts: ["Order Items"],
       });
+      await sendProjectRevisionEmailSafely({
+        projectId: project._id,
+        actor: req.user,
+        requestBaseUrl: getRequestBaseUrl(req),
+        revisionParts: ["Order Items"],
+        changeDetails: [
+          {
+            label: "Order Items Summary",
+            before: previousItemTotals,
+            after: getOrderItemTotalsSummary(project?.items),
+          },
+          {
+            label: "Added Item",
+            before: "N/A",
+            after: formatRevisionItemSummary(newItem),
+          },
+        ],
+      });
     }
 
     // Notify Admins
@@ -7572,9 +7643,20 @@ const updateItemInProject = async (req, res) => {
     const { id, itemId } = req.params;
 
     const projectForAccess = await Project.findById(id).select(
-      PROJECT_MUTATION_ACCESS_FIELDS,
+      `${PROJECT_MUTATION_ACCESS_FIELDS} items`,
     );
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "manage")) return;
+    const existingItem = Array.isArray(projectForAccess?.items)
+      ? projectForAccess.items.find(
+          (item) => item?._id?.toString?.() === String(itemId),
+        )
+      : null;
+    const previousItemTotals = getOrderItemTotalsSummary(projectForAccess?.items);
+    const nextItemSummary = formatRevisionItemSummary({
+      description,
+      breakdown,
+      qty: Number(qty),
+    });
 
     const revisionMetaUpdate = {
       "orderRevisionMeta.updatedAt": new Date(),
@@ -7617,6 +7699,24 @@ const updateItemInProject = async (req, res) => {
         actor: req.user,
         revisionParts: ["Order Items"],
       });
+      await sendProjectRevisionEmailSafely({
+        projectId: project._id,
+        actor: req.user,
+        requestBaseUrl: getRequestBaseUrl(req),
+        revisionParts: ["Order Items"],
+        changeDetails: [
+          {
+            label: "Order Items Summary",
+            before: previousItemTotals,
+            after: getOrderItemTotalsSummary(project?.items),
+          },
+          {
+            label: "Updated Item",
+            before: formatRevisionItemSummary(existingItem),
+            after: nextItemSummary,
+          },
+        ],
+      });
     }
 
     // Notify Admins
@@ -7644,6 +7744,10 @@ const deleteItemFromProject = async (req, res) => {
 
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    const removedItem = Array.isArray(project?.items)
+      ? project.items.find((item) => item?._id?.toString?.() === String(itemId))
+      : null;
+    const previousItemTotals = getOrderItemTotalsSummary(project?.items);
 
     // Pull item from array
     project.items.pull({ _id: itemId });
@@ -7666,6 +7770,24 @@ const deleteItemFromProject = async (req, res) => {
         project,
         actor: req.user,
         revisionParts: ["Order Items"],
+      });
+      await sendProjectRevisionEmailSafely({
+        projectId: project._id,
+        actor: req.user,
+        requestBaseUrl: getRequestBaseUrl(req),
+        revisionParts: ["Order Items"],
+        changeDetails: [
+          {
+            label: "Order Items Summary",
+            before: previousItemTotals,
+            after: getOrderItemTotalsSummary(project?.items),
+          },
+          {
+            label: "Removed Item",
+            before: formatRevisionItemSummary(removedItem),
+            after: "Removed",
+          },
+        ],
       });
     }
 
@@ -14121,6 +14243,49 @@ const updateProject = async (req, res) => {
     if (itemsChanged) {
       changes.push("Order Items updated");
     }
+    const orderRevisionChangeDetails = [];
+    if (briefOverviewChanged) {
+      orderRevisionChangeDetails.push({
+        label: "Brief Overview",
+        before: previousBriefOverview || "N/A",
+        after: nextBriefOverview || "N/A",
+      });
+    }
+    if (itemsChanged) {
+      orderRevisionChangeDetails.push({
+        label: "Order Items Summary",
+        before: getOrderItemTotalsSummary(oldValues.items),
+        after: getOrderItemTotalsSummary(updatedProject.items),
+      });
+    }
+    if (sampleImageChanged) {
+      orderRevisionChangeDetails.push({
+        label: "Primary Reference Image",
+        before:
+          [
+            previousSampleImage
+              ? path.basename(previousSampleImage.split("?")[0])
+              : "",
+            previousSampleImageNote ? `Note: ${previousSampleImageNote}` : "",
+          ]
+            .filter(Boolean)
+            .join(" | ") || "N/A",
+        after:
+          [
+            nextSampleImage ? path.basename(nextSampleImage.split("?")[0]) : "",
+            nextSampleImageNote ? `Note: ${nextSampleImageNote}` : "",
+          ]
+            .filter(Boolean)
+            .join(" | ") || "N/A",
+      });
+    }
+    if (attachmentsChanged) {
+      orderRevisionChangeDetails.push({
+        label: "Reference Materials",
+        before: `${previousAttachments.length} file(s)`,
+        after: `${nextAttachments.length} file(s)`,
+      });
+    }
     const orderRevisionChanged =
       briefOverviewChanged ||
       sampleImageChanged ||
@@ -14248,13 +14413,6 @@ const updateProject = async (req, res) => {
       if (sampleImageChanged) revisionParts.push("Primary Reference Image");
       if (attachmentsChanged) revisionParts.push("Reference Materials");
 
-      const notifiedIds = await notifyReviewUpdated({
-        project: updatedProject,
-        actor: req.user,
-        revisionParts,
-      });
-      notifiedIds.forEach((id) => directlyNotifiedUserIds.add(id));
-
       updatedProject.orderRevisionMeta = {
         updatedAt: new Date(),
         updatedBy: req.user._id || req.user.id,
@@ -14263,6 +14421,20 @@ const updateProject = async (req, res) => {
       updatedProject.orderRevisionCount =
         Number(updatedProject.orderRevisionCount || 0) + 1;
       await updatedProject.save();
+
+      const notifiedIds = await notifyReviewUpdated({
+        project: updatedProject,
+        actor: req.user,
+        revisionParts,
+      });
+      notifiedIds.forEach((id) => directlyNotifiedUserIds.add(id));
+      await sendProjectRevisionEmailSafely({
+        projectId: updatedProject._id,
+        actor: req.user,
+        requestBaseUrl: getRequestBaseUrl(req),
+        revisionParts,
+        changeDetails: orderRevisionChangeDetails,
+      });
     }
 
     // Notify Admins of significant updates (if changes > 0)
@@ -14804,6 +14976,35 @@ const reopenProject = async (req, res) => {
       "Project Reopened",
       notifyMessage,
     );
+
+    await sendProjectRevisionEmailSafely({
+      projectId: savedReopenedProject._id,
+      actor: req.user,
+      requestBaseUrl: getRequestBaseUrl(req),
+      revisionParts: ["Project Reopened"],
+      changeDetails: [
+        {
+          label: "Revision Version",
+          before: `v${sourceVersion}`,
+          after: `v${nextVersion}`,
+        },
+        {
+          label: "Project Status",
+          before: sourceStatus || "N/A",
+          after: savedReopenedProject.status || "N/A",
+        },
+        {
+          label: "Reopen Reason",
+          before: "N/A",
+          after: reopenReason || "N/A",
+        },
+      ],
+      eventType: "reopen",
+      reopenContext: {
+        sourceVersion,
+        reason: reopenReason,
+      },
+    });
 
     const populatedReopenedProject = await Project.findById(
       savedReopenedProject._id,
