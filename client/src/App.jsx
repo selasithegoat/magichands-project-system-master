@@ -153,7 +153,7 @@ function App() {
   };
 
   // Initialize auto-logout (5 minutes)
-  useInactivityLogout(5 * 60 * 1000, () => setUser(null));
+  useInactivityLogout(5 * 60 * 1000, () => setUser(null), Boolean(user?._id));
   useRealtimeClient(Boolean(user));
 
   React.useEffect(() => {
@@ -166,7 +166,7 @@ function App() {
       legacyTheme = window.localStorage.getItem(
         `${THEME_STORAGE_KEY}:${accountKey}`,
       );
-    } catch (error) {
+    } catch {
       legacyTheme = "";
     }
 
@@ -222,9 +222,11 @@ function App() {
           navigate("/login");
         }
       }
-    } catch (err) {
+    } catch {
       setUser(null);
-      navigate("/login");
+      if (location.pathname !== "/login") {
+        navigate("/login");
+      }
     } finally {
       setIsLoading(false);
     }

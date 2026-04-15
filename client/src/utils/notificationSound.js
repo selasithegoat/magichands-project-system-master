@@ -131,3 +131,19 @@ export const playNotificationSound = async (
 
 export const playMessageSound = async (enabled = true) =>
   playSoundKind("message", enabled);
+
+export const triggerNotificationVibration = (pattern = [200, 100, 200]) => {
+  if (
+    !hasUserInteraction ||
+    typeof navigator === "undefined" ||
+    typeof navigator.vibrate !== "function"
+  ) {
+    return false;
+  }
+
+  try {
+    return Boolean(navigator.vibrate(pattern));
+  } catch {
+    return false;
+  }
+};

@@ -25,6 +25,7 @@ import {
 import {
   initNotificationSound,
   playNotificationSound,
+  triggerNotificationVibration,
 } from "../../utils/notificationSound";
 import { formatProjectDisplayName } from "../../utils/projectName";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
@@ -260,14 +261,7 @@ const Layout = ({
     // Show Native Notification
     showNativeNotification(notification);
 
-    // Vibrate on mobile (wrapped in try-catch as Chrome blocks this until user interaction)
-    try {
-      if ("vibrate" in navigator) {
-        navigator.vibrate([200, 100, 200]);
-      }
-    } catch {
-      // Silently ignore - vibration blocked before user interaction
-    }
+    triggerNotificationVibration();
 
     const id = Date.now() + Math.random();
     const projectId = toEntityId(
