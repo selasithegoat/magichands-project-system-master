@@ -14,6 +14,18 @@ const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
 const unique = (items = []) => Array.from(new Set(items.filter(Boolean)));
 
+const HELP_TERM_SYNONYM_GROUPS = [
+  ["blocked", "blocking", "stuck", "pending", "waiting", "delay", "hold"],
+  ["invoice", "payment", "billing", "authorization", "po", "receipt"],
+  ["quote", "cost", "mockup", "bid", "sample", "requirements"],
+  ["page", "screen", "menu", "tab", "route", "open", "find"],
+  ["lead", "assistant", "department", "assignment", "responsible"],
+  ["project", "order", "job"],
+  ["edit", "update", "revise", "change", "modify"],
+  ["upload", "attach", "reference", "file", "sample"],
+  ["engagement", "acknowledge", "complete", "assigned"],
+];
+
 const HELP_INTENT_DEFINITIONS = {
   blocker: {
     label: "Blocker or pending reason",
@@ -241,6 +253,16 @@ const getConversationSearchText = (conversation = [], limit = 4) =>
     .map((entry) => entry.text)
     .join(" ");
 
+const getSynonymTokens = (token = "") =>
+  HELP_TERM_SYNONYM_GROUPS.find((group) => group.includes(token)) || [];
+
+const expandQueryTokens = (query = "", intent = {}) =>
+  unique([
+    ...tokenize(query),
+    ...tokenize(toArray(intent?.queryTerms).join(" ")),
+    ...tokenize(toArray(intent?.articleHints).join(" ")),
+  ]).flatMap((token) => unique([token, ...getSynonymTokens(token)]));
+
 const isLikelyFollowUpQuestion = (question = "") => {
   const text = String(question || "").trim();
   if (!text) return false;
@@ -404,7 +426,7 @@ const scoreArticle = (article = {}, query = "", userContext = {}, intent = {}) =
     );
   }
 
-  const queryTokens = tokenize(normalizedQuery);
+  const queryTokens = expandQueryTokens(normalizedQuery, intent);
   const titleText = normalizeText(article.title);
   const categoryText = normalizeText(article.category);
   const keywordText = normalizeText(toArray(article.keywords).join(" "));
@@ -427,6 +449,190 @@ const scoreArticle = (article = {}, query = "", userContext = {}, intent = {}) =
   }
 
   return score;
+};
+
+const chunkItems = (items = [], size = 3) => {
+  const list = toArray(items).filter(Boolean);
+  const chunks = [];
+  for (let index = 0; index < list.length; index += size) {
+    chunks.push(list.slice(index, index + size));
+  }
+  return chunks;
+};
+
+const buildHelpArticleChunks = (articles = []) =>
+  toArray(articles).flatMap((article) => {
+    const articleId = String(article?.id || "").trim();
+    const articleTitle = String(article?.title || "").trim();
+    const articleCategory = String(article?.category || "").trim();
+    const articleKeywords = toArray(article?.keywords).map(String).filter(Boolean);
+    const articleRoutes = toArray(article?.relatedRoutes).filter(
+      (route) => route?.label || route?.path,
+    );
+    const chunks = [];
+
+    const pushChunk = (chunk) => {
+      if (!chunk?.text) return;
+      chunks.push({
+        id: `${articleId || articleTitle || "article"}:${chunk.kind}:${chunks.length + 1}`,
+        articleId,
+        articleTitle,
+        articleCategory,
+        articleKeywords,
+        articleRoutes,
+        article,
+        ...chunk,
+      });
+    };
+
+    pushChunk({
+      kind: "summary",
+      label: "Summary",
+      title: articleTitle,
+      text: article.summary || "",
+    });
+
+    chunkItems(article.steps, 3).forEach((steps, index) => {
+      pushChunk({
+        kind: "steps",
+        label: "Workflow steps",
+        title: `${articleTitle} steps ${index + 1}`,
+        text: steps.join(" "),
+        steps,
+      });
+    });
+
+    chunkItems(article.tips, 3).forEach((tips, index) => {
+      pushChunk({
+        kind: "tips",
+        label: "Tips",
+        title: `${articleTitle} tips ${index + 1}`,
+        text: tips.join(" "),
+        tips,
+      });
+    });
+
+    if (articleRoutes.length > 0) {
+      pushChunk({
+        kind: "routes",
+        label: "Related pages",
+        title: `${articleTitle} related pages`,
+        text: articleRoutes
+          .map((route) => [route.label, route.path].filter(Boolean).join(" "))
+          .join(" "),
+        routes: articleRoutes,
+      });
+    }
+
+    return chunks;
+  });
+
+const getHelpChunkSearchText = (chunk = {}) =>
+  [
+    chunk.articleTitle,
+    chunk.articleCategory,
+    chunk.label,
+    chunk.title,
+    chunk.text,
+    ...toArray(chunk.steps),
+    ...toArray(chunk.tips),
+    ...toArray(chunk.routes).flatMap((route) => [route?.label, route?.path]),
+    ...toArray(chunk.articleKeywords),
+    ...toArray(chunk.article?.audience),
+    ...toArray(chunk.article?.departments),
+  ].join(" ");
+
+const getIntentChunkBoost = (chunk = {}, intent = {}) => {
+  const kind = String(chunk?.kind || "").trim();
+  const intentName = String(intent?.name || "").trim();
+  let score = 0;
+
+  if (kind === "summary") score += 2;
+
+  if (intentName === "how_to" && kind === "steps") score += 7;
+  if (intentName === "navigation" && kind === "routes") score += 8;
+  if (intentName === "blocker" && (kind === "summary" || kind === "tips")) score += 5;
+  if (intentName === "status" && kind === "summary") score += 6;
+  if (intentName === "assignment" && (kind === "summary" || kind === "steps")) score += 4;
+  if (intentName === "permission" && (kind === "summary" || kind === "routes")) score += 4;
+  if (intentName === "billing" && (kind === "summary" || kind === "steps")) score += 4;
+  if (intentName === "quote" && (kind === "summary" || kind === "steps")) score += 4;
+
+  return score;
+};
+
+const scoreHelpChunk = (chunk = {}, query = "", userContext = {}, intent = {}) => {
+  const normalizedQuery = normalizeText(query);
+  const queryTokens = expandQueryTokens(normalizedQuery, intent);
+  const titleText = normalizeText(chunk.title || chunk.articleTitle);
+  const labelText = normalizeText(chunk.label);
+  const searchText = normalizeText(getHelpChunkSearchText(chunk));
+  let score =
+    articleAudienceScore(chunk.article, userContext) +
+    getIntentArticleBoost(chunk.article, intent) +
+    getIntentChunkBoost(chunk, intent);
+
+  if (!normalizedQuery) return score;
+
+  if (titleText.includes(normalizedQuery)) score += 12;
+  if (labelText.includes(normalizedQuery)) score += 5;
+  if (searchText.includes(normalizedQuery)) score += 8;
+
+  queryTokens.forEach((token) => {
+    if (titleText.includes(token)) score += 5;
+    if (labelText.includes(token)) score += 3;
+    if (searchText.includes(token)) score += 2;
+  });
+
+  return score;
+};
+
+const searchHelpChunks = (
+  articles = [],
+  query = "",
+  userContext = {},
+  options = {},
+) => {
+  const limit = Number.isFinite(Number(options.limit))
+    ? Math.max(1, Number(options.limit))
+    : 6;
+  const minScore = Number.isFinite(Number(options.minScore))
+    ? Number(options.minScore)
+    : 1;
+  const maxPerArticle = Number.isFinite(Number(options.maxPerArticle))
+    ? Math.max(1, Number(options.maxPerArticle))
+    : 2;
+  const intent =
+    typeof options.intent === "string"
+      ? detectHelpIntent({ question: options.intent })
+      : options.intent || HELP_INTENT_DEFINITIONS.general;
+
+  const chunkEntries = buildHelpArticleChunks(articles)
+    .map((chunk) => ({
+      chunk,
+      article: chunk.article,
+      score: scoreHelpChunk(chunk, query, userContext, intent),
+    }))
+    .filter((entry) => entry.score >= minScore)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.chunk.articleTitle.localeCompare(b.chunk.articleTitle) ||
+        a.chunk.id.localeCompare(b.chunk.id),
+    );
+
+  const articleUsage = new Map();
+  const results = [];
+  for (const entry of chunkEntries) {
+    const articleId = String(entry.chunk.articleId || "");
+    const usedCount = articleUsage.get(articleId) || 0;
+    if (articleId && usedCount >= maxPerArticle) continue;
+    if (articleId) articleUsage.set(articleId, usedCount + 1);
+    results.push(entry);
+    if (results.length >= limit) break;
+  }
+
+  return results;
 };
 
 const searchHelpArticles = (
@@ -471,14 +677,17 @@ const buildArticleAnswer = (article = {}) => {
 
 module.exports = {
   buildHelpRetrievalText,
+  buildHelpArticleChunks,
   normalizeText,
   tokenize,
   getArticleSearchText,
+  getHelpChunkSearchText,
   getUserHelpContext,
   getConversationEntries,
   getConversationSearchText,
   detectHelpIntent,
   isLikelyFollowUpQuestion,
+  searchHelpChunks,
   searchHelpArticles,
   buildArticleAnswer,
 };

@@ -6,7 +6,9 @@ const {
   buildHelpRetrievalText,
   detectHelpIntent,
   getConversationEntries,
+  getHelpChunkSearchText,
   getUserHelpContext,
+  searchHelpChunks,
   searchHelpArticles,
 } = require("../utils/helpSearch");
 const {
@@ -106,6 +108,430 @@ const buildFollowUpSuggestions = ({
   ).slice(0, 4);
 };
 
+const getUniqueRelatedArticles = (chunkMatches = []) => {
+  const seen = new Set();
+  return toArray(chunkMatches)
+    .map((entry) => entry?.article || entry?.chunk?.article)
+    .filter((article) => {
+      const articleId = toText(article?.id);
+      if (!articleId || seen.has(articleId)) return false;
+      seen.add(articleId);
+      return true;
+    });
+};
+
+const formatChunkPromptBlock = (entry = {}, index = 0) => {
+  const chunk = entry?.chunk || entry;
+  const routes = toArray(chunk?.routes || chunk?.articleRoutes)
+    .map((route) => [route?.label, route?.path].filter(Boolean).join(" "))
+    .filter(Boolean)
+    .join(" | ");
+
+  return [
+    `Chunk ${index + 1}: ${chunk?.articleTitle || chunk?.title || "Help content"}`,
+    `Category: ${chunk?.articleCategory || "General"}`,
+    `Type: ${chunk?.label || chunk?.kind || "content"}`,
+    `Text: ${toText(chunk?.text) || getHelpChunkSearchText(chunk)}`,
+    chunk?.steps?.length ? `Steps: ${chunk.steps.join(" | ")}` : "",
+    chunk?.tips?.length ? `Tips: ${chunk.tips.join(" | ")}` : "",
+    routes ? `Routes: ${routes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
+const normalizeLooseText = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const isDirectProjectStatusQuestion = (question = "", intent = {}) => {
+  if (intent?.name !== "status") return false;
+
+  const normalized = normalizeLooseText(question);
+  if (!normalized) return false;
+
+  return [
+    /\bstatus\b/,
+    /\bstage\b/,
+    /\bcurrent\b/,
+    /\bcurrently\b/,
+    /\bprogress\b/,
+    /\bwhere is\b/,
+    /\bwhere s\b/,
+    /\bwhat s next\b/,
+    /\bwhat is next\b/,
+    /\bwhat is happening\b/,
+    /\bwhat s happening\b/,
+  ].some((pattern) => pattern.test(normalized));
+};
+
+const isDirectProjectAssignmentQuestion = (question = "", intent = {}) => {
+  if (intent?.name !== "assignment") return false;
+
+  const normalized = normalizeLooseText(question);
+  if (!normalized) return false;
+
+  return [
+    /\bwho\b/,
+    /\bneeds to act\b/,
+    /\bwho acts\b/,
+    /\bwho next\b/,
+    /\bresponsible\b/,
+    /\bassigned\b/,
+    /\bowner\b/,
+    /\blead\b/,
+    /\bdepartment\b/,
+  ].some((pattern) => pattern.test(normalized));
+};
+
+const isDirectProjectNextStepQuestion = (question = "", intent = {}) => {
+  const normalized = normalizeLooseText(question);
+  if (!normalized) return false;
+
+  if (intent?.name && ["navigation", "permission", "assignment"].includes(intent.name)) {
+    return false;
+  }
+
+  return [
+    /\bwhat should i do next\b/,
+    /\bwhat do i do next\b/,
+    /\bwhat next\b/,
+    /\bnext step\b/,
+    /\bwhat should i check next\b/,
+    /\bwhat do i check next\b/,
+    /\bwhat comes next\b/,
+    /\bwhat should happen next\b/,
+  ].some((pattern) => pattern.test(normalized));
+};
+
+const getFirstDepartmentLabel = (project = {}) =>
+  toArray(project?.departments).map(toText).find(Boolean) || "";
+
+const toDepartmentDisplay = (value = "") => {
+  const text = toText(value);
+  if (!text) return "";
+  if (/\bdepartment\b/i.test(text)) return text;
+  if (/\bteam\b/i.test(text)) return text.replace(/\bteam\b/i, "department");
+  return `${text} department`;
+};
+
+const getDefaultProjectOwner = (project = {}) => {
+  const departmentLabel = getFirstDepartmentLabel(project);
+  if (departmentLabel) {
+    return {
+      name: toDepartmentDisplay(departmentLabel),
+      role: "",
+    };
+  }
+
+  return {
+    name: "Assigned department",
+    role: "",
+  };
+};
+
+const formatActorDisplay = (actor = {}) => {
+  const name = toText(actor?.name);
+  const role = toText(actor?.role);
+  if (!name) return "Assigned department";
+  return role ? `${name} (${role})` : name;
+};
+
+const normalizeResponsibilityText = (value = "") => {
+  const text = toText(value).replace(/\.$/, "");
+  if (!text) return "";
+
+  return text.charAt(0).toLowerCase() + text.slice(1);
+};
+
+const getProjectActionResponsibility = (project = {}) => {
+  const blockers = toArray(project?.blockers);
+  const primaryBlocker = blockers[0] || {};
+  const blockerLabel = toText(primaryBlocker?.label).toLowerCase();
+  const blockerDetail = toText(primaryBlocker?.detail);
+  const status = toText(project?.status);
+  const defaultOwner = getDefaultProjectOwner(project);
+
+  if (blockerLabel.includes("client mockup approval is pending")) {
+    return {
+      actor: defaultOwner,
+      responsibility:
+        "follow up on the client mockup approval and confirm the approved mockup version.",
+    };
+  }
+
+  if (blockerLabel.includes("sample approval is pending")) {
+    return {
+      actor: defaultOwner,
+      responsibility: "follow up on sample approval before the project moves forward.",
+    };
+  }
+
+  if (blockerLabel.includes("quote requirements are still pending")) {
+    return {
+      actor: defaultOwner,
+      responsibility: blockerDetail
+        ? `complete the remaining quote requirements: ${blockerDetail}.`
+        : "complete the remaining quote requirements and prepare the client response.",
+    };
+  }
+
+  if (
+    blockerLabel.includes("payment or authorization is not verified") ||
+    blockerLabel.includes("invoice has not been marked as sent")
+  ) {
+    const billingResponsibility = normalizeResponsibilityText(blockerDetail).replace(
+      /^front desk should\s+/i,
+      "",
+    );
+
+    return {
+      actor: {
+        name: "Front Desk department",
+        role: "",
+      },
+      responsibility: billingResponsibility
+        ? `${billingResponsibility}.`
+        : "confirm billing or payment verification before production continues.",
+    };
+  }
+
+  if (blockerLabel.includes("open challenge")) {
+    return {
+      actor: defaultOwner,
+      responsibility: blockerDetail
+        ? `resolve the open challenge: ${blockerDetail}.`
+        : "resolve the open challenge and update the project.",
+    };
+  }
+
+  if (status.includes("Mockup")) {
+    return {
+      actor: defaultOwner,
+      responsibility:
+        "review the latest mockup and move the project to the next approval step.",
+    };
+  }
+
+  if (status.includes("Production")) {
+    return {
+      actor: defaultOwner,
+      responsibility:
+        "confirm production readiness and update progress on the project.",
+    };
+  }
+
+  if (status.includes("Delivery") || status === "Delivered") {
+    return {
+      actor: defaultOwner,
+      responsibility: "complete the delivery handoff and record the update.",
+    };
+  }
+
+  const nextCheck = toText(toArray(project?.nextChecks)[0]);
+  if (nextCheck) {
+    return {
+      actor: defaultOwner,
+      responsibility:
+        `${normalizeResponsibilityText(nextCheck)}.`,
+    };
+  }
+
+  return {
+    actor: defaultOwner,
+    responsibility: "review the project and handle the next workflow step.",
+  };
+};
+
+const getProjectNextAction = (project = {}) => {
+  const blockers = toArray(project?.blockers);
+  const primaryBlocker = blockers[0] || {};
+  const blockerLabel = toText(primaryBlocker?.label).toLowerCase();
+  const blockerDetail = toText(primaryBlocker?.detail);
+  const status = toText(project?.status);
+
+  if (blockerLabel.includes("client mockup approval is pending")) {
+    return "follow up on the client mockup approval and confirm the approved mockup version.";
+  }
+
+  if (blockerLabel.includes("sample approval is pending")) {
+    return "follow up on sample approval before the project moves forward.";
+  }
+
+  if (blockerLabel.includes("quote requirements are still pending")) {
+    return blockerDetail
+      ? `complete the remaining quote requirements: ${blockerDetail}.`
+      : "complete the remaining quote requirements and prepare the client response.";
+  }
+
+  if (blockerLabel.includes("payment or authorization is not verified")) {
+    return "confirm payment or authorization verification before production continues.";
+  }
+
+  if (blockerLabel.includes("invoice has not been marked as sent")) {
+    return "confirm the invoice has been sent before production continues.";
+  }
+
+  if (blockerLabel.includes("open challenge")) {
+    return blockerDetail
+      ? `resolve the open challenge: ${blockerDetail}.`
+      : "resolve the open challenge and update the project.";
+  }
+
+  if (status.includes("Mockup")) {
+    return "review the latest mockup and move the project to the next approval step.";
+  }
+
+  if (status.includes("Production")) {
+    return "confirm production readiness and update progress on the project.";
+  }
+
+  if (status.includes("Delivery") || status === "Delivered") {
+    return "complete the delivery handoff and record the update.";
+  }
+
+  const nextCheck = toText(toArray(project?.nextChecks)[0]);
+  if (nextCheck) {
+    return `${normalizeResponsibilityText(nextCheck)}.`;
+  }
+
+  return "open the project timeline and handle the next workflow step.";
+};
+
+const formatProjectStatusReason = (project = {}) => {
+  const blockers = toArray(project?.blockers);
+  const primaryBlocker = blockers[0] || {};
+  const blockerLabel = toText(primaryBlocker?.label).toLowerCase();
+  const blockerDetail = toText(primaryBlocker?.detail);
+  const mockupApprovalStatus = toText(project?.mockupClientApprovalStatus).toLowerCase();
+  const sampleApprovalStatus = toText(project?.sampleApprovalStatus).toLowerCase();
+  const status = toText(project?.status);
+
+  if (
+    blockerLabel.includes("client mockup approval is pending") ||
+    (status.includes("Mockup") && mockupApprovalStatus && mockupApprovalStatus !== "approved")
+  ) {
+    return "Pending Mockup Approval from Client.";
+  }
+
+  if (
+    blockerLabel.includes("sample approval is pending") ||
+    (sampleApprovalStatus && sampleApprovalStatus !== "approved")
+  ) {
+    return "Pending Sample Approval.";
+  }
+
+  if (blockerLabel.includes("quote requirements are still pending")) {
+    return blockerDetail
+      ? `Pending Quote Requirements: ${blockerDetail}.`
+      : "Pending Quote Requirements.";
+  }
+
+  if (blockerLabel.includes("payment or authorization is not verified")) {
+    return "Pending Payment or Authorization Verification.";
+  }
+
+  if (blockerLabel.includes("invoice has not been marked as sent")) {
+    return "Invoice has not been marked as sent yet.";
+  }
+
+  if (blockerLabel.includes("project is on hold")) {
+    return blockerDetail ? `Project on hold: ${blockerDetail}.` : "Project on hold.";
+  }
+
+  if (blockerLabel.includes("project is cancelled")) {
+    return blockerDetail ? `Project cancelled: ${blockerDetail}.` : "Project cancelled.";
+  }
+
+  if (blockerLabel && blockerLabel.includes("open challenge")) {
+    return blockerDetail ? `Open Challenge: ${blockerDetail}.` : "There is an open challenge on this project.";
+  }
+
+  return "";
+};
+
+const buildDirectProjectStatusAnswer = (project = {}) => {
+  if (!project) return "";
+
+  const lines = [
+    `Answer: ${project.displayRef} is currently ${project.status || "in progress"}${
+      project.projectName ? ` for ${project.projectName}` : ""
+    }.`,
+  ];
+
+  const reason = formatProjectStatusReason(project);
+  if (reason) lines.push(reason);
+
+  return shortenHelpAnswer(lines.join("\n"));
+};
+
+const buildDirectProjectAssignmentAnswer = (project = {}) => {
+  if (!project) return "";
+
+  const { actor, responsibility } = getProjectActionResponsibility(project);
+  const actorDisplay = formatActorDisplay(actor);
+
+  return shortenHelpAnswer(
+    [
+      `Answer: ${actorDisplay} needs to act next on ${project.displayRef}.`,
+      `Responsibility: ${responsibility}`,
+    ].join("\n"),
+  );
+};
+
+const buildDirectProjectNextStepAnswer = (project = {}) => {
+  if (!project) return "";
+
+  return shortenHelpAnswer(
+    `Answer: The next step on ${project.displayRef} is to ${getProjectNextAction(project).replace(/^to\s+/i, "")}`,
+  );
+};
+
+const buildDirectProjectIntentAnswer = ({ question = "", intent = {}, project = null } = {}) => {
+  if (!project) return "";
+  if (isDirectProjectNextStepQuestion(question, intent)) {
+    return buildDirectProjectNextStepAnswer(project);
+  }
+  if (isDirectProjectStatusQuestion(question, intent)) {
+    return buildDirectProjectStatusAnswer(project);
+  }
+  if (isDirectProjectAssignmentQuestion(question, intent)) {
+    return buildDirectProjectAssignmentAnswer(project);
+  }
+  return "";
+};
+
+const shortenHelpAnswer = (value = "") => {
+  const lines = String(value || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter(
+      (line) =>
+        !/^(direct answer|why this applies|steps to take now|what to check next|when to escalate):?$/i.test(
+          line,
+        ),
+    );
+
+  if (!lines.length) return "";
+
+  const compactLines = lines.slice(0, 5);
+  let text = compactLines.join("\n");
+  if (text.length <= 520) return text;
+
+  const shortened = text.slice(0, 517);
+  const sentenceCut = Math.max(
+    shortened.lastIndexOf(". "),
+    shortened.lastIndexOf("\n"),
+  );
+  return `${shortened
+    .slice(0, sentenceCut > 120 ? sentenceCut : 517)
+    .trimEnd()}...`;
+};
+
 const toPublicArticle = (article) => ({
   id: article.id,
   title: article.title,
@@ -121,29 +547,16 @@ const toPublicArticle = (article) => ({
 
 const buildHelpPrompt = ({
   question,
-  articles,
+  chunks = [],
   userContext,
   conversation = [],
   intent = {},
   projectContexts = [],
   projectLookupNotes = [],
 }) => {
-  const contextBlocks = articles.map((article, index) => {
-    const steps = (article.steps || [])
-      .map((step, stepIndex) => `${stepIndex + 1}. ${step}`)
-      .join("\n");
-    const tips = (article.tips || []).map((tip) => `- ${tip}`).join("\n");
-
-    return [
-      `Article ${index + 1}: ${article.title}`,
-      `Category: ${article.category}`,
-      `Summary: ${article.summary}`,
-      steps ? `Steps:\n${steps}` : "",
-      tips ? `Tips:\n${tips}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  });
+  const contextBlocks = toArray(chunks)
+    .slice(0, 4)
+    .map((entry, index) => formatChunkPromptBlock(entry, index));
   const projectContextBlock = getProjectPromptContext(
     projectContexts,
     projectLookupNotes,
@@ -151,14 +564,18 @@ const buildHelpPrompt = ({
   const conversationBlock = buildConversationPromptBlock(conversation);
 
   return [
-    "Answer the user's MagicHands system question using only the approved help articles and authorized project context below.",
+    "Answer the user's MagicHands system question using only the approved help chunks and authorized project context below.",
     "If authorized project context is present, use it to tailor the status, blockers, and next checks for that specific project.",
     "If a project lookup note says the project could not be found or accessed, do not guess whether the project exists.",
-    "If the help articles and project context do not contain enough information, say you could not find an approved tutorial for that exact question and suggest the closest article.",
+    "If the help chunks and project context do not contain enough information, say that briefly and suggest the closest approved help article.",
     "Do not invent buttons, pages, permissions, or workflow steps.",
     "Do not claim that you changed, approved, submitted, or updated anything.",
     "Keep the answer practical, conversational, and specific to the user's question.",
-    "Use this structure when it fits: Direct answer, Why this applies, Steps to take now, What to check next, When to escalate.",
+    "Reply in 2 to 5 short lines.",
+    "Start with the direct answer.",
+    "For project status, stage, next-step, owner, assignment, or blocker questions, answer in 1 to 2 short lines and do not add numbered steps unless the user explicitly asks for a step-by-step guide.",
+    "If action is needed for a how-to question, add at most 3 numbered steps.",
+    "Keep it brief and easy to scan.",
     "If the user is asking a short follow-up and the earlier conversation gives the missing context, reuse that context.",
     "If the question is still ambiguous, ask one short clarifying question instead of guessing.",
     "Use plain text.",
@@ -173,16 +590,16 @@ const buildHelpPrompt = ({
     `Question: ${question}`,
     "",
     projectContextBlock,
-    "Approved help articles:",
+    "Approved help chunks:",
     contextBlocks.length
       ? contextBlocks.join("\n\n---\n\n")
-      : "No matching approved help articles were found.",
+      : "No matching approved help chunks were found.",
   ].join("\n");
 };
 
 const requestOpenAiHelpAnswer = async ({
   question,
-  articles = [],
+  chunks = [],
   userContext,
   conversation = [],
   intent = {},
@@ -190,7 +607,7 @@ const requestOpenAiHelpAnswer = async ({
   projectLookupNotes = [],
 }) => {
   const apiKey = toText(process.env.OPENAI_API_KEY);
-  if (!apiKey || (articles.length === 0 && projectContexts.length === 0)) {
+  if (!apiKey || (chunks.length === 0 && projectContexts.length === 0)) {
     return "";
   }
 
@@ -213,13 +630,13 @@ const requestOpenAiHelpAnswer = async ({
           {
             role: "system",
             content:
-              "You are MagicHelp, a concise internal help assistant for the MagicHands project management system. You only answer from approved help content and authorized project context.",
+              "You are MagicHelp, a concise internal help assistant for the MagicHands project management system. Answer from approved help content and authorized project context only. Be brief and direct.",
           },
           {
             role: "user",
             content: buildHelpPrompt({
               question,
-              articles,
+              chunks,
               userContext,
               conversation,
               intent,
@@ -228,7 +645,7 @@ const requestOpenAiHelpAnswer = async ({
             }),
           },
         ],
-        max_tokens: 700,
+        max_tokens: 260,
       }),
     });
 
@@ -248,7 +665,7 @@ const requestOpenAiHelpAnswer = async ({
         .trim();
     }
 
-    return toText(content);
+    return shortenHelpAnswer(toText(content));
   } finally {
     clearTimeout(timeout);
   }
@@ -256,14 +673,14 @@ const requestOpenAiHelpAnswer = async ({
 
 const requestOllamaHelpAnswer = async ({
   question,
-  articles = [],
+  chunks = [],
   userContext,
   conversation = [],
   intent = {},
   projectContexts = [],
   projectLookupNotes = [],
 }) => {
-  if (articles.length === 0 && projectContexts.length === 0) return "";
+  if (chunks.length === 0 && projectContexts.length === 0) return "";
 
   const fetchClient = await getFetchClient();
   const controller = new AbortController();
@@ -280,7 +697,7 @@ const requestOllamaHelpAnswer = async ({
         model: OLLAMA_HELP_MODEL,
         prompt: buildHelpPrompt({
           question,
-          articles,
+          chunks,
           userContext,
           conversation,
           intent,
@@ -289,7 +706,7 @@ const requestOllamaHelpAnswer = async ({
         }),
         stream: false,
         options: {
-          temperature: 0.2,
+          temperature: 0.1,
         },
       }),
     });
@@ -300,7 +717,7 @@ const requestOllamaHelpAnswer = async ({
     }
 
     const payload = await response.json();
-    return toText(payload?.response);
+    return shortenHelpAnswer(toText(payload?.response));
   } finally {
     clearTimeout(timeout);
   }
@@ -346,26 +763,35 @@ const buildProjectFallbackSection = (projectContexts, projectLookupNotes) => {
 };
 
 const buildFallbackHelpAnswer = (
-  matches,
+  chunkMatches,
   projectContexts = [],
   projectLookupNotes = [],
   intent = {},
+  question = "",
 ) => {
-  const projectSection = buildProjectFallbackSection(projectContexts, projectLookupNotes);
   const primaryProject = projectContexts[0] || null;
-  const primaryArticle = matches[0]?.article || null;
+  const primaryChunk = chunkMatches[0]?.chunk || null;
   const primaryBlockers = toArray(primaryProject?.blockers)
     .map((blocker) =>
       [toText(blocker?.label), toText(blocker?.detail)].filter(Boolean).join(": "),
     )
     .filter(Boolean);
   const primaryChecks = toArray(primaryProject?.nextChecks).filter(Boolean);
-  const articleSteps = toArray(primaryArticle?.steps).filter(Boolean);
-  const articleTips = toArray(primaryArticle?.tips).filter(Boolean);
+  const chunkSteps = toArray(primaryChunk?.steps).filter(Boolean);
+  const chunkTips = toArray(primaryChunk?.tips).filter(Boolean);
+  const chunkText = toText(primaryChunk?.text);
   const lines = [];
 
-  if (!matches.length || matches[0].score < 4) {
-    lines.push("Direct answer:");
+  const directProjectAnswer = buildDirectProjectIntentAnswer({
+    question,
+    intent,
+    project: primaryProject,
+  });
+  if (directProjectAnswer) {
+    return directProjectAnswer;
+  }
+
+  if (!chunkMatches.length || chunkMatches[0].score < 4) {
     if (primaryProject) {
       lines.push(
         `${primaryProject.displayRef} is currently ${primaryProject.status || "in progress"}${
@@ -377,11 +803,11 @@ const buildFallbackHelpAnswer = (
           `The clearest blocker I found is ${primaryBlockers[0]}.`,
         );
       } else {
-        lines.push("I did not find an approved tutorial that exactly matches your question, but I can use the project snapshot to guide the next checks.");
+        lines.push(
+          "I could not find an exact approved tutorial, but I can use the project snapshot to guide the next checks.",
+        );
       }
       if (primaryChecks.length > 0) {
-        lines.push("");
-        lines.push("What to check next:");
         primaryChecks.slice(0, 4).forEach((check, index) => {
           lines.push(`${index + 1}. ${check}`);
         });
@@ -390,69 +816,44 @@ const buildFallbackHelpAnswer = (
       lines.push(
         "I could not find an approved tutorial for that exact question yet.",
       );
-      lines.push(
-        "Try searching with a workflow keyword such as order, quote, mockup, engagement, reminder, billing, inventory, or profile.",
-      );
+      if (projectLookupNotes[0]?.message) lines.push(projectLookupNotes[0].message);
     }
 
-    if (projectSection) {
-      lines.push("");
-      lines.push(projectSection);
-    }
-
-    return lines.join("\n");
+    return shortenHelpAnswer(lines.join("\n"));
   }
 
-  lines.push("Direct answer:");
-  lines.push(primaryArticle?.summary || buildArticleAnswer(primaryArticle));
-
-  if (primaryProject) {
-    lines.push("");
-    lines.push("Why this applies:");
+  if (primaryProject && primaryBlockers.length > 0 && intent?.name === "blocker") {
     lines.push(
-      `${primaryProject.displayRef} is currently ${primaryProject.status || "in the system"}${
+      `${primaryProject.displayRef} is ${primaryProject.status || "pending"} because ${primaryBlockers[0]}.`,
+    );
+  } else if (primaryProject && intent?.name === "status") {
+    lines.push(
+      `${primaryProject.displayRef} is currently ${primaryProject.status || "in progress"}${
         primaryProject.projectName ? ` for ${primaryProject.projectName}` : ""
       }.`,
     );
-    if (primaryBlockers.length > 0) {
-      lines.push(`Current blocker: ${primaryBlockers[0]}.`);
-    }
+  } else if (chunkText) {
+    lines.push(chunkText);
+  } else {
+    lines.push(buildArticleAnswer(primaryChunk?.article));
   }
 
-  if (articleSteps.length > 0 || primaryChecks.length > 0) {
-    lines.push("");
-    lines.push("Steps to take now:");
-    const steps = articleSteps.length > 0 ? articleSteps : primaryChecks;
-    steps.slice(0, 5).forEach((step, index) => {
+  const steps = chunkSteps.length > 0 ? chunkSteps : primaryChecks;
+  if (steps.length > 0) {
+    steps.slice(0, 3).forEach((step, index) => {
       lines.push(`${index + 1}. ${step}`);
     });
+  } else if (chunkTips.length > 0) {
+    lines.push(chunkTips[0]);
   }
 
-  if (articleTips.length > 0 || primaryChecks.length > 0) {
-    lines.push("");
-    lines.push("What to check next:");
-    const checks = articleTips.length > 0 ? articleTips : primaryChecks;
-    checks.slice(0, 4).forEach((check, index) => {
+  if (primaryProject && primaryChecks.length > 0 && steps.length === 0) {
+    primaryChecks.slice(0, 2).forEach((check, index) => {
       lines.push(`${index + 1}. ${check}`);
     });
   }
 
-  if (projectSection) {
-    lines.push("");
-    lines.push(projectSection);
-  }
-
-  if (intent?.followUps?.length) {
-    lines.push("");
-    lines.push("You can also ask:");
-    toArray(intent.followUps)
-      .slice(0, 3)
-      .forEach((followUp) => {
-        lines.push(`- ${followUp}`);
-      });
-  }
-
-  return lines.join("\n");
+  return shortenHelpAnswer(lines.join("\n"));
 };
 
 const getHelpArticles = async (req, res) => {
@@ -462,14 +863,15 @@ const getHelpArticles = async (req, res) => {
     minScore: 1,
   });
 
-  return res.json({
-    capabilities: {
-      projectSearch: true,
-      feedback: true,
-      projectAwareAnswers: true,
-      conversation: true,
-      followUpSuggestions: true,
-    },
+    return res.json({
+      capabilities: {
+        projectSearch: true,
+        feedback: true,
+        projectAwareAnswers: true,
+        conversation: true,
+        followUpSuggestions: true,
+        hybridRetrieval: true,
+      },
     categories: HELP_CATEGORIES,
     articles: HELP_ARTICLES.map(toPublicArticle),
     featuredArticleIds: featuredMatches.map((entry) => entry.article.id),
@@ -511,7 +913,7 @@ const askHelpQuestion = async (req, res) => {
       intent,
       projectSearchText,
     });
-    const matches = searchHelpArticles(
+    const articleMatches = searchHelpArticles(
       HELP_ARTICLES,
       contextualQuestion,
       userContext,
@@ -521,20 +923,47 @@ const askHelpQuestion = async (req, res) => {
         intent,
       },
     );
-    const relatedArticles = matches.map((entry) => toPublicArticle(entry.article));
-    const contextArticles = matches.map((entry) => entry.article);
+    const chunkMatches = searchHelpChunks(
+      HELP_ARTICLES,
+      contextualQuestion,
+      userContext,
+      {
+        limit: 6,
+        minScore: projectContexts.length ? 1 : 2,
+        maxPerArticle: 2,
+        intent,
+      },
+    );
+    const relatedArticles = getUniqueRelatedArticles(
+      chunkMatches.length > 0 ? chunkMatches : articleMatches,
+    ).map((article) => toPublicArticle(article));
+    const contextChunks = chunkMatches.map((entry) => entry.chunk);
 
     let answer = "";
     let source = "fallback";
 
+    const directProjectAnswer = buildDirectProjectIntentAnswer({
+      question,
+      intent,
+      project: projectContexts[0] || null,
+    });
+
+    if (directProjectAnswer) {
+      answer = directProjectAnswer;
+      source = "project-context";
+    }
+
     if (
-      projectContexts.length > 0 ||
-      (contextArticles.length > 0 && matches[0].score >= 4)
+      !answer &&
+      (
+        projectContexts.length > 0 ||
+        (contextChunks.length > 0 && chunkMatches[0].score >= 4)
+      )
     ) {
       try {
         answer = await requestOpenAiHelpAnswer({
           question,
-          articles: contextArticles,
+          chunks: contextChunks,
           userContext,
           conversation,
           intent,
@@ -550,7 +979,7 @@ const askHelpQuestion = async (req, res) => {
         try {
           answer = await requestOllamaHelpAnswer({
             question,
-            articles: contextArticles,
+            chunks: contextChunks,
             userContext,
             conversation,
             intent,
@@ -565,12 +994,13 @@ const askHelpQuestion = async (req, res) => {
     }
 
     if (!answer) {
-        answer = buildFallbackHelpAnswer(
-          matches,
-          projectContexts,
-          projectLookupNotes,
-          intent,
-        );
+      answer = buildFallbackHelpAnswer(
+        chunkMatches,
+        projectContexts,
+        projectLookupNotes,
+        intent,
+        question,
+      );
       source = "fallback";
     }
 
@@ -584,6 +1014,9 @@ const askHelpQuestion = async (req, res) => {
       answerId: createAnswerId(),
       answer,
       source,
+      retrieval: {
+        mode: chunkMatches.length > 0 ? "hybrid-chunks" : "article-fallback",
+      },
       intent: {
         name: intent.name,
         label: intent.label,

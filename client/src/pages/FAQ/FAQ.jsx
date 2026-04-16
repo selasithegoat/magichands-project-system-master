@@ -218,6 +218,7 @@ const highlight = (text, term) => {
 const FAQ = ({ user }) => {
   const location = useLocation();
   const questionRef = useRef(null);
+  const chatWindowRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [categories, setCategories] = useState(["All"]);
@@ -379,6 +380,11 @@ const FAQ = ({ user }) => {
       window.clearTimeout(timerId);
     };
   }, [helpCapabilities.projectSearch, location.search, projectPickerOpen, projectQuery, selectedProject]);
+
+  useEffect(() => {
+    if (!chatWindowRef.current) return;
+    chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+  }, [conversation, answer]);
 
   const focusQuestion = () => window.setTimeout(() => questionRef.current?.focus(), 30);
   const prefillQuestion = (nextQuestion, includeProject = true) => {
@@ -578,7 +584,7 @@ const FAQ = ({ user }) => {
 
         <form className="faq-ask-panel" onSubmit={handleAsk}>
           <div className="faq-ask-heading">
-            <label htmlFor="faq-question">Ask MagicHelp</label>
+            <label htmlFor="faq-question">MagicHelp Chat</label>
             <div className="faq-ask-controls">
               {conversation.length > 0 && <button type="button" className="faq-project-picker-toggle" onClick={clearConversation}>New chat</button>}
               <button type="button" className="faq-project-picker-toggle" onClick={() => setProjectPickerOpen((value) => !value)}>Attach project</button>
@@ -606,7 +612,62 @@ const FAQ = ({ user }) => {
               </div>
             </div>
           )}
-          <textarea id="faq-question" ref={questionRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: Why is #1024 or Q2026-001 still pending?" rows="4" maxLength={MAX_QUESTION_LENGTH} />
+          {conversation.length > 0 && (
+            <div className="faq-chat-inline" aria-live="polite">
+              <div className="faq-chat-inline-header">
+                <span>Conversation</span>
+                <span>{conversation.length} turn{conversation.length === 1 ? "" : "s"}</span>
+              </div>
+              <div className="faq-chat-list" ref={chatWindowRef}>
+                {conversation.map((turn) => (
+                  <article key={turn.id} className={`faq-chat-turn ${turn.role}`}>
+                    <div className="faq-chat-meta">
+                      <strong>{turn.role === "assistant" ? "MagicHelp" : "You"}</strong>
+                      {turn.role === "assistant" && (
+                        <div>
+                          {turn.intent?.label && <span className="faq-chat-intent">{turn.intent.label}</span>}
+                          {turn.sourceLabel && <span className="faq-chat-source">{turn.sourceLabel}</span>}
+                        </div>
+                      )}
+                    </div>
+                    <div className="faq-chat-text">
+                      {formatAnswerLines(turn.text).map((line, index) => line ? <p key={`${turn.id}-${index}`}>{line}</p> : <br key={`${turn.id}-break-${index}`} />)}
+                    </div>
+                    {turn.role === "assistant" && toArray(turn.projectContexts).length > 0 && (
+                      <div className="faq-chat-projects">
+                        {turn.projectContexts.slice(0, 3).map((project) => <span key={`${turn.id}-${project.projectId || project.displayRef}`}>{project.displayRef}</span>)}
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+          {answer && (
+            <>
+              {answer.projectContexts.length > 0 && (
+                <div className="faq-project-contexts">
+                  <span>Project context used</span>
+                  <div className="faq-project-context-list">
+                    {answer.projectContexts.map((project) => (
+                      <article className="faq-project-context-item" key={project.projectId || project.displayRef}>
+                        <div>
+                          <strong>{project.displayRef}{project.projectName ? ` - ${project.projectName}` : ""}</strong>
+                          <p>{[project.projectType, project.status].filter(Boolean).join(" | ")}</p>
+                          {project.clientName && <p>Client: {project.clientName}</p>}
+                          {project.updatedAt && <p>Updated {formatDate(project.updatedAt)}</p>}
+                        </div>
+                        {toArray(project.blockers).length > 0 && <ul>{project.blockers.slice(0, 3).map((blocker) => <li key={`${project.projectId}-${blocker.label}`}>{blocker.label}</li>)}</ul>}
+                        {project.route && <Link to={project.route} className="faq-project-link">Open project</Link>}
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {answer.projectLookupNotes.length > 0 && <div className="faq-lookup-notes">{answer.projectLookupNotes.map((note) => <p key={`${note.reference}-${note.code}`}>{note.message}</p>)}</div>}
+            </>
+          )}
+          <textarea id="faq-question" ref={questionRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: Why is #1024 or Q2026-001 still pending?" rows="3" maxLength={MAX_QUESTION_LENGTH} />
           <div className="faq-quick-questions">
             {questionSuggestions.map((item) => <button type="button" key={item} onClick={() => prefillQuestion(item)}>{item}</button>)}
           </div>
@@ -616,6 +677,49 @@ const FAQ = ({ user }) => {
             <button type="submit" disabled={asking}>{asking ? "Finding answer..." : "Ask"}</button>
           </div>
           {askError && <p className="faq-error">{askError}</p>}
+          {answer && (
+            <>
+              <div className="faq-answer-actions">
+                <span>Useful next steps</span>
+                <div>
+                  {answer.projectContexts[0]?.route && <Link to={answer.projectContexts[0].route}>Open project</Link>}
+                  {answerRoutes.map((route) => <Link key={`${route.label}-${route.path}`} to={route.path}>{route.label}</Link>)}
+                  <button type="button" onClick={() => prefillQuestion(answer.followUpSuggestions?.[0] || "Who needs to act next?")}>Ask follow-up</button>
+                </div>
+              </div>
+              {toArray(answer.followUpSuggestions).length > 0 && (
+                <div className="faq-answer-related">
+                  <span>Suggested follow-up questions</span>
+                  <div>{answer.followUpSuggestions.map((item) => <button type="button" key={item} onClick={() => prefillQuestion(item)}>{item}</button>)}</div>
+                </div>
+              )}
+              {answer.relatedArticles.length > 0 && (
+                <div className="faq-answer-related">
+                  <span>Related tutorials</span>
+                  <div>{answer.relatedArticles.map((article) => <button type="button" key={article.id} onClick={() => revealArticle(article.id)}>{article.title}</button>)}</div>
+                </div>
+              )}
+              <div className="faq-feedback">
+                <span>Was this helpful?</span>
+                <div className="faq-feedback-buttons">
+                  {[
+                    ["helpful", "Helpful"],
+                    ["not_helpful", "Not helpful"],
+                    ["still_confused", "Still confused"],
+                  ].map(([rating, label]) => (
+                    <button type="button" key={rating} className={feedbackRating === rating ? "active" : ""} disabled={feedbackSubmitting} onClick={() => submitFeedback(rating)}>{label}</button>
+                  ))}
+                </div>
+                {feedbackRating && feedbackRating !== "helpful" && (
+                  <div className="faq-feedback-note">
+                    <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} rows="3" maxLength="700" placeholder="What were you trying to do?" />
+                    <button type="button" disabled={feedbackSubmitting} onClick={() => submitFeedback(feedbackRating)}>Send note</button>
+                  </div>
+                )}
+                {feedbackStatus && <p>{feedbackStatus}</p>}
+              </div>
+            </>
+          )}
         </form>
       </section>
 
@@ -629,110 +733,6 @@ const FAQ = ({ user }) => {
           ))}
         </div>
       </section>
-
-      {conversation.length > 0 && (
-        <section className="faq-chat" aria-live="polite">
-          <div className="faq-section-heading">
-            <h2>Conversation</h2>
-            <span>{conversation.length} turn{conversation.length === 1 ? "" : "s"}</span>
-          </div>
-          <div className="faq-chat-list">
-            {conversation.map((turn) => (
-              <article key={turn.id} className={`faq-chat-turn ${turn.role}`}>
-                <div className="faq-chat-meta">
-                  <strong>{turn.role === "assistant" ? "MagicHelp" : "You"}</strong>
-                  {turn.role === "assistant" && (
-                    <div>
-                      {turn.intent?.label && <span className="faq-chat-intent">{turn.intent.label}</span>}
-                      {turn.sourceLabel && <span className="faq-chat-source">{turn.sourceLabel}</span>}
-                    </div>
-                  )}
-                </div>
-                <div className="faq-chat-text">
-                  {formatAnswerLines(turn.text).map((line, index) => line ? <p key={`${turn.id}-${index}`}>{line}</p> : <br key={`${turn.id}-break-${index}`} />)}
-                </div>
-                {turn.role === "assistant" && toArray(turn.projectContexts).length > 0 && (
-                  <div className="faq-chat-projects">
-                    {turn.projectContexts.slice(0, 3).map((project) => <span key={`${turn.id}-${project.projectId || project.displayRef}`}>{project.displayRef}</span>)}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {answer && (
-        <section className="faq-answer" aria-live="polite">
-          <div className="faq-answer-header">
-            <span>Latest MagicHelp answer</span>
-            <div className="faq-answer-meta">
-              {answer.intent?.label && <span className="faq-answer-intent">{answer.intent.label}</span>}
-              <span className="faq-answer-source">{answer.sourceLabel || answer.source}</span>
-            </div>
-          </div>
-          <div className="faq-answer-text">{formatAnswerLines(answer.text).map((line, index) => line ? <p key={`${line}-${index}`}>{line}</p> : <br key={index} />)}</div>
-          {answer.projectContexts.length > 0 && (
-            <div className="faq-project-contexts">
-              <span>Project context used</span>
-              <div className="faq-project-context-list">
-                {answer.projectContexts.map((project) => (
-                  <article className="faq-project-context-item" key={project.projectId || project.displayRef}>
-                    <div>
-                      <strong>{project.displayRef}{project.projectName ? ` - ${project.projectName}` : ""}</strong>
-                      <p>{[project.projectType, project.status].filter(Boolean).join(" | ")}</p>
-                      {project.clientName && <p>Client: {project.clientName}</p>}
-                      {project.updatedAt && <p>Updated {formatDate(project.updatedAt)}</p>}
-                    </div>
-                    {toArray(project.blockers).length > 0 && <ul>{project.blockers.slice(0, 3).map((blocker) => <li key={`${project.projectId}-${blocker.label}`}>{blocker.label}</li>)}</ul>}
-                    {project.route && <Link to={project.route} className="faq-project-link">Open project</Link>}
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
-          {answer.projectLookupNotes.length > 0 && <div className="faq-lookup-notes">{answer.projectLookupNotes.map((note) => <p key={`${note.reference}-${note.code}`}>{note.message}</p>)}</div>}
-          <div className="faq-answer-actions">
-            <span>Useful next steps</span>
-            <div>
-              {answer.projectContexts[0]?.route && <Link to={answer.projectContexts[0].route}>Open project</Link>}
-              {answerRoutes.map((route) => <Link key={`${route.label}-${route.path}`} to={route.path}>{route.label}</Link>)}
-              <button type="button" onClick={() => prefillQuestion(answer.followUpSuggestions?.[0] || "Who needs to act next?")}>Ask follow-up</button>
-            </div>
-          </div>
-          {toArray(answer.followUpSuggestions).length > 0 && (
-            <div className="faq-answer-related">
-              <span>Suggested follow-up questions</span>
-              <div>{answer.followUpSuggestions.map((item) => <button type="button" key={item} onClick={() => prefillQuestion(item)}>{item}</button>)}</div>
-            </div>
-          )}
-          {answer.relatedArticles.length > 0 && (
-            <div className="faq-answer-related">
-              <span>Related tutorials</span>
-              <div>{answer.relatedArticles.map((article) => <button type="button" key={article.id} onClick={() => revealArticle(article.id)}>{article.title}</button>)}</div>
-            </div>
-          )}
-          <div className="faq-feedback">
-            <span>Was this helpful?</span>
-            <div className="faq-feedback-buttons">
-              {[
-                ["helpful", "Helpful"],
-                ["not_helpful", "Not helpful"],
-                ["still_confused", "Still confused"],
-              ].map(([rating, label]) => (
-                <button type="button" key={rating} className={feedbackRating === rating ? "active" : ""} disabled={feedbackSubmitting} onClick={() => submitFeedback(rating)}>{label}</button>
-              ))}
-            </div>
-            {feedbackRating && feedbackRating !== "helpful" && (
-              <div className="faq-feedback-note">
-                <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} rows="3" maxLength="700" placeholder="What were you trying to do?" />
-                <button type="button" disabled={feedbackSubmitting} onClick={() => submitFeedback(feedbackRating)}>Send note</button>
-              </div>
-            )}
-            {feedbackStatus && <p>{feedbackStatus}</p>}
-          </div>
-        </section>
-      )}
 
       {featuredArticles.length > 0 && (
         <section className="faq-featured">

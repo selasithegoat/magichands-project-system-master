@@ -2,6 +2,7 @@
   width: min(92%, 1180px);
   margin: 0 auto;
   color: var(--text-primary);
+  position: relative;
 }
 
 .faq-hero {
@@ -10,6 +11,8 @@
   gap: 1.25rem;
   align-items: stretch;
   margin-bottom: 1.4rem;
+  position: relative;
+  overflow: visible;
 }
 
 .faq-hero-copy {
@@ -76,6 +79,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  position: relative;
+  z-index: 5;
 }
 
 .faq-ask-panel label {
@@ -114,6 +119,7 @@
 .faq-answer-actions button,
 .faq-feedback-buttons button,
 .faq-feedback-note button,
+.faq-chat-inline button,
 .faq-empty button {
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -218,7 +224,7 @@
 }
 
 .faq-ask-panel textarea {
-  min-height: 116px;
+  min-height: 92px;
   resize: vertical;
   border: 1px solid var(--border-color);
   background: var(--bg-input);
@@ -302,21 +308,23 @@
   font-size: 0.82rem;
 }
 
-.faq-chat,
-.faq-answer {
-  background: var(--bg-card);
-  box-shadow: var(--shadow-md);
+.faq-chat-inline {
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  background: rgba(59, 130, 246, 0.04);
   border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1.35rem;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.65rem;
 }
 
-.faq-chat {
-  border: 1px solid rgba(59, 130, 246, 0.2);
-}
-
-.faq-answer {
-  border: 1px solid rgba(16, 185, 129, 0.28);
+.faq-chat-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
 .faq-answer-header,
@@ -370,6 +378,9 @@
 .faq-chat-list {
   display: grid;
   gap: 0.8rem;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 0.15rem;
 }
 
 .faq-chat-turn {
@@ -387,6 +398,7 @@
 
 .faq-chat-turn.assistant {
   background: var(--surface-alt);
+  border-color: rgba(16, 185, 129, 0.16);
 }
 
 .faq-chat-meta {
@@ -404,6 +416,7 @@
 .faq-chat-text {
   color: var(--text-secondary);
   line-height: 1.65;
+  font-size: 0.88rem;
 }
 
 .faq-chat-text p + p {
@@ -919,6 +932,32 @@
   .faq-guided-grid,
   .faq-whats-new-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 981px) {
+  .faq-page {
+    --faq-chat-width: clamp(340px, 33vw, 420px);
+    --faq-chat-gap: 1.25rem;
+  }
+
+  .faq-hero {
+    display: block;
+    padding-right: calc(var(--faq-chat-width) + var(--faq-chat-gap));
+  }
+
+  .faq-hero-copy {
+    max-width: 720px;
+  }
+
+  .faq-ask-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--faq-chat-width);
+    max-height: calc(100vh - 1.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 
