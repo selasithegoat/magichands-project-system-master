@@ -80,6 +80,14 @@ const normalizeArchivedMessageRecord = (record = {}) => ({
         uploadedAt: entry?.uploadedAt || null,
       }))
     : [],
+  replyTo: record?.replyTo
+    ? {
+        messageId: toText(record?.replyTo?.messageId),
+        senderId: toText(record?.replyTo?.senderId),
+        senderName: toText(record?.replyTo?.senderName),
+        preview: toText(record?.replyTo?.preview),
+      }
+    : null,
   isDeleted: Boolean(record.isDeleted),
   deletedAt: record?.deletedAt || null,
   deletedBy: toText(record?.deletedBy),

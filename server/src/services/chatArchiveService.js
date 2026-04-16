@@ -92,6 +92,14 @@ const buildArchivedMessageRecord = (message = {}) => ({
   attachments: Array.isArray(message?.attachments)
     ? message.attachments.map((entry) => serializeArchiveAttachment(entry))
     : [],
+  replyTo: message?.replyTo
+    ? {
+        messageId: toIdString(message?.replyTo?.messageId),
+        senderId: toIdString(message?.replyTo?.senderId),
+        senderName: toText(message?.replyTo?.senderName),
+        preview: toText(message?.replyTo?.preview),
+      }
+    : null,
   isDeleted: Boolean(message?.isDeleted),
   deletedAt: message?.deletedAt || null,
   deletedBy: toIdString(message?.deletedBy),
@@ -125,6 +133,14 @@ const toMessageShapeFromArchiveRecord = (record = {}) => ({
         uploadedAt: entry?.uploadedAt || null,
       }))
     : [],
+  replyTo: record?.replyTo
+    ? {
+        messageId: toText(record?.replyTo?.messageId),
+        senderId: toText(record?.replyTo?.senderId),
+        senderName: toText(record?.replyTo?.senderName),
+        preview: toText(record?.replyTo?.preview),
+      }
+    : null,
   isDeleted: Boolean(record?.isDeleted),
   deletedAt: record?.deletedAt || null,
   deletedBy: toText(record?.deletedBy),

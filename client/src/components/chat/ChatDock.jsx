@@ -310,6 +310,34 @@ const buildChatMessagePreview = (message = {}) => {
   return "Shared a project";
 };
 
+const normalizeChatReplyTarget = (value = {}) => {
+  const preview = toText(value?.preview || value?.body || value?.text);
+  if (!preview) return null;
+
+  return {
+    messageId: toIdString(value?.messageId || value?._id),
+    senderId: toIdString(value?.senderId || value?.sender?._id || value?.sender),
+    senderName: toText(value?.senderName || value?.sender?.name),
+    preview: preview.length > 280 ? `${preview.slice(0, 277)}...` : preview,
+  };
+};
+
+const buildReplyTargetFromMessage = (message = {}) =>
+  normalizeChatReplyTarget({
+    messageId: message?._id,
+    senderId: message?.sender?._id || message?.sender,
+    senderName: message?.sender?.name,
+    preview: buildChatMessagePreview(message),
+  });
+
+const getReplySenderLabel = (replyTarget = {}, currentUserId = "") => {
+  if (toIdString(replyTarget?.senderId) === toIdString(currentUserId)) {
+    return "You";
+  }
+
+  return toText(replyTarget?.senderName) || "Message";
+};
+
 const getThreadActivityTimestamp = (thread) => {
   const lastMessageAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt) : null;
   if (lastMessageAt && !Number.isNaN(lastMessageAt.getTime())) {
@@ -829,6 +857,7 @@ const ChatDock = ({ user }) => {
   const [editingMessageId, setEditingMessageId] = useState("");
   const [editDraft, setEditDraft] = useState("");
   const [savingMessageId, setSavingMessageId] = useState("");
+  const [replyTarget, setReplyTarget] = useState(null);
   const [activeMention, setActiveMention] = useState(null);
   const [mentionResults, setMentionResults] = useState([]);
   const [mentionSearchLoading, setMentionSearchLoading] = useState(false);
@@ -1444,6 +1473,7 @@ const ChatDock = ({ user }) => {
 
   useEffect(() => {
     setIsThreadMenuOpen(false);
+    setReplyTarget(null);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -2116,6 +2146,7 @@ const ChatDock = ({ user }) => {
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
+    setReplyTarget(null);
     clearMentionState();
     resetProjectRoutePicker();
   };
@@ -2137,6 +2168,7 @@ const ChatDock = ({ user }) => {
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
+    setReplyTarget(null);
     clearMentionState();
     resetProjectRoutePicker();
   };
@@ -2169,6 +2201,7 @@ const ChatDock = ({ user }) => {
       setMobilePanelView("thread");
       setUserQuery("");
       setUserResults([]);
+      setReplyTarget(null);
       resetProjectRoutePicker();
       setActiveThreadId(nextThreadId);
       setIsOpen(true);
@@ -2195,6 +2228,7 @@ const ChatDock = ({ user }) => {
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
+    setReplyTarget(null);
     clearMentionState();
     resetProjectRoutePicker();
 
@@ -2385,6 +2419,42 @@ const ChatDock = ({ user }) => {
     syncComposerMentionState(event.target.value, event.target.selectionStart);
   };
 
+  const handleCancelReply = useCallback(() => {
+    setReplyTarget(null);
+  }, []);
+
+  const handleStartReply = useCallback((message) => {
+    if (!message?._id || message?.isDeleted) return;
+
+    const nextReplyTarget = buildReplyTargetFromMessage(message);
+    if (!nextReplyTarget) return;
+
+    setReplyTarget(nextReplyTarget);
+    setIsThreadMenuOpen(false);
+    setOpenMessageMenuId("");
+    setDeleteTarget(null);
+    setEditingMessageId("");
+    setEditDraft("");
+    setError("");
+    resetProjectRoutePicker();
+
+    window.requestAnimationFrame(() => {
+      composerTextareaRef.current?.focus();
+    });
+  }, [resetProjectRoutePicker]);
+
+  const handleJumpToRepliedMessage = useCallback((messageId) => {
+    const normalizedMessageId = toIdString(messageId);
+    if (!normalizedMessageId) return;
+
+    const messageNode = document.getElementById(
+      `chat-dock-message-${normalizedMessageId}`,
+    );
+    if (!messageNode) return;
+
+    messageNode.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
   const handleSendMessage = async () => {
     if (!activeThreadId || sending) return;
 
@@ -2404,6 +2474,9 @@ const ChatDock = ({ user }) => {
       const payload = new FormData();
       if (trimmedComposer) {
         payload.append("body", trimmedComposer);
+      }
+      if (replyTarget?.preview) {
+        payload.append("replyTo", JSON.stringify(replyTarget));
       }
       if (selectedProjects.length > 0) {
         payload.append(
@@ -2448,6 +2521,7 @@ const ChatDock = ({ user }) => {
       clearMentionState();
       setSelectedProjects([]);
       clearPendingAttachments();
+      setReplyTarget(null);
       setProjectPickerOpen(false);
       resetProjectRoutePicker();
       void markThreadRead(activeThreadId);
@@ -2527,6 +2601,7 @@ const ChatDock = ({ user }) => {
 
     setEditingMessageId(message._id);
     setEditDraft(message?.body || "");
+    setReplyTarget(null);
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
@@ -2610,6 +2685,7 @@ const ChatDock = ({ user }) => {
     setDeleteTarget({
       _id: message._id,
     });
+    setReplyTarget(null);
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
@@ -2661,6 +2737,9 @@ const ChatDock = ({ user }) => {
         setEditingMessageId("");
         setEditDraft("");
       }
+      if (replyTarget?.messageId === messageId) {
+        setReplyTarget(null);
+      }
       resetProjectRoutePicker();
       await fetchThreads({
         focusThreadId: activeThreadId,
@@ -2684,6 +2763,7 @@ const ChatDock = ({ user }) => {
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
+    setReplyTarget(null);
     setError("");
     resetProjectRoutePicker();
   };
@@ -2732,6 +2812,7 @@ const ChatDock = ({ user }) => {
       setOpenMessageMenuId("");
       setEditingMessageId("");
       setEditDraft("");
+      setReplyTarget(null);
       resetProjectRoutePicker();
     } catch (clearError) {
       setError(clearError.message || "Failed to clear chat messages.");
@@ -3114,6 +3195,8 @@ const ChatDock = ({ user }) => {
                         const isEditingMessage = editingMessageId === message._id;
                         const isSavingMessage = savingMessageId === message._id;
                         const isDeletingMessage = deletingMessageId === message._id;
+                        const showReplyAction = !isDeleted;
+                        const replyReference = normalizeChatReplyTarget(message?.replyTo);
                         const references = Array.isArray(message?.references)
                           ? message.references
                           : [];
@@ -3124,6 +3207,7 @@ const ChatDock = ({ user }) => {
                         return (
                           <div
                             key={message._id}
+                            id={`chat-dock-message-${message._id}`}
                             className={`chat-dock-message-row ${isMine ? "mine" : ""}`}
                           >
                             {!isMine && (
@@ -3145,6 +3229,22 @@ const ChatDock = ({ user }) => {
                                   <span>{formatThreadTime(message.createdAt)}</span>
                                 </div>
                               </div>
+                              {replyReference && (
+                                <button
+                                  type="button"
+                                  className={`chat-dock-reply-quote ${replyReference.messageId ? "clickable" : ""}`}
+                                  onClick={() =>
+                                    handleJumpToRepliedMessage(replyReference.messageId)
+                                  }
+                                  disabled={!replyReference.messageId}
+                                >
+                                  <span>
+                                    Replying to{" "}
+                                    {getReplySenderLabel(replyReference, currentUserId)}
+                                  </span>
+                                  <small>{replyReference.preview}</small>
+                                </button>
+                              )}
                               {isEditingMessage ? (
                                 <div className="chat-dock-message-editor">
                                   <textarea
@@ -3356,6 +3456,7 @@ const ChatDock = ({ user }) => {
                               )}
                               {(wasEdited ||
                                 isArchivedMessage ||
+                                showReplyAction ||
                                 (isMine && !isDeleted && !isArchivedMessage)) && (
                                 <div className="chat-dock-message-footer">
                                   <span className="chat-dock-message-status">
@@ -3363,6 +3464,18 @@ const ChatDock = ({ user }) => {
                                       .filter(Boolean)
                                       .join(" | ")}
                                   </span>
+                                  <div className="chat-dock-message-footer-actions">
+                                    {showReplyAction && !isEditingMessage && (
+                                      <button
+                                        type="button"
+                                        className={`chat-dock-inline-btn ${
+                                          replyTarget?.messageId === message._id ? "primary" : ""
+                                        }`}
+                                        onClick={() => handleStartReply(message)}
+                                      >
+                                        {replyTarget?.messageId === message._id ? "Replying" : "Reply"}
+                                      </button>
+                                    )}
                                   {isMine &&
                                     !isDeleted &&
                                     !isEditingMessage &&
@@ -3385,6 +3498,14 @@ const ChatDock = ({ user }) => {
                                           className="chat-dock-message-menu"
                                           role="menu"
                                         >
+                                          <button
+                                            type="button"
+                                            className="chat-dock-message-menu-item"
+                                            onClick={() => handleStartReply(message)}
+                                            disabled={isDeletingMessage}
+                                          >
+                                            Reply
+                                          </button>
                                           <button
                                             type="button"
                                             className="chat-dock-message-menu-item"
@@ -3423,6 +3544,7 @@ const ChatDock = ({ user }) => {
                                       )}
                                     </div>
                                   )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -3462,6 +3584,23 @@ const ChatDock = ({ user }) => {
                         onChange={handleAttachmentInputChange}
                       />
                     </div>
+
+                    {replyTarget && (
+                      <div className="chat-dock-reply-preview">
+                        <div className="chat-dock-reply-preview-copy">
+                          <span>Replying to {getReplySenderLabel(replyTarget, currentUserId)}</span>
+                          <small>{replyTarget.preview}</small>
+                        </div>
+                        <button
+                          type="button"
+                          className="chat-dock-reply-preview-dismiss"
+                          onClick={handleCancelReply}
+                          aria-label="Cancel reply"
+                        >
+                          <XIcon width="12" height="12" />
+                        </button>
+                      </div>
+                    )}
 
                     {selectedProjects.length > 0 && (
                       <div className="chat-dock-selected-projects">

@@ -71,6 +71,33 @@ const ChatAttachmentSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ChatReplySchema = new mongoose.Schema(
+  {
+    messageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ChatMessage",
+      default: null,
+    },
+    senderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    senderName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    preview: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 280,
+    },
+  },
+  { _id: false },
+);
+
 const ChatMessageSchema = new mongoose.Schema(
   {
     thread: {
@@ -96,6 +123,10 @@ const ChatMessageSchema = new mongoose.Schema(
     attachments: {
       type: [ChatAttachmentSchema],
       default: [],
+    },
+    replyTo: {
+      type: ChatReplySchema,
+      default: null,
     },
     isDeleted: {
       type: Boolean,

@@ -243,6 +243,23 @@ const parseReferencesInput = (value) => {
   }
 };
 
+const parseReplyInput = (value) => {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== "string") return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 const resolveAttachmentName = (attachment) => {
   const explicitName = toText(attachment?.fileName || attachment?.name);
   if (explicitName) return explicitName;
@@ -387,6 +404,26 @@ const serializeProjectReference = (reference) => ({
   status: toText(reference?.status),
 });
 
+const serializeReplyTo = (replyTo) => {
+  if (!replyTo) return null;
+
+  const preview = toText(replyTo?.preview);
+  const senderName = toText(replyTo?.senderName);
+  const messageId = toIdString(replyTo?.messageId);
+  const senderId = toIdString(replyTo?.senderId);
+
+  if (!preview && !senderName && !messageId) {
+    return null;
+  }
+
+  return {
+    messageId,
+    senderId,
+    senderName,
+    preview,
+  };
+};
+
 const serializeMessage = (message, senderMap = {}) => {
   const senderId = toIdString(message?.sender?._id || message?.sender);
   const sender =
@@ -406,6 +443,7 @@ const serializeMessage = (message, senderMap = {}) => {
     attachments: Array.isArray(message?.attachments)
       ? message.attachments.map((entry) => serializeAttachment(entry))
       : [],
+    replyTo: serializeReplyTo(message?.replyTo),
     isDeleted: Boolean(message?.isDeleted),
     deletedAt: message?.deletedAt || null,
     editedAt: message?.editedAt || null,
@@ -678,6 +716,63 @@ const buildMessagePreview = (body, references = [], attachments = []) => {
     return attachments.length > 1 ? `Shared ${attachments.length} files` : "Shared a file";
   }
   return "Shared a project";
+};
+
+const normalizeReplyPreview = (value) => {
+  const preview = toText(value).replace(/\s+/g, " ");
+  if (!preview) return "";
+  return preview.length > 280 ? `${preview.slice(0, 277)}...` : preview;
+};
+
+const buildReplyPreviewFromMessage = (message = {}) =>
+  normalizeReplyPreview(
+    buildMessagePreview(message?.body, message?.references, message?.attachments),
+  );
+
+const resolveReplyTargetPayload = async (threadId, rawReplyTarget = null) => {
+  const replyTarget = parseReplyInput(rawReplyTarget);
+  if (!replyTarget) return null;
+
+  const replyMessageId = toIdString(replyTarget?.messageId || replyTarget?._id);
+  if (mongoose.Types.ObjectId.isValid(replyMessageId)) {
+    const replyMessage = await ChatMessage.findOne({
+      _id: replyMessageId,
+      thread: threadId,
+    })
+      .select("_id sender body references attachments")
+      .populate("sender", "_id firstName lastName name")
+      .lean();
+
+    if (replyMessage) {
+      return {
+        messageId: replyMessage._id,
+        senderId: replyMessage.sender?._id || replyMessage.sender || null,
+        senderName: getUserDisplayName(replyMessage.sender),
+        preview: buildReplyPreviewFromMessage(replyMessage),
+      };
+    }
+  }
+
+  const fallbackPreview = normalizeReplyPreview(
+    replyTarget?.preview || replyTarget?.body || replyTarget?.text,
+  );
+  const fallbackSenderName = toText(replyTarget?.senderName || replyTarget?.label);
+  const fallbackSenderId = toIdString(replyTarget?.senderId);
+
+  if (!fallbackPreview && !fallbackSenderName && !replyMessageId) {
+    return null;
+  }
+
+  return {
+    messageId: mongoose.Types.ObjectId.isValid(replyMessageId)
+      ? new mongoose.Types.ObjectId(replyMessageId)
+      : null,
+    senderId: mongoose.Types.ObjectId.isValid(fallbackSenderId)
+      ? new mongoose.Types.ObjectId(fallbackSenderId)
+      : null,
+    senderName: fallbackSenderName,
+    preview: fallbackPreview,
+  };
 };
 
 const ensureTeamRoom = async (actorId) => {
@@ -1096,9 +1191,14 @@ const getThreadMessages = async (req, res) => {
     const hasOlder = messagePage.length > limit;
     const visibleMessages = messagePage.slice(0, limit);
 
+    const messageRelatedUserIds = visibleMessages.flatMap((message) => [
+      message?.sender,
+      message?.replyTo?.senderId,
+    ]);
     const participantUserMap = await loadUsersById([
       ...(Array.isArray(thread.participants) ? thread.participants : []),
       thread.lastMessageSender,
+      ...messageRelatedUserIds,
     ]);
 
     const serializedThread = await serializeThreadSummary(
@@ -1108,7 +1208,7 @@ const getThreadMessages = async (req, res) => {
     );
     const serializedMessages = visibleMessages
       .reverse()
-      .map((message) => serializeMessage(message));
+      .map((message) => serializeMessage(message, participantUserMap));
 
     return res.json({
       thread: serializedThread,
@@ -1204,6 +1304,7 @@ const sendMessage = async (req, res) => {
     const body = toText(req.body?.body).slice(0, MAX_MESSAGE_LENGTH);
     const rawReferences = parseReferencesInput(req.body?.references);
     const attachments = mapChatAttachments(req, req.user?._id);
+    const replyTo = await resolveReplyTargetPayload(thread._id, req.body?.replyTo);
 
     const requestedProjectIds = rawReferences
       .slice(0, MAX_REFERENCE_COUNT)
@@ -1251,6 +1352,7 @@ const sendMessage = async (req, res) => {
       body,
       references,
       attachments,
+      replyTo,
     });
 
     upsertThreadReadState(thread, currentUserId, message.createdAt || new Date());
