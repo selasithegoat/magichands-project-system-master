@@ -58,6 +58,16 @@ const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 const createAnswerId = () =>
   `help-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+const normalizeReplyTarget = (value = {}) => {
+  const text = toText(value?.text || value?.content).slice(0, 220);
+  if (!text) return null;
+
+  return {
+    role: toText(value?.role).toLowerCase() === "assistant" ? "assistant" : "user",
+    text,
+  };
+};
+
 const buildConversationPromptBlock = (conversation = []) => {
   const entries = getConversationEntries(conversation, MAX_CONVERSATION_TURNS);
   if (!entries.length) return "";
@@ -65,10 +75,24 @@ const buildConversationPromptBlock = (conversation = []) => {
   return [
     "Recent conversation:",
     ...entries.map(
-      (entry) =>
-        `${entry.role === "assistant" ? "MagicHelp" : "User"}: ${entry.text}`,
+      (entry) => {
+        const speaker = entry.role === "assistant" ? "MagicHelp" : "User";
+        if (!entry.replyToText) {
+          return `${speaker}: ${entry.text}`;
+        }
+
+        const replySpeaker = entry.replyToRole === "assistant" ? "MagicHelp" : "User";
+        return `${speaker} replying to ${replySpeaker} ("${entry.replyToText}"): ${entry.text}`;
+      },
     ),
   ].join("\n");
+};
+
+const buildReplyPromptBlock = (replyTo = null) => {
+  if (!replyTo?.text) return "";
+  return `The latest user question is replying to ${
+    replyTo.role === "assistant" ? "MagicHelp" : "their earlier message"
+  }: ${replyTo.text}`;
 };
 
 const normalizeQuestionForSuggestions = (value) =>
@@ -553,6 +577,7 @@ const buildHelpPrompt = ({
   intent = {},
   projectContexts = [],
   projectLookupNotes = [],
+  replyTo = null,
 }) => {
   const contextBlocks = toArray(chunks)
     .slice(0, 4)
@@ -562,6 +587,7 @@ const buildHelpPrompt = ({
     projectLookupNotes,
   );
   const conversationBlock = buildConversationPromptBlock(conversation);
+  const replyBlock = buildReplyPromptBlock(replyTo);
 
   return [
     "Answer the user's MagicHands system question using only the approved help chunks and authorized project context below.",
@@ -576,6 +602,7 @@ const buildHelpPrompt = ({
     "For project status, stage, next-step, owner, assignment, or blocker questions, answer in 1 to 2 short lines and do not add numbered steps unless the user explicitly asks for a step-by-step guide.",
     "If action is needed for a how-to question, add at most 3 numbered steps.",
     "Keep it brief and easy to scan.",
+    "If the user is replying to a specific earlier message, address that exact point first.",
     "If the user is asking a short follow-up and the earlier conversation gives the missing context, reuse that context.",
     "If the question is still ambiguous, ask one short clarifying question instead of guessing.",
     "Use plain text.",
@@ -587,6 +614,7 @@ const buildHelpPrompt = ({
     intent?.isFollowUp ? "The latest question looks like a follow-up." : "",
     "",
     conversationBlock,
+    replyBlock,
     `Question: ${question}`,
     "",
     projectContextBlock,
@@ -605,6 +633,7 @@ const requestOpenAiHelpAnswer = async ({
   intent = {},
   projectContexts = [],
   projectLookupNotes = [],
+  replyTo = null,
 }) => {
   const apiKey = toText(process.env.OPENAI_API_KEY);
   if (!apiKey || (chunks.length === 0 && projectContexts.length === 0)) {
@@ -642,6 +671,7 @@ const requestOpenAiHelpAnswer = async ({
               intent,
               projectContexts,
               projectLookupNotes,
+              replyTo,
             }),
           },
         ],
@@ -679,6 +709,7 @@ const requestOllamaHelpAnswer = async ({
   intent = {},
   projectContexts = [],
   projectLookupNotes = [],
+  replyTo = null,
 }) => {
   if (chunks.length === 0 && projectContexts.length === 0) return "";
 
@@ -703,6 +734,7 @@ const requestOllamaHelpAnswer = async ({
           intent,
           projectContexts,
           projectLookupNotes,
+          replyTo,
         }),
         stream: false,
         options: {
@@ -885,6 +917,7 @@ const askHelpQuestion = async (req, res) => {
       req.body?.conversation,
       MAX_CONVERSATION_TURNS,
     );
+    const replyTo = normalizeReplyTarget(req.body?.replyTo);
 
     if (question.length < 3) {
       return res.status(400).json({
@@ -893,7 +926,7 @@ const askHelpQuestion = async (req, res) => {
     }
 
     const userContext = getUserHelpContext(req.user);
-    const intent = detectHelpIntent({ question, conversation });
+    const intent = detectHelpIntent({ question, conversation, replyTo });
     const selectedProjectIds = toArray(req.body?.projectIds)
       .map(toText)
       .filter(Boolean)
@@ -912,6 +945,7 @@ const askHelpQuestion = async (req, res) => {
       conversation,
       intent,
       projectSearchText,
+      replyText: replyTo?.text || "",
     });
     const articleMatches = searchHelpArticles(
       HELP_ARTICLES,
@@ -969,6 +1003,7 @@ const askHelpQuestion = async (req, res) => {
           intent,
           projectContexts,
           projectLookupNotes,
+          replyTo,
         });
         if (answer) source = "openai";
       } catch (error) {
@@ -985,6 +1020,7 @@ const askHelpQuestion = async (req, res) => {
             intent,
             projectContexts,
             projectLookupNotes,
+            replyTo,
           });
           if (answer) source = "ollama";
         } catch (error) {

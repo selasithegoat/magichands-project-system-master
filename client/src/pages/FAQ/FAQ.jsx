@@ -96,6 +96,11 @@ const formatDate = (value) => {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
 };
 const formatAnswerLines = (answer) => String(answer || "").split("\n").map((line) => line.trimEnd());
+const truncatePreviewText = (value, maxLength = 180) => {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trim()}...`;
+};
 const projectRef = (project) => String(project?.displayRef || project?.orderId || project?.quoteNumber || "").trim();
 const withProject = (question, project) => {
   const nextQuestion = String(question || "").trim();
@@ -124,6 +129,23 @@ const normalizeHelpCapabilities = (value) => ({
   conversation: Boolean(value?.conversation),
   followUpSuggestions: Boolean(value?.followUpSuggestions),
 });
+const normalizeReplyTarget = (value) => {
+  const text = truncatePreviewText(value?.text || value?.content || "");
+  if (!text) return null;
+  const role = String(value?.role || "").trim().toLowerCase() === "assistant" ? "assistant" : "user";
+  return {
+    turnId: String(value?.turnId || value?.id || "").trim(),
+    role,
+    label: role === "assistant" ? "MagicHelp" : "You",
+    text,
+  };
+};
+const createReplyTarget = (turn) =>
+  normalizeReplyTarget({
+    turnId: turn?.id,
+    role: turn?.role,
+    text: turn?.text,
+  });
 const formatOrderReference = (value) => {
   const reference = String(value || "").trim();
   if (!reference) return "";
@@ -166,6 +188,7 @@ const toConversationPayload = (conversation) =>
       role: turn?.role === "assistant" ? "assistant" : "user",
       text: String(turn?.text || "").slice(0, 420),
       source: String(turn?.source || "").slice(0, 40),
+      replyTo: normalizeReplyTarget(turn?.replyTo),
     }))
     .filter((turn) => turn.text);
 const getProjectPickerSearchText = (project) =>
@@ -245,6 +268,7 @@ const FAQ = ({ user }) => {
   const [helpCapabilities, setHelpCapabilities] = useState(() =>
     normalizeHelpCapabilities(),
   );
+  const [replyTarget, setReplyTarget] = useState(null);
 
   const audience = useMemo(() => getAudience(user), [user]);
   const roleLabel = useMemo(() => getRoleLabel(user), [user]);
@@ -419,11 +443,20 @@ const FAQ = ({ user }) => {
     setConversation([]);
     setAnswer(null);
     setAskError("");
+    setReplyTarget(null);
     resetFeedback();
+  };
+  const startReply = (turn) => {
+    const nextReplyTarget = createReplyTarget(turn);
+    if (!nextReplyTarget) return;
+    setReplyTarget(nextReplyTarget);
+    setAskError("");
+    focusQuestion();
   };
   const handleAsk = async (event) => {
     event.preventDefault();
     const trimmedQuestion = question.trim();
+    const currentReplyTarget = normalizeReplyTarget(replyTarget);
     if (trimmedQuestion.length < 3) {
       setAskError("Ask a question with at least 3 characters.");
       return;
@@ -440,6 +473,7 @@ const FAQ = ({ user }) => {
           question: trimmedQuestion,
           projectIds: selectedProject?.projectId ? [selectedProject.projectId] : [],
           conversation: toConversationPayload(conversation),
+          replyTo: currentReplyTarget,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -464,6 +498,7 @@ const FAQ = ({ user }) => {
             id: createConversationTurnId("user"),
             role: "user",
             text: trimmedQuestion,
+            replyTo: currentReplyTarget,
           },
           {
             id: createConversationTurnId("assistant"),
@@ -482,6 +517,7 @@ const FAQ = ({ user }) => {
         setProjectQuery([contextProject.displayRef, contextProject.projectName].filter(Boolean).join(" - "));
       }
       setQuestion("");
+      setReplyTarget(null);
     } catch (error) {
       setAskError(error.message || "Unable to answer that question.");
     } finally {
@@ -620,16 +656,33 @@ const FAQ = ({ user }) => {
               </div>
               <div className="faq-chat-list" ref={chatWindowRef}>
                 {conversation.map((turn) => (
-                  <article key={turn.id} className={`faq-chat-turn ${turn.role}`}>
+                  <article key={turn.id} id={`faq-turn-${turn.id}`} className={`faq-chat-turn ${turn.role}`}>
                     <div className="faq-chat-meta">
                       <strong>{turn.role === "assistant" ? "MagicHelp" : "You"}</strong>
-                      {turn.role === "assistant" && (
-                        <div>
-                          {turn.intent?.label && <span className="faq-chat-intent">{turn.intent.label}</span>}
-                          {turn.sourceLabel && <span className="faq-chat-source">{turn.sourceLabel}</span>}
-                        </div>
-                      )}
+                      <div className="faq-chat-meta-actions">
+                        {turn.role === "assistant" && (
+                          <>
+                            {turn.intent?.label && <span className="faq-chat-intent">{turn.intent.label}</span>}
+                            {turn.sourceLabel && <span className="faq-chat-source">{turn.sourceLabel}</span>}
+                          </>
+                        )}
+                        {turn.role === "assistant" && (
+                          <button
+                            type="button"
+                            className={`faq-chat-reply-button ${replyTarget?.turnId === turn.id ? "active" : ""}`}
+                            onClick={() => startReply(turn)}
+                          >
+                            {replyTarget?.turnId === turn.id ? "Replying" : "Reply"}
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {turn.replyTo && (
+                      <div className="faq-chat-quote">
+                        <span>Replying to {turn.replyTo.label || (turn.replyTo.role === "assistant" ? "MagicHelp" : "You")}</span>
+                        <p>{turn.replyTo.text}</p>
+                      </div>
+                    )}
                     <div className="faq-chat-text">
                       {formatAnswerLines(turn.text).map((line, index) => line ? <p key={`${turn.id}-${index}`}>{line}</p> : <br key={`${turn.id}-break-${index}`} />)}
                     </div>
@@ -666,6 +719,15 @@ const FAQ = ({ user }) => {
               )}
               {answer.projectLookupNotes.length > 0 && <div className="faq-lookup-notes">{answer.projectLookupNotes.map((note) => <p key={`${note.reference}-${note.code}`}>{note.message}</p>)}</div>}
             </>
+          )}
+          {replyTarget && (
+            <div className="faq-replying-to">
+              <div className="faq-replying-to-header">
+                <span>Replying to {replyTarget.label}</span>
+                <button type="button" onClick={() => setReplyTarget(null)}>Cancel</button>
+              </div>
+              <p>{replyTarget.text}</p>
+            </div>
           )}
           <textarea id="faq-question" ref={questionRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: Why is #1024 or Q2026-001 still pending?" rows="3" maxLength={MAX_QUESTION_LENGTH} />
           <div className="faq-quick-questions">

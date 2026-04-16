@@ -238,19 +238,39 @@ const truncateText = (value = "", maxLength = 220) => {
   return `${text.slice(0, maxLength - 1).trim()}...`;
 };
 
+const getReplyEntry = (value = {}) => {
+  const text = truncateText(value?.text || value?.content || value?.replyToText || "", 220);
+  if (!text) return null;
+  const role =
+    normalizeText(value?.role || value?.replyToRole) === "assistant"
+      ? "assistant"
+      : "user";
+
+  return {
+    role,
+    text,
+  };
+};
+
 const getConversationEntries = (conversation = [], limit = 6) =>
   toArray(conversation)
-    .map((entry) => ({
-      role: normalizeText(entry?.role) === "assistant" ? "assistant" : "user",
-      text: truncateText(entry?.text || entry?.content || "", 420),
-    }))
+    .map((entry) => {
+      const replyTo = getReplyEntry(entry?.replyTo || entry);
+
+      return {
+        role: normalizeText(entry?.role) === "assistant" ? "assistant" : "user",
+        text: truncateText(entry?.text || entry?.content || "", 420),
+        replyToRole: replyTo?.role || "",
+        replyToText: replyTo?.text || "",
+      };
+    })
     .filter((entry) => entry.text)
     .slice(-limit);
 
 const getConversationSearchText = (conversation = [], limit = 4) =>
   getConversationEntries(conversation, limit)
     .filter((entry) => entry.role === "user")
-    .map((entry) => entry.text)
+    .map((entry) => [entry.text, entry.replyToText].filter(Boolean).join(" "))
     .join(" ");
 
 const getSynonymTokens = (token = "") =>
@@ -291,10 +311,11 @@ const scoreIntentMatch = (intentName, combinedText, questionText) => {
   return score;
 };
 
-const detectHelpIntent = ({ question = "", conversation = [] } = {}) => {
+const detectHelpIntent = ({ question = "", conversation = [], replyTo = null } = {}) => {
   const questionText = normalizeText(question);
+  const replyText = truncateText(replyTo?.text || replyTo?.content || "", 220);
   const combinedText = normalizeText(
-    [question, getConversationSearchText(conversation)].join(" "),
+    [question, getConversationSearchText(conversation), replyText].join(" "),
   );
   const followUp = isLikelyFollowUpQuestion(question);
 
@@ -332,10 +353,12 @@ const buildHelpRetrievalText = ({
   conversation = [],
   intent = {},
   projectSearchText = "",
+  replyText = "",
 } = {}) =>
   unique([
     question,
     getConversationSearchText(conversation, 4),
+    replyText,
     projectSearchText,
     ...toArray(intent?.queryTerms),
     ...toArray(intent?.articleHints),
