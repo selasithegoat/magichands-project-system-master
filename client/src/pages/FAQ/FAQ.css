@@ -97,6 +97,16 @@
   justify-content: space-between;
 }
 
+.faq-ask-controls,
+.faq-answer-meta,
+.faq-chat-meta div,
+.faq-chat-projects {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .faq-project-picker-toggle,
 .faq-selected-project button,
 .faq-quick-questions button,
@@ -292,13 +302,21 @@
   font-size: 0.82rem;
 }
 
+.faq-chat,
 .faq-answer {
   background: var(--bg-card);
-  border: 1px solid rgba(16, 185, 129, 0.28);
   box-shadow: var(--shadow-md);
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1.35rem;
+}
+
+.faq-chat {
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.faq-answer {
+  border: 1px solid rgba(16, 185, 129, 0.28);
 }
 
 .faq-answer-header,
@@ -325,6 +343,81 @@
   padding: 0.2rem 0.55rem;
   font-size: 0.72rem;
   text-transform: uppercase;
+}
+
+.faq-answer-intent,
+.faq-chat-intent,
+.faq-chat-source {
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.faq-answer-intent,
+.faq-chat-intent {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.24);
+}
+
+.faq-chat-source {
+  color: #475569;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+}
+
+.faq-chat-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.faq-chat-turn {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.faq-chat-turn.user {
+  background: rgba(var(--primary-rgb), 0.06);
+  border-color: rgba(var(--primary-rgb), 0.16);
+}
+
+.faq-chat-turn.assistant {
+  background: var(--surface-alt);
+}
+
+.faq-chat-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.faq-chat-meta strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.faq-chat-text {
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.faq-chat-text p + p {
+  margin-top: 0.45rem;
+}
+
+.faq-chat-projects span {
+  color: var(--primary-color);
+  background: var(--primary-soft);
+  border: 1px solid rgba(var(--primary-rgb), 0.2);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 .faq-answer-text {
@@ -850,6 +943,7 @@
 
   .faq-toolbar,
   .faq-answer-header,
+  .faq-chat-meta,
   .faq-project-context-item,
   .faq-selected-project,
   .faq-feedback-note,

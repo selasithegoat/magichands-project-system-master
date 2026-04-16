@@ -5,6 +5,7 @@ import SearchIcon from "../../components/icons/SearchIcon";
 import "./FAQ.css";
 
 const MAX_QUESTION_LENGTH = 600;
+const MAX_CONVERSATION_TURNS = 8;
 const QUICK_QUESTIONS = [
   "What should I do next?",
   "Who needs to act next?",
@@ -96,11 +97,32 @@ const formatDate = (value) => {
 };
 const formatAnswerLines = (answer) => String(answer || "").split("\n").map((line) => line.trimEnd());
 const projectRef = (project) => String(project?.displayRef || project?.orderId || project?.quoteNumber || "").trim();
-const withProject = (question, project) => (projectRef(project) ? `${question} (${projectRef(project)})` : question);
+const withProject = (question, project) => {
+  const nextQuestion = String(question || "").trim();
+  const reference = projectRef(project);
+  if (!reference || !nextQuestion) return nextQuestion;
+  return nextQuestion.includes(reference) ? nextQuestion : `${nextQuestion} (${reference})`;
+};
+const createConversationTurnId = (prefix = "turn") =>
+  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const normalizeIntent = (value) => ({
+  name: String(value?.name || "").trim(),
+  label: String(value?.label || "").trim(),
+  isFollowUp: Boolean(value?.isFollowUp),
+});
+const normalizeAnswerSourceLabel = (value) => {
+  const source = String(value || "").trim().toLowerCase();
+  if (source === "openai") return "AI";
+  if (source === "ollama") return "Local AI";
+  if (source === "fallback") return "Approved help";
+  return source ? source : "Help";
+};
 const normalizeHelpCapabilities = (value) => ({
   projectSearch: Boolean(value?.projectSearch),
   feedback: Boolean(value?.feedback),
   projectAwareAnswers: Boolean(value?.projectAwareAnswers),
+  conversation: Boolean(value?.conversation),
+  followUpSuggestions: Boolean(value?.followUpSuggestions),
 });
 const formatOrderReference = (value) => {
   const reference = String(value || "").trim();
@@ -129,6 +151,23 @@ const toProjectPickerResult = (project) => ({
   projectType: String(project?.projectType || "").trim(),
   clientName: String(project?.clientName || project?.details?.client || "").trim(),
 });
+const toSelectedProjectFromContext = (project) => ({
+  projectId: String(project?.projectId || "").trim(),
+  displayRef: String(project?.displayRef || "").trim(),
+  projectName: String(project?.projectName || "").trim(),
+  status: String(project?.status || "").trim(),
+  projectType: String(project?.projectType || "").trim(),
+  clientName: String(project?.clientName || "").trim(),
+});
+const toConversationPayload = (conversation) =>
+  toArray(conversation)
+    .slice(-6)
+    .map((turn) => ({
+      role: turn?.role === "assistant" ? "assistant" : "user",
+      text: String(turn?.text || "").slice(0, 420),
+      source: String(turn?.source || "").slice(0, 40),
+    }))
+    .filter((turn) => turn.text);
 const getProjectPickerSearchText = (project) =>
   normalizeText(
     [
@@ -201,6 +240,7 @@ const FAQ = ({ user }) => {
   const [feedbackNote, setFeedbackNote] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [conversation, setConversation] = useState([]);
   const [helpCapabilities, setHelpCapabilities] = useState(() =>
     normalizeHelpCapabilities(),
   );
@@ -243,6 +283,10 @@ const FAQ = ({ user }) => {
         seen.add(key);
         return true;
       });
+  }, [answer]);
+  const questionSuggestions = useMemo(() => {
+    const answerSuggestions = toArray(answer?.followUpSuggestions).filter(Boolean);
+    return unique(answerSuggestions.length ? answerSuggestions : QUICK_QUESTIONS).slice(0, 5);
   }, [answer]);
 
   useEffect(() => {
@@ -365,6 +409,12 @@ const FAQ = ({ user }) => {
     setFeedbackStatus("");
     setFeedbackSubmitting(false);
   };
+  const clearConversation = () => {
+    setConversation([]);
+    setAnswer(null);
+    setAskError("");
+    resetFeedback();
+  };
   const handleAsk = async (event) => {
     event.preventDefault();
     const trimmedQuestion = question.trim();
@@ -374,7 +424,6 @@ const FAQ = ({ user }) => {
     }
     setAsking(true);
     setAskError("");
-    setAnswer(null);
     resetFeedback();
     try {
       const response = await fetch("/api/help/ask", {
@@ -384,19 +433,49 @@ const FAQ = ({ user }) => {
         body: JSON.stringify({
           question: trimmedQuestion,
           projectIds: selectedProject?.projectId ? [selectedProject.projectId] : [],
+          conversation: toConversationPayload(conversation),
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.message || "Unable to answer that question.");
-      setAnswer({
+      const nextAnswer = {
         answerId: payload?.answerId || "",
         question: trimmedQuestion,
         text: payload?.answer || "",
         source: payload?.source || "fallback",
+        sourceLabel: normalizeAnswerSourceLabel(payload?.source),
+        intent: normalizeIntent(payload?.intent),
+        followUpSuggestions: toArray(payload?.followUpSuggestions),
         relatedArticles: toArray(payload?.relatedArticles),
         projectContexts: toArray(payload?.projectContexts),
         projectLookupNotes: toArray(payload?.projectLookupNotes),
-      });
+      };
+      setAnswer(nextAnswer);
+      setConversation((previous) =>
+        [
+          ...previous,
+          {
+            id: createConversationTurnId("user"),
+            role: "user",
+            text: trimmedQuestion,
+          },
+          {
+            id: createConversationTurnId("assistant"),
+            role: "assistant",
+            text: nextAnswer.text,
+            source: nextAnswer.source,
+            sourceLabel: nextAnswer.sourceLabel,
+            intent: nextAnswer.intent,
+            projectContexts: nextAnswer.projectContexts,
+          },
+        ].slice(-MAX_CONVERSATION_TURNS),
+      );
+      if (!selectedProject && nextAnswer.projectContexts[0]?.projectId) {
+        const contextProject = toSelectedProjectFromContext(nextAnswer.projectContexts[0]);
+        setSelectedProject(contextProject);
+        setProjectQuery([contextProject.displayRef, contextProject.projectName].filter(Boolean).join(" - "));
+      }
+      setQuestion("");
     } catch (error) {
       setAskError(error.message || "Unable to answer that question.");
     } finally {
@@ -500,7 +579,10 @@ const FAQ = ({ user }) => {
         <form className="faq-ask-panel" onSubmit={handleAsk}>
           <div className="faq-ask-heading">
             <label htmlFor="faq-question">Ask MagicHelp</label>
-            <button type="button" className="faq-project-picker-toggle" onClick={() => setProjectPickerOpen((value) => !value)}>Attach project</button>
+            <div className="faq-ask-controls">
+              {conversation.length > 0 && <button type="button" className="faq-project-picker-toggle" onClick={clearConversation}>New chat</button>}
+              <button type="button" className="faq-project-picker-toggle" onClick={() => setProjectPickerOpen((value) => !value)}>Attach project</button>
+            </div>
           </div>
           {selectedProject && (
             <div className="faq-selected-project">
@@ -526,9 +608,9 @@ const FAQ = ({ user }) => {
           )}
           <textarea id="faq-question" ref={questionRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Example: Why is #1024 or Q2026-001 still pending?" rows="4" maxLength={MAX_QUESTION_LENGTH} />
           <div className="faq-quick-questions">
-            {QUICK_QUESTIONS.map((item) => <button type="button" key={item} onClick={() => prefillQuestion(item)}>{item}</button>)}
+            {questionSuggestions.map((item) => <button type="button" key={item} onClick={() => prefillQuestion(item)}>{item}</button>)}
           </div>
-          <p className="faq-ask-hint">Use # for regular orders, Q for quote requests, or attach a project before asking.</p>
+          <p className="faq-ask-hint">{conversation.length > 0 ? "MagicHelp keeps the last few turns so follow-up questions can stay specific." : "Use # for regular orders, Q for quote requests, or attach a project before asking."}</p>
           <div className="faq-ask-actions">
             <span>{question.length}/{MAX_QUESTION_LENGTH}</span>
             <button type="submit" disabled={asking}>{asking ? "Finding answer..." : "Ask"}</button>
@@ -548,9 +630,47 @@ const FAQ = ({ user }) => {
         </div>
       </section>
 
+      {conversation.length > 0 && (
+        <section className="faq-chat" aria-live="polite">
+          <div className="faq-section-heading">
+            <h2>Conversation</h2>
+            <span>{conversation.length} turn{conversation.length === 1 ? "" : "s"}</span>
+          </div>
+          <div className="faq-chat-list">
+            {conversation.map((turn) => (
+              <article key={turn.id} className={`faq-chat-turn ${turn.role}`}>
+                <div className="faq-chat-meta">
+                  <strong>{turn.role === "assistant" ? "MagicHelp" : "You"}</strong>
+                  {turn.role === "assistant" && (
+                    <div>
+                      {turn.intent?.label && <span className="faq-chat-intent">{turn.intent.label}</span>}
+                      {turn.sourceLabel && <span className="faq-chat-source">{turn.sourceLabel}</span>}
+                    </div>
+                  )}
+                </div>
+                <div className="faq-chat-text">
+                  {formatAnswerLines(turn.text).map((line, index) => line ? <p key={`${turn.id}-${index}`}>{line}</p> : <br key={`${turn.id}-break-${index}`} />)}
+                </div>
+                {turn.role === "assistant" && toArray(turn.projectContexts).length > 0 && (
+                  <div className="faq-chat-projects">
+                    {turn.projectContexts.slice(0, 3).map((project) => <span key={`${turn.id}-${project.projectId || project.displayRef}`}>{project.displayRef}</span>)}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       {answer && (
         <section className="faq-answer" aria-live="polite">
-          <div className="faq-answer-header"><span>MagicHelp Answer</span><span className="faq-answer-source">{answer.source}</span></div>
+          <div className="faq-answer-header">
+            <span>Latest MagicHelp answer</span>
+            <div className="faq-answer-meta">
+              {answer.intent?.label && <span className="faq-answer-intent">{answer.intent.label}</span>}
+              <span className="faq-answer-source">{answer.sourceLabel || answer.source}</span>
+            </div>
+          </div>
           <div className="faq-answer-text">{formatAnswerLines(answer.text).map((line, index) => line ? <p key={`${line}-${index}`}>{line}</p> : <br key={index} />)}</div>
           {answer.projectContexts.length > 0 && (
             <div className="faq-project-contexts">
@@ -577,9 +697,15 @@ const FAQ = ({ user }) => {
             <div>
               {answer.projectContexts[0]?.route && <Link to={answer.projectContexts[0].route}>Open project</Link>}
               {answerRoutes.map((route) => <Link key={`${route.label}-${route.path}`} to={route.path}>{route.label}</Link>)}
-              <button type="button" onClick={() => prefillQuestion("Who needs to act next?")}>Ask follow-up</button>
+              <button type="button" onClick={() => prefillQuestion(answer.followUpSuggestions?.[0] || "Who needs to act next?")}>Ask follow-up</button>
             </div>
           </div>
+          {toArray(answer.followUpSuggestions).length > 0 && (
+            <div className="faq-answer-related">
+              <span>Suggested follow-up questions</span>
+              <div>{answer.followUpSuggestions.map((item) => <button type="button" key={item} onClick={() => prefillQuestion(item)}>{item}</button>)}</div>
+            </div>
+          )}
           {answer.relatedArticles.length > 0 && (
             <div className="faq-answer-related">
               <span>Related tutorials</span>

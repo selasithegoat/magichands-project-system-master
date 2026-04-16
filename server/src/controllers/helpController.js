@@ -3,6 +3,9 @@ const { HELP_ARTICLES, HELP_CATEGORIES } = require("../data/helpArticles");
 const HelpFeedback = require("../models/HelpFeedback");
 const {
   buildArticleAnswer,
+  buildHelpRetrievalText,
+  detectHelpIntent,
+  getConversationEntries,
   getUserHelpContext,
   searchHelpArticles,
 } = require("../utils/helpSearch");
@@ -38,6 +41,7 @@ const OLLAMA_HELP_TIMEOUT_MS = Number.isFinite(
   ? Number.parseInt(process.env.OLLAMA_HELP_TIMEOUT_MS, 10)
   : 18000;
 const MAX_QUESTION_LENGTH = 600;
+const MAX_CONVERSATION_TURNS = 6;
 
 const getFetchClient = async () => {
   if (typeof fetch === "function") return fetch;
@@ -51,6 +55,56 @@ const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
 const createAnswerId = () =>
   `help-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const buildConversationPromptBlock = (conversation = []) => {
+  const entries = getConversationEntries(conversation, MAX_CONVERSATION_TURNS);
+  if (!entries.length) return "";
+
+  return [
+    "Recent conversation:",
+    ...entries.map(
+      (entry) =>
+        `${entry.role === "assistant" ? "MagicHelp" : "User"}: ${entry.text}`,
+    ),
+  ].join("\n");
+};
+
+const normalizeQuestionForSuggestions = (value) =>
+  toText(value).toLowerCase().replace(/\s+/g, " ").trim();
+
+const buildFollowUpSuggestions = ({
+  intent = {},
+  projectContexts = [],
+  question = "",
+} = {}) => {
+  const projectRef = toText(projectContexts?.[0]?.displayRef);
+  const intentSuggestions = toArray(intent?.followUps);
+  const contextualSuggestions = projectRef
+    ? [
+        `What should I check next on ${projectRef}?`,
+        `Who needs to act next on ${projectRef}?`,
+        `Can you explain that for ${projectRef} step by step?`,
+      ]
+    : [];
+  const genericSuggestions = [
+    "Can you break that into steps?",
+    "What usually blocks this workflow?",
+    "Which page should I open next?",
+  ];
+
+  return Array.from(
+    new Set(
+      [...intentSuggestions, ...contextualSuggestions, ...genericSuggestions]
+        .map(toText)
+        .filter(
+          (item) =>
+            item &&
+            normalizeQuestionForSuggestions(item) !==
+              normalizeQuestionForSuggestions(question),
+        ),
+    ),
+  ).slice(0, 4);
+};
 
 const toPublicArticle = (article) => ({
   id: article.id,
@@ -69,6 +123,8 @@ const buildHelpPrompt = ({
   question,
   articles,
   userContext,
+  conversation = [],
+  intent = {},
   projectContexts = [],
   projectLookupNotes = [],
 }) => {
@@ -92,6 +148,7 @@ const buildHelpPrompt = ({
     projectContexts,
     projectLookupNotes,
   );
+  const conversationBlock = buildConversationPromptBlock(conversation);
 
   return [
     "Answer the user's MagicHands system question using only the approved help articles and authorized project context below.",
@@ -100,12 +157,19 @@ const buildHelpPrompt = ({
     "If the help articles and project context do not contain enough information, say you could not find an approved tutorial for that exact question and suggest the closest article.",
     "Do not invent buttons, pages, permissions, or workflow steps.",
     "Do not claim that you changed, approved, submitted, or updated anything.",
-    "Keep the answer practical and step-by-step. Use plain text.",
+    "Keep the answer practical, conversational, and specific to the user's question.",
+    "Use this structure when it fits: Direct answer, Why this applies, Steps to take now, What to check next, When to escalate.",
+    "If the user is asking a short follow-up and the earlier conversation gives the missing context, reuse that context.",
+    "If the question is still ambiguous, ask one short clarifying question instead of guessing.",
+    "Use plain text.",
     "",
     `User role: ${userContext.role || "unknown"}`,
     `Employee type: ${userContext.employeeType || "unknown"}`,
     `Departments: ${(userContext.departments || []).join(", ") || "none"}`,
+    `Detected intent: ${intent?.label || "General help"}`,
+    intent?.isFollowUp ? "The latest question looks like a follow-up." : "",
     "",
+    conversationBlock,
     `Question: ${question}`,
     "",
     projectContextBlock,
@@ -120,6 +184,8 @@ const requestOpenAiHelpAnswer = async ({
   question,
   articles = [],
   userContext,
+  conversation = [],
+  intent = {},
   projectContexts = [],
   projectLookupNotes = [],
 }) => {
@@ -155,6 +221,8 @@ const requestOpenAiHelpAnswer = async ({
               question,
               articles,
               userContext,
+              conversation,
+              intent,
               projectContexts,
               projectLookupNotes,
             }),
@@ -190,6 +258,8 @@ const requestOllamaHelpAnswer = async ({
   question,
   articles = [],
   userContext,
+  conversation = [],
+  intent = {},
   projectContexts = [],
   projectLookupNotes = [],
 }) => {
@@ -212,6 +282,8 @@ const requestOllamaHelpAnswer = async ({
           question,
           articles,
           userContext,
+          conversation,
+          intent,
           projectContexts,
           projectLookupNotes,
         }),
@@ -277,23 +349,110 @@ const buildFallbackHelpAnswer = (
   matches,
   projectContexts = [],
   projectLookupNotes = [],
+  intent = {},
 ) => {
-  const projectSection = buildProjectFallbackSection(
-    projectContexts,
-    projectLookupNotes,
-  );
+  const projectSection = buildProjectFallbackSection(projectContexts, projectLookupNotes);
+  const primaryProject = projectContexts[0] || null;
+  const primaryArticle = matches[0]?.article || null;
+  const primaryBlockers = toArray(primaryProject?.blockers)
+    .map((blocker) =>
+      [toText(blocker?.label), toText(blocker?.detail)].filter(Boolean).join(": "),
+    )
+    .filter(Boolean);
+  const primaryChecks = toArray(primaryProject?.nextChecks).filter(Boolean);
+  const articleSteps = toArray(primaryArticle?.steps).filter(Boolean);
+  const articleTips = toArray(primaryArticle?.tips).filter(Boolean);
+  const lines = [];
 
   if (!matches.length || matches[0].score < 4) {
-    const fallback = [
-      "I could not find an approved tutorial for that exact question yet.",
-      "Try searching with a workflow keyword such as order, quote, mockup, engagement, reminder, billing, inventory, or profile.",
-    ].join(" ");
+    lines.push("Direct answer:");
+    if (primaryProject) {
+      lines.push(
+        `${primaryProject.displayRef} is currently ${primaryProject.status || "in progress"}${
+          primaryProject.projectName ? ` for ${primaryProject.projectName}` : ""
+        }.`,
+      );
+      if (primaryBlockers.length > 0) {
+        lines.push(
+          `The clearest blocker I found is ${primaryBlockers[0]}.`,
+        );
+      } else {
+        lines.push("I did not find an approved tutorial that exactly matches your question, but I can use the project snapshot to guide the next checks.");
+      }
+      if (primaryChecks.length > 0) {
+        lines.push("");
+        lines.push("What to check next:");
+        primaryChecks.slice(0, 4).forEach((check, index) => {
+          lines.push(`${index + 1}. ${check}`);
+        });
+      }
+    } else {
+      lines.push(
+        "I could not find an approved tutorial for that exact question yet.",
+      );
+      lines.push(
+        "Try searching with a workflow keyword such as order, quote, mockup, engagement, reminder, billing, inventory, or profile.",
+      );
+    }
 
-    return [projectSection, fallback].filter(Boolean).join("\n\n");
+    if (projectSection) {
+      lines.push("");
+      lines.push(projectSection);
+    }
+
+    return lines.join("\n");
   }
 
-  const article = matches[0].article;
-  return [projectSection, buildArticleAnswer(article)].filter(Boolean).join("\n\n");
+  lines.push("Direct answer:");
+  lines.push(primaryArticle?.summary || buildArticleAnswer(primaryArticle));
+
+  if (primaryProject) {
+    lines.push("");
+    lines.push("Why this applies:");
+    lines.push(
+      `${primaryProject.displayRef} is currently ${primaryProject.status || "in the system"}${
+        primaryProject.projectName ? ` for ${primaryProject.projectName}` : ""
+      }.`,
+    );
+    if (primaryBlockers.length > 0) {
+      lines.push(`Current blocker: ${primaryBlockers[0]}.`);
+    }
+  }
+
+  if (articleSteps.length > 0 || primaryChecks.length > 0) {
+    lines.push("");
+    lines.push("Steps to take now:");
+    const steps = articleSteps.length > 0 ? articleSteps : primaryChecks;
+    steps.slice(0, 5).forEach((step, index) => {
+      lines.push(`${index + 1}. ${step}`);
+    });
+  }
+
+  if (articleTips.length > 0 || primaryChecks.length > 0) {
+    lines.push("");
+    lines.push("What to check next:");
+    const checks = articleTips.length > 0 ? articleTips : primaryChecks;
+    checks.slice(0, 4).forEach((check, index) => {
+      lines.push(`${index + 1}. ${check}`);
+    });
+  }
+
+  if (projectSection) {
+    lines.push("");
+    lines.push(projectSection);
+  }
+
+  if (intent?.followUps?.length) {
+    lines.push("");
+    lines.push("You can also ask:");
+    toArray(intent.followUps)
+      .slice(0, 3)
+      .forEach((followUp) => {
+        lines.push(`- ${followUp}`);
+      });
+  }
+
+  return lines.join("\n");
 };
 
 const getHelpArticles = async (req, res) => {
@@ -308,6 +467,8 @@ const getHelpArticles = async (req, res) => {
       projectSearch: true,
       feedback: true,
       projectAwareAnswers: true,
+      conversation: true,
+      followUpSuggestions: true,
     },
     categories: HELP_CATEGORIES,
     articles: HELP_ARTICLES.map(toPublicArticle),
@@ -318,6 +479,10 @@ const getHelpArticles = async (req, res) => {
 const askHelpQuestion = async (req, res) => {
   try {
     const question = toText(req.body?.question).slice(0, MAX_QUESTION_LENGTH);
+    const conversation = getConversationEntries(
+      req.body?.conversation,
+      MAX_CONVERSATION_TURNS,
+    );
 
     if (question.length < 3) {
       return res.status(400).json({
@@ -326,6 +491,7 @@ const askHelpQuestion = async (req, res) => {
     }
 
     const userContext = getUserHelpContext(req.user);
+    const intent = detectHelpIntent({ question, conversation });
     const selectedProjectIds = toArray(req.body?.projectIds)
       .map(toText)
       .filter(Boolean)
@@ -339,9 +505,12 @@ const askHelpQuestion = async (req, res) => {
       projectIds: selectedProjectIds,
     });
     const projectSearchText = getProjectContextSearchText(projectContexts);
-    const contextualQuestion = [question, projectSearchText]
-      .filter(Boolean)
-      .join(" ");
+    const contextualQuestion = buildHelpRetrievalText({
+      question,
+      conversation,
+      intent,
+      projectSearchText,
+    });
     const matches = searchHelpArticles(
       HELP_ARTICLES,
       contextualQuestion,
@@ -349,6 +518,7 @@ const askHelpQuestion = async (req, res) => {
       {
         limit: 5,
         minScore: projectContexts.length ? 1 : 2,
+        intent,
       },
     );
     const relatedArticles = matches.map((entry) => toPublicArticle(entry.article));
@@ -366,6 +536,8 @@ const askHelpQuestion = async (req, res) => {
           question,
           articles: contextArticles,
           userContext,
+          conversation,
+          intent,
           projectContexts,
           projectLookupNotes,
         });
@@ -380,6 +552,8 @@ const askHelpQuestion = async (req, res) => {
             question,
             articles: contextArticles,
             userContext,
+            conversation,
+            intent,
             projectContexts,
             projectLookupNotes,
           });
@@ -391,18 +565,31 @@ const askHelpQuestion = async (req, res) => {
     }
 
     if (!answer) {
-      answer = buildFallbackHelpAnswer(
-        matches,
-        projectContexts,
-        projectLookupNotes,
-      );
+        answer = buildFallbackHelpAnswer(
+          matches,
+          projectContexts,
+          projectLookupNotes,
+          intent,
+        );
       source = "fallback";
     }
+
+    const followUpSuggestions = buildFollowUpSuggestions({
+      intent,
+      projectContexts,
+      question,
+    });
 
     return res.json({
       answerId: createAnswerId(),
       answer,
       source,
+      intent: {
+        name: intent.name,
+        label: intent.label,
+        isFollowUp: Boolean(intent.isFollowUp),
+      },
+      followUpSuggestions,
       relatedArticles,
       projectContexts: projectContexts.map(toPublicProjectContext),
       projectLookupNotes,
