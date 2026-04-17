@@ -3696,6 +3696,43 @@
   justify-content: center;
 }
 
+.new-orders-page .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.new-orders-page .cancel-order-btn {
+  border: 1px solid rgba(15, 118, 110, 0.25);
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--order-primary);
+  padding: 0.95rem 1.4rem;
+  border-radius: 14px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.new-orders-page .cancel-order-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(15, 118, 110, 0.14);
+  border-color: rgba(15, 118, 110, 0.38);
+}
+
+.new-orders-page .cancel-order-btn:disabled,
+.new-orders-page .submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .new-orders-page .submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 18px 32px rgba(15, 118, 110, 0.28);
@@ -3752,6 +3789,15 @@
   .order-meta-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .new-orders-page .form-actions {
+    justify-content: stretch;
+  }
+
+  .new-orders-page .cancel-order-btn,
+  .new-orders-page .submit-btn {
+    width: 100% !important;
   }
 }
 

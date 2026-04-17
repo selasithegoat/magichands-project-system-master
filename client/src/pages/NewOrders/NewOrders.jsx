@@ -32,6 +32,7 @@ import {
   saveNewOrderDraftFiles,
   saveNewOrderDraftMeta,
 } from "../../utils/newOrderDraftStorage";
+import { resolvePortalSource } from "../../utils/portalSource";
 import "./NewOrders.css";
 
 const REVISION_LOCKED_STATUSES = new Set([
@@ -214,6 +215,7 @@ const NewOrders = ({ user = null }) => {
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [toast, setToast] = useState({
     show: false,
     message: "",
@@ -243,6 +245,7 @@ const NewOrders = ({ user = null }) => {
   const isCreateMode = !editingId && !reopenedProject;
   const routeProjectType = location.state?.projectType || "Standard";
   const routePriority = location.state?.priority || "Normal";
+  const portalSource = useMemo(() => resolvePortalSource(), []);
   const draftAccountKey =
     String(
       currentUser?._id || currentUser?.id || currentUser?.email || "default",
@@ -866,6 +869,50 @@ const NewOrders = ({ user = null }) => {
     setShowConfirmModal(true);
   };
 
+  const resetCreateOrderState = React.useCallback(
+    ({
+      projectType = routeProjectType,
+      priority = routePriority,
+    } = {}) => {
+      setFormData(
+        createNewOrderFormData({
+          projectType,
+          priority,
+        }),
+      );
+      setSelectedFiles([]);
+      setSelectedClientMockups([]);
+      setSelectedClientMockupNotes({});
+      setSelectedApprovedMockups([]);
+      setSelectedApprovedMockupNotes({});
+      setSelectedFileNotes({});
+      setExistingSampleImage("");
+      setExistingSampleImageNote("");
+      setExistingAttachments([]);
+      setEditingProjectStatus("");
+      setIsClientDropdownOpen(false);
+    },
+    [routePriority, routeProjectType],
+  );
+
+  const handleCancelOrderCreation = async () => {
+    setShowCancelModal(false);
+    draftPersistenceDisabledRef.current = true;
+
+    try {
+      await Promise.allSettled([
+        draftMetaSaveChainRef.current,
+        draftFileSaveChainRef.current,
+      ]);
+      await clearNewOrderDraft(draftAccountKey);
+    } catch (error) {
+      console.error("Failed to clear New Order draft during cancel", error);
+    }
+
+    resetCreateOrderState();
+    navigate(portalSource === "admin" ? "/dashboard" : "/client");
+  };
+
   const handleConfirmSubmit = async () => {
     if (editingId && isRevisionLocked) {
       setShowConfirmModal(false);
@@ -1064,6 +1111,7 @@ const NewOrders = ({ user = null }) => {
   const canEditOrderNumber =
     currentUser?.role === "admin" ||
     currentUserDepartments.includes("Front Desk");
+  const showCreateCancelAction = isCreateMode;
 
   return (
     <div className="new-orders-page">
@@ -2055,6 +2103,16 @@ const NewOrders = ({ user = null }) => {
             </div>
 
             <div className="form-actions">
+              {showCreateCancelAction && (
+                <button
+                  type="button"
+                  className="cancel-order-btn"
+                  onClick={() => setShowCancelModal(true)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 type="submit"
                 className="submit-btn"
@@ -2105,6 +2163,15 @@ const NewOrders = ({ user = null }) => {
             : "Yes, Create Order"
         }
         cancelText="Cancel"
+      />
+      <ConfirmationModal
+        isOpen={showCancelModal}
+        onConfirm={handleCancelOrderCreation}
+        onCancel={() => setShowCancelModal(false)}
+        title="Cancel New Order"
+        message="Cancel this new order, clear the current form and draft, and return to the dashboard?"
+        confirmText="Yes, Cancel Order"
+        cancelText="Keep Editing"
       />
     </div>
   );
