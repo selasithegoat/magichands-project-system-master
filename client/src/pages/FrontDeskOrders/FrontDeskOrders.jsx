@@ -37,7 +37,10 @@ const FrontDeskOrders = () => {
     fetchOrders();
   }, [fetchOrders]);
 
-  useRealtimeRefresh(() => fetchOrders());
+  useRealtimeRefresh(() => fetchOrders(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const billingBlocks = useMemo(
     () =>

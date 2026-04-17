@@ -61,7 +61,10 @@ const CancelledOrders = () => {
     fetchCancelledOrders();
   }, []);
 
-  useRealtimeRefresh(() => fetchCancelledOrders());
+  useRealtimeRefresh(() => fetchCancelledOrders(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const filteredGroups = useMemo(() => {
     const token = searchQuery.trim().toLowerCase();

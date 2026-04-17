@@ -653,7 +653,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <MyActivities onBack={() => navigate("/profile")} />
+              <MyActivities user={user} onBack={() => navigate("/profile")} />
             </ProtectedLayout>
           }
         />

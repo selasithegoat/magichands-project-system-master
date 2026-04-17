@@ -311,6 +311,9 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   useRealtimeRefresh(() => {
     fetchStats();
     fetchActivities();
+  }, {
+    paths: ["/api/projects", "/api/updates"],
+    excludePaths: ["/api/projects/ai"],
   });
 
   const validationErrors = useMemo(() => validateProfile(formData), [formData]);

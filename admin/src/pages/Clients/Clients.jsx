@@ -42,7 +42,10 @@ const Clients = ({ user }) => {
     fetchClients();
   }, []);
 
-  useRealtimeRefresh(() => fetchClients());
+  useRealtimeRefresh(() => fetchClients(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";

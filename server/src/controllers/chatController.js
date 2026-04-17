@@ -33,6 +33,8 @@ const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const CHAT_ARCHIVE_WINDOW_MS = CHAT_ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
 const CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH = 160;
+const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
+const CHAT_REACTION_EMOJI_SET = new Set(CHAT_REACTION_EMOJIS);
 const PRODUCTION_SUB_DEPARTMENTS = new Set([
   "dtf",
   "uv-dtf",
@@ -282,7 +284,7 @@ const getAttachmentKind = (attachment) => {
   if (mimeType.startsWith("video/")) return "video";
 
   const fileName = resolveAttachmentName(attachment).toLowerCase();
-  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(fileName)) return "image";
+  if (/\.(jpg|jpeg|png|webp|bmp|svg)$/i.test(fileName)) return "image";
   if (/\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(fileName)) return "audio";
   if (/\.(mp4|mov|avi|mkv|m4v|webm)$/i.test(fileName)) return "video";
   return "file";
@@ -424,6 +426,97 @@ const serializeReplyTo = (replyTo) => {
   };
 };
 
+const normalizeReactionEmoji = (value) => {
+  const emoji = toText(value);
+  return CHAT_REACTION_EMOJI_SET.has(emoji) ? emoji : "";
+};
+
+const serializeReactions = (reactions = []) =>
+  (Array.isArray(reactions) ? reactions : [])
+    .map((entry) => {
+      const emoji = normalizeReactionEmoji(entry?.emoji);
+      const userIds = Array.from(
+        new Set(
+          (Array.isArray(entry?.users) ? entry.users : [])
+            .map((userId) => toIdString(userId))
+            .filter(Boolean),
+        ),
+      );
+
+      if (!emoji || userIds.length === 0) {
+        return null;
+      }
+
+      return {
+        emoji,
+        userIds,
+        count: userIds.length,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return (
+        CHAT_REACTION_EMOJIS.indexOf(left.emoji) -
+        CHAT_REACTION_EMOJIS.indexOf(right.emoji)
+      );
+    });
+
+const applyReactionToggleToMessage = (message, actorId, emoji) => {
+  const normalizedEmoji = normalizeReactionEmoji(emoji);
+  const normalizedActorId = toIdString(actorId);
+  if (!message || !normalizedEmoji || !normalizedActorId) {
+    return false;
+  }
+
+  const reactionEntries = Array.isArray(message.reactions)
+    ? message.reactions.map((entry) =>
+        entry?.toObject ? entry.toObject() : entry,
+      )
+    : [];
+  const existingReactionIndex = reactionEntries.findIndex(
+    (entry) => normalizeReactionEmoji(entry?.emoji) === normalizedEmoji,
+  );
+
+  if (existingReactionIndex >= 0) {
+    const nextUsers = Array.from(
+      new Set(
+        (Array.isArray(reactionEntries[existingReactionIndex]?.users)
+          ? reactionEntries[existingReactionIndex].users
+          : []
+        )
+          .map((userId) => toIdString(userId))
+          .filter(Boolean),
+      ),
+    );
+    const alreadyReacted = nextUsers.includes(normalizedActorId);
+
+    reactionEntries[existingReactionIndex] = {
+      ...reactionEntries[existingReactionIndex],
+      emoji: normalizedEmoji,
+      users: alreadyReacted
+        ? nextUsers.filter((userId) => userId !== normalizedActorId)
+        : [...nextUsers, normalizedActorId],
+    };
+  } else {
+    reactionEntries.push({
+      emoji: normalizedEmoji,
+      users: [normalizedActorId],
+    });
+  }
+
+  message.reactions = reactionEntries.filter(
+    (entry) =>
+      normalizeReactionEmoji(entry?.emoji) &&
+      Array.isArray(entry?.users) &&
+      entry.users.length > 0,
+  );
+  message.markModified("reactions");
+  return true;
+};
+
 const serializeMessage = (message, senderMap = {}) => {
   const senderId = toIdString(message?.sender?._id || message?.sender);
   const sender =
@@ -444,6 +537,7 @@ const serializeMessage = (message, senderMap = {}) => {
       ? message.attachments.map((entry) => serializeAttachment(entry))
       : [],
     replyTo: serializeReplyTo(message?.replyTo),
+    reactions: serializeReactions(message?.reactions),
     isDeleted: Boolean(message?.isDeleted),
     deletedAt: message?.deletedAt || null,
     editedAt: message?.editedAt || null,
@@ -1366,7 +1460,11 @@ const sendMessage = async (req, res) => {
       upsertThreadUnreadState(thread, currentUserId, 0, null);
     }
     thread.lastMessageAt = message.createdAt || new Date();
-    thread.lastMessagePreview = buildMessagePreview(body, references, attachments);
+    thread.lastMessagePreview = buildMessagePreview(
+      body,
+      references,
+      attachments,
+    );
     thread.lastMessageSender = req.user._id;
     await thread.save();
     await upsertChatAttachmentIndexEntries({
@@ -1473,6 +1571,7 @@ const deleteMessage = async (req, res) => {
       message.body = DELETED_MESSAGE_BODY;
       message.references = [];
       message.attachments = [];
+      message.reactions = [];
       message.isDeleted = true;
       message.deletedAt = new Date();
       message.deletedBy = req.user._id;
@@ -1544,6 +1643,41 @@ const updateMessage = async (req, res) => {
     });
     if (!message) {
       return res.status(404).json({ message: "Chat message not found." });
+    }
+
+    const reactionEmoji = normalizeReactionEmoji(req.body?.reactionEmoji);
+    if (reactionEmoji) {
+      if (message.isDeleted) {
+        return res.status(400).json({ message: "Deleted messages cannot be reacted to." });
+      }
+
+      applyReactionToggleToMessage(message, req.user?._id, reactionEmoji);
+      await message.save();
+
+      const userMap = await loadUsersById([message.sender]);
+      const serializedMessage = serializeMessage(message, userMap);
+
+      const participantIds = Array.isArray(thread.participants)
+        ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
+        : [];
+      const targetUserIds =
+        thread.type === "public" ? [] : Array.from(new Set(participantIds));
+
+      broadcastChatChange(
+        {
+          threadId: toIdString(thread._id),
+          threadType: thread.type,
+          changeType: "message_updated",
+          messageId: toIdString(message._id),
+          senderId: currentUserId,
+        },
+        {
+          userIds: targetUserIds,
+          broadcast: thread.type === "public",
+        },
+      );
+
+      return res.json({ message: serializedMessage });
     }
 
     if (toIdString(message.sender) !== currentUserId) {
@@ -1643,6 +1777,74 @@ const updateMessage = async (req, res) => {
   } catch (error) {
     console.error("Error updating chat message:", error);
     return res.status(500).json({ message: "Server error updating message." });
+  }
+};
+
+const toggleMessageReaction = async (req, res) => {
+  try {
+    const currentUserId = toIdString(req.user?._id);
+    const threadId = toIdString(req.params?.id);
+    const messageId = toIdString(req.params?.messageId);
+    const emoji = normalizeReactionEmoji(req.body?.emoji);
+
+    if (
+      !mongoose.Types.ObjectId.isValid(threadId) ||
+      !mongoose.Types.ObjectId.isValid(messageId)
+    ) {
+      return res.status(400).json({ message: "Invalid chat message." });
+    }
+
+    if (!emoji) {
+      return res.status(400).json({ message: "Choose a supported reaction." });
+    }
+
+    const thread = await ChatThread.findById(threadId);
+    if (!thread || !hasThreadAccess(thread, currentUserId)) {
+      return res.status(404).json({ message: "Chat thread not found." });
+    }
+
+    const message = await ChatMessage.findOne({
+      _id: messageId,
+      thread: threadId,
+    });
+    if (!message) {
+      return res.status(404).json({ message: "Chat message not found." });
+    }
+
+    if (message.isDeleted) {
+      return res.status(400).json({ message: "Deleted messages cannot be reacted to." });
+    }
+
+    applyReactionToggleToMessage(message, req.user?._id, emoji);
+    await message.save();
+
+    const userMap = await loadUsersById([message.sender]);
+    const serializedMessage = serializeMessage(message, userMap);
+
+    const participantIds = Array.isArray(thread.participants)
+      ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
+      : [];
+    const targetUserIds =
+      thread.type === "public" ? [] : Array.from(new Set(participantIds));
+
+    broadcastChatChange(
+      {
+        threadId: toIdString(thread._id),
+        threadType: thread.type,
+        changeType: "message_updated",
+        messageId: toIdString(message._id),
+        senderId: currentUserId,
+      },
+      {
+        userIds: targetUserIds,
+        broadcast: thread.type === "public",
+      },
+    );
+
+    return res.json({ message: serializedMessage });
+  } catch (error) {
+    console.error("Error toggling chat reaction:", error);
+    return res.status(500).json({ message: "Server error updating reaction." });
   }
 };
 
@@ -1920,6 +2122,7 @@ module.exports = {
   getThreadMessages,
   startDirectThread,
   sendMessage,
+  toggleMessageReaction,
   deleteMessage,
   updateMessage,
   markThreadRead,

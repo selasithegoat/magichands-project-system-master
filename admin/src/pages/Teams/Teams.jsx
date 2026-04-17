@@ -96,7 +96,9 @@ const Teams = ({ user }) => {
     fetchEmployees();
   }, []);
 
-  useRealtimeRefresh(() => fetchEmployees());
+  useRealtimeRefresh(() => fetchEmployees(), {
+    paths: ["/api/admin/employees"],
+  });
 
   // Handle Input Changes
   const handleChange = (e) => {

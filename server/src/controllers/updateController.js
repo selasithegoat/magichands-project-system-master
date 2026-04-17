@@ -3,6 +3,8 @@ const Project = require("../models/Project");
 const { createNotification } = require("../utils/notificationService");
 const { logActivity } = require("../utils/activityLogger");
 const { notifyAdmins } = require("../utils/adminNotificationUtils"); // [NEW]
+const { broadcastDataChange } = require("../utils/realtimeHub");
+const { buildRealtimeChangePayload } = require("../utils/realtimeChange");
 const {
   isProjectOnHold,
   sendProjectOnHoldResponse,
@@ -217,6 +219,18 @@ const isUserAssignedProjectLead = (user, project) => {
   return Boolean(userId && leadId && userId === leadId);
 };
 
+const broadcastProjectUpdateChange = (req, projectId, updateId) => {
+  const normalizedProjectId = normalizeObjectId(projectId);
+  const normalizedUpdateId = normalizeObjectId(updateId);
+
+  broadcastDataChange(
+    buildRealtimeChangePayload(req, {
+      projectId: normalizedProjectId,
+      updateId: normalizedUpdateId,
+    }),
+  );
+};
+
 // Get all updates for a specific project
 exports.getProjectUpdates = async (req, res) => {
   try {
@@ -398,6 +412,7 @@ exports.createProjectUpdate = async (req, res) => {
       { category, updateId: newUpdate._id, syncsToEndOfDay: true, isLeadUpdate },
     );
 
+    broadcastProjectUpdateChange(req, project._id, newUpdate._id);
     res.status(201).json(newUpdate);
   } catch (error) {
     console.error("Error creating project update:", error);
@@ -479,6 +494,7 @@ exports.updateProjectUpdate = async (req, res) => {
       type: "UPDATE",
     });
 
+    broadcastProjectUpdateChange(req, project._id, update._id);
     res.status(200).json(update);
   } catch (error) {
     console.error("Error updating project update:", error);
@@ -541,6 +557,7 @@ exports.deleteProjectUpdate = async (req, res) => {
       type: "UPDATE",
     });
 
+    broadcastProjectUpdateChange(req, project._id, update._id);
     res.status(200).json({ message: "Update deleted successfully" });
   } catch (error) {
     console.error("Error deleting project update:", error);

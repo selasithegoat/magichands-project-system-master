@@ -81,6 +81,26 @@ const serializeArchiveAttachment = (entry = {}) => ({
   uploadedAt: entry?.uploadedAt || null,
 });
 
+const serializeArchiveReaction = (entry = {}) => {
+  const emoji = toText(entry?.emoji);
+  const users = Array.from(
+    new Set(
+      (Array.isArray(entry?.users) ? entry.users : [])
+        .map((userId) => toIdString(userId))
+        .filter(Boolean),
+    ),
+  );
+
+  if (!emoji || users.length === 0) {
+    return null;
+  }
+
+  return {
+    emoji,
+    users,
+  };
+};
+
 const buildArchivedMessageRecord = (message = {}) => ({
   _id: toIdString(message?._id),
   threadId: toIdString(message?.thread),
@@ -100,6 +120,9 @@ const buildArchivedMessageRecord = (message = {}) => ({
         preview: toText(message?.replyTo?.preview),
       }
     : null,
+  reactions: Array.isArray(message?.reactions)
+    ? message.reactions.map((entry) => serializeArchiveReaction(entry)).filter(Boolean)
+    : [],
   isDeleted: Boolean(message?.isDeleted),
   deletedAt: message?.deletedAt || null,
   deletedBy: toIdString(message?.deletedBy),
@@ -141,6 +164,20 @@ const toMessageShapeFromArchiveRecord = (record = {}) => ({
         preview: toText(record?.replyTo?.preview),
       }
     : null,
+  reactions: Array.isArray(record?.reactions)
+    ? record.reactions
+        .map((entry) => ({
+          emoji: toText(entry?.emoji),
+          users: Array.from(
+            new Set(
+              (Array.isArray(entry?.users) ? entry.users : [])
+                .map((userId) => toText(userId))
+                .filter(Boolean),
+            ),
+          ),
+        }))
+        .filter((entry) => entry.emoji && entry.users.length > 0)
+    : [],
   isDeleted: Boolean(record?.isDeleted),
   deletedAt: record?.deletedAt || null,
   deletedBy: toText(record?.deletedBy),

@@ -4,6 +4,7 @@ const {
   getThreadMessages,
   startDirectThread,
   sendMessage,
+  toggleMessageReaction,
   deleteMessage,
   updateMessage,
   markThreadRead,
@@ -49,6 +50,7 @@ router.get("/projects/:id/routes", protect, getProjectRoutes);
 router.post("/direct", protect, startDirectThread);
 router.get("/threads/:id/messages", protect, getThreadMessages);
 router.post("/threads/:id/messages", protect, handleChatUploads, sendMessage);
+router.post("/threads/:id/messages/:messageId/reactions", protect, toggleMessageReaction);
 router.patch("/threads/:id/messages/:messageId", protect, updateMessage);
 router.post("/threads/:id/messages/:messageId", protect, updateMessage);
 router.delete("/threads/:id/messages/:messageId", protect, deleteMessage);

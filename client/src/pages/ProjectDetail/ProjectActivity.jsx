@@ -28,6 +28,16 @@ const ProjectActivity = ({ project }) => {
     }
   }, {
     enabled: Boolean(project?._id),
+    paths: ["/api/projects", "/api/updates"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+    shouldRefresh: (detail) => {
+      if (!project?._id) return false;
+      if (detail.path.startsWith("/api/updates")) {
+        return detail.projectId === project._id;
+      }
+
+      return detail.projectId === project._id;
+    },
   });
 
   const fetchActivities = async () => {

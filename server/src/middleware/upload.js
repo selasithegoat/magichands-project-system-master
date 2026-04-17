@@ -128,6 +128,22 @@ const FEEDBACK_MEDIA_MIME_TYPES = new Set([
   ...IMAGE_MIME_TYPES,
   ...MEDIA_MIME_TYPES,
 ]);
+const CHAT_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const CHAT_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const CHAT_SAFE_EXTENSIONS = new Set([
+  ...CHAT_IMAGE_EXTENSIONS,
+  ...DOCUMENT_EXTENSIONS,
+  ...MEDIA_EXTENSIONS,
+]);
+const CHAT_SAFE_MIME_TYPES = new Set([
+  ...CHAT_IMAGE_MIME_TYPES,
+  ...DOCUMENT_MIME_TYPES,
+  ...MEDIA_MIME_TYPES,
+]);
 
 const GENERAL_SAFE_EXTENSIONS = new Set([
   ...IMAGE_EXTENSIONS,
@@ -186,8 +202,8 @@ const FILE_POLICY_BY_FIELD = {
     mimeTypes: FEEDBACK_MEDIA_MIME_TYPES,
   },
   chatAttachments: {
-    extensions: GENERAL_SAFE_EXTENSIONS,
-    mimeTypes: GENERAL_SAFE_MIME_TYPES,
+    extensions: CHAT_SAFE_EXTENSIONS,
+    mimeTypes: CHAT_SAFE_MIME_TYPES,
   },
   default: {
     extensions: GENERAL_SAFE_EXTENSIONS,

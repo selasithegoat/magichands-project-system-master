@@ -20,7 +20,10 @@ const ProjectHistory = ({ onBack }) => {
     fetchHistory();
   }, []);
 
-  useRealtimeRefresh(() => fetchHistory());
+  useRealtimeRefresh(() => fetchHistory(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const fetchHistory = async () => {
     try {

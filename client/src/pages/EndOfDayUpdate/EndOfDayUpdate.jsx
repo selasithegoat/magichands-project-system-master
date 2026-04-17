@@ -32,7 +32,18 @@ const EndOfDayUpdate = ({ user }) => {
   }, [user, navigate]);
 
   const isFrontDesk = user?.department?.includes("Front Desk");
-  useRealtimeRefresh(() => fetchProjects(), { enabled: Boolean(isFrontDesk) });
+  useRealtimeRefresh(() => fetchProjects(), {
+    enabled: Boolean(isFrontDesk),
+    paths: ["/api/projects", "/api/updates"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+    shouldRefresh: (detail) => {
+      if (detail.path.startsWith("/api/updates")) {
+        return projects.some((project) => project?._id === detail.projectId);
+      }
+
+      return true;
+    },
+  });
 
   const fetchProjects = async () => {
     try {

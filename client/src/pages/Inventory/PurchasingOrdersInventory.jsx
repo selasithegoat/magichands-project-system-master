@@ -125,7 +125,9 @@ const PurchasingOrdersInventory = () => {
     fetchRecords();
   }, [fetchRecords]);
 
-  useRealtimeRefresh(() => fetchRecords());
+  useRealtimeRefresh(() => fetchRecords(), {
+    paths: ["/api/inventory/purchasing-orders", "/api/inventory/purchase-orders"],
+  });
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(records.length / ROWS_PER_PAGE));

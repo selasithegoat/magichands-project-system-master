@@ -43,6 +43,7 @@ const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
 const helpRoutes = require("./routes/helpRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
+const { buildRealtimeChangePayload } = require("./utils/realtimeChange");
 const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 const { startReminderScheduler } = require("./utils/reminderScheduler");
@@ -368,7 +369,6 @@ app.use("/api", (req, res, next) => {
 // Realtime change notifications for mutating API calls
 const realtimePaths = [
   "/api/projects",
-  "/api/updates",
   "/api/notifications",
   "/api/reminders",
   "/api/admin",
@@ -384,10 +384,7 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      broadcastDataChange({
-        path: req.originalUrl,
-        method: req.method,
-      });
+      broadcastDataChange(buildRealtimeChangePayload(req));
     }
   });
 

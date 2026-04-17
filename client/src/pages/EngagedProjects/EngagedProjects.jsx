@@ -353,7 +353,21 @@ const EngagedProjects = ({ user }) => {
     fetchEngagedProjects();
   }, [engagedSubDepts]);
 
-  useRealtimeRefresh(() => fetchEngagedProjects());
+  useRealtimeRefresh(() => fetchEngagedProjects(), {
+    paths: ["/api/projects", "/api/updates"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+    shouldRefresh: (detail) => {
+      if (detail.path.startsWith("/api/updates")) {
+        return Boolean(
+          selectedProject?._id &&
+            detail.projectId &&
+            detail.projectId === selectedProject._id,
+        );
+      }
+
+      return true;
+    },
+  });
 
   const fetchEngagedProjects = async () => {
     try {

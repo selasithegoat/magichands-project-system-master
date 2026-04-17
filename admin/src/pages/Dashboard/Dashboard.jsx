@@ -389,7 +389,10 @@ const Dashboard = ({ user }) => {
     fetchGlobalProjects();
   }, []);
 
-  useRealtimeRefresh(() => fetchGlobalProjects());
+  useRealtimeRefresh(() => fetchGlobalProjects(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const fetchGlobalProjects = async () => {
     try {

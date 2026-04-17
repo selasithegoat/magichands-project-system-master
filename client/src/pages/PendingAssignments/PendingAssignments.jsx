@@ -41,7 +41,11 @@ const PendingAssignments = ({ onStartNew, user }) => {
     fetchAssignments();
   }, [user]);
 
-  useRealtimeRefresh(() => fetchAssignments(), { enabled: Boolean(user) });
+  useRealtimeRefresh(() => fetchAssignments(), {
+    enabled: Boolean(user),
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const handleAccept = (project) => {
     if (!project) return;

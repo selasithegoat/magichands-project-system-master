@@ -144,7 +144,9 @@ const ClientItemsInventory = () => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  useRealtimeRefresh(() => fetchItems());
+  useRealtimeRefresh(() => fetchItems(), {
+    paths: ["/api/inventory/client-items"],
+  });
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(items.length / ROWS_PER_PAGE));

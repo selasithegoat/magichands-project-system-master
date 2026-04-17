@@ -98,6 +98,27 @@ const ChatReplySchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ChatReactionSchema = new mongoose.Schema(
+  {
+    emoji: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 16,
+    },
+    users: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
 const ChatMessageSchema = new mongoose.Schema(
   {
     thread: {
@@ -127,6 +148,10 @@ const ChatMessageSchema = new mongoose.Schema(
     replyTo: {
       type: ChatReplySchema,
       default: null,
+    },
+    reactions: {
+      type: [ChatReactionSchema],
+      default: [],
     },
     isDeleted: {
       type: Boolean,

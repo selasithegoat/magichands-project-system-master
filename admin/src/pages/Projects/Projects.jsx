@@ -366,7 +366,10 @@ const Projects = ({ user }) => {
     [],
   );
 
-  useRealtimeRefresh(() => fetchProjects());
+  useRealtimeRefresh(() => fetchProjects(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";

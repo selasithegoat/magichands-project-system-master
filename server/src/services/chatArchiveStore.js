@@ -88,6 +88,20 @@ const normalizeArchivedMessageRecord = (record = {}) => ({
         preview: toText(record?.replyTo?.preview),
       }
     : null,
+  reactions: Array.isArray(record?.reactions)
+    ? record.reactions
+        .map((entry) => ({
+          emoji: toText(entry?.emoji),
+          users: Array.from(
+            new Set(
+              (Array.isArray(entry?.users) ? entry.users : [])
+                .map((userId) => toText(userId))
+                .filter(Boolean),
+            ),
+          ),
+        }))
+        .filter((entry) => entry.emoji && entry.users.length > 0)
+    : [],
   isDeleted: Boolean(record.isDeleted),
   deletedAt: record?.deletedAt || null,
   deletedBy: toText(record?.deletedBy),

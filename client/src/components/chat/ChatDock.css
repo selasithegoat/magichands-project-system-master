@@ -298,6 +298,8 @@
 }
 
 .chat-dock-sidebar {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -425,7 +427,16 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.chat-dock-search-pane {
   overflow: hidden;
+}
+
+.chat-dock-main {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
 }
 
 .chat-dock-search-label {
@@ -950,6 +961,62 @@
   margin-left: auto;
 }
 
+.chat-dock-reaction-picker-wrap {
+  position: relative;
+}
+
+.chat-dock-reaction-picker {
+  position: absolute;
+  left: 0;
+  right: auto;
+  bottom: calc(100% + 0.55rem);
+  display: flex;
+  align-items: center;
+  gap: 0.36rem;
+  padding: 0.46rem;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--chat-elevated);
+  box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.45);
+  z-index: 20;
+}
+
+.chat-dock-message-row.mine .chat-dock-reaction-picker {
+  left: auto;
+  right: 0;
+}
+
+.chat-dock-reaction-option {
+  min-width: 42px;
+  height: 38px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-alt) 86%, var(--bg-card));
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.chat-dock-reaction-option:hover:not(:disabled),
+.chat-dock-reaction-option.active {
+  border-color: rgba(var(--primary-rgb), 0.28);
+  background: rgba(var(--primary-rgb), 0.12);
+  transform: translateY(-1px);
+}
+
+.chat-dock-reaction-option small {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
 .chat-dock-inline-btn {
   border: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--surface-alt) 86%, var(--bg-card));
@@ -986,6 +1053,43 @@
 .chat-dock-inline-btn:disabled {
   opacity: 0.62;
   cursor: not-allowed;
+}
+
+.chat-dock-reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.72rem;
+}
+
+.chat-dock-reaction-chip {
+  border: 1px solid rgba(var(--primary-rgb), 0.12);
+  background: color-mix(in srgb, var(--surface-alt) 82%, var(--bg-card));
+  color: var(--text-primary);
+  min-height: 34px;
+  padding: 0.34rem 0.62rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.chat-dock-reaction-chip:hover:not(:disabled),
+.chat-dock-reaction-chip.active {
+  border-color: rgba(var(--primary-rgb), 0.28);
+  background: rgba(var(--primary-rgb), 0.12);
+  transform: translateY(-1px);
+}
+
+.chat-dock-reaction-chip small {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
 }
 
 .chat-dock-message-footer {
@@ -1369,6 +1473,26 @@
 .chat-dock-message-bubble.mine .chat-dock-attachment-meta span,
 .chat-dock-message-bubble.mine .chat-dock-attachment-meta a {
   color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-reaction-chip,
+.chat-dock-message-bubble.mine .chat-dock-reaction-option {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.chat-dock-message-bubble.mine .chat-dock-reaction-chip small,
+.chat-dock-message-bubble.mine .chat-dock-reaction-option small {
+  color: rgba(248, 250, 252, 0.82);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-reaction-chip:hover:not(:disabled),
+.chat-dock-message-bubble.mine .chat-dock-reaction-chip.active,
+.chat-dock-message-bubble.mine .chat-dock-reaction-option:hover:not(:disabled),
+.chat-dock-message-bubble.mine .chat-dock-reaction-option.active {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .chat-dock-route-picker {
@@ -1970,6 +2094,13 @@
 
   .chat-dock-pending-attachments {
     grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  }
+
+  .chat-dock-reaction-picker {
+    right: auto;
+    left: 0;
+    flex-wrap: wrap;
+    max-width: min(260px, calc(100vw - 84px));
   }
 }
 

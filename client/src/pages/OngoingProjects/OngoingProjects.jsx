@@ -79,7 +79,10 @@ const OngoingProjects = ({
     fetchProjects();
   }, []);
 
-  useRealtimeRefresh(() => fetchProjects());
+  useRealtimeRefresh(() => fetchProjects(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const [toast, setToast] = React.useState(null);
 

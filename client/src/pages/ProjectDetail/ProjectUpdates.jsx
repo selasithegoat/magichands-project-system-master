@@ -112,6 +112,11 @@ const ProjectUpdates = ({ project, currentUser }) => {
     }
   }, {
     enabled: Boolean(project?._id),
+    paths: ["/api/updates"],
+    shouldRefresh: (detail) =>
+      Boolean(
+        project?._id && detail.projectId && detail.projectId === project._id,
+      ),
   });
 
   const fetchUpdates = async () => {

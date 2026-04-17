@@ -36,14 +36,16 @@ const CHAT_ATTACHMENT_MAX_FILES = 6;
 const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
 const INCOMING_PREVIEW_HIDE_MS = 4800;
 const INCOMING_PREVIEW_EXIT_MS = 240;
+const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
 const CHAT_ATTACHMENT_ACCEPT =
-  "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
-const CHAT_SAFE_FILE_EXTENSIONS = new Set([
+  "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
+const CHAT_SAFE_IMAGE_EXTENSIONS = new Set([
   ".jpg",
   ".jpeg",
   ".png",
   ".webp",
-  ".gif",
+]);
+const CHAT_SAFE_FILE_EXTENSIONS = new Set([
   ".pdf",
   ".doc",
   ".docx",
@@ -64,6 +66,11 @@ const CHAT_SAFE_FILE_EXTENSIONS = new Set([
   ".wav",
   ".m4a",
   ".ogg",
+]);
+const CHAT_SAFE_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
 ]);
 const CHAT_SAFE_FILE_MIME_TYPES = new Set([
   "application/pdf",
@@ -309,6 +316,30 @@ const buildChatMessagePreview = (message = {}) => {
 
   return "Shared a project";
 };
+
+const normalizeChatReactions = (reactions = []) =>
+  (Array.isArray(reactions) ? reactions : [])
+    .map((entry) => {
+      const emoji = toText(entry?.emoji);
+      const userIds = Array.from(
+        new Set(
+          (Array.isArray(entry?.userIds) ? entry.userIds : entry?.users || [])
+            .map((userId) => toIdString(userId))
+            .filter(Boolean),
+        ),
+      );
+
+      if (!emoji || userIds.length === 0) {
+        return null;
+      }
+
+      return {
+        emoji,
+        userIds,
+        count: Number(entry?.count) || userIds.length,
+      };
+    })
+    .filter(Boolean);
 
 const normalizeChatReplyTarget = (value = {}) => {
   const preview = toText(value?.preview || value?.body || value?.text);
@@ -762,7 +793,7 @@ const getAttachmentType = (attachment = {}, fallbackIndex = 0) => {
   if (mimeType.startsWith("video/")) return "video";
 
   const attachmentName = getAttachmentName(attachment, fallbackIndex).toLowerCase();
-  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(attachmentName)) return "image";
+  if (/\.(jpg|jpeg|png|webp|bmp|svg)$/i.test(attachmentName)) return "image";
   if (/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(attachmentName)) return "audio";
   if (/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(attachmentName)) return "video";
   return "file";
@@ -779,10 +810,11 @@ const isChatAttachmentFile = (file) => {
   const extension = getFileExtension(file?.name);
 
   return (
-    mimeType.startsWith("image/") ||
+    CHAT_SAFE_IMAGE_MIME_TYPES.has(mimeType) ||
     mimeType.startsWith("audio/") ||
     mimeType.startsWith("video/") ||
     CHAT_SAFE_FILE_MIME_TYPES.has(mimeType) ||
+    CHAT_SAFE_IMAGE_EXTENSIONS.has(extension) ||
     CHAT_SAFE_FILE_EXTENSIONS.has(extension) ||
     (CHAT_GENERIC_BINARY_MIME_TYPES.has(mimeType) && extension === ".cdr")
   );
@@ -852,7 +884,9 @@ const ChatDock = ({ user }) => {
   const [clearThreadTarget, setClearThreadTarget] = useState(null);
   const [deletingMessageId, setDeletingMessageId] = useState("");
   const [clearingThreadId, setClearingThreadId] = useState("");
+  const [reactingMessageId, setReactingMessageId] = useState("");
   const [openMessageMenuId, setOpenMessageMenuId] = useState("");
+  const [openReactionPickerId, setOpenReactionPickerId] = useState("");
   const [isThreadMenuOpen, setIsThreadMenuOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState("");
   const [editDraft, setEditDraft] = useState("");
@@ -1436,6 +1470,25 @@ const ChatDock = ({ user }) => {
   }, [openMessageMenuId]);
 
   useEffect(() => {
+    if (!openReactionPickerId) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (event.target?.closest?.(".chat-dock-reaction-picker-wrap")) {
+        return;
+      }
+      setOpenReactionPickerId("");
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [openReactionPickerId]);
+
+  useEffect(() => {
     if (!isThreadMenuOpen) return undefined;
 
     const handlePointerDown = (event) => {
@@ -1469,11 +1522,19 @@ const ChatDock = ({ user }) => {
       setEditingMessageId("");
       setEditDraft("");
     }
-  }, [editingMessageId, messages, openMessageMenuId]);
+
+    if (
+      openReactionPickerId &&
+      !messages.some((message) => message?._id === openReactionPickerId)
+    ) {
+      setOpenReactionPickerId("");
+    }
+  }, [editingMessageId, messages, openMessageMenuId, openReactionPickerId]);
 
   useEffect(() => {
     setIsThreadMenuOpen(false);
     setReplyTarget(null);
+    setOpenReactionPickerId("");
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -2128,6 +2189,7 @@ const ChatDock = ({ user }) => {
     dismissIncomingPreview(true);
     setIsOpen(true);
     setError("");
+    setOpenReactionPickerId("");
     clearMentionState();
     setMobilePanelView(activeThreadId ? "thread" : "sidebar");
     if (threads.length === 0) {
@@ -2144,6 +2206,7 @@ const ChatDock = ({ user }) => {
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
+    setOpenReactionPickerId("");
     setEditingMessageId("");
     setEditDraft("");
     setReplyTarget(null);
@@ -2166,6 +2229,7 @@ const ChatDock = ({ user }) => {
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
+    setOpenReactionPickerId("");
     setEditingMessageId("");
     setEditDraft("");
     setReplyTarget(null);
@@ -2201,6 +2265,7 @@ const ChatDock = ({ user }) => {
       setMobilePanelView("thread");
       setUserQuery("");
       setUserResults([]);
+      setOpenReactionPickerId("");
       setReplyTarget(null);
       resetProjectRoutePicker();
       setActiveThreadId(nextThreadId);
@@ -2226,6 +2291,7 @@ const ChatDock = ({ user }) => {
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
+    setOpenReactionPickerId("");
     setEditingMessageId("");
     setEditDraft("");
     setReplyTarget(null);
@@ -2285,6 +2351,7 @@ const ChatDock = ({ user }) => {
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
+    setOpenReactionPickerId("");
     setEditingMessageId("");
     setEditDraft("");
     clearMentionState();
@@ -2419,6 +2486,25 @@ const ChatDock = ({ user }) => {
     syncComposerMentionState(event.target.value, event.target.selectionStart);
   };
 
+  const handleComposerPaste = useCallback(
+    (event) => {
+      const clipboardItems = Array.from(event.clipboardData?.items || []);
+      const pastedFiles = clipboardItems
+        .filter((item) => item?.kind === "file")
+        .map((item) => item.getAsFile?.())
+        .filter(Boolean);
+      const acceptedFiles = pastedFiles.filter((file) => isChatAttachmentFile(file));
+
+      if (acceptedFiles.length > 0) {
+        event.preventDefault();
+        addPendingFiles(acceptedFiles);
+        setProjectPickerOpen(false);
+        setError("");
+      }
+    },
+    [addPendingFiles],
+  );
+
   const handleCancelReply = useCallback(() => {
     setReplyTarget(null);
   }, []);
@@ -2432,6 +2518,7 @@ const ChatDock = ({ user }) => {
     setReplyTarget(nextReplyTarget);
     setIsThreadMenuOpen(false);
     setOpenMessageMenuId("");
+    setOpenReactionPickerId("");
     setDeleteTarget(null);
     setEditingMessageId("");
     setEditDraft("");
@@ -2454,6 +2541,99 @@ const ChatDock = ({ user }) => {
 
     messageNode.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
+
+  const handleToggleReactionPicker = useCallback((messageId) => {
+    const normalizedMessageId = toIdString(messageId);
+    if (!normalizedMessageId) return;
+
+    setIsThreadMenuOpen(false);
+    setOpenMessageMenuId("");
+    setDeleteTarget(null);
+    setEditingMessageId("");
+    setEditDraft("");
+    setOpenReactionPickerId((prev) =>
+      prev === normalizedMessageId ? "" : normalizedMessageId,
+    );
+  }, []);
+
+  const handleToggleReaction = useCallback(
+    async (messageId, emoji) => {
+      const normalizedMessageId = toIdString(messageId);
+      if (!activeThreadId || !normalizedMessageId || !emoji || reactingMessageId) {
+        return;
+      }
+
+      setReactingMessageId(normalizedMessageId);
+      setError("");
+
+      try {
+        let res = await fetch(
+          `/api/chat/threads/${activeThreadId}/messages/${normalizedMessageId}/reactions`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({ emoji }),
+          },
+        );
+
+        if (res.status === 404 || res.status === 405) {
+          res = await fetch(
+            `/api/chat/threads/${activeThreadId}/messages/${normalizedMessageId}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              credentials: "include",
+              body: JSON.stringify({ reactionEmoji: emoji }),
+            },
+          );
+        }
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            data.message ||
+              (res.status === 404
+                ? "Reaction support is not live on the current server yet. Restart the backend and try again."
+                : "Failed to update reaction."),
+          );
+        }
+
+        const nextMessage = data?.message;
+        if (nextMessage?._id) {
+          cancelPendingMessageLoads();
+          invalidateMessageFetchCache(activeThreadId);
+          setMessages((prev) =>
+            prev.map((message) =>
+              message._id === nextMessage._id ? nextMessage : message,
+            ),
+          );
+          recordLocalChatChange({
+            changeType: "message_updated",
+            threadId: activeThreadId,
+            messageId: nextMessage._id,
+          });
+        }
+
+        setOpenReactionPickerId("");
+      } catch (reactionError) {
+        setError(reactionError.message || "Failed to update reaction.");
+      } finally {
+        setReactingMessageId("");
+      }
+    },
+    [
+      activeThreadId,
+      cancelPendingMessageLoads,
+      invalidateMessageFetchCache,
+      reactingMessageId,
+      recordLocalChatChange,
+    ],
+  );
 
   const handleSendMessage = async () => {
     if (!activeThreadId || sending) return;
@@ -2580,12 +2760,14 @@ const ChatDock = ({ user }) => {
   const handleToggleMessageMenu = (messageId) => {
     if (!messageId) return;
     setIsThreadMenuOpen(false);
+    setOpenReactionPickerId("");
     setOpenMessageMenuId((prev) => (prev === messageId ? "" : messageId));
   };
 
   const handleToggleThreadMenu = () => {
     if (!activeThreadId || clearingThreadId) return;
     setDeleteTarget(null);
+    setOpenReactionPickerId("");
     setOpenMessageMenuId("");
     setIsThreadMenuOpen((prev) => !prev);
   };
@@ -2601,6 +2783,7 @@ const ChatDock = ({ user }) => {
 
     setEditingMessageId(message._id);
     setEditDraft(message?.body || "");
+    setOpenReactionPickerId("");
     setReplyTarget(null);
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
@@ -2685,6 +2868,7 @@ const ChatDock = ({ user }) => {
     setDeleteTarget({
       _id: message._id,
     });
+    setOpenReactionPickerId("");
     setReplyTarget(null);
     setClearThreadTarget(null);
     setIsThreadMenuOpen(false);
@@ -2760,6 +2944,7 @@ const ChatDock = ({ user }) => {
     });
     setDeleteTarget(null);
     setIsThreadMenuOpen(false);
+    setOpenReactionPickerId("");
     setOpenMessageMenuId("");
     setEditingMessageId("");
     setEditDraft("");
@@ -2809,6 +2994,7 @@ const ChatDock = ({ user }) => {
 
       setClearThreadTarget(null);
       setDeleteTarget(null);
+      setOpenReactionPickerId("");
       setOpenMessageMenuId("");
       setEditingMessageId("");
       setEditDraft("");
@@ -3196,6 +3382,8 @@ const ChatDock = ({ user }) => {
                         const isSavingMessage = savingMessageId === message._id;
                         const isDeletingMessage = deletingMessageId === message._id;
                         const showReplyAction = !isDeleted;
+                        const canReactToMessage = !isDeleted && !isArchivedMessage;
+                        const isReactionPickerOpen = openReactionPickerId === message._id;
                         const replyReference = normalizeChatReplyTarget(message?.replyTo);
                         const references = Array.isArray(message?.references)
                           ? message.references
@@ -3203,6 +3391,7 @@ const ChatDock = ({ user }) => {
                         const attachments = Array.isArray(message?.attachments)
                           ? message.attachments
                           : [];
+                        const reactions = normalizeChatReactions(message?.reactions);
 
                         return (
                           <div
@@ -3388,6 +3577,43 @@ const ChatDock = ({ user }) => {
                                   })}
                                 </div>
                               )}
+                              {reactions.length > 0 && (
+                                <div className="chat-dock-reaction-bar">
+                                  {reactions.map((reaction) => {
+                                    const reactedByCurrentUser = reaction.userIds.includes(
+                                      currentUserId,
+                                    );
+
+                                    return (
+                                      <button
+                                        key={`${message._id}-reaction-${reaction.emoji}`}
+                                        type="button"
+                                        className={`chat-dock-reaction-chip ${
+                                          reactedByCurrentUser ? "active" : ""
+                                        }`}
+                                        onClick={() =>
+                                          canReactToMessage
+                                            ? void handleToggleReaction(
+                                                message._id,
+                                                reaction.emoji,
+                                              )
+                                            : undefined
+                                        }
+                                        disabled={
+                                          !canReactToMessage ||
+                                          reactingMessageId === message._id
+                                        }
+                                        title={`${reaction.count} reaction${
+                                          reaction.count === 1 ? "" : "s"
+                                        }`}
+                                      >
+                                        <span>{reaction.emoji}</span>
+                                        <small>{reaction.count}</small>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               {references.length > 0 && (
                                 <div className="chat-dock-reference-stack">
                                   {references.map((reference) => {
@@ -3465,6 +3691,59 @@ const ChatDock = ({ user }) => {
                                       .join(" | ")}
                                   </span>
                                   <div className="chat-dock-message-footer-actions">
+                                    {canReactToMessage && !isEditingMessage && (
+                                      <div className="chat-dock-reaction-picker-wrap">
+                                        <button
+                                          type="button"
+                                          className={`chat-dock-inline-btn ${
+                                            isReactionPickerOpen ? "primary" : ""
+                                          }`}
+                                          onClick={() =>
+                                            handleToggleReactionPicker(message._id)
+                                          }
+                                          disabled={reactingMessageId === message._id}
+                                        >
+                                          React
+                                        </button>
+                                        {isReactionPickerOpen && (
+                                          <div className="chat-dock-reaction-picker">
+                                            {CHAT_REACTION_EMOJIS.map((emoji) => {
+                                              const activeReaction = reactions.find(
+                                                (entry) => entry.emoji === emoji,
+                                              );
+                                              const reactedByCurrentUser =
+                                                activeReaction?.userIds.includes(
+                                                  currentUserId,
+                                                );
+
+                                              return (
+                                                <button
+                                                  key={`${message._id}-picker-${emoji}`}
+                                                  type="button"
+                                                  className={`chat-dock-reaction-option ${
+                                                    reactedByCurrentUser ? "active" : ""
+                                                  }`}
+                                                  onClick={() =>
+                                                    void handleToggleReaction(
+                                                      message._id,
+                                                      emoji,
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    reactingMessageId === message._id
+                                                  }
+                                                >
+                                                  <span>{emoji}</span>
+                                                  {activeReaction?.count ? (
+                                                    <small>{activeReaction.count}</small>
+                                                  ) : null}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                     {showReplyAction && !isEditingMessage && (
                                       <button
                                         type="button"
@@ -3804,6 +4083,7 @@ const ChatDock = ({ user }) => {
                         ref={composerTextareaRef}
                         value={composer}
                         onChange={handleComposerChange}
+                        onPaste={handleComposerPaste}
                         onSelect={handleComposerSelect}
                         onKeyDown={handleComposerKeyDown}
                         placeholder={`Message ${activeThread.name}`}

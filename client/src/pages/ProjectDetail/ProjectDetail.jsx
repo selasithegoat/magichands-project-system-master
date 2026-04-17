@@ -936,7 +936,19 @@ const ProjectDetail = ({ user }) => {
         fetchUpdatesCount();
       }
     },
-    { enabled: Boolean(id) },
+    {
+      enabled: Boolean(id),
+      paths: ["/api/projects", "/api/updates"],
+      excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+      shouldRefresh: (detail) => {
+        if (!id) return false;
+        if (detail.path.startsWith("/api/updates")) {
+          return detail.projectId === id;
+        }
+
+        return detail.projectId === id;
+      },
+    },
   );
 
   const handleFinishProject = async () => {

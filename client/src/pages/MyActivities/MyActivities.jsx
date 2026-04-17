@@ -15,7 +15,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 
-const MyActivities = ({ onBack }) => {
+const MyActivities = ({ onBack, user }) => {
   const [activities, setActivities] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -26,6 +26,7 @@ const MyActivities = ({ onBack }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [compactView, setCompactView] = useState(false);
+  const userId = String(user?._id || user?.id || "").trim();
 
   const fetchActivities = async (pageNum) => {
     try {
@@ -67,6 +68,11 @@ const MyActivities = ({ onBack }) => {
     setPage(1);
     setHasMore(true);
     fetchActivities(1);
+  }, {
+    enabled: Boolean(userId),
+    paths: ["/api/projects", "/api/updates"],
+    excludePaths: ["/api/projects/ai"],
+    shouldRefresh: (detail) => detail.actorId === userId,
   });
 
   const handleLoadMore = () => {

@@ -1487,6 +1487,16 @@ const EngagedProjectActions = ({ user }) => {
     fetchProject();
   }, {
     enabled: Boolean(id) && engagedSubDepts.length > 0,
+    paths: ["/api/projects", "/api/updates"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+    shouldRefresh: (detail) => {
+      if (!project?._id) return false;
+      if (detail.path.startsWith("/api/updates")) {
+        return detail.projectId === project._id;
+      }
+
+      return detail.projectId === project._id;
+    },
   });
 
   const handleCompleteStatus = async (targetProject, action) => {

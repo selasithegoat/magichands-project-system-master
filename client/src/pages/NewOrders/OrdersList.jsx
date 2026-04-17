@@ -184,7 +184,10 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     [],
   );
 
-  useRealtimeRefresh(() => fetchOrders());
+  useRealtimeRefresh(() => fetchOrders(), {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
   const fetchCurrentUser = async () => {
     try {
