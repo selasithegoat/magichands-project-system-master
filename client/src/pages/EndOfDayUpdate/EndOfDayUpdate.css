@@ -36,7 +36,7 @@
   margin-bottom: 1.25rem;
   padding: 0.35rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-alt) 78%, white);
+  background: color-mix(in srgb, var(--surface-alt) 78%, var(--bg-card));
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   overflow-x: auto;
@@ -62,13 +62,17 @@
 
 .eod-route-tab:hover {
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--surface-alt) 65%, white);
+  background: color-mix(in srgb, var(--surface-alt) 65%, var(--bg-card));
 }
 
 .eod-route-tab.active {
   color: white;
-  background: linear-gradient(135deg, var(--primary-color), #0f766e);
-  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.18);
+  background: linear-gradient(
+    135deg,
+    var(--primary-color),
+    var(--primary-color-hover)
+  );
+  box-shadow: 0 10px 24px rgba(var(--primary-rgb), 0.22);
 }
 
 /* ... existing table styles ... */

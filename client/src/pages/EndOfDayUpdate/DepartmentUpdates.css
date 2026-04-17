@@ -51,7 +51,11 @@
   padding: 1rem 1.1rem;
   border-radius: 14px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-alt) 76%, white), var(--bg-card));
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface-alt) 76%, var(--bg-card)),
+      var(--bg-card)
+    );
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
 }
@@ -76,9 +80,9 @@
   margin-bottom: 1rem;
   padding: 0.9rem 1rem;
   border-radius: 12px;
-  background: color-mix(in srgb, #ef4444 10%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, #ef4444 35%, var(--border-color));
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border-color));
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -98,7 +102,11 @@
   padding: 1rem 1.1rem;
   border-bottom: 1px solid var(--border-color);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-alt) 82%, white), var(--bg-card));
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface-alt) 82%, var(--bg-card)),
+      var(--bg-card)
+    );
 }
 
 .department-updates-toolbar p {
@@ -115,18 +123,19 @@
   width: 100%;
   min-width: 920px;
   border-collapse: collapse;
+  color: var(--text-primary);
 }
 
 .department-updates-table th,
 .department-updates-table td {
-  border: 1px solid color-mix(in srgb, var(--border-color) 92%, #111827);
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--text-primary));
   padding: 0.72rem 0.8rem;
   vertical-align: top;
 }
 
 .department-updates-header-row th {
-  background: #f3f4f6;
-  color: #111827;
+  background: color-mix(in srgb, var(--surface-alt) 76%, var(--primary-soft));
+  color: var(--text-primary);
   font-size: 0.86rem;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -135,7 +144,12 @@
 
 .department-updates-section-row td {
   padding: 0;
-  background: #8f8f8f;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary-color) 20%, var(--surface-alt)),
+      color-mix(in srgb, var(--surface-alt) 78%, var(--bg-card))
+    );
 }
 
 .department-updates-section-head {
@@ -144,7 +158,7 @@
   justify-content: space-between;
   gap: 0.8rem;
   padding: 0.72rem 0.9rem;
-  color: #111827;
+  color: var(--text-primary);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -155,16 +169,16 @@
 .department-updates-table input,
 .department-updates-table textarea {
   width: 100%;
-  border: 1px solid color-mix(in srgb, var(--border-color) 85%, #cbd5e1);
+  border: 1px solid color-mix(in srgb, var(--border-color) 90%, var(--surface-alt));
   border-radius: 8px;
-  background: white;
-  color: #0f172a;
+  background: var(--bg-input);
+  color: var(--text-primary);
   padding: 0.55rem 0.65rem;
   font: inherit;
 }
 
 .department-updates-section-input {
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--bg-input) 88%, var(--surface-alt));
   font-weight: 800;
 }
 
@@ -175,7 +189,7 @@
 }
 
 .department-updates-column-input.core {
-  background: #eef2f7;
+  background: color-mix(in srgb, var(--surface-alt) 82%, var(--bg-card));
 }
 
 .department-updates-table textarea {
@@ -183,11 +197,20 @@
   resize: vertical;
 }
 
+.department-updates-section-input:focus,
+.department-updates-column-input:focus,
+.department-updates-table input:focus,
+.department-updates-table textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.18);
+}
+
 .department-updates-inline-btn {
   flex: 0 0 auto;
-  border: 1px solid rgba(17, 24, 39, 0.18);
-  background: rgba(255, 255, 255, 0.94);
-  color: #111827;
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, var(--surface-alt));
+  background: color-mix(in srgb, var(--bg-card) 88%, var(--surface-alt));
+  color: var(--text-primary);
   border-radius: 999px;
   padding: 0.48rem 0.88rem;
   font-size: 0.82rem;
@@ -200,7 +223,7 @@
 }
 
 .department-updates-data-row td {
-  background: white;
+  background: var(--bg-card);
 }
 
 .department-updates-data-row td:first-child {
@@ -214,14 +237,14 @@
 }
 
 .department-updates-cell-value {
-  color: #111827;
+  color: var(--text-primary);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .department-updates-cell-meta {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.72rem;
   line-height: 1.4;
 }
