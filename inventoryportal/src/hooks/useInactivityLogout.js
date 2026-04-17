@@ -1,7 +1,21 @@
 import { useEffect, useRef } from "react";
+import { setSessionTimeoutNotice } from "../utils/sessionTimeoutNotice";
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_KEEPALIVE_MS = 60 * 1000;
+const ACTIVITY_EVENTS = [
+  "pointerdown",
+  "pointermove",
+  "mousedown",
+  "mousemove",
+  "keydown",
+  "click",
+  "wheel",
+  "scroll",
+  "touchstart",
+  "touchmove",
+  "focusin",
+];
 
 const useInactivityLogout = ({
   enabled = true,
@@ -12,16 +26,10 @@ const useInactivityLogout = ({
 } = {}) => {
   const timeoutRef = useRef(null);
   const keepaliveRef = useRef(0);
+  const lastActivityAtRef = useRef(Date.now());
+  const isLoggingOutRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled) {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      return undefined;
-    }
-
     const clearTimer = () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -29,18 +37,46 @@ const useInactivityLogout = ({
       timeoutRef.current = null;
     };
 
-    const startTimer = () => {
+    if (!enabled) {
       clearTimer();
-      timeoutRef.current = setTimeout(() => {
-        clearTimer();
+      isLoggingOutRef.current = false;
+      return undefined;
+    }
+
+    const triggerTimeoutLogout = async () => {
+      if (isLoggingOutRef.current) return;
+      isLoggingOutRef.current = true;
+      clearTimer();
+      setSessionTimeoutNotice(timeout);
+
+      try {
         if (typeof onLogout === "function") {
-          onLogout();
+          await onLogout({ reason: "timeout" });
         }
-      }, timeout);
+      } finally {
+        isLoggingOutRef.current = false;
+      }
+    };
+
+    const scheduleLogout = (activityAt) => {
+      if (isLoggingOutRef.current) return;
+
+      const now = Date.now();
+      const remainingMs = timeout - (now - activityAt);
+      clearTimer();
+
+      if (remainingMs <= 0) {
+        void triggerTimeoutLogout();
+        return;
+      }
+
+      timeoutRef.current = window.setTimeout(() => {
+        void triggerTimeoutLogout();
+      }, remainingMs);
     };
 
     const sendKeepalive = () => {
-      if (!keepalive) return;
+      if (!keepalive || isLoggingOutRef.current) return;
       const now = Date.now();
       if (now - keepaliveRef.current < keepaliveInterval) return;
       keepaliveRef.current = now;
@@ -50,45 +86,53 @@ const useInactivityLogout = ({
       }).catch(() => {});
     };
 
-    const resetTimer = () => {
-      startTimer();
+    const registerActivity = () => {
+      if (isLoggingOutRef.current) return;
+      const now = Date.now();
+      lastActivityAtRef.current = now;
+      scheduleLogout(now);
       sendKeepalive();
     };
 
-    const events = [
-      "pointerdown",
-      "pointermove",
-      "mousedown",
-      "mousemove",
-      "keydown",
-      "click",
-      "wheel",
-      "scroll",
-      "touchstart",
-      "touchmove",
-      "focusin",
-    ];
+    const handleWindowReturn = () => {
+      if (isLoggingOutRef.current) return;
 
-    events.forEach((event) => {
-      window.addEventListener(event, resetTimer, true);
+      const now = Date.now();
+      const lastActivityAt = lastActivityAtRef.current || now;
+      const idleMs = now - lastActivityAt;
+
+      if (idleMs >= timeout) {
+        void triggerTimeoutLogout();
+        return;
+      }
+
+      lastActivityAtRef.current = now;
+      scheduleLogout(now);
+      sendKeepalive();
+    };
+
+    isLoggingOutRef.current = false;
+    lastActivityAtRef.current = Date.now();
+    scheduleLogout(lastActivityAtRef.current);
+    sendKeepalive();
+
+    ACTIVITY_EVENTS.forEach((event) => {
+      window.addEventListener(event, registerActivity, true);
     });
-    window.addEventListener("focus", resetTimer, true);
+    window.addEventListener("focus", handleWindowReturn, true);
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        resetTimer();
+        handleWindowReturn();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility, true);
 
-    startTimer();
-    sendKeepalive();
-
     return () => {
       clearTimer();
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer, true);
+      ACTIVITY_EVENTS.forEach((event) => {
+        window.removeEventListener(event, registerActivity, true);
       });
-      window.removeEventListener("focus", resetTimer, true);
+      window.removeEventListener("focus", handleWindowReturn, true);
       document.removeEventListener("visibilitychange", handleVisibility, true);
     };
   }, [enabled, keepalive, keepaliveInterval, onLogout, timeout]);

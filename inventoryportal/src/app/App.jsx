@@ -26,6 +26,10 @@ import {
 } from "../components/icons/Icons";
 import { hasInventoryPortalAccess } from "../utils/access";
 import { fetchInventory } from "../utils/inventoryApi";
+import {
+  clearSessionTimeoutNotice,
+  consumeSessionTimeoutNotice,
+} from "../utils/sessionTimeoutNotice";
 import { quickActions } from "../data/quickActions";
 import useNotifications from "../hooks/useNotifications";
 import useRealtimeClient from "../hooks/useRealtimeClient";
@@ -96,6 +100,9 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
   const [loginError, setLoginError] = useState("");
+  const [sessionNotice, setSessionNotice] = useState(() =>
+    consumeSessionTimeoutNotice(),
+  );
   const [accessDenied, setAccessDenied] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -251,7 +258,26 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [globalSearch]);
 
-  const logout = useCallback(async () => {
+  useEffect(() => {
+    if (user) {
+      clearSessionTimeoutNotice();
+      setSessionNotice("");
+      return;
+    }
+
+    const notice = consumeSessionTimeoutNotice();
+    if (!notice) return;
+
+    setSessionNotice(notice);
+    setLoginError("");
+    setAccessDenied(false);
+  }, [user]);
+
+  const logout = useCallback(async ({ reason = "manual" } = {}) => {
+    if (reason !== "timeout") {
+      clearSessionTimeoutNotice();
+      setSessionNotice("");
+    }
     setUser(null);
     try {
       await fetch("/api/auth/logout", {
@@ -343,6 +369,8 @@ const App = () => {
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoginError("");
+    setSessionNotice("");
+    clearSessionTimeoutNotice();
     setAccessDenied(false);
 
     const formData = new FormData(event.currentTarget);
@@ -379,6 +407,7 @@ const App = () => {
       }
 
       setUser(data);
+      setSessionNotice("");
     } catch (error) {
       console.error("Login failed", error);
       setLoginError("Unable to sign in. Try again shortly.");
@@ -395,6 +424,7 @@ const App = () => {
         appName={APP_NAME}
         onSubmit={handleLogin}
         error={loginError}
+        notice={sessionNotice}
         accessDenied={accessDenied}
       />
     );

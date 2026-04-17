@@ -3,6 +3,7 @@ import "./Login.css";
 import AuthLayout from "../../layouts/AuthLayout/AuthLayout";
 import InputField from "../../components/InputField/InputField";
 import Button from "../../components/Button/Button";
+import { consumeSessionTimeoutNotice } from "../../utils/sessionTimeoutNotice";
 import {
   ShieldCheckIcon,
   UserIcon,
@@ -35,6 +36,7 @@ const Login = ({ onLoginSuccess }) => {
 
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [timeoutNotice] = useState(() => consumeSessionTimeoutNotice());
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -100,6 +102,21 @@ const Login = ({ onLoginSuccess }) => {
           <p className="login-subtitle">
             Welcome back. Please authenticate to continue.
           </p>
+          {timeoutNotice && (
+            <div
+              style={{
+                color: "#f59e0b",
+                fontSize: "0.875rem",
+                marginTop: "1rem",
+                backgroundColor: "rgba(245, 158, 11, 0.12)",
+                border: "1px solid rgba(245, 158, 11, 0.35)",
+                padding: "0.75rem",
+                borderRadius: "8px",
+              }}
+            >
+              {timeoutNotice}
+            </div>
+          )}
           {error && (
             <div
               style={{

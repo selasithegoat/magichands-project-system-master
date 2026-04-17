@@ -102,7 +102,7 @@ function App() {
   };
 
   // Inactivity Timeout (5 minutes)
-  useInactivityLogout(5 * 60 * 1000, () => setUser(null));
+  useInactivityLogout(5 * 60 * 1000, () => setUser(null), Boolean(user?._id));
   useRealtimeClient(Boolean(user));
 
   const LoadingScreen = () => (

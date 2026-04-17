@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { consumeSessionTimeoutNotice } from "../../utils/sessionTimeoutNotice";
 import EyeIcon from "../../components/icons/EyeIcon";
 import Spinner from "../../components/ui/Spinner";
 import "./Login.css";
@@ -28,6 +29,7 @@ const Login = ({ onLogin }) => {
   const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [timeoutNotice] = React.useState(() => consumeSessionTimeoutNotice());
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,6 +80,22 @@ const Login = ({ onLogin }) => {
         </p>
 
         <form className="login-form" onSubmit={handleSubmit}>
+          {timeoutNotice && (
+            <div
+              style={{
+                color: "#92400e",
+                background: "rgba(245, 158, 11, 0.12)",
+                border: "1px solid rgba(245, 158, 11, 0.35)",
+                borderRadius: "12px",
+                fontSize: "0.875rem",
+                marginBottom: "1rem",
+                padding: "0.875rem 1rem",
+              }}
+            >
+              {timeoutNotice}
+            </div>
+          )}
+
           {error && (
             <div
               style={{

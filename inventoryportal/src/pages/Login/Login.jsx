@@ -5,6 +5,7 @@ const Login = ({
   appName,
   onSubmit,
   error,
+  notice,
   accessDenied,
 }) => (
   <div className="login-shell">
@@ -16,6 +17,14 @@ const Login = ({
           <p>Enterprise Inventory Portal</p>
         </div>
       </div>
+
+      {notice ? (
+        <AlertBanner
+          variant="warning"
+          title="Session expired"
+          description={notice}
+        />
+      ) : null}
 
       {accessDenied ? (
         <AlertBanner

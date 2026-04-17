@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { setSessionTimeoutNotice } from "../utils/sessionTimeoutNotice";
+
+const ACTIVITY_EVENTS = [
+  "pointerdown",
+  "mousedown",
+  "mousemove",
+  "keydown",
+  "scroll",
+  "touchstart",
+  "focusin",
+  "click",
+];
 
 const useInactivityLogout = (
   timeout = 5 * 60 * 1000,
@@ -13,9 +25,14 @@ const useInactivityLogout = (
   const enabledRef = useRef(enabled);
   const locationPathRef = useRef(location.pathname);
   const onLoggedOutRef = useRef(onLoggedOut);
+  const lastActivityAtRef = useRef(Date.now());
+  const isLoggingOutRef = useRef(false);
 
   useEffect(() => {
     enabledRef.current = enabled;
+    if (!enabled) {
+      isLoggingOutRef.current = false;
+    }
   }, [enabled]);
 
   useEffect(() => {
@@ -33,39 +50,84 @@ const useInactivityLogout = (
     }
   }, []);
 
-  const logout = useCallback(async () => {
-    if (!enabledRef.current) return;
+  const logout = useCallback(
+    async ({ reason = "manual" } = {}) => {
+      if (!enabledRef.current || isLoggingOutRef.current) return;
 
-    try {
-      // Call logout endpoint to clear cookies
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-        keepalive: true,
-      });
-    } catch (error) {
-      console.error("Logout failed", error);
+      isLoggingOutRef.current = true;
+      clearLogoutTimer();
+
+      if (reason === "timeout") {
+        setSessionTimeoutNotice(timeout);
+      }
+
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+        });
+      } catch (error) {
+        console.error("Logout failed", error);
+      }
+
+      if (typeof onLoggedOutRef.current === "function") {
+        onLoggedOutRef.current({ reason });
+      }
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      if (locationPathRef.current !== "/login") {
+        navigate("/login", { replace: true });
+      }
+    },
+    [clearLogoutTimer, navigate, timeout],
+  );
+
+  const scheduleLogout = useCallback(
+    (activityAt) => {
+      if (!enabledRef.current || isLoggingOutRef.current) return;
+
+      const now = Date.now();
+      const remainingMs = timeout - (now - activityAt);
+      clearLogoutTimer();
+
+      if (remainingMs <= 0) {
+        void logout({ reason: "timeout" });
+        return;
+      }
+
+      timeoutRef.current = window.setTimeout(() => {
+        void logout({ reason: "timeout" });
+      }, remainingMs);
+    },
+    [clearLogoutTimer, logout, timeout],
+  );
+
+  const registerActivity = useCallback(() => {
+    if (!enabledRef.current || isLoggingOutRef.current) return;
+
+    const now = Date.now();
+    lastActivityAtRef.current = now;
+    scheduleLogout(now);
+  }, [scheduleLogout]);
+
+  const handleWindowReturn = useCallback(() => {
+    if (!enabledRef.current || isLoggingOutRef.current) return;
+
+    const now = Date.now();
+    const lastActivityAt = lastActivityAtRef.current || now;
+    const idleMs = now - lastActivityAt;
+
+    if (idleMs >= timeout) {
+      void logout({ reason: "timeout" });
+      return;
     }
 
-    if (!enabledRef.current) return;
-
-    if (typeof onLoggedOutRef.current === "function") {
-      onLoggedOutRef.current();
-    }
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-
-    if (locationPathRef.current !== "/login") {
-      navigate("/login", { replace: true });
-    }
-  }, [navigate]);
-
-  const resetTimer = useCallback(() => {
-    if (!enabledRef.current) return;
-
-    clearLogoutTimer();
-    timeoutRef.current = setTimeout(logout, timeout);
-  }, [clearLogoutTimer, logout, timeout]);
+    lastActivityAtRef.current = now;
+    scheduleLogout(now);
+  }, [logout, scheduleLogout, timeout]);
 
   useEffect(() => {
     if (!enabled) {
@@ -73,44 +135,32 @@ const useInactivityLogout = (
       return undefined;
     }
 
-    const events = [
-      "pointerdown",
-      "mousedown",
-      "mousemove",
-      "keydown",
-      "scroll",
-      "touchstart",
-      "focusin",
-      "click",
-    ];
+    isLoggingOutRef.current = false;
+    lastActivityAtRef.current = Date.now();
+    scheduleLogout(lastActivityAtRef.current);
 
-    // Add event listeners
-    events.forEach((event) => {
-      window.addEventListener(event, resetTimer, true);
+    ACTIVITY_EVENTS.forEach((event) => {
+      window.addEventListener(event, registerActivity, true);
     });
-    window.addEventListener("focus", resetTimer, true);
+    window.addEventListener("focus", handleWindowReturn, true);
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        resetTimer();
+        handleWindowReturn();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility, true);
 
-    // Start initial timer
-    resetTimer();
-
-    // Cleanup
     return () => {
       clearLogoutTimer();
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer, true);
+      ACTIVITY_EVENTS.forEach((event) => {
+        window.removeEventListener(event, registerActivity, true);
       });
-      window.removeEventListener("focus", resetTimer, true);
+      window.removeEventListener("focus", handleWindowReturn, true);
       document.removeEventListener("visibilitychange", handleVisibility, true);
     };
-  }, [clearLogoutTimer, enabled, resetTimer]);
+  }, [clearLogoutTimer, enabled, handleWindowReturn, registerActivity, scheduleLogout]);
 
-  return null; // Hook doesn't render anything
+  return null;
 };
 
 export default useInactivityLogout;
