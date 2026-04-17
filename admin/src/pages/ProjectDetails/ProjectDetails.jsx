@@ -1752,7 +1752,7 @@ const ProjectDetails = ({ user }) => {
     }
     try {
       setSmsLoading(true);
-      const res = await fetch(`/api/projects/${id}/sms-prompts`, {
+      const res = await fetch(`/api/projects/${id}/sms-prompts?source=admin`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch SMS prompts.");
@@ -1780,7 +1780,6 @@ const ProjectDetails = ({ user }) => {
     }
 
     fetchUpdates();
-    fetchSmsPrompts();
 
     // Fetch users for Lead Edit
     const fetchUsers = async () => {
@@ -1798,6 +1797,14 @@ const ProjectDetails = ({ user }) => {
     };
     fetchUsers();
   }, [id, location.state]);
+
+  useEffect(() => {
+    if (canManageSms) {
+      fetchSmsPrompts();
+    } else {
+      setSmsPrompts([]);
+    }
+  }, [canManageSms, project?._id, project?.projectType]);
 
   useRealtimeRefresh(
     () => {
@@ -1866,12 +1873,15 @@ const ProjectDetails = ({ user }) => {
     try {
       let promptId = smsModal.prompt?._id || "";
       if (smsModal.mode === "custom") {
-        const res = await fetch(`/api/projects/${project._id}/sms-prompts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ message: trimmedMessage }),
-        });
+        const res = await fetch(
+          `/api/projects/${project._id}/sms-prompts?source=admin`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ message: trimmedMessage }),
+          },
+        );
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.message || "Failed to create SMS prompt.");
@@ -1880,7 +1890,7 @@ const ProjectDetails = ({ user }) => {
         promptId = created?._id || "";
       } else if (smsModal.mode === "edit" && smsModal.prompt?._id) {
         const res = await fetch(
-          `/api/projects/${project._id}/sms-prompts/${smsModal.prompt._id}`,
+          `/api/projects/${project._id}/sms-prompts/${smsModal.prompt._id}?source=admin`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -1918,7 +1928,7 @@ const ProjectDetails = ({ user }) => {
     setSmsSendingId(promptId);
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/sms-prompts/${promptId}/send`,
+        `/api/projects/${project._id}/sms-prompts/${promptId}/send?source=admin`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1948,7 +1958,7 @@ const ProjectDetails = ({ user }) => {
     setSmsSkippingId(promptId);
     try {
       const res = await fetch(
-        `/api/projects/${project._id}/sms-prompts/${promptId}`,
+        `/api/projects/${project._id}/sms-prompts/${promptId}?source=admin`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
