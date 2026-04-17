@@ -7,11 +7,24 @@ import FilterIcon from "../../components/icons/FilterIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import HistoryProjectCard from "../../components/ui/HistoryProjectCard";
 import { useNavigate } from "react-router-dom"; // Add navigation hook
+import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
+const HISTORY_FILTER_OPTIONS = ["All", "This Month", "Last Month", "Older"];
+
 const ProjectHistory = ({ onBack }) => {
-  const [filter, setFilter] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = usePersistedState(
+    "client-project-history-filter",
+    "All",
+    {
+      sanitize: (value) =>
+        HISTORY_FILTER_OPTIONS.includes(value) ? value : "All",
+    },
+  );
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "client-project-history-search",
+    "",
+  );
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate(); // Hook for navigation
@@ -188,7 +201,7 @@ const ProjectHistory = ({ onBack }) => {
         </div>
 
         <div className="history-filters">
-          {["All", "This Month", "Last Month", "Older"].map((f) => (
+          {HISTORY_FILTER_OPTIONS.map((f) => (
             <button
               key={f}
               className={`filter-pill ${filter === f ? "active" : "inactive"}`}

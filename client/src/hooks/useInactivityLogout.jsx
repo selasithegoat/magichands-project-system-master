@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { clearPersistedFilterState } from "../utils/filterPersistence";
 import { setSessionTimeoutNotice } from "../utils/sessionTimeoutNotice";
 
 const ACTIVITY_EVENTS = [
@@ -75,6 +76,7 @@ const useInactivityLogout = (
         onLoggedOutRef.current({ reason });
       }
 
+      clearPersistedFilterState();
       localStorage.removeItem("token");
       localStorage.removeItem("user");
 

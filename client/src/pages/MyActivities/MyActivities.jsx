@@ -12,8 +12,20 @@ import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import SearchIcon from "../../components/icons/SearchIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { format, isToday, isYesterday } from "date-fns";
+import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
+
+const ACTIVITY_FILTER_OPTIONS = [
+  "all",
+  "create",
+  "update",
+  "approval",
+  "add",
+  "risk",
+  "delete",
+  "other",
+];
 
 const MyActivities = ({ onBack, user }) => {
   const [activities, setActivities] = useState([]);
@@ -23,9 +35,25 @@ const MyActivities = ({ onBack, user }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [compactView, setCompactView] = useState(false);
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "client-my-activities-search",
+    "",
+  );
+  const [typeFilter, setTypeFilter] = usePersistedState(
+    "client-my-activities-type-filter",
+    "all",
+    {
+      sanitize: (value) =>
+        ACTIVITY_FILTER_OPTIONS.includes(value) ? value : "all",
+    },
+  );
+  const [compactView, setCompactView] = usePersistedState(
+    "client-my-activities-compact-view",
+    false,
+    {
+      sanitize: (value) => Boolean(value),
+    },
+  );
   const userId = String(user?._id || user?.id || "").trim();
 
   const fetchActivities = async (pageNum) => {

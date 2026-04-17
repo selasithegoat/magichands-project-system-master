@@ -8,6 +8,7 @@ import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import useTheme from "./hooks/useTheme";
+import { clearPersistedFilterState } from "./utils/filterPersistence";
 import { buildPortalUrl } from "./utils/portalNavigation";
 
 // Lazy Loaded Pages
@@ -268,6 +269,7 @@ function App() {
 
   const performLogout = async () => {
     setUser(null);
+    clearPersistedFilterState();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -356,7 +358,14 @@ function App() {
         <Routes>
         <Route
           path="/login"
-          element={<Login onLogin={() => fetchUser({ showSplash: true })} />}
+          element={
+            <Login
+              onLogin={() => {
+                clearPersistedFilterState();
+                fetchUser({ showSplash: true });
+              }}
+            />
+          }
         />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route

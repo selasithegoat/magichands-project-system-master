@@ -18,6 +18,7 @@ import XIcon from "../../components/icons/XIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
 import UserAvatar from "../../components/ui/UserAvatar";
+import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
@@ -361,9 +362,27 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [projectViewMode, setProjectViewMode] = useState("grid");
-  const [pipelineView, setPipelineView] = useState("acceptance");
-  const [selectedWorkloadDept, setSelectedWorkloadDept] = useState("");
+  const [projectViewMode, setProjectViewMode] = usePersistedState(
+    "client-dashboard-project-view-mode",
+    "grid",
+    {
+      sanitize: (value) => (value === "list" ? "list" : "grid"),
+    },
+  );
+  const [pipelineView, setPipelineView] = usePersistedState(
+    "client-dashboard-pipeline-view",
+    "acceptance",
+    {
+      sanitize: (value) =>
+        ["acceptance", "quotes", "delivery"].includes(value)
+          ? value
+          : "acceptance",
+    },
+  );
+  const [selectedWorkloadDept, setSelectedWorkloadDept] = usePersistedState(
+    "client-dashboard-workload-department",
+    "",
+  );
   const [activeTimelineEvent, setActiveTimelineEvent] = useState(null);
   const [isDrawerMounted, setIsDrawerMounted] = useState(false);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);

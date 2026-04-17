@@ -10,6 +10,7 @@ import {
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
   getFullName,
@@ -189,6 +190,13 @@ const STANDARD_DEPARTMENT_COMPLETION_STATUS_SETS = {
     "In Progress",
   ]),
 };
+const ENGAGED_TAB_OPTIONS = ["active", "history"];
+const KPI_FILTER_OPTIONS = [
+  "all",
+  "pendingAcceptance",
+  "waitingMockup",
+  "completedActions",
+];
 
 const normalizeObjectId = (value) => {
   if (!value) return "";
@@ -222,23 +230,74 @@ const getQuoteRequirementState = (project = {}, key = "") => {
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = usePersistedState(
+    "client-engaged-projects-tab",
+    "active",
+    {
+      sanitize: (value) =>
+        ENGAGED_TAB_OPTIONS.includes(value) ? value : "active",
+    },
+  );
   const [projects, setProjects] = useState([]);
   const [historyProjects, setHistoryProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
   // Filter State
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [departmentFilter, setDepartmentFilter] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [kpiFilter, setKpiFilter] = useState("all");
-  const [historyProjectIdQuery, setHistoryProjectIdQuery] = useState("");
-  const [historyDeptFilter, setHistoryDeptFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = usePersistedState(
+    "client-engaged-projects-status-filter",
+    "All",
+    {
+      sanitize: (value) =>
+        STATUS_OPTIONS.includes(value) ? value : "All",
+    },
+  );
+  const [departmentFilter, setDepartmentFilter] = usePersistedState(
+    "client-engaged-projects-department-filter",
+    "All",
+  );
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "client-engaged-projects-search",
+    "",
+  );
+  const [kpiFilter, setKpiFilter] = usePersistedState(
+    "client-engaged-projects-kpi-filter",
+    "all",
+    {
+      sanitize: (value) =>
+        KPI_FILTER_OPTIONS.includes(value) ? value : "all",
+    },
+  );
+  const [historyProjectIdQuery, setHistoryProjectIdQuery] = usePersistedState(
+    "client-engaged-projects-history-project-query",
+    "",
+  );
+  const [historyDeptFilter, setHistoryDeptFilter] = usePersistedState(
+    "client-engaged-projects-history-department-filter",
+    "All",
+  );
 
   // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
+  const [currentPage, setCurrentPage] = usePersistedState(
+    "client-engaged-projects-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
+  const [historyPage, setHistoryPage] = usePersistedState(
+    "client-engaged-projects-history-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
 
   // Modal State
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -350,6 +409,13 @@ const EngagedProjects = ({ user }) => {
   }, [userEngagedDepts, departmentFilter]);
 
   useEffect(() => {
+    if (departmentFilter === "All" || userEngagedDepts.includes(departmentFilter)) {
+      return;
+    }
+    setDepartmentFilter("All");
+  }, [departmentFilter, setDepartmentFilter, userEngagedDepts]);
+
+  useEffect(() => {
     fetchEngagedProjects();
   }, [engagedSubDepts]);
 
@@ -429,6 +495,16 @@ const EngagedProjects = ({ user }) => {
   useEffect(() => {
     setHistoryPage(1);
   }, [historyProjectIdQuery, historyDeptFilter]);
+
+  useEffect(() => {
+    if (
+      historyDeptFilter === "All" ||
+      Array.from(new Set(engagedSubDepts)).includes(historyDeptFilter)
+    ) {
+      return;
+    }
+    setHistoryDeptFilter("All");
+  }, [engagedSubDepts, historyDeptFilter, setHistoryDeptFilter]);
 
   const filteredHistoryProjects = useMemo(() => {
     return historyProjects.filter((project) => {
@@ -819,6 +895,18 @@ const EngagedProjects = ({ user }) => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredProjects.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredProjects, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, setCurrentPage, totalPages]);
+
+  useEffect(() => {
+    if (historyPage > historyTotalPages && historyTotalPages > 0) {
+      setHistoryPage(historyTotalPages);
+    }
+  }, [historyPage, historyTotalPages, setHistoryPage]);
 
   const handleCompleteStatus = async (project, action) => {
     try {

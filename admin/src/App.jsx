@@ -37,6 +37,7 @@ import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import AdminFrontDeskScope from "./components/AdminFrontDeskScope/AdminFrontDeskScope";
+import { clearPersistedFilterState } from "@client/utils/filterPersistence";
 import {
   BrowserRouter as Router,
   Routes,
@@ -85,11 +86,13 @@ function App() {
   }, []);
 
   const handleLoginSuccess = (userData) => {
+    clearPersistedFilterState();
     setUser(hasAdminPortalAccess(userData) ? userData : null);
   };
 
   const handleLogout = async () => {
     setUser(null);
+    clearPersistedFilterState();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",

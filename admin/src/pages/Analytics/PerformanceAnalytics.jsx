@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PerformanceAnalytics.css";
+import usePersistedState from "@client/hooks/usePersistedState";
 import { renderProjectName } from "../../utils/projectName";
 
 const HIDDEN_STAGE_KEYS = new Set(["proofReading", "qualityControl", "photography"]);
@@ -306,16 +307,35 @@ const Distribution = ({ distribution, median }) => {
 const PerformanceAnalytics = () => {
   const navigate = useNavigate();
   const today = useMemo(() => new Date(), []);
-  const [fromDate, setFromDate] = useState(
+  const [fromDate, setFromDate] = usePersistedState(
+    "admin-performance-analytics-from-date",
     formatDateInput(new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)),
   );
-  const [toDate, setToDate] = useState(formatDateInput(today));
+  const [toDate, setToDate] = usePersistedState(
+    "admin-performance-analytics-to-date",
+    formatDateInput(today),
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "admin-performance-analytics-search",
+    "",
+  );
+  const [statusFilter, setStatusFilter] = usePersistedState(
+    "admin-performance-analytics-status-filter",
+    "All",
+  );
+  const [currentPage, setCurrentPage] = usePersistedState(
+    "admin-performance-analytics-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
   const itemsPerPage = 15;
 
   const fetchAnalytics = async () => {

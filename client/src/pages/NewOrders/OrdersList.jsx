@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import usePersistedState from "../../hooks/usePersistedState";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import {
   formatProjectDisplayName,
@@ -52,10 +53,47 @@ const KPI_FILTER_LABELS = {
   mockupApproval: "Client Mockup Approval",
   sample: "Sample Approval",
 };
+const ORDER_LIST_TAB_OPTIONS = ["all", "history"];
+const ORDER_LIST_STATUS_OPTIONS = [
+  "All",
+  "New Order",
+  "Order Created",
+  "Pending Departmental Meeting",
+  "Pending Departmental Engagement",
+  "In Progress",
+  "Pending Feedback",
+  "Feedback Completed",
+];
+const ORDER_LIST_ASSIGNMENT_OPTIONS = ["All", "Assigned", "Unassigned"];
+const DEFAULT_ALL_FILTERS = {
+  orderId: "",
+  client: "",
+  projectName: "",
+  lead: "",
+  status: "All",
+  assignment: "All",
+};
+const DEFAULT_HISTORY_FILTERS = {
+  orderId: "",
+  client: "",
+  projectName: "",
+  lead: "",
+};
+const sanitizeTextMap = (value, fallback) => ({
+  ...fallback,
+  ...(value && typeof value === "object" ? value : {}),
+});
 
 const OrdersList = ({ kpiFilter = "all" }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = usePersistedState(
+    "portal-orders-list-tab",
+    "all",
+    {
+      sanitize: (value) =>
+        ORDER_LIST_TAB_OPTIONS.includes(value) ? value : "all",
+    },
+  );
   const [allOrders, setAllOrders] = useState([]);
   const [groupedOrders, setGroupedOrders] = useState([]);
   const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
@@ -63,22 +101,52 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   const collapseTimersRef = useRef({});
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [allFilters, setAllFilters] = useState({
-    orderId: "",
-    client: "",
-    projectName: "",
-    lead: "",
-    status: "All",
-    assignment: "All",
-  });
-  const [allOrdersPage, setAllOrdersPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyFilters, setHistoryFilters] = useState({
-    orderId: "",
-    client: "",
-    projectName: "",
-    lead: "",
-  });
+  const [allFilters, setAllFilters] = usePersistedState(
+    "portal-orders-list-all-filters",
+    DEFAULT_ALL_FILTERS,
+    {
+      sanitize: (value, fallback) => {
+        const nextValue = sanitizeTextMap(value, fallback);
+        return {
+          ...fallback,
+          ...nextValue,
+          status: ORDER_LIST_STATUS_OPTIONS.includes(nextValue.status)
+            ? nextValue.status
+            : fallback.status,
+          assignment: ORDER_LIST_ASSIGNMENT_OPTIONS.includes(nextValue.assignment)
+            ? nextValue.assignment
+            : fallback.assignment,
+        };
+      },
+    },
+  );
+  const [allOrdersPage, setAllOrdersPage] = usePersistedState(
+    "portal-orders-list-all-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
+  const [historyPage, setHistoryPage] = usePersistedState(
+    "portal-orders-list-history-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
+  const [historyFilters, setHistoryFilters] = usePersistedState(
+    "portal-orders-list-history-filters",
+    DEFAULT_HISTORY_FILTERS,
+    {
+      sanitize: sanitizeTextMap,
+    },
+  );
 
   const [toast, setToast] = useState({
     show: false,
@@ -983,18 +1051,11 @@ const OrdersList = ({ kpiFilter = "all" }) => {
               }
               className="filter-select"
             >
-              <option value="All">All Status</option>
-              <option value="New Order">New Order</option>
-              <option value="Order Created">Order Created</option>
-              <option value="Pending Departmental Meeting">
-                Pending Departmental Meeting
-              </option>
-              <option value="Pending Departmental Engagement">
-                Pending Departmental Engagement
-              </option>
-              <option value="In Progress">In Progress</option>
-              <option value="Pending Feedback">Pending Feedback</option>
-              <option value="Feedback Completed">Feedback Completed</option>
+              {ORDER_LIST_STATUS_OPTIONS.map((statusOption) => (
+                <option key={statusOption} value={statusOption}>
+                  {statusOption === "All" ? "All Status" : statusOption}
+                </option>
+              ))}
             </select>
             <select
               value={allFilters.assignment}
@@ -1003,9 +1064,13 @@ const OrdersList = ({ kpiFilter = "all" }) => {
               }
               className="filter-select"
             >
-              <option value="All">All Assignments</option>
-              <option value="Assigned">Assigned</option>
-              <option value="Unassigned">Unassigned</option>
+              {ORDER_LIST_ASSIGNMENT_OPTIONS.map((assignmentOption) => (
+                <option key={assignmentOption} value={assignmentOption}>
+                  {assignmentOption === "All"
+                    ? "All Assignments"
+                    : assignmentOption}
+                </option>
+              ))}
             </select>
             {kpiFilter !== "all" && (
               <div className="orders-kpi-filter-chip">

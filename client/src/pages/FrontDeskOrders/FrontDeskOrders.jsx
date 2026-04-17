@@ -8,12 +8,31 @@ import {
   matchesOrdersManagementKpi,
   resolveOrderManagementStatus,
 } from "../../utils/ordersManagementKpis";
+import usePersistedState from "../../hooks/usePersistedState";
 import "./FrontDeskOrders.css";
+
+const FRONT_DESK_KPI_KEYS = [
+  "all",
+  "billing",
+  "actions",
+  "delivery",
+  "quotes",
+  "mockup",
+  "mockupApproval",
+  "sample",
+];
 
 const FrontDeskOrders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeKpi, setActiveKpi] = useState("all");
+  const [activeKpi, setActiveKpi] = usePersistedState(
+    "portal-frontdesk-orders-kpi",
+    "all",
+    {
+      sanitize: (value) =>
+        FRONT_DESK_KPI_KEYS.includes(value) ? value : "all",
+    },
+  );
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);

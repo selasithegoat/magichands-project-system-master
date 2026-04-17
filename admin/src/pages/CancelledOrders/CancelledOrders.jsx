@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import usePersistedState from "@client/hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import "./CancelledOrders.css";
@@ -26,7 +27,10 @@ const CancelledOrders = () => {
   const [orderGroups, setOrderGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "admin-cancelled-orders-search",
+    "",
+  );
   const [reactivatingId, setReactivatingId] = useState("");
   const [reactivateModalProject, setReactivateModalProject] = useState(null);
   const [reactivateError, setReactivateError] = useState("");

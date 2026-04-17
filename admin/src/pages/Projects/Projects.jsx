@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
+import usePersistedState from "@client/hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
@@ -14,6 +15,7 @@ import {
 
 const GROUP_ROW_TRANSITION_MS = 220;
 const URGENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const PROJECT_VIEW_MODES = ["active", "finished"];
 const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished", "Declined"]);
 const PENDING_PROJECT_STATUSES = new Set([
   "Order Created",
@@ -224,12 +226,40 @@ const Projects = ({ user }) => {
   });
 
   // Pagination & Filter State
-  const [viewMode, setViewMode] = useState("active");
-  const [filterStatus, setFilterStatus] = useState(getDefaultFilterStatus("active"));
-  const [searchQuery, setSearchQuery] = useState("");
-  const [clientFilter, setClientFilter] = useState("All");
-  const [leadFilter, setLeadFilter] = useState("All");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = usePersistedState(
+    "admin-projects-view-mode",
+    "active",
+    {
+      sanitize: (value) =>
+        PROJECT_VIEW_MODES.includes(value) ? value : "active",
+    },
+  );
+  const [filterStatus, setFilterStatus] = usePersistedState(
+    "admin-projects-filter-status",
+    getDefaultFilterStatus("active"),
+  );
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "admin-projects-search",
+    "",
+  );
+  const [clientFilter, setClientFilter] = usePersistedState(
+    "admin-projects-client-filter",
+    "All",
+  );
+  const [leadFilter, setLeadFilter] = usePersistedState(
+    "admin-projects-lead-filter",
+    "All",
+  );
+  const [currentPage, setCurrentPage] = usePersistedState(
+    "admin-projects-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
   const [itemsPerPage] = useState(15);
   const isFinishedView = viewMode === "finished";
   const pageConfig = getPageConfig(viewMode);
@@ -326,6 +356,10 @@ const Projects = ({ user }) => {
   useEffect(() => {
     const viewQuery = searchParams.get("view");
     const statusQuery = searchParams.get("status");
+    if (!viewQuery && !statusQuery) {
+      return;
+    }
+
     let nextViewMode = viewQuery === "finished" ? "finished" : "active";
 
     if (statusQuery) {
@@ -565,6 +599,10 @@ const Projects = ({ user }) => {
 
   const handleViewModeChange = (nextViewMode) => {
     if (nextViewMode === viewMode) return;
+
+    setViewMode(nextViewMode);
+    setFilterStatus(getDefaultFilterStatus(nextViewMode));
+    setCurrentPage(1);
 
     const params = new URLSearchParams(searchParams);
     if (nextViewMode === "finished") {

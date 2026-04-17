@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import HelpIcon from "../../components/icons/HelpIcon";
 import SearchIcon from "../../components/icons/SearchIcon";
+import usePersistedState from "../../hooks/usePersistedState";
 import "./FAQ.css";
 
 const MAX_QUESTION_LENGTH = 600;
@@ -247,8 +248,14 @@ const FAQ = ({ user }) => {
   const [categories, setCategories] = useState(["All"]);
   const [articles, setArticles] = useState([]);
   const [featuredArticleIds, setFeaturedArticleIds] = useState([]);
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [activeCategory, setActiveCategory] = usePersistedState(
+    "client-faq-active-category",
+    "All",
+  );
+  const [searchTerm, setSearchTerm] = usePersistedState(
+    "client-faq-search-term",
+    "",
+  );
   const [expandedIds, setExpandedIds] = useState(() => new Set());
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
@@ -341,6 +348,13 @@ const FAQ = ({ user }) => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!categories.length || categories.includes(activeCategory)) {
+      return;
+    }
+    setActiveCategory("All");
+  }, [activeCategory, categories, setActiveCategory]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

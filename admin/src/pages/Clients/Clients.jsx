@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import "./Clients.css";
+import usePersistedState from "@client/hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
@@ -14,10 +15,29 @@ const Clients = ({ user }) => {
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [projectStatusFilter, setProjectStatusFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "admin-clients-search",
+    "",
+  );
+  const [projectStatusFilter, setProjectStatusFilter] = usePersistedState(
+    "admin-clients-project-status-filter",
+    "all",
+    {
+      sanitize: (value) =>
+        ["all", "ongoing", "completed"].includes(value) ? value : "all",
+    },
+  );
   const [expandedClients, setExpandedClients] = useState(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = usePersistedState(
+    "admin-clients-page",
+    1,
+    {
+      sanitize: (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+      },
+    },
+  );
   const pageSize = 15;
 
   const fetchClients = async () => {

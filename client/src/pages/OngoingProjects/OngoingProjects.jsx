@@ -7,6 +7,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import FabButton from "../../components/ui/FabButton";
 import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
+import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadSearchText } from "../../utils/leadDisplay";
 import { useLocation } from "react-router-dom";
@@ -43,7 +44,10 @@ const OngoingProjects = ({
   const location = useLocation();
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "client-ongoing-projects-search",
+    "",
+  );
 
   const viewMode = React.useMemo(() => {
     const params = new URLSearchParams(location.search || "");
