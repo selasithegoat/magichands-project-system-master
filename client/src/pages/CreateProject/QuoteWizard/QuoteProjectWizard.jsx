@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
@@ -14,6 +14,7 @@ import {
   formatProjectIndicatorInput,
   resolveProjectNameForForm,
 } from "../../../utils/projectName";
+import { resolvePortalSource } from "../../../utils/portalSource";
 
 const defaultChecklist = {
   cost: true,
@@ -40,6 +41,8 @@ const normalizeChecklist = (checklist) => {
 const QuoteProjectWizard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const dashboardPath = portalSource === "admin" ? "/dashboard" : "/client";
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [leads, setLeads] = useState([]);
@@ -291,7 +294,7 @@ const QuoteProjectWizard = () => {
   const handleCancelProject = () => setShowCancelModal(true);
   const confirmCancel = () => {
     setShowCancelModal(false);
-    navigate("/client");
+    navigate(dashboardPath);
   };
 
   const handleChange = (e) => {
@@ -454,7 +457,7 @@ const QuoteProjectWizard = () => {
   };
 
   const handleProjectComplete = () => {
-    navigate("/client");
+    navigate(dashboardPath);
   };
 
   if (isLoading) return <Spinner />;

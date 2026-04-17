@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Spinner from "../../../components/ui/Spinner";
 import TrashIcon from "../../../components/icons/TrashIcon";
@@ -26,6 +26,7 @@ import {
   formatProjectDisplayName,
   resolveProjectNameForForm,
 } from "../../../utils/projectName";
+import { resolvePortalSource } from "../../../utils/portalSource";
 import "./MinimalQuoteForm.css";
 
 const normalizeTimeForInput = (value) => {
@@ -109,7 +110,8 @@ const normalizeChecklist = (checklist) => {
 const MinimalQuoteForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dashboardPath = "/client";
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const dashboardPath = portalSource === "admin" ? "/dashboard" : "/client";
 
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
@@ -1217,7 +1219,7 @@ const MinimalQuoteForm = () => {
             <button
               type="button"
               className="minimal-quote-btn-cancel"
-              onClick={() => navigate("/")}
+              onClick={() => navigate(dashboardPath)}
             >
               Cancel
             </button>
