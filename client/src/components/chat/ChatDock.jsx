@@ -487,7 +487,7 @@ const resolveNextActiveThreadId = (
   ) {
     return previousThreadId;
   }
-  return safeThreads[0]?._id || "";
+  return "";
 };
 
 const applyPresencePatchToUser = (user, presencePatch) => {
@@ -2041,6 +2041,9 @@ const ChatDock = ({ user }) => {
         !loadingOlderMessages &&
         !isOwnRecentLocalChange
       ) {
+        if (changeType === "message_created") {
+          messageScrollActionRef.current = "bottom";
+        }
         void fetchMessages(changedThreadId, {
           mode: changeType === "thread_cleared" ? "replace" : "preserve",
           minIntervalMs: 0,
@@ -2188,16 +2191,18 @@ const ChatDock = ({ user }) => {
   const handleOpen = () => {
     dismissIncomingPreview(true);
     setIsOpen(true);
+    setSidebarMode("threads");
+    setActiveThreadId("");
     setError("");
     setOpenReactionPickerId("");
     clearMentionState();
-    setMobilePanelView(activeThreadId ? "thread" : "sidebar");
+    setMobilePanelView("sidebar");
     if (threads.length === 0) {
       void fetchThreads({ preserveSelection: false, showLoading: true });
     }
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsOpen(false);
     setSidebarMode("threads");
     setProjectPickerOpen(false);
@@ -2212,7 +2217,31 @@ const ChatDock = ({ user }) => {
     setReplyTarget(null);
     clearMentionState();
     resetProjectRoutePicker();
-  };
+  }, [clearMentionState, resetProjectRoutePicker]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (
+        event.target?.closest?.(".chat-dock-shell") ||
+        event.target?.closest?.(".chat-dock-fab") ||
+        event.target?.closest?.(".confirm-overlay")
+      ) {
+        return;
+      }
+
+      handleClose();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [handleClose, isOpen]);
 
   const handleSidebarModeChange = (mode) => {
     setSidebarMode(mode);
