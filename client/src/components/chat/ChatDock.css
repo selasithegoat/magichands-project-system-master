@@ -88,8 +88,8 @@
 }
 
 .chat-dock-fab.portal-admin {
-  left: auto;
-  right: 24px;
+  left: calc(260px + var(--spacing-xl));
+  right: auto;
 }
 
 .chat-dock-incoming-preview {
@@ -124,9 +124,9 @@
 }
 
 .chat-dock-incoming-preview.portal-admin {
-  left: auto;
-  right: 24px;
-  transform-origin: right bottom;
+  left: calc(260px + var(--spacing-xl));
+  right: auto;
+  transform-origin: left bottom;
 }
 
 .chat-dock-incoming-preview::after {
@@ -145,8 +145,8 @@
 }
 
 .chat-dock-incoming-preview.portal-admin::after {
-  left: auto;
-  right: 34px;
+  left: 34px;
+  right: auto;
 }
 
 .chat-dock-incoming-preview.visible {
@@ -277,8 +277,9 @@
 }
 
 .chat-dock-shell.portal-admin {
-  left: auto;
-  right: 24px;
+  left: calc(260px + var(--spacing-xl));
+  right: auto;
+  width: min(940px, calc(100vw - 260px - (var(--spacing-xl) * 2)));
 }
 
 .chat-dock-panel {
@@ -1952,13 +1953,13 @@
 
 @media (max-width: 768px) {
   .chat-dock-fab.portal-admin {
-    left: auto;
-    right: 16px;
+    left: 16px;
+    right: auto;
   }
 
   .chat-dock-incoming-preview.portal-admin {
-    left: auto;
-    right: 16px;
+    left: 16px;
+    right: auto;
   }
 
   .chat-dock-shell.portal-admin {
@@ -2106,8 +2107,8 @@
 
 @media (max-width: 560px) {
   .chat-dock-fab.portal-admin {
-    left: auto;
-    right: 12px;
+    left: 12px;
+    right: auto;
   }
 
   .chat-dock-incoming-preview.portal-admin {
