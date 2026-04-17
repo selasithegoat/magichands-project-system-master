@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./GlobalSmsPrompt.css";
 import { formatProjectDisplayName } from "../../utils/projectName";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
@@ -60,6 +60,10 @@ const GlobalSmsPrompt = ({ user }) => {
     );
     return departments.includes("front desk");
   }, [user]);
+  const authSessionKey = useMemo(
+    () => String(user?._id || user?.id || user?.email || ""),
+    [user?._id, user?.email, user?.id],
+  );
 
   const [prompts, setPrompts] = useState([]);
   const [expandedId, setExpandedId] = useState("");
@@ -68,12 +72,38 @@ const GlobalSmsPrompt = ({ user }) => {
   const [skippingId, setSkippingId] = useState("");
   const [errorById, setErrorById] = useState({});
   const [loading, setLoading] = useState(false);
+  const [authLost, setAuthLost] = useState(false);
 
-  const fetchPrompts = async () => {
-    if (!canManageSms) return;
+  const clearPromptState = useCallback(() => {
+    setPrompts([]);
+    setExpandedId("");
+    setDrafts({});
+    setErrorById({});
+    setSendingId("");
+    setSkippingId("");
+  }, []);
+
+  useEffect(() => {
+    setAuthLost(false);
+    if (!canManageSms) {
+      clearPromptState();
+      setLoading(false);
+    }
+  }, [authSessionKey, canManageSms, clearPromptState]);
+
+  const fetchPrompts = useCallback(async () => {
+    if (!canManageSms || authLost) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/projects/sms-prompts/pending?source=frontdesk");
+      const res = await fetch("/api/projects/sms-prompts/pending?source=frontdesk", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (res.status === 401) {
+        setAuthLost(true);
+        clearPromptState();
+        return;
+      }
       if (!res.ok) {
         throw new Error("Failed to load SMS prompts.");
       }
@@ -84,10 +114,10 @@ const GlobalSmsPrompt = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authLost, canManageSms, clearPromptState]);
 
   useAdaptivePolling(fetchPrompts, {
-    enabled: canManageSms,
+    enabled: canManageSms && !authLost,
     intervalMs: POLL_INTERVAL_MS,
     hiddenIntervalMs: HIDDEN_POLL_INTERVAL_MS,
   });
