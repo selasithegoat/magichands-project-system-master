@@ -9,6 +9,7 @@ import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
 import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import { getLeadSearchText } from "../../utils/leadDisplay";
 import { useLocation } from "react-router-dom";
 
@@ -36,12 +37,14 @@ const isHistoryProject = (project) =>
   HISTORY_PROJECT_STATUSES.has(project?.status || "");
 
 const OngoingProjects = ({
-  onNavigateDetail,
   onBack,
   onCreateProject,
+  user,
   onProjectChange, // New prop
 }) => {
   const location = useLocation();
+  const { navigateToProject, projectRouteChoiceDialog } =
+    useAuthorizedProjectNavigation(user);
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = usePersistedState(
@@ -252,6 +255,17 @@ const OngoingProjects = ({
   }, [viewMode]);
 
   const isEmergencyView = viewMode === "emergencies";
+  const handleProjectOpen = React.useCallback(
+    (project) => {
+      navigateToProject(project, {
+        fallbackPath: "/client",
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+      });
+    },
+    [navigateToProject],
+  );
 
   return (
     <div className={`ongoing-container ${isEmergencyView ? "emergency-theme" : ""}`}>
@@ -298,7 +312,7 @@ const OngoingProjects = ({
             <ProjectCard
               key={p._id}
               project={p}
-              onDetails={onNavigateDetail}
+              onDetails={handleProjectOpen}
               onUpdateStatus={handleUpdateStatus}
             />
           ))
@@ -319,6 +333,7 @@ const OngoingProjects = ({
       {/* FAB */}
       {/* FAB */}
       <FabButton onClick={onCreateProject} />
+      {projectRouteChoiceDialog}
     </div>
   );
 };

@@ -1,0 +1,140 @@
+.project-route-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: var(--overlay);
+}
+
+.project-route-choice-dialog {
+  width: min(520px, 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.project-route-choice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.2rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.project-route-choice-title {
+  margin: 0 0 0.45rem;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.project-route-choice-message {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.project-route-choice-close,
+.project-route-choice-cancel {
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.project-route-choice-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+}
+
+.project-route-choice-close:hover,
+.project-route-choice-cancel:hover,
+.project-route-choice-option:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color));
+}
+
+.project-route-choice-options {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.1rem 1.2rem 0;
+}
+
+.project-route-choice-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface-alt) 78%, var(--bg-card)),
+      var(--bg-card)
+    );
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.project-route-choice-option:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary-soft) 56%, var(--surface-alt)),
+      var(--bg-card)
+    );
+}
+
+.project-route-choice-option-label {
+  font-weight: 700;
+}
+
+.project-route-choice-option-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.project-route-choice-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+
+.project-route-choice-cancel {
+  min-width: 108px;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .project-route-choice-header,
+  .project-route-choice-options,
+  .project-route-choice-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

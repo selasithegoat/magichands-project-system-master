@@ -140,7 +140,7 @@ const HistoryProjectCard = ({ project, onViewDetails, animationDelay = 0 }) => {
       <div className="history-card-footer">
         <button
           className="history-card-button"
-          onClick={() => onViewDetails(project._id)}
+          onClick={() => onViewDetails(project)}
         >
           <EyeIcon /> View Details
         </button>

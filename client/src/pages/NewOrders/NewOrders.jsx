@@ -246,6 +246,14 @@ const NewOrders = ({ user = null }) => {
   const routeProjectType = location.state?.projectType || "Standard";
   const routePriority = location.state?.priority || "Normal";
   const portalSource = useMemo(() => resolvePortalSource(), []);
+  const isFrontDeskUser = useMemo(() => {
+    const departments = Array.isArray(currentUser?.department)
+      ? currentUser.department
+      : currentUser?.department
+        ? [currentUser.department]
+        : [];
+    return departments.includes("Front Desk");
+  }, [currentUser?.department]);
   const draftAccountKey =
     String(
       currentUser?._id || currentUser?.id || currentUser?.email || "default",
@@ -571,7 +579,10 @@ const NewOrders = ({ user = null }) => {
       }
 
       try {
-        const res = await fetch(`/api/projects/${projectId}`, {
+        const editProjectUrl = isFrontDeskUser
+          ? `/api/projects/${projectId}?source=frontdesk`
+          : `/api/projects/${projectId}`;
+        const res = await fetch(editProjectUrl, {
           credentials: "include",
         });
         if (res.ok) {
@@ -699,6 +710,7 @@ const NewOrders = ({ user = null }) => {
     draftAccountKey,
     editingId,
     hasResolvedCurrentUser,
+    isFrontDeskUser,
     reopenedProject,
     routePriority,
     routeProjectType,

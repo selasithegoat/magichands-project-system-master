@@ -414,7 +414,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
       </div>
 
       <div className="card-footer">
-        <button className="btn-details" onClick={() => onDetails(project._id)}>
+        <button className="btn-details" onClick={() => onDetails(project)}>
           Details
         </button>
         <button

@@ -6,13 +6,13 @@ import SearchIcon from "../../components/icons/SearchIcon";
 import FilterIcon from "../../components/icons/FilterIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import HistoryProjectCard from "../../components/ui/HistoryProjectCard";
-import { useNavigate } from "react-router-dom"; // Add navigation hook
 import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 
 const HISTORY_FILTER_OPTIONS = ["All", "This Month", "Last Month", "Older"];
 
-const ProjectHistory = ({ onBack }) => {
+const ProjectHistory = ({ onBack, user }) => {
   const [filter, setFilter] = usePersistedState(
     "client-project-history-filter",
     "All",
@@ -27,7 +27,8 @@ const ProjectHistory = ({ onBack }) => {
   );
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate(); // Hook for navigation
+  const { navigateToProject, projectRouteChoiceDialog } =
+    useAuthorizedProjectNavigation(user);
 
   useEffect(() => {
     fetchHistory();
@@ -54,8 +55,13 @@ const ProjectHistory = ({ onBack }) => {
     }
   };
 
-  const handleViewDetails = (id) => {
-    navigate(`/detail/${id}`);
+  const handleViewDetails = (project) => {
+    navigateToProject(project, {
+      fallbackPath: "/client",
+      title: "Choose Authorized Page",
+      message:
+        "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+    });
   };
 
   const getProjectDate = (project) => {
@@ -254,6 +260,7 @@ const ProjectHistory = ({ onBack }) => {
           </>
         )}
       </section>
+      {projectRouteChoiceDialog}
     </div>
   );
 };

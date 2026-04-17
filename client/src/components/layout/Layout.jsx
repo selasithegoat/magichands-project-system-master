@@ -29,6 +29,7 @@ import {
 } from "../../utils/notificationSound";
 import { formatProjectDisplayName } from "../../utils/projectName";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
+import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 
 const NOTIFICATION_POLL_INTERVAL_MS = 15000;
 const HIDDEN_NOTIFICATION_POLL_INTERVAL_MS = 60000;
@@ -50,78 +51,6 @@ const toEntityId = (value) => {
 
 const toArray = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
-
-const resolveEngagedSubDepartments = (user) => {
-  const userDepts = toArray(user?.department);
-  const hasGraphicsParent = userDepts.includes("Graphics/Design");
-  const hasStoresParent = userDepts.includes("Stores");
-  const hasPhotographyParent = userDepts.includes("Photography");
-
-  const productionSubDepts = userDepts.filter((d) =>
-    PRODUCTION_SUB_DEPARTMENTS.includes(d),
-  );
-
-  const hasGraphics =
-    hasGraphicsParent ||
-    userDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
-  const hasStores =
-    hasStoresParent || userDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
-  const hasPhotography =
-    hasPhotographyParent ||
-    userDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
-
-  let subDepts = [];
-  if (productionSubDepts.length > 0) {
-    subDepts = subDepts.concat(productionSubDepts);
-  }
-  if (hasGraphics) {
-    subDepts = subDepts.concat(GRAPHICS_SUB_DEPARTMENTS);
-  }
-  if (hasStores) {
-    subDepts = subDepts.concat(STORES_SUB_DEPARTMENTS);
-  }
-  if (hasPhotography) {
-    subDepts = subDepts.concat(PHOTOGRAPHY_SUB_DEPARTMENTS);
-  }
-
-  return Array.from(new Set(subDepts));
-};
-
-const hasEngagedDepartmentOverlap = (user, projectDepartments) => {
-  if (!Array.isArray(projectDepartments) || projectDepartments.length === 0) {
-    return false;
-  }
-  const engagedSubDepts = resolveEngagedSubDepartments(user);
-  if (engagedSubDepts.length === 0) return false;
-  const engagedSubDeptSet = new Set(engagedSubDepts);
-  return projectDepartments.some((dept) => engagedSubDeptSet.has(dept));
-};
-
-const getEngagedProjectPath = (user, projectId, projectDepartments) => {
-  if (!projectId) return "";
-  return hasEngagedDepartmentOverlap(user, projectDepartments)
-    ? `/engaged-projects/actions/${projectId}`
-    : `/detail/${projectId}`;
-};
-
-const getNotificationProjectPath = (notification, user) => {
-  const projectId = toEntityId(
-    notification?.project?._id || notification?.project,
-  );
-  if (!projectId) return "";
-  const projectDepartments = Array.isArray(notification?.project?.departments)
-    ? notification.project.departments
-    : [];
-  const notificationType = String(notification?.type || "")
-    .trim()
-    .toUpperCase();
-
-  if (notificationType === "REMINDER") {
-    return getEngagedProjectPath(user, projectId, projectDepartments);
-  }
-
-  return `/detail/${projectId}`;
-};
 
 const isChatMentionNotification = (notification) =>
   String(notification?.source || "")
@@ -172,6 +101,8 @@ const Layout = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isFrontDeskUser = toArray(user?.department).includes("Front Desk");
   const isFrontDeskOrdersPage = location.pathname === "/frontdesk/orders";
+  const { navigateToProject, projectRouteChoiceDialog } =
+    useAuthorizedProjectNavigation(user);
 
   // [New] Notifications & Toasts State
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -206,6 +137,41 @@ const Layout = ({
     );
   };
 
+  const openProjectFromNotification = React.useCallback(
+    (notification, { onBeforeNavigate } = {}) => {
+      const projectId = toEntityId(
+        notification?.project?._id || notification?.project,
+      );
+      if (!projectId) return false;
+
+      const projectValue =
+        notification?.project && typeof notification.project === "object"
+          ? notification.project
+          : { _id: projectId };
+      const notificationType = String(notification?.type || "")
+        .trim()
+        .toUpperCase();
+      const detailSearch =
+        notificationType === "ACTIVITY"
+          ? "tab=Activities"
+          : notificationType === "UPDATE"
+            ? "tab=Updates"
+            : "";
+
+      navigateToProject(projectValue, {
+        detailSearch,
+        fallbackPath: "/client",
+        allowGenericEngaged: true,
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+        onBeforeNavigate,
+      });
+      return true;
+    },
+    [navigateToProject],
+  );
+
   const handleChatMentionOpen = (notification) => {
     if (!isChatMentionNotification(notification)) {
       return false;
@@ -230,12 +196,12 @@ const Layout = ({
           return;
         }
         if (notification.project) {
-          const projectPath = getNotificationProjectPath(notification, user);
-          if (projectPath) {
-            setIsNotificationOpen(false);
-            setIsMobileMenuOpen(false);
-            navigate(projectPath);
-          }
+          openProjectFromNotification(notification, {
+            onBeforeNavigate: () => {
+              setIsNotificationOpen(false);
+              setIsMobileMenuOpen(false);
+            },
+          });
         }
         n.close();
       };
@@ -267,7 +233,6 @@ const Layout = ({
     const projectId = toEntityId(
       notification?.project?._id || notification?.project,
     );
-    const projectPath = getNotificationProjectPath(notification, user);
     setToasts((prev) => [
       ...prev,
       {
@@ -276,7 +241,7 @@ const Layout = ({
         type: notification.type === "ASSIGNMENT" ? "warning" : "info",
         chatKind: isChatMentionNotification(notification) ? "public" : "",
         projectId,
-        projectPath,
+        notification,
       },
     ]);
   };
@@ -301,11 +266,6 @@ const Layout = ({
           null,
           "",
         );
-        const projectPath = getEngagedProjectPath(
-          user,
-          projectId,
-          projectDepartments,
-        );
         return {
           notificationId,
           reminderId,
@@ -315,7 +275,13 @@ const Layout = ({
           projectId,
           projectOrderId,
           projectName,
-          projectPath,
+          project:
+            item?.project && typeof item.project === "object"
+              ? item.project
+              : {
+                  _id: projectId,
+                  departments: projectDepartments,
+                },
         };
       })
       .filter((item) => Boolean(item.notificationId && item.reminderId))
@@ -469,6 +435,11 @@ const Layout = ({
     if (!activeReminderAlert) return;
     const notificationId = toEntityId(activeReminderAlert.notificationId);
     if (!notificationId) return;
+    const reminderProject =
+      activeReminderAlert.project ||
+      (activeReminderAlert.projectId
+        ? { _id: activeReminderAlert.projectId }
+        : null);
 
     void markNotificationReadSilently(notificationId);
     handledReminderNotificationIdsRef.current.add(notificationId);
@@ -478,6 +449,15 @@ const Layout = ({
     );
     setActiveReminderAlert(null);
     setReminderActionError("");
+    if (reminderProject) {
+      navigateToProject(reminderProject, {
+        fallbackPath: "/client",
+        allowGenericEngaged: true,
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+      });
+    }
   };
 
   const EXCLUDED_NOTIFICATION_SOURCE = "inventory";
@@ -666,22 +646,6 @@ const Layout = ({
     const id = notification._id;
     const projectId = notification.project?._id || notification.project;
     const type = notification.type;
-    const viewScope = String(options?.viewScope || "all").toLowerCase();
-    const isTeamView = viewScope === "team";
-    const userDepartments = toArray(user?.department);
-    const isFrontDeskUser = userDepartments.includes("Front Desk");
-    const projectDepartments = Array.isArray(notification?.project?.departments)
-      ? notification.project.departments
-      : [];
-    const shouldRouteFrontDeskTeam = isTeamView && isFrontDeskUser;
-    const shouldRouteEngagedTeam =
-      isTeamView && hasEngagedDepartmentOverlap(user, projectDepartments);
-    const teamProjectPath =
-      shouldRouteFrontDeskTeam && projectId
-        ? `/new-orders/actions/${projectId}`
-        : shouldRouteEngagedTeam && projectId
-          ? `/engaged-projects/actions/${projectId}`
-          : "";
 
     try {
       const res = await fetch(`/api/notifications/${id}/read`, {
@@ -711,40 +675,15 @@ const Layout = ({
 
         // Intelligent Routing based on notification type
         if (projectId) {
-          if (String(type || "").toUpperCase() === "REMINDER") {
-            const projectPath = getNotificationProjectPath(notification, user);
-            if (projectPath) {
-              navigate(projectPath);
-            }
-          } else if (teamProjectPath) {
-            navigate(teamProjectPath);
-          } else if (notification.title === "Final Update Posted") {
+          if (notification.title === "Final Update Posted") {
             // Special Case: End of Day Update for Front Desk
             navigate("/end-of-day");
-          } else if (notification.title === "New Project Engagement") {
-            navigate("/engaged-projects");
           } else {
-            switch (type) {
-              case "ACTIVITY":
-                navigate(`/detail/${projectId}?tab=Activities`);
-                break;
-              case "UPDATE":
-                navigate(`/detail/${projectId}?tab=Updates`);
-                break;
-              case "ASSIGNMENT":
-                // Navigate to project details for assigned project
-                navigate(`/detail/${projectId}`);
-                break;
-              case "ACCEPTANCE":
-                navigate(`/detail/${projectId}`);
-                break;
-              default:
-                navigate(`/detail/${projectId}`);
-            }
+            openProjectFromNotification(notification);
           }
         } else if (type === "SYSTEM") {
           // System notifications with no project context - go to dashboard
-          navigate("/dashboard");
+          navigate("/client");
         }
       }
     } catch (err) {
@@ -833,6 +772,7 @@ const Layout = ({
         onNavigateProject={handleReminderNavigate}
         onClose={dismissReminderAlert}
       />
+      {projectRouteChoiceDialog}
 
       {/* Mobile Drawer */}
       {isMobileMenuOpen && (
@@ -1074,11 +1014,22 @@ const Layout = ({
                 removeToast(toast.id);
                 return;
               }
-              const targetPath =
-                toast.projectPath ||
-                (toast.projectId ? `/detail/${toast.projectId}` : "");
-              if (targetPath) {
-                navigate(targetPath);
+              if (toast.notification) {
+                removeToast(toast.id);
+                openProjectFromNotification(toast.notification);
+                return;
+              }
+              if (toast.projectId) {
+                navigateToProject(
+                  { _id: toast.projectId },
+                  {
+                    fallbackPath: "/client",
+                    allowGenericEngaged: true,
+                    title: "Choose Authorized Page",
+                    message:
+                      "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+                  },
+                );
                 removeToast(toast.id);
               }
             }}

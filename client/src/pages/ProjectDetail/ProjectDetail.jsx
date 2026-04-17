@@ -29,6 +29,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import EyeIcon from "../../components/icons/EyeIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import {
   isQuoteCostCompleted,
   getQuoteRequirementSummary,
@@ -65,6 +66,7 @@ import {
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -781,12 +783,15 @@ const formatMeetingOffset = (minutes) => {
 const ProjectDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { navigateToProject, projectRouteChoiceDialog } =
+    useAuthorizedProjectNavigation(user);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(tabParam || "Overview");
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAccessRedirecting, setIsAccessRedirecting] = useState(false);
   const [orderGroupProjects, setOrderGroupProjects] = useState([]);
   const [orderMeeting, setOrderMeeting] = useState(null);
   const [meetingLoading, setMeetingLoading] = useState(false);
@@ -797,6 +802,10 @@ const ProjectDetail = ({ user }) => {
   const projectLeadUserId = toEntityId(project?.projectLeadId);
   const isProjectLead = Boolean(
     currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
+  );
+  const canViewProjectDetails = useMemo(
+    () => canAccessProjectDetails(user, project),
+    [project, user],
   );
   const isMeetingRequired = useMemo(
     () =>
@@ -873,8 +882,28 @@ const ProjectDetail = ({ user }) => {
 
   const fetchProject = async () => {
     try {
+      setIsAccessRedirecting(false);
       const res = await fetch(`/api/projects/${id}`);
-      if (!res.ok) throw new Error("Failed to fetch project");
+      if (!res.ok) {
+        if (res.status === 403) {
+          setProject(null);
+          setError(null);
+          setIsAccessRedirecting(true);
+          navigateToProject(
+            { _id: id },
+            {
+              fallbackPath: "/client",
+              allowGenericEngaged: true,
+              replace: true,
+              title: "Choose Authorized Page",
+              message:
+                "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+            },
+          );
+          return;
+        }
+        throw new Error("Failed to fetch project");
+      }
       const data = await res.json();
       setProject(data);
       await fetchOrderGroupProjects(data?.orderId, data);
@@ -902,6 +931,27 @@ const ProjectDetail = ({ user }) => {
   useEffect(() => {
     if (id) fetchProject();
   }, [id]);
+
+  useEffect(() => {
+    if (loading || !project || canViewProjectDetails || isAccessRedirecting) {
+      return;
+    }
+
+    setIsAccessRedirecting(true);
+    navigateToProject(project, {
+      fallbackPath: "/client",
+      replace: true,
+      title: "Choose Authorized Page",
+      message:
+        "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+    });
+  }, [
+    canViewProjectDetails,
+    isAccessRedirecting,
+    loading,
+    navigateToProject,
+    project,
+  ]);
 
   // [New] Fetch updates count
   useEffect(() => {
@@ -1012,22 +1062,24 @@ const ProjectDetail = ({ user }) => {
     };
   }, [countdownNowMs, deliveryDeadline]);
 
-  if (loading)
+  if (loading || isAccessRedirecting)
     return (
       <div
         className="project-detail-container"
         style={{ justifyContent: "center", alignItems: "center" }}
       >
         <LoadingSpinner />
+        {projectRouteChoiceDialog}
       </div>
     );
   if (error)
     return (
       <div className="project-detail-container">
+        {projectRouteChoiceDialog}
         <p style={{ padding: "2rem", color: "red" }}>{error}</p>
       </div>
     );
-  if (!project) return null;
+  if (!project) return projectRouteChoiceDialog;
 
   const isProjectOnHold = Boolean(
     project.hold?.isOnHold || project.status === "On Hold",

@@ -20,6 +20,7 @@ import Toast from "../../components/ui/Toast";
 import UserAvatar from "../../components/ui/UserAvatar";
 import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
@@ -357,8 +358,10 @@ const getProjectReferenceImage = (project) => {
   return firstImage || "";
 };
 
-const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProjectChange }) => {
+const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const navigate = useNavigate();
+  const { navigateToProject, projectRouteChoiceDialog } =
+    useAuthorizedProjectNavigation(user);
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -494,13 +497,37 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
     }
   };
 
-  const handleDetailsClick = (projectId) => {
+  const handleDetailsClick = (projectOrId) => {
+    const projectValue =
+      projectOrId && typeof projectOrId === "object"
+        ? projectOrId
+        : projects.find(
+            (entry) =>
+              toEntityId(entry?._id || entry?.id) === toEntityId(projectOrId),
+          );
+    const projectId = toEntityId(
+      projectValue?._id || projectValue?.id || projectOrId,
+    );
     if (!projectId) return;
-    if (onNavigateProject) {
-      onNavigateProject(projectId);
+    if (projectValue) {
+      navigateToProject(projectValue, {
+        fallbackPath: "/client",
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+      });
       return;
     }
-    navigate(`/detail/${projectId}`);
+    navigateToProject(
+      { _id: projectId },
+      {
+        fallbackPath: "/client",
+        allowGenericEngaged: true,
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+      },
+    );
   };
 
   const handleUpdateStatusClick = async (project) => {
@@ -1552,6 +1579,7 @@ const DashboardRedesign = ({ onNavigateProject, onCreateProject, user, onProject
           />
         </div>
       )}
+      {projectRouteChoiceDialog}
     </div>
   );
 };

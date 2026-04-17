@@ -12,6 +12,7 @@ import Toast from "../../components/ui/Toast";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
+import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import {
   getFullName,
   getLeadDisplay,
@@ -230,6 +231,8 @@ const getQuoteRequirementState = (project = {}, key = "") => {
 
 const EngagedProjects = ({ user }) => {
   const navigate = useNavigate();
+  const { navigateToProject, projectRouteChoiceDialog } =
+    useAuthorizedProjectNavigation(user);
   const [activeTab, setActiveTab] = usePersistedState(
     "client-engaged-projects-tab",
     "active",
@@ -1619,7 +1622,14 @@ const EngagedProjects = ({ user }) => {
                       <tr key={project._id}>
                         <td
                           className="project-id-cell"
-                          onClick={() => navigate(`/detail/${project._id}`)}
+                          onClick={() =>
+                            navigateToProject(project, {
+                              fallbackPath: "/engaged-projects",
+                              title: "Choose Authorized Page",
+                              message:
+                                "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+                            })
+                          }
                         >
                           <div className="project-id-stack">
                             <div className="project-id-with-version">
@@ -1683,6 +1693,7 @@ const EngagedProjects = ({ user }) => {
           )}
         </>
       )}
+      {projectRouteChoiceDialog}
       {/* Update Modal */}
       {showUpdateModal && selectedProject && (
         <div className="modal-overlay">

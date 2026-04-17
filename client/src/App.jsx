@@ -384,7 +384,6 @@ function App() {
             >
               <Dashboard
                 user={user} // Pass user to Dashboard
-                onNavigateProject={(id) => navigate(`/detail/${id}`)}
                 onCreateProject={() => navigate("/create")}
                 onProjectChange={fetchDashboardCounts} // Refresh counts on change
               />
@@ -489,9 +488,9 @@ function App() {
               engagedCount={engagedCount}
             >
               <OngoingProjects
-                onNavigateDetail={(id) => navigate(`/detail/${id}`)}
                 onBack={() => navigate("/client")}
                 onCreateProject={() => navigate("/create")}
+                user={user}
                 onProjectChange={fetchDashboardCounts} // Refresh counts on change
               />
             </ProtectedLayout>
@@ -507,7 +506,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <ProjectHistory onBack={() => navigate("/client")} />
+              <ProjectHistory onBack={() => navigate("/client")} user={user} />
             </ProtectedLayout>
           }
         />

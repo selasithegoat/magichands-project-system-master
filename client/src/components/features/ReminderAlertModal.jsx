@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import "./ReminderAlertModal.css";
 import ReminderBellIcon from "../icons/ReminderBellIcon";
 
@@ -72,13 +71,22 @@ const ReminderAlertModal = ({
               ) : null}
             </div>
             {projectId ? (
-              <Link
-                className="reminder-alert-project-link"
-                to={projectPath || `/detail/${projectId}`}
-                onClick={onNavigateProject}
-              >
-                Open Project
-              </Link>
+              onNavigateProject ? (
+                <button
+                  type="button"
+                  className="reminder-alert-project-link"
+                  onClick={onNavigateProject}
+                >
+                  Open Project
+                </button>
+              ) : (
+                <a
+                  className="reminder-alert-project-link"
+                  href={projectPath || `/detail/${projectId}`}
+                >
+                  Open Project
+                </a>
+              )
             ) : null}
           </div>
         ) : null}
