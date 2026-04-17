@@ -71,6 +71,10 @@ const {
   resetQuoteSampleProduction,
   resetProjectMockupDecision,
 } = require("../controllers/projectController");
+const {
+  getDepartmentUpdateBoard,
+  saveDepartmentUpdateBoard,
+} = require("../controllers/departmentUpdateBoardController");
 const { protect } = require("../middleware/authMiddleware");
 const {
   requireProjectNotOnHold,
@@ -209,6 +213,8 @@ const handleBidSubmissionUploads = (req, res, next) => {
 
 router.delete("/activities/me/cleanup", protect, deleteOldUserActivity);
 router.get("/activities/me", protect, getUserActivity); // [NEW] - Must be before /:id routes
+router.get("/department-updates", protect, getDepartmentUpdateBoard);
+router.put("/department-updates", protect, saveDepartmentUpdateBoard);
 router.get("/clients", protect, getClients); // [NEW] - Get all clients with their projects
 router.get("/orders", protect, getOrderGroups);
 router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);

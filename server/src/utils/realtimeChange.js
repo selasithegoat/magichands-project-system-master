@@ -6,6 +6,7 @@ const PROJECT_STATIC_SEGMENTS = new Set([
   "ai",
   "bottlenecks",
   "clients",
+  "department-updates",
   "dashboard-counts",
   "orders",
   "sms-prompts",

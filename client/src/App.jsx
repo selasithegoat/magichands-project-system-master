@@ -30,6 +30,9 @@ const FrontDeskOrders = lazy(
 const EndOfDayUpdate = lazy(
   () => import("./pages/EndOfDayUpdate/EndOfDayUpdate"),
 );
+const DepartmentUpdates = lazy(
+  () => import("./pages/EndOfDayUpdate/DepartmentUpdates"),
+);
 const EngagedProjects = lazy(
   () => import("./pages/EngagedProjects/EngagedProjects"),
 );
@@ -575,6 +578,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <EndOfDayUpdate user={user} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/end-of-day/department-updates"
+          element={
+            <ProtectedLayout
+              activeView="end-of-day"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <DepartmentUpdates user={user} />
             </ProtectedLayout>
           }
         />

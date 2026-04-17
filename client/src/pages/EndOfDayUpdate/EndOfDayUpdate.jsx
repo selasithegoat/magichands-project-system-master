@@ -8,9 +8,213 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { buildProjectNameRuns, renderProjectName } from "../../utils/projectName";
+import EndOfDayRouteTabs from "./EndOfDayRouteTabs";
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
+
+const toText = (value) => String(value || "").trim();
+
+const DOCX_COLUMN_WEIGHT_MAP = {
+  dept: 18,
+  lead: 14,
+  deliveryDate: 18,
+  itemInformation: 28,
+  statusUpdate: 22,
+};
+
+const getDepartmentColumnWidth = (column, columns = []) => {
+  const totalWeight = columns.reduce(
+    (sum, currentColumn) =>
+      sum + (DOCX_COLUMN_WEIGHT_MAP[currentColumn.id] || 18),
+    0,
+  );
+  const columnWeight = DOCX_COLUMN_WEIGHT_MAP[column.id] || 18;
+  return Math.max(8, Math.round((columnWeight / Math.max(totalWeight, 1)) * 100));
+};
+
+const getDepartmentCellValue = (row, column) => {
+  if (column.id === "dept") return toText(row?.dept);
+  if (column.id === "lead") return toText(row?.leadName);
+  return toText(row?.values?.[column.id]);
+};
+
+const normalizeDocxCellText = (value) =>
+  toText(value)
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" | ");
+
+const formatDepartmentDocxValue = (column, value) => {
+  const normalizedValue = toText(value);
+  if (!normalizedValue) return "";
+  if (column.kind !== "date") {
+    return normalizeDocxCellText(normalizedValue);
+  }
+
+  const parsedDate = new Date(normalizedValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return normalizedValue;
+  }
+
+  return parsedDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const fetchDepartmentUpdateBoardForExport = async () => {
+  const response = await fetch("/api/projects/department-updates", {
+    credentials: "include",
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || "Failed to load Department Updates.");
+  }
+  return payload;
+};
+
+const buildDepartmentUpdateDocxTable = (board, docx) => {
+  const columns = Array.isArray(board?.columns) ? board.columns : [];
+  const sections = Array.isArray(board?.sections) ? board.sections : [];
+
+  if (columns.length === 0 || sections.length === 0) {
+    return null;
+  }
+
+  const {
+    Paragraph,
+    TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+    BorderStyle,
+    AlignmentType,
+  } = docx;
+
+  const createDataCell = (text, column) =>
+    new TableCell({
+      children: [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: text || "",
+              font: "Calibri",
+              size: 22,
+              color: "000000",
+            }),
+          ],
+          alignment: AlignmentType.LEFT,
+        }),
+      ],
+      width: {
+        size: getDepartmentColumnWidth(column, columns),
+        type: WidthType.PERCENTAGE,
+      },
+      margins: { top: 90, bottom: 90, left: 90, right: 90 },
+      shading: { fill: "FFFFFF" },
+    });
+
+  const rows = [];
+
+  sections.forEach((section, sectionIndex) => {
+    rows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: toText(section?.title),
+                    bold: true,
+                    size: 24,
+                    color: "000000",
+                    font: "Calibri",
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            columnSpan: Math.max(columns.length, 1),
+            shading: { fill: "A3A3A3" },
+            margins: { top: 90, bottom: 90, left: 90, right: 90 },
+          }),
+        ],
+      }),
+    );
+
+    if (sectionIndex === 0) {
+      rows.push(
+        new TableRow({
+          children: columns.map((column) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: toText(column?.label),
+                      bold: true,
+                      size: 22,
+                      color: "000000",
+                      font: "Calibri",
+                    }),
+                  ],
+                  alignment: AlignmentType.LEFT,
+                }),
+              ],
+              width: {
+                size: getDepartmentColumnWidth(column, columns),
+                type: WidthType.PERCENTAGE,
+              },
+              shading: { fill: "F4F4F4" },
+              margins: { top: 90, bottom: 90, left: 90, right: 90 },
+            }),
+          ),
+        }),
+      );
+    }
+
+    (Array.isArray(section?.rows) ? section.rows : []).forEach((row) => {
+      rows.push(
+        new TableRow({
+          children: columns.map((column) =>
+            createDataCell(
+              formatDepartmentDocxValue(column, getDepartmentCellValue(row, column)),
+              column,
+            ),
+          ),
+        }),
+      );
+    });
+  });
+
+  return new Table({
+    rows,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+      insideHorizontal: {
+        style: BorderStyle.SINGLE,
+        size: 1,
+        color: "000000",
+      },
+      insideVertical: {
+        style: BorderStyle.SINGLE,
+        size: 1,
+        color: "000000",
+      },
+    },
+  });
+};
 
 const EndOfDayUpdate = ({ user }) => {
   const [projects, setProjects] = useState([]);
@@ -24,7 +228,7 @@ const EndOfDayUpdate = ({ user }) => {
   useEffect(() => {
     // Redirect if user is loaded but not Front Desk
     if (user && !user.department?.includes("Front Desk")) {
-      navigate("/");
+      navigate("/client", { replace: true });
       return;
     }
 
@@ -158,6 +362,7 @@ const EndOfDayUpdate = ({ user }) => {
     if (!projects.length) return;
 
     try {
+      const departmentBoardPromise = fetchDepartmentUpdateBoardForExport();
       const {
         Document,
         Packer,
@@ -174,6 +379,7 @@ const EndOfDayUpdate = ({ user }) => {
         Header,
       } = await import("docx");
       const { saveAs } = await import("file-saver");
+      const departmentBoard = await departmentBoardPromise;
       const userName = user
         ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
         : "User";
@@ -392,6 +598,20 @@ const EndOfDayUpdate = ({ user }) => {
         },
       });
 
+      const departmentUpdatesTable = buildDepartmentUpdateDocxTable(
+        departmentBoard,
+        {
+          Paragraph,
+          TextRun,
+          Table,
+          TableRow,
+          TableCell,
+          WidthType,
+          BorderStyle,
+          AlignmentType,
+        },
+      );
+
       const doc = new Document({
         styles: {
           default: {
@@ -464,6 +684,14 @@ const EndOfDayUpdate = ({ user }) => {
                   },
                 },
               }),
+              ...(departmentUpdatesTable
+                ? [
+                    new Paragraph({
+                      children: [new TextRun({ text: "" })],
+                    }),
+                    departmentUpdatesTable,
+                  ]
+                : []),
             ],
           },
         ],
@@ -494,12 +722,7 @@ const EndOfDayUpdate = ({ user }) => {
   return (
     <div className="end-of-day-container">
       <div
-        className="page-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
+        className="page-header eod-page-header"
       >
         <div>
           <h1>End of Day Update</h1>
@@ -513,6 +736,8 @@ const EndOfDayUpdate = ({ user }) => {
           Download Report
         </button>
       </div>
+
+      <EndOfDayRouteTabs />
 
       <div className="table-container">
         <table className="update-table">

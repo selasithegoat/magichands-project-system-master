@@ -9,6 +9,14 @@
   margin-bottom: 2rem;
 }
 
+.eod-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .page-header h1 {
   font-size: 1.8rem;
   font-weight: 700;
@@ -19,6 +27,48 @@
 .page-header p {
   color: var(--text-secondary);
   font-size: 0.95rem;
+}
+
+.eod-route-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-alt) 78%, white);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+
+.eod-route-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.eod-route-tab:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-alt) 65%, white);
+}
+
+.eod-route-tab.active {
+  color: white;
+  background: linear-gradient(135deg, var(--primary-color), #0f766e);
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.18);
 }
 
 /* ... existing table styles ... */
@@ -310,6 +360,19 @@
 }
 
 @media (max-width: 768px) {
+  .eod-page-header {
+    align-items: flex-start;
+  }
+
+  .eod-route-tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .eod-route-tab {
+    flex: 1 1 0;
+  }
+
   .eod-pagination {
     flex-direction: column;
     align-items: stretch;
