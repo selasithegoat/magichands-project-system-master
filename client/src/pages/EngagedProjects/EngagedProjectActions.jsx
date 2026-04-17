@@ -706,6 +706,15 @@ const EngagedProjectActions = ({ user }) => {
       getQuoteActionDepartmentsForCurrentUser(projectRecord);
     if (!matchedDepartments.length) return false;
 
+    if (
+      isLeadGraphicsMockupUser &&
+      matchedDepartments.some((departmentName) =>
+        GRAPHICS_SUB_DEPARTMENTS.includes(departmentName),
+      )
+    ) {
+      return true;
+    }
+
     const targetAcknowledged = new Set(
       (projectRecord?.acknowledgements || []).map((ack) => ack.department),
     );

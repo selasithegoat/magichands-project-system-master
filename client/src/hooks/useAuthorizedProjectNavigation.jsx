@@ -6,6 +6,9 @@ import { resolveProjectNavigation } from "../utils/projectAccessRouting";
 const DEFAULT_ROUTE_CHOICE_TITLE = "Choose Authorized Page";
 const DEFAULT_ROUTE_CHOICE_MESSAGE =
   "Project Details is reserved for the assigned lead. Choose an authorized page to continue.";
+const MULTI_ACCESS_ROUTE_CHOICE_TITLE = "Choose Project Page";
+const MULTI_ACCESS_ROUTE_CHOICE_MESSAGE =
+  "You have access to more than one authorized page for this project. Choose where you want to continue.";
 
 const useAuthorizedProjectNavigation = (user) => {
   const navigate = useNavigate();
@@ -42,9 +45,16 @@ const useAuthorizedProjectNavigation = (user) => {
       }
 
       if (resolution.mode === "choice") {
+        const hasProjectDetailsOption = resolution.options.some(
+          (option) => option?.key === "detail",
+        );
         setRouteChoice({
-          title,
-          message,
+          title: hasProjectDetailsOption
+            ? MULTI_ACCESS_ROUTE_CHOICE_TITLE
+            : title,
+          message: hasProjectDetailsOption
+            ? MULTI_ACCESS_ROUTE_CHOICE_MESSAGE
+            : message,
           options: resolution.options,
           replace,
           onBeforeNavigate,

@@ -387,15 +387,22 @@ const canManageBilling = (user) => {
 
 const canManageMockupApproval = (user) => canManageBilling(user);
 const canManageSampleApproval = (user) => canManageBilling(user);
-const canValidateClientMockup = (user) => {
+const isGraphicsDepartmentUser = (user) => {
   if (!user) return false;
-  if (user.role === "admin") return true;
   const departments = Array.isArray(user.department)
     ? user.department
     : user.department
       ? [user.department]
       : [];
-  return departments.includes("Graphics/Design");
+  return departments
+    .map(normalizeDepartmentValue)
+    .includes("graphics");
+};
+
+const canValidateClientMockup = (user) => {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return isGraphicsDepartmentUser(user);
 };
 
 const canEditOrderNumber = (user) => canManageBilling(user);
@@ -741,6 +748,16 @@ const getQuoteDepartmentEngagementGuard = ({
 
   if (!matchedDepartmentTokens.length) return null;
 
+  const isGraphicsLeadException =
+    isUserAssignedProjectLead(user, project) &&
+    isGraphicsDepartmentUser(user) &&
+    matchedDepartmentTokens.some(
+      (departmentToken) => normalizeDepartmentValue(departmentToken) === "graphics",
+    );
+  if (isGraphicsLeadException) {
+    return null;
+  }
+
   const acknowledgedDepartmentTokens = getAcknowledgedDepartmentTokens(project);
   if (
     matchedDepartmentTokens.some((departmentToken) =>
@@ -829,10 +846,18 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
   }
   const engagedActionTypes = new Set(["acknowledge", "status", "mockup"]);
   const isEngagedPortalMutation = isEngagedPortalRequest(req);
+  const requestedStatus = toText(req.body?.status);
+  const isGraphicsLeadOwnMockupAction =
+    isEngagedPortalMutation &&
+    isUserAssignedProjectLead(req.user, project) &&
+    isGraphicsDepartmentUser(req.user) &&
+    (action === "mockup" ||
+      (action === "status" && requestedStatus === "Mockup Completed"));
   if (
     isUserAssignedProjectLead(req.user, project) &&
     isEngagedPortalMutation &&
-    engagedActionTypes.has(action)
+    engagedActionTypes.has(action) &&
+    !isGraphicsLeadOwnMockupAction
   ) {
     res.status(403).json({
       message:

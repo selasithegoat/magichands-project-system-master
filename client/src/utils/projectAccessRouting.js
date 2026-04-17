@@ -168,17 +168,6 @@ export const resolveProjectNavigation = ({
     allowGenericEngaged,
   });
 
-  const detailDestination = destinations.find(
-    (destination) => destination.key === "detail",
-  );
-  if (detailDestination) {
-    return {
-      mode: "single",
-      option: detailDestination,
-      options: destinations,
-    };
-  }
-
   if (destinations.length === 1) {
     return {
       mode: "single",
