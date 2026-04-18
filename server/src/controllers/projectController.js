@@ -14760,14 +14760,13 @@ const resetProjectMockupDecision = async (req, res) => {
 
 // @desc    Get all clients with their projects
 // @route   GET /api/projects/clients
-// @access  Private (Admin only)
+// @access  Private (Admin or Front Desk)
 const getClients = async (req, res) => {
   try {
-    // Only admins can access this endpoint
-    if (req.user.role !== "admin") {
+    if (!canManageBilling(req.user)) {
       return res
         .status(403)
-        .json({ message: "Not authorized. Only admins can view clients." });
+        .json({ message: "Not authorized. Only Admin and Front Desk can view clients." });
     }
 
     // Aggregate clients from all projects

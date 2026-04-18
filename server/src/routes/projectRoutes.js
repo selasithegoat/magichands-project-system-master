@@ -86,9 +86,9 @@ const enforceProjectNotOnHold = requireProjectNotOnHold({ paramName: "id" });
 const maxFileSizeMb = upload.maxFileSizeMb;
 const projectUploadFields = [
   { name: "sampleImage", maxCount: 1 },
-  { name: "clientMockup", maxCount: 10 },
-  { name: "approvedMockup", maxCount: 10 },
-  { name: "attachments", maxCount: 10 },
+  { name: "clientMockup" },
+  { name: "approvedMockup" },
+  { name: "attachments" },
 ];
 
 const handleProjectUploads = (req, res, next) => {
@@ -98,6 +98,11 @@ const handleProjectUploads = (req, res, next) => {
         return res
           .status(400)
           .json({ message: `File too large. Max limit is ${maxFileSizeMb}MB.` });
+      }
+      if (err.code === "LIMIT_UNEXPECTED_FILE" && err.field === "sampleImage") {
+        return res.status(400).json({
+          message: "Only one sample image can be uploaded per project.",
+        });
       }
       return res.status(400).json({ message: err.message });
     }
