@@ -30,7 +30,13 @@ import ProgressBar from "../../components/ui/ProgressBar";
 
 const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   // Use formData.departments (default to [])
-  const selectedDepts = formData.departments || [];
+  const selectedDepts = Array.from(
+    new Set(
+      (formData.departments || []).map((dept) =>
+        dept === "outside-production" ? "local-outsourcing" : dept,
+      ),
+    ),
+  ).filter(Boolean);
   const [searchTerm, setSearchTerm] = useState("");
 
   const allDepartments = [
@@ -66,8 +72,8 @@ const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
     { id: "fabrication", label: "Fabrication", icon: <HammerIcon /> },
     { id: "signage", label: "Signage", icon: <SignIcon /> },
     {
-      id: "outside-production",
-      label: "Outside Production",
+      id: "local-outsourcing",
+      label: "Local Outsourcing",
       icon: <FactoryIcon />,
     },
   ];

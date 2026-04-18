@@ -3,6 +3,7 @@ import {
   GRAPHICS_SUB_DEPARTMENTS,
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
+  normalizeDepartmentId,
 } from "../constants/departments";
 
 export const toEntityId = (value) => {
@@ -25,7 +26,7 @@ export const isFrontDeskUser = (user) =>
   toArray(user?.department).includes("Front Desk");
 
 export const resolveEngagedSubDepartments = (user) => {
-  const userDepts = toArray(user?.department);
+  const userDepts = toArray(user?.department).map(normalizeDepartmentId);
   const hasProductionParent = userDepts.includes("Production");
   const hasGraphicsParent = userDepts.includes("Graphics/Design");
   const hasStoresParent = userDepts.includes("Stores");
@@ -65,7 +66,9 @@ export const hasEngagedDepartmentOverlap = (user, projectDepartments) => {
   const engagedSubDepartments = resolveEngagedSubDepartments(user);
   if (engagedSubDepartments.length === 0) return false;
   const departmentSet = new Set(engagedSubDepartments);
-  return projectDepartments.some((dept) => departmentSet.has(dept));
+  return projectDepartments.some((dept) =>
+    departmentSet.has(normalizeDepartmentId(dept)),
+  );
 };
 
 const normalizeSearchSuffix = (value) => {

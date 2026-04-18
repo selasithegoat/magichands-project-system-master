@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { PRODUCTION_SUB_DEPARTMENTS } from "../../constants/departments";
+import {
+  PRODUCTION_SUB_DEPARTMENTS,
+  normalizeDepartmentId,
+} from "../../constants/departments";
 import "./NotificationModal.css";
 import XIcon from "../icons/XIcon";
 import ClipboardListIcon from "../icons/ClipboardListIcon";
@@ -110,9 +113,9 @@ const NotificationModal = ({
 
   const userId = toEntityId(currentUser?._id || currentUser?.id);
   const departments = Array.isArray(currentUser?.department)
-    ? currentUser.department
+    ? currentUser.department.map(normalizeDepartmentId)
     : currentUser?.department
-      ? [currentUser.department]
+      ? [normalizeDepartmentId(currentUser.department)]
       : [];
   const isFrontDesk = departments.includes("Front Desk");
   const productionSubDepts = departments.filter((dept) =>

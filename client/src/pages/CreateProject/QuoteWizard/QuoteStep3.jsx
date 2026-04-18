@@ -28,7 +28,13 @@ import {
 } from "../../../components/icons/DeptIcons3";
 
 const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
-  const selectedDepts = formData.departments || [];
+  const selectedDepts = Array.from(
+    new Set(
+      (formData.departments || []).map((dept) =>
+        dept === "outside-production" ? "local-outsourcing" : dept,
+      ),
+    ),
+  ).filter(Boolean);
   const [searchTerm, setSearchTerm] = useState("");
 
   const allDepartments = [
@@ -63,11 +69,6 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
     { id: "woodme", label: "Woodme", icon: <WoodIcon /> },
     { id: "fabrication", label: "Fabrication", icon: <HammerIcon /> },
     { id: "signage", label: "Signage", icon: <SignIcon /> },
-    {
-      id: "outside-production",
-      label: "Outside Production",
-      icon: <FactoryIcon />,
-    },
     // [NEW] Quote specific departments
     {
       id: "in-house-production",

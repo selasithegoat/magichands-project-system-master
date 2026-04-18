@@ -55,7 +55,7 @@ const PRODUCTION_SUB_DEPARTMENTS = new Set([
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
+  "local-outsourcing",
 ]);
 const GRAPHICS_SUB_DEPARTMENTS = new Set(["graphics"]);
 const STORES_SUB_DEPARTMENTS = new Set(["stock", "packaging"]);
@@ -92,10 +92,14 @@ const toText = (value) => String(value || "").trim();
 const toDepartmentArray = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
 
-const normalizeDepartmentValue = (value) =>
-  String(value || "")
+const normalizeDepartmentValue = (value) => {
+  const normalized = String(value || "")
     .trim()
     .toLowerCase();
+  return normalized.replace(/\s+/g, "-") === "outside-production"
+    ? "local-outsourcing"
+    : normalized;
+};
 
 const isFrontDeskUser = (user) =>
   toDepartmentArray(user?.department)

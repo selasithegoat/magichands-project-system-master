@@ -56,7 +56,7 @@ const PRODUCTION_DEPARTMENT_TOKENS = new Set([
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
+  "local-outsourcing",
 ]);
 const GRAPHICS_DEPARTMENT_TOKENS = new Set([
   "graphics/design",
@@ -110,9 +110,15 @@ const normalizeObjectId = (value) => {
 
 const normalizeDepartmentToken = (value) => {
   if (value && typeof value === "object") {
-    return String(value.value || value.label || "").trim().toLowerCase();
+    const normalized = String(value.value || value.label || "").trim().toLowerCase();
+    return normalized.replace(/\s+/g, "-") === "outside-production"
+      ? "local-outsourcing"
+      : normalized;
   }
-  return String(value || "").trim().toLowerCase();
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized.replace(/\s+/g, "-") === "outside-production"
+    ? "local-outsourcing"
+    : normalized;
 };
 
 const canonicalizeDepartmentToken = (value) => {

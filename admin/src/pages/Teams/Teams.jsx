@@ -6,6 +6,13 @@ import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationMo
 import { UserIcon, LockIcon, PencilIcon, TrashIcon } from "../../icons/Icons";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
+const normalizeDepartmentId = (value) =>
+  ["outside-production", "outside production"].includes(
+    String(value || "").trim().toLowerCase(),
+  )
+    ? "local-outsourcing"
+    : value;
+
 const Teams = ({ user }) => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +75,7 @@ const Teams = ({ user }) => {
     { id: "woodme", label: "Woodme" },
     { id: "fabrication", label: "Fabrication" },
     { id: "signage", label: "Signage" },
-    { id: "outside-production", label: "Outside Production" },
+    { id: "local-outsourcing", label: "Local Outsourcing" },
   ];
   const productionSubDeptIds = productionSubDepartments.map((d) => d.id);
   const productionSubDeptLabelMap = new Map(
@@ -111,7 +118,9 @@ const Teams = ({ user }) => {
   };
 
   const normalizeDepartments = (depts = []) => {
-    const unique = Array.from(new Set(depts.filter(Boolean)));
+    const unique = Array.from(
+      new Set(depts.filter(Boolean).map(normalizeDepartmentId)),
+    );
     const hasProdSub = unique.some((d) => productionSubDeptIds.includes(d));
     const hasProduction = unique.includes("Production") || hasProdSub;
 
@@ -159,7 +168,8 @@ const Teams = ({ user }) => {
   };
 
   const getDepartmentLabel = (dept) =>
-    productionSubDeptLabelMap.get(dept) || dept;
+    productionSubDeptLabelMap.get(normalizeDepartmentId(dept)) ||
+    normalizeDepartmentId(dept);
 
   const selectedProductionSubDepts = formData.department.filter((d) =>
     productionSubDeptIds.includes(d),

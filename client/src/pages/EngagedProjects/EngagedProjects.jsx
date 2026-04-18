@@ -6,6 +6,7 @@ import {
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
   getDepartmentLabel,
+  normalizeDepartmentId,
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
@@ -205,6 +206,15 @@ const normalizeObjectId = (value) => {
   return String(value);
 };
 
+const normalizeDepartmentList = (value) =>
+  Array.from(
+    new Set(
+      (Array.isArray(value) ? value : value ? [value] : [])
+        .map(normalizeDepartmentId)
+        .filter(Boolean),
+    ),
+  );
+
 const getQuoteRequirementState = (project = {}, key = "") => {
   const quoteDetails = project?.quoteDetails || {};
   const checklistRequired = Boolean(quoteDetails?.checklist?.[key]);
@@ -325,11 +335,7 @@ const EngagedProjects = ({ user }) => {
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
 
-  const userDepartments = Array.isArray(user?.department)
-    ? user.department
-    : user?.department
-      ? [user.department]
-      : [];
+  const userDepartments = normalizeDepartmentList(user?.department);
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasProductionParent = userDepartments.includes("Production");
   const hasStoresParent = userDepartments.includes("Stores");
@@ -448,7 +454,9 @@ const EngagedProjects = ({ user }) => {
         const engaged = data.filter((project) => {
           const hasDeptMatch =
             Array.isArray(project?.departments) &&
-            project.departments.some((dept) => engagedSubDepts.includes(dept));
+            project.departments.some((dept) =>
+              engagedSubDepts.includes(normalizeDepartmentId(dept)),
+            );
           if (hasDeptMatch) return true;
           if (
             !hasPackagingRole ||
@@ -511,8 +519,8 @@ const EngagedProjects = ({ user }) => {
 
   const filteredHistoryProjects = useMemo(() => {
     return historyProjects.filter((project) => {
-      const engagedDeptsForUser = (project.departments || []).filter((dept) =>
-        engagedSubDepts.includes(dept),
+      const engagedDeptsForUser = normalizeDepartmentList(project.departments).filter(
+        (dept) => engagedSubDepts.includes(dept),
       );
       if (engagedDeptsForUser.length === 0) return false;
 
@@ -565,7 +573,7 @@ const EngagedProjects = ({ user }) => {
   };
 
   const projectHasDept = (project, dept) => {
-    const projDepts = project.departments || [];
+    const projDepts = normalizeDepartmentList(project.departments);
     if (dept === "Graphics")
       return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
     if (dept === "Production")
@@ -1608,7 +1616,9 @@ const EngagedProjects = ({ user }) => {
                           )
                         : project.status;
                     const revisionCount = getRevisionCount(project);
-                    const engagedDeptsForUser = (project.departments || [])
+                    const engagedDeptsForUser = normalizeDepartmentList(
+                      project.departments,
+                    )
                       .filter((dept) => engagedSubDepts.includes(dept))
                       .map((dept) => getDepartmentLabel(dept));
                     const engagedDeptLabel =
@@ -1706,7 +1716,7 @@ const EngagedProjects = ({ user }) => {
             <div className="engaged-depts-section">
               <label>Engaged Departments</label>
               <div className="dept-chips">
-                {selectedProject.departments
+                {normalizeDepartmentList(selectedProject.departments)
                   .filter((dept) => engagedSubDepts.includes(dept))
                   .map((dept) => (
                     <span
@@ -1723,7 +1733,7 @@ const EngagedProjects = ({ user }) => {
 
                         setUpdateForm({
                           ...updateForm,
-                          department: dept,
+                          department: normalizeDepartmentId(dept),
                           category,
                         });
                       }}

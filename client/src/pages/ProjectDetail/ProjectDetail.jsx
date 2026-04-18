@@ -6,7 +6,11 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { DEPARTMENTS, getDepartmentLabel } from "../../constants/departments";
+import {
+  DEPARTMENTS,
+  getDepartmentLabel,
+  normalizeDepartmentId,
+} from "../../constants/departments";
 import "./ProjectDetail.css";
 import UserAvatar from "../../components/ui/UserAvatar";
 import BackArrow from "../../components/icons/BackArrow";
@@ -2305,15 +2309,24 @@ const DepartmentsCard = ({
 
   useEffect(() => {
     if (showModal) {
-      setSelectedDepts(departments);
+      setSelectedDepts(
+        Array.from(
+          new Set(
+            (Array.isArray(departments) ? departments : [])
+              .map(normalizeDepartmentId)
+              .filter(Boolean),
+          ),
+        ),
+      );
     }
   }, [showModal, departments]);
 
   const toggleDept = (deptId) => {
-    if (selectedDepts.includes(deptId)) {
-      setSelectedDepts(selectedDepts.filter((d) => d !== deptId));
+    const normalizedDeptId = normalizeDepartmentId(deptId);
+    if (selectedDepts.includes(normalizedDeptId)) {
+      setSelectedDepts(selectedDepts.filter((d) => d !== normalizedDeptId));
     } else {
-      setSelectedDepts([...selectedDepts, deptId]);
+      setSelectedDepts([...selectedDepts, normalizedDeptId]);
     }
   };
 

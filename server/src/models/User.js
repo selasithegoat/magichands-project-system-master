@@ -59,6 +59,7 @@ const UserSchema = new mongoose.Schema({
       "woodme",
       "fabrication",
       "signage",
+      "local-outsourcing",
       "outside-production",
     ],
     default: [],

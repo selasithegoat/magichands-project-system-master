@@ -1,10 +1,10 @@
 import {
   DEPARTMENTS,
   PRODUCTION_SUB_DEPARTMENTS,
+  normalizeDepartmentId as normalizeKnownDepartmentId,
 } from "../constants/departments";
 
 const EXTRA_PRODUCTION_DEPARTMENTS = [
-  "outside-production",
   "in-house-production",
   "local-outsourcing",
 ];
@@ -25,7 +25,7 @@ const ENGAGEMENT_FIELD_KEYS = [
 
 const PRODUCTION_CHECKLIST_MAP = {
   inHouse: "in-house-production",
-  outside: "outside-production",
+  outside: "local-outsourcing",
   localOutsourcing: "local-outsourcing",
   overseasOutsourcing: "overseas",
 };
@@ -113,7 +113,7 @@ const buildDepartmentLookup = () => {
   lookup.set("business cards", "business-cards");
   lookup.set("pvc id", "pvc-id");
   lookup.set("pvc id cards", "pvc-id");
-  lookup.set("outside production", "outside-production");
+  lookup.set("outside production", "local-outsourcing");
   lookup.set("in house production", "in-house-production");
   lookup.set("local outsourcing", "local-outsourcing");
   lookup.set("production", "in-house-production");
@@ -141,15 +141,18 @@ const normalizeDepartmentId = (value) => {
   if (!key) return "";
 
   if (DEPARTMENT_LOOKUP.has(key)) {
-    return DEPARTMENT_LOOKUP.get(key);
+    return normalizeKnownDepartmentId(DEPARTMENT_LOOKUP.get(key));
   }
 
   const hyphenKey = key.replace(/\s+/g, "-");
   if (DEPARTMENT_LOOKUP.has(hyphenKey)) {
-    return DEPARTMENT_LOOKUP.get(hyphenKey);
+    return normalizeKnownDepartmentId(DEPARTMENT_LOOKUP.get(hyphenKey));
   }
 
-  return "";
+  const normalizedId = normalizeKnownDepartmentId(hyphenKey);
+  return DEPARTMENT_LOOKUP.has(normalizeLookupKey(normalizedId))
+    ? normalizedId
+    : "";
 };
 
 const normalizeSuggestionFacet = (value) => {

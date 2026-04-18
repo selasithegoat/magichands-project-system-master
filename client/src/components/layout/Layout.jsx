@@ -21,6 +21,7 @@ import {
   GRAPHICS_SUB_DEPARTMENTS,
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
+  normalizeDepartmentId,
 } from "../../constants/departments";
 import {
   initNotificationSound,
@@ -707,9 +708,9 @@ const Layout = ({
   const avatarUrl = user?.avatarUrl || "";
 
   const userDepartments = Array.isArray(user?.department)
-    ? user.department
+    ? user.department.map(normalizeDepartmentId)
     : user?.department
-      ? [user.department]
+      ? [normalizeDepartmentId(user.department)]
       : [];
 
   const hasProduction = userDepartments.some((d) =>

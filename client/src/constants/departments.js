@@ -1,3 +1,8 @@
+const LEGACY_DEPARTMENT_ID_ALIASES = {
+  "outside-production": "local-outsourcing",
+  "outside production": "local-outsourcing",
+};
+
 export const DEPARTMENTS = [
   { id: "graphics", label: "Graphics" },
   { id: "stock", label: "Stock" },
@@ -22,7 +27,7 @@ export const DEPARTMENTS = [
   { id: "woodme", label: "Woodme" },
   { id: "fabrication", label: "Fabrication" },
   { id: "signage", label: "Signage" },
-  { id: "outside-production", label: "Outside Production" },
+  { id: "local-outsourcing", label: "Local Outsourcing" },
 ];
 
 export const PRODUCTION_SUB_DEPARTMENTS = [
@@ -45,7 +50,7 @@ export const PRODUCTION_SUB_DEPARTMENTS = [
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
+  "local-outsourcing",
 ];
 
 export const GRAPHICS_SUB_DEPARTMENTS = ["graphics"];
@@ -59,7 +64,33 @@ export const ALL_ENGAGED_DEPARTMENTS = [
   "Photography",
 ];
 
+const DEPARTMENT_ID_LOOKUP = new Map(
+  DEPARTMENTS.flatMap((dept) => [
+    [String(dept.id || "").trim().toLowerCase(), dept.id],
+    [String(dept.label || "").trim().toLowerCase(), dept.id],
+  ]),
+);
+
+export const normalizeDepartmentId = (value) => {
+  if (value === null || value === undefined) return "";
+
+  const raw =
+    typeof value === "object"
+      ? value.id || value.value || value.label || value.name || ""
+      : value;
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+
+  const normalized = trimmed.toLowerCase().replace(/_/g, "-");
+  if (LEGACY_DEPARTMENT_ID_ALIASES[normalized]) {
+    return LEGACY_DEPARTMENT_ID_ALIASES[normalized];
+  }
+
+  return DEPARTMENT_ID_LOOKUP.get(normalized) || trimmed;
+};
+
 export const getDepartmentLabel = (id) => {
-  const dept = DEPARTMENTS.find((d) => d.id === id);
+  const normalizedId = normalizeDepartmentId(id);
+  const dept = DEPARTMENTS.find((d) => d.id === normalizedId);
   return dept ? dept.label : id;
 };

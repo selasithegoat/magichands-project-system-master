@@ -42,11 +42,17 @@ const toDepartmentArray = (value) => {
 const normalizeDepartmentValue = (value) => {
   if (value && typeof value === "object") {
     const optionValue = value.value || value.label || "";
-    return String(optionValue).trim().toLowerCase();
+    const normalized = String(optionValue).trim().toLowerCase();
+    return normalized.replace(/\s+/g, "-") === "outside-production"
+      ? "local-outsourcing"
+      : normalized;
   }
-  return String(value || "")
+  const normalized = String(value || "")
     .trim()
     .toLowerCase();
+  return normalized.replace(/\s+/g, "-") === "outside-production"
+    ? "local-outsourcing"
+    : normalized;
 };
 
 const PRODUCTION_DEPARTMENT_TOKENS = new Set([
@@ -70,7 +76,7 @@ const PRODUCTION_DEPARTMENT_TOKENS = new Set([
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
+  "local-outsourcing",
 ]);
 const GRAPHICS_DEPARTMENT_TOKENS = new Set([
   "graphics/design",

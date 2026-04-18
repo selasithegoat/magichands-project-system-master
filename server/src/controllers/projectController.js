@@ -72,7 +72,7 @@ const ENGAGED_SUB_DEPARTMENTS = new Set([
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
+  "local-outsourcing",
 ]);
 
 const PRODUCTION_DEPARTMENTS = new Set([
@@ -96,7 +96,7 @@ const PRODUCTION_DEPARTMENTS = new Set([
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
+  "local-outsourcing",
 ]);
 
 const PAYMENT_TYPES = new Set([
@@ -565,11 +565,17 @@ const toDepartmentArray = (value) => {
 const normalizeDepartmentValue = (value) => {
   if (value && typeof value === "object") {
     const optionValue = value.value || value.label || "";
-    return String(optionValue).trim().toLowerCase();
+    const normalized = String(optionValue).trim().toLowerCase();
+    return normalized.replace(/\s+/g, "-") === "outside-production"
+      ? "local-outsourcing"
+      : normalized;
   }
-  return String(value || "")
+  const normalized = String(value || "")
     .trim()
     .toLowerCase();
+  return normalized.replace(/\s+/g, "-") === "outside-production"
+    ? "local-outsourcing"
+    : normalized;
 };
 
 const PRODUCTION_SUB_DEPARTMENT_TOKENS = new Set(
@@ -600,6 +606,15 @@ const canonicalizeDepartment = (value) => {
   if (PHOTOGRAPHY_DEPARTMENT_TOKENS.has(token)) return "photography";
   return token;
 };
+
+const normalizeProjectDepartmentSelections = (value) =>
+  Array.from(
+    new Set(
+      toDepartmentArray(value)
+        .map(normalizeDepartmentValue)
+        .filter(Boolean),
+    ),
+  );
 
 const hasDepartmentOverlap = (userDepartments, projectDepartments) => {
   const userCanonical = new Set(
@@ -1793,7 +1808,6 @@ const PRODUCTION_SUGGESTION_DEPARTMENTS = [
   "woodme",
   "fabrication",
   "signage",
-  "outside-production",
   "in-house-production",
   "local-outsourcing",
 ];
@@ -1823,7 +1837,7 @@ const PRODUCTION_DEPARTMENT_LABELS = {
   woodme: "Woodme",
   fabrication: "Fabrication",
   signage: "Signage",
-  "outside-production": "Outside Production",
+  "outside-production": "Local Outsourcing",
   "in-house-production": "In-house Production",
   "local-outsourcing": "Local Outsourcing",
 };
@@ -1844,7 +1858,7 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
   "pvc id": "pvc-id",
   "pvc id cards": "pvc-id",
   "business cards": "business-cards",
-  "outside production": "outside-production",
+  "outside production": "local-outsourcing",
   "in house production": "in-house-production",
   "local outsourcing": "local-outsourcing",
 };
@@ -4127,7 +4141,7 @@ const buildProcessConstraintTags = (context = {}, itemInsights = []) => {
 
   if (
     context.productionDepartments.some((dept) =>
-      ["outside-production", "local-outsourcing", "overseas"].includes(dept),
+      ["local-outsourcing", "overseas"].includes(dept),
     )
   ) {
     tags.add("outsourced");
@@ -4920,20 +4934,6 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Define export-grade packaging specs and confirm them with supplier QA.",
     },
   ],
-  "outside-production": [
-    {
-      description:
-        "Third-party process quality may not match internal standards.",
-      preventive:
-        "Issue clear QC acceptance criteria and require approval samples before full run.",
-    },
-    {
-      description:
-        "External lead-time slippage can delay downstream production stages.",
-      preventive:
-        "Set milestone checkpoints with contingency turnaround options.",
-    },
-  ],
   "in-house-production": [
     {
       description:
@@ -4949,6 +4949,18 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
     },
   ],
   "local-outsourcing": [
+    {
+      description:
+        "Third-party process quality may not match internal standards.",
+      preventive:
+        "Issue clear QC acceptance criteria and require approval samples before full run.",
+    },
+    {
+      description:
+        "External lead-time slippage can delay downstream production stages.",
+      preventive:
+        "Set milestone checkpoints with contingency turnaround options.",
+    },
     {
       description:
         "Local outsourcing quality variance may affect output consistency.",
@@ -6978,7 +6990,7 @@ const createProject = async (req, res) => {
         sampleImageNote: resolvedSampleImageNote, // [NEW]
         attachments: normalizedExistingAttachments, // [NEW]
       },
-      departments: departments || [],
+      departments: normalizeProjectDepartmentSelections(departments),
       items: finalItems || [], // [NEW] Use parsed items
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
@@ -7853,13 +7865,13 @@ const updateProjectDepartments = async (req, res) => {
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
-    const oldDepartments = project.departments || [];
-    const newDepartments = departments || [];
+    const oldDepartments = normalizeProjectDepartmentSelections(project.departments);
+    const newDepartments = normalizeProjectDepartmentSelections(departments);
 
     // Reset acknowledgements for removed departments
     // If a department is no longer in the engaged list, remove its acknowledgement
     project.acknowledgements = (project.acknowledgements || []).filter((ack) =>
-      newDepartments.includes(ack.department),
+      newDepartments.includes(normalizeDepartmentValue(ack?.department)),
     );
 
     // Identify newly added departments
@@ -7878,7 +7890,7 @@ const updateProjectDepartments = async (req, res) => {
       req.user.id,
       "departments_update",
       `Updated engaged departments`,
-      { departments },
+      { departments: newDepartments },
     );
 
     // Notify newly added departments
@@ -14046,7 +14058,7 @@ const updateProject = async (req, res) => {
 
     // Update Arrays and their timestamps
     if (departments) {
-      project.departments = departments;
+      project.departments = normalizeProjectDepartmentSelections(departments);
       project.sectionUpdates.departments = new Date();
     }
     if (items) {
@@ -15151,7 +15163,7 @@ const SCOPE_APPROVAL_READY_STATUSES = new Set([
 const acknowledgeProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { department } = req.body;
+    const department = normalizeDepartmentValue(req.body?.department);
 
     if (!department) {
       return res.status(400).json({ message: "Department is required" });
@@ -15198,7 +15210,7 @@ const acknowledgeProject = async (req, res) => {
 
     // Check if department has already acknowledged
     const existingIndex = (project.acknowledgements || []).findIndex(
-      (a) => a.department === department,
+      (a) => normalizeDepartmentValue(a?.department) === department,
     );
 
     if (existingIndex > -1) {
@@ -15280,7 +15292,7 @@ const acknowledgeProject = async (req, res) => {
 const undoAcknowledgeProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { department } = req.body;
+    const department = normalizeDepartmentValue(req.body?.department);
 
     if (!department) {
       return res.status(400).json({ message: "Department is required" });
@@ -15298,7 +15310,7 @@ const undoAcknowledgeProject = async (req, res) => {
     }
 
     const ackIndex = (project.acknowledgements || []).findIndex(
-      (ack) => ack.department === department,
+      (ack) => normalizeDepartmentValue(ack?.department) === department,
     );
 
     if (ackIndex === -1) {

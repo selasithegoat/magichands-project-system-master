@@ -6,6 +6,7 @@ import {
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
   getDepartmentLabel,
+  normalizeDepartmentId,
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
@@ -231,8 +232,16 @@ const getNextBatchStatus = (status) => {
 };
 const normalizeBatchStatus = (status) =>
   String(status || "").trim().toLowerCase();
+const normalizeDepartmentList = (value) =>
+  Array.from(
+    new Set(
+      (Array.isArray(value) ? value : value ? [value] : [])
+        .map(normalizeDepartmentId)
+        .filter(Boolean),
+    ),
+  );
 const normalizeProductionSubDepartmentToken = (value) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = normalizeDepartmentId(value);
   return PRODUCTION_SUB_DEPARTMENTS.includes(normalized) ? normalized : "";
 };
 
@@ -507,9 +516,10 @@ const isImageMockupAsset = (fileUrl = "", fileType = "") => {
 };
 
 const getCategoryForDepartment = (dept) => {
-  if (GRAPHICS_SUB_DEPARTMENTS.includes(dept)) return "Graphics";
-  if (STORES_SUB_DEPARTMENTS.includes(dept)) return "Stores";
-  if (PHOTOGRAPHY_SUB_DEPARTMENTS.includes(dept)) return "Photography";
+  const normalizedDept = normalizeDepartmentId(dept);
+  if (GRAPHICS_SUB_DEPARTMENTS.includes(normalizedDept)) return "Graphics";
+  if (STORES_SUB_DEPARTMENTS.includes(normalizedDept)) return "Stores";
+  if (PHOTOGRAPHY_SUB_DEPARTMENTS.includes(normalizedDept)) return "Photography";
   return "Production";
 };
 
@@ -588,11 +598,7 @@ const EngagedProjectActions = ({ user }) => {
   const [batchPackagingSubmitting, setBatchPackagingSubmitting] =
     useState(false);
 
-  const userDepartments = Array.isArray(user?.department)
-    ? user.department
-    : user?.department
-      ? [user.department]
-      : [];
+  const userDepartments = normalizeDepartmentList(user?.department);
   const hasProductionParent = userDepartments.includes("Production");
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");
@@ -661,7 +667,7 @@ const EngagedProjectActions = ({ user }) => {
 
   const projectEngagedSubDepts = useMemo(() => {
     if (!project) return [];
-    return (project.departments || []).filter((dept) =>
+    return normalizeDepartmentList(project.departments).filter((dept) =>
       engagedSubDepts.includes(dept),
     );
   }, [project, engagedSubDepts]);
@@ -669,7 +675,7 @@ const EngagedProjectActions = ({ user }) => {
     () =>
       Array.from(
         new Set(
-          (project?.departments || []).filter((dept) =>
+          normalizeDepartmentList(project?.departments).filter((dept) =>
             PRODUCTION_SUB_DEPARTMENTS.includes(dept),
           ),
         ),
@@ -687,9 +693,7 @@ const EngagedProjectActions = ({ user }) => {
     !isAdminUser && batchProductionSubDepartmentOptions.length > 0;
 
   const getQuoteActionDepartmentsForCurrentUser = (projectRecord) => {
-    const targetDepartments = Array.isArray(projectRecord?.departments)
-      ? projectRecord.departments
-      : [];
+    const targetDepartments = normalizeDepartmentList(projectRecord?.departments);
     return targetDepartments.filter((dept) => engagedSubDepts.includes(dept));
   };
 
@@ -709,22 +713,29 @@ const EngagedProjectActions = ({ user }) => {
     if (
       isLeadGraphicsMockupUser &&
       matchedDepartments.some((departmentName) =>
-        GRAPHICS_SUB_DEPARTMENTS.includes(departmentName),
+        GRAPHICS_SUB_DEPARTMENTS.includes(normalizeDepartmentId(departmentName)),
       )
     ) {
       return true;
     }
 
     const targetAcknowledged = new Set(
-      (projectRecord?.acknowledgements || []).map((ack) => ack.department),
+      (projectRecord?.acknowledgements || [])
+        .map((ack) => normalizeDepartmentId(ack?.department))
+        .filter(Boolean),
     );
     return matchedDepartments.some((departmentName) =>
-      targetAcknowledged.has(departmentName),
+      targetAcknowledged.has(normalizeDepartmentId(departmentName)),
     );
   };
 
   const acknowledgedDepts = useMemo(
-    () => new Set((project?.acknowledgements || []).map((ack) => ack.department)),
+    () =>
+      new Set(
+        (project?.acknowledgements || [])
+          .map((ack) => normalizeDepartmentId(ack?.department))
+          .filter(Boolean),
+      ),
     [project],
   );
   const acknowledgementsByDept = useMemo(() => {
@@ -734,7 +745,7 @@ const EngagedProjectActions = ({ user }) => {
     return new Map(
       entries
         .filter((ack) => ack && ack.department)
-        .map((ack) => [ack.department, ack]),
+        .map((ack) => [normalizeDepartmentId(ack.department), ack]),
     );
   }, [project]);
 
@@ -1347,7 +1358,9 @@ const EngagedProjectActions = ({ user }) => {
       const data = await res.json();
       const engaged = data.filter((item) => {
         if (!item.departments || item.departments.length === 0) return false;
-        return item.departments.some((dept) => engagedSubDepts.includes(dept));
+        return item.departments.some((dept) =>
+          engagedSubDepts.includes(normalizeDepartmentId(dept)),
+        );
       });
       const match = engaged.find((item) => item._id === id);
       if (!match) {
