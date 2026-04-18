@@ -598,7 +598,10 @@ const EngagedProjectActions = ({ user }) => {
   const [batchPackagingSubmitting, setBatchPackagingSubmitting] =
     useState(false);
 
-  const userDepartments = normalizeDepartmentList(user?.department);
+  const userDepartments = useMemo(
+    () => normalizeDepartmentList(user?.department),
+    [user?.department],
+  );
   const hasProductionParent = userDepartments.includes("Production");
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasStoresParent = userDepartments.includes("Stores");

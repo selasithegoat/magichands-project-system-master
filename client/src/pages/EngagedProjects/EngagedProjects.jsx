@@ -335,7 +335,10 @@ const EngagedProjects = ({ user }) => {
   const [mockupNote, setMockupNote] = useState("");
   const [mockupUploading, setMockupUploading] = useState(false);
 
-  const userDepartments = normalizeDepartmentList(user?.department);
+  const userDepartments = useMemo(
+    () => normalizeDepartmentList(user?.department),
+    [user?.department],
+  );
   const hasGraphicsParent = userDepartments.includes("Graphics/Design");
   const hasProductionParent = userDepartments.includes("Production");
   const hasStoresParent = userDepartments.includes("Stores");
