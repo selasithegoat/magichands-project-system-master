@@ -7,6 +7,7 @@ import DollarIcon from "../../components/icons/DollarIcon";
 import CheckIcon from "../../components/icons/CheckIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 
@@ -251,16 +252,12 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   return (
     <div className="step-container">
       {/* Toast Notification */}
-      {showToast.show && (
-        <div
-          className={`toast-message ${showToast.type} ${
-            isFadingOut ? "fading-out" : ""
-          }`}
-        >
-          {showToast.type === "success" ? <CheckIcon /> : null}
-          {showToast.message}
-        </div>
-      )}
+      <FloatingMessageToast
+        show={showToast.show}
+        message={showToast.message}
+        type={showToast.type}
+        fading={isFadingOut}
+      />
 
       {/* Header */}
       <div className="step-header">

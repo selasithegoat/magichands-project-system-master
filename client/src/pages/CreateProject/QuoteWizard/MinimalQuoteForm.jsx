@@ -10,6 +10,7 @@ import UploadIcon from "../../../components/icons/UploadIcon";
 import Input from "../../../components/ui/Input";
 import Select from "../../../components/ui/Select";
 import UserAvatar from "../../../components/ui/UserAvatar";
+import FloatingMessageToast from "../../../components/ui/FloatingMessageToast";
 import CalendarIcon from "../../../components/icons/CalendarIcon";
 import ClockIcon from "../../../components/icons/ClockIcon";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
@@ -560,15 +561,12 @@ const MinimalQuoteForm = () => {
 
   return (
     <div className="minimal-quote-container">
-      {showToast.show && (
-        <div
-          className={`toast-message ${showToast.type} ${
-            isToastFading ? "fading-out" : ""
-          }`}
-        >
-          {showToast.message}
-        </div>
-      )}
+      <FloatingMessageToast
+        show={showToast.show}
+        message={showToast.message}
+        type={showToast.type}
+        fading={isToastFading}
+      />
       <div className="page-header">
         <div className="page-header-brand">
           <img

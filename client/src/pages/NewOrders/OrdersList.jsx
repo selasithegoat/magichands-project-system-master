@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import usePersistedState from "../../hooks/usePersistedState";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import {
@@ -977,9 +978,11 @@ const OrdersList = ({ kpiFilter = "all" }) => {
 
   return (
     <div className="orders-management-section" style={{ marginTop: "3rem" }}>
-      {toast.show && (
-        <div className={`toast-message ${toast.type}`}>{toast.message}</div>
-      )}
+      <FloatingMessageToast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+      />
 
       <div className="orders-help-row">
         <ContextualHelpLink

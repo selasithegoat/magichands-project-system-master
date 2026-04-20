@@ -4,6 +4,7 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
+import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import {
   formatQuoteDecisionStatus,
   getQuoteDecisionState,
@@ -3280,9 +3281,11 @@ const OrderActions = () => {
 
   return (
     <div className="new-orders-container order-actions-page">
-      {toast.show && (
-        <div className={`toast-message ${toast.type}`}>{toast.message}</div>
-      )}
+      <FloatingMessageToast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+      />
       <ConfirmDialog
         isOpen={quoteCostResetConfirmOpen}
         title="Rework Cost?"

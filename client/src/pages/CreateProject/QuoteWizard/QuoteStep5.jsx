@@ -11,6 +11,7 @@ import UserAvatar from "../../../components/ui/UserAvatar";
 import Spinner from "../../../components/ui/Spinner";
 import ProgressBar from "../../../components/ui/ProgressBar";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
+import FloatingMessageToast from "../../../components/ui/FloatingMessageToast";
 import {
   normalizeReferenceAttachments,
   getReferenceFileName,
@@ -103,13 +104,12 @@ const QuoteStep5 = ({
 
   return (
     <div className="step-container">
-      {showToast.show && (
-        <div
-          className={`toast-message ${showToast.type} ${isToastFading ? "fading-out" : ""}`}
-        >
-          {showToast.message}
-        </div>
-      )}
+      <FloatingMessageToast
+        show={showToast.show}
+        message={showToast.message}
+        type={showToast.type}
+        fading={isToastFading}
+      />
       <div className="step-header">
         <button className="back-btn" onClick={onBack}>
           <BackArrow />

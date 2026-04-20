@@ -13,6 +13,7 @@ import PhoneIcon from "../../components/icons/PhoneIcon";
 import UserAvatar from "../../components/ui/UserAvatar";
 import Select from "../../components/ui/Select";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
+import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import {
   buildFileKey,
@@ -1127,13 +1128,12 @@ const NewOrders = ({ user = null }) => {
 
   return (
     <div className="new-orders-page">
-      {toast.show && (
-        <div
-          className={`toast-message ${toast.type} ${isToastFading ? "fading-out" : ""}`}
-        >
-          {toast.message}
-        </div>
-      )}
+      <FloatingMessageToast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        fading={isToastFading}
+      />
 
       <div className="page-header">
         <div className="page-header-brand">

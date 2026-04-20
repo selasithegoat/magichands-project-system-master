@@ -7,6 +7,7 @@ import FolderIcon from "../../components/icons/FolderIcon";
 import ClockIcon from "../../components/icons/ClockIcon";
 import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
+import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
   PASSWORD_STRENGTH_MESSAGE,
@@ -1033,20 +1034,12 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
               <h3>My Profile</h3>
             </div>
 
-            {message && (
-              <div
-                className={`toast-message ${message.type} ${
-                  isFadingOut ? "fading-out" : ""
-                }`}
-              >
-                {message.type === "success" ? (
-                  <CheckCircleIcon width="16" height="16" />
-                ) : (
-                  "!"
-                )}
-                {message.text}
-              </div>
-            )}
+            <FloatingMessageToast
+              show={Boolean(message)}
+              message={message?.text}
+              type={message?.type}
+              fading={isFadingOut}
+            />
 
             <div className="form-grid">
               <div className="form-group">
