@@ -6,6 +6,7 @@ const upload = require("../middleware/upload");
 const { sendEmailDetailed } = require("./emailService");
 
 const toText = (value) => (value === null || value === undefined ? "" : String(value).trim());
+const unique = (items = []) => Array.from(new Set((Array.isArray(items) ? items : []).filter(Boolean)));
 
 const escapeHtml = (value = "") =>
   toText(value)

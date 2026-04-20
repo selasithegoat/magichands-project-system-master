@@ -367,7 +367,14 @@ const sendEmailDetailed = async (
       rejected: Array.isArray(info?.rejected) ? info.rejected : [],
       response: toText(info?.response),
     };
-  } catch {
+  } catch (error) {
+    console.error("Email send failed:", {
+      code: toText(error?.code),
+      command: toText(error?.command),
+      responseCode: error?.responseCode || null,
+      response: toText(error?.response),
+      message: toText(error?.message) || "Unknown email error",
+    });
     return {
       sent: false,
       messageId: "",
