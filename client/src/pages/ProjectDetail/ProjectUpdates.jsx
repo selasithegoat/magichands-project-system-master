@@ -619,11 +619,13 @@ const ProjectUpdates = ({ project, currentUser }) => {
       />
 
       {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+        <div className="ui-toast-container">
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        </div>
       )}
     </div>
   );

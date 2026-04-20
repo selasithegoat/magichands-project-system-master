@@ -2908,11 +2908,13 @@ const EngagedProjectActions = ({ user }) => {
   return (
     <div className="engaged-projects-container engaged-actions-page">
       {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+        <div className="ui-toast-container">
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        </div>
       )}
 
       <header className="engaged-actions-topbar">
