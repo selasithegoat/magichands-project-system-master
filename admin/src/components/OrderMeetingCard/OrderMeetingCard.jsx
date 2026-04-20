@@ -273,7 +273,7 @@ const OrderMeetingCard = ({
     }
 
     const confirmMessage = nextSkipped
-      ? "Skip the departmental meeting requirement? This lets the project move past the meeting gate."
+      ? "Skip the departmental meeting requirement? Any project still waiting at the meeting stage will move to Pending Departmental Engagement."
       : "Restore the departmental meeting requirement for this order?";
     if (!window.confirm(confirmMessage)) return;
 
@@ -295,7 +295,9 @@ const OrderMeetingCard = ({
         onMeetingOverrideChange(updatedProject);
       }
       toast.success(
-        nextSkipped ? "Meeting requirement skipped." : "Meeting requirement restored.",
+        nextSkipped
+          ? "Meeting skipped. Pending meeting projects moved to Pending Departmental Engagement when applicable."
+          : "Meeting requirement restored.",
       );
     } catch (overrideError) {
       console.error("Meeting override failed:", overrideError);
@@ -503,7 +505,7 @@ const OrderMeetingCard = ({
                   ? "Update Meeting"
                   : "Schedule Meeting"}
             </button>
-            {allowSkip && isRequired && (
+            {allowSkip && (
               <button
                 type="button"
                 className={`order-meeting-btn ${meetingSkipped ? "ghost" : "warn"}`}

@@ -1670,6 +1670,15 @@ const ProjectDetails = ({ user }) => {
     });
   };
 
+  const refreshMeetingOrderState = (updatedProject) => {
+    if (!updatedProject) return;
+    applyProjectToState(updatedProject);
+    fetchOrderGroupProjects(
+      updatedProject?.orderRef?.orderNumber || updatedProject?.orderId,
+      updatedProject,
+    );
+  };
+
   const fetchOrderGroupProjects = async (orderNumber, fallbackProject = null) => {
     const normalizedOrder = String(orderNumber || "").trim();
     if (!normalizedOrder) {
@@ -4779,35 +4788,18 @@ const ProjectDetails = ({ user }) => {
 
         {/* Right Column */}
         <div className="side-info">
-          {isGroupedOrder ? (
-            <div className="detail-card group-meeting-notice">
-              <h3 className="card-title">Departmental Meeting</h3>
-              <p>
-                Meetings for grouped orders are scheduled on the Group Projects
-                page so they apply to every project in the order.
-              </p>
-              {orderNumber && (
-                <button
-                  type="button"
-                  className="group-meeting-btn"
-                  onClick={() =>
-                    navigate(`/projects/orders/${encodeURIComponent(orderNumber)}`)
-                  }
-                >
-                  Open Group Projects
-                </button>
-              )}
-            </div>
-          ) : (
-            <OrderMeetingCard
-              project={project}
-              orderGroupProjects={orderGroupProjects}
-              user={user}
-              onMeetingOverrideChange={(updatedProject) =>
-                applyProjectToState(updatedProject)
-              }
-            />
-          )}
+          <OrderMeetingCard
+            project={project}
+            orderNumber={orderNumber}
+            orderGroupProjects={orderGroupProjects}
+            user={user}
+            manageHint={
+              isGroupedOrder
+                ? "Meeting changes here apply to every project in this order group."
+                : ""
+            }
+            onMeetingOverrideChange={refreshMeetingOrderState}
+          />
           <ProjectRemindersCard project={project} user={user} />
           <div className="detail-card">
             <h3

@@ -1365,6 +1365,20 @@ const resolveMeetingGateState = async (project = {}) => {
   };
 };
 
+const advanceProjectsPastPendingMeeting = async (projects = []) => {
+  const targetIds = (Array.isArray(projects) ? projects : [])
+    .filter((entry) => entry?.status === "Pending Departmental Meeting")
+    .map((entry) => entry?._id)
+    .filter(Boolean);
+
+  if (targetIds.length === 0) return;
+
+  await Project.updateMany(
+    { _id: { $in: targetIds } },
+    { $set: { status: "Pending Departmental Engagement" } },
+  );
+};
+
 // @desc    Skip or restore departmental meeting requirement (Admin only)
 // @route   PATCH /api/projects/:id/meeting-override
 // @access  Private (Admin)
@@ -1413,6 +1427,12 @@ const updateMeetingOverride = async (req, res) => {
         },
       },
     );
+
+    if (skipped) {
+      await advanceProjectsPastPendingMeeting(
+        groupProjects.length ? groupProjects : [project],
+      );
+    }
 
     await logActivity(
       project._id,
@@ -16030,17 +16050,7 @@ const completeOrderMeeting = async (req, res) => {
       orderNumber,
       orderRefId: meeting.orderRef,
     });
-    const targetIds = projects
-      .filter((project) => project?.status === "Pending Departmental Meeting")
-      .map((project) => project?._id)
-      .filter(Boolean);
-
-    if (targetIds.length > 0) {
-      await Project.updateMany(
-        { _id: { $in: targetIds } },
-        { $set: { status: "Pending Departmental Engagement" } },
-      );
-    }
+    await advanceProjectsPastPendingMeeting(projects);
 
     return res.json(meeting);
   } catch (error) {
