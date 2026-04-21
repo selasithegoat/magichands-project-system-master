@@ -25,6 +25,7 @@ const {
   undoClientProjectMockupValidation,
   approveProjectMockup,
   rejectProjectMockup,
+  emailApprovedProjectMockups,
   getPendingSmsPrompts,
   getProjectSmsPrompts,
   createProjectSmsPrompt,
@@ -392,6 +393,12 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   resetProjectMockupDecision,
+);
+router.post(
+  "/:id/mockup/email-approved",
+  protect,
+  enforceProjectNotOnHold,
+  emailApprovedProjectMockups,
 );
 router.patch(
   "/:id/quote-requirements/:requirementKey/transition",

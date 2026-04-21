@@ -710,6 +710,10 @@ const OrderActions = () => {
   const [mockupDecisionResetInput, setMockupDecisionResetInput] = useState("");
   const [mockupDecisionResetSubmitting, setMockupDecisionResetSubmitting] =
     useState(false);
+  const [approvedMockupEmailConfirmOpen, setApprovedMockupEmailConfirmOpen] =
+    useState(false);
+  const [approvedMockupEmailSending, setApprovedMockupEmailSending] =
+    useState(false);
   const [sampleApprovalModal, setSampleApprovalModal] = useState(false);
   const [sampleApprovalInput, setSampleApprovalInput] = useState("");
   const [sampleApprovalSubmitting, setSampleApprovalSubmitting] = useState(false);
@@ -1098,6 +1102,14 @@ const OrderActions = () => {
   const mockupVersions = useMemo(
     () => getMockupVersions(project?.mockup || {}),
     [project?.mockup],
+  );
+  const approvedMockupVersions = useMemo(
+    () =>
+      mockupVersions.filter(
+        (version) =>
+          getMockupApprovalStatus(version?.clientApproval || {}) === "approved",
+      ),
+    [mockupVersions],
   );
   const latestMockupVersion = getLatestMockupVersion(project?.mockup || {});
   const latestMockupVersionLabel = latestMockupVersion
@@ -2693,6 +2705,68 @@ const OrderActions = () => {
     }
   };
 
+  const openApprovedMockupEmailConfirm = () => {
+    if (
+      !project?._id ||
+      !canManageMockupApproval ||
+      approvedMockupVersions.length === 0
+    ) {
+      return;
+    }
+    setApprovedMockupEmailConfirmOpen(true);
+  };
+
+  const closeApprovedMockupEmailConfirm = () => {
+    if (approvedMockupEmailSending) return;
+    setApprovedMockupEmailConfirmOpen(false);
+  };
+
+  const handleSendApprovedMockupsEmail = async () => {
+    if (
+      approvedMockupEmailSending ||
+      !project?._id ||
+      !canManageMockupApproval ||
+      approvedMockupVersions.length === 0
+    ) {
+      return;
+    }
+
+    setApprovedMockupEmailSending(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/mockup/email-approved`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+      if (res.ok) {
+        const result = await res.json().catch(() => ({}));
+        await fetchProjectUpdates(project._id);
+        showToast(
+          result.message ||
+            `${approvedMockupVersions.length} approved mockup${
+              approvedMockupVersions.length === 1 ? "" : "s"
+            } emailed successfully.`,
+          "success",
+        );
+        setApprovedMockupEmailConfirmOpen(false);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message || "Failed to send approved mockups email.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Approved mockup email error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setApprovedMockupEmailSending(false);
+    }
+  };
+
   const openSampleApprovalModal = () => {
     if (!project || !canManageBilling || !sampleRequirementEnabled) return;
     setSampleApprovalInput("");
@@ -3325,6 +3399,20 @@ const OrderActions = () => {
         type="primary"
         onConfirm={handleConfirmQuoteSampleProductionReset}
         onCancel={() => setQuoteSampleProductionResetConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={approvedMockupEmailConfirmOpen}
+        title="Email Approved Mockups?"
+        message={`Send ${approvedMockupVersions.length} approved mockup${
+          approvedMockupVersions.length === 1 ? "" : "s"
+        } for project ${project?.orderId || project?._id || "N/A"} to the final approval inbox? The email will include the project ID, lead name, and any notes saved on each approved mockup.`}
+        confirmText={
+          approvedMockupEmailSending ? "Sending..." : "Send Approved Mockups"
+        }
+        cancelText="Cancel"
+        type="primary"
+        onConfirm={handleSendApprovedMockupsEmail}
+        onCancel={closeApprovedMockupEmailConfirm}
       />
 
       <header className="order-actions-topbar">
@@ -4550,6 +4638,30 @@ const OrderActions = () => {
                     )}
                   </div>
                 )}
+
+                <div className="mockup-email-actions">
+                  <button
+                    type="button"
+                    className="action-btn feedback-btn"
+                    onClick={openApprovedMockupEmailConfirm}
+                    disabled={
+                      !canManageMockupApproval ||
+                      approvedMockupEmailSending ||
+                      approvedMockupVersions.length === 0
+                    }
+                  >
+                    {approvedMockupEmailSending
+                      ? "Sending Approved Mockups..."
+                      : "Email Approved Mockups"}
+                  </button>
+                  <p className="mockup-version-actions-note">
+                    {approvedMockupVersions.length > 0
+                      ? `${approvedMockupVersions.length} approved mockup${
+                          approvedMockupVersions.length === 1 ? "" : "s"
+                        } ready to email for this project.`
+                      : "No approved mockups are available to email for this project yet."}
+                  </p>
+                </div>
 
                 <div className="mockup-carousel-track">
                   {mockupCarouselVersions.map((version, index) => {

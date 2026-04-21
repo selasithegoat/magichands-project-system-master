@@ -40,6 +40,7 @@ const {
   sendProjectCreationEmail,
   sendProjectRevisionEmail,
 } = require("../utils/projectCreationEmailService");
+const { sendEmailDetailed } = require("../utils/emailService");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -1885,6 +1886,76 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
 
 const toSafeArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
+const FINAL_APPROVAL_EMAIL_RECIPIENT = toText(process.env.FINAL_APPROVAL_EMAIL);
+const MOCKUP_EMAIL_MAX_BYTES_RAW = Number.parseInt(
+  process.env.MOCKUP_EMAIL_MAX_BYTES,
+  10,
+);
+const MOCKUP_EMAIL_MAX_BYTES = Number.isFinite(MOCKUP_EMAIL_MAX_BYTES_RAW)
+  ? MOCKUP_EMAIL_MAX_BYTES_RAW
+  : NaN;
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const formatFileSize = (bytes) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(size) / Math.log(1024)),
+  );
+  const value = size / 1024 ** index;
+  const precision = value >= 10 || index === 0 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[index]}`;
+};
+
+const formatEmailDateTime = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const sanitizeEmailAttachmentName = (value, fallback = "attachment") => {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+};
+
+const buildApprovedMockupNotes = (version = {}) => {
+  const notes = [];
+  const mockupNote = toText(version?.note);
+  const graphicsNote = toText(version?.graphicsReview?.note);
+  const approvalNote = toText(version?.clientApproval?.note);
+
+  if (mockupNote) {
+    notes.push({ label: "Mockup note", value: mockupNote });
+  }
+  if (graphicsNote) {
+    notes.push({ label: "Graphics note", value: graphicsNote });
+  }
+  if (approvalNote) {
+    notes.push({ label: "Approval note", value: approvalNote });
+  }
+
+  return notes;
+};
 
 const getRequestBaseUrl = (req) => {
   const forwardedProto = Array.isArray(req?.headers?.["x-forwarded-proto"])
@@ -14778,6 +14849,317 @@ const resetProjectMockupDecision = async (req, res) => {
   }
 };
 
+// @desc    Email approved mockups for a project to the final approval inbox
+// @route   POST /api/projects/:id/mockup/email-approved
+// @access  Private (Front Desk or Admin)
+const emailApprovedProjectMockups = async (req, res) => {
+  try {
+    if (!canManageMockupApproval(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to email approved mockups.",
+      });
+    }
+
+    const project = await buildProjectResponseQuery(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
+
+    const normalizedVersions = getNormalizedMockupVersions(project);
+    const approvedVersions = normalizedVersions.filter(
+      (version) =>
+        getMockupApprovalStatus(version?.clientApproval || {}) === "approved",
+    );
+
+    if (!approvedVersions.length) {
+      return res.status(400).json({
+        message: "No approved mockups are available to email for this project.",
+      });
+    }
+
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    const leadName =
+      toUserDisplayName(project?.projectLeadId) ||
+      toText(project?.details?.lead) ||
+      "Unassigned";
+    const recipient = FINAL_APPROVAL_EMAIL_RECIPIENT;
+
+    if (!recipient) {
+      return res.status(500).json({
+        message:
+          "FINAL_APPROVAL_EMAIL is not configured. Please set it in server/.env before sending approved mockups.",
+      });
+    }
+
+    if (!Number.isFinite(MOCKUP_EMAIL_MAX_BYTES) || MOCKUP_EMAIL_MAX_BYTES <= 0) {
+      return res.status(500).json({
+        message:
+          "MOCKUP_EMAIL_MAX_BYTES is not configured correctly. Please set a positive byte value in server/.env before sending approved mockups.",
+      });
+    }
+
+    const attachmentEntries = [];
+    const missingFiles = [];
+    let totalAttachmentBytes = 0;
+
+    for (const version of approvedVersions) {
+      const versionNumber = Number.parseInt(version?.version, 10) || 1;
+      const versionLabel = buildMockupVersionLabel(versionNumber);
+      const sourceLabel =
+        String(version?.source || "").trim().toLowerCase() === "client"
+          ? "Client"
+          : "Graphics";
+      const fileName =
+        toText(version?.fileName) || `${projectRef}-approved-mockup-${versionLabel}`;
+      const filePath = upload.resolveUploadPathFromUrl(version?.fileUrl);
+
+      if (!filePath) {
+        missingFiles.push(`${sourceLabel} ${versionLabel} (${fileName})`);
+        continue;
+      }
+
+      let fileStats = null;
+      try {
+        fileStats = await fs.promises.stat(filePath);
+      } catch (error) {
+        missingFiles.push(`${sourceLabel} ${versionLabel} (${fileName})`);
+        continue;
+      }
+
+      if (!fileStats?.isFile()) {
+        missingFiles.push(`${sourceLabel} ${versionLabel} (${fileName})`);
+        continue;
+      }
+
+      const notes = buildApprovedMockupNotes(version);
+      const noteContent = notes.length
+        ? notes.map((entry) => `${entry.label}: ${entry.value}`).join("\n\n")
+        : "";
+
+      attachmentEntries.push({
+        versionNumber,
+        versionLabel,
+        sourceLabel,
+        fileName,
+        approvedAt: version?.clientApproval?.approvedAt || null,
+        notes,
+        filePath,
+        fileSize: fileStats.size,
+        noteAttachment:
+          noteContent
+            ? {
+                filename: `${sanitizeEmailAttachmentName(
+                  `${projectRef}-mockup-${versionLabel}-notes`,
+                  `mockup-${versionLabel}-notes`,
+                )}.txt`,
+                content: noteContent,
+                contentType: "text/plain; charset=utf-8",
+              }
+            : null,
+      });
+
+      totalAttachmentBytes += fileStats.size;
+      if (noteContent) {
+        totalAttachmentBytes += Buffer.byteLength(noteContent, "utf8");
+      }
+    }
+
+    if (missingFiles.length > 0) {
+      return res.status(400).json({
+        message: `Cannot send approved mockups because these files are missing on the server: ${missingFiles.join(", ")}`,
+      });
+    }
+
+    if (!attachmentEntries.length) {
+      return res.status(400).json({
+        message: "No approved mockup files were available to attach.",
+      });
+    }
+
+    if (totalAttachmentBytes > MOCKUP_EMAIL_MAX_BYTES) {
+      return res.status(400).json({
+        message: `Approved mockup email is too large to send (${formatFileSize(
+          totalAttachmentBytes,
+        )}). Current limit is ${formatFileSize(MOCKUP_EMAIL_MAX_BYTES)}.`,
+      });
+    }
+
+    const subject = `Approved Mockups - ${projectRef} - ${projectName}`;
+    const totalAttachmentCount =
+      attachmentEntries.length +
+      attachmentEntries.filter((entry) => entry.noteAttachment).length;
+    const actorName = getUserDisplayName(req.user);
+
+    const textSections = attachmentEntries.map((entry) => {
+      const lines = [
+        `${entry.sourceLabel} ${entry.versionLabel}`,
+        `File: ${entry.fileName}`,
+      ];
+
+      if (entry.approvedAt) {
+        lines.push(`Approved: ${formatEmailDateTime(entry.approvedAt)}`);
+      }
+
+      if (entry.notes.length > 0) {
+        lines.push("Notes:");
+        entry.notes.forEach((note) => {
+          lines.push(`- ${note.label}: ${note.value}`);
+        });
+      } else {
+        lines.push("Notes: None");
+      }
+
+      return lines.join("\n");
+    });
+
+    const text = [
+      "Approved mockups ready for final approval.",
+      `Project ID: ${projectRef}`,
+      `Lead Name: ${leadName}`,
+      `Project Name: ${projectName}`,
+      `Prepared By: ${actorName}`,
+      `Approved Mockups: ${attachmentEntries.length}`,
+      "",
+      ...textSections,
+    ].join("\n");
+
+    const versionCardsHtml = attachmentEntries
+      .map((entry) => {
+        const notesHtml =
+          entry.notes.length > 0
+            ? `<ul style="margin:8px 0 0 18px;padding:0;color:#111827;font-size:14px;line-height:1.6;">${entry.notes
+                .map(
+                  (note) =>
+                    `<li><strong>${escapeHtml(note.label)}:</strong> ${escapeHtml(
+                      note.value,
+                    )}</li>`,
+                )
+                .join("")}</ul>`
+            : `<p style="margin:8px 0 0;color:#6b7280;font-size:14px;">No notes saved for this approved mockup.</p>`;
+
+        const approvedAtText = entry.approvedAt
+          ? formatEmailDateTime(entry.approvedAt)
+          : "Not recorded";
+
+        return `
+          <div style="margin:0 0 14px;padding:16px 18px;border:1px solid #dbe3ef;border-radius:12px;background:#ffffff;">
+            <div style="font-size:16px;font-weight:700;color:#111827;">${escapeHtml(
+              `${entry.sourceLabel} ${entry.versionLabel}`,
+            )}</div>
+            <div style="margin-top:6px;font-size:14px;color:#374151;">
+              <strong>File:</strong> ${escapeHtml(entry.fileName)}
+            </div>
+            <div style="margin-top:4px;font-size:14px;color:#374151;">
+              <strong>Approved:</strong> ${escapeHtml(approvedAtText)}
+            </div>
+            ${notesHtml}
+          </div>
+        `;
+      })
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>${escapeHtml(subject)}</title>
+        </head>
+        <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Segoe UI,Arial,sans-serif;color:#111827;">
+          <div style="max-width:760px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;">
+            <div style="padding:24px 28px;background:linear-gradient(135deg,#0f172a 0%,#1f2937 100%);color:#f9fafb;">
+              <div style="font-size:28px;font-weight:800;line-height:1.2;">Approved Mockups</div>
+              <div style="margin-top:8px;font-size:15px;line-height:1.6;color:#d1d5db;">
+                Final approval package prepared for the current project.
+              </div>
+            </div>
+            <div style="padding:24px 28px;">
+              <div style="margin:0 0 18px;padding:16px 18px;border-radius:12px;background:#f8fafc;border:1px solid #dbe3ef;">
+                <div style="font-size:14px;line-height:1.7;color:#111827;"><strong>Project ID:</strong> ${escapeHtml(
+                  projectRef,
+                )}</div>
+                <div style="font-size:14px;line-height:1.7;color:#111827;"><strong>Lead Name:</strong> ${escapeHtml(
+                  leadName,
+                )}</div>
+                <div style="font-size:14px;line-height:1.7;color:#111827;"><strong>Project Name:</strong> ${escapeHtml(
+                  projectName,
+                )}</div>
+                <div style="font-size:14px;line-height:1.7;color:#111827;"><strong>Prepared By:</strong> ${escapeHtml(
+                  actorName,
+                )}</div>
+                <div style="font-size:14px;line-height:1.7;color:#111827;"><strong>Approved Mockups:</strong> ${escapeHtml(
+                  String(attachmentEntries.length),
+                )}</div>
+              </div>
+              ${versionCardsHtml}
+              <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
+                Attached files: ${escapeHtml(String(totalAttachmentCount))} total, including companion note files where notes were available.
+              </p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const delivery = await sendEmailDetailed(recipient, subject, text, {
+      html,
+      attachments: attachmentEntries.flatMap((entry) => [
+        {
+          filename: entry.fileName,
+          path: entry.filePath,
+        },
+        ...(entry.noteAttachment ? [entry.noteAttachment] : []),
+      ]),
+    });
+
+    if (!delivery.sent) {
+      return res.status(500).json({
+        message: "Approved mockup email failed to send.",
+      });
+    }
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "mockup_email_sent",
+      `Approved mockups emailed to ${recipient}.`,
+      {
+        approvedMockupEmail: {
+          recipient,
+          projectId: projectRef,
+          leadName,
+          approvedMockupCount: attachmentEntries.length,
+          attachmentCount: totalAttachmentCount,
+          messageId: delivery.messageId || "",
+          versions: attachmentEntries.map((entry) => ({
+            version: entry.versionNumber,
+            fileName: entry.fileName,
+            approvedAt: entry.approvedAt || null,
+            notes: entry.notes.map((note) => ({
+              label: note.label,
+              value: note.value,
+            })),
+          })),
+        },
+      },
+    );
+
+    return res.json({
+      message: `${attachmentEntries.length} approved mockup${
+        attachmentEntries.length === 1 ? "" : "s"
+      } emailed to ${recipient}.`,
+      recipient,
+      projectId: projectRef,
+      leadName,
+      approvedMockupCount: attachmentEntries.length,
+      attachmentCount: totalAttachmentCount,
+    });
+  } catch (error) {
+    console.error("Error emailing approved mockups:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Get all clients with their projects
 // @route   GET /api/projects/clients
 // @access  Private (Admin or Front Desk)
@@ -16549,6 +16931,7 @@ module.exports = {
   resetQuoteMockup,
   resetQuotePreviousSamples,
   resetQuoteSampleProduction,
+  emailApprovedProjectMockups,
   updateQuoteBidSubmissionDocuments,
   updateQuoteDecision,
   markInvoiceSent,
