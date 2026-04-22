@@ -2,6 +2,7 @@ const BREADCRUMB_MAP = {
   dashboard: { section: "System", page: "Dashboard" },
   "inventory-types": { section: "Inventory", page: "Inventory Categories" },
   "inventory-records": { section: "Inventory", page: "Inventory Records" },
+  "price-list": { section: "Catalog", page: "Price List" },
   "stock-transactions": { section: "Inventory", page: "Stock Transactions" },
   "client-items": { section: "Service Desk", page: "Client Items" },
   suppliers: { section: "Purchasing", page: "Suppliers" },

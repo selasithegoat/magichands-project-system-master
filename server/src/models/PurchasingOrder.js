@@ -136,7 +136,6 @@ const PurchasingOrderSchema = new mongoose.Schema(
 );
 
 PurchasingOrderSchema.index({ dateRequestPlaced: -1, createdAt: -1 });
-PurchasingOrderSchema.index({ poNumber: 1 }, { unique: true });
 PurchasingOrderSchema.index({ orderNumber: 1 });
 PurchasingOrderSchema.index({ supplierName: 1 });
 

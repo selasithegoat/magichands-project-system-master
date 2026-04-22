@@ -25,6 +25,4 @@ const InventoryCategorySchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-InventoryCategorySchema.index({ name: 1 });
-
 module.exports = mongoose.model("InventoryCategory", InventoryCategorySchema);

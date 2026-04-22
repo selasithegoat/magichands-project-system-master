@@ -8,6 +8,7 @@ import NotificationDropdown from "../components/notifications/NotificationDropdo
 import StockTransactions from "../pages/StockTransactions/StockTransactions";
 import InventoryCategories from "../pages/InventoryTypes/InventoryTypes";
 import InventoryRecords from "../pages/InventoryRecords/InventoryRecords";
+import PriceList from "../pages/PriceList/PriceList";
 import ClientItems from "../pages/ClientItems/ClientItems";
 import Suppliers from "../pages/Suppliers/Suppliers";
 import PurchaseOrders from "../pages/PurchaseOrders/PurchaseOrders";
@@ -16,6 +17,7 @@ import Settings from "../pages/Settings/Settings";
 import {
   ClientIcon,
   DashboardIcon,
+  FileTextIcon,
   LayersIcon,
   PurchaseOrderIcon,
   RecordsIcon,
@@ -44,6 +46,7 @@ const DENSITY_STORAGE_KEY = "inventory-portal-density";
 const PAGE_STORAGE_KEY = "inventory-portal-active-page";
 const SEARCHABLE_PAGES = new Set([
   "inventory-records",
+  "price-list",
   "inventory-types",
   "purchase-orders",
   "stock-transactions",
@@ -88,6 +91,7 @@ const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: DashboardIcon },
   { key: "inventory-types", label: "Inventory Categories", icon: LayersIcon },
   { key: "inventory-records", label: "Inventory Records", icon: RecordsIcon },
+  { key: "price-list", label: "Price List", icon: FileTextIcon },
   { key: "stock-transactions", label: "Stock Transactions", icon: SwapIcon },
   { key: "client-items", label: "Client Items", icon: ClientIcon },
   { key: "suppliers", label: "Suppliers", icon: SuppliersIcon },
@@ -440,6 +444,8 @@ const App = () => {
         return <InventoryCategories />;
       case "inventory-records":
         return <InventoryRecords />;
+      case "price-list":
+        return <PriceList />;
       case "client-items":
         return <ClientItems />;
       case "suppliers":

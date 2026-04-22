@@ -28,3 +28,7 @@ dist-ssr
 
 # Local maintenance scripts
 scripts/migrate-uploads.js
+
+# Generated inventory import artifacts
+data/inventory-imports/
+scripts/__pycache__/

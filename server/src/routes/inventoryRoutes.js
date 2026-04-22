@@ -36,6 +36,7 @@ const {
   getInventorySettings,
   updateInventorySettings,
 } = require("../controllers/inventoryController");
+const { getPriceListItems } = require("../controllers/priceListController");
 
 router.use(protect);
 
@@ -72,6 +73,7 @@ router
 
 router.route("/categories/options").get(getInventoryCategoryOptions);
 router.route("/warehouses/options").get(getInventoryWarehouseOptions);
+router.route("/price-list").get(getPriceListItems);
 router.route("/categories").get(getInventoryCategories).post(createInventoryCategory);
 router
   .route("/categories/:id")
