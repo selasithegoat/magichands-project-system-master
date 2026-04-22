@@ -125,12 +125,20 @@
 
 .engaged-kpi-card.warning {
   border-color: rgba(245, 158, 11, 0.4);
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), transparent 65%);
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.12),
+    transparent 65%
+  );
 }
 
 .engaged-kpi-card.info {
   border-color: rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), transparent 65%);
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.12),
+    transparent 65%
+  );
 }
 
 .engaged-kpi-card.success {
@@ -1198,15 +1206,14 @@
   position: relative;
   overflow: hidden;
   border-radius: 22px;
-  border: 1px solid color-mix(in srgb, var(--primary-color) 20%, var(--border-color));
+  border: 1px solid
+    color-mix(in srgb, var(--primary-color) 20%, var(--border-color));
   padding: 1.35rem;
+  height: 800px;
+  overflow-y: auto;
   margin-bottom: 1.35rem;
   background:
-    linear-gradient(
-      180deg,
-      rgba(var(--primary-rgb), 0.08),
-      transparent 38%
-    ),
+    linear-gradient(180deg, rgba(var(--primary-rgb), 0.08), transparent 38%),
     radial-gradient(
       140% 120% at 0% 0%,
       rgba(14, 165, 233, 0.12),
@@ -1324,7 +1331,8 @@
 
 .engaged-scope-card {
   border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, rgba(var(--primary-rgb), 0.16));
+  border: 1px solid
+    color-mix(in srgb, var(--border-color) 84%, rgba(var(--primary-rgb), 0.16));
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.92),
@@ -1416,7 +1424,8 @@
   gap: 0.75rem;
   text-decoration: none;
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 86%, rgba(var(--primary-rgb), 0.2));
+  border: 1px solid
+    color-mix(in srgb, var(--border-color) 86%, rgba(var(--primary-rgb), 0.2));
   background: linear-gradient(
     180deg,
     rgba(248, 250, 252, 0.94),
@@ -1432,7 +1441,11 @@
 
 .engaged-reference-item:hover {
   transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--primary-color) 42%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 42%,
+    var(--border-color)
+  );
   box-shadow: 0 16px 28px rgba(15, 23, 42, 0.12);
 }
 
@@ -2148,7 +2161,11 @@
 [data-theme="dark"] .engaged-tag {
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 35%,
+    var(--border-color)
+  );
 }
 
 [data-theme="dark"] .engaged-tag.invoice {
@@ -2204,13 +2221,21 @@
 [data-theme="dark"] .view-actions-btn {
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 35%,
+    var(--border-color)
+  );
 }
 
 [data-theme="dark"] .view-actions-btn:hover {
   background: color-mix(in srgb, var(--primary-color) 26%, var(--surface-alt));
   color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 50%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 50%,
+    var(--border-color)
+  );
 }
 
 [data-theme="dark"] .complete-btn.confirm-btn {
@@ -2250,7 +2275,11 @@
 [data-theme="dark"] .engaged-activity-category {
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 35%,
+    var(--border-color)
+  );
 }
 
 [data-theme="dark"] .engaged-activity-item p {
@@ -2270,7 +2299,11 @@
 }
 
 [data-theme="dark"] .graphics-carousel-nav {
-  border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 45%,
+    var(--border-color)
+  );
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
 }
@@ -2308,7 +2341,11 @@
 }
 
 [data-theme="dark"] .graphics-carousel-chip.active {
-  border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 45%,
+    var(--border-color)
+  );
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
 }
@@ -2387,13 +2424,13 @@
 }
 
 [data-theme="dark"] .engaged-scope-section {
-  border-color: color-mix(in srgb, var(--primary-color) 24%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 24%,
+    var(--border-color)
+  );
   background:
-    linear-gradient(
-      180deg,
-      rgba(var(--primary-rgb), 0.12),
-      transparent 38%
-    ),
+    linear-gradient(180deg, rgba(var(--primary-rgb), 0.12), transparent 38%),
     radial-gradient(
       140% 120% at 0% 0%,
       rgba(14, 165, 233, 0.14),
@@ -2433,13 +2470,21 @@
 }
 
 [data-theme="dark"] .engaged-scope-pill.muted {
-  border-color: color-mix(in srgb, var(--text-secondary) 35%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--text-secondary) 35%,
+    var(--border-color)
+  );
   background: color-mix(in srgb, var(--text-secondary) 16%, var(--surface-alt));
   color: var(--text-secondary);
 }
 
 [data-theme="dark"] .engaged-scope-card {
-  border-color: color-mix(in srgb, var(--primary-color) 16%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 16%,
+    var(--border-color)
+  );
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--bg-card) 94%, #0b1120),
@@ -2451,7 +2496,11 @@
 [data-theme="dark"] .engaged-scope-card-kicker {
   color: #bfdbfe;
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
-  border-color: color-mix(in srgb, var(--primary-color) 36%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 36%,
+    var(--border-color)
+  );
 }
 
 [data-theme="dark"] .engaged-scope-card h3 {
@@ -2459,7 +2508,11 @@
 }
 
 [data-theme="dark"] .engaged-scope-brief-panel {
-  border-color: color-mix(in srgb, var(--primary-color) 32%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 32%,
+    var(--border-color)
+  );
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--bg-card) 94%, #0b1120),
@@ -2484,7 +2537,11 @@
 }
 
 [data-theme="dark"] .engaged-reference-item {
-  border-color: color-mix(in srgb, var(--primary-color) 14%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 14%,
+    var(--border-color)
+  );
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--surface-alt) 94%, var(--bg-card)),
@@ -2498,7 +2555,11 @@
 }
 
 [data-theme="dark"] .engaged-reference-preview {
-  border-color: color-mix(in srgb, var(--primary-color) 14%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 14%,
+    var(--border-color)
+  );
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--surface-alt) 96%, var(--bg-card)),
@@ -2538,7 +2599,11 @@
 [data-theme="dark"] .engaged-section-chip {
   background: color-mix(in srgb, var(--primary-color) 18%, var(--surface-alt));
   color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 32%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 32%,
+    var(--border-color)
+  );
 }
 
 [data-theme="dark"] .engaged-ack-status {
@@ -2578,7 +2643,11 @@
 
 [data-theme="dark"] .dept-chip {
   background: color-mix(in srgb, var(--primary-color) 12%, var(--surface-alt));
-  border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+  border-color: color-mix(
+    in srgb,
+    var(--primary-color) 30%,
+    var(--border-color)
+  );
   color: var(--primary-color);
 }
 @media (max-width: 1414px) {

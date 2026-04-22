@@ -949,6 +949,254 @@ const normalizeItems = (items) => {
   }));
 };
 
+const SUPPLIER_PRODUCT_TONES = [...SUPPLIER_TONES, "slate"];
+const PURCHASE_ORDER_CLOSED_STATUSES = new Set([
+  "received",
+  "fully received",
+  "cancelled",
+  "closed",
+  "complete",
+  "completed",
+]);
+const PURCHASE_ORDER_TO_SUPPLIER_STATUS = Object.freeze({
+  open: "open",
+  pending: "pending",
+  requested: "pending",
+  ordered: "processing",
+  processing: "processing",
+  active: "active",
+  "partially received": "processing",
+});
+
+const pickToneFromSeed = (seed, tones) => {
+  const palette = Array.isArray(tones) && tones.length ? tones : SUPPLIER_TONES;
+  const normalizedSeed = parseStringValue(seed);
+  if (!normalizedSeed) return pickRandomTone(palette);
+  const hash = normalizedSeed
+    .split("")
+    .reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+};
+
+const normalizeSupplierProducts = (products) => {
+  if (!Array.isArray(products)) return [];
+
+  const deduped = new Map();
+  products.forEach((entry) => {
+    const label = parseStringValue(
+      typeof entry === "string" ? entry : entry?.label,
+    );
+    if (!label) return;
+
+    const key = normalizeKey(label);
+    const tone =
+      parseStringValue(typeof entry === "object" ? entry?.tone : "") ||
+      pickToneFromSeed(label, SUPPLIER_PRODUCT_TONES);
+
+    if (!deduped.has(key)) {
+      deduped.set(key, { label, tone });
+      return;
+    }
+
+    const current = deduped.get(key);
+    if (!current.tone && tone) {
+      current.tone = tone;
+    }
+    deduped.set(key, current);
+  });
+
+  return Array.from(deduped.values());
+};
+
+const mergeSupplierProducts = (existingProducts, nextProducts) =>
+  normalizeSupplierProducts([
+    ...(Array.isArray(existingProducts) ? existingProducts : []),
+    ...(Array.isArray(nextProducts) ? nextProducts : []),
+  ]);
+
+const buildPurchaseOrderSupplierProducts = (purchaseOrder) => {
+  const items = Array.isArray(purchaseOrder?.items) ? purchaseOrder.items : [];
+  const itemLabels = items
+    .map((item) => parseStringValue(item?.name))
+    .filter(Boolean);
+  const fallbackCategory = parseStringValue(purchaseOrder?.category);
+  const labels = itemLabels.length
+    ? itemLabels
+    : fallbackCategory
+      ? [fallbackCategory]
+      : [];
+
+  return normalizeSupplierProducts(labels);
+};
+
+const findSupplierByName = async (name) => {
+  const normalizedName = parseStringValue(name);
+  if (!normalizedName) return null;
+  const nameRegex = buildExactMatchRegex(normalizedName);
+  return nameRegex ? Supplier.findOne({ name: nameRegex }) : null;
+};
+
+const mapPurchaseOrderStatusToSupplierOpenPOStatus = (status) => {
+  const normalizedStatus = normalizeKey(status);
+  if (!normalizedStatus || PURCHASE_ORDER_CLOSED_STATUSES.has(normalizedStatus)) {
+    return "";
+  }
+  return PURCHASE_ORDER_TO_SUPPLIER_STATUS[normalizedStatus] || "open";
+};
+
+const buildSupplierOpenPOSummary = async (supplierName) => {
+  const normalizedName = parseStringValue(supplierName);
+  if (!normalizedName) {
+    return { label: "0 Open", status: "open" };
+  }
+
+  const nameRegex = buildExactMatchRegex(normalizedName);
+  const filter = nameRegex ? { supplierName: nameRegex } : { supplierName: normalizedName };
+  const orders = await PurchasingOrder.find(filter)
+    .select("status requestStatus")
+    .lean();
+
+  const openStatuses = orders
+    .map((order) =>
+      mapPurchaseOrderStatusToSupplierOpenPOStatus(
+        order?.status || order?.requestStatus,
+      ),
+    )
+    .filter(Boolean);
+
+  if (!openStatuses.length) {
+    return { label: "0 Open", status: "open" };
+  }
+
+  const uniqueStatuses = Array.from(new Set(openStatuses));
+  if (uniqueStatuses.length === 1) {
+    const status = uniqueStatuses[0];
+    return {
+      label: `${openStatuses.length} ${formatOpenPOStatusLabel(status)}`,
+      status,
+    };
+  }
+
+  return {
+    label: `${openStatuses.length} Open`,
+    status: "open",
+  };
+};
+
+const buildSupplierSyncMeta = (supplier) => {
+  const normalizedProducts = normalizeSupplierProducts(supplier?.products);
+  const missingFields = {
+    name: !parseStringValue(supplier?.name),
+    phone: !parseStringValue(supplier?.phone),
+    products: normalizedProducts.length === 0,
+  };
+
+  return {
+    supplierId: supplier?._id ? String(supplier._id) : "",
+    supplierName: parseStringValue(supplier?.name),
+    needsDetails: Object.values(missingFields).some(Boolean),
+    missingFields,
+    prefill: {
+      name: parseStringValue(supplier?.name),
+      phone: parseStringValue(supplier?.phone),
+      products: normalizedProducts.map((product) => product.label).join(", "),
+    },
+  };
+};
+
+const refreshSupplierOpenPOByName = async ({ supplierName, actorId }) => {
+  const supplier = await findSupplierByName(supplierName);
+  if (!supplier) return null;
+
+  const nextOpenPO = await buildSupplierOpenPOSummary(supplier.name || supplierName);
+  const nextTone =
+    parseStringValue(supplier.tone) ||
+    pickToneFromSeed(supplier.name || supplierName, SUPPLIER_TONES);
+
+  let shouldSave = false;
+  if (
+    parseStringValue(supplier.openPO?.label) !== nextOpenPO.label ||
+    parseStringValue(supplier.openPO?.status) !== nextOpenPO.status
+  ) {
+    supplier.openPO = nextOpenPO;
+    shouldSave = true;
+  }
+
+  if (parseStringValue(supplier.tone) !== nextTone) {
+    supplier.tone = nextTone;
+    shouldSave = true;
+  }
+
+  if (actorId) {
+    supplier.updatedBy = actorId;
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    await supplier.save();
+  }
+
+  return supplier;
+};
+
+const syncSupplierFromPurchaseOrder = async ({ purchaseOrder, actorId }) => {
+  const supplierName = parseStringValue(purchaseOrder?.supplierName);
+  if (!supplierName) return null;
+
+  const poProducts = buildPurchaseOrderSupplierProducts(purchaseOrder);
+  const nextOpenPO = await buildSupplierOpenPOSummary(supplierName);
+  const toneSeed =
+    parseStringValue(purchaseOrder?.supplierTone) || supplierName;
+  const nextTone = pickToneFromSeed(toneSeed, SUPPLIER_TONES);
+
+  let supplier = await findSupplierByName(supplierName);
+  if (!supplier) {
+    supplier = await Supplier.create({
+      name: supplierName,
+      products: poProducts,
+      openPO: nextOpenPO,
+      tone: nextTone,
+      createdBy: actorId,
+      updatedBy: actorId,
+    });
+
+    return buildSupplierSyncMeta(supplier);
+  }
+
+  const currentProducts = normalizeSupplierProducts(supplier.products);
+  const mergedProducts = mergeSupplierProducts(currentProducts, poProducts);
+  let shouldSave = false;
+
+  if (JSON.stringify(currentProducts) !== JSON.stringify(mergedProducts)) {
+    supplier.products = mergedProducts;
+    shouldSave = true;
+  }
+
+  if (
+    parseStringValue(supplier.openPO?.label) !== nextOpenPO.label ||
+    parseStringValue(supplier.openPO?.status) !== nextOpenPO.status
+  ) {
+    supplier.openPO = nextOpenPO;
+    shouldSave = true;
+  }
+
+  if (!parseStringValue(supplier.tone)) {
+    supplier.tone = nextTone;
+    shouldSave = true;
+  }
+
+  if (actorId) {
+    supplier.updatedBy = actorId;
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    await supplier.save();
+  }
+
+  return buildSupplierSyncMeta(supplier);
+};
+
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
 
@@ -1510,6 +1758,10 @@ const createPurchasingOrder = async (req, res) => {
     const populated = await PurchasingOrder.findById(record._id)
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
+    const supplierSync = await syncSupplierFromPurchaseOrder({
+      purchaseOrder: record,
+      actorId: req.user?._id,
+    });
 
     const settings = await getInventorySettingsSnapshot();
     if (settings.notifyPurchaseOrders !== false) {
@@ -1520,7 +1772,8 @@ const createPurchasingOrder = async (req, res) => {
       });
     }
 
-    res.status(201).json(populated);
+    const responseBody = populated?.toObject ? populated.toObject() : populated;
+    res.status(201).json({ ...responseBody, supplierSync });
   } catch (error) {
     console.error("Error creating purchasing order:", error);
     res.status(500).json({ message: "Server Error" });
@@ -1537,6 +1790,7 @@ const updatePurchasingOrder = async (req, res) => {
     }
 
     const previousStatus = record.status;
+    const previousSupplierName = parseStringValue(record.supplierName);
 
     if (Object.prototype.hasOwnProperty.call(req.body, "poNumber")) {
       const poNumber = parseStringValue(req.body.poNumber);
@@ -1635,6 +1889,21 @@ const updatePurchasingOrder = async (req, res) => {
     const populated = await PurchasingOrder.findById(record._id)
       .populate("createdBy", "firstName lastName employeeId")
       .populate("updatedBy", "firstName lastName employeeId");
+    const supplierSync = await syncSupplierFromPurchaseOrder({
+      purchaseOrder: record,
+      actorId: req.user?._id,
+    });
+    const nextSupplierName = parseStringValue(record.supplierName);
+    if (
+      previousSupplierName &&
+      nextSupplierName &&
+      normalizeKey(previousSupplierName) !== normalizeKey(nextSupplierName)
+    ) {
+      await refreshSupplierOpenPOByName({
+        supplierName: previousSupplierName,
+        actorId: req.user?._id,
+      });
+    }
 
     const settings = await getInventorySettingsSnapshot();
     if (settings.notifyPurchaseOrders !== false) {
@@ -1653,7 +1922,8 @@ const updatePurchasingOrder = async (req, res) => {
       }
     }
 
-    res.json(populated);
+    const responseBody = populated?.toObject ? populated.toObject() : populated;
+    res.json({ ...responseBody, supplierSync });
   } catch (error) {
     console.error("Error updating purchasing order:", error);
     res.status(500).json({ message: "Server Error" });
@@ -1676,6 +1946,10 @@ const deletePurchasingOrder = async (req, res) => {
         message: `${deleted.poNumber || "Purchase order"} was removed.`,
       });
     }
+    await refreshSupplierOpenPOByName({
+      supplierName: deleted.supplierName,
+      actorId: req.user?._id,
+    });
     res.json({ message: "Purchasing order deleted successfully." });
   } catch (error) {
     console.error("Error deleting purchasing order:", error);
@@ -1758,7 +2032,7 @@ const createSupplier = async (req, res) => {
       role: parseStringValue(req.body.role),
       phone: parseStringValue(req.body.phone),
       email: parseStringValue(req.body.email),
-      products: Array.isArray(req.body.products) ? req.body.products : [],
+      products: normalizeSupplierProducts(req.body.products),
       openPO: {
         label: openPOLabel,
         status: openPOStatus,
@@ -1813,9 +2087,7 @@ const updateSupplier = async (req, res) => {
       record.email = parseStringValue(req.body.email);
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "products")) {
-      record.products = Array.isArray(req.body.products)
-        ? req.body.products
-        : [];
+      record.products = normalizeSupplierProducts(req.body.products);
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "openPO")) {
       const openPOBody = req.body.openPO || {};

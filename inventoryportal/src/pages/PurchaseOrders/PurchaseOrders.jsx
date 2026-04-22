@@ -85,6 +85,32 @@ const normalizeCategoryOptions = (payload) => {
   return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
 };
 
+const createEmptySupplierPrompt = () => ({
+  supplierId: "",
+  poNumber: "",
+  name: "",
+  phone: "",
+  products: "",
+  missingFields: {
+    name: false,
+    phone: false,
+    products: false,
+  },
+});
+
+const buildSupplierProductsPayload = (value) =>
+  String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((label) => ({ label, tone: "slate" }));
+
+const getMissingSupplierDetailLabels = (missingFields = {}) =>
+  [
+    missingFields.name ? "Supplier name" : "",
+    missingFields.phone ? "Phone number" : "",
+    missingFields.products ? "Products supplied" : "",
+  ].filter(Boolean);
 
 const PurchaseOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -120,6 +146,12 @@ const PurchaseOrders = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
+  const [isSupplierPromptOpen, setIsSupplierPromptOpen] = useState(false);
+  const [supplierPrompt, setSupplierPrompt] = useState(
+    createEmptySupplierPrompt,
+  );
+  const [supplierPromptError, setSupplierPromptError] = useState("");
+  const [isSupplierPromptSaving, setIsSupplierPromptSaving] = useState(false);
   const { currency, rate } = useInventoryCurrency();
 
   const triggerRefresh = () => setRefreshKey((prev) => prev + 1);
@@ -418,8 +450,37 @@ const PurchaseOrders = () => {
     setActionError("");
   };
 
+  const openSupplierPrompt = (supplierSync, poNumber) => {
+    if (!supplierSync?.supplierId || !supplierSync?.needsDetails) return;
+    setSupplierPrompt({
+      supplierId: supplierSync.supplierId,
+      poNumber: poNumber || "",
+      name: supplierSync?.prefill?.name || supplierSync?.supplierName || "",
+      phone: supplierSync?.prefill?.phone || "",
+      products: supplierSync?.prefill?.products || "",
+      missingFields: {
+        name: Boolean(supplierSync?.missingFields?.name),
+        phone: Boolean(supplierSync?.missingFields?.phone),
+        products: Boolean(supplierSync?.missingFields?.products),
+      },
+    });
+    setSupplierPromptError("");
+    setIsSupplierPromptOpen(true);
+  };
+
+  const closeSupplierPrompt = ({ force = false } = {}) => {
+    if (isSupplierPromptSaving && !force) return;
+    setIsSupplierPromptOpen(false);
+    setSupplierPrompt(createEmptySupplierPrompt());
+    setSupplierPromptError("");
+  };
+
   const updateField = (field) => (event) => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const updateSupplierPromptField = (field) => (event) => {
+    setSupplierPrompt((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
   const handleCategoryFocus = () => {
@@ -495,28 +556,28 @@ const PurchaseOrders = () => {
 
     setIsSaving(true);
     try {
-    const payload = {
-      poNumber: formData.poNumber,
-      supplierName: formData.supplierName,
-      supplierInitials: buildInitials(formData.supplierName),
-      items,
-      itemsCount,
-      category: formData.category,
-      total: formData.total,
-      status: formData.status,
-      ...(editingOrder
-        ? {}
-        : {
-            dateRequestPlaced: new Date().toISOString(),
-            supplierTone: pickTone(formData.supplierName),
-          }),
-    };
+      const payload = {
+        poNumber: formData.poNumber,
+        supplierName: formData.supplierName,
+        supplierInitials: buildInitials(formData.supplierName),
+        items,
+        itemsCount,
+        category: formData.category,
+        total: formData.total,
+        status: formData.status,
+        ...(editingOrder
+          ? {}
+          : {
+              dateRequestPlaced: new Date().toISOString(),
+              supplierTone: pickTone(formData.supplierName),
+            }),
+      };
 
       const endpoint = editingOrder
         ? `/api/inventory/purchase-orders/${editingOrder.id}`
         : "/api/inventory/purchase-orders";
 
-      await fetchInventory(endpoint, {
+      const response = await fetchInventory(endpoint, {
         method: editingOrder ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
@@ -525,10 +586,59 @@ const PurchaseOrders = () => {
         setPage(1);
       }
       triggerRefresh();
+      if (!editingOrder && response?.supplierSync?.needsDetails) {
+        openSupplierPrompt(response.supplierSync, payload.poNumber);
+      }
     } catch (err) {
       setActionError(err?.message || "Unable to save purchase order.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSupplierPromptSave = async () => {
+    if (isSupplierPromptSaving) return;
+
+    const supplierId = String(supplierPrompt.supplierId || "").trim();
+    const name = String(supplierPrompt.name || "").trim();
+    const phone = String(supplierPrompt.phone || "").trim();
+    const products = String(supplierPrompt.products || "").trim();
+
+    if (!supplierId) {
+      setSupplierPromptError("Supplier record is missing. Refresh and try again.");
+      return;
+    }
+    if (!name) {
+      setSupplierPromptError("Supplier name is required.");
+      return;
+    }
+    if (!phone) {
+      setSupplierPromptError("Phone number is required.");
+      return;
+    }
+    if (!products) {
+      setSupplierPromptError("Add at least one supplied product.");
+      return;
+    }
+
+    setIsSupplierPromptSaving(true);
+    try {
+      await fetchInventory(`/api/inventory/suppliers/${supplierId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name,
+          phone,
+          products: buildSupplierProductsPayload(products),
+        }),
+        toast: {
+          success: `${name} supplier details saved.`,
+        },
+      });
+      closeSupplierPrompt({ force: true });
+    } catch (err) {
+      setSupplierPromptError(err?.message || "Unable to save supplier details.");
+    } finally {
+      setIsSupplierPromptSaving(false);
     }
   };
 
@@ -989,6 +1099,72 @@ const PurchaseOrders = () => {
             ))}
           </datalist>
           {actionError ? <span className="modal-help">{actionError}</span> : null}
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isSupplierPromptOpen}
+        title="Complete Supplier Details"
+        subtitle={`${
+          supplierPrompt.poNumber ? `${supplierPrompt.poNumber} created this supplier record.` : "This supplier was created from a purchase order."
+        } Add the missing supplier details so the Suppliers table stays complete.`}
+        primaryText={isSupplierPromptSaving ? "Saving..." : "Save Supplier"}
+        secondaryText="Later"
+        onConfirm={handleSupplierPromptSave}
+        onClose={closeSupplierPrompt}
+        variant="side"
+      >
+        <form className="modal-form">
+          <div className="supplier-followup-note">
+            <strong>Missing details</strong>
+            <div className="supplier-followup-tags">
+              {getMissingSupplierDetailLabels(supplierPrompt.missingFields).map(
+                (label) => (
+                  <span key={label} className="supplier-followup-tag">
+                    {label}
+                  </span>
+                ),
+              )}
+            </div>
+          </div>
+          <div className="modal-grid">
+            <label className="modal-field">
+              <span>Supplier Name</span>
+              <input
+                type="text"
+                value={supplierPrompt.name}
+                onChange={updateSupplierPromptField("name")}
+                readOnly
+              />
+              <span className="modal-help">
+                Pulled from the purchase order that created this supplier.
+              </span>
+            </label>
+            <label className="modal-field">
+              <span>Phone Number</span>
+              <input
+                type="text"
+                value={supplierPrompt.phone}
+                onChange={updateSupplierPromptField("phone")}
+                placeholder="+1 (555) 555-1234"
+              />
+            </label>
+            <label className="modal-field full">
+              <span>Products Supplied</span>
+              <input
+                type="text"
+                value={supplierPrompt.products}
+                onChange={updateSupplierPromptField("products")}
+                placeholder="Semiconductors, Ink, Packaging"
+              />
+              <span className="modal-help">
+                Separate product names with commas. One supplier can supply multiple products.
+              </span>
+            </label>
+          </div>
+          {supplierPromptError ? (
+            <span className="modal-help">{supplierPromptError}</span>
+          ) : null}
         </form>
       </Modal>
 
