@@ -2,7 +2,6 @@ import { useDeferredValue, useEffect, useState } from "react";
 import {
   AlertCircleIcon,
   DownloadIcon,
-  FileTextIcon,
   LayersIcon,
   SearchIcon,
 } from "../../components/icons/Icons";
@@ -45,11 +44,9 @@ const PriceList = () => {
   const [items, setItems] = useState([]);
   const [sections, setSections] = useState([]);
   const [priceModes, setPriceModes] = useState([]);
-  const [sourcePdf, setSourcePdf] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sectionFilter, setSectionFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
-  const [pageFilter, setPageFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -71,14 +68,12 @@ const PriceList = () => {
         setItems(Array.isArray(payload?.data) ? payload.data : []);
         setSections(Array.isArray(payload?.sections) ? payload.sections : []);
         setPriceModes(Array.isArray(payload?.priceModes) ? payload.priceModes : []);
-        setSourcePdf(String(payload?.sourcePdf || "").trim());
         setError("");
       } catch (err) {
         if (!isMounted) return;
         setItems([]);
         setSections([]);
         setPriceModes([]);
-        setSourcePdf("");
         setError(err?.message || "Unable to load the souvenir price list.");
       } finally {
         if (isMounted) {
@@ -94,16 +89,10 @@ const PriceList = () => {
   }, []);
 
   const normalizedSearch = String(deferredSearch || "").trim().toLowerCase();
-  const pageOptions = Array.from(
-    new Set(items.map((item) => Number(item.pageNumber)).filter(Number.isFinite)),
-  ).sort((a, b) => a - b);
 
   const filteredItems = items.filter((item) => {
     if (sectionFilter !== "all" && item.sectionKey !== sectionFilter) return false;
     if (modeFilter !== "all" && item.priceMode !== modeFilter) return false;
-    if (pageFilter !== "all" && Number(item.pageNumber) !== Number(pageFilter)) {
-      return false;
-    }
 
     if (!normalizedSearch) return true;
     const haystack = String(
@@ -113,7 +102,6 @@ const PriceList = () => {
           item.sectionTitle,
           item.detailSummary,
           item.priceText,
-          item.pageLabel,
         ].join(" "),
     ).toLowerCase();
     return haystack.includes(normalizedSearch);
@@ -128,7 +116,6 @@ const PriceList = () => {
         title: item.sectionTitle || "General",
         description: item.sectionDescription || "",
         order: Number(item.sectionOrder) || 0,
-        pageRangeLabel: item.pageRangeLabel || item.pageLabel || "",
       };
 
     if (!groupedMap.has(key)) {
@@ -153,7 +140,6 @@ const PriceList = () => {
     setSearchTerm("");
     setSectionFilter("all");
     setModeFilter("all");
-    setPageFilter("all");
   };
 
   const handleExport = () => {
@@ -161,12 +147,10 @@ const PriceList = () => {
 
     const headers = [
       "Section",
-      "Page",
-      "Title",
+      "Item",
       "Pricing Mode",
-      "Price Lines",
+      "Pricing",
       "Details",
-      "Source PDF",
     ];
 
     const csv = [
@@ -174,14 +158,12 @@ const PriceList = () => {
       ...filteredItems.map((item) =>
         [
           item.sectionTitle,
-          item.pageLabel || `Page ${item.pageNumber}`,
           item.title,
           formatPriceModeLabel(item.priceMode),
           Array.isArray(item.priceLines) ? item.priceLines.join(" | ") : item.priceText,
           Array.isArray(item.detailLines)
             ? item.detailLines.join(" | ")
             : item.detailSummary,
-          sourcePdf,
         ]
           .map(buildCsvValue)
           .join(","),
@@ -208,8 +190,8 @@ const PriceList = () => {
           <span className="price-list-eyebrow">Souvenir Catalog</span>
           <h2>Price List</h2>
           <p>
-            Browse souvenir pricing in the same sequence the PDF presents it,
-            with grouped sections, page references, and full pricing notes kept intact.
+            Browse the souvenir catalog by section, review pricing styles,
+            and keep item notes visible in a clean list that feels manually maintained.
           </p>
         </div>
 
@@ -234,21 +216,8 @@ const PriceList = () => {
       </header>
 
       <div className="price-list-summary">
-        <article className="summary-card spotlight">
-          <div className="summary-icon">
-            <FileTextIcon />
-          </div>
-          <div className="summary-copy">
-            <span className="summary-label">Source</span>
-            <strong>{sourcePdf || "Souvenir price list"}</strong>
-            <span className="summary-meta">
-              PDF-ordered catalog import for the inventory portal
-            </span>
-          </div>
-        </article>
-
         <article className="summary-card">
-          <div className="summary-icon muted">
+          <div className="summary-icon">
             <LayersIcon />
           </div>
           <div className="summary-copy">
@@ -260,7 +229,7 @@ const PriceList = () => {
 
         <article className="summary-card">
           <div className="summary-icon muted">
-            <FileTextIcon />
+            <LayersIcon />
           </div>
           <div className="summary-copy">
             <span className="summary-label">Items</span>
@@ -288,7 +257,7 @@ const PriceList = () => {
           <SearchIcon className="search-icon" />
           <input
             type="search"
-            placeholder="Search titles, notes, or page references"
+            placeholder="Search items, sections, or pricing notes"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
@@ -316,19 +285,6 @@ const PriceList = () => {
           {priceModes.map((mode) => (
             <option key={mode.value} value={mode.value}>
               {mode.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="filter-input"
-          value={pageFilter}
-          onChange={(event) => setPageFilter(event.target.value)}
-        >
-          <option value="all">All pages</option>
-          {pageOptions.map((pageNumber) => (
-            <option key={pageNumber} value={pageNumber}>
-              Page {pageNumber}
             </option>
           ))}
         </select>
@@ -366,9 +322,6 @@ const PriceList = () => {
             <article key={section.key} className="price-section-card">
               <header className="price-section-header">
                 <div>
-                  <span className="section-range">
-                    {section.pageRangeLabel || "Catalog section"}
-                  </span>
                   <h3>{section.title}</h3>
                   <p>{section.description}</p>
                 </div>
@@ -399,9 +352,6 @@ const PriceList = () => {
                       className={`price-item-card mode-${modeClass}`}
                     >
                       <div className="price-item-top">
-                        <span className="page-chip">
-                          {item.pageLabel || `Page ${item.pageNumber}`}
-                        </span>
                         <span className={`mode-chip mode-${modeClass}`}>
                           {formatPriceModeLabel(item.priceMode)}
                         </span>
@@ -444,13 +394,12 @@ const PriceList = () => {
                       </div>
 
                       <footer className="price-item-footer">
-                        <span>{item.sourcePdf || sourcePdf}</span>
                         <span>
                           {item.priceValues?.length
                             ? `${item.priceValues.length} numeric value${
                                 item.priceValues.length > 1 ? "s" : ""
                               }`
-                            : "Text-only pricing"}
+                            : "Custom pricing"}
                         </span>
                       </footer>
                     </article>

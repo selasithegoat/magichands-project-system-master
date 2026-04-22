@@ -62,7 +62,7 @@
 
 .price-list-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -75,12 +75,6 @@
   align-items: flex-start;
   gap: 14px;
   box-shadow: var(--shadow-soft);
-}
-
-.summary-card.spotlight {
-  background:
-    linear-gradient(135deg, rgba(29, 78, 216, 0.08), rgba(245, 158, 11, 0.08)),
-    var(--bg-alt);
 }
 
 .summary-icon {
@@ -130,7 +124,7 @@
 
 .price-list-toolbar {
   display: grid;
-  grid-template-columns: 1.6fr repeat(3, minmax(0, 0.7fr));
+  grid-template-columns: 1.7fr repeat(2, minmax(0, 0.8fr));
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--border-soft);
@@ -224,20 +218,6 @@
   max-width: 70ch;
 }
 
-.section-range {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .section-count {
   min-width: 86px;
   padding: 12px 14px;
@@ -315,12 +295,11 @@
 .price-item-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.page-chip,
 .mode-chip {
   display: inline-flex;
   align-items: center;
@@ -331,11 +310,6 @@
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
-}
-
-.page-chip {
-  background: var(--surface-muted);
-  color: var(--ink-soft);
 }
 
 .mode-chip {
@@ -444,7 +418,7 @@
   }
 
   .price-list-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr 1fr;
   }
 
   .price-item-grid {
