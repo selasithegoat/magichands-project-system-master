@@ -91,7 +91,7 @@
 
 .orders-filters .filters-row {
   display: grid;
-  grid-template-columns: 1fr 0.7fr auto;
+  grid-template-columns: 1fr 0.7fr 0.7fr auto;
   gap: 12px;
   align-items: center;
 }
@@ -138,7 +138,7 @@
 .orders-table-card .table-header,
 .orders-table-card .table-row {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 0.4fr;
+  grid-template-columns: 1.1fr 1.3fr 1.6fr 0.95fr 0.8fr 0.95fr 0.9fr 1fr 0.4fr;
   gap: 12px;
   align-items: center;
   padding: 12px 18px;
@@ -196,6 +196,12 @@
 
 .orders-table-card .supplier-cell strong {
   line-height: 1.2;
+}
+
+.orders-table-card .supplier-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .supplier-avatar {
@@ -563,7 +569,7 @@
 @media (max-width: 1100px) and (min-width: 1001px) {
   .orders-table-card .table-header,
   .orders-table-card .table-row {
-    grid-template-columns: 1fr 1.1fr 1.4fr 1fr 0.9fr 0.9fr 1fr 0.4fr;
+    grid-template-columns: 1fr 1.1fr 1.4fr 0.95fr 0.75fr 0.95fr 0.9fr 1fr 0.4fr;
   }
 }
 

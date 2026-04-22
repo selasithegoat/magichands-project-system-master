@@ -79,7 +79,7 @@
 .suppliers-page .table-header,
 .suppliers-page .table-row {
   display: grid;
-  grid-template-columns: 2fr 1.2fr 1.4fr 1.6fr 0.8fr 0.8fr;
+  grid-template-columns: 2fr 1.5fr 1.8fr 0.9fr 0.8fr;
   gap: 12px;
   align-items: center;
   padding: 12px 18px;

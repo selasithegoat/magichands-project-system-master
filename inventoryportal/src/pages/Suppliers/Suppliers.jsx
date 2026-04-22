@@ -55,6 +55,7 @@ const Suppliers = () => {
     code: "",
     contactPerson: "",
     phone: "",
+    location: "",
     email: "",
     products: "",
     openPOStatus: "open",
@@ -93,6 +94,7 @@ const Suppliers = () => {
           contactPerson: supplier.contactPerson || "",
           role: supplier.role || "",
           phone: supplier.phone || "",
+          location: supplier.location || "",
           email: supplier.email || "",
           products: Array.isArray(supplier.products) ? supplier.products : [],
           openPO: {
@@ -159,6 +161,7 @@ const Suppliers = () => {
       "Contact Person": supplier.contactPerson,
       Role: supplier.role,
       Phone: supplier.phone,
+      Location: supplier.location,
       Email: supplier.email,
       Products: supplier.products
         .map((product) => product.label)
@@ -199,6 +202,7 @@ const Suppliers = () => {
       code: "",
       contactPerson: "",
       phone: "",
+      location: "",
       email: "",
       products: "",
       openPOStatus: "open",
@@ -219,6 +223,7 @@ const Suppliers = () => {
       code: supplier.code || "",
       contactPerson: supplier.contactPerson || "",
       phone: supplier.phone || "",
+      location: supplier.location || "",
       email: supplier.email || "",
       products: productLabels,
       openPOStatus: supplier.openPO?.status || "open",
@@ -258,6 +263,7 @@ const Suppliers = () => {
         code: formData.code,
         contactPerson: formData.contactPerson,
         phone: formData.phone,
+        location: formData.location,
         email: formData.email,
         products,
         openPO: {
@@ -339,7 +345,7 @@ const Suppliers = () => {
             <SearchIcon className="search-icon" />
             <input
               type="text"
-              placeholder="Search suppliers, contacts, or email..."
+              placeholder="Search suppliers, contacts, location, or email..."
               value={searchTerm}
               onChange={handleSearchChange}
             />
@@ -357,8 +363,7 @@ const Suppliers = () => {
       <div className="suppliers-table mobile-card-table">
         <div className="table-header">
           <span>Supplier Name</span>
-          <span>Contact Person</span>
-          <span>Contact Info</span>
+          <span>Contact Info / Location</span>
           <span>Products Supplied</span>
           <span>Open POs</span>
           <span>Actions</span>
@@ -378,15 +383,15 @@ const Suppliers = () => {
                   <span className="muted">{supplier.code}</span>
                 </div>
               </div>
-              <div className="supplier-cell cell" data-label="Contact">
-                <strong>{supplier.contactPerson}</strong>
-                {supplier.role ? (
-                  <span className="muted">{supplier.role}</span>
-                ) : null}
-              </div>
-              <div className="supplier-cell cell" data-label="Contact Info">
+              <div
+                className="supplier-cell cell"
+                data-label="Contact Info / Location"
+              >
                 <span>{supplier.phone}</span>
                 <span className="muted">{supplier.email}</span>
+                {supplier.location ? (
+                  <span className="muted">{supplier.location}</span>
+                ) : null}
               </div>
               <div
                 className="supplier-cell cell supplier-tags full"
@@ -519,6 +524,15 @@ const Suppliers = () => {
                 value={formData.phone}
                 onChange={updateField("phone")}
                 placeholder="+1 (555) 555-1234"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Location</span>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={updateField("location")}
+                placeholder="Accra, Ghana"
               />
             </label>
             <label className="modal-field">

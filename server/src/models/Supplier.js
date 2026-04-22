@@ -59,6 +59,11 @@ const SupplierSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    location: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     email: {
       type: String,
       trim: true,
@@ -90,5 +95,14 @@ const SupplierSchema = new mongoose.Schema(
 );
 
 SupplierSchema.index({ name: 1 });
+SupplierSchema.index(
+  { code: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      code: { $type: "string", $ne: "" },
+    },
+  },
+);
 
 module.exports = mongoose.model("Supplier", SupplierSchema);

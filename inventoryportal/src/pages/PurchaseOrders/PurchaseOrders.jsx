@@ -72,6 +72,68 @@ const formatTime = (value) => {
   });
 };
 
+const toFiniteNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatDateTimeInputValue = (value) => {
+  const parsed = value ? new Date(value) : new Date();
+  if (Number.isNaN(parsed.getTime())) return "";
+  const localDate = new Date(
+    parsed.getTime() - parsed.getTimezoneOffset() * 60000,
+  );
+  return localDate.toISOString().slice(0, 16);
+};
+
+const resolveOrderQuantity = (order = {}) => {
+  const candidates = [order.quantity, order.itemsCount, order.qty];
+  for (const candidate of candidates) {
+    const numericValue = toFiniteNumber(candidate);
+    if (numericValue !== null) {
+      return numericValue;
+    }
+  }
+
+  if (Array.isArray(order.items)) {
+    return order.items.length;
+  }
+
+  return 0;
+};
+
+const resolveOrderUnitCost = (
+  order = {},
+  quantityValue = resolveOrderQuantity(order),
+) => {
+  const directValue = toFiniteNumber(order.unitCost);
+  if (directValue !== null && (directValue > 0 || quantityValue <= 0)) {
+    return directValue;
+  }
+
+  const totalValue = parseCurrencyValue(order.total);
+  if (Number.isFinite(totalValue) && quantityValue > 0) {
+    return Number((totalValue / quantityValue).toFixed(2));
+  }
+
+  return directValue ?? 0;
+};
+
+const buildComputedTotal = (unitCost, quantity) => {
+  const numericUnitCost = toFiniteNumber(unitCost);
+  const numericQuantity = toFiniteNumber(quantity);
+  if (numericUnitCost === null || numericQuantity === null) return "";
+  return (numericUnitCost * numericQuantity).toFixed(2);
+};
+
+const formatNumberInputValue = (value, fractionDigits = 0) => {
+  const numericValue = toFiniteNumber(value);
+  if (numericValue === null) return "";
+  return fractionDigits > 0
+    ? numericValue.toFixed(fractionDigits)
+    : String(numericValue);
+};
+
 const normalizeCategoryOptions = (payload) => {
   const list = Array.isArray(payload?.data)
     ? payload.data
@@ -90,12 +152,29 @@ const createEmptySupplierPrompt = () => ({
   poNumber: "",
   name: "",
   phone: "",
+  location: "",
   products: "",
   missingFields: {
     name: false,
     phone: false,
+    location: false,
     products: false,
   },
+});
+
+const createEmptyOrderForm = () => ({
+  poNumber: "",
+  orderNumber: "",
+  supplierName: "",
+  supplierLocation: "",
+  category: "",
+  unitCost: "",
+  quantity: "",
+  total: "",
+  status: "Pending",
+  dateRequestPlaced: formatDateTimeInputValue(new Date()),
+  itemNames: "",
+  itemImages: [],
 });
 
 const buildSupplierProductsPayload = (value) =>
@@ -109,6 +188,7 @@ const getMissingSupplierDetailLabels = (missingFields = {}) =>
   [
     missingFields.name ? "Supplier name" : "",
     missingFields.phone ? "Phone number" : "",
+    missingFields.location ? "Supplier location" : "",
     missingFields.products ? "Products supplied" : "",
   ].filter(Boolean);
 
@@ -126,21 +206,10 @@ const PurchaseOrders = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
-  const [formData, setFormData] = useState({
-    poNumber: "",
-    orderNumber: "",
-    supplierName: "",
-    category: "",
-    total: "",
-    status: "Pending",
-    createdDate: "",
-    createdTime: "",
-    itemsCount: "",
-    itemNames: "",
-    itemImages: [],
-  });
+  const [formData, setFormData] = useState(createEmptyOrderForm);
   const [actionError, setActionError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -180,6 +249,9 @@ const PurchaseOrders = () => {
         if (supplierFilter.trim()) {
           params.set("supplier", supplierFilter.trim());
         }
+        if (departmentFilter.trim()) {
+          params.set("department", departmentFilter.trim());
+        }
 
         const payload = await fetchInventory(
           `/api/inventory/purchase-orders?${params.toString()}`,
@@ -190,14 +262,22 @@ const PurchaseOrders = () => {
           const items = Array.isArray(order.items) ? order.items : [];
           const primaryItemName = items[0]?.name || "";
           const primaryItemImage = items[0]?.image || "";
+          const quantityValue = resolveOrderQuantity({
+            ...order,
+            items,
+          });
+          const unitCostValue = resolveOrderUnitCost(order, quantityValue);
           return {
             id: order._id || order.id || `${index}`,
-            poNumber: order.poNumber || order.orderNo || order.id || "",
-            orderNumber:
+            poNumber: String(order.poNumber || order.orderNo || order.id || ""),
+            orderNumber: String(
               order.orderNumber || order.orderNo || order.poNumber || "",
+            ),
             itemName: primaryItemName,
             itemImage: primaryItemImage,
             supplier,
+            supplierLocation:
+              order.supplierLocation || order.location || "",
             supplierInitials:
               order.supplierInitials || buildInitials(supplier),
             supplierTone: order.supplierTone || pickTone(supplier || order.id),
@@ -206,10 +286,10 @@ const PurchaseOrders = () => {
               name: item.name || "",
               image: item.image || "",
             })),
-            itemsCount: Number.isFinite(order.itemsCount)
-              ? order.itemsCount
-              : items.length,
+            itemsCount: quantityValue,
+            quantity: quantityValue,
             category: order.category || "",
+            unitCost: unitCostValue,
             total: order.total || "",
             status: order.status || order.requestStatus || "Pending",
             dateRequestPlaced:
@@ -250,7 +330,7 @@ const PurchaseOrders = () => {
     return () => {
       isMounted = false;
     };
-  }, [page, refreshKey, activeStatus, searchTerm, supplierFilter]);
+  }, [page, refreshKey, activeStatus, searchTerm, supplierFilter, departmentFilter]);
 
   useEffect(() => {
     let isMounted = true;
@@ -272,6 +352,18 @@ const PurchaseOrders = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const nextTotal = buildComputedTotal(formData.unitCost, formData.quantity);
+    setFormData((prev) =>
+      prev.total === nextTotal
+        ? prev
+        : {
+            ...prev,
+            total: nextTotal,
+          },
+    );
+  }, [formData.unitCost, formData.quantity]);
 
   const handleStatusChange = async (orderId, nextStatus) => {
     const previousStatus = orders.find((order) => order.id === orderId)?.status;
@@ -327,21 +419,29 @@ const PurchaseOrders = () => {
     setPage(1);
   };
 
+  const handleDepartmentChange = (event) => {
+    setDepartmentFilter(event.target.value);
+    setPage(1);
+  };
+
   const handleClearFilters = () => {
     setSearchTerm("");
     setSupplierFilter("");
+    setDepartmentFilter("");
     setPage(1);
   };
 
   const handleExport = () => {
     if (!orders.length) return;
     const rows = orders.map((order) => ({
-      "Order Number": order.orderNumber || "",
+      "Order No. / Department": order.orderNumber || "",
       "PO Number": order.poNumber || "",
       "Item Name": order.itemName || "",
       Supplier: order.supplier,
+      "Supplier Location": order.supplierLocation || "",
       Category: order.category || "",
-      "Items Ordered": order.itemsCount,
+      Quantity: order.quantity,
+      "Unit Cost": formatCurrencyValue(order.unitCost, currency, rate),
       "Total Cost": formatCurrencyValue(order.total, currency, rate),
       Status: order.status,
       "Created Date": `${order.createdDate} ${order.createdTime}`.trim(),
@@ -391,19 +491,7 @@ const PurchaseOrders = () => {
 
   const openCreateModal = () => {
     setEditingOrder(null);
-    setFormData({
-      poNumber: "",
-      orderNumber: "",
-      supplierName: "",
-      category: "",
-      total: "",
-      status: "Pending",
-      createdDate: "",
-      createdTime: "",
-      itemsCount: "",
-      itemNames: "",
-      itemImages: [],
-    });
+    setFormData(createEmptyOrderForm());
     setActionError("");
     setIsModalOpen(true);
   };
@@ -434,15 +522,15 @@ const PurchaseOrders = () => {
       poNumber: order.poNumber || "",
       orderNumber: order.orderNumber || "",
       supplierName: order.supplier || "",
+      supplierLocation: order.supplierLocation || "",
       category: order.category || "",
-      total: order.total || "",
+      unitCost: formatNumberInputValue(order.unitCost, 2),
+      quantity: formatNumberInputValue(order.quantity),
+      total: buildComputedTotal(order.unitCost, order.quantity) || order.total || "",
       status: order.status || "Pending",
-      createdDate: order.createdDate || "",
-      createdTime: order.createdTime || "",
-      itemsCount:
-        Number.isFinite(order.itemsCount) && order.itemsCount
-          ? String(order.itemsCount)
-          : "",
+      dateRequestPlaced: formatDateTimeInputValue(
+        order.dateRequestPlaced || order.createdAt || order.created,
+      ),
       itemNames,
       itemImages,
     });
@@ -463,10 +551,12 @@ const PurchaseOrders = () => {
       poNumber: poNumber || "",
       name: supplierSync?.prefill?.name || supplierSync?.supplierName || "",
       phone: supplierSync?.prefill?.phone || "",
+      location: supplierSync?.prefill?.location || "",
       products: supplierSync?.prefill?.products || "",
       missingFields: {
         name: Boolean(supplierSync?.missingFields?.name),
         phone: Boolean(supplierSync?.missingFields?.phone),
+        location: Boolean(supplierSync?.missingFields?.location),
         products: Boolean(supplierSync?.missingFields?.products),
       },
     });
@@ -540,10 +630,35 @@ const PurchaseOrders = () => {
 
   const handleSave = async () => {
     if (isSaving) return;
-    if (!formData.orderNumber || !formData.supplierName || !formData.total) {
-      setActionError("Order number, supplier name, and total are required.");
+    const orderNumber = String(formData.orderNumber || "").trim();
+    const supplierName = String(formData.supplierName || "").trim();
+    const supplierLocation = String(formData.supplierLocation || "").trim();
+    const quantityValue = toFiniteNumber(formData.quantity);
+    const unitCostValue = toFiniteNumber(formData.unitCost);
+    const totalValue = buildComputedTotal(formData.unitCost, formData.quantity);
+    const dateRequestPlaced = formData.dateRequestPlaced
+      ? new Date(formData.dateRequestPlaced)
+      : null;
+
+    if (
+      !orderNumber ||
+      !supplierName ||
+      !formData.dateRequestPlaced ||
+      quantityValue === null ||
+      unitCostValue === null ||
+      !totalValue
+    ) {
+      setActionError(
+        "Order No. / Department, supplier name, date created, unit cost, and quantity are required.",
+      );
       return;
     }
+
+    if (Number.isNaN(dateRequestPlaced?.getTime?.())) {
+      setActionError("Date created must be a valid date and time.");
+      return;
+    }
+
     const names = formData.itemNames
       .split(",")
       .map((item) => item.trim())
@@ -555,28 +670,27 @@ const PurchaseOrders = () => {
       name,
       image: images[index] || "",
     }));
-    const parsedCount = Number.parseInt(formData.itemsCount, 10);
-    const itemsCount = Number.isFinite(parsedCount)
-      ? parsedCount
-      : items.length;
 
     setIsSaving(true);
     try {
       const payload = {
         poNumber: formData.poNumber,
-        orderNumber: formData.orderNumber,
-        supplierName: formData.supplierName,
-        supplierInitials: buildInitials(formData.supplierName),
+        orderNumber,
+        supplierName,
+        supplierLocation,
+        supplierInitials: buildInitials(supplierName),
         items,
-        itemsCount,
+        quantity: quantityValue,
+        itemsCount: quantityValue,
         category: formData.category,
-        total: formData.total,
+        unitCost: unitCostValue,
+        total: totalValue,
         status: formData.status,
+        dateRequestPlaced: dateRequestPlaced.toISOString(),
         ...(editingOrder
           ? {}
           : {
-              dateRequestPlaced: new Date().toISOString(),
-              supplierTone: pickTone(formData.supplierName),
+              supplierTone: pickTone(supplierName),
             }),
       };
 
@@ -612,6 +726,7 @@ const PurchaseOrders = () => {
     const supplierId = String(supplierPrompt.supplierId || "").trim();
     const name = String(supplierPrompt.name || "").trim();
     const phone = String(supplierPrompt.phone || "").trim();
+    const location = String(supplierPrompt.location || "").trim();
     const products = String(supplierPrompt.products || "").trim();
 
     if (!supplierId) {
@@ -626,6 +741,10 @@ const PurchaseOrders = () => {
       setSupplierPromptError("Phone number is required.");
       return;
     }
+    if (!location) {
+      setSupplierPromptError("Supplier location is required.");
+      return;
+    }
     if (!products) {
       setSupplierPromptError("Add at least one supplied product.");
       return;
@@ -638,6 +757,7 @@ const PurchaseOrders = () => {
         body: JSON.stringify({
           name,
           phone,
+          location,
           products: buildSupplierProductsPayload(products),
         }),
         toast: {
@@ -752,7 +872,7 @@ const PurchaseOrders = () => {
               <SearchIcon className="search-icon" />
               <input
                 type="text"
-                placeholder="Search order number, PO number, supplier, or item..."
+                placeholder="Search order no., PO number, supplier, department, or item..."
                 value={searchTerm}
                 onChange={handleSearchChange}
               />
@@ -763,6 +883,13 @@ const PurchaseOrders = () => {
               placeholder="Filter by supplier"
               value={supplierFilter}
               onChange={handleSupplierChange}
+            />
+            <input
+              className="filter-input"
+              type="text"
+              placeholder="Filter by department"
+              value={departmentFilter}
+              onChange={handleDepartmentChange}
             />
             <button
               type="button"
@@ -777,10 +904,11 @@ const PurchaseOrders = () => {
 
       <div className="orders-table-card mobile-card-table">
         <div className="table-header">
-          <span>Order Number</span>
+          <span>Order No. / Department</span>
           <span>Item Name</span>
           <span>Supplier</span>
-          <span>Items Ordered</span>
+          <span>Unit Cost</span>
+          <span>Quantity</span>
           <span>Total Cost</span>
           <span>Status</span>
           <span>Created Date</span>
@@ -789,7 +917,7 @@ const PurchaseOrders = () => {
         <div className="table-body">
           {orders.map((order) => (
             <div className="table-row" key={order.id}>
-              <div className="cell mono" data-label="Order Number">
+              <div className="cell mono" data-label="Order No. / Department">
                 {order.orderNumber || "-"}
               </div>
               <div className="cell item-name-cell full" data-label="Item Name">
@@ -813,14 +941,26 @@ const PurchaseOrders = () => {
                 <div className={`supplier-avatar ${order.supplierTone}`}>
                   {order.supplierInitials}
                 </div>
-                <div>
+                <div className="supplier-copy">
                   <strong>{order.supplier}</strong>
+                  {order.supplierLocation ? (
+                    <span className="muted">{order.supplierLocation}</span>
+                  ) : null}
                 </div>
               </div>
-              <div className="cell items-cell full" data-label="Items Ordered">
-                <span className="muted items-count">
-                  {order.itemsCount} items
+              <div className="cell total-cost" data-label="Unit Cost">
+                <span
+                  className="tooltip-anchor"
+                  data-tooltip={
+                    formatCurrencyPair(order.unitCost, currency, rate)
+                      .alternateValue || undefined
+                  }
+                >
+                  {formatCurrencyValue(order.unitCost, currency, rate)}
                 </span>
+              </div>
+              <div className="cell items-cell full" data-label="Quantity">
+                <span className="muted items-count">{order.quantity}</span>
               </div>
               <div className="cell total-cost" data-label="Total Cost">
                 <span
@@ -959,7 +1099,7 @@ const PurchaseOrders = () => {
       <Modal
         isOpen={isModalOpen}
         title={editingOrder ? "Edit Purchase Order" : "Create Purchase Order"}
-        subtitle="Enter purchase order details and item counts."
+        subtitle="Enter purchase order details, pricing, and quantity."
         primaryText={isSaving ? "Saving..." : "Save"}
         secondaryText="Cancel"
         onConfirm={handleSave}
@@ -981,12 +1121,12 @@ const PurchaseOrders = () => {
               </span>
             </label>
             <label className="modal-field">
-              <span>Order Number</span>
+              <span>Order No. / Department</span>
               <input
                 type="text"
                 value={formData.orderNumber}
                 onChange={updateField("orderNumber")}
-                placeholder="ORD-2024-0001"
+                placeholder="ORD-2045 / Stores"
               />
             </label>
             <label className="modal-field">
@@ -996,6 +1136,15 @@ const PurchaseOrders = () => {
                 value={formData.supplierName}
                 onChange={updateField("supplierName")}
                 placeholder="Supplier name"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Supplier Location</span>
+              <input
+                type="text"
+                value={formData.supplierLocation}
+                onChange={updateField("supplierLocation")}
+                placeholder="Accra, Ghana"
               />
             </label>
             <label className="modal-field">
@@ -1030,6 +1179,38 @@ const PurchaseOrders = () => {
               </div>
             </label>
             <label className="modal-field">
+              <span>Unit Cost ({currencyLabel})</span>
+              <div
+                className="tooltip-anchor tooltip-field"
+                data-tooltip={
+                  formData.unitCost
+                    ? formatCurrencyPair(formData.unitCost, currency, rate)
+                        .alternateValue
+                    : undefined
+                }
+              >
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.unitCost}
+                  onChange={updateField("unitCost")}
+                  placeholder={currencyPlaceholder}
+                />
+              </div>
+            </label>
+            <label className="modal-field">
+              <span>Quantity</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={formData.quantity}
+                onChange={updateField("quantity")}
+                placeholder="0"
+              />
+            </label>
+            <label className="modal-field">
               <span>Total Cost ({currencyLabel})</span>
               <div
                 className="tooltip-anchor tooltip-field"
@@ -1043,10 +1224,13 @@ const PurchaseOrders = () => {
                 <input
                   type="text"
                   value={formData.total}
-                  onChange={updateField("total")}
+                  readOnly
                   placeholder={currencyPlaceholder}
                 />
               </div>
+              <span className="modal-help">
+                Calculated automatically from unit cost x quantity.
+              </span>
             </label>
             <label className="modal-field">
               <span>Status</span>
@@ -1058,15 +1242,11 @@ const PurchaseOrders = () => {
               </select>
             </label>
             <label className="modal-field">
-              <span>Created Date &amp; Time</span>
+              <span>Date Created</span>
               <input
-                type="text"
-                value={
-                  editingOrder
-                    ? `${formData.createdDate || ""} ${formData.createdTime || ""}`.trim()
-                    : `${formatShortDate(new Date())} ${formatTime(new Date())}`
-                }
-                readOnly
+                type="datetime-local"
+                value={formData.dateRequestPlaced}
+                onChange={updateField("dateRequestPlaced")}
               />
             </label>
             <label className="modal-field">
@@ -1092,16 +1272,6 @@ const PurchaseOrders = () => {
               <span className="modal-help">
                 Upload images in the same order as item names.
               </span>
-            </label>
-            <label className="modal-field">
-              <span>Items Count</span>
-              <input
-                type="number"
-                min="0"
-                value={formData.itemsCount}
-                onChange={updateField("itemsCount")}
-                placeholder="0"
-              />
             </label>
           </div>
           {formData.itemImages?.length ? (
@@ -1176,6 +1346,15 @@ const PurchaseOrders = () => {
                 value={supplierPrompt.phone}
                 onChange={updateSupplierPromptField("phone")}
                 placeholder="+1 (555) 555-1234"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Supplier Location</span>
+              <input
+                type="text"
+                value={supplierPrompt.location}
+                onChange={updateSupplierPromptField("location")}
+                placeholder="Accra, Ghana"
               />
             </label>
             <label className="modal-field full">

@@ -49,6 +49,11 @@ const PurchasingOrderSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    supplierLocation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     items: {
       type: [PurchasingOrderItemSchema],
       default: [],
@@ -62,6 +67,11 @@ const PurchasingOrderSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    unitCost: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     total: {
       type: String,

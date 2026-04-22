@@ -153,6 +153,8 @@ const shouldNotifyLowStock = (record, previousQtyValue, settings) => {
 
 const parseStringValue = (value) => String(value ?? "").trim();
 const normalizeKey = (value) => parseStringValue(value).toLowerCase();
+const hasOwnField = (value, fieldName) =>
+  Object.prototype.hasOwnProperty.call(value || {}, fieldName);
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const buildExactMatchRegex = (value) => {
@@ -656,6 +658,84 @@ const parseOptionalDate = (value) => {
   return parsed;
 };
 
+const getPurchaseOrderQuantityInput = (payload = {}) => {
+  if (hasOwnField(payload, "quantity")) return payload.quantity;
+  if (hasOwnField(payload, "itemsCount")) return payload.itemsCount;
+  if (hasOwnField(payload, "qty")) return payload.qty;
+  return undefined;
+};
+
+const parsePurchaseOrderQuantityValue = (payload, options = {}) =>
+  parseNumberValue(getPurchaseOrderQuantityInput(payload), "quantity", options);
+
+const resolvePurchaseOrderQuantity = (record = {}) => {
+  const candidates = [record?.quantity, record?.itemsCount, record?.qty];
+  for (const candidate of candidates) {
+    const numericValue = Number(candidate);
+    if (Number.isFinite(numericValue)) {
+      return numericValue;
+    }
+  }
+
+  if (Array.isArray(record?.items)) {
+    return record.items.length;
+  }
+
+  return 0;
+};
+
+const getPurchaseOrderUnitCostInput = (payload = {}) => {
+  if (hasOwnField(payload, "unitCost")) return payload.unitCost;
+  if (hasOwnField(payload, "unitPrice")) return payload.unitPrice;
+  if (hasOwnField(payload, "unit_price")) return payload.unit_price;
+  if (hasOwnField(payload, "costPerUnit")) return payload.costPerUnit;
+  return undefined;
+};
+
+const parsePurchaseOrderUnitCostValue = (payload, options = {}) =>
+  parseNumberValue(getPurchaseOrderUnitCostInput(payload), "unitCost", options);
+
+const resolvePurchaseOrderUnitCost = (record = {}) => {
+  const directUnitCost = Number(record?.unitCost);
+  const quantity = resolvePurchaseOrderQuantity(record);
+  const totalValue = parseCurrencyNumber(record?.total);
+
+  if (
+    Number.isFinite(directUnitCost) &&
+    (directUnitCost > 0 || quantity <= 0 || !Number.isFinite(totalValue))
+  ) {
+    return directUnitCost;
+  }
+
+  if (Number.isFinite(totalValue) && quantity > 0) {
+    return Number((totalValue / quantity).toFixed(2));
+  }
+
+  return 0;
+};
+
+const formatPurchaseOrderAmount = (value) =>
+  Number.isFinite(value) ? value.toFixed(2) : "";
+
+const buildPurchaseOrderTotalValue = ({
+  unitCost,
+  quantity,
+  fallbackTotal,
+}) => {
+  const numericUnitCost = Number(unitCost);
+  const numericQuantity = Number(quantity);
+  if (Number.isFinite(numericUnitCost) && Number.isFinite(numericQuantity)) {
+    return formatPurchaseOrderAmount(numericUnitCost * numericQuantity);
+  }
+
+  const fallbackNumeric = parseCurrencyNumber(fallbackTotal);
+  if (Number.isFinite(fallbackNumeric)) {
+    return formatPurchaseOrderAmount(fallbackNumeric);
+  }
+
+  return parseStringValue(fallbackTotal);
+};
+
 const normalizeStockTransactionQty = (type, qty) => {
   const numericQty = Number(qty);
   if (!Number.isFinite(numericQty)) return 0;
@@ -1077,6 +1157,20 @@ const findSupplierByName = async (name) => {
   return nameRegex ? Supplier.findOne({ name: nameRegex }) : null;
 };
 
+const findSupplierByCode = async (code, excludeId = null) => {
+  const normalizedCode = parseStringValue(code);
+  if (!normalizedCode) return null;
+  const codeRegex = buildExactMatchRegex(normalizedCode);
+  if (!codeRegex) return null;
+
+  const filter = { code: codeRegex };
+  if (excludeId) {
+    filter._id = { $ne: excludeId };
+  }
+
+  return Supplier.findOne(filter);
+};
+
 const mapPurchaseOrderStatusToSupplierOpenPOStatus = (status) => {
   const normalizedStatus = normalizeKey(status);
   if (!normalizedStatus || PURCHASE_ORDER_CLOSED_STATUSES.has(normalizedStatus)) {
@@ -1129,6 +1223,7 @@ const buildSupplierSyncMeta = (supplier) => {
   const missingFields = {
     name: !parseStringValue(supplier?.name),
     phone: !parseStringValue(supplier?.phone),
+    location: !parseStringValue(supplier?.location),
     products: normalizedProducts.length === 0,
   };
 
@@ -1140,6 +1235,7 @@ const buildSupplierSyncMeta = (supplier) => {
     prefill: {
       name: parseStringValue(supplier?.name),
       phone: parseStringValue(supplier?.phone),
+      location: parseStringValue(supplier?.location),
       products: normalizedProducts.map((product) => product.label).join(", "),
     },
   };
@@ -1185,6 +1281,9 @@ const syncSupplierFromPurchaseOrder = async ({ purchaseOrder, actorId }) => {
   if (!supplierName) return null;
 
   const poProducts = buildPurchaseOrderSupplierProducts(purchaseOrder);
+  const supplierLocation = parseStringValue(
+    purchaseOrder?.supplierLocation || purchaseOrder?.location,
+  );
   const nextOpenPO = await buildSupplierOpenPOSummary(supplierName);
   const toneSeed =
     parseStringValue(purchaseOrder?.supplierTone) || supplierName;
@@ -1194,6 +1293,7 @@ const syncSupplierFromPurchaseOrder = async ({ purchaseOrder, actorId }) => {
   if (!supplier) {
     supplier = await Supplier.create({
       name: supplierName,
+      location: supplierLocation,
       products: poProducts,
       openPO: nextOpenPO,
       tone: nextTone,
@@ -1210,6 +1310,14 @@ const syncSupplierFromPurchaseOrder = async ({ purchaseOrder, actorId }) => {
 
   if (JSON.stringify(currentProducts) !== JSON.stringify(mergedProducts)) {
     supplier.products = mergedProducts;
+    shouldSave = true;
+  }
+
+  if (
+    supplierLocation &&
+    parseStringValue(supplier.location) !== supplierLocation
+  ) {
+    supplier.location = supplierLocation;
     shouldSave = true;
   }
 
@@ -1687,17 +1795,42 @@ const getPurchasingOrders = async (req, res) => {
     const filter = {};
     const status = parseStringValue(req.query.status);
     const supplier = parseStringValue(req.query.supplier);
+    const departmentSearch = buildSearchRegex(
+      req.query.department || req.query.dept,
+    );
     const search = buildSearchRegex(req.query.search);
+    const andFilters = [];
 
-    if (status) filter.status = status;
-    if (supplier) filter.supplierName = supplier;
+    if (status) {
+      andFilters.push({ status });
+    }
+    if (supplier) {
+      andFilters.push({ supplierName: supplier });
+    }
+    if (departmentSearch) {
+      andFilters.push({
+        $or: [
+          { dept: departmentSearch },
+          { orderNumber: departmentSearch },
+        ],
+      });
+    }
     if (search) {
-      filter.$or = [
-        { supplierName: search },
-        { orderNumber: search },
-        { poNumber: search },
-        { description: search },
-      ];
+      andFilters.push({
+        $or: [
+          { supplierName: search },
+          { orderNumber: search },
+          { poNumber: search },
+          { dept: search },
+          { description: search },
+        ],
+      });
+    }
+
+    if (andFilters.length === 1) {
+      Object.assign(filter, andFilters[0]);
+    } else if (andFilters.length > 1) {
+      filter.$and = andFilters;
     }
 
     const [records, total] = await Promise.all([
@@ -1735,6 +1868,9 @@ const createPurchasingOrder = async (req, res) => {
     const supplierName =
       parseStringValue(req.body.supplierName) ||
       parseStringValue(req.body.supplier);
+    const supplierLocation = parseStringValue(
+      req.body.supplierLocation || req.body.location,
+    );
     const category = parseStringValue(req.body.category);
     const supplierInitials =
       parseStringValue(req.body.supplierInitials) || buildInitials(supplierName);
@@ -1745,10 +1881,27 @@ const createPurchasingOrder = async (req, res) => {
       parseStringValue(req.body.requestStatus) ||
       "Pending";
     const items = normalizeItems(req.body.items);
-    const itemsCountValue =
-      Number.isFinite(Number(req.body.itemsCount))
-        ? Number(req.body.itemsCount)
-        : items.length;
+    const quantityResult = parsePurchaseOrderQuantityValue(req.body);
+    if (quantityResult.error) {
+      return res.status(400).json({ message: quantityResult.error });
+    }
+    const quantityValue =
+      quantityResult.value ?? resolvePurchaseOrderQuantity({ items });
+    const unitCostResult = parsePurchaseOrderUnitCostValue(req.body);
+    if (unitCostResult.error) {
+      return res.status(400).json({ message: unitCostResult.error });
+    }
+    const fallbackTotalValue = parseCurrencyNumber(total);
+    const unitCostValue =
+      unitCostResult.value ??
+      (Number.isFinite(fallbackTotalValue) && quantityValue > 0
+        ? Number((fallbackTotalValue / quantityValue).toFixed(2))
+        : 0);
+    const totalValue = buildPurchaseOrderTotalValue({
+      unitCost: unitCostValue,
+      quantity: quantityValue,
+      fallbackTotal: total,
+    });
     const dateRequestPlaced =
       parseOptionalDate(req.body.dateRequestPlaced) ||
       parseOptionalDate(req.body.createdAt) ||
@@ -1761,8 +1914,10 @@ const createPurchasingOrder = async (req, res) => {
     if (!supplierName) {
       return res.status(400).json({ message: "supplierName is required." });
     }
-    if (!total) {
-      return res.status(400).json({ message: "total is required." });
+    if (!totalValue) {
+      return res.status(400).json({
+        message: "unitCost and quantity are required to calculate total.",
+      });
     }
 
     let resolvedPoNumber = poNumber;
@@ -1782,11 +1937,6 @@ const createPurchasingOrder = async (req, res) => {
       resolvedPoNumber = await generateUniquePurchaseOrderNumber();
     }
 
-    const qtyResult = parseNumberValue(req.body.qty, "qty", { min: 0 });
-    if (qtyResult.error) {
-      return res.status(400).json({ message: qtyResult.error });
-    }
-
     let record = null;
     let attemptsRemaining = 3;
     while (!record && attemptsRemaining > 0) {
@@ -1797,15 +1947,17 @@ const createPurchasingOrder = async (req, res) => {
           supplierName,
           supplierInitials,
           supplierTone,
+          supplierLocation,
           items,
-          itemsCount: itemsCountValue,
+          itemsCount: quantityValue,
           category,
-          total,
+          unitCost: unitCostValue,
+          total: totalValue,
           status,
           dateRequestPlaced,
           dept: parseStringValue(req.body.dept),
           description: parseStringValue(req.body.description),
-          qty: qtyResult.value ?? 0,
+          qty: quantityValue,
           requestStatus: parseStringValue(req.body.requestStatus) || status,
           qtyReceivedBrought: Number.isFinite(Number(req.body.qtyReceivedBrought))
             ? Number(req.body.qtyReceivedBrought)
@@ -1912,6 +2064,15 @@ const updatePurchasingOrder = async (req, res) => {
       record.supplierName = supplierName;
     }
 
+    if (
+      hasOwnField(req.body, "supplierLocation") ||
+      hasOwnField(req.body, "location")
+    ) {
+      record.supplierLocation = parseStringValue(
+        req.body.supplierLocation || req.body.location,
+      );
+    }
+
     if (Object.prototype.hasOwnProperty.call(req.body, "supplierInitials")) {
       record.supplierInitials = parseStringValue(req.body.supplierInitials);
     }
@@ -1923,31 +2084,67 @@ const updatePurchasingOrder = async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, "items")) {
       const items = normalizeItems(req.body.items);
       record.items = items;
-      record.itemsCount = items.length;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "itemsCount")) {
-      const itemsCountResult = parseNumberValue(
-        req.body.itemsCount,
-        "itemsCount",
-        { min: 0 },
-      );
-      if (itemsCountResult.error) {
-        return res.status(400).json({ message: itemsCountResult.error });
+    if (
+      hasOwnField(req.body, "quantity") ||
+      hasOwnField(req.body, "itemsCount") ||
+      hasOwnField(req.body, "qty")
+    ) {
+      const quantityResult = parsePurchaseOrderQuantityValue(req.body, {
+        required: true,
+      });
+      if (quantityResult.error) {
+        return res.status(400).json({ message: quantityResult.error });
       }
-      record.itemsCount = itemsCountResult.value ?? 0;
+      const quantityValue = quantityResult.value ?? 0;
+      record.itemsCount = quantityValue;
+      record.qty = quantityValue;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
       record.category = parseStringValue(req.body.category);
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, "total")) {
-      const total = parseStringValue(req.body.total);
-      if (!total) {
-        return res.status(400).json({ message: "total cannot be empty." });
+    if (
+      hasOwnField(req.body, "unitCost") ||
+      hasOwnField(req.body, "unitPrice") ||
+      hasOwnField(req.body, "unit_price") ||
+      hasOwnField(req.body, "costPerUnit")
+    ) {
+      const unitCostResult = parsePurchaseOrderUnitCostValue(req.body, {
+        required: true,
+      });
+      if (unitCostResult.error) {
+        return res.status(400).json({ message: unitCostResult.error });
       }
-      record.total = total;
+      record.unitCost = unitCostResult.value ?? 0;
+    } else if (!Number.isFinite(Number(record.unitCost))) {
+      record.unitCost = resolvePurchaseOrderUnitCost(record);
+    }
+
+    if (
+      hasOwnField(req.body, "total") ||
+      hasOwnField(req.body, "unitCost") ||
+      hasOwnField(req.body, "unitPrice") ||
+      hasOwnField(req.body, "unit_price") ||
+      hasOwnField(req.body, "costPerUnit") ||
+      hasOwnField(req.body, "quantity") ||
+      hasOwnField(req.body, "itemsCount") ||
+      hasOwnField(req.body, "qty")
+    ) {
+      const totalValue = buildPurchaseOrderTotalValue({
+        unitCost: resolvePurchaseOrderUnitCost(record),
+        quantity: resolvePurchaseOrderQuantity(record),
+        fallbackTotal:
+          parseStringValue(req.body.total) || parseStringValue(record.total),
+      });
+      if (!totalValue) {
+        return res.status(400).json({
+          message: "unitCost and quantity are required to calculate total.",
+        });
+      }
+      record.total = totalValue;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "status")) {
@@ -2073,6 +2270,7 @@ const getSuppliers = async (req, res) => {
         { contactPerson: search },
         { email: search },
         { phone: search },
+        { location: search },
       ];
     }
 
@@ -2105,8 +2303,17 @@ const createSupplier = async (req, res) => {
 
   try {
     const name = parseStringValue(req.body.name);
+    const code = parseStringValue(req.body.code);
     if (!name) {
       return res.status(400).json({ message: "name is required." });
+    }
+    if (code) {
+      const existingSupplier = await findSupplierByCode(code);
+      if (existingSupplier) {
+        return res.status(409).json({
+          message: `code "${code}" already exists. Use a unique supplier code.`,
+        });
+      }
     }
 
     const openPOBody = req.body.openPO || {};
@@ -2116,11 +2323,12 @@ const createSupplier = async (req, res) => {
       formatOpenPOStatusLabel(openPOStatus);
 
     const record = await Supplier.create({
-      code: parseStringValue(req.body.code),
+      code,
       name,
       contactPerson: parseStringValue(req.body.contactPerson),
       role: parseStringValue(req.body.role),
       phone: parseStringValue(req.body.phone),
+      location: parseStringValue(req.body.location),
       email: parseStringValue(req.body.email),
       products: normalizeSupplierProducts(req.body.products),
       openPO: {
@@ -2140,6 +2348,14 @@ const createSupplier = async (req, res) => {
 
     res.status(201).json(record);
   } catch (error) {
+    if (
+      isDuplicateKeyError(error) &&
+      String(error?.message || "").includes("code")
+    ) {
+      return res.status(409).json({
+        message: "Supplier code already exists. Use a unique supplier code.",
+      });
+    }
     console.error("Error creating supplier:", error);
     res.status(500).json({ message: "Server Error" });
   }
@@ -2155,7 +2371,16 @@ const updateSupplier = async (req, res) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "code")) {
-      record.code = parseStringValue(req.body.code);
+      const code = parseStringValue(req.body.code);
+      if (code) {
+        const existingSupplier = await findSupplierByCode(code, record._id);
+        if (existingSupplier) {
+          return res.status(409).json({
+            message: `code "${code}" already exists. Use a unique supplier code.`,
+          });
+        }
+      }
+      record.code = code;
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "name")) {
       const name = parseStringValue(req.body.name);
@@ -2172,6 +2397,9 @@ const updateSupplier = async (req, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "phone")) {
       record.phone = parseStringValue(req.body.phone);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "location")) {
+      record.location = parseStringValue(req.body.location);
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "email")) {
       record.email = parseStringValue(req.body.email);
@@ -2210,6 +2438,14 @@ const updateSupplier = async (req, res) => {
 
     res.json(record);
   } catch (error) {
+    if (
+      isDuplicateKeyError(error) &&
+      String(error?.message || "").includes("code")
+    ) {
+      return res.status(409).json({
+        message: "Supplier code already exists. Use a unique supplier code.",
+      });
+    }
     console.error("Error updating supplier:", error);
     res.status(500).json({ message: "Server Error" });
   }
