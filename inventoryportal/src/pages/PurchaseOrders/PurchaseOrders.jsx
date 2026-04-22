@@ -130,6 +130,7 @@ const PurchaseOrders = () => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [formData, setFormData] = useState({
     poNumber: "",
+    orderNumber: "",
     supplierName: "",
     category: "",
     total: "",
@@ -192,6 +193,8 @@ const PurchaseOrders = () => {
           return {
             id: order._id || order.id || `${index}`,
             poNumber: order.poNumber || order.orderNo || order.id || "",
+            orderNumber:
+              order.orderNumber || order.orderNo || order.poNumber || "",
             itemName: primaryItemName,
             itemImage: primaryItemImage,
             supplier,
@@ -333,7 +336,8 @@ const PurchaseOrders = () => {
   const handleExport = () => {
     if (!orders.length) return;
     const rows = orders.map((order) => ({
-      "PO Number": order.poNumber,
+      "Order Number": order.orderNumber || "",
+      "PO Number": order.poNumber || "",
       "Item Name": order.itemName || "",
       Supplier: order.supplier,
       Category: order.category || "",
@@ -389,6 +393,7 @@ const PurchaseOrders = () => {
     setEditingOrder(null);
     setFormData({
       poNumber: "",
+      orderNumber: "",
       supplierName: "",
       category: "",
       total: "",
@@ -427,6 +432,7 @@ const PurchaseOrders = () => {
     setEditingOrder(order);
     setFormData({
       poNumber: order.poNumber || "",
+      orderNumber: order.orderNumber || "",
       supplierName: order.supplier || "",
       category: order.category || "",
       total: order.total || "",
@@ -534,8 +540,8 @@ const PurchaseOrders = () => {
 
   const handleSave = async () => {
     if (isSaving) return;
-    if (!formData.poNumber || !formData.supplierName || !formData.total) {
-      setActionError("PO number, supplier name, and total are required.");
+    if (!formData.orderNumber || !formData.supplierName || !formData.total) {
+      setActionError("Order number, supplier name, and total are required.");
       return;
     }
     const names = formData.itemNames
@@ -558,6 +564,7 @@ const PurchaseOrders = () => {
     try {
       const payload = {
         poNumber: formData.poNumber,
+        orderNumber: formData.orderNumber,
         supplierName: formData.supplierName,
         supplierInitials: buildInitials(formData.supplierName),
         items,
@@ -587,7 +594,10 @@ const PurchaseOrders = () => {
       }
       triggerRefresh();
       if (!editingOrder && response?.supplierSync?.needsDetails) {
-        openSupplierPrompt(response.supplierSync, payload.poNumber);
+        openSupplierPrompt(
+          response.supplierSync,
+          payload.orderNumber || payload.poNumber,
+        );
       }
     } catch (err) {
       setActionError(err?.message || "Unable to save purchase order.");
@@ -742,7 +752,7 @@ const PurchaseOrders = () => {
               <SearchIcon className="search-icon" />
               <input
                 type="text"
-                placeholder="Search PO number, supplier, or item..."
+                placeholder="Search order number, PO number, supplier, or item..."
                 value={searchTerm}
                 onChange={handleSearchChange}
               />
@@ -767,7 +777,7 @@ const PurchaseOrders = () => {
 
       <div className="orders-table-card mobile-card-table">
         <div className="table-header">
-          <span>PO Number</span>
+          <span>Order Number</span>
           <span>Item Name</span>
           <span>Supplier</span>
           <span>Items Ordered</span>
@@ -779,8 +789,8 @@ const PurchaseOrders = () => {
         <div className="table-body">
           {orders.map((order) => (
             <div className="table-row" key={order.id}>
-              <div className="cell mono" data-label="PO Number">
-                {order.poNumber}
+              <div className="cell mono" data-label="Order Number">
+                {order.orderNumber || "-"}
               </div>
               <div className="cell item-name-cell full" data-label="Item Name">
                 <span className="item-avatar">
@@ -792,7 +802,12 @@ const PurchaseOrders = () => {
                     </span>
                   )}
                 </span>
-                <strong>{order.itemName || "-"}</strong>
+                <div className="item-name-copy">
+                  <strong>{order.itemName || "-"}</strong>
+                  <span className="muted">
+                    PO No: {order.poNumber || "-"}
+                  </span>
+                </div>
               </div>
               <div className="cell supplier-cell full" data-label="Supplier">
                 <div className={`supplier-avatar ${order.supplierTone}`}>
@@ -822,7 +837,7 @@ const PurchaseOrders = () => {
                 <select
                   className={`status-select ${getStatusClass(order.status)}`}
                   value={order.status}
-                  aria-label={`Status for ${order.poNumber}`}
+                  aria-label={`Status for ${order.orderNumber || order.poNumber}`}
                   onChange={(event) =>
                     handleStatusChange(order.id, event.target.value)
                   }
@@ -958,8 +973,20 @@ const PurchaseOrders = () => {
               <input
                 type="text"
                 value={formData.poNumber}
-                onChange={updateField("poNumber")}
-                placeholder="PO-2024-0001"
+                readOnly
+                placeholder="Generated when you save"
+              />
+              <span className="modal-help">
+                Automatically generated in a simple PO sequence when you save.
+              </span>
+            </label>
+            <label className="modal-field">
+              <span>Order Number</span>
+              <input
+                type="text"
+                value={formData.orderNumber}
+                onChange={updateField("orderNumber")}
+                placeholder="ORD-2024-0001"
               />
             </label>
             <label className="modal-field">
@@ -1106,7 +1133,9 @@ const PurchaseOrders = () => {
         isOpen={isSupplierPromptOpen}
         title="Complete Supplier Details"
         subtitle={`${
-          supplierPrompt.poNumber ? `${supplierPrompt.poNumber} created this supplier record.` : "This supplier was created from a purchase order."
+          supplierPrompt.poNumber
+            ? `Order ${supplierPrompt.poNumber} created this supplier record.`
+            : "This supplier was created from a purchase order."
         } Add the missing supplier details so the Suppliers table stays complete.`}
         primaryText={isSupplierPromptSaving ? "Saving..." : "Save Supplier"}
         secondaryText="Later"
@@ -1173,7 +1202,7 @@ const PurchaseOrders = () => {
         title="Delete Purchase Order"
         message={
           deleteTarget
-            ? `Delete ${deleteTarget.poNumber}? This cannot be undone.`
+            ? `Delete ${deleteTarget.orderNumber || deleteTarget.poNumber}? This cannot be undone.`
             : "Delete this purchase order?"
         }
         confirmText={isDeleting ? "Deleting..." : "Delete"}

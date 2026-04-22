@@ -940,6 +940,47 @@ const buildInitials = (value) => {
     .join("");
 };
 
+const PURCHASE_ORDER_NUMBER_DIGITS = 4;
+
+const buildPurchaseOrderNumber = (sequenceNumber) =>
+  `PO-${String(sequenceNumber).padStart(PURCHASE_ORDER_NUMBER_DIGITS, "0")}`;
+
+const generateUniquePurchaseOrderNumber = async () => {
+  const [latestSequential] = await PurchasingOrder.aggregate([
+    {
+      $match: {
+        poNumber: /^PO-\d+$/,
+      },
+    },
+    {
+      $project: {
+        sequence: {
+          $toInt: {
+            $substrBytes: ["$poNumber", 3, -1],
+          },
+        },
+      },
+    },
+    { $sort: { sequence: -1 } },
+    { $limit: 1 },
+  ]);
+
+  const startingSequence = Number(latestSequential?.sequence) || 0;
+  for (let attempt = 1; attempt <= 25; attempt += 1) {
+    const candidate = buildPurchaseOrderNumber(startingSequence + attempt);
+    const existing = await PurchasingOrder.exists({ poNumber: candidate });
+    if (!existing) return candidate;
+  }
+
+  return `PO-${Date.now()}`;
+};
+
+const getPurchaseOrderDisplayLabel = (record = {}) =>
+  parseStringValue(record?.orderNumber) ||
+  parseStringValue(record?.orderNo) ||
+  parseStringValue(record?.poNumber) ||
+  "Purchase order";
+
 const normalizeItems = (items) => {
   if (!Array.isArray(items)) return [];
   return items.map((item) => ({
@@ -1629,7 +1670,14 @@ const getPurchasingOrders = async (req, res) => {
 
     const sortResult = parseSortParam(
       req,
-      ["dateRequestPlaced", "createdAt", "supplierName", "status", "poNumber"],
+      [
+        "dateRequestPlaced",
+        "createdAt",
+        "supplierName",
+        "status",
+        "poNumber",
+        "orderNumber",
+      ],
       { dateRequestPlaced: -1, createdAt: -1 },
     );
     if (sortResult.error) {
@@ -1646,6 +1694,7 @@ const getPurchasingOrders = async (req, res) => {
     if (search) {
       filter.$or = [
         { supplierName: search },
+        { orderNumber: search },
         { poNumber: search },
         { description: search },
       ];
@@ -1679,10 +1728,10 @@ const createPurchasingOrder = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const poNumber =
-      parseStringValue(req.body.poNumber) ||
-      parseStringValue(req.body.orderNo) ||
-      parseStringValue(req.body.id);
+    const poNumber = parseStringValue(req.body.poNumber);
+    const orderNumber = parseStringValue(
+      req.body.orderNumber || req.body.orderNo,
+    );
     const supplierName =
       parseStringValue(req.body.supplierName) ||
       parseStringValue(req.body.supplier);
@@ -1706,8 +1755,8 @@ const createPurchasingOrder = async (req, res) => {
       parseOptionalDate(req.body.created) ||
       new Date();
 
-    if (!poNumber) {
-      return res.status(400).json({ message: "poNumber is required." });
+    if (!orderNumber) {
+      return res.status(400).json({ message: "orderNumber is required." });
     }
     if (!supplierName) {
       return res.status(400).json({ message: "supplierName is required." });
@@ -1716,14 +1765,21 @@ const createPurchasingOrder = async (req, res) => {
       return res.status(400).json({ message: "total is required." });
     }
 
-    const poNumberRegex = buildExactMatchRegex(poNumber);
-    if (poNumberRegex) {
-      const existingPo = await PurchasingOrder.findOne({ poNumber: poNumberRegex });
-      if (existingPo) {
-        return res.status(409).json({
-          message: `poNumber "${poNumber}" already exists. Use a different PO number.`,
+    let resolvedPoNumber = poNumber;
+    if (resolvedPoNumber) {
+      const poNumberRegex = buildExactMatchRegex(resolvedPoNumber);
+      if (poNumberRegex) {
+        const existingPo = await PurchasingOrder.findOne({
+          poNumber: poNumberRegex,
         });
+        if (existingPo) {
+          return res.status(409).json({
+            message: `poNumber "${resolvedPoNumber}" already exists. Use a different PO number.`,
+          });
+        }
       }
+    } else {
+      resolvedPoNumber = await generateUniquePurchaseOrderNumber();
     }
 
     const qtyResult = parseNumberValue(req.body.qty, "qty", { min: 0 });
@@ -1731,29 +1787,45 @@ const createPurchasingOrder = async (req, res) => {
       return res.status(400).json({ message: qtyResult.error });
     }
 
-    const record = await PurchasingOrder.create({
-      poNumber,
-      supplierName,
-      supplierInitials,
-      supplierTone,
-      items,
-      itemsCount: itemsCountValue,
-      category,
-      total,
-      status,
-      dateRequestPlaced,
-      dept: parseStringValue(req.body.dept),
-      description: parseStringValue(req.body.description),
-      qty: qtyResult.value ?? 0,
-      requestStatus: parseStringValue(req.body.requestStatus) || status,
-      qtyReceivedBrought: Number.isFinite(Number(req.body.qtyReceivedBrought))
-        ? Number(req.body.qtyReceivedBrought)
-        : null,
-      dateItemReceived: parseOptionalDate(req.body.dateItemReceived),
-      receivedBy: parseStringValue(req.body.receivedBy),
-      createdBy: req.user._id,
-      updatedBy: req.user._id,
-    });
+    let record = null;
+    let attemptsRemaining = 3;
+    while (!record && attemptsRemaining > 0) {
+      try {
+        record = await PurchasingOrder.create({
+          poNumber: resolvedPoNumber,
+          orderNumber,
+          supplierName,
+          supplierInitials,
+          supplierTone,
+          items,
+          itemsCount: itemsCountValue,
+          category,
+          total,
+          status,
+          dateRequestPlaced,
+          dept: parseStringValue(req.body.dept),
+          description: parseStringValue(req.body.description),
+          qty: qtyResult.value ?? 0,
+          requestStatus: parseStringValue(req.body.requestStatus) || status,
+          qtyReceivedBrought: Number.isFinite(Number(req.body.qtyReceivedBrought))
+            ? Number(req.body.qtyReceivedBrought)
+            : null,
+          dateItemReceived: parseOptionalDate(req.body.dateItemReceived),
+          receivedBy: parseStringValue(req.body.receivedBy),
+          createdBy: req.user._id,
+          updatedBy: req.user._id,
+        });
+      } catch (createError) {
+        attemptsRemaining -= 1;
+        const duplicatePoNumber =
+          isDuplicateKeyError(createError) &&
+          String(createError?.message || "").includes("poNumber");
+        if (!duplicatePoNumber || attemptsRemaining <= 0) {
+          throw createError;
+        }
+        resolvedPoNumber = await generateUniquePurchaseOrderNumber();
+      }
+    }
 
     const populated = await PurchasingOrder.findById(record._id)
       .populate("createdBy", "firstName lastName employeeId")
@@ -1768,7 +1840,10 @@ const createPurchasingOrder = async (req, res) => {
       await notifyInventoryUsersWithActor(req.user, {
         type: "SYSTEM",
         title: "Purchase order created",
-        message: `${poNumber} created for ${supplierName} (${status}).`,
+        message: `${getPurchaseOrderDisplayLabel({
+          orderNumber,
+          poNumber: resolvedPoNumber,
+        })} created for ${supplierName} (${status}).`,
       });
     }
 
@@ -1810,6 +1885,21 @@ const updatePurchasingOrder = async (req, res) => {
         }
       }
       record.poNumber = poNumber;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, "orderNumber") ||
+      Object.prototype.hasOwnProperty.call(req.body, "orderNo")
+    ) {
+      const orderNumber = parseStringValue(
+        req.body.orderNumber || req.body.orderNo,
+      );
+      if (!orderNumber) {
+        return res
+          .status(400)
+          .json({ message: "orderNumber cannot be empty." });
+      }
+      record.orderNumber = orderNumber;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "supplierName")) {
@@ -1911,13 +2001,13 @@ const updatePurchasingOrder = async (req, res) => {
         await notifyInventoryUsersWithActor(req.user, {
           type: "UPDATE",
           title: "Purchase order status updated",
-          message: `${record.poNumber} is now ${record.status}.`,
+          message: `${getPurchaseOrderDisplayLabel(record)} is now ${record.status}.`,
         });
       } else {
         await notifyInventoryUsersWithActor(req.user, {
           type: "UPDATE",
           title: "Purchase order updated",
-          message: `${record.poNumber} was updated.`,
+          message: `${getPurchaseOrderDisplayLabel(record)} was updated.`,
         });
       }
     }
@@ -1943,7 +2033,7 @@ const deletePurchasingOrder = async (req, res) => {
       await notifyInventoryUsersWithActor(req.user, {
         type: "ACTIVITY",
         title: "Purchase order removed",
-        message: `${deleted.poNumber || "Purchase order"} was removed.`,
+        message: `${getPurchaseOrderDisplayLabel(deleted)} was removed.`,
       });
     }
     await refreshSupplierOpenPOByName({

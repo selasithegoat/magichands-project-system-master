@@ -299,6 +299,16 @@
   gap: 10px;
 }
 
+.item-name-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-name-copy strong {
+  line-height: 1.2;
+}
+
 .total-cost {
   font-weight: 600;
 }
