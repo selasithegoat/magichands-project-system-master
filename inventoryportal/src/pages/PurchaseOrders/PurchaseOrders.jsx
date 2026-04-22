@@ -351,7 +351,7 @@ const PurchaseOrders = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     const nextTotal = buildComputedTotal(formData.unitCost, formData.quantity);

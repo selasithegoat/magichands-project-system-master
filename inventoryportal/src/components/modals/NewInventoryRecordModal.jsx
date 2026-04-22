@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "../ui/Modal";
+import { fetchInventory } from "../../utils/inventoryApi";
 import "./NewInventoryRecordModal.css";
 
 const DEFAULT_FORM = {
@@ -22,16 +23,58 @@ const DEFAULT_FORM = {
 const INVENTORY_IMAGE_MAX_MB =
   typeof __UPLOAD_MAX_MB__ === "number" ? __UPLOAD_MAX_MB__ : 200;
 
+const normalizeCategoryOptions = (payload) => {
+  const list = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload)
+      ? payload
+      : [];
+
+  return Array.from(
+    new Set(
+      list
+        .map((entry) => (typeof entry === "string" ? entry : entry?.name))
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+};
+
 const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState(DEFAULT_FORM);
   const [imagePreview, setImagePreview] = useState("");
   const [imageName, setImageName] = useState("");
   const [showWarehouseInput, setShowWarehouseInput] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState([]);
+  const [categorySuggestionsOpen, setCategorySuggestionsOpen] = useState(false);
 
   useEffect(() => {
     if (!imagePreview) return undefined;
     return () => URL.revokeObjectURL(imagePreview);
   }, [imagePreview]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const payload = await fetchInventory("/api/inventory/categories/options");
+        const categories = normalizeCategoryOptions(payload);
+        if (!isMounted) return;
+        setCategoryOptions(categories);
+      } catch {
+        if (!isMounted) return;
+        setCategoryOptions([]);
+      }
+    };
+
+    loadCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
 
   const totalValue = useMemo(() => {
     const qty = Number.parseFloat(formData.quantity || "0");
@@ -81,6 +124,24 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
     setFormData((prev) => ({ ...prev, condition }));
   };
 
+  const handleCategoryFocus = () => {
+    setCategorySuggestionsOpen(true);
+  };
+
+  const handleCategoryBlur = () => {
+    setTimeout(() => setCategorySuggestionsOpen(false), 150);
+  };
+
+  const handleCategoryInput = (event) => {
+    handleChange(event);
+    setCategorySuggestionsOpen(true);
+  };
+
+  const selectCategorySuggestion = (value) => {
+    setFormData((prev) => ({ ...prev, category: value }));
+    setCategorySuggestionsOpen(false);
+  };
+
   const handleSave = () => {
     onSave?.(formData);
     onClose?.();
@@ -96,7 +157,15 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
     setImagePreview("");
     setImageName("");
     setShowWarehouseInput(false);
+    setCategorySuggestionsOpen(false);
   };
+
+  const categoryQuery = String(formData.category || "").trim().toLowerCase();
+  const visibleCategoryOptions = categoryOptions
+    .filter((category) =>
+      categoryQuery ? category.toLowerCase().includes(categoryQuery) : true,
+    )
+    .slice(0, 6);
 
   return (
     <Modal
@@ -135,13 +204,35 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
             </label>
             <label className="field">
               Category
-              <select name="category" value={formData.category} onChange={handleChange}>
-                <option>Electronics</option>
-                <option>Peripherals</option>
-                <option>Accessories</option>
-                <option>Office</option>
-                <option>Hardware</option>
-              </select>
+              <div className="input-suggest">
+                <input
+                  name="category"
+                  type="text"
+                  value={formData.category}
+                  onChange={handleCategoryInput}
+                  onFocus={handleCategoryFocus}
+                  onBlur={handleCategoryBlur}
+                  list="new-inventory-record-category-options"
+                  placeholder="Electronics"
+                />
+                {categorySuggestionsOpen && visibleCategoryOptions.length ? (
+                  <div className="suggestions-list">
+                    {visibleCategoryOptions.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className="suggestion-item"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectCategorySuggestion(category);
+                        }}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </label>
             <div className="field">
               Condition
@@ -317,6 +408,11 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
             </label>
           </section>
         </div>
+        <datalist id="new-inventory-record-category-options">
+          {categoryOptions.map((category) => (
+            <option key={category} value={category} />
+          ))}
+        </datalist>
       </form>
     </Modal>
   );

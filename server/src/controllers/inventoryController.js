@@ -1902,6 +1902,10 @@ const createPurchasingOrder = async (req, res) => {
       quantity: quantityValue,
       fallbackTotal: total,
     });
+    const ensuredCategory = category
+      ? await ensureInventoryCategory(category, req.user?._id)
+      : null;
+    const resolvedCategory = parseStringValue(ensuredCategory?.name) || category;
     const dateRequestPlaced =
       parseOptionalDate(req.body.dateRequestPlaced) ||
       parseOptionalDate(req.body.createdAt) ||
@@ -1950,7 +1954,7 @@ const createPurchasingOrder = async (req, res) => {
           supplierLocation,
           items,
           itemsCount: quantityValue,
-          category,
+          category: resolvedCategory,
           unitCost: unitCostValue,
           total: totalValue,
           status,
@@ -2103,7 +2107,16 @@ const updatePurchasingOrder = async (req, res) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
-      record.category = parseStringValue(req.body.category);
+      const category = parseStringValue(req.body.category);
+      if (category) {
+        const ensuredCategory = await ensureInventoryCategory(
+          category,
+          req.user?._id,
+        );
+        record.category = parseStringValue(ensuredCategory?.name) || category;
+      } else {
+        record.category = "";
+      }
     }
 
     if (
@@ -2505,14 +2518,23 @@ const getInventoryCategories = async (req, res) => {
     const names = records.map((record) => record.name).filter(Boolean);
     let usageMap = {};
     if (names.length) {
-      const usage = await InventoryRecord.aggregate([
-        { $match: { category: { $in: names } } },
-        { $group: { _id: "$category", count: { $sum: 1 } } },
+      const [inventoryRecordUsage, purchasingOrderUsage] = await Promise.all([
+        InventoryRecord.aggregate([
+          { $match: { category: { $in: names } } },
+          { $group: { _id: "$category", count: { $sum: 1 } } },
+        ]),
+        PurchasingOrder.aggregate([
+          { $match: { category: { $in: names } } },
+          { $group: { _id: "$category", count: { $sum: 1 } } },
+        ]),
       ]);
-      usageMap = usage.reduce((acc, entry) => {
-        acc[entry._id] = entry.count;
-        return acc;
-      }, {});
+      usageMap = [...inventoryRecordUsage, ...purchasingOrderUsage].reduce(
+        (acc, entry) => {
+          acc[entry._id] = (acc[entry._id] || 0) + (entry.count || 0);
+          return acc;
+        },
+        {},
+      );
     }
 
     const data = records.map((record) => ({
@@ -2538,13 +2560,13 @@ const getInventoryCategoryOptions = async (req, res) => {
   if (!ensureInventoryAccess(req, res)) return;
 
   try {
-    const categories = await InventoryRecord.distinct("category", {
-      category: { $ne: "" },
-    });
+    const categories = await InventoryCategory.find({})
+      .sort({ name: 1 })
+      .select("name")
+      .lean();
     const sorted = categories
-      .map((value) => parseStringValue(value))
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
+      .map((record) => parseStringValue(record?.name))
+      .filter(Boolean);
     res.json({ data: sorted });
   } catch (error) {
     console.error("Error fetching inventory category options:", error);
@@ -2870,7 +2892,11 @@ const createInventoryRecord = async (req, res) => {
     }
 
     if (category) {
-      await ensureInventoryCategory(category, req.user?._id);
+      const ensuredCategory = await ensureInventoryCategory(
+        category,
+        req.user?._id,
+      );
+      req.body.category = parseStringValue(ensuredCategory?.name) || category;
     }
 
     const mappingConflict = await findItemIdConflict({
@@ -2942,7 +2968,7 @@ const createInventoryRecord = async (req, res) => {
       sku,
       brand: primaryBrand,
       brandGroups,
-      category,
+      category: parseStringValue(req.body.category) || category,
       categoryTone: pickRandomTone(CATEGORY_TONES),
       qtyLabel: derivedLabel,
       qtyValue: derivedQtyValue,
@@ -3079,11 +3105,17 @@ const updateInventoryRecord = async (req, res) => {
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
-      record.category = parseStringValue(req.body.category);
-      record.categoryTone = pickRandomTone(CATEGORY_TONES);
-      if (record.category) {
-        await ensureInventoryCategory(record.category, req.user?._id);
+      const category = parseStringValue(req.body.category);
+      if (category) {
+        const ensuredCategory = await ensureInventoryCategory(
+          category,
+          req.user?._id,
+        );
+        record.category = parseStringValue(ensuredCategory?.name) || category;
+      } else {
+        record.category = "";
       }
+      record.categoryTone = pickRandomTone(CATEGORY_TONES);
     }
 
     const fallbackStatus =
@@ -3530,9 +3562,14 @@ const createInventoryRecordForStockIn = async ({
   const normalizedBrandGroup = parseStringValue(brandGroup);
   const normalizedVariantName = parseStringValue(variantName);
   const normalizedVariantSku = parseStringValue(variantSku);
+  let resolvedCategory = normalizedCategory;
 
   if (normalizedCategory) {
-    await ensureInventoryCategory(normalizedCategory, actorId);
+    const ensuredCategory = await ensureInventoryCategory(
+      normalizedCategory,
+      actorId,
+    );
+    resolvedCategory = parseStringValue(ensuredCategory?.name) || normalizedCategory;
   }
 
   let brandGroups = [];
@@ -3575,8 +3612,8 @@ const createInventoryRecordForStockIn = async ({
     sku,
     brand: normalizedBrandGroup,
     brandGroups,
-    category: normalizedCategory,
-    categoryTone: normalizedCategory ? pickRandomTone(CATEGORY_TONES) : "",
+    category: resolvedCategory,
+    categoryTone: resolvedCategory ? pickRandomTone(CATEGORY_TONES) : "",
     qtyLabel: formatVariantQtyLabel(derivedQtyValue),
     qtyValue: derivedQtyValue,
     maxQty,

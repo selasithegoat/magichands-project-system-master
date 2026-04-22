@@ -283,15 +283,15 @@
 .table-header,
 .table-row {
   display: grid;
-  grid-template-columns: 80px 2fr 0.8fr 0.6fr 1.2fr 1.2fr 0.9fr 0.8fr 1fr 0.6fr;
-  gap: 12px;
+  grid-template-columns: 108px 2fr 0.8fr 0.6fr 1.2fr 1.2fr 0.9fr 0.8fr 1fr 0.6fr;
+  gap: 14px;
   align-items: center;
   padding: 12px 18px;
 }
 
 .stock-out-table .table-header,
 .stock-out-table .table-row {
-  grid-template-columns: 80px 2fr 0.8fr 0.6fr 1.3fr 0.9fr 0.9fr 1.2fr 0.6fr;
+  grid-template-columns: 108px 2fr 0.8fr 0.6fr 1.3fr 0.9fr 0.9fr 1.2fr 0.6fr;
 }
 
 .table-header {
@@ -327,11 +327,20 @@
   flex-direction: row;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.cell.txid {
+  min-width: 0;
+  padding-right: 6px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .item-avatar {
   width: 34px;
   height: 34px;
+  flex: 0 0 34px;
   background: var(--surface-muted);
   display: grid;
   place-items: center;
@@ -360,9 +369,13 @@
 
 .type-pill {
   display: inline-flex;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
   padding: 4px 8px;
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
   text-transform: capitalize;
   border-radius: 999px !important;
 }
@@ -481,12 +494,12 @@
 
   .table-header,
   .table-row {
-    grid-template-columns: 80px 1.6fr 0.8fr 0.6fr 1fr 1fr 0.8fr 0.8fr 1fr 0.6fr;
+    grid-template-columns: 96px 1.6fr 0.8fr 0.6fr 1fr 1fr 0.8fr 0.8fr 1fr 0.6fr;
   }
 
   .stock-out-table .table-header,
   .stock-out-table .table-row {
-    grid-template-columns: 80px 1.6fr 0.8fr 0.6fr 1.1fr 0.8fr 0.8fr 1fr 0.6fr;
+    grid-template-columns: 96px 1.6fr 0.8fr 0.6fr 1.1fr 0.8fr 0.8fr 1fr 0.6fr;
   }
 }
 
