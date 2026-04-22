@@ -8,6 +8,7 @@
     "seed:inventory": "node scripts/seed-inventory.js",
     "seed:inventory:reset": "node scripts/seed-inventory.js --reset",
     "backfill:inventory:categories": "node scripts/backfill-inventory-categories.js",
+    "backfill:inventory:suppliers": "node scripts/backfill-suppliers-from-purchase-orders.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
