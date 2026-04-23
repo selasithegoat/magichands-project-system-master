@@ -383,6 +383,12 @@
   border-color: rgba(148, 163, 184, 0.42);
 }
 
+.billing-tag.eod-restored {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
 .payment-warning {
   background: #fff7ed;
   border: 1px solid #fdba74;

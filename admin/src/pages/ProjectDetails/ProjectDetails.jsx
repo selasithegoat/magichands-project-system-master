@@ -106,6 +106,38 @@ const formatSupplySource = (value) => {
   return list.join(", ");
 };
 
+const getLatestProjectFeedbackTimestamp = (feedbackEntries = []) =>
+  feedbackEntries.reduce((latest, feedback) => {
+    const rawDate = feedback?.createdAt || feedback?.date;
+    if (!rawDate) return latest;
+    const parsedMs = new Date(rawDate).getTime();
+    if (Number.isNaN(parsedMs)) return latest;
+    return Math.max(latest, parsedMs);
+  }, 0);
+
+const shouldShowProjectInEndOfDayByDefault = (project, nowMs = Date.now()) => {
+  if (project?.status === "Completed") return false;
+  if (project?.status !== "Finished") return true;
+
+  const feedbackEntries = Array.isArray(project?.feedbacks)
+    ? project.feedbacks
+    : [];
+  if (feedbackEntries.length === 0) return true;
+
+  const latestFeedbackMs = getLatestProjectFeedbackTimestamp(feedbackEntries);
+  if (!latestFeedbackMs) return true;
+
+  const elapsedHours = (nowMs - latestFeedbackMs) / (1000 * 60 * 60);
+  return elapsedHours < 24;
+};
+
+const shouldShowProjectInEndOfDay = (project, nowMs = Date.now()) => {
+  if (project?.cancellation?.isCancelled) return false;
+  if (project?.includeInEndOfDayUpdates) return true;
+  if (project?.excludeFromEndOfDayUpdates) return false;
+  return shouldShowProjectInEndOfDayByDefault(project, nowMs);
+};
+
 const STATUS_AUTO_ADVANCE_TARGETS = {
   "Master Approval Completed": "Pending Production",
   "Packaging Completed": "Pending Delivery/Pickup",
@@ -1465,7 +1497,7 @@ const ProjectDetails = ({ user }) => {
       return;
     }
 
-    const nextExcluded = !Boolean(project?.excludeFromEndOfDayUpdates);
+    const nextVisible = !shouldShowProjectInEndOfDay(project);
     setIsTogglingEndOfDayVisibility(true);
 
     try {
@@ -1475,7 +1507,7 @@ const ProjectDetails = ({ user }) => {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ excluded: nextExcluded }),
+          body: JSON.stringify({ visible: nextVisible }),
         },
       );
 
@@ -1489,9 +1521,9 @@ const ProjectDetails = ({ user }) => {
       const updatedProject = await res.json();
       applyProjectToState(updatedProject);
       toast.success(
-        nextExcluded
-          ? "Removed from End of Day Updates."
-          : "Restored to End of Day Updates.",
+        nextVisible
+          ? "Restored to End of Day Updates."
+          : "Removed from End of Day Updates.",
       );
     } catch (error) {
       console.error("Error updating End of Day visibility:", error);
@@ -2359,6 +2391,10 @@ const ProjectDetails = ({ user }) => {
   const isExcludedFromEndOfDayUpdates = Boolean(
     project.excludeFromEndOfDayUpdates,
   );
+  const isIncludedInEndOfDayUpdates = Boolean(
+    project.includeInEndOfDayUpdates,
+  );
+  const isInEndOfDayUpdatesTable = shouldShowProjectInEndOfDay(project);
 
   // Helpers
   const formatDate = (dateString) => {
@@ -3115,9 +3151,7 @@ const ProjectDetails = ({ user }) => {
                   <button
                     type="button"
                     className={`hold-toggle-btn ${
-                      isExcludedFromEndOfDayUpdates
-                        ? "eod-restore"
-                        : "eod-remove"
+                      isInEndOfDayUpdatesTable ? "eod-remove" : "eod-restore"
                     }`}
                     onClick={handleToggleEndOfDayVisibility}
                     disabled={
@@ -3129,9 +3163,9 @@ const ProjectDetails = ({ user }) => {
                   >
                     {isTogglingEndOfDayVisibility
                       ? "Updating EOD..."
-                      : isExcludedFromEndOfDayUpdates
-                        ? "Restore to EOD Updates"
-                        : "Remove from EOD Updates"}
+                      : isInEndOfDayUpdatesTable
+                        ? "Remove from EOD Updates"
+                        : "Restore to EOD Updates"}
                   </button>
                   <button
                     type="button"
@@ -3198,9 +3232,14 @@ const ProjectDetails = ({ user }) => {
                   : "Sample Approval Required"}
               </span>
             )}
-            {isExcludedFromEndOfDayUpdates && (
+            {isExcludedFromEndOfDayUpdates && !isIncludedInEndOfDayUpdates && (
               <span className="billing-tag eod-hidden">
                 Hidden from EOD Updates
+              </span>
+            )}
+            {isIncludedInEndOfDayUpdates && !isExcludedFromEndOfDayUpdates && (
+              <span className="billing-tag eod-restored">
+                Restored to EOD Updates
               </span>
             )}
             {showPendingProductionWarning && (

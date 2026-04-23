@@ -650,6 +650,10 @@ const ProjectSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    includeInEndOfDayUpdates: {
+      type: Boolean,
+      default: false,
+    },
     projectType: {
       type: String,
       enum: ["Standard", "Emergency", "Quote", "Corporate Job"],

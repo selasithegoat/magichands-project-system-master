@@ -66,6 +66,38 @@ const formatDepartmentDocxValue = (column, value) => {
   });
 };
 
+const getLatestProjectFeedbackTimestamp = (feedbackEntries = []) =>
+  feedbackEntries.reduce((latest, feedback) => {
+    const rawDate = feedback?.createdAt || feedback?.date;
+    if (!rawDate) return latest;
+    const parsedMs = new Date(rawDate).getTime();
+    if (Number.isNaN(parsedMs)) return latest;
+    return Math.max(latest, parsedMs);
+  }, 0);
+
+const shouldShowProjectInEndOfDayByDefault = (project, nowMs = Date.now()) => {
+  if (project?.status === "Completed") return false;
+  if (project?.status !== "Finished") return true;
+
+  const feedbackEntries = Array.isArray(project?.feedbacks)
+    ? project.feedbacks
+    : [];
+  if (feedbackEntries.length === 0) return true;
+
+  const latestFeedbackMs = getLatestProjectFeedbackTimestamp(feedbackEntries);
+  if (!latestFeedbackMs) return true;
+
+  const elapsedHours = (nowMs - latestFeedbackMs) / (1000 * 60 * 60);
+  return elapsedHours < 24;
+};
+
+const shouldShowProjectInEndOfDay = (project, nowMs = Date.now()) => {
+  if (project?.cancellation?.isCancelled) return false;
+  if (project?.includeInEndOfDayUpdates) return true;
+  if (project?.excludeFromEndOfDayUpdates) return false;
+  return shouldShowProjectInEndOfDayByDefault(project, nowMs);
+};
+
 const fetchDepartmentUpdateBoardForExport = async () => {
   const response = await fetch("/api/projects/department-updates", {
     credentials: "include",
@@ -311,30 +343,6 @@ const EndOfDayUpdate = ({ user }) => {
     return Number.isFinite(parsedVersion) && parsedVersion > 0
       ? parsedVersion
       : 1;
-  };
-
-  const shouldShowProjectInEndOfDay = (project, nowMs = Date.now()) => {
-    if (project?.excludeFromEndOfDayUpdates) return false;
-    if (project?.status === "Completed") return false;
-    if (project?.status !== "Finished") return true;
-
-    const feedbackEntries = Array.isArray(project?.feedbacks)
-      ? project.feedbacks
-      : [];
-    if (feedbackEntries.length === 0) return true;
-
-    const latestFeedbackMs = feedbackEntries.reduce((latest, feedback) => {
-      const rawDate = feedback?.createdAt || feedback?.date;
-      if (!rawDate) return latest;
-      const ms = new Date(rawDate).getTime();
-      if (Number.isNaN(ms)) return latest;
-      return Math.max(latest, ms);
-    }, 0);
-
-    if (!latestFeedbackMs) return true;
-
-    const elapsedHours = (nowMs - latestFeedbackMs) / (1000 * 60 * 60);
-    return elapsedHours < 24;
   };
 
   const sortProjectsByLeadName = (list) =>

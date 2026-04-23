@@ -459,6 +459,42 @@ const parseCorporateEmergencyFlag = (value, fallback = false) => {
   return parseBooleanFlag(value, fallback);
 };
 
+const getLatestProjectFeedbackTimestamp = (feedbackEntries = []) =>
+  feedbackEntries.reduce((latest, feedback) => {
+    const rawDate = feedback?.createdAt || feedback?.date;
+    if (!rawDate) return latest;
+    const parsedMs = new Date(rawDate).getTime();
+    if (Number.isNaN(parsedMs)) return latest;
+    return Math.max(latest, parsedMs);
+  }, 0);
+
+const shouldProjectAppearInEndOfDayByDefault = (
+  project,
+  nowMs = Date.now(),
+) => {
+  if (!project || project?.cancellation?.isCancelled) return false;
+  if (project?.status === "Completed") return false;
+  if (project?.status !== "Finished") return true;
+
+  const feedbackEntries = Array.isArray(project?.feedbacks)
+    ? project.feedbacks
+    : [];
+  if (feedbackEntries.length === 0) return true;
+
+  const latestFeedbackMs = getLatestProjectFeedbackTimestamp(feedbackEntries);
+  if (!latestFeedbackMs) return true;
+
+  const elapsedHours = (nowMs - latestFeedbackMs) / (1000 * 60 * 60);
+  return elapsedHours < 24;
+};
+
+const shouldProjectAppearInEndOfDay = (project, nowMs = Date.now()) => {
+  if (!project || project?.cancellation?.isCancelled) return false;
+  if (project?.includeInEndOfDayUpdates) return true;
+  if (project?.excludeFromEndOfDayUpdates) return false;
+  return shouldProjectAppearInEndOfDayByDefault(project, nowMs);
+};
+
 const toDateOrNull = (value) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -1477,15 +1513,43 @@ const updateProjectEndOfDayVisibility = async (req, res) => {
 
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    if (project?.cancellation?.isCancelled) {
+      return res.status(400).json({
+        message: "Cancelled projects are already excluded from End of Day.",
+      });
+    }
 
+    const requestBody =
+      req.body && typeof req.body === "object" ? req.body : {};
     const previousExcluded = Boolean(project?.excludeFromEndOfDayUpdates);
-    const nextExcluded = parseBooleanFlag(
-      req.body?.excluded,
-      !previousExcluded,
+    const previousIncluded = Boolean(project?.includeInEndOfDayUpdates);
+    const previousVisible = shouldProjectAppearInEndOfDay(project);
+    const defaultVisible = shouldProjectAppearInEndOfDayByDefault(project);
+    const hasVisibleFlag = Object.prototype.hasOwnProperty.call(
+      requestBody,
+      "visible",
+    );
+    const hasExcludedFlag = Object.prototype.hasOwnProperty.call(
+      requestBody,
+      "excluded",
     );
 
-    if (nextExcluded !== previousExcluded) {
+    let nextVisible = !previousVisible;
+    if (hasVisibleFlag) {
+      nextVisible = parseBooleanFlag(requestBody.visible, !previousVisible);
+    } else if (hasExcludedFlag) {
+      nextVisible = !parseBooleanFlag(requestBody.excluded, !previousExcluded);
+    }
+
+    const nextExcluded = !nextVisible;
+    const nextIncluded = nextVisible && !defaultVisible;
+
+    if (
+      nextExcluded !== previousExcluded ||
+      nextIncluded !== previousIncluded
+    ) {
       project.excludeFromEndOfDayUpdates = nextExcluded;
+      project.includeInEndOfDayUpdates = nextIncluded;
       await project.save();
 
       await logActivity(
@@ -1499,6 +1563,10 @@ const updateProjectEndOfDayVisibility = async (req, res) => {
           endOfDayVisibility: {
             previousExcluded,
             nextExcluded,
+            previousIncluded,
+            nextIncluded,
+            previousVisible,
+            nextVisible,
           },
         },
       );
@@ -15367,6 +15435,7 @@ const reopenProject = async (req, res) => {
       endOfDayUpdateDate: null,
       endOfDayUpdateBy: null,
       excludeFromEndOfDayUpdates: false,
+      includeInEndOfDayUpdates: false,
       updates: [],
       sectionUpdates: {
         details: now,
