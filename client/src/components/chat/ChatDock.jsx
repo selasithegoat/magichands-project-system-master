@@ -19,7 +19,7 @@ import TrashIcon from "../icons/TrashIcon";
 import XIcon from "../icons/XIcon";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { playMessageSound } from "../../utils/notificationSound";
-import { resolvePortalSource } from "../../utils/portalSource";
+import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import "./ChatDock.css";
 
 const THREAD_OPEN_POLL_INTERVAL_MS = 20000;
@@ -1168,7 +1168,10 @@ const ChatDock = ({ user }) => {
       return cacheEntry.data;
     }
 
-    const requestUrl = `/api/chat/projects?q=${encodeURIComponent(trimmedQuery)}`;
+    const requestUrl = appendPortalSource(
+      `/api/chat/projects?q=${encodeURIComponent(trimmedQuery)}`,
+      portalSource,
+    );
     const requestPromise = (async () => {
       const res = await fetch(requestUrl, {
         credentials: "include",
@@ -1202,7 +1205,7 @@ const ChatDock = ({ user }) => {
       }
       throw error;
     }
-  }, []);
+  }, [portalSource]);
 
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -2697,6 +2700,9 @@ const ChatDock = ({ user }) => {
           ),
         );
       }
+      if (portalSource) {
+        payload.append("source", portalSource);
+      }
       pendingAttachments.forEach((attachment) => {
         payload.append("chatAttachments", attachment.file, attachment.name);
       });
@@ -3106,9 +3112,12 @@ const ChatDock = ({ user }) => {
     });
 
     try {
-      const res = await fetch(`/api/chat/projects/${projectId}/routes`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        appendPortalSource(`/api/chat/projects/${projectId}/routes`, portalSource),
+        {
+          credentials: "include",
+        },
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.message || "Failed to resolve project routes.");

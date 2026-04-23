@@ -101,6 +101,14 @@ const normalizeDepartmentValue = (value) => {
     : normalized;
 };
 
+const normalizePortalSource = (value) => {
+  const normalized = toText(value).toLowerCase();
+  return normalized === "admin" ? "admin" : "";
+};
+
+const getRequestPortalSource = (req) =>
+  normalizePortalSource(req?.query?.source || req?.body?.source);
+
 const isFrontDeskUser = (user) =>
   toDepartmentArray(user?.department)
     .map((entry) => normalizeDepartmentValue(entry))
@@ -111,12 +119,13 @@ const resolveEngagedRouteDepartments = (departments = []) => {
     .map((entry) => normalizeDepartmentValue(entry))
     .filter(Boolean);
 
+  const hasProductionParent = normalizedDepartments.includes("production");
   const hasGraphicsParent = normalizedDepartments.includes("graphics/design");
   const hasStoresParent = normalizedDepartments.includes("stores");
   const hasPhotographyParent = normalizedDepartments.includes("photography");
-  const productionSubDepartments = normalizedDepartments.filter((entry) =>
-    PRODUCTION_SUB_DEPARTMENTS.has(entry),
-  );
+  const productionSubDepartments = hasProductionParent
+    ? Array.from(PRODUCTION_SUB_DEPARTMENTS)
+    : normalizedDepartments.filter((entry) => PRODUCTION_SUB_DEPARTMENTS.has(entry));
   const hasGraphics =
     hasGraphicsParent ||
     normalizedDepartments.some((entry) => GRAPHICS_SUB_DEPARTMENTS.has(entry));
@@ -152,19 +161,33 @@ const hasEngagedDepartmentOverlap = (user, projectDepartments = []) => {
     .some((entry) => routeDepartments.has(entry));
 };
 
-const isProjectLeadUser = (user, project) => {
+const isProjectDetailUser = (user, project) => {
   const currentUserId = toIdString(user?._id || user?.id);
   const projectLeadId = toIdString(project?.projectLeadId?._id || project?.projectLeadId);
-  return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
+  const assistantLeadId = toIdString(
+    project?.assistantLeadId?._id || project?.assistantLeadId,
+  );
+  return Boolean(
+    currentUserId &&
+      ((projectLeadId && currentUserId === projectLeadId) ||
+        (assistantLeadId && currentUserId === assistantLeadId)),
+  );
 };
 
-const buildProjectRouteOptions = (user, project) => {
+const buildProjectRouteOptions = (user, project, { source = "" } = {}) => {
   const projectId = toIdString(project?._id);
   if (!projectId) return [];
 
   const routes = [];
+  const portalSource = normalizePortalSource(source);
 
-  if (isProjectLeadUser(user, project)) {
+  if (portalSource === "admin" && user?.role === "admin") {
+    routes.push({
+      key: "admin-detail",
+      label: "Admin Project",
+      path: `/projects/${projectId}`,
+    });
+  } else if (isProjectDetailUser(user, project)) {
     routes.push({
       key: "detail",
       label: "Project Detail",
@@ -1400,6 +1423,7 @@ const sendMessage = async (req, res) => {
     }
 
     const body = toText(req.body?.body).slice(0, MAX_MESSAGE_LENGTH);
+    const portalSource = getRequestPortalSource(req);
     const rawReferences = parseReferencesInput(req.body?.references);
     const attachments = mapChatAttachments(req, req.user?._id);
     const replyTo = await resolveReplyTargetPayload(thread._id, req.body?.replyTo);
@@ -1413,7 +1437,7 @@ const sendMessage = async (req, res) => {
       requestedProjectIds.length > 0
         ? await Project.find({ _id: { $in: requestedProjectIds } })
             .select(
-              "_id orderId status details.projectName details.projectIndicator details.client",
+              "_id orderId status departments projectLeadId assistantLeadId details.projectName details.projectIndicator details.client",
             )
             .lean()
         : [];
@@ -1426,7 +1450,11 @@ const sendMessage = async (req, res) => {
     const references = requestedProjectIds
       .map((projectId) => projectMap[projectId])
       .filter(Boolean)
-      .filter((project) => buildProjectRouteOptions(req.user, project).length > 0)
+      .filter(
+        (project) =>
+          buildProjectRouteOptions(req.user, project, { source: portalSource })
+            .length > 0,
+      )
       .map((project) => ({
         type: "project",
         project: project._id,
@@ -2006,6 +2034,7 @@ const searchUsers = async (req, res) => {
 const searchProjects = async (req, res) => {
   try {
     const queryText = toText(req.query?.q);
+    const portalSource = getRequestPortalSource(req);
     const regex = queryText ? new RegExp(escapeRegex(queryText), "i") : null;
     const searchConditions = regex
       ? [
@@ -2017,7 +2046,9 @@ const searchProjects = async (req, res) => {
       : [];
     const accessConditions = [];
 
-    if (isFrontDeskUser(req.user)) {
+    if (req.user?.role === "admin") {
+      accessConditions.push({});
+    } else if (isFrontDeskUser(req.user)) {
       accessConditions.push({});
     } else {
       const engagedRouteDepartments = resolveEngagedRouteDepartments(
@@ -2028,6 +2059,7 @@ const searchProjects = async (req, res) => {
       }
       if (req.user?._id) {
         accessConditions.push({ projectLeadId: req.user._id });
+        accessConditions.push({ assistantLeadId: req.user._id });
       }
     }
 
@@ -2051,14 +2083,18 @@ const searchProjects = async (req, res) => {
 
     const projects = await Project.find(filter)
       .select(
-        "_id orderId status departments projectLeadId details.projectName details.projectIndicator details.client",
+        "_id orderId status departments projectLeadId assistantLeadId details.projectName details.projectIndicator details.client",
       )
       .sort({ updatedAt: -1, createdAt: -1 })
       .limit(PROJECT_SEARCH_LIMIT * 3)
       .lean();
 
     const serializedProjects = projects
-      .filter((project) => buildProjectRouteOptions(req.user, project).length > 0)
+      .filter(
+        (project) =>
+          buildProjectRouteOptions(req.user, project, { source: portalSource })
+            .length > 0,
+      )
       .slice(0, PROJECT_SEARCH_LIMIT)
       .map((project) => ({
         _id: toIdString(project._id),
@@ -2079,6 +2115,7 @@ const searchProjects = async (req, res) => {
 
 const getProjectRoutes = async (req, res) => {
   try {
+    const portalSource = getRequestPortalSource(req);
     const projectId = toIdString(req.params?.id);
     if (!mongoose.Types.ObjectId.isValid(projectId)) {
       return res.status(400).json({ message: "Invalid project reference." });
@@ -2086,7 +2123,7 @@ const getProjectRoutes = async (req, res) => {
 
     const project = await Project.findById(projectId)
       .select(
-        "_id orderId status departments projectLeadId details.projectName details.projectIndicator details.client",
+        "_id orderId status departments projectLeadId assistantLeadId details.projectName details.projectIndicator details.client",
       )
       .lean();
 
@@ -2094,7 +2131,9 @@ const getProjectRoutes = async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    const routes = buildProjectRouteOptions(req.user, project);
+    const routes = buildProjectRouteOptions(req.user, project, {
+      source: portalSource,
+    });
     if (routes.length === 0) {
       return res.status(403).json({
         message: "You do not have an eligible route for this linked project.",
