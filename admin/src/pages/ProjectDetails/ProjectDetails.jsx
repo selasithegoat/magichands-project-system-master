@@ -880,6 +880,8 @@ const ProjectDetails = ({ user }) => {
     useState(false);
   const [isTogglingCorporateEmergency, setIsTogglingCorporateEmergency] =
     useState(false);
+  const [isTogglingEndOfDayVisibility, setIsTogglingEndOfDayVisibility] =
+    useState(false);
   const [isProjectTypeModalOpen, setIsProjectTypeModalOpen] = useState(false);
   const [isChangingProjectType, setIsChangingProjectType] = useState(false);
   const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
@@ -1452,6 +1454,50 @@ const ProjectDetails = ({ user }) => {
       );
     } finally {
       setIsTogglingCorporateEmergency(false);
+    }
+  };
+
+  const handleToggleEndOfDayVisibility = async () => {
+    if (!project || user?.role !== "admin" || isLeadRestricted) return;
+    if (isTogglingEndOfDayVisibility) return;
+    if (project?.cancellation?.isCancelled) {
+      toast.error("Cancelled projects are already excluded from End of Day.");
+      return;
+    }
+
+    const nextExcluded = !Boolean(project?.excludeFromEndOfDayUpdates);
+    setIsTogglingEndOfDayVisibility(true);
+
+    try {
+      const res = await fetch(
+        `/api/projects/${id}/end-of-day-visibility?source=admin`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ excluded: nextExcluded }),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || "Failed to update End of Day visibility.",
+        );
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+      toast.success(
+        nextExcluded
+          ? "Removed from End of Day Updates."
+          : "Restored to End of Day Updates.",
+      );
+    } catch (error) {
+      console.error("Error updating End of Day visibility:", error);
+      toast.error(error.message || "Failed to update End of Day visibility.");
+    } finally {
+      setIsTogglingEndOfDayVisibility(false);
     }
   };
 
@@ -2310,6 +2356,9 @@ const ProjectDetails = ({ user }) => {
     project.hold?.isOnHold || project.status === "On Hold",
   );
   const isCancelledProject = Boolean(project.cancellation?.isCancelled);
+  const isExcludedFromEndOfDayUpdates = Boolean(
+    project.excludeFromEndOfDayUpdates,
+  );
 
   // Helpers
   const formatDate = (dateString) => {
@@ -3065,6 +3114,27 @@ const ProjectDetails = ({ user }) => {
                   )}
                   <button
                     type="button"
+                    className={`hold-toggle-btn ${
+                      isExcludedFromEndOfDayUpdates
+                        ? "eod-restore"
+                        : "eod-remove"
+                    }`}
+                    onClick={handleToggleEndOfDayVisibility}
+                    disabled={
+                      isTogglingEndOfDayVisibility ||
+                      isCancelling ||
+                      isReactivating ||
+                      isCancelledProject
+                    }
+                  >
+                    {isTogglingEndOfDayVisibility
+                      ? "Updating EOD..."
+                      : isExcludedFromEndOfDayUpdates
+                        ? "Restore to EOD Updates"
+                        : "Remove from EOD Updates"}
+                  </button>
+                  <button
+                    type="button"
                     className={`hold-toggle-btn ${isProjectOnHold ? "release" : "hold"}`}
                     onClick={handleHoldActionClick}
                     disabled={isTogglingHold || isCancelling}
@@ -3126,6 +3196,11 @@ const ProjectDetails = ({ user }) => {
                 {sampleApprovalStatus === "approved"
                   ? "Sample Approval Required (Approved)"
                   : "Sample Approval Required"}
+              </span>
+            )}
+            {isExcludedFromEndOfDayUpdates && (
+              <span className="billing-tag eod-hidden">
+                Hidden from EOD Updates
               </span>
             )}
             {showPendingProductionWarning && (

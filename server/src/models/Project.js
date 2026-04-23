@@ -646,6 +646,10 @@ const ProjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    excludeFromEndOfDayUpdates: {
+      type: Boolean,
+      default: false,
+    },
     projectType: {
       type: String,
       enum: ["Standard", "Emergency", "Quote", "Corporate Job"],

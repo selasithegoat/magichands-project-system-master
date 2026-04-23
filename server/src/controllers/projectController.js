@@ -992,6 +992,12 @@ const buildProjectAccessQuery = (req) => {
     });
   }
 
+  if (isReportMode) {
+    query = mergeQueryWithCondition(query, {
+      excludeFromEndOfDayUpdates: { $ne: true },
+    });
+  }
+
   const cancelledOnly = String(req.query.cancelled || "").toLowerCase() === "true";
   const includeCancelled =
     String(req.query.includeCancelled || "").toLowerCase() === "true";
@@ -1455,6 +1461,63 @@ const updateMeetingOverride = async (req, res) => {
   } catch (error) {
     console.error("Error updating meeting override:", error);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Toggle whether a project appears in the Front Desk End of Day report
+// @route   PATCH /api/projects/:id/end-of-day-visibility
+// @access  Private (Admin portal)
+const updateProjectEndOfDayVisibility = async (req, res) => {
+  try {
+    if (!hasAdminPortalAccess(req.user) || !isAdminPortalRequest(req)) {
+      return res.status(403).json({
+        message: "Only admin portal users can manage End of Day visibility.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+
+    const previousExcluded = Boolean(project?.excludeFromEndOfDayUpdates);
+    const nextExcluded = parseBooleanFlag(
+      req.body?.excluded,
+      !previousExcluded,
+    );
+
+    if (nextExcluded !== previousExcluded) {
+      project.excludeFromEndOfDayUpdates = nextExcluded;
+      await project.save();
+
+      await logActivity(
+        project._id,
+        req.user._id || req.user.id,
+        "update",
+        nextExcluded
+          ? "Project removed from End of Day Updates report."
+          : "Project restored to End of Day Updates report.",
+        {
+          endOfDayVisibility: {
+            previousExcluded,
+            nextExcluded,
+          },
+        },
+      );
+    }
+
+    const updatedProject = await buildProjectResponseQuery(project._id).populate(
+      "acknowledgements.user",
+      "firstName lastName name avatarUrl",
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    normalizeProjectStatusFields(updatedProject);
+    return res.json(updatedProject);
+  } catch (error) {
+    console.error("Error updating End of Day visibility:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -15303,6 +15366,7 @@ const reopenProject = async (req, res) => {
       endOfDayUpdate: "",
       endOfDayUpdateDate: null,
       endOfDayUpdateBy: null,
+      excludeFromEndOfDayUpdates: false,
       updates: [],
       sectionUpdates: {
         details: now,
@@ -16926,6 +16990,7 @@ module.exports = {
   reactivateProject,
   updateProjectStatus,
   updateMeetingOverride,
+  updateProjectEndOfDayVisibility,
   transitionQuoteRequirement,
   updateQuoteCostVerification,
   resetQuoteMockup,

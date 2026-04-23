@@ -314,6 +314,7 @@ const EndOfDayUpdate = ({ user }) => {
   };
 
   const shouldShowProjectInEndOfDay = (project, nowMs = Date.now()) => {
+    if (project?.excludeFromEndOfDayUpdates) return false;
     if (project?.status === "Completed") return false;
     if (project?.status !== "Finished") return true;
 

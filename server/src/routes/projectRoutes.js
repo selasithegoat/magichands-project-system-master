@@ -62,6 +62,7 @@ const {
   updateCorporateEmergency,
   updateProjectType,
   updateMeetingOverride,
+  updateProjectEndOfDayVisibility,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
   createProjectBatch,
@@ -449,6 +450,11 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   updateMeetingOverride,
+);
+router.patch(
+  "/:id/end-of-day-visibility",
+  protect,
+  updateProjectEndOfDayVisibility,
 );
 router.patch("/:id/reopen", protect, enforceProjectNotOnHold, reopenProject); // [NEW] - Reopen completed project
 router.post(

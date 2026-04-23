@@ -312,6 +312,18 @@
   color: #9a3412;
 }
 
+.hold-toggle-btn.eod-remove {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.hold-toggle-btn.eod-restore {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+
 .hold-toggle-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
@@ -363,6 +375,12 @@
   background: #fff7ed;
   color: #9a3412;
   border-color: #fdba74;
+}
+
+.billing-tag.eod-hidden {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.42);
 }
 
 .payment-warning {
