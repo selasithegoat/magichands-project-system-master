@@ -2815,6 +2815,7 @@ const getInventoryRecords = async (req, res) => {
           { sku: search },
           { subtext: search },
           { warehouse: search },
+          { shelfLocation: search },
           { "variants.name": search },
           { "variants.color": search },
           { "variants.colors.name": search },
@@ -2882,6 +2883,9 @@ const createInventoryRecord = async (req, res) => {
     const item = parseStringValue(req.body.item);
     const sku = parseStringValue(req.body.sku);
     const warehouse = parseStringValue(req.body.warehouse || req.body.subtext);
+    const shelfLocation = parseStringValue(
+      req.body.shelfLocation || req.body.shelveLocation || req.body.location,
+    );
     const recordStatus = parseStringValue(req.body.status) || "In Stock";
     const category = parseStringValue(req.body.category);
     if (!item) {
@@ -2965,6 +2969,7 @@ const createInventoryRecord = async (req, res) => {
       item,
       subtext: warehouse,
       warehouse,
+      shelfLocation,
       sku,
       brand: primaryBrand,
       brandGroups,
@@ -3102,6 +3107,16 @@ const updateInventoryRecord = async (req, res) => {
       const nextWarehouse = parseStringValue(req.body.subtext);
       record.subtext = nextWarehouse;
       record.warehouse = nextWarehouse;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, "shelfLocation") ||
+      Object.prototype.hasOwnProperty.call(req.body, "shelveLocation") ||
+      Object.prototype.hasOwnProperty.call(req.body, "location")
+    ) {
+      record.shelfLocation = parseStringValue(
+        req.body.shelfLocation || req.body.shelveLocation || req.body.location,
+      );
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, "category")) {
@@ -3552,12 +3567,14 @@ const createInventoryRecordForStockIn = async ({
   variantSku,
   status,
   warehouse,
+  shelfLocation,
   category,
   maxQty,
   actorId,
 }) => {
   const recordStatus = parseStringValue(status) || "In Stock";
   const normalizedWarehouse = parseStringValue(warehouse);
+  const normalizedShelfLocation = parseStringValue(shelfLocation);
   const normalizedCategory = parseStringValue(category);
   const normalizedBrandGroup = parseStringValue(brandGroup);
   const normalizedVariantName = parseStringValue(variantName);
@@ -3609,6 +3626,7 @@ const createInventoryRecordForStockIn = async ({
     item,
     subtext: normalizedWarehouse,
     warehouse: normalizedWarehouse,
+    shelfLocation: normalizedShelfLocation,
     sku,
     brand: normalizedBrandGroup,
     brandGroups,
@@ -3742,6 +3760,9 @@ const createStockTransaction = async (req, res) => {
       const warehouse = parseStringValue(
         req.body.warehouse || req.body.subtext || req.body.destination,
       );
+      const shelfLocation = parseStringValue(
+        req.body.shelfLocation || req.body.shelveLocation || req.body.location,
+      );
       const category = parseStringValue(req.body.category);
       const maxQty = parseMaxQty(req.body.maxQty);
       inventoryRecord = await createInventoryRecordForStockIn({
@@ -3752,6 +3773,7 @@ const createStockTransaction = async (req, res) => {
         variantSku,
         status: req.body.status,
         warehouse,
+        shelfLocation,
         category,
         maxQty,
         actorId: req.user?._id,

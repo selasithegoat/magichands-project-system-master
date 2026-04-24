@@ -36,6 +36,7 @@ import "./InventoryRecords.css";
 const DEFAULT_RECORD_FORM = {
   item: "",
   warehouse: "",
+  shelfLocation: "",
   sku: "",
   category: "",
   qtyLabel: "",
@@ -64,6 +65,7 @@ const DEFAULT_FILTERS = {
 const DEFAULT_VISIBLE_COLUMNS = {
   item: true,
   sku: true,
+  shelfLocation: false,
   brand: true,
   category: true,
   quantity: true,
@@ -515,6 +517,20 @@ const formatStatusTone = (value) =>
     .toLowerCase()
     .replace(/\s+/g, "-");
 
+const getShelfLocation = (record) =>
+  String(
+    record?.shelfLocation ||
+      record?.shelveLocation ||
+      record?.location ||
+      "",
+  ).trim();
+
+const getWarehouseLocationLabel = (record) =>
+  [record?.warehouse || record?.subtext || "", getShelfLocation(record)]
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean)
+    .join(" - ");
+
 const formatShareTimestamp = (value) => {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return "";
@@ -681,6 +697,7 @@ const InventoryRecords = () => {
             id: record._id || record.id || `${index}`,
             item: record.item || "",
             warehouse: record.warehouse || record.subtext || "",
+            shelfLocation: getShelfLocation(record),
             sku: record.sku || "",
             brand: record.brand || brandGroups[0]?.name || "",
             brandGroups,
@@ -1037,6 +1054,7 @@ const InventoryRecords = () => {
     "48px",
     visibleColumns.item ? "2fr" : null,
     visibleColumns.sku ? "1fr" : null,
+    visibleColumns.shelfLocation ? "1fr" : null,
     visibleColumns.brand ? "1fr" : null,
     visibleColumns.category ? "1fr" : null,
     visibleColumns.quantity ? "1.2fr" : null,
@@ -1163,6 +1181,11 @@ const InventoryRecords = () => {
         try {
           const parsed = JSON.parse(savedDraft);
           const nextForm = { ...DEFAULT_RECORD_FORM, ...parsed };
+          nextForm.shelfLocation =
+            nextForm.shelfLocation ||
+            nextForm.shelveLocation ||
+            nextForm.location ||
+            "";
           nextForm.brandGroups = Array.isArray(nextForm.brandGroups)
             ? nextForm.brandGroups
             : DEFAULT_RECORD_FORM.brandGroups;
@@ -1252,6 +1275,7 @@ const InventoryRecords = () => {
     setFormData({
       item: record.item || "",
       warehouse: record.warehouse || record.subtext || "",
+      shelfLocation: getShelfLocation(record),
       sku: record.sku || "",
       category: record.category || "",
       qtyLabel: record.qtyLabel || "",
@@ -1528,6 +1552,7 @@ const InventoryRecords = () => {
       const payload = {
         item: formData.item,
         warehouse: formData.warehouse,
+        shelfLocation: formData.shelfLocation,
         sku: formData.sku,
         category: formData.category,
         qtyLabel: derivedQtyLabel,
@@ -1918,7 +1943,7 @@ const InventoryRecords = () => {
                 <SearchIcon className="search-icon" />
                 <input
                   type="text"
-                  placeholder="Search items, brand, Item ID, or warehouse"
+                  placeholder="Search items, brand, Item ID, warehouse, or shelf"
                   value={searchTerm}
                   onChange={handleSearchChange}
                 />
@@ -1947,6 +1972,7 @@ const InventoryRecords = () => {
                     {[
                       { key: "item", label: "Item Name" },
                       { key: "sku", label: "Item ID" },
+                      { key: "shelfLocation", label: "Shelf Location" },
                       { key: "brand", label: "Brand" },
                       { key: "category", label: "Category" },
                       { key: "quantity", label: "Quantity" },
@@ -1989,6 +2015,9 @@ const InventoryRecords = () => {
               </span>
               {visibleColumns.item ? <span>Item Name</span> : null}
               {visibleColumns.sku ? <span>Item ID</span> : null}
+              {visibleColumns.shelfLocation ? (
+                <span>Shelf Location</span>
+              ) : null}
               {visibleColumns.brand ? <span>Brand</span> : null}
               {visibleColumns.category ? <span>Category</span> : null}
               {visibleColumns.quantity ? <span>Quantity</span> : null}
@@ -2036,9 +2065,11 @@ const InventoryRecords = () => {
                         rate,
                       )
                     : priceInfo.type === "single"
-                      ? formatCurrencyPair(priceInfo.value, currency, rate)
-                          .alternateValue
-                      : "";
+                        ? formatCurrencyPair(priceInfo.value, currency, rate)
+                            .alternateValue
+                        : "";
+                const warehouseLocationLabel =
+                  getWarehouseLocationLabel(record);
 
                 return (
                   <div
@@ -2073,13 +2104,22 @@ const InventoryRecords = () => {
                       </div>
                       <div>
                         <strong>{record.item}</strong> <br></br>
-                        <span className="muted">{record.warehouse}</span>
+                        <span className="muted">
+                          {warehouseLocationLabel || "-"}
+                        </span>
                       </div>
                     </div>
                   ) : null}
                   {visibleColumns.sku ? (
                     <div className="cell mono" data-label="Item ID">
                       {record.sku}
+                    </div>
+                  ) : null}
+                  {visibleColumns.shelfLocation ? (
+                    <div className="cell" data-label="Shelf Location">
+                      <span className="muted">
+                        {record.shelfLocation || "-"}
+                      </span>
                     </div>
                   ) : null}
                   {visibleColumns.brand ? (
@@ -2290,6 +2330,15 @@ const InventoryRecords = () => {
                 value={formData.warehouse}
                 onChange={updateField("warehouse")}
                 placeholder="Select or type warehouse"
+              />
+            </label>
+            <label className="modal-field">
+              <span>Shelf Location</span>
+              <input
+                type="text"
+                value={formData.shelfLocation}
+                onChange={updateField("shelfLocation")}
+                placeholder="e.g. A-04-12 or Shelf B2"
               />
             </label>
             <label className="modal-field">
@@ -2705,6 +2754,15 @@ const InventoryRecords = () => {
                 <span className="detail-value">{detailsRecord.sku}</span>
               </div>
               <div className="detail-card">
+                <span className="detail-label">Shelf Location</span>
+                <span className="detail-value">
+                  {detailsRecord.shelfLocation || "-"}
+                </span>
+                <span className="detail-sub">
+                  {detailsRecord.warehouse || "-"}
+                </span>
+              </div>
+              <div className="detail-card">
                 <span className="detail-label">Status</span>
                 <span className="detail-value">{detailsRecord.status}</span>
                 <span className="detail-sub">{detailQtyLabel}</span>
@@ -2937,6 +2995,10 @@ const InventoryRecords = () => {
               <div className="share-report-card">
                 <span>Warehouse</span>
                 <strong>{shareRecord.warehouse || "-"}</strong>
+              </div>
+              <div className="share-report-card">
+                <span>Shelf Location</span>
+                <strong>{shareRecord.shelfLocation || "-"}</strong>
               </div>
               <div className="share-report-card">
                 <span>Category</span>

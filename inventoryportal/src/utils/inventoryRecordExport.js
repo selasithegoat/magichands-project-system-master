@@ -5,6 +5,7 @@ const EXPORT_HEADERS = [
   "Item ID",
   "Category",
   "Warehouse",
+  "Shelf Location",
   "Brand",
   "Variant",
   "Variant Item ID",
@@ -123,6 +124,8 @@ export const buildInventoryRecordExportRows = (
       "Item ID": record?.sku || "",
       Category: record?.category || "",
       Warehouse: record?.warehouse || record?.subtext || "",
+      "Shelf Location":
+        record?.shelfLocation || record?.shelveLocation || record?.location || "",
       "Record Status": record?.status || "",
       Reorder: record?.reorder ? "Yes" : "No",
     };

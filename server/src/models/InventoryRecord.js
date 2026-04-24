@@ -106,6 +106,11 @@ const InventoryRecordSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    shelfLocation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     subtext: {
       type: String,
       trim: true,

@@ -326,11 +326,11 @@ const NewInventoryRecordModal = ({ isOpen, onClose, onSave }) => {
             </label>
             <div className="inline-row">
               <label className="field">
-                Bin / Location
+                Shelf Location
                 <input
                   name="location"
                   type="text"
-                  placeholder="e.g. A-04-12"
+                  placeholder="e.g. A-04-12 or Shelf B2"
                   value={formData.location}
                   onChange={handleChange}
                 />

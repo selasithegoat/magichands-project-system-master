@@ -192,6 +192,8 @@ const buildLowStockRows = (records, threshold) =>
         "Item ID": record.sku || "",
         Category: record.category || "",
         Warehouse: record.warehouse || record.subtext || "",
+        "Shelf Location":
+          record.shelfLocation || record.shelveLocation || record.location || "",
         Quantity: record.qtyLabel || record.qtyValue || "",
         "Capacity %": Number.isFinite(percent)
           ? `${Math.round(percent * 10) / 10}%`
@@ -227,6 +229,8 @@ const buildValuationRows = (records, currency, rate) =>
       : record.brand || "",
     Category: record.category || "",
     Warehouse: record.warehouse || record.subtext || "",
+    "Shelf Location":
+      record.shelfLocation || record.shelveLocation || record.location || "",
     Quantity: record.qtyLabel || record.qtyValue || "",
     Price: formatCurrencyValue(getRecordPrice(record), currency, rate),
     Value: formatCurrencyValue(getRecordValue(record), currency, rate),
@@ -597,6 +601,11 @@ const Reports = () => {
               : record.brand || "",
             Category: record.category || "",
             Warehouse: record.warehouse || record.subtext || "",
+            "Shelf Location":
+              record.shelfLocation ||
+              record.shelveLocation ||
+              record.location ||
+              "",
             Quantity: record.qtyLabel || record.qtyValue || "",
             Variations: record.variations || "",
             "Colors/Kind": record.colors || "",
