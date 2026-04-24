@@ -375,15 +375,26 @@ const buildProjectResponseQuery = (projectId) =>
       .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
   );
 
-const canManageBilling = (user) => {
+const hasDepartmentAccess = (user, departmentName) => {
   if (!user) return false;
-  if (user.role === "admin") return true;
+  const targetDepartmentToken = normalizeDepartmentValue(departmentName);
+  if (!targetDepartmentToken) return false;
+
   const departments = Array.isArray(user.department)
     ? user.department
     : user.department
       ? [user.department]
       : [];
-  return departments.includes("Front Desk");
+
+  return departments
+    .map(normalizeDepartmentValue)
+    .includes(targetDepartmentToken);
+};
+
+const canManageBilling = (user) => {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return hasDepartmentAccess(user, FRONT_DESK_DEPARTMENT);
 };
 
 const canManageMockupApproval = (user) => canManageBilling(user);
@@ -857,7 +868,9 @@ const canMutateProject = (user, project, action = "default") => {
   const userDepartmentTokens = toDepartmentArray(user.department).map(
     normalizeDepartmentValue,
   );
-  const isFrontDesk = userDepartmentTokens.includes("front desk");
+  const isFrontDesk = userDepartmentTokens.includes(
+    normalizeDepartmentValue(FRONT_DESK_DEPARTMENT),
+  );
   const hasDeptScope = hasDepartmentOverlap(user.department, project.departments);
 
   switch (action) {
@@ -989,7 +1002,7 @@ const buildProjectAccessQuery = (req) => {
   const isReportMode = req.query.mode === "report";
   const isEngagedMode = req.query.mode === "engaged";
   const isAdminPortal = req.query.source === "admin";
-  const isFrontDesk = req.user.department?.includes("Front Desk");
+  const isFrontDesk = hasDepartmentAccess(req.user, FRONT_DESK_DEPARTMENT);
   const userDepartments = Array.isArray(req.user.department)
     ? req.user.department
     : req.user.department
@@ -2144,9 +2157,7 @@ const BATCH_PRODUCED_STATUS_SET = new Set([
   "delivered",
 ]);
 const isFrontDeskUser = (user) =>
-  toDepartmentArray(user?.department)
-    .map(normalizeDepartmentValue)
-    .includes("front desk");
+  hasDepartmentAccess(user, FRONT_DESK_DEPARTMENT);
 const isAdminUser = (user) => user?.role === "admin";
 const isProductionUser = (user) =>
   toDepartmentArray(user?.department)
@@ -2872,9 +2883,12 @@ const QUOTE_REQUIREMENT_DEPARTMENT_STAGES = new Set([
 ]);
 const QUOTE_REQUIREMENT_ADMIN_ONLY_TARGETS = new Set(["cancelled", "not_required"]);
 const QUOTE_REQUIREMENT_DEPARTMENT_STAGE_ACCESS = {
-  cost: new Set(["front desk"]),
+  cost: new Set([canonicalizeDepartment(FRONT_DESK_DEPARTMENT)]),
   mockup: new Set(["graphics"]),
-  previousSamples: new Set(["front desk", "stores"]),
+  previousSamples: new Set([
+    canonicalizeDepartment(FRONT_DESK_DEPARTMENT),
+    "stores",
+  ]),
   sampleProduction: new Set(["graphics", "production"]),
   bidSubmission: new Set(),
 };
@@ -7782,22 +7796,13 @@ const getProjectById = async (req, res) => {
 
     if (project) {
       // Access Check: Admin OR Project Lead
-      const isLead =
-        project.projectLeadId &&
-        (project.projectLeadId._id.toString() === req.user._id.toString() ||
-          project.projectLeadId.toString() === req.user._id.toString());
-
-      const isAssistant =
-        project.assistantLeadId &&
-        (project.assistantLeadId._id?.toString() === req.user._id.toString() ||
-          project.assistantLeadId.toString() === req.user._id.toString());
+      const isLead = isUserAssignedProjectLead(req.user, project);
+      const isAssistant = isUserAssignedAssistantLead(req.user, project);
 
       const requestSource = String(req.query.source || "")
         .trim()
         .toLowerCase();
-      const isFrontDesk = toDepartmentArray(req.user?.department)
-        .map(normalizeDepartmentValue)
-        .includes("front desk");
+      const isFrontDesk = hasDepartmentAccess(req.user, FRONT_DESK_DEPARTMENT);
       const canFrontDeskAccessProject =
         isFrontDesk && requestSource === "frontdesk";
 

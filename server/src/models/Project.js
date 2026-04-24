@@ -224,10 +224,10 @@ const getUpdateStatusValue = (update = {}) => {
   return "";
 };
 
-const applyStatusSlaUpdateMetadata = async function applyStatusSlaUpdateMetadata(next) {
+const applyStatusSlaUpdateMetadata = async function applyStatusSlaUpdateMetadata() {
   const update = this.getUpdate();
   const nextStatus = getUpdateStatusValue(update);
-  if (!nextStatus) return next();
+  if (!nextStatus) return;
 
   const now = new Date();
   const historyEntry = {
@@ -237,17 +237,13 @@ const applyStatusSlaUpdateMetadata = async function applyStatusSlaUpdateMetadata
   };
 
   if (this.op !== "updateMany") {
-    try {
-      const currentProject = await this.model
-        .findOne(this.getQuery())
-        .select("status")
-        .lean();
-      const previousStatus = currentProject?.status || "";
-      if (previousStatus === nextStatus) return next();
-      historyEntry.fromStatus = previousStatus;
-    } catch (error) {
-      return next(error);
-    }
+    const currentProject = await this.model
+      .findOne(this.getQuery())
+      .select("status")
+      .lean();
+    const previousStatus = currentProject?.status || "";
+    if (previousStatus === nextStatus) return;
+    historyEntry.fromStatus = previousStatus;
   }
 
   const usesOperators = Object.keys(update || {}).some((key) =>
@@ -267,7 +263,7 @@ const applyStatusSlaUpdateMetadata = async function applyStatusSlaUpdateMetadata
         },
       },
     });
-    return next();
+    return;
   }
 
   update.$set = {
@@ -282,7 +278,7 @@ const applyStatusSlaUpdateMetadata = async function applyStatusSlaUpdateMetadata
     },
   };
   this.setUpdate(update);
-  return next();
+  return;
 };
 
 const ProjectBatchItemSchema = new mongoose.Schema(
@@ -1234,70 +1230,64 @@ ProjectSchema.pre("validate", function normalizeLegacyStatus() {
   }
 });
 
-ProjectSchema.pre("save", async function trackStatusAge(next) {
-  try {
-    const now = new Date();
+ProjectSchema.pre("save", async function trackStatusAge() {
+  const now = new Date();
 
-    if (this.isNew) {
-      if (!this.statusChangedAt) {
-        this.statusChangedAt = this.createdAt || this.orderDate || now;
-      }
-      if (this.status && (!this.statusHistory || this.statusHistory.length === 0)) {
-        this.statusHistory = [
-          {
-            fromStatus: "",
-            toStatus: this.status,
-            changedAt: this.statusChangedAt,
-          },
-        ];
-      }
-      return next();
+  if (this.isNew) {
+    if (!this.statusChangedAt) {
+      this.statusChangedAt = this.createdAt || this.orderDate || now;
     }
-
-    if (!this.isModified("status")) {
-      if (!this.statusChangedAt) {
-        const previous = await this.constructor
-          .findById(this._id)
-          .select("statusChangedAt updatedAt createdAt orderDate")
-          .lean();
-        this.statusChangedAt =
-          previous?.statusChangedAt ||
-          previous?.updatedAt ||
-          previous?.createdAt ||
-          previous?.orderDate ||
-          this.createdAt ||
-          now;
-      }
-      return next();
-    }
-
-    const previous = await this.constructor
-      .findById(this._id)
-      .select("status")
-      .lean();
-    const previousStatus = previous?.status || "";
-    if (previousStatus !== this.status) {
-      this.statusChangedAt = now;
+    if (this.status && (!this.statusHistory || this.statusHistory.length === 0)) {
       this.statusHistory = [
-        ...(Array.isArray(this.statusHistory) ? this.statusHistory : []),
         {
-          fromStatus: previousStatus,
+          fromStatus: "",
           toStatus: this.status,
-          changedAt: now,
+          changedAt: this.statusChangedAt,
         },
-      ].slice(-MAX_STATUS_HISTORY_ENTRIES);
-    } else if (!this.statusChangedAt) {
+      ];
+    }
+    return;
+  }
+
+  if (!this.isModified("status")) {
+    if (!this.statusChangedAt) {
+      const previous = await this.constructor
+        .findById(this._id)
+        .select("statusChangedAt updatedAt createdAt orderDate")
+        .lean();
       this.statusChangedAt =
+        previous?.statusChangedAt ||
         previous?.updatedAt ||
         previous?.createdAt ||
         previous?.orderDate ||
         this.createdAt ||
         now;
     }
+    return;
+  }
 
-    return next();
-  } catch (error) {
-    return next(error);
+  const previous = await this.constructor
+    .findById(this._id)
+    .select("status")
+    .lean();
+  const previousStatus = previous?.status || "";
+  if (previousStatus !== this.status) {
+    this.statusChangedAt = now;
+    this.statusHistory = [
+      ...(Array.isArray(this.statusHistory) ? this.statusHistory : []),
+      {
+        fromStatus: previousStatus,
+        toStatus: this.status,
+        changedAt: now,
+      },
+    ].slice(-MAX_STATUS_HISTORY_ENTRIES);
+  } else if (!this.statusChangedAt) {
+    this.statusChangedAt =
+      previous?.updatedAt ||
+      previous?.createdAt ||
+      previous?.orderDate ||
+      this.createdAt ||
+      now;
   }
 });
 
