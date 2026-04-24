@@ -7,12 +7,19 @@ const ACTIVITY_EVENTS = [
   "pointerdown",
   "mousedown",
   "mousemove",
+  "pointermove",
   "keydown",
+  "input",
+  "wheel",
   "scroll",
   "touchstart",
+  "touchmove",
   "focusin",
   "click",
 ];
+
+const getKeepAliveIntervalMs = (timeout) =>
+  Math.max(15 * 1000, Math.min(60 * 1000, Math.floor(timeout / 2)));
 
 const useInactivityLogout = (
   timeout = 5 * 60 * 1000,
@@ -26,6 +33,8 @@ const useInactivityLogout = (
   const onLoggedOutRef = useRef(onLoggedOut);
   const locationPathRef = useRef(location.pathname);
   const lastActivityAtRef = useRef(Date.now());
+  const lastKeepAliveAtRef = useRef(Date.now());
+  const keepAliveInFlightRef = useRef(false);
   const isLoggingOutRef = useRef(false);
 
   useEffect(() => {
@@ -105,13 +114,55 @@ const useInactivityLogout = (
     [clearLogoutTimer, logout, timeout],
   );
 
+  const refreshSession = useCallback(async () => {
+    if (
+      !enabledRef.current ||
+      isLoggingOutRef.current ||
+      keepAliveInFlightRef.current
+    ) {
+      return;
+    }
+
+    keepAliveInFlightRef.current = true;
+    try {
+      const res = await fetch("/api/auth/me?source=admin", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!enabledRef.current || isLoggingOutRef.current) return;
+
+      const sessionUser = res.ok ? await res.json().catch(() => null) : null;
+      if (!res.ok || !sessionUser?._id) {
+        void logout({ reason: "expired" });
+      }
+    } catch (error) {
+      console.error("Session keepalive failed", error);
+    } finally {
+      keepAliveInFlightRef.current = false;
+    }
+  }, [logout]);
+
+  const refreshSessionIfNeeded = useCallback(
+    (now = Date.now()) => {
+      if (!enabledRef.current || isLoggingOutRef.current) return;
+
+      const elapsedMs = now - lastKeepAliveAtRef.current;
+      if (elapsedMs < getKeepAliveIntervalMs(timeout)) return;
+
+      lastKeepAliveAtRef.current = now;
+      void refreshSession();
+    },
+    [refreshSession, timeout],
+  );
+
   const registerActivity = useCallback(() => {
     if (!enabledRef.current || isLoggingOutRef.current) return;
 
     const now = Date.now();
     lastActivityAtRef.current = now;
     scheduleLogout(now);
-  }, [scheduleLogout]);
+    refreshSessionIfNeeded(now);
+  }, [refreshSessionIfNeeded, scheduleLogout]);
 
   const handleWindowReturn = useCallback(() => {
     if (!enabledRef.current || isLoggingOutRef.current) return;
@@ -127,7 +178,8 @@ const useInactivityLogout = (
 
     lastActivityAtRef.current = now;
     scheduleLogout(now);
-  }, [logout, scheduleLogout, timeout]);
+    refreshSessionIfNeeded(now);
+  }, [logout, refreshSessionIfNeeded, scheduleLogout, timeout]);
 
   useEffect(() => {
     if (!enabled) {
@@ -137,6 +189,7 @@ const useInactivityLogout = (
 
     isLoggingOutRef.current = false;
     lastActivityAtRef.current = Date.now();
+    lastKeepAliveAtRef.current = Date.now();
     scheduleLogout(lastActivityAtRef.current);
 
     ACTIVITY_EVENTS.forEach((event) => {
