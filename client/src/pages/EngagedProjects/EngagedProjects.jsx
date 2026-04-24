@@ -359,59 +359,80 @@ const EngagedProjects = ({ user }) => {
         : productionSubDepts,
     [hasProductionParent, productionSubDepts],
   );
+  const effectiveGraphicsSubDepts = useMemo(
+    () =>
+      hasGraphicsParent
+        ? GRAPHICS_SUB_DEPARTMENTS
+        : userDepartments.filter((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d)),
+    [hasGraphicsParent, userDepartments],
+  );
+  const effectiveStoresSubDepts = useMemo(
+    () =>
+      hasStoresParent
+        ? STORES_SUB_DEPARTMENTS
+        : userDepartments.filter((d) => STORES_SUB_DEPARTMENTS.includes(d)),
+    [hasStoresParent, userDepartments],
+  );
+  const effectivePhotographySubDepts = useMemo(
+    () =>
+      hasPhotographyParent
+        ? PHOTOGRAPHY_SUB_DEPARTMENTS
+        : userDepartments.filter((d) =>
+            PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d),
+          ),
+    [hasPhotographyParent, userDepartments],
+  );
+  const userDepartmentTokensByDept = useMemo(
+    () => ({
+      Graphics: effectiveGraphicsSubDepts,
+      Production: effectiveProductionSubDepts,
+      Stores: effectiveStoresSubDepts,
+      Photography: effectivePhotographySubDepts,
+    }),
+    [
+      effectiveGraphicsSubDepts,
+      effectiveProductionSubDepts,
+      effectiveStoresSubDepts,
+      effectivePhotographySubDepts,
+    ],
+  );
 
   // Determine all engaged departments the user belongs to
   const userEngagedDepts = useMemo(() => {
     const found = [];
-    if (hasProductionParent || effectiveProductionSubDepts.length > 0) {
+    if (effectiveProductionSubDepts.length > 0) {
       found.push("Production");
     }
-    if (
-      hasGraphicsParent ||
-      userDepartments.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d))
-    )
+    if (effectiveGraphicsSubDepts.length > 0)
       found.push("Graphics");
-    if (
-      hasStoresParent ||
-      userDepartments.some((d) => STORES_SUB_DEPARTMENTS.includes(d))
-    )
+    if (effectiveStoresSubDepts.length > 0)
       found.push("Stores");
-    if (
-      hasPhotographyParent ||
-      userDepartments.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d))
-    )
+    if (effectivePhotographySubDepts.length > 0)
       found.push("Photography");
     return found;
   }, [
-    userDepartments,
-    hasProductionParent,
     effectiveProductionSubDepts,
-    hasGraphicsParent,
-    hasStoresParent,
-    hasPhotographyParent,
+    effectiveGraphicsSubDepts,
+    effectiveStoresSubDepts,
+    effectivePhotographySubDepts,
   ]);
 
   // Determine sub-departments to check based on the selected department filter
   const engagedSubDepts = useMemo(() => {
     // If filtering by a specific department
-    if (departmentFilter === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
-    if (departmentFilter === "Stores") return STORES_SUB_DEPARTMENTS;
-    if (departmentFilter === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
-    if (departmentFilter === "Production") return effectiveProductionSubDepts;
+    if (departmentFilter !== "All") {
+      return userDepartmentTokensByDept[departmentFilter] || [];
+    }
 
     // If "All" or default, aggregate from all user's engaged departments
-    let aggregated = [];
-    if (effectiveProductionSubDepts.length > 0)
-      aggregated = [...aggregated, ...effectiveProductionSubDepts];
-    if (userEngagedDepts.includes("Graphics"))
-      aggregated = [...aggregated, ...GRAPHICS_SUB_DEPARTMENTS];
-    if (userEngagedDepts.includes("Stores"))
-      aggregated = [...aggregated, ...STORES_SUB_DEPARTMENTS];
-    if (userEngagedDepts.includes("Photography"))
-      aggregated = [...aggregated, ...PHOTOGRAPHY_SUB_DEPARTMENTS];
-
-    return aggregated;
-  }, [userEngagedDepts, departmentFilter, effectiveProductionSubDepts]);
+    return Array.from(
+      new Set(
+        userEngagedDepts.flatMap(
+          (dept) => userDepartmentTokensByDept[dept] || [],
+        ),
+      ),
+    );
+  }, [userEngagedDepts, departmentFilter, userDepartmentTokensByDept]);
 
   // Determine user's primary label for the current view
   const primaryDeptLabel = useMemo(() => {
@@ -577,15 +598,8 @@ const EngagedProjects = ({ user }) => {
 
   const projectHasDept = (project, dept) => {
     const projDepts = normalizeDepartmentList(project.departments);
-    if (dept === "Graphics")
-      return projDepts.some((d) => GRAPHICS_SUB_DEPARTMENTS.includes(d));
-    if (dept === "Production")
-      return projDepts.some((d) => effectiveProductionSubDepts.includes(d));
-    if (dept === "Photography")
-      return projDepts.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
-    if (dept === "Stores")
-      return projDepts.some((d) => STORES_SUB_DEPARTMENTS.includes(d));
-    return false;
+    const relevantTokens = userDepartmentTokensByDept[dept] || [];
+    return projDepts.some((d) => relevantTokens.includes(d));
   };
 
   const getDeptActionsForProject = (project) => {
@@ -605,31 +619,35 @@ const EngagedProjects = ({ user }) => {
   };
 
   const getRelevantDepartmentTokens = (dept) => {
-    if (dept === "Graphics") return GRAPHICS_SUB_DEPARTMENTS;
-    if (dept === "Stores") return STORES_SUB_DEPARTMENTS;
-    if (dept === "Photography") return PHOTOGRAPHY_SUB_DEPARTMENTS;
-    if (dept === "Production") return effectiveProductionSubDepts;
-    return [];
+    return userDepartmentTokensByDept[dept] || [];
   };
 
   const getMatchedProjectDepartments = (project, dept) => {
     const relevantTokens = getRelevantDepartmentTokens(dept);
     if (!relevantTokens.length) return [];
-    const projectDepartments = Array.isArray(project?.departments)
-      ? project.departments
-      : [];
+    const projectDepartments = normalizeDepartmentList(project?.departments);
     return projectDepartments.filter((token) => relevantTokens.includes(token));
   };
+
+  const getAcknowledgedDepartmentSet = (project) =>
+    new Set(
+      (Array.isArray(project?.acknowledgements) ? project.acknowledgements : [])
+        .map((entry) => normalizeDepartmentId(entry?.department))
+        .filter(Boolean),
+    );
 
   const isDepartmentAcknowledged = (project, dept) => {
     const matchedDepartments = getMatchedProjectDepartments(project, dept);
     if (!matchedDepartments.length) return false;
-    const acknowledged = new Set(
-      (Array.isArray(project?.acknowledgements) ? project.acknowledgements : [])
-        .map((entry) => entry?.department)
-        .filter(Boolean),
-    );
+    const acknowledged = getAcknowledgedDepartmentSet(project);
     return matchedDepartments.some((token) => acknowledged.has(token));
+  };
+
+  const hasPendingDepartmentAcknowledgement = (project, dept) => {
+    const matchedDepartments = getMatchedProjectDepartments(project, dept);
+    if (!matchedDepartments.length) return false;
+    const acknowledged = getAcknowledgedDepartmentSet(project);
+    return matchedDepartments.some((token) => !acknowledged.has(token));
   };
 
   const canDepartmentTakeAction = (project, dept) => {
@@ -701,6 +719,39 @@ const EngagedProjects = ({ user }) => {
     );
   };
 
+  const isQuoteDepartmentActionPending = (project, dept) => {
+    const summary = getQuoteSummaryForProject(project);
+
+    if (dept === "Graphics") {
+      if (!summary.includesMockup) return false;
+      const requirement = getEffectiveQuoteMockupRequirement(project);
+      if (!requirement.isRequired) return false;
+      return QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES.has(requirement.status);
+    }
+
+    if (dept === "Production") {
+      if (!summary.includesSampleProduction) return false;
+      const requirement = getQuoteRequirementState(project, "sampleProduction");
+      if (!requirement.isRequired) return false;
+      return !QUOTE_SAMPLE_PRODUCTION_COMPLETE_STATUSES.has(
+        requirement.status,
+      );
+    }
+
+    return false;
+  };
+
+  const isDepartmentActionPending = (project, dept) => {
+    if (isDepartmentActionCompleted(project, dept)) return false;
+    if (!canDepartmentTakeAction(project, dept)) return false;
+
+    if (project?.projectType === "Quote") {
+      return isQuoteDepartmentActionPending(project, dept);
+    }
+
+    return project?.status === STATUS_ACTIONS[dept]?.pending;
+  };
+
   const isGraphicsMockupWaitingForUpload = (project) => {
     if (!projectHasDept(project, "Graphics")) return false;
     if (!canDepartmentTakeAction(project, "Graphics")) return false;
@@ -749,24 +800,25 @@ const EngagedProjects = ({ user }) => {
       !(getProjectLeadMatch(project) && dept !== "Graphics"),
   );
 
+  const isDepartmentAcceptancePending = (project, dept) =>
+    isScopeApprovalComplete(project?.status) &&
+    !(dept === "Graphics" && getProjectLeadMatch(project)) &&
+    hasPendingDepartmentAcknowledgement(project, dept);
+
   const pendingAcceptanceCount = actionableDepartmentAssignments.filter(
-    ({ project, dept }) =>
-      isScopeApprovalComplete(project?.status) &&
-      !(dept === "Graphics" && getProjectLeadMatch(project)) &&
-      !isDepartmentAcknowledged(project, dept),
+    ({ project, dept }) => isDepartmentAcceptancePending(project, dept),
   ).length;
   const projectMatchesPendingAcceptance = (project) =>
     actionableDepartmentAssignments.some(
       (assignment) =>
         assignment.project?._id === project?._id &&
-        isScopeApprovalComplete(assignment.project?.status) &&
-        !isDepartmentAcknowledged(assignment.project, assignment.dept),
+        isDepartmentAcceptancePending(assignment.project, assignment.dept),
     );
-  const projectMatchesCompletedAction = (project) =>
+  const projectMatchesDepartmentCompletion = (project) =>
     actionableDepartmentAssignments.some(
       (assignment) =>
         assignment.project?._id === project?._id &&
-        isDepartmentActionCompleted(assignment.project, assignment.dept),
+        isDepartmentActionPending(assignment.project, assignment.dept),
     );
   const getProjectAcknowledgementRows = (project) => {
     const projectDepartments = Array.isArray(project?.departments)
@@ -816,6 +868,12 @@ const EngagedProjects = ({ user }) => {
     ({ project, dept }) => isDepartmentActionCompleted(project, dept),
   ).length;
   const departmentActionTotalCount = actionableDepartmentAssignments.length;
+  const pendingDepartmentCompletionProjectCount = new Set(
+    actionableDepartmentAssignments
+      .filter(({ project, dept }) => isDepartmentActionPending(project, dept))
+      .map(({ project }) => project?._id)
+      .filter(Boolean),
+  ).size;
   const departmentCompletionPercent =
     departmentActionTotalCount > 0
       ? Math.round(
@@ -865,7 +923,7 @@ const EngagedProjects = ({ user }) => {
 
       if (
         kpiFilter === "completedActions" &&
-        !projectMatchesCompletedAction(project)
+        !projectMatchesDepartmentCompletion(project)
       ) {
         return false;
       }
@@ -896,6 +954,7 @@ const EngagedProjects = ({ user }) => {
     kpiFilter,
     statusFilter,
     searchQuery,
+    departmentFilter,
   ]);
 
   // Reset to page 1 when filters change
@@ -1241,7 +1300,7 @@ const EngagedProjects = ({ user }) => {
               <strong>{pendingAcceptanceCount}</strong>
             </div>
             <p>
-              Department engagements ready for your acknowledgement across{" "}
+              Department engagements ready for your acknowledgement in{" "}
               {engagedContextLabel}.
             </p>
           </button>
@@ -1283,8 +1342,11 @@ const EngagedProjects = ({ user }) => {
               <strong>{departmentCompletionPercent}%</strong>
             </div>
             <p>
+              {pendingDepartmentCompletionProjectCount}{" "}
+              project{pendingDepartmentCompletionProjectCount === 1 ? "" : "s"}{" "}
+              need your department before the next stage.{" "}
               {departmentActionCompletedCount} of {departmentActionTotalCount}{" "}
-              active department actions are already completed.
+              actions completed.
             </p>
           </button>
         </div>
