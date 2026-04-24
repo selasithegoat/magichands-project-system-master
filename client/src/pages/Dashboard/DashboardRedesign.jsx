@@ -9,6 +9,7 @@ import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import TruckIcon from "../../components/icons/TruckIcon";
 import BuildingIcon from "../../components/icons/BuildingIcon";
+import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import LayoutGridIcon from "../../components/icons/LayoutGridIcon";
 import MenuIcon from "../../components/icons/MenuIcon";
@@ -389,6 +390,9 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const [activeTimelineEvent, setActiveTimelineEvent] = useState(null);
   const [isDrawerMounted, setIsDrawerMounted] = useState(false);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
+  const [nextActions, setNextActions] = useState([]);
+  const [nextActionsTotal, setNextActionsTotal] = useState(0);
+  const [nextActionsLoading, setNextActionsLoading] = useState(true);
 
   const leadUserId = toEntityId(user?._id || user?.id);
   const previousLeadPendingIdsRef = useRef(new Set());
@@ -397,9 +401,13 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
 
   useEffect(() => {
     fetchProjects();
+    fetchNextActions();
   }, []);
 
-  useRealtimeRefresh(() => fetchProjects(), {
+  useRealtimeRefresh(() => {
+    fetchProjects();
+    fetchNextActions();
+  }, {
     paths: ["/api/projects", "/api/updates"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],
     shouldRefresh: (detail) => {
@@ -497,6 +505,30 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     }
   };
 
+  const fetchNextActions = async () => {
+    setNextActionsLoading(true);
+    try {
+      const res = await fetch("/api/projects/next-actions?limit=8", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setNextActions([]);
+        setNextActionsTotal(0);
+        return;
+      }
+      const payload = await res.json();
+      setNextActions(Array.isArray(payload?.actions) ? payload.actions : []);
+      setNextActionsTotal(Number(payload?.total) || 0);
+    } catch (error) {
+      console.error("Error fetching next actions:", error);
+      setNextActions([]);
+      setNextActionsTotal(0);
+    } finally {
+      setNextActionsLoading(false);
+    }
+  };
+
   const handleDetailsClick = (projectOrId) => {
     const projectValue =
       projectOrId && typeof projectOrId === "object"
@@ -579,6 +611,17 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       handleStatsNavigate(targetPath);
+    }
+  };
+
+  const handleNextActionClick = (action) => {
+    if (!action) return;
+    if (action.route) {
+      navigate(action.route);
+      return;
+    }
+    if (action.projectId) {
+      handleDetailsClick(action.projectId);
     }
   };
 
@@ -1333,6 +1376,58 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
         </div>
 
         <aside className="dashboard-insights">
+          <div className="dashboard-next-actions">
+            <div className="dashboard-section-header">
+              <div>
+                <h3>My Next Actions</h3>
+                <p>Role-based tasks you can handle now.</p>
+              </div>
+              <div className="dashboard-next-actions-count">
+                {nextActionsLoading ? "Syncing" : `${nextActionsTotal} open`}
+              </div>
+            </div>
+
+            {nextActionsLoading ? (
+              <div className="dashboard-next-actions-loading">
+                <LoadingSpinner />
+              </div>
+            ) : nextActions.length ? (
+              <ul className="dashboard-next-actions-list">
+                {nextActions.map((action) => (
+                  <li key={action.id}>
+                    <button
+                      type="button"
+                      className={`dashboard-next-action priority-${action.priority || "normal"}`}
+                      onClick={() => handleNextActionClick(action)}
+                    >
+                      <span className="dashboard-next-action-icon">
+                        <ClipboardListIcon width="16" height="16" />
+                      </span>
+                      <span className="dashboard-next-action-main">
+                        <span className="dashboard-next-action-meta">
+                          {action.department ||
+                            action.projectType ||
+                            action.status ||
+                            "Action"}
+                        </span>
+                        <strong>{action.title}</strong>
+                        <span>{action.description}</span>
+                      </span>
+                      <span className="dashboard-next-action-cta">
+                        {action.ctaLabel || "Open"}
+                        <ChevronRightIcon width="14" height="14" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="dashboard-empty compact">
+                <p>No next actions right now.</p>
+              </div>
+            )}
+          </div>
+
           <div className="dashboard-action-center">
             <div className="dashboard-section-header">
               <div>

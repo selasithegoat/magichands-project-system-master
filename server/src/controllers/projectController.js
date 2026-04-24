@@ -9482,6 +9482,678 @@ const transitionQuoteRequirement = async (req, res) => {
   }
 };
 
+const NEXT_ACTION_DEFAULT_LIMIT = 8;
+const NEXT_ACTION_MAX_LIMIT = 30;
+const NEXT_ACTION_PROJECT_LIMIT = 500;
+const NEXT_ACTION_CLOSED_STATUSES = new Set([
+  "Completed",
+  "Finished",
+  "Declined",
+]);
+const NEXT_ACTION_DEPARTMENT_CONFIG = {
+  graphics: {
+    label: "Graphics",
+    pendingStatuses: new Set(["Pending Mockup"]),
+    completeLabel: "Confirm mockup completion",
+  },
+  production: {
+    label: "Production",
+    pendingStatuses: new Set(["Pending Production", "Pending Sample Production"]),
+    completeLabel: "Complete production stage",
+  },
+  photography: {
+    label: "Photography",
+    pendingStatuses: new Set(["Pending Photography"]),
+    completeLabel: "Complete photography stage",
+  },
+  stores: {
+    label: "Stores",
+    pendingStatuses: new Set(["Pending Packaging"]),
+    completeLabel: "Complete packaging stage",
+  },
+};
+const NEXT_ACTION_PRIORITY_RANK = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  normal: 3,
+  low: 4,
+};
+
+const normalizeNextActionLimit = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return NEXT_ACTION_DEFAULT_LIMIT;
+  return Math.min(parsed, NEXT_ACTION_MAX_LIMIT);
+};
+
+const getProjectActionRoute = (project, routeType = "detail") => {
+  const projectId = toObjectIdString(project?._id);
+  if (!projectId) return "";
+  if (routeType === "engaged") return `/engaged-projects/actions/${projectId}`;
+  if (routeType === "frontdesk") return `/new-orders/actions/${projectId}`;
+  return `/detail/${projectId}`;
+};
+
+const parseProjectDeliveryDeadline = (project = {}) => {
+  const deliveryDate = project?.details?.deliveryDate;
+  if (!deliveryDate) return null;
+  const parsed = new Date(deliveryDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const deliveryTime = toText(project?.details?.deliveryTime);
+  if (!deliveryTime) {
+    parsed.setHours(23, 59, 59, 999);
+    return parsed;
+  }
+
+  const match24h = deliveryTime.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  const match12h = deliveryTime.match(
+    /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i,
+  );
+
+  if (match24h || match12h) {
+    const match = match24h || match12h;
+    let hours = Number.parseInt(match[1], 10);
+    const minutes = Number.parseInt(match[2], 10);
+    const seconds = Number.parseInt(match[3] || "0", 10);
+    if (match12h) {
+      const period = match[4].toUpperCase();
+      if (period === "PM" && hours < 12) hours += 12;
+      if (period === "AM" && hours === 12) hours = 0;
+    }
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      parsed.setHours(hours, minutes, seconds, 0);
+      return parsed;
+    }
+  }
+
+  parsed.setHours(23, 59, 59, 999);
+  return parsed;
+};
+
+const resolveNextActionPriority = (project = {}, basePriority = "normal") => {
+  const dueAt = parseProjectDeliveryDeadline(project);
+  const isEmergency =
+    project?.priority === "Urgent" || project?.projectType === "Emergency";
+
+  if (dueAt) {
+    const diffMs = dueAt.getTime() - Date.now();
+    if (diffMs < 0) return "critical";
+    if (diffMs <= 24 * 60 * 60 * 1000) return isEmergency ? "critical" : "high";
+  }
+
+  if (isEmergency && ["high", "medium", "normal", "low"].includes(basePriority)) {
+    return "high";
+  }
+
+  return basePriority;
+};
+
+const buildNextActionPayload = ({
+  type,
+  title,
+  description,
+  project = null,
+  department = "",
+  route = "",
+  ctaLabel = "Open",
+  basePriority = "normal",
+  createdAt = null,
+}) => {
+  const priority = project
+    ? resolveNextActionPriority(project, basePriority)
+    : basePriority;
+  const projectId = project ? toObjectIdString(project?._id) : "";
+  const dueAt = project ? parseProjectDeliveryDeadline(project) : null;
+
+  return {
+    id: [
+      type,
+      projectId || "global",
+      normalizeDepartmentValue(department) || "general",
+    ].join(":"),
+    type,
+    priority,
+    priorityRank: NEXT_ACTION_PRIORITY_RANK[priority] ?? 3,
+    projectId,
+    orderId: project ? getProjectDisplayRef(project) : "",
+    projectName: project ? getProjectDisplayName(project) : "",
+    projectType: project?.projectType || "",
+    status: project?.status || "",
+    department,
+    title,
+    description,
+    ctaLabel,
+    route,
+    dueAt: dueAt ? dueAt.toISOString() : null,
+    createdAt:
+      createdAt ||
+      project?.updatedAt ||
+      project?.createdAt ||
+      (project ? new Date().toISOString() : null),
+  };
+};
+
+const getNextActionProjectQuery = (req) => {
+  const queries = [buildProjectAccessQuery(req).query];
+
+  if (canManageBilling(req.user)) {
+    const reportRequest = {
+      ...req,
+      query: {
+        ...(req.query || {}),
+        mode: "report",
+      },
+    };
+    queries.push(buildProjectAccessQuery(reportRequest).query);
+  }
+
+  const engagedDepartmentFilters = resolveEngagedDepartmentFilters(
+    req.user?.department,
+  );
+  if (engagedDepartmentFilters.length > 0) {
+    const engagedRequest = {
+      ...req,
+      query: {
+        ...(req.query || {}),
+        mode: "engaged",
+      },
+    };
+    queries.push(buildProjectAccessQuery(engagedRequest).query);
+  }
+
+  const dedupedQueries = [];
+  const seen = new Set();
+  queries.forEach((query) => {
+    const key = JSON.stringify(query || {});
+    if (seen.has(key)) return;
+    seen.add(key);
+    dedupedQueries.push(query || {});
+  });
+
+  const accessQuery =
+    dedupedQueries.length === 1 ? dedupedQueries[0] : { $or: dedupedQueries };
+
+  return mergeQueryWithCondition(accessQuery, {
+    status: { $nin: Array.from(NEXT_ACTION_CLOSED_STATUSES) },
+  });
+};
+
+const getNextActionDepartmentMatches = (project, user) => {
+  const matchedTokens = getMatchedProjectDepartmentTokensForUser({
+    project,
+    user,
+  });
+  const byCanonical = new Map();
+
+  matchedTokens.forEach((token) => {
+    const canonical = canonicalizeDepartment(token);
+    if (!NEXT_ACTION_DEPARTMENT_CONFIG[canonical]) return;
+    if (!byCanonical.has(canonical)) byCanonical.set(canonical, []);
+    byCanonical.get(canonical).push(token);
+  });
+
+  return Array.from(byCanonical.entries()).map(([key, tokens]) => ({
+    key,
+    tokens,
+    label: NEXT_ACTION_DEPARTMENT_CONFIG[key].label,
+  }));
+};
+
+const hasPendingAcknowledgementForTokens = (project, tokens = []) => {
+  const acknowledged = getAcknowledgedDepartmentTokens(project);
+  return tokens.some((token) => !acknowledged.has(normalizeDepartmentValue(token)));
+};
+
+const hasAcknowledgementForTokens = (project, tokens = []) => {
+  const acknowledged = getAcknowledgedDepartmentTokens(project);
+  return tokens.some((token) => acknowledged.has(normalizeDepartmentValue(token)));
+};
+
+const canUserCompleteDepartmentAction = ({ project, user, match }) => {
+  const currentUserId = toObjectIdString(user?._id || user?.id);
+  const leadId = toObjectIdString(project?.projectLeadId);
+  const isProjectLead = Boolean(currentUserId && leadId && currentUserId === leadId);
+
+  if (isProjectLead && match.key !== "graphics") return false;
+  if (isProjectLead && match.key === "graphics") return true;
+
+  return hasAcknowledgementForTokens(project, match.tokens);
+};
+
+const addDepartmentNextActions = ({ project, user, actions }) => {
+  const matches = getNextActionDepartmentMatches(project, user);
+  if (!matches.length) return;
+
+  const scopeReady = isQuoteProject(project)
+    ? isQuoteScopeApprovalReadyForDepartments(project)
+    : SCOPE_APPROVAL_READY_STATUSES.has(project?.status);
+
+  matches.forEach((match) => {
+    const config = NEXT_ACTION_DEPARTMENT_CONFIG[match.key];
+    const departmentLabel = config.label;
+    const currentUserId = toObjectIdString(user?._id || user?.id);
+    const leadId = toObjectIdString(project?.projectLeadId);
+    const isProjectLead = Boolean(
+      currentUserId && leadId && currentUserId === leadId,
+    );
+
+    if (
+      scopeReady &&
+      !isProjectLead &&
+      hasPendingAcknowledgementForTokens(project, match.tokens)
+    ) {
+      actions.push(
+        buildNextActionPayload({
+          type: "acknowledge_engagement",
+          project,
+          department: departmentLabel,
+          title: `Acknowledge ${departmentLabel} engagement`,
+          description: `${getProjectDisplayRef(project)} is ready for your department acknowledgement.`,
+          route: getProjectActionRoute(project, "engaged"),
+          ctaLabel: "Acknowledge",
+          basePriority: "medium",
+        }),
+      );
+      return;
+    }
+
+    if (!canUserCompleteDepartmentAction({ project, user, match })) return;
+    if (!config.pendingStatuses.has(project?.status)) return;
+
+    if (match.key === "graphics") {
+      const latestMockup = getLatestMockupVersion(project);
+      const approvalStatus = getMockupApprovalStatus(
+        latestMockup?.clientApproval || {},
+      );
+      const isClientProvided =
+        latestMockup && isClientProvidedMockupVersion(latestMockup);
+      const graphicsReviewStatus = latestMockup
+        ? getMockupGraphicsReviewStatus(
+            latestMockup?.graphicsReview || {},
+            getMockupSource(
+              latestMockup?.source,
+              latestMockup?.intakeUpload ? "client" : "graphics",
+            ),
+            parseBooleanFlag(latestMockup?.intakeUpload, false),
+          )
+        : "";
+
+      if (!latestMockup?.fileUrl || approvalStatus === "rejected") {
+        actions.push(
+          buildNextActionPayload({
+            type: "upload_mockup",
+            project,
+            department: departmentLabel,
+            title: "Upload mockup",
+            description: `${getProjectDisplayRef(project)} is waiting for Graphics mockup upload.`,
+            route: getProjectActionRoute(project, "engaged"),
+            ctaLabel: "Upload",
+            basePriority: "high",
+          }),
+        );
+        return;
+      }
+
+      if (isClientProvided && graphicsReviewStatus === "pending") {
+        actions.push(
+          buildNextActionPayload({
+            type: "validate_client_mockup",
+            project,
+            department: departmentLabel,
+            title: "Validate client mockup",
+            description: `${getProjectDisplayRef(project)} has a client mockup waiting for Graphics validation.`,
+            route: getProjectActionRoute(project, "engaged"),
+            ctaLabel: "Validate",
+            basePriority: "high",
+          }),
+        );
+        return;
+      }
+
+      if (!isMockupReadyForCompletion(latestMockup)) return;
+    }
+
+    actions.push(
+      buildNextActionPayload({
+        type: "complete_department_stage",
+        project,
+        department: departmentLabel,
+        title: config.completeLabel,
+        description: `${getProjectDisplayRef(project)} is waiting for ${departmentLabel} before the next stage.`,
+        route: getProjectActionRoute(project, "engaged"),
+        ctaLabel: "Complete",
+        basePriority: "high",
+      }),
+    );
+  });
+};
+
+const getSampleApprovalStatusForNextActions = (project = {}) => {
+  const explicit = toText(project?.sampleApproval?.status).toLowerCase();
+  if (explicit === "approved") return "approved";
+  if (project?.sampleApproval?.approvedAt || project?.sampleApproval?.approvedBy) {
+    return "approved";
+  }
+  return "pending";
+};
+
+const addFrontDeskNextActions = ({ project, actions }) => {
+  const route = getProjectActionRoute(project, "frontdesk");
+  const latestMockup = getLatestMockupVersion(project);
+  const latestMockupApprovalStatus = getMockupApprovalStatus(
+    latestMockup?.clientApproval || {},
+  );
+  const latestMockupNeedsClientDecision =
+    Boolean(latestMockup?.fileUrl) &&
+    !isClientProvidedMockupVersion(latestMockup) &&
+    latestMockupApprovalStatus === "pending";
+
+  if (latestMockupNeedsClientDecision) {
+    actions.push(
+      buildNextActionPayload({
+        type: "mockup_client_approval",
+        project,
+        title: "Review mockup client decision",
+        description: `${getProjectDisplayRef(project)} has an uploaded mockup waiting for Front Desk/Admin approval.`,
+        route,
+        ctaLabel: "Review",
+        basePriority: "high",
+      }),
+    );
+  }
+
+  if (!isQuoteProject(project)) {
+    const paymentTypes = getPaymentVerificationTypes(project);
+    const productionMissing =
+      ["Pending Master Approval", "Pending Production"].includes(project?.status)
+        ? getPendingProductionBillingMissing({
+            invoiceSent: Boolean(project?.invoice?.sent),
+            paymentTypes,
+          })
+        : [];
+    const deliveryMissing =
+      ["Pending Packaging", "Pending Delivery/Pickup"].includes(project?.status)
+        ? getPendingDeliveryBillingMissing({ paymentTypes })
+        : [];
+    const missingBilling = [...productionMissing, ...deliveryMissing];
+
+    if (missingBilling.length > 0) {
+      actions.push(
+        buildNextActionPayload({
+          type: "billing_block",
+          project,
+          title: "Resolve billing block",
+          description: `${getProjectDisplayRef(project)} needs ${formatBillingRequirementLabels(
+            missingBilling,
+          )} before moving forward.`,
+          route,
+          ctaLabel: "Resolve",
+          basePriority: "critical",
+        }),
+      );
+    }
+
+    if (
+      project?.sampleRequirement?.isRequired &&
+      getSampleApprovalStatusForNextActions(project) !== "approved"
+    ) {
+      actions.push(
+        buildNextActionPayload({
+          type: "sample_approval",
+          project,
+          title: "Confirm sample approval",
+          description: `${getProjectDisplayRef(project)} requires client sample approval before production can close.`,
+          route,
+          ctaLabel: "Confirm",
+          basePriority: "high",
+        }),
+      );
+    }
+
+    if (project?.status === "Pending Delivery/Pickup") {
+      actions.push(
+        buildNextActionPayload({
+          type: "delivery_pickup",
+          project,
+          title: "Coordinate delivery or pickup",
+          description: `${getProjectDisplayRef(project)} is ready for delivery/pickup handling.`,
+          route,
+          ctaLabel: "Open",
+          basePriority: "medium",
+        }),
+      );
+    }
+
+    return;
+  }
+
+  const normalizedQuoteDetails = getNormalizedQuoteDetailsForProject(project);
+  const requirementItems = normalizedQuoteDetails?.requirementItems || {};
+  const quoteStatus = normalizeStatusForStorageByProjectType(
+    project?.status,
+    "Quote",
+  );
+  const costStatus = toText(requirementItems?.cost?.status).toLowerCase();
+
+  if (
+    quoteStatus === "Pending Cost Verification" ||
+    ["assigned", "in_progress", "blocked"].includes(costStatus)
+  ) {
+    actions.push(
+      buildNextActionPayload({
+        type: "quote_cost",
+        project,
+        title: "Complete quote cost",
+        description: `${getProjectDisplayRef(project)} is waiting for quote cost verification.`,
+        route,
+        ctaLabel: "Complete Cost",
+        basePriority: "high",
+      }),
+    );
+  }
+
+  if (quoteStatus === "Pending Quote Submission") {
+    actions.push(
+      buildNextActionPayload({
+        type: "quote_submission",
+        project,
+        title: "Send quote to client",
+        description: `${getProjectDisplayRef(project)} is ready for quote submission.`,
+        route,
+        ctaLabel: "Send Quote",
+        basePriority: "high",
+      }),
+    );
+  }
+
+  if (quoteStatus === "Pending Client Decision") {
+    actions.push(
+      buildNextActionPayload({
+        type: "quote_client_decision",
+        project,
+        title: "Record quote client decision",
+        description: `${getProjectDisplayRef(project)} is waiting for the client's quote decision.`,
+        route,
+        ctaLabel: "Record Decision",
+        basePriority: "medium",
+      }),
+    );
+  }
+};
+
+const isProjectLeadForNextActions = (project, user) => {
+  const userId = toObjectIdString(user?._id || user?.id);
+  if (!userId) return false;
+  return [project?.projectLeadId, project?.assistantLeadId].some(
+    (value) => toObjectIdString(value) === userId,
+  );
+};
+
+const addLeadNextActions = ({ project, user, actions }) => {
+  if (!isProjectLeadForNextActions(project, user)) return;
+
+  if (["Order Created", "Quote Created", "Pending Acceptance"].includes(project?.status)) {
+    actions.push(
+      buildNextActionPayload({
+        type: "lead_acceptance",
+        project,
+        title: "Accept assigned project",
+        description: `${getProjectDisplayRef(project)} is waiting for your acceptance.`,
+        route:
+          project?.projectType === "Quote"
+            ? `/create/quote-wizard?edit=${toObjectIdString(project?._id)}`
+            : `/create/wizard?edit=${toObjectIdString(project?._id)}`,
+        ctaLabel: "Accept",
+        basePriority: "high",
+      }),
+    );
+  }
+
+  if (project?.status === "Pending Scope Approval") {
+    actions.push(
+      buildNextActionPayload({
+        type: "scope_approval",
+        project,
+        title: "Review scope approval",
+        description: `${getProjectDisplayRef(project)} needs scope approval before departments can proceed.`,
+        route: getProjectActionRoute(project, "detail"),
+        ctaLabel: "Review",
+        basePriority: "high",
+      }),
+    );
+  }
+
+  if (project?.status === "Pending Master Approval") {
+    actions.push(
+      buildNextActionPayload({
+        type: "master_approval",
+        project,
+        title: "Complete master approval",
+        description: `${getProjectDisplayRef(project)} is waiting for master approval.`,
+        route: getProjectActionRoute(project, "detail"),
+        ctaLabel: "Review",
+        basePriority: "high",
+      }),
+    );
+  }
+};
+
+const isSameLocalDay = (left, right = new Date()) => {
+  const parsed = new Date(left);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return (
+    parsed.getFullYear() === right.getFullYear() &&
+    parsed.getMonth() === right.getMonth() &&
+    parsed.getDate() === right.getDate()
+  );
+};
+
+const shouldProjectNeedEndOfDayUpdate = (project = {}) => {
+  if (project?.cancellation?.isCancelled) return false;
+  if (project?.excludeFromEndOfDayUpdates) return false;
+  if (NEXT_ACTION_CLOSED_STATUSES.has(project?.status)) return false;
+  if (!toText(project?.endOfDayUpdate)) return true;
+  return !isSameLocalDay(project?.endOfDayUpdateDate);
+};
+
+const addEndOfDayNextAction = ({ projects, actions }) => {
+  const eodCount = projects.filter(shouldProjectNeedEndOfDayUpdate).length;
+  if (eodCount === 0) return;
+
+  actions.push(
+    buildNextActionPayload({
+      type: "end_of_day_update",
+      title: "Post End of Day updates",
+      description: `${eodCount} active project${eodCount === 1 ? "" : "s"} need today's EOD update.`,
+      route: "/end-of-day",
+      ctaLabel: "Update",
+      basePriority: "low",
+      createdAt: new Date().toISOString(),
+    }),
+  );
+};
+
+// @desc    Get role-based next actions for the current user
+// @route   GET /api/projects/next-actions
+// @access  Private
+const getNextActions = async (req, res) => {
+  try {
+    const limit = normalizeNextActionLimit(req.query.limit);
+    const query = getNextActionProjectQuery(req);
+    const projects = await Project.find(query)
+      .select(
+        [
+          "_id",
+          "orderId",
+          "projectType",
+          "priority",
+          "status",
+          "details",
+          "departments",
+          "acknowledgements",
+          "invoice",
+          "paymentVerifications",
+          "sampleRequirement",
+          "sampleApproval",
+          "mockup",
+          "quoteDetails",
+          "projectLeadId",
+          "assistantLeadId",
+          "endOfDayUpdate",
+          "endOfDayUpdateDate",
+          "excludeFromEndOfDayUpdates",
+          "cancellation",
+          "createdAt",
+          "updatedAt",
+        ].join(" "),
+      )
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(NEXT_ACTION_PROJECT_LIMIT)
+      .lean();
+
+    const actions = [];
+    const canSeeFrontDeskActions = canManageBilling(req.user);
+
+    projects.forEach((project) => {
+      addLeadNextActions({ project, user: req.user, actions });
+      addDepartmentNextActions({ project, user: req.user, actions });
+      if (canSeeFrontDeskActions) {
+        addFrontDeskNextActions({ project, actions });
+      }
+    });
+
+    if (canSeeFrontDeskActions) {
+      addEndOfDayNextAction({ projects, actions });
+    }
+
+    const deduped = Array.from(
+      new Map(actions.map((action) => [action.id, action])).values(),
+    ).sort((left, right) => {
+      if (left.priorityRank !== right.priorityRank) {
+        return left.priorityRank - right.priorityRank;
+      }
+
+      const leftDue = left.dueAt ? new Date(left.dueAt).getTime() : Infinity;
+      const rightDue = right.dueAt ? new Date(right.dueAt).getTime() : Infinity;
+      if (leftDue !== rightDue) return leftDue - rightDue;
+
+      return (
+        new Date(left.createdAt || 0).getTime() -
+        new Date(right.createdAt || 0).getTime()
+      );
+    });
+
+    return res.json({
+      actions: deduped.slice(0, limit),
+      total: deduped.length,
+    });
+  } catch (error) {
+    console.error("Error fetching next actions:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // @desc    Get lightweight dashboard counts for the current user
 // @route   GET /api/projects/dashboard-counts
 // @access  Private
@@ -17048,6 +17720,7 @@ module.exports = {
   createProject,
   getProjects,
   getDashboardCounts,
+  getNextActions,
   getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,
