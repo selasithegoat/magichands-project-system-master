@@ -574,6 +574,7 @@ const InventoryRecords = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [detailsRecord, setDetailsRecord] = useState(null);
+  const [detailsImageRecord, setDetailsImageRecord] = useState(null);
   const [shareRecord, setShareRecord] = useState(null);
   const [shareGeneratedAt, setShareGeneratedAt] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -1605,6 +1606,16 @@ const InventoryRecords = () => {
 
   const closeDetailsModal = () => {
     setDetailsRecord(null);
+    setDetailsImageRecord(null);
+  };
+
+  const openDetailsImageModal = () => {
+    if (!detailsRecord?.image) return;
+    setDetailsImageRecord(detailsRecord);
+  };
+
+  const closeDetailsImageModal = () => {
+    setDetailsImageRecord(null);
   };
 
   const openShareModal = (record) => {
@@ -2743,49 +2754,67 @@ const InventoryRecords = () => {
       >
         {detailsRecord ? (
           <div className="record-details">
-            <div className="details-grid">
-              <div className="detail-card">
-                <span className="detail-label">Item</span>
-                <span className="detail-value">{detailsRecord.item}</span>
-                <span className="detail-sub">{detailsRecord.warehouse}</span>
-              </div>
-              <div className="detail-card">
-                <span className="detail-label">Item ID</span>
-                <span className="detail-value">{detailsRecord.sku}</span>
-              </div>
-              <div className="detail-card">
-                <span className="detail-label">Shelf Location</span>
-                <span className="detail-value">
-                  {detailsRecord.shelfLocation || "-"}
-                </span>
-                <span className="detail-sub">
-                  {detailsRecord.warehouse || "-"}
-                </span>
-              </div>
-              <div className="detail-card">
-                <span className="detail-label">Status</span>
-                <span className="detail-value">{detailsRecord.status}</span>
-                <span className="detail-sub">{detailQtyLabel}</span>
-              </div>
-              <div className="detail-card">
-                <span className="detail-label">{detailPriceTitle}</span>
-                <span className="detail-value">
-                  <span
-                    className="tooltip-anchor"
-                    data-tooltip={detailPriceTooltip || undefined}
-                  >
-                    {detailPriceLabel || "-"}
+            <div
+              className={`details-overview${
+                detailsRecord.image ? "" : " details-overview--no-image"
+              }`}
+            >
+              {detailsRecord.image ? (
+                <button
+                  type="button"
+                  className="details-image-button"
+                  onClick={openDetailsImageModal}
+                  aria-label={`View ${detailsRecord.item || "inventory"} image`}
+                >
+                  <img src={detailsRecord.image} alt={detailsRecord.item} />
+                  <span>View image</span>
+                </button>
+              ) : null}
+
+              <div className="details-grid">
+                <div className="detail-card">
+                  <span className="detail-label">Item</span>
+                  <span className="detail-value">{detailsRecord.item}</span>
+                  <span className="detail-sub">{detailsRecord.warehouse}</span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">Item ID</span>
+                  <span className="detail-value">{detailsRecord.sku}</span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">Shelf Location</span>
+                  <span className="detail-value">
+                    {detailsRecord.shelfLocation || "-"}
                   </span>
-                </span>
-                <span className="detail-sub">
-                  <span
-                    className="tooltip-anchor"
-                    data-tooltip={detailValueTooltip || undefined}
-                  >
-                    {formatCurrencyValue(detailsRecord.value, currency, rate)}
-                  </span>{" "}
-                  total
-                </span>
+                  <span className="detail-sub">
+                    {detailsRecord.warehouse || "-"}
+                  </span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">Status</span>
+                  <span className="detail-value">{detailsRecord.status}</span>
+                  <span className="detail-sub">{detailQtyLabel}</span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">{detailPriceTitle}</span>
+                  <span className="detail-value">
+                    <span
+                      className="tooltip-anchor"
+                      data-tooltip={detailPriceTooltip || undefined}
+                    >
+                      {detailPriceLabel || "-"}
+                    </span>
+                  </span>
+                  <span className="detail-sub">
+                    <span
+                      className="tooltip-anchor"
+                      data-tooltip={detailValueTooltip || undefined}
+                    >
+                      {formatCurrencyValue(detailsRecord.value, currency, rate)}
+                    </span>{" "}
+                    total
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2956,6 +2985,30 @@ const InventoryRecords = () => {
                 <span className="muted">No brands added yet.</span>
               )}
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(detailsImageRecord)}
+        title="Inventory Image"
+        subtitle={
+          detailsImageRecord
+            ? `${detailsImageRecord.item} - ${detailsImageRecord.sku}`
+            : ""
+        }
+        primaryText="Close"
+        onConfirm={closeDetailsImageModal}
+        onClose={closeDetailsImageModal}
+        hideFooter
+        variant="center"
+      >
+        {detailsImageRecord ? (
+          <div className="details-image-viewer">
+            <img
+              src={detailsImageRecord.image}
+              alt={detailsImageRecord.item || "Inventory item"}
+            />
           </div>
         ) : null}
       </Modal>
