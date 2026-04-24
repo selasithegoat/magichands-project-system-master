@@ -70,6 +70,7 @@ import {
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
@@ -1231,6 +1232,7 @@ const ProjectDetail = ({ user }) => {
                       ? projectStatusDisplay.replace("Pending ", "")
                       : projectStatusDisplay}
                 </span>
+              <StatusSlaBadge project={project} />
               {(canFinishProject || canFinishQuote) && (
                 <button
                   className="btn-primary"

@@ -10,6 +10,7 @@ import {
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
+import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -1592,13 +1593,16 @@ const EngagedProjects = ({ user }) => {
                           {deliveryTime && ` (${deliveryTime})`}
                         </td>
                         <td>
-                          <span
-                            className={`status-badge ${String(displayStatus || "")
-                              .toLowerCase()
-                              .replace(/\s+/g, "-")}`}
-                          >
-                            {displayStatus}
-                          </span>
+                          <div className="status-cell-stack">
+                            <span
+                              className={`status-badge ${String(displayStatus || "")
+                                .toLowerCase()
+                                .replace(/\s+/g, "-")}`}
+                            >
+                              {displayStatus}
+                            </span>
+                            <StatusSlaBadge project={project} compact />
+                          </div>
                         </td>
                         <td>
                           <button
@@ -1726,13 +1730,16 @@ const EngagedProjects = ({ user }) => {
                         <td>{lead}</td>
                         <td>{client}</td>
                         <td>
-                          <span
-                            className={`status-badge ${String(displayStatus || "")
-                              .toLowerCase()
-                              .replace(/\s+/g, "-")}`}
-                          >
-                            {displayStatus}
-                          </span>
+                          <div className="status-cell-stack">
+                            <span
+                              className={`status-badge ${String(displayStatus || "")
+                                .toLowerCase()
+                                .replace(/\s+/g, "-")}`}
+                            >
+                              {displayStatus}
+                            </span>
+                            <StatusSlaBadge project={project} compact />
+                          </div>
                         </td>
                         <td>{engagedDeptLabel}</td>
                       </tr>

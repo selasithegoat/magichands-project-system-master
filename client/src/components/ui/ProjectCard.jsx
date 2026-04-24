@@ -2,6 +2,7 @@ import "./ProjectCard.css";
 import CalendarIcon from "../icons/CalendarIcon";
 import UserAvatar from "../ui/UserAvatar";
 import FolderIcon from "../icons/FolderIcon";
+import StatusSlaBadge from "../ui/StatusSlaBadge";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
 import { getReferenceFileUrl } from "../../utils/referenceAttachments";
 import { renderProjectName } from "../../utils/projectName";
@@ -321,6 +322,7 @@ const ProjectCard = ({ project, onDetails, onUpdateStatus }) => {
               ? "WAITING ACCEPTANCE"
               : displayStatus || "Draft"}
           </span>
+          <StatusSlaBadge project={project} compact />
           {showPendingClientApprovalTag && (
             <span className="status-badge mockup-client-pending">
               {mockupVersionLabel

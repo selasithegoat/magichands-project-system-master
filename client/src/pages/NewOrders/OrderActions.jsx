@@ -31,6 +31,7 @@ import {
 } from "../../utils/mockupWorkflow";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -3426,6 +3427,7 @@ const OrderActions = () => {
               quoteRequirementMode,
             )}
           </span>
+          <StatusSlaBadge project={project} />
         </div>
         <div className="order-actions-topbar-actions">
           <ContextualHelpLink

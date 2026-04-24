@@ -3755,6 +3755,18 @@ const normalizeProjectStatusFields = (project) => {
   if (normalizedStatus && normalizedStatus !== project.status) {
     project.status = normalizedStatus;
   }
+  const statusSla =
+    typeof Project.buildStatusSla === "function"
+      ? Project.buildStatusSla(project)
+      : null;
+  if (statusSla) {
+    project.statusChangedAt = project.statusChangedAt || statusSla.since;
+    if (typeof project.set === "function") {
+      project.set("sla", statusSla, { strict: false });
+    } else {
+      project.sla = statusSla;
+    }
+  }
   if (project.hold?.previousStatus) {
     const normalizedPrevious = normalizeMasterApprovalStatus(
       project.hold.previousStatus,
@@ -7489,7 +7501,7 @@ const getStageBottlenecks = async (req, res) => {
       $or: [{ "hold.isOnHold": { $exists: false } }, { "hold.isOnHold": false }],
     })
       .select(
-        "_id orderId details.projectName details.projectIndicator status hold createdAt",
+        "_id orderId details.projectName details.projectIndicator status statusChangedAt hold createdAt",
       )
       .lean();
 
@@ -7539,7 +7551,9 @@ const getStageBottlenecks = async (req, res) => {
       if (!projectId || !status) return;
 
       const stageEnteredAtValue =
-        stageEntryMap.get(`${projectId}|${status}`) || project?.createdAt;
+        project?.statusChangedAt ||
+        stageEntryMap.get(`${projectId}|${status}`) ||
+        project?.createdAt;
       if (!stageEnteredAtValue) return;
 
       const stageEnteredAt = new Date(stageEnteredAtValue);

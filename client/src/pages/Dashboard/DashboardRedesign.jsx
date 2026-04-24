@@ -19,6 +19,7 @@ import XIcon from "../../components/icons/XIcon";
 import FabButton from "../../components/ui/FabButton";
 import Toast from "../../components/ui/Toast";
 import UserAvatar from "../../components/ui/UserAvatar";
+import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import usePersistedState from "../../hooks/usePersistedState";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
@@ -1045,6 +1046,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                 : "",
             )}
           </span>
+          <StatusSlaBadge project={project} compact />
         </div>
 
         <div className="dashboard-project-progress-block">

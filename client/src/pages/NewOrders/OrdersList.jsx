@@ -4,6 +4,7 @@ import "./NewOrders.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
+import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import usePersistedState from "../../hooks/usePersistedState";
 import { getLeadDisplay, getLeadSearchText } from "../../utils/leadDisplay";
 import {
@@ -406,6 +407,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
         <span className={`status-badge ${getStatusClass(displayStatus)}`}>
           {displayStatus}
         </span>
+        <StatusSlaBadge project={project} compact />
         {showQuoteDecisionMeta && (
           <span className="order-status-meta">
             Client decision: {formatQuoteDecisionStatus(quoteDecisionState.status)}

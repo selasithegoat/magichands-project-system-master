@@ -10,6 +10,7 @@ import {
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
+import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
@@ -2936,6 +2937,7 @@ const EngagedProjectActions = ({ user }) => {
             >
               {displayStatus}
             </span>
+            <StatusSlaBadge project={project} />
           </div>
         </div>
         <button

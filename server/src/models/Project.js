@@ -93,6 +93,197 @@ const BATCH_STATUSES = [
   "delivered",
   "cancelled",
 ];
+const HOUR_IN_MS = 60 * 60 * 1000;
+const DAY_IN_MS = 24 * HOUR_IN_MS;
+const MAX_STATUS_HISTORY_ENTRIES = 75;
+const SLA_CLOSED_STATUSES = new Set([
+  "Completed",
+  "Finished",
+  "Declined",
+]);
+const STATUS_SLA_RULES = {
+  "Order Created": { yellowHours: 8, redHours: 24 },
+  "Quote Created": { yellowHours: 8, redHours: 24 },
+  "Pending Acceptance": { yellowHours: 8, redHours: 24 },
+  "Pending Scope Approval": { yellowHours: 8, redHours: 24 },
+  "Scope Approval Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Departmental Meeting": { yellowHours: 24, redHours: 48 },
+  "Pending Departmental Engagement": { yellowHours: 24, redHours: 48 },
+  "Departmental Engagement Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Mockup": { yellowHours: 24, redHours: 48 },
+  "Mockup Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Master Approval": { yellowHours: 8, redHours: 24 },
+  "Master Approval Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Production": { yellowHours: 48, redHours: 96 },
+  "Pending Sample Production": { yellowHours: 24, redHours: 48 },
+  "Production Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Quality Control": { yellowHours: 12, redHours: 24 },
+  "Quality Control Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Photography": { yellowHours: 24, redHours: 48 },
+  "Photography Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Packaging": { yellowHours: 24, redHours: 48 },
+  "Packaging Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Delivery/Pickup": { yellowHours: 24, redHours: 48 },
+  Delivered: { yellowHours: 48, redHours: 72 },
+  "Pending Feedback": { yellowHours: 48, redHours: 96 },
+  "Feedback Completed": { yellowHours: 24, redHours: 48 },
+  "Pending Cost Verification": { yellowHours: 24, redHours: 48 },
+  "Cost Verification Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Quote Submission": { yellowHours: 24, redHours: 48 },
+  "Quote Submission Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Client Decision": { yellowHours: 72, redHours: 120 },
+  "Pending Quote Request": { yellowHours: 24, redHours: 48 },
+  "Quote Request Completed": { yellowHours: 12, redHours: 24 },
+  "Pending Send Response": { yellowHours: 24, redHours: 48 },
+  "Response Sent": { yellowHours: 24, redHours: 48 },
+  "On Hold": { yellowHours: 72, redHours: 168 },
+};
+
+const toDateOrNull = (value) => {
+  if (!value) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatStatusElapsed = (elapsedMs) => {
+  const safeElapsed = Math.max(0, Number(elapsedMs) || 0);
+  const days = Math.floor(safeElapsed / DAY_IN_MS);
+  if (days >= 1) return `${days} day${days === 1 ? "" : "s"}`;
+
+  const hours = Math.floor(safeElapsed / HOUR_IN_MS);
+  if (hours >= 1) return `${hours} hour${hours === 1 ? "" : "s"}`;
+
+  const minutes = Math.floor(safeElapsed / (60 * 1000));
+  if (minutes >= 1) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+
+  return "less than 1 minute";
+};
+
+const getProjectStatusStartedAt = (project = {}) => {
+  const status = project?.status;
+  const statusHistory = Array.isArray(project?.statusHistory)
+    ? project.statusHistory
+    : [];
+  const latestMatchingHistory = [...statusHistory]
+    .reverse()
+    .find((entry) => entry?.toStatus === status && entry?.changedAt);
+
+  return (
+    toDateOrNull(project?.statusChangedAt) ||
+    toDateOrNull(latestMatchingHistory?.changedAt) ||
+    toDateOrNull(project?.updatedAt) ||
+    toDateOrNull(project?.createdAt) ||
+    toDateOrNull(project?.orderDate)
+  );
+};
+
+const buildStatusSla = (project = {}, now = new Date()) => {
+  const status = project?.status || "";
+  if (!status || SLA_CLOSED_STATUSES.has(status)) return null;
+
+  const sinceDate = getProjectStatusStartedAt(project);
+  if (!sinceDate) return null;
+
+  const elapsedMs = Math.max(0, now.getTime() - sinceDate.getTime());
+  const rule = STATUS_SLA_RULES[status] || null;
+  const isEmergency =
+    project?.priority === "Urgent" || project?.projectType === "Emergency";
+  const multiplier = isEmergency ? 0.5 : 1;
+  const yellowAfterMs = rule ? Math.max(HOUR_IN_MS, rule.yellowHours * multiplier * HOUR_IN_MS) : null;
+  const redAfterMs = rule ? Math.max(HOUR_IN_MS, rule.redHours * multiplier * HOUR_IN_MS) : null;
+  let severity = "normal";
+
+  if (redAfterMs && elapsedMs >= redAfterMs) {
+    severity = "red";
+  } else if (yellowAfterMs && elapsedMs >= yellowAfterMs) {
+    severity = "yellow";
+  }
+
+  return {
+    status,
+    since: sinceDate.toISOString(),
+    elapsedMs,
+    elapsedLabel: formatStatusElapsed(elapsedMs),
+    label: `${status} for ${formatStatusElapsed(elapsedMs)}`,
+    severity,
+    yellowAfterMs,
+    redAfterMs,
+    tracked: Boolean(rule),
+  };
+};
+
+const getUpdateStatusValue = (update = {}) => {
+  if (!update || Array.isArray(update)) return "";
+  if (Object.prototype.hasOwnProperty.call(update, "status")) return update.status;
+  if (
+    update.$set &&
+    Object.prototype.hasOwnProperty.call(update.$set, "status")
+  ) {
+    return update.$set.status;
+  }
+  return "";
+};
+
+const applyStatusSlaUpdateMetadata = async function applyStatusSlaUpdateMetadata(next) {
+  const update = this.getUpdate();
+  const nextStatus = getUpdateStatusValue(update);
+  if (!nextStatus) return next();
+
+  const now = new Date();
+  const historyEntry = {
+    fromStatus: "",
+    toStatus: nextStatus,
+    changedAt: now,
+  };
+
+  if (this.op !== "updateMany") {
+    try {
+      const currentProject = await this.model
+        .findOne(this.getQuery())
+        .select("status")
+        .lean();
+      const previousStatus = currentProject?.status || "";
+      if (previousStatus === nextStatus) return next();
+      historyEntry.fromStatus = previousStatus;
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  const usesOperators = Object.keys(update || {}).some((key) =>
+    key.startsWith("$"),
+  );
+
+  if (!usesOperators) {
+    this.setUpdate({
+      $set: {
+        ...update,
+        statusChangedAt: now,
+      },
+      $push: {
+        statusHistory: {
+          $each: [historyEntry],
+          $slice: -MAX_STATUS_HISTORY_ENTRIES,
+        },
+      },
+    });
+    return next();
+  }
+
+  update.$set = {
+    ...(update.$set || {}),
+    statusChangedAt: now,
+  };
+  update.$push = {
+    ...(update.$push || {}),
+    statusHistory: {
+      $each: [historyEntry],
+      $slice: -MAX_STATUS_HISTORY_ENTRIES,
+    },
+  };
+  this.setUpdate(update);
+  return next();
+};
 
 const ProjectBatchItemSchema = new mongoose.Schema(
   {
@@ -270,6 +461,29 @@ const ProjectRevisionEmailNotificationSchema = new mongoose.Schema(
       type: String,
       default: "",
       trim: true,
+    },
+  },
+  { _id: false },
+);
+
+const ProjectStatusHistorySchema = new mongoose.Schema(
+  {
+    fromStatus: {
+      type: String,
+      default: "",
+    },
+    toStatus: {
+      type: String,
+      required: true,
+    },
+    changedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    changedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   { _id: false },
@@ -467,6 +681,14 @@ const ProjectSchema = new mongoose.Schema(
         "Response Sent",
       ],
       default: "Order Created",
+    },
+    statusChangedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    statusHistory: {
+      type: [ProjectStatusHistorySchema],
+      default: [],
     },
     hold: {
       isOnHold: {
@@ -999,12 +1221,75 @@ const ProjectSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+ProjectSchema.virtual("sla").get(function getProjectSlaVirtual() {
+  return buildStatusSla(this);
+});
+
+ProjectSchema.set("toJSON", { virtuals: true });
+ProjectSchema.set("toObject", { virtuals: true });
+
 ProjectSchema.pre("validate", function normalizeLegacyStatus() {
   const rawStatus = String(this.status || "").trim();
   if (rawStatus.toLowerCase() === "order confirmed") {
     this.status = "Order Created";
   }
 });
+
+ProjectSchema.pre("save", async function trackStatusAge(next) {
+  try {
+    const now = new Date();
+
+    if (this.isNew) {
+      if (!this.statusChangedAt) {
+        this.statusChangedAt = this.createdAt || this.orderDate || now;
+      }
+      if (this.status && (!this.statusHistory || this.statusHistory.length === 0)) {
+        this.statusHistory = [
+          {
+            fromStatus: "",
+            toStatus: this.status,
+            changedAt: this.statusChangedAt,
+          },
+        ];
+      }
+      return next();
+    }
+
+    if (!this.isModified("status")) {
+      if (!this.statusChangedAt) {
+        this.statusChangedAt = this.updatedAt || this.createdAt || now;
+      }
+      return next();
+    }
+
+    const previous = await this.constructor
+      .findById(this._id)
+      .select("status")
+      .lean();
+    const previousStatus = previous?.status || "";
+    if (previousStatus !== this.status) {
+      this.statusChangedAt = now;
+      this.statusHistory = [
+        ...(Array.isArray(this.statusHistory) ? this.statusHistory : []),
+        {
+          fromStatus: previousStatus,
+          toStatus: this.status,
+          changedAt: now,
+        },
+      ].slice(-MAX_STATUS_HISTORY_ENTRIES);
+    } else if (!this.statusChangedAt) {
+      this.statusChangedAt = this.updatedAt || this.createdAt || now;
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+});
+
+ProjectSchema.pre("findOneAndUpdate", applyStatusSlaUpdateMetadata);
+ProjectSchema.pre("updateOne", applyStatusSlaUpdateMetadata);
+ProjectSchema.pre("updateMany", applyStatusSlaUpdateMetadata);
 
 // Indexes for performance optimization
 // Combined index for Dashboard/Filtering: Most common filter combo
@@ -1022,6 +1307,9 @@ ProjectSchema.index({ "details.deliveryDate": 1 });
 ProjectSchema.index({ "cancellation.isCancelled": 1, createdAt: -1 });
 ProjectSchema.index({ lineageId: 1, versionNumber: -1 });
 ProjectSchema.index({ isLatestVersion: 1, status: 1, createdAt: -1 });
+ProjectSchema.index({ status: 1, statusChangedAt: 1 });
+
+ProjectSchema.statics.buildStatusSla = buildStatusSla;
 
 module.exports = mongoose.model("Project", ProjectSchema);
 
