@@ -9526,6 +9526,32 @@ const normalizeNextActionLimit = (value) => {
   return Math.min(parsed, NEXT_ACTION_MAX_LIMIT);
 };
 
+const isFrontDeskUserForNextActions = (user) =>
+  toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .includes(normalizeDepartmentValue(FRONT_DESK_DEPARTMENT));
+
+const isNextActionDepartmentTokenMatch = (projectToken, userToken) => {
+  const projectDepartment = normalizeDepartmentValue(projectToken);
+  const userDepartment = normalizeDepartmentValue(userToken);
+  if (!projectDepartment || !userDepartment) return false;
+  if (projectDepartment === userDepartment) return true;
+
+  const projectCanonical = canonicalizeDepartment(projectDepartment);
+  const userCanonical = canonicalizeDepartment(userDepartment);
+  if (!projectCanonical || projectCanonical !== userCanonical) return false;
+
+  if (userCanonical === "production") {
+    return userDepartment === "production" || projectDepartment === "production";
+  }
+
+  if (userCanonical === "stores") {
+    return userDepartment === "stores" || projectDepartment === "stores";
+  }
+
+  return userCanonical === "graphics" || userCanonical === "photography";
+};
+
 const getProjectActionRoute = (project, routeType = "detail") => {
   const projectId = toObjectIdString(project?._id);
   if (!projectId) return "";
@@ -9637,7 +9663,7 @@ const buildNextActionPayload = ({
 const getNextActionProjectQuery = (req) => {
   const queries = [buildProjectAccessQuery(req).query];
 
-  if (canManageBilling(req.user)) {
+  if (isFrontDeskUserForNextActions(req.user)) {
     const reportRequest = {
       ...req,
       query: {
@@ -9680,10 +9706,16 @@ const getNextActionProjectQuery = (req) => {
 };
 
 const getNextActionDepartmentMatches = (project, user) => {
-  const matchedTokens = getMatchedProjectDepartmentTokensForUser({
-    project,
-    user,
-  });
+  const userDepartmentTokens = toDepartmentArray(user?.department)
+    .map(normalizeDepartmentValue)
+    .filter(Boolean);
+  const matchedTokens = normalizeProjectDepartmentSelections(
+    project?.departments,
+  ).filter((projectToken) =>
+    userDepartmentTokens.some((userToken) =>
+      isNextActionDepartmentTokenMatch(projectToken, userToken),
+    ),
+  );
   const byCanonical = new Map();
 
   matchedTokens.forEach((token) => {
@@ -10113,7 +10145,7 @@ const getNextActions = async (req, res) => {
       .lean();
 
     const actions = [];
-    const canSeeFrontDeskActions = canManageBilling(req.user);
+    const canSeeFrontDeskActions = isFrontDeskUserForNextActions(req.user);
 
     projects.forEach((project) => {
       addLeadNextActions({ project, user: req.user, actions });
