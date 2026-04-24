@@ -271,9 +271,6 @@ const MinimalQuoteForm = () => {
         applyProjectToForm(location.state.reopenedProject);
         return;
       }
-      // Auto-generate quote number
-      const qNumber = `Q-${Date.now().toString().slice(-6)}`;
-      setFormData((prev) => ({ ...prev, quoteNumber: qNumber }));
     });
   }, [location.state, editingId]);
 
@@ -426,6 +423,14 @@ const MinimalQuoteForm = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const trimmedOrderNumber = String(formData.quoteNumber || "").trim();
+    if (!trimmedOrderNumber) {
+      triggerToast("Please enter the Order Number.", "error");
+      return;
+    }
+    if (trimmedOrderNumber !== formData.quoteNumber) {
+      setFormData((prev) => ({ ...prev, quoteNumber: trimmedOrderNumber }));
+    }
     if (!formData.deliveryTime) {
       triggerToast("Please set delivery time for this quote request.", "error");
       return;
@@ -451,12 +456,18 @@ const MinimalQuoteForm = () => {
     setIsLoading(true);
 
     try {
+      const orderNumber = String(formData.quoteNumber || "").trim();
+      if (!orderNumber) {
+        triggerToast("Please enter the Order Number.", "error");
+        setIsLoading(false);
+        return;
+      }
       const formPayload = new FormData();
       formPayload.append("projectType", "Quote");
       if (!editingId) {
         formPayload.append("status", "Quote Created");
       }
-      formPayload.append("orderId", formData.quoteNumber);
+      formPayload.append("orderId", orderNumber);
       formPayload.append("projectName", formData.projectName);
       formPayload.append("projectIndicator", formData.projectIndicator || "");
       formPayload.append("client", formData.clientName);
@@ -473,7 +484,7 @@ const MinimalQuoteForm = () => {
       formPayload.append(
         "quoteDetails",
         JSON.stringify({
-          quoteNumber: formData.quoteNumber,
+          quoteNumber: orderNumber,
           checklist: normalizeChecklist(formData.checklist),
         }),
       );
@@ -537,7 +548,7 @@ const MinimalQuoteForm = () => {
       });
 
       if (res.ok) {
-        setCreatedOrderNumber(formData.quoteNumber);
+        setCreatedOrderNumber(orderNumber);
         triggerToast(
           editingId
             ? "Quote revision updated successfully!"
@@ -608,7 +619,8 @@ const MinimalQuoteForm = () => {
             </div>
             <div className="quote-meta-grid">
               <Input
-                label="Quote Number"
+                label="Order Number"
+                placeholder="Enter order number"
                 value={formData.quoteNumber}
                 onChange={(e) =>
                   handleChange({

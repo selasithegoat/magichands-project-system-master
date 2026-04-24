@@ -279,7 +279,8 @@ const ProjectSchema = new mongoose.Schema(
   {
     orderId: {
       type: String,
-      required: false, // Can be generated or optional for now
+      required: [true, "Order number is required"],
+      trim: true,
     },
     orderRef: {
       type: mongoose.Schema.Types.ObjectId,

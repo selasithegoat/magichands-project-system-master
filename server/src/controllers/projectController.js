@@ -6949,7 +6949,7 @@ const parseBottleneckThresholdDays = (value) => {
 const createProject = async (req, res) => {
   try {
     const {
-      orderId, // Optional, can be auto-generated
+      orderId,
       orderRef,
       orderDate,
       receivedTime,
@@ -6990,9 +6990,6 @@ const createProject = async (req, res) => {
         .status(401)
         .json({ message: "User not found or not authorized" });
     }
-
-    // Auto-generate orderId if not provided and we are not attaching to an existing orderRef.
-    const generatedOrderId = `ORD-${Date.now().toString().slice(-6)}`;
 
     // Helper to extract value if object
     const getValue = (field) => {
@@ -7137,6 +7134,13 @@ const createProject = async (req, res) => {
       ),
     );
     const normalizedProjectType = toText(req.body.projectType) || "Standard";
+    const finalOrderId = normalizeOrderNumber(orderId);
+    if (!finalOrderId) {
+      await cleanupUploadedFilesSafely(req);
+      return res.status(400).json({
+        message: "Order number is required. Front Desk must enter it manually.",
+      });
+    }
     const normalizedDeliveryTime = toText(finalDeliveryTime);
     if (normalizedProjectType === "Quote" && !normalizedDeliveryTime) {
       return res.status(400).json({
@@ -7172,9 +7176,6 @@ const createProject = async (req, res) => {
     const resolvedProjectName =
       buildProjectDisplayName(normalizedProjectNameRaw, normalizedProjectIndicator) ||
       normalizedProjectNameRaw;
-    const finalOrderId =
-      normalizeOrderNumber(orderId) || (normalizedOrderRefId ? "" : generatedOrderId);
-
     const linkedOrder = await ensureOrderRecord({
       orderNumber: finalOrderId,
       orderDate: orderDate || now,
@@ -7185,7 +7186,7 @@ const createProject = async (req, res) => {
       requestedOrderRefId: normalizedOrderRefId,
     });
 
-    const resolvedOrderId = linkedOrder?.orderNumber || finalOrderId || generatedOrderId;
+    const resolvedOrderId = linkedOrder?.orderNumber || finalOrderId;
 
     // Create project
     const project = new Project({

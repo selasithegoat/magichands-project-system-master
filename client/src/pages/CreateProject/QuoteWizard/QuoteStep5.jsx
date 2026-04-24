@@ -170,7 +170,7 @@ const QuoteStep5 = ({
               </div>
             </div>
             <div className="review-item">
-              <label>Quote Number</label>
+              <label>Order Number</label>
               <div className="review-value">
                 {formData.quoteDetails?.quoteNumber || "N/A"}
               </div>

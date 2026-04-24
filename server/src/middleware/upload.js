@@ -406,13 +406,6 @@ const getProjectName = (req) => {
 const getOrderId = (req) => {
   if (req._resolvedOrderId) return req._resolvedOrderId;
   let orderId = req.body?.orderId;
-  const isCreate =
-    req.method === "POST" && !req.params?.id && !req.params?.projectId;
-  if (!orderId && isCreate) {
-    orderId = `ORD-${Date.now().toString().slice(-6)}`;
-    if (!req.body) req.body = {};
-    req.body.orderId = orderId;
-  }
   if (!orderId) {
     orderId = req.params?.id || req.params?.projectId || "project";
   }

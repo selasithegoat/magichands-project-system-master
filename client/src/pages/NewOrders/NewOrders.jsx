@@ -65,16 +65,10 @@ const toDateTimeLocal = (value) => {
   return local.toISOString().slice(0, 16);
 };
 
-const generateOrderNumber = () => {
-  const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-  const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `ORD-${datePart}-${randomPart}`;
-};
-
 const createNewOrderFormData = ({
   projectType = "Standard",
   priority = "Normal",
-  orderNumber = generateOrderNumber(),
+  orderNumber = "",
   orderDate = toDateTimeLocal(new Date()),
 } = {}) => ({
   orderNumber,
@@ -97,6 +91,9 @@ const createNewOrderFormData = ({
   assistantLeadId: "",
   sampleRequired: false,
 });
+
+const isGeneratedOrderNumberDraft = (value) =>
+  /^ORD-\d{6}-\d{4}$/i.test(String(value || "").trim());
 
 const normalizeDraftItems = (items) => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -140,6 +137,8 @@ const mergeUniqueFiles = (existingFiles, incomingFiles) => {
 
 const normalizeDraftFormData = (draftFormData, fallbackFormData) => {
   const draft = draftFormData && typeof draftFormData === "object" ? draftFormData : {};
+  const draftOrderNumber =
+    typeof draft.orderNumber === "string" ? draft.orderNumber.trim() : "";
   const nextProjectType =
     typeof draft.projectType === "string" && draft.projectType.trim()
       ? draft.projectType
@@ -149,8 +148,8 @@ const normalizeDraftFormData = (draftFormData, fallbackFormData) => {
     ...fallbackFormData,
     ...draft,
     orderNumber:
-      typeof draft.orderNumber === "string" && draft.orderNumber.trim()
-        ? draft.orderNumber
+      draftOrderNumber && !isGeneratedOrderNumberDraft(draftOrderNumber)
+        ? draftOrderNumber
         : fallbackFormData.orderNumber,
     clientName: typeof draft.clientName === "string" ? draft.clientName : "",
     clientEmail: typeof draft.clientEmail === "string" ? draft.clientEmail : "",
@@ -875,6 +874,14 @@ const NewOrders = ({ user = null }) => {
       );
       return;
     }
+    const trimmedOrderNumber = String(formData.orderNumber || "").trim();
+    if (!trimmedOrderNumber) {
+      showToast("Please enter the Order Number.", "error");
+      return;
+    }
+    if (trimmedOrderNumber !== formData.orderNumber) {
+      setFormData((prev) => ({ ...prev, orderNumber: trimmedOrderNumber }));
+    }
     if (!formData.projectLeadId) {
       showToast("Please select a Project Lead.", "error");
       return;
@@ -951,7 +958,7 @@ const NewOrders = ({ user = null }) => {
     }
 
     const formPayload = new FormData();
-    formPayload.append("orderId", formData.orderNumber);
+    formPayload.append("orderId", String(formData.orderNumber || "").trim());
     formPayload.append("orderDate", formData.orderDate);
     const canonicalClientName = resolveClientName(formData.clientName);
     formPayload.append("client", canonicalClientName);
@@ -1255,7 +1262,7 @@ const NewOrders = ({ user = null }) => {
                   </datalist>
                   <small className="field-help-text">
                     {canEditOrderNumber
-                      ? "Use an existing order number to group projects under the same order."
+                      ? "Enter the Front Desk order number. Existing numbers can group projects under the same order."
                       : "Only Front Desk and Admin can change order numbers."}
                   </small>
                 </div>
