@@ -1382,8 +1382,17 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                 <h3>My Next Actions</h3>
                 <p>Role-based tasks you can handle now.</p>
               </div>
-              <div className="dashboard-next-actions-count">
-                {nextActionsLoading ? "Syncing" : `${nextActionsTotal} open`}
+              <div className="dashboard-next-actions-tools">
+                <span className="dashboard-next-actions-count">
+                  {nextActionsLoading ? "Syncing" : `${nextActionsTotal} open`}
+                </span>
+                <button
+                  type="button"
+                  className="dashboard-next-actions-more"
+                  onClick={() => navigate("/next-actions")}
+                >
+                  Show more
+                </button>
               </div>
             </div>
 

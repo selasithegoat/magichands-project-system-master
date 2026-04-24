@@ -14,6 +14,7 @@ import { buildPortalUrl } from "./utils/portalNavigation";
 // Lazy Loaded Pages
 const Login = lazy(() => import("./pages/Login/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
+const NextActions = lazy(() => import("./pages/NextActions/NextActions"));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail/ProjectDetail"));
 const ProjectHistory = lazy(
   () => import("./pages/ProjectHistory/ProjectHistory"),
@@ -388,6 +389,21 @@ function App() {
                 onCreateProject={() => navigate("/create")}
                 onProjectChange={fetchDashboardCounts} // Refresh counts on change
               />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/next-actions"
+          element={
+            <ProtectedLayout
+              activeView="dashboard"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+              onSignOut={handleRequestLogout}
+            >
+              <NextActions user={user} />
             </ProtectedLayout>
           }
         />

@@ -9483,7 +9483,7 @@ const transitionQuoteRequirement = async (req, res) => {
 };
 
 const NEXT_ACTION_DEFAULT_LIMIT = 8;
-const NEXT_ACTION_MAX_LIMIT = 30;
+const NEXT_ACTION_MAX_LIMIT = 100;
 const NEXT_ACTION_PROJECT_LIMIT = 500;
 const NEXT_ACTION_CLOSED_STATUSES = new Set([
   "Completed",

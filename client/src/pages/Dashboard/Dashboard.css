@@ -1028,6 +1028,30 @@
   text-transform: uppercase;
 }
 
+.dashboard-next-actions-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-next-actions-more {
+  min-height: 1.8rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, var(--border));
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 0 0.62rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dashboard-next-actions-more:hover {
+  filter: brightness(0.97);
+}
+
 .dashboard-next-actions-loading {
   min-height: 160px;
   display: flex;
