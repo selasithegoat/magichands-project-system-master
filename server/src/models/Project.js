@@ -684,7 +684,6 @@ const ProjectSchema = new mongoose.Schema(
     },
     statusChangedAt: {
       type: Date,
-      default: Date.now,
     },
     statusHistory: {
       type: [ProjectStatusHistorySchema],
@@ -1257,7 +1256,17 @@ ProjectSchema.pre("save", async function trackStatusAge(next) {
 
     if (!this.isModified("status")) {
       if (!this.statusChangedAt) {
-        this.statusChangedAt = this.updatedAt || this.createdAt || now;
+        const previous = await this.constructor
+          .findById(this._id)
+          .select("statusChangedAt updatedAt createdAt orderDate")
+          .lean();
+        this.statusChangedAt =
+          previous?.statusChangedAt ||
+          previous?.updatedAt ||
+          previous?.createdAt ||
+          previous?.orderDate ||
+          this.createdAt ||
+          now;
       }
       return next();
     }
@@ -1278,7 +1287,12 @@ ProjectSchema.pre("save", async function trackStatusAge(next) {
         },
       ].slice(-MAX_STATUS_HISTORY_ENTRIES);
     } else if (!this.statusChangedAt) {
-      this.statusChangedAt = this.updatedAt || this.createdAt || now;
+      this.statusChangedAt =
+        previous?.updatedAt ||
+        previous?.createdAt ||
+        previous?.orderDate ||
+        this.createdAt ||
+        now;
     }
 
     return next();
