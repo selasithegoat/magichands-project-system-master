@@ -266,7 +266,7 @@ const DeliveryCalendarFab = ({ hasFrontDeskFab = false, onOpenProject }) => {
         <span className="delivery-calendar-fab-icon">
           <CalendarIcon width={20} height={20} color="currentColor" />
         </span>
-        <span>Calendar</span>
+        <span className="delivery-calendar-fab-label">Calendar</span>
       </button>
 
       {isOpen && (

@@ -1071,7 +1071,7 @@ const Layout = ({
           <span className="frontdesk-fab-icon">
             <ClipboardListIcon />
           </span>
-          <span>Orders</span>
+          <span className="frontdesk-fab-label">Orders</span>
         </button>
       )}
 

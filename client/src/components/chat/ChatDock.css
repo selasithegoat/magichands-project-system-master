@@ -5,8 +5,8 @@
   z-index: 980;
   display: inline-flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.8rem 1rem;
+  gap: 0;
+  padding: 0.8rem;
   border: 1px solid rgba(var(--primary-rgb), 0.34);
   border-radius: 999px;
   background:
@@ -26,12 +26,17 @@
     0 18px 34px -22px rgba(var(--primary-rgb), 0.48);
   cursor: pointer;
   transition:
+    gap 0.2s ease,
+    padding 0.2s ease,
     transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
 }
 
-.chat-dock-fab:hover {
+.chat-dock-fab:hover,
+.chat-dock-fab:focus-visible {
+  gap: 0.7rem;
+  padding-right: 1rem;
   transform: translateY(-2px);
   box-shadow:
     var(--shadow-lg),
@@ -45,6 +50,7 @@
 }
 
 .chat-dock-fab-icon {
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
   display: inline-flex;
@@ -59,12 +65,26 @@
 }
 
 .chat-dock-fab-label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.01em;
+  transition: max-width 0.2s ease, opacity 0.16s ease;
+}
+
+.chat-dock-fab:hover .chat-dock-fab-label,
+.chat-dock-fab:focus-visible .chat-dock-fab-label {
+  max-width: 80px;
+  opacity: 1;
 }
 
 .chat-dock-fab-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
   min-width: 22px;
   height: 22px;
   padding: 0 0.45rem;
@@ -1977,7 +1997,12 @@
   .chat-dock-fab {
     left: 16px;
     bottom: 16px;
-    padding: 0.75rem 0.92rem;
+    padding: 0.75rem;
+  }
+
+  .chat-dock-fab:hover,
+  .chat-dock-fab:focus-visible {
+    padding-right: 0.92rem;
   }
 
   .chat-dock-fab.active {
@@ -2132,10 +2157,6 @@
   .chat-dock-fab {
     left: 12px;
     bottom: 12px;
-  }
-
-  .chat-dock-fab-label {
-    display: none;
   }
 
   .chat-dock-shell {
