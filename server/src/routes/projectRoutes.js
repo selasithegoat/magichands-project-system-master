@@ -5,6 +5,7 @@ const {
   getProjects,
   getDashboardCounts,
   getNextActions,
+  getDeliveryCalendar,
   getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,
@@ -229,6 +230,7 @@ router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
 router.get("/dashboard-counts", protect, getDashboardCounts);
 router.get("/next-actions", protect, getNextActions);
+router.get("/delivery-calendar", protect, getDeliveryCalendar);
 router.get("/bottlenecks/stage", protect, getStageBottlenecks);
 router.get("/sms-prompts/pending", protect, getPendingSmsPrompts);
 router.post(

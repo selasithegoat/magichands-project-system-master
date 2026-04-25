@@ -4,6 +4,7 @@ import Header from "./Header";
 import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
 import ReminderAlertModal from "../features/ReminderAlertModal";
+import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
 import ChatDock from "../chat/ChatDock";
 import "./Layout.css";
 // Icons
@@ -169,6 +170,19 @@ const Layout = ({
         onBeforeNavigate,
       });
       return true;
+    },
+    [navigateToProject],
+  );
+
+  const openProjectFromCalendar = React.useCallback(
+    (project) => {
+      navigateToProject(project, {
+        fallbackPath: "/client",
+        allowGenericEngaged: true,
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+      });
     },
     [navigateToProject],
   );
@@ -1039,6 +1053,13 @@ const Layout = ({
       </div>
 
       {user?._id && <ChatDock user={user} />}
+
+      {user?._id && (
+        <DeliveryCalendarFab
+          hasFrontDeskFab={isFrontDeskUser}
+          onOpenProject={openProjectFromCalendar}
+        />
+      )}
 
       {isFrontDeskUser && (
         <button

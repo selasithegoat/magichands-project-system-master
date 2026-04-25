@@ -9509,6 +9509,17 @@ const NEXT_ACTION_CLOSED_STATUSES = new Set([
   "Finished",
   "Declined",
 ]);
+const DELIVERY_CALENDAR_DEFAULT_LIMIT = 500;
+const DELIVERY_CALENDAR_MAX_LIMIT = 1000;
+const DELIVERY_CALENDAR_URGENT_WINDOW_MS = 72 * 60 * 60 * 1000;
+const DELIVERY_CALENDAR_CLOSED_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+  "Declined",
+]);
 const NEXT_ACTION_DEPARTMENT_CONFIG = {
   graphics: {
     label: "Graphics",
@@ -9614,6 +9625,153 @@ const parseProjectDeliveryDeadline = (project = {}) => {
 
   parsed.setHours(23, 59, 59, 999);
   return parsed;
+};
+
+const parseDeliveryCalendarDateBoundary = (value, fallbackDate) => {
+  const parsed = value ? new Date(value) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+  return new Date(fallbackDate);
+};
+
+const getDeliveryCalendarAccessQuery = (req) => {
+  const queries = [buildProjectAccessQuery(req).query];
+
+  if (isFrontDeskUserForNextActions(req.user)) {
+    queries.push(
+      buildProjectAccessQuery({
+        ...req,
+        query: {
+          ...(req.query || {}),
+          mode: "report",
+        },
+      }).query,
+    );
+  }
+
+  const engagedDepartmentFilters = resolveEngagedDepartmentFilters(
+    req.user?.department,
+  );
+  if (engagedDepartmentFilters.length > 0) {
+    queries.push(
+      buildProjectAccessQuery({
+        ...req,
+        query: {
+          ...(req.query || {}),
+          mode: "engaged",
+        },
+      }).query,
+    );
+  }
+
+  const dedupedQueries = [];
+  const seen = new Set();
+  queries.forEach((query) => {
+    const key = JSON.stringify(query || {});
+    if (seen.has(key)) return;
+    seen.add(key);
+    dedupedQueries.push(query || {});
+  });
+
+  return dedupedQueries.length === 1 ? dedupedQueries[0] : { $or: dedupedQueries };
+};
+
+const buildDeliveryCalendarProjectQuery = ({
+  req,
+  fromDate,
+  toDate,
+  includeOverdue,
+  now,
+}) => {
+  let query = getDeliveryCalendarAccessQuery(req);
+
+  query = mergeQueryWithCondition(query, {
+    projectType: { $ne: "Quote" },
+    status: { $nin: Array.from(DELIVERY_CALENDAR_CLOSED_STATUSES) },
+    "details.deliveryDate": { $exists: true, $ne: null },
+    "cancellation.isCancelled": { $ne: true },
+  });
+
+  const rangeCondition = {
+    "details.deliveryDate": {
+      $gte: fromDate,
+      $lte: toDate,
+    },
+  };
+
+  if (!includeOverdue) {
+    return mergeQueryWithCondition(query, rangeCondition);
+  }
+
+  return mergeQueryWithCondition(query, {
+    $or: [
+      rangeCondition,
+      {
+        "details.deliveryDate": { $lt: now },
+      },
+    ],
+  });
+};
+
+const normalizeDeliveryCalendarLimit = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DELIVERY_CALENDAR_DEFAULT_LIMIT;
+  }
+  return Math.min(parsed, DELIVERY_CALENDAR_MAX_LIMIT);
+};
+
+const isSameCalendarDay = (left, right) =>
+  left.getFullYear() === right.getFullYear() &&
+  left.getMonth() === right.getMonth() &&
+  left.getDate() === right.getDate();
+
+const buildDeliveryCalendarEvent = (project, now = new Date()) => {
+  const dueAt = parseProjectDeliveryDeadline(project);
+  if (!dueAt) return null;
+
+  const diffMs = dueAt.getTime() - now.getTime();
+  const isOverdue = diffMs < 0;
+  const isDeadlineWarning =
+    diffMs >= 0 && diffMs <= DELIVERY_CALENDAR_URGENT_WINDOW_MS;
+  const isPriorityUrgent =
+    project?.priority === "Urgent" || project?.projectType === "Emergency";
+  const isCorporate =
+    project?.projectType === "Corporate Job" ||
+    Boolean(project?.corporateEmergency?.isEnabled);
+
+  return {
+    id: `${project?._id?.toString?.() || project?._id}:delivery`,
+    projectId: project?._id?.toString?.() || "",
+    orderId: getProjectDisplayRef(project),
+    projectName: getProjectDisplayName(project),
+    client: toText(project?.details?.client) || "Unknown Client",
+    status: project?.status || "",
+    priority: project?.priority || "Normal",
+    projectType: project?.projectType || "",
+    deliveryDate: project?.details?.deliveryDate || null,
+    deliveryTime: toText(project?.details?.deliveryTime),
+    deliveryLocation: toText(project?.details?.deliveryLocation),
+    dueAt: dueAt.toISOString(),
+    isOverdue,
+    isUrgent: isPriorityUrgent || isDeadlineWarning,
+    isCorporate,
+    isToday: isSameCalendarDay(dueAt, now),
+    hoursUntilDue: Number.isFinite(diffMs)
+      ? Math.round((diffMs / (60 * 60 * 1000)) * 10) / 10
+      : null,
+    handoffType: "Delivery / Pickup",
+    departments: Array.isArray(project?.departments) ? project.departments : [],
+    projectLeadId: project?.projectLeadId || null,
+    assistantLeadId: project?.assistantLeadId || null,
+    projectLeadName: project?.projectLeadId
+      ? getUserDisplayName(project.projectLeadId)
+      : "Unassigned",
+    assistantLeadName: project?.assistantLeadId
+      ? getUserDisplayName(project.assistantLeadId)
+      : "",
+    updatedAt: project?.updatedAt || null,
+    createdAt: project?.createdAt || null,
+  };
 };
 
 const resolveNextActionPriority = (project = {}, basePriority = "normal") => {
@@ -10197,6 +10355,93 @@ const getNextActions = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching next actions:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get delivery and pickup calendar events
+// @route   GET /api/projects/delivery-calendar
+// @access  Private
+const getDeliveryCalendar = async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    const fromDate = parseDeliveryCalendarDateBoundary(
+      req.query.from,
+      startOfMonth,
+    );
+    const toDate = parseDeliveryCalendarDateBoundary(req.query.to, endOfMonth);
+    const includeOverdue =
+      String(req.query.includeOverdue || "true").toLowerCase() !== "false";
+    const limit = normalizeDeliveryCalendarLimit(req.query.limit);
+    const query = buildDeliveryCalendarProjectQuery({
+      req,
+      fromDate,
+      toDate,
+      includeOverdue,
+      now,
+    });
+
+    const projects = await Project.find(query)
+      .select(
+        [
+          "_id",
+          "orderId",
+          "projectType",
+          "priority",
+          "status",
+          "details",
+          "departments",
+          "corporateEmergency",
+          "projectLeadId",
+          "assistantLeadId",
+          "createdAt",
+          "updatedAt",
+        ].join(" "),
+      )
+      .populate("projectLeadId", "firstName lastName employeeId email")
+      .populate("assistantLeadId", "firstName lastName employeeId email")
+      .sort({ "details.deliveryDate": 1, updatedAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const events = projects
+      .map((project) => buildDeliveryCalendarEvent(project, now))
+      .filter(Boolean)
+      .sort((left, right) => new Date(left.dueAt) - new Date(right.dueAt));
+
+    const summary = events.reduce(
+      (acc, event) => {
+        acc.total += 1;
+        if (event.isOverdue) acc.overdue += 1;
+        if (event.isUrgent) acc.urgent += 1;
+        if (event.isCorporate) acc.corporate += 1;
+        if (event.isToday) acc.today += 1;
+        return acc;
+      },
+      { total: 0, overdue: 0, urgent: 0, corporate: 0, today: 0 },
+    );
+
+    return res.json({
+      range: {
+        from: fromDate.toISOString(),
+        to: toDate.toISOString(),
+        includeOverdue,
+      },
+      summary,
+      events,
+    });
+  } catch (error) {
+    console.error("Error fetching delivery calendar:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -17768,6 +18013,7 @@ module.exports = {
   getProjects,
   getDashboardCounts,
   getNextActions,
+  getDeliveryCalendar,
   getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,

@@ -8,6 +8,7 @@ const PROJECT_STATIC_SEGMENTS = new Set([
   "clients",
   "department-updates",
   "dashboard-counts",
+  "delivery-calendar",
   "orders",
   "sms-prompts",
   "stats",
