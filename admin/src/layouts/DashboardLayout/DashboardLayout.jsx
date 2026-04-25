@@ -3,7 +3,6 @@ import "./DashboardLayout.css";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import Header from "../../components/Header/Header";
 import StageBottleneckAlert from "../../components/StageBottleneckAlert/StageBottleneckAlert";
-import ChatDock from "@client/components/chat/ChatDock";
 import DeliveryCalendarFab from "@client/components/features/DeliveryCalendarFab";
 import { useNavigate } from "react-router-dom";
 
@@ -35,7 +34,6 @@ const DashboardLayout = ({ children, user, onLogout }) => {
         <main className="dashboard-page-content">{children}</main>
       </div>
 
-      {user?._id && <ChatDock user={user} />}
       {isAdminUser && (
         <DeliveryCalendarFab
           requestSource="admin"

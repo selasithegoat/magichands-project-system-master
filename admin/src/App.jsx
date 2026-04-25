@@ -37,6 +37,7 @@ import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import AdminFrontDeskScope from "./components/AdminFrontDeskScope/AdminFrontDeskScope";
+import ChatDock from "@client/components/chat/ChatDock";
 import { clearPersistedFilterState } from "@client/utils/filterPersistence";
 import {
   BrowserRouter as Router,
@@ -290,6 +291,7 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
+      {user?._id && <ChatDock user={user} />}
       <Toaster
         position="top-right"
         reverseOrder={false}

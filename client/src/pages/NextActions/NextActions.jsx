@@ -7,6 +7,7 @@ import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import SearchIcon from "../../components/icons/SearchIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
+import usePersistedState from "../../hooks/usePersistedState";
 import "./NextActions.css";
 
 const ACTION_FETCH_LIMIT = 100;
@@ -53,8 +54,18 @@ const NextActions = ({ user }) => {
   const [totalActions, setTotalActions] = useState(0);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [activePriority, setActivePriority] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activePriority, setActivePriority] = usePersistedState(
+    "client-next-actions-priority-filter",
+    "all",
+    {
+      sanitize: (value) =>
+        PRIORITY_OPTIONS.includes(value) ? value : "all",
+    },
+  );
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "client-next-actions-search",
+    "",
+  );
 
   const fetchActions = useCallback(async () => {
     setLoading(true);
