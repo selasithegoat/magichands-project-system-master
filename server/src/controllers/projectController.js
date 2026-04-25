@@ -9915,17 +9915,13 @@ const addFrontDeskNextActions = ({ project, actions }) => {
   }
 
   if (!isQuoteProject(project)) {
-    const paymentTypes = getPaymentVerificationTypes(project);
     const productionMissing =
       ["Pending Master Approval", "Pending Production"].includes(project?.status)
-        ? getPendingProductionBillingMissing({
-            invoiceSent: Boolean(project?.invoice?.sent),
-            paymentTypes,
-          })
+        ? getPendingProductionBillingMissing(project)
         : [];
     const deliveryMissing =
       ["Pending Packaging", "Pending Delivery/Pickup"].includes(project?.status)
-        ? getPendingDeliveryBillingMissing({ paymentTypes })
+        ? getPendingDeliveryBillingMissing(project)
         : [];
     const missingBilling = [...productionMissing, ...deliveryMissing];
 
