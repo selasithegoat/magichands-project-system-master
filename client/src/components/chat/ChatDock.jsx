@@ -36,6 +36,7 @@ const CHAT_ATTACHMENT_MAX_FILES = 6;
 const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
 const INCOMING_PREVIEW_HIDE_MS = 4800;
 const INCOMING_PREVIEW_EXIT_MS = 240;
+const CHAT_UNREAD_PREVIEW_LIMIT = 5;
 const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
 const CHAT_ATTACHMENT_ACCEPT =
   "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
@@ -1000,6 +1001,45 @@ const ChatDock = ({ user }) => {
       threads.reduce((sum, thread) => sum + (Number(thread.unreadCount) || 0), 0),
     [threads],
   );
+  const unreadPreviewData = useMemo(() => {
+    if (isOpen) {
+      return { threads: [], hiddenCount: 0 };
+    }
+
+    const unreadThreads = threads
+      .filter((thread) => (Number(thread?.unreadCount) || 0) > 0)
+      .sort(compareThreadsByActivityDesc);
+
+    const visibleThreads = unreadThreads
+      .slice(0, CHAT_UNREAD_PREVIEW_LIMIT)
+      .map((thread) => {
+        const sender = thread?.lastMessageSender || thread?.counterpart || null;
+        const senderName =
+          getChatUserDisplayName(sender) ||
+          getChatUserDisplayName(thread?.counterpart) ||
+          "New message";
+        const threadName = toText(thread?.name);
+
+        return {
+          threadId: toIdString(thread?._id),
+          senderName,
+          senderAvatarUrl:
+            toText(sender?.avatarUrl) || toText(thread?.counterpart?.avatarUrl),
+          threadName: threadName && threadName !== senderName ? threadName : "",
+          messagePreview: toText(thread?.lastMessagePreview) || "Sent a message",
+          unreadCount: Number(thread?.unreadCount) || 0,
+          lastMessageAt: toText(thread?.lastMessageAt),
+        };
+      })
+      .filter((thread) => thread.threadId);
+
+    return {
+      threads: visibleThreads,
+      hiddenCount: Math.max(unreadThreads.length - visibleThreads.length, 0),
+    };
+  }, [isOpen, threads]);
+  const unreadPreviewThreads = unreadPreviewData.threads;
+  const hiddenUnreadPreviewThreadCount = unreadPreviewData.hiddenCount;
 
   const updateThreadsState = useCallback((nextValue) => {
     setThreads((prev) => {
@@ -2355,8 +2395,8 @@ const ChatDock = ({ user }) => {
     threads,
   ]);
 
-  const handleIncomingPreviewOpen = useCallback(async () => {
-    const threadId = toIdString(incomingPreview?.threadId);
+  const handleIncomingPreviewOpen = useCallback(async (threadIdOverride = "") => {
+    const threadId = toIdString(threadIdOverride || incomingPreview?.threadId);
     dismissIncomingPreview(true);
 
     if (!threadId) {
@@ -3268,7 +3308,9 @@ const ChatDock = ({ user }) => {
                         <button
                           key={thread._id}
                           type="button"
-                          className={`chat-dock-thread-item ${isActive ? "active" : ""}`}
+                          className={`chat-dock-thread-item ${
+                            isActive ? "active" : ""
+                          } ${unreadCount > 0 ? "unread" : ""}`}
                           onClick={() => handleSelectThread(thread._id)}
                         >
                           <span className="chat-dock-thread-icon" aria-hidden="true">
@@ -4157,37 +4199,55 @@ const ChatDock = ({ user }) => {
         </div>
       )}
 
-      {incomingPreview && (
-        <button
-          key={incomingPreview.token}
-          type="button"
-          className={`chat-dock-incoming-preview ${portalPositionClass} ${
-            incomingPreviewVisible ? "visible" : "closing"
-          }`}
-          onClick={() => void handleIncomingPreviewOpen()}
-          aria-label={`Open chat from ${incomingPreview.senderName}`}
+      {unreadPreviewThreads.length > 0 && (
+        <div
+          className={`chat-dock-unread-preview-stack ${portalPositionClass}`}
+          aria-label="Unread chat messages"
         >
-          <div className="chat-dock-incoming-preview-head">
-            <span className="chat-dock-incoming-preview-avatar">
-              <UserAvatar
-                name={incomingPreview.senderName}
-                src={incomingPreview.senderAvatarUrl}
-                width="44px"
-                height="44px"
-              />
-            </span>
-            <span className="chat-dock-incoming-preview-copy">
-              <strong>{incomingPreview.senderName}</strong>
-              {incomingPreview.threadName &&
-                incomingPreview.threadName !== incomingPreview.senderName && (
-                  <small>{incomingPreview.threadName}</small>
+          {unreadPreviewThreads.map((preview) => (
+            <button
+              key={`${preview.threadId}-${preview.lastMessageAt}`}
+              type="button"
+              className={`chat-dock-incoming-preview persistent ${portalPositionClass} visible`}
+              onClick={() => void handleIncomingPreviewOpen(preview.threadId)}
+              aria-label={`Open unread chat from ${preview.senderName}`}
+            >
+              <div className="chat-dock-incoming-preview-head">
+                <span className="chat-dock-incoming-preview-avatar">
+                  <UserAvatar
+                    name={preview.senderName}
+                    src={preview.senderAvatarUrl}
+                    width="44px"
+                    height="44px"
+                  />
+                </span>
+                <span className="chat-dock-incoming-preview-copy">
+                  <strong>{preview.senderName}</strong>
+                  {preview.threadName && <small>{preview.threadName}</small>}
+                </span>
+                {preview.unreadCount > 1 && (
+                  <span className="chat-dock-incoming-preview-count">
+                    {preview.unreadCount}
+                  </span>
                 )}
-            </span>
-          </div>
-          <p className="chat-dock-incoming-preview-message">
-            {incomingPreview.messagePreview}
-          </p>
-        </button>
+              </div>
+              <p className="chat-dock-incoming-preview-message">
+                {preview.messagePreview}
+              </p>
+            </button>
+          ))}
+
+          {hiddenUnreadPreviewThreadCount > 0 && (
+            <button
+              type="button"
+              className="chat-dock-unread-preview-more"
+              onClick={handleOpen}
+            >
+              +{hiddenUnreadPreviewThreadCount} more unread{" "}
+              {hiddenUnreadPreviewThreadCount === 1 ? "chat" : "chats"}
+            </button>
+          )}
+        </div>
       )}
 
       <button
