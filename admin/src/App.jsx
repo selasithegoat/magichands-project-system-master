@@ -293,8 +293,14 @@ function App() {
       <Toaster
         position="top-right"
         reverseOrder={false}
+        gutter={12}
+        containerStyle={{
+          maxHeight: "min(70vh, calc(100vh - 32px))",
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+        }}
         toastOptions={{
-          duration: 5000,
+          duration: 10000,
           style: { pointerEvents: "none" },
         }}
       />

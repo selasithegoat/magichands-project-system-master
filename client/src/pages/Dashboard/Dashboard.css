@@ -1570,6 +1570,8 @@
   top: calc(env(safe-area-inset-top, 0px) + 5rem);
   right: 1.1rem;
   z-index: 10001;
+  bottom: auto;
+  max-height: min(70vh, calc(100vh - 6.5rem));
 }
 
 @media (max-width: 1260px) {

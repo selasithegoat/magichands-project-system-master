@@ -1979,7 +1979,7 @@
   gap: 0.75rem;
   font-weight: 500;
   z-index: 1000;
-  animation: toastMessageLife 5s ease-in-out forwards;
+  animation: toastMessageLife 10s ease-in-out forwards;
   pointer-events: none;
 }
 

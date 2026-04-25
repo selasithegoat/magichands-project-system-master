@@ -195,7 +195,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
           message: "",
           type,
         })),
-      5000,
+      10000,
     );
   };
 

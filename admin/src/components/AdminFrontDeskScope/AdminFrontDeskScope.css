@@ -11,7 +11,7 @@
 .admin-frontdesk-scope .toast-message {
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-color);
-  animation: adminToastMessageLife 5s ease-in-out forwards;
+  animation: adminToastMessageLife 10s ease-in-out forwards;
 }
 
 .admin-frontdesk-scope .toast-message.success {

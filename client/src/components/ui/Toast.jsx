@@ -10,7 +10,7 @@ const Toast = ({
   type = "info",
   onClose,
   onClick,
-  duration = 5000,
+  duration = 10000,
 }) => {
   const [isExiting, setIsExiting] = useState(false);
   const hasClosedRef = useRef(false);

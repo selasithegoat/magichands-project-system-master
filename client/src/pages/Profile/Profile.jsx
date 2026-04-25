@@ -268,12 +268,12 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
     const fadeTimer = setTimeout(() => {
       setIsFadingOut(true);
-    }, 4500);
+    }, 9500);
 
     const removeTimer = setTimeout(() => {
       setMessage(null);
       setIsFadingOut(false);
-    }, 5000);
+    }, 10000);
 
     return () => {
       clearTimeout(fadeTimer);
@@ -283,7 +283,7 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
 
   useEffect(() => {
     if (!passwordMessage) return undefined;
-    const timer = setTimeout(() => setPasswordMessage(null), 5000);
+    const timer = setTimeout(() => setPasswordMessage(null), 10000);
     return () => clearTimeout(timer);
   }, [passwordMessage]);
 

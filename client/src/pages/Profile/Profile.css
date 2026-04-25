@@ -1143,7 +1143,7 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   gap: 8px;
-  animation: toastMessageLife 5s ease-in-out forwards;
+  animation: toastMessageLife 10s ease-in-out forwards;
   pointer-events: none;
 }
 

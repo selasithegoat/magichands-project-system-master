@@ -433,7 +433,7 @@ const NewOrders = ({ user = null }) => {
         setToast({ show: false, message: "", type: "success" });
         setIsToastFading(false);
       }, 500);
-    }, 4500);
+    }, 9500);
   };
 
   const renderLeadOption = (option) => (

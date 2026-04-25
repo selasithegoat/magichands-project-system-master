@@ -90,7 +90,7 @@ const QuoteStep5 = ({
         setShowToast({ show: false, message: "", type: "success" });
         setIsToastFading(false);
       }, 500);
-    }, 4500);
+    }, 9500);
   };
 
   const formatDate = (dateStr) => {

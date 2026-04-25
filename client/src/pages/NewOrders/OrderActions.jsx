@@ -767,7 +767,7 @@ const OrderActions = () => {
     }
     toastTimeoutRef.current = setTimeout(
       () => setToast({ show: false, message: "", type }),
-      5000,
+      10000,
     );
   };
 

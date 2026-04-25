@@ -236,7 +236,7 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
         setShowToast({ show: false, message: "", type: "" });
         setIsFadingOut(false);
       }, 500); // Wait for fade out
-    }, 4500);
+    }, 9500);
   };
 
   // Helper to format date

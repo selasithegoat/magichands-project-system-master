@@ -190,7 +190,7 @@
   border: 1px solid var(--border-color);
 
   /* Animation */
-  animation: toastMessageLife 5s ease-in-out forwards;
+  animation: toastMessageLife 10s ease-in-out forwards;
 }
 
 .toast-message.success {

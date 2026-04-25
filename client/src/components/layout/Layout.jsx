@@ -1031,7 +1031,7 @@ const Layout = ({
             message={toast.message}
             type={toast.type}
             onClose={() => removeToast(toast.id)}
-            duration={5000}
+            duration={10000}
             onClick={() => {
               if (toast.chatKind) {
                 dispatchOpenChat({ kind: toast.chatKind });
