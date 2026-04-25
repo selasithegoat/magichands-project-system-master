@@ -54,6 +54,15 @@ const toEntityId = (value) => {
 const toArray = (value) =>
   Array.isArray(value) ? value : value ? [value] : [];
 
+const normalizeDepartmentToken = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, "-");
+
+const isFrontDeskDepartment = (value) =>
+  normalizeDepartmentToken(value) === "front-desk";
+
 const isChatMentionNotification = (notification) =>
   String(notification?.source || "")
     .trim()
@@ -101,7 +110,7 @@ const Layout = ({
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isFrontDeskUser = toArray(user?.department).includes("Front Desk");
+  const isFrontDeskUser = toArray(user?.department).some(isFrontDeskDepartment);
   const isFrontDeskOrdersPage = location.pathname === "/frontdesk/orders";
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
@@ -1054,9 +1063,9 @@ const Layout = ({
 
       {user?._id && <ChatDock user={user} />}
 
-      {user?._id && (
+      {isFrontDeskUser && (
         <DeliveryCalendarFab
-          hasFrontDeskFab={isFrontDeskUser}
+          hasFrontDeskFab
           onOpenProject={openProjectFromCalendar}
         />
       )}

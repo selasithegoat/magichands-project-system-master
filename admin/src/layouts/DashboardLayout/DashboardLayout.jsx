@@ -4,9 +4,13 @@ import Sidebar from "../../components/Sidebar/Sidebar";
 import Header from "../../components/Header/Header";
 import StageBottleneckAlert from "../../components/StageBottleneckAlert/StageBottleneckAlert";
 import ChatDock from "@client/components/chat/ChatDock";
+import DeliveryCalendarFab from "@client/components/features/DeliveryCalendarFab";
+import { useNavigate } from "react-router-dom";
 
 const DashboardLayout = ({ children, user, onLogout }) => {
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const isAdminUser = user?.role === "admin";
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const closeSidebar = () => setIsSidebarOpen(false);
@@ -32,6 +36,12 @@ const DashboardLayout = ({ children, user, onLogout }) => {
       </div>
 
       {user?._id && <ChatDock user={user} />}
+      {isAdminUser && (
+        <DeliveryCalendarFab
+          requestSource="admin"
+          onOpenProject={(project) => navigate(`/projects/${project?._id}`)}
+        />
+      )}
     </div>
   );
 };

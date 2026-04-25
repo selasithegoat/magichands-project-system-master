@@ -98,7 +98,11 @@ const getEventTone = (event) => {
   return "normal";
 };
 
-const DeliveryCalendarFab = ({ hasFrontDeskFab = false, onOpenProject }) => {
+const DeliveryCalendarFab = ({
+  hasFrontDeskFab = false,
+  onOpenProject,
+  requestSource = "",
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
@@ -130,6 +134,7 @@ const DeliveryCalendarFab = ({ hasFrontDeskFab = false, onOpenProject }) => {
         includeOverdue: "true",
         limit: "1000",
       });
+      if (requestSource) params.set("source", requestSource);
       const response = await fetch(`/api/projects/delivery-calendar?${params}`, {
         credentials: "include",
         cache: "no-store",
@@ -153,7 +158,7 @@ const DeliveryCalendarFab = ({ hasFrontDeskFab = false, onOpenProject }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentMonth]);
+  }, [currentMonth, requestSource]);
 
   useEffect(() => {
     if (isOpen) fetchCalendar();

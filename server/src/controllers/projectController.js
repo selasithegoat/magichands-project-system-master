@@ -10364,6 +10364,16 @@ const getNextActions = async (req, res) => {
 // @access  Private
 const getDeliveryCalendar = async (req, res) => {
   try {
+    const canUseDeliveryCalendar =
+      isFrontDeskUserForNextActions(req.user) ||
+      (isAdminPortalRequest(req) && hasAdminPortalAccess(req.user));
+
+    if (!canUseDeliveryCalendar) {
+      return res.status(403).json({
+        message: "Access denied: delivery calendar is restricted.",
+      });
+    }
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(
