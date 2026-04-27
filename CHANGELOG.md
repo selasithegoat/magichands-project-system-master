@@ -6,6 +6,10 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-04-27
+
+- Fixed the unread comments modal so comments leave the list immediately after being opened and marked read.
+
 ## [2.8.0] - 2026-04-27
 
 - Added project-scoped comment threads with replies for authorized project users.
