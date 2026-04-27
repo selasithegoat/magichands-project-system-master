@@ -876,6 +876,8 @@ const canMutateProject = (user, project, action = "default") => {
   switch (action) {
     case "revision":
       return isFrontDesk || user?.role === "admin";
+    case "delivery_schedule":
+      return isFrontDesk || user?.role === "admin";
     case "manage":
     case "delete":
     case "reopen":
@@ -1598,6 +1600,108 @@ const updateProjectEndOfDayVisibility = async (req, res) => {
     return res.json(updatedProject);
   } catch (error) {
     console.error("Error updating End of Day visibility:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Update delivery date/time for a project from quick-action surfaces
+// @route   PATCH /api/projects/:id/delivery-schedule
+// @access  Private (Front Desk/Admin)
+const updateProjectDeliverySchedule = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "delivery_schedule")) {
+      return;
+    }
+
+    const deliveryDate = req.body?.deliveryDate;
+    const deliveryTime = toText(req.body?.deliveryTime);
+
+    if (!deliveryDate) {
+      return res.status(400).json({
+        message: "Delivery date is required.",
+      });
+    }
+
+    const parsedDeliveryDate = new Date(deliveryDate);
+    if (Number.isNaN(parsedDeliveryDate.getTime())) {
+      return res.status(400).json({
+        message: "Delivery date is invalid.",
+      });
+    }
+
+    project.details = project.details || {};
+
+    const previousDeliveryDate = project.details.deliveryDate || null;
+    const previousDeliveryTime = toText(project.details.deliveryTime);
+    const previousDateLabel = previousDeliveryDate
+      ? new Date(previousDeliveryDate).toISOString().split("T")[0]
+      : "";
+    const nextDateLabel = parsedDeliveryDate.toISOString().split("T")[0];
+
+    const deliveryDateChanged = previousDateLabel !== nextDateLabel;
+    const deliveryTimeChanged = previousDeliveryTime !== deliveryTime;
+
+    if (!deliveryDateChanged && !deliveryTimeChanged) {
+      const unchangedProject = await buildProjectResponseQuery(project._id).populate(
+        "acknowledgements.user",
+        "firstName lastName name avatarUrl",
+      );
+
+      if (!unchangedProject) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      normalizeProjectStatusFields(unchangedProject);
+      return res.json(unchangedProject);
+    }
+
+    project.details.deliveryDate = parsedDeliveryDate;
+    project.details.deliveryTime = deliveryTime;
+    project.sectionUpdates = project.sectionUpdates || {};
+    project.sectionUpdates.details = new Date();
+
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id || req.user.id,
+      "update",
+      "Updated delivery schedule.",
+      {
+        deliverySchedule: {
+          previousDate: previousDateLabel,
+          nextDate: nextDateLabel,
+          previousTime: previousDeliveryTime,
+          nextTime: deliveryTime,
+        },
+      },
+    );
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: "Delivery Schedule Updated",
+      message: `Admin ${actorName} updated the delivery schedule for project #${projectRef} (${projectName}) to ${nextDateLabel}${deliveryTime ? ` at ${deliveryTime}` : ""}.`,
+      type: "UPDATE",
+    });
+
+    const updatedProject = await buildProjectResponseQuery(project._id).populate(
+      "acknowledgements.user",
+      "firstName lastName name avatarUrl",
+    );
+
+    if (!updatedProject) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    normalizeProjectStatusFields(updatedProject);
+    return res.json(updatedProject);
+  } catch (error) {
+    console.error("Error updating delivery schedule:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -18037,6 +18141,7 @@ module.exports = {
   updateProjectStatus,
   updateMeetingOverride,
   updateProjectEndOfDayVisibility,
+  updateProjectDeliverySchedule,
   transitionQuoteRequirement,
   updateQuoteCostVerification,
   resetQuoteMockup,

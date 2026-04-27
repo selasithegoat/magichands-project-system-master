@@ -65,6 +65,7 @@ const {
   updateProjectType,
   updateMeetingOverride,
   updateProjectEndOfDayVisibility,
+  updateProjectDeliverySchedule,
   confirmProjectSampleApproval,
   resetProjectSampleApproval,
   createProjectBatch,
@@ -497,6 +498,12 @@ router.patch(
   protect,
   enforceProjectNotOnHold,
   updateSampleRequirement,
+);
+router.patch(
+  "/:id/delivery-schedule",
+  protect,
+  enforceProjectNotOnHold,
+  updateProjectDeliverySchedule,
 );
 router.patch(
   "/:id/corporate-emergency",
