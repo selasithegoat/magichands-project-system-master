@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import XIcon from "../icons/XIcon";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -48,6 +48,19 @@ const isUnreadFromOtherUser = (comment, currentUserId) => {
   return !getReadByIds(comment).includes(currentUserId);
 };
 
+const filterUnreadComments = (
+  comments,
+  currentUserId,
+  excludedCommentIds = new Set(),
+) =>
+  (Array.isArray(comments) ? comments : []).filter((comment) => {
+    const commentId = toIdString(comment?._id);
+    return (
+      isUnreadFromOtherUser(comment, currentUserId) &&
+      !excludedCommentIds.has(commentId)
+    );
+  });
+
 const formatCommentTime = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -95,11 +108,12 @@ const ProjectCommentsFab = ({ user }) => {
     useAuthorizedProjectNavigation(user);
   const [isOpen, setIsOpen] = useState(false);
   const [comments, setComments] = useState([]);
-  const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const pendingReadCommentIdsRef = useRef(new Set());
   const requestSource = resolvePortalSource();
   const currentUserId = toIdString(user?._id || user?.id);
+  const count = comments.length;
 
   const feedUrl = useMemo(
     () => appendPortalSource("/api/projects/comments/feed?limit=all", requestSource),
@@ -116,22 +130,29 @@ const ProjectCommentsFab = ({ user }) => {
       });
       if (!response.ok) {
         setComments([]);
-        setCount(0);
         setError("Could not load project comments.");
         return;
       }
 
       const payload = await response.json().catch(() => ({}));
-      const unreadComments = (Array.isArray(payload.comments)
-        ? payload.comments
-        : []
-      ).filter((comment) => isUnreadFromOtherUser(comment, currentUserId));
+      const nextComments = Array.isArray(payload.comments) ? payload.comments : [];
+      const serverUnreadIds = new Set(
+        nextComments.map((comment) => toIdString(comment?._id)).filter(Boolean),
+      );
+      for (const commentId of pendingReadCommentIdsRef.current) {
+        if (!serverUnreadIds.has(commentId)) {
+          pendingReadCommentIdsRef.current.delete(commentId);
+        }
+      }
+      const unreadComments = filterUnreadComments(
+        nextComments,
+        currentUserId,
+        pendingReadCommentIdsRef.current,
+      );
       setComments(unreadComments);
-      setCount(unreadComments.length);
     } catch (commentsError) {
       console.error("Failed to load project comment feed", commentsError);
       setComments([]);
-      setCount(0);
       setError("Could not load project comments.");
     } finally {
       setLoading(false);
@@ -153,16 +174,18 @@ const ProjectCommentsFab = ({ user }) => {
       const projectId = toIdString(comment?.project?._id);
       const commentId = toIdString(comment?._id);
       if (!projectId || !commentId) return;
+      if (pendingReadCommentIdsRef.current.has(commentId)) return;
+
+      pendingReadCommentIdsRef.current.add(commentId);
 
       setComments((currentComments) =>
         currentComments.filter(
           (currentComment) => toIdString(currentComment?._id) !== commentId,
         ),
       );
-      setCount((currentCount) => Math.max(0, currentCount - 1));
 
       try {
-        await fetch(
+        const response = await fetch(
           appendPortalSource(
             `/api/projects/${projectId}/comments/${commentId}/read`,
             requestSource,
@@ -174,11 +197,16 @@ const ProjectCommentsFab = ({ user }) => {
             body: JSON.stringify({}),
           },
         );
+        if (!response.ok) {
+          throw new Error(`Failed to mark project comment read: ${response.status}`);
+        }
       } catch (readError) {
+        pendingReadCommentIdsRef.current.delete(commentId);
         console.error("Failed to mark project comment read", readError);
+        void fetchComments();
       }
     },
-    [requestSource],
+    [fetchComments, requestSource],
   );
 
   const openComment = (comment) => {
@@ -187,7 +215,7 @@ const ProjectCommentsFab = ({ user }) => {
     if (!projectId || !commentId) return;
 
     setIsOpen(false);
-    markCommentRead(comment);
+    void markCommentRead(comment);
     const hash = `project-comment-${commentId}`;
 
     if (requestSource === "admin" && user?.role === "admin") {
