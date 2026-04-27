@@ -10,6 +10,7 @@ import {
 
 import MenuIcon from "../icons/MenuIcon";
 import HelpIcon from "../icons/HelpIcon";
+import AppVersionBadge from "../ui/AppVersionBadge";
 
 const Header = ({
   activeView,
@@ -264,6 +265,7 @@ const Header = ({
               getInitials()
             )}
           </div>
+          <AppVersionBadge />
         </div>
       </div>
     </header>

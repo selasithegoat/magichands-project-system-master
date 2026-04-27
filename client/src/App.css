@@ -16,6 +16,27 @@
   animation: startupLogoFadeIn 900ms ease-out forwards;
 }
 
+.startup-splash-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.startup-splash-version {
+  padding: 0.34rem 0.62rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  color: #64748b;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  animation: startupVersionFadeIn 700ms ease-out 260ms forwards;
+}
+
 @keyframes startupLogoFadeIn {
   from {
     opacity: 0;
@@ -27,8 +48,20 @@
   }
 }
 
+@keyframes startupVersionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 0.82;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .startup-splash-logo {
+  .startup-splash-logo,
+  .startup-splash-version {
     animation: none;
     opacity: 1;
     transform: none;

@@ -11,6 +11,11 @@ import useRealtimeClient from "./hooks/useRealtimeClient";
 import useTheme from "./hooks/useTheme";
 import { clearPersistedFilterState } from "./utils/filterPersistence";
 import { buildPortalUrl } from "./utils/portalNavigation";
+import {
+  fetchSystemVersionInfo,
+  formatVersionDisplay,
+  getCachedSystemVersionInfo,
+} from "./utils/systemVersionInfo";
 
 // Lazy Loaded Pages
 const Login = lazy(() => import("./pages/Login/Login"));
@@ -68,7 +73,7 @@ const PendingAssignments = lazy(
 );
 const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 
-const APP_SPLASH_DURATION_MS = 1200;
+const APP_SPLASH_DURATION_MS = 1600;
 const THEME_STORAGE_KEY = "mh-client-theme";
 
 const normalizeThemePreference = (value) => {
@@ -76,16 +81,25 @@ const normalizeThemePreference = (value) => {
   return normalized === "light" || normalized === "dark" ? normalized : "";
 };
 
-const StartupSplash = () => (
-  <div className="startup-splash" role="status" aria-live="polite">
-    <img
-      src="/mhlogo.png"
-      alt="Magic Hands"
-      className="startup-splash-logo"
-      draggable="false"
-    />
-  </div>
-);
+const StartupSplash = ({ versionInfo }) => {
+  const versionLabel = formatVersionDisplay(versionInfo);
+
+  return (
+    <div className="startup-splash" role="status" aria-live="polite">
+      <div className="startup-splash-mark">
+        <img
+          src="/mhlogo.png"
+          alt="Magic Hands"
+          className="startup-splash-logo"
+          draggable="false"
+        />
+        {versionLabel && (
+          <div className="startup-splash-version">{versionLabel}</div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 function App() {
   const navigate = useNavigate();
@@ -96,6 +110,9 @@ function App() {
   const [engagedCount, setEngagedCount] = useState(0); // [New] Department engagement count
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [showPostLoginSplash, setShowPostLoginSplash] = useState(false);
+  const [splashVersionInfo, setSplashVersionInfo] = useState(
+    () => getCachedSystemVersionInfo(),
+  );
   const accountKey = String(
     user?._id || user?.id || user?.email || "",
   ).trim();
@@ -208,6 +225,10 @@ function App() {
         if (userData) {
           setUser(userData);
           if (showSplash) {
+            const versionInfo = await fetchSystemVersionInfo().catch(() => null);
+            if (versionInfo) {
+              setSplashVersionInfo(versionInfo);
+            }
             setShowPostLoginSplash(true);
           }
           // If on login page and authorized, go to dashboard
@@ -340,7 +361,7 @@ function App() {
   };
 
   if (showPostLoginSplash) {
-    return <StartupSplash />;
+    return <StartupSplash versionInfo={splashVersionInfo} />;
   }
 
   if (isLoading) {

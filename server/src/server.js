@@ -42,6 +42,7 @@ const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
 const helpRoutes = require("./routes/helpRoutes");
+const systemRoutes = require("./routes/systemRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
 const { buildRealtimeChangePayload } = require("./utils/realtimeChange");
 const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
@@ -427,6 +428,7 @@ app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/help", helpRoutes);
+app.use("/api/system", systemRoutes);
 
 const resolveDistPath = (value, fallbackPath) => {
   const raw = String(value || "").trim();
