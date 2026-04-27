@@ -6,6 +6,10 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.8.3] - 2026-04-27
+
+- Fixed the project route choice modal to label the lead detail option as "Lead Project" instead of "Admin Project".
+
 ## [2.8.2] - 2026-04-27
 
 - Fixed the unread comments modal to mark comments as read through the shared bulk read endpoint, avoiding 404 errors on deployed builds.

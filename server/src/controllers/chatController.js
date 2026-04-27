@@ -190,7 +190,7 @@ const buildProjectRouteOptions = (user, project, { source = "" } = {}) => {
   } else if (isProjectDetailUser(user, project)) {
     routes.push({
       key: "detail",
-      label: "Project Detail",
+      label: "Lead Project",
       path: `/detail/${projectId}`,
     });
   }

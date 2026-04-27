@@ -85,9 +85,23 @@ const normalizeHashSuffix = (value) => {
 };
 
 export const canAccessProjectDetails = (user, project) => {
-  if (user?.role === "admin") return true;
-  if (project?.referenceAccess?.granted) return true;
+  const userId = toEntityId(user?._id || user?.id);
+  const leadId = toEntityId(project?.projectLeadId || project?.details?.lead);
+  const assistantLeadId = toEntityId(
+    project?.assistantLeadId || project?.details?.assistantLead,
+  );
 
+  if (
+    userId &&
+    (userId === leadId || (assistantLeadId && userId === assistantLeadId))
+  ) {
+    return true;
+  }
+
+  return Boolean(project?.referenceAccess?.granted);
+};
+
+const isLeadProjectUser = (user, project) => {
   const userId = toEntityId(user?._id || user?.id);
   if (!userId) return false;
 
@@ -118,25 +132,19 @@ export const buildAuthorizedProjectDestinations = ({
   const destinations = [];
   const hashSuffix = normalizeHashSuffix(hash);
   const detailPath = `/detail/${projectId}${normalizeSearchSuffix(detailSearch)}${hashSuffix}`;
-  const adminDetailPath = `/projects/${projectId}${normalizeSearchSuffix(detailSearch)}${hashSuffix}`;
   const projectDepartments = Array.isArray(project?.departments)
     ? project.departments
     : [];
+  const hasLeadProjectAccess = isLeadProjectUser(user, project);
+  const hasProjectDetailAccess = canAccessProjectDetails(user, project);
 
-  if (user?.role === "admin") {
-    destinations.push({
-      key: "admin-detail",
-      label: "Admin Project",
-      description: "Open the admin project detail view.",
-      path: adminDetailPath,
-    });
-  }
-
-  if (user?.role !== "admin" && canAccessProjectDetails(user, project)) {
+  if (hasProjectDetailAccess) {
     destinations.push({
       key: "detail",
-      label: "Project Details",
-      description: "Open the full project details view.",
+      label: hasLeadProjectAccess ? "Lead Project" : "Project Details",
+      description: hasLeadProjectAccess
+        ? "Open the lead project detail view."
+        : "Open the full project details view.",
       path: detailPath,
     });
   }
