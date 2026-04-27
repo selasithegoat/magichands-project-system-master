@@ -2021,11 +2021,15 @@ const getPaymentVerificationTypes = (project) =>
       .filter(Boolean),
   );
 
+const COMPLETION_PAYMENT_TYPES = new Set(["full_payment", "authorized", "po"]);
+
 const BILLING_REQUIREMENT_LABELS = {
   invoice: "Invoice confirmation",
   payment_verification_any: "Payment method verification",
   full_payment_or_authorized:
     "Full payment or authorization verification",
+  completion_payment_verification:
+    "Full payment, authorization, or P.O. verification",
 };
 
 const getPendingProductionBillingMissing = (project) => {
@@ -2053,6 +2057,14 @@ const getPendingDeliveryBillingMissing = (project) => {
   return missing;
 };
 
+const getCompletionBillingMissing = (project) => {
+  const paymentTypes = getPaymentVerificationTypes(project);
+  const hasCompletionPayment = Array.from(COMPLETION_PAYMENT_TYPES).some(
+    (type) => paymentTypes.has(type),
+  );
+  return hasCompletionPayment ? [] : ["completion_payment_verification"];
+};
+
 const formatBillingRequirementLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((key) => BILLING_REQUIREMENT_LABELS[key] || key)
@@ -2070,6 +2082,10 @@ const buildBillingRequirementMessage = (targetStatus, missing = []) => {
     return `Full payment or authorization verification is required before moving to Pending Delivery/Pickup.${missingLabelText}`;
   }
 
+  if (targetStatus === "Completed" || targetStatus === "Finished") {
+    return `Full payment, authorization, or P.O. verification is required before completing this project.${missingLabelText}`;
+  }
+
   return `Billing prerequisites are missing for ${targetStatus}.${missingLabelText}`;
 };
 
@@ -2084,6 +2100,7 @@ const getBillingGuardMissingByTarget = (project) => {
   return {
     pendingProduction: getPendingProductionBillingMissing(project),
     pendingDelivery: getPendingDeliveryBillingMissing(project),
+    completion: getCompletionBillingMissing(project),
   };
 };
 
@@ -9370,6 +9387,30 @@ const updateProjectStatus = async (req, res) => {
       }
     }
 
+    const requiresCompletionBillingGuard =
+      isStandardProject && ["Completed", "Finished"].includes(finalStatus);
+
+    if (requiresCompletionBillingGuard) {
+      const missing = getCompletionBillingMissing(project);
+      if (missing.length > 0) {
+        const message = buildBillingRequirementMessage(finalStatus, missing);
+
+        await notifyBillingPrerequisiteBlocked({
+          project,
+          senderId: req.user._id || req.user.id,
+          targetStatus: finalStatus,
+          missing,
+        });
+
+        return res.status(400).json({
+          code: "BILLING_PREREQUISITE_MISSING",
+          targetStatus: finalStatus,
+          missing,
+          message,
+        });
+      }
+    }
+
     project.status = finalStatus;
     await project.save();
 
@@ -15720,6 +15761,32 @@ const updateProject = async (req, res) => {
       const batchProgressGuard = getBatchProgressGuard(project, project.status);
       if (batchProgressGuard) {
         return res.status(400).json(batchProgressGuard);
+      }
+
+      const nextStatus = toText(project.status);
+      const requiresCompletionBillingGuard =
+        project.projectType !== "Quote" &&
+        ["Completed", "Finished"].includes(nextStatus);
+
+      if (requiresCompletionBillingGuard) {
+        const missing = getCompletionBillingMissing(project);
+        if (missing.length > 0) {
+          const message = buildBillingRequirementMessage(nextStatus, missing);
+
+          await notifyBillingPrerequisiteBlocked({
+            project,
+            senderId: req.user._id || req.user.id,
+            targetStatus: nextStatus,
+            missing,
+          });
+
+          return res.status(400).json({
+            code: "BILLING_PREREQUISITE_MISSING",
+            targetStatus: nextStatus,
+            missing,
+            message,
+          });
+        }
       }
     }
 

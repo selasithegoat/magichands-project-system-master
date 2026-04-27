@@ -476,6 +476,8 @@ const BILLING_REQUIREMENT_LABELS = {
   payment_verification_any: "Payment method verification",
   full_payment_or_authorized:
     "Full payment or authorization verification",
+  completion_payment_verification:
+    "Full payment, authorization, or P.O. verification",
 };
 const QUOTE_REQUIREMENT_KEYS = [
   "cost",

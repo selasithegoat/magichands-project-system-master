@@ -596,7 +596,11 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
         fetchProjects();
         if (onProjectChange) onProjectChange();
       } else {
-        setToast({ message: "Failed to update status.", type: "error" });
+        const errorData = await res.json().catch(() => ({}));
+        setToast({
+          message: errorData.message || "Failed to update status.",
+          type: "error",
+        });
       }
     } catch (error) {
       console.error(error);

@@ -6,6 +6,11 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-04-27
+
+- Blocked project completion until full payment, authorization, or P.O. is verified.
+- Added a completion billing guard for invoice-only and part-payment-only states.
+
 ## [2.7.0] - 2026-04-27
 
 - Added optional reference orders to Front Desk order intake and revision.

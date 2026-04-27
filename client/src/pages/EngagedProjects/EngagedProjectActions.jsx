@@ -123,6 +123,8 @@ const BILLING_REQUIREMENT_LABELS = {
   payment_verification_any: "Payment method verification",
   full_payment_or_authorized:
     "Full payment or authorization verification",
+  completion_payment_verification:
+    "Full payment, authorization, or P.O. verification",
 };
 const SAMPLE_APPROVAL_MISSING_LABEL = "Client sample approval";
 const QUOTE_REQUIREMENT_MOCKUP_KEY = "mockup";
