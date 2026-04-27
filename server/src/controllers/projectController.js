@@ -356,6 +356,8 @@ const cleanupUploadedFilesSafely = async (req) => {
 };
 
 const MOCKUP_UPLOADER_POPULATE_FIELDS = "firstName lastName department";
+const PROJECT_REFERENCE_POPULATE_FIELDS =
+  "orderId projectType status departments createdAt details.projectName details.projectIndicator details.client";
 const populateMockupUploaders = (query) =>
   query
     .populate("mockup.uploadedBy", MOCKUP_UPLOADER_POPULATE_FIELDS)
@@ -365,14 +367,21 @@ const populateMockupUploaders = (query) =>
       "mockup.versions.graphicsReview.reviewedBy",
       MOCKUP_UPLOADER_POPULATE_FIELDS,
     );
+const populateProjectReferences = (query) =>
+  query.populate({
+    path: "referenceProjects.project",
+    select: PROJECT_REFERENCE_POPULATE_FIELDS,
+  });
 const buildProjectResponseQuery = (projectId) =>
-  populateMockupUploaders(
-    Project.findById(projectId)
-      .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName employeeId email")
-      .populate("assistantLeadId", "firstName lastName employeeId email")
-      .populate("endOfDayUpdateBy", "firstName lastName department")
-      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+  populateProjectReferences(
+    populateMockupUploaders(
+      Project.findById(projectId)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName employeeId email")
+        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("endOfDayUpdateBy", "firstName lastName department")
+        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+    ),
   );
 
 const hasDepartmentAccess = (user, departmentName) => {
@@ -451,6 +460,105 @@ const normalizeOrderNumber = (value) => String(value || "").trim();
 const normalizeOptionalText = (value) => {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+};
+
+const escapeRegExp = (value) =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const parseJsonArrayField = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null || value === "") return [];
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [trimmed];
+  }
+  return [value];
+};
+
+const getProjectReferenceInputId = (entry) => {
+  if (!entry) return "";
+  if (typeof entry === "string" || typeof entry === "number") {
+    return String(entry).trim();
+  }
+  return toObjectIdString(entry.project || entry._id || entry.id || entry.value);
+};
+
+const normalizeReferenceProjectInputs = (value) => {
+  const seen = new Set();
+  return parseJsonArrayField(value)
+    .map(getProjectReferenceInputId)
+    .filter((id) => {
+      if (!isValidObjectId(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+};
+
+const buildReferenceProjectEntry = (project, actorId, existingEntry = null) => ({
+  project: project._id,
+  orderId: normalizeOrderNumber(project.orderId),
+  projectName: normalizeOptionalText(project.details?.projectName),
+  client: normalizeOptionalText(project.details?.client),
+  projectType: normalizeOptionalText(project.projectType),
+  status: normalizeOptionalText(project.status),
+  addedBy: existingEntry?.addedBy || actorId || null,
+  addedAt: existingEntry?.addedAt || new Date(),
+});
+
+const resolveReferenceProjectEntries = async (
+  value,
+  { currentProjectId = "", actorId = "", existingReferences = [] } = {},
+) => {
+  const referenceIds = normalizeReferenceProjectInputs(value);
+  const currentId = toObjectIdString(currentProjectId);
+  const filteredReferenceIds = referenceIds.filter((id) => id !== currentId);
+
+  if (referenceIds.length !== filteredReferenceIds.length) {
+    const error = new Error("A project cannot reference itself.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (filteredReferenceIds.length === 0) return [];
+
+  const projects = await Project.find({
+    _id: { $in: filteredReferenceIds },
+  })
+    .select("_id orderId projectType status details.projectName details.client")
+    .lean();
+  const projectById = new Map(
+    projects.map((project) => [toObjectIdString(project._id), project]),
+  );
+  const missingIds = filteredReferenceIds.filter((id) => !projectById.has(id));
+
+  if (missingIds.length > 0) {
+    const error = new Error("One or more reference orders could not be found.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const existingByProjectId = new Map(
+    (Array.isArray(existingReferences) ? existingReferences : [])
+      .map((entry) => [toObjectIdString(entry?.project), entry])
+      .filter(([id]) => Boolean(id)),
+  );
+
+  return filteredReferenceIds.map((id) =>
+    buildReferenceProjectEntry(
+      projectById.get(id),
+      actorId,
+      existingByProjectId.get(id),
+    ),
+  );
 };
 
 const parseBooleanFlag = (value, fallback = false) => {
@@ -7107,6 +7215,8 @@ const createProject = async (req, res) => {
       workstreamCode,
       sampleRequired,
       corporateEmergency,
+      referenceProjects,
+      referenceProjectIds,
     } = req.body;
 
     // Basic validation
@@ -7402,6 +7512,18 @@ const createProject = async (req, res) => {
         : {}),
     });
 
+    project.referenceProjects = await resolveReferenceProjectEntries(
+      referenceProjectIds !== undefined
+        ? referenceProjectIds
+        : referenceProjects !== undefined
+          ? referenceProjects
+          : details?.referenceProjects,
+      {
+        currentProjectId: project._id,
+        actorId: req.user._id || req.user.id,
+      },
+    );
+
     // Root project in a lineage starts at version 1 and points to itself.
     project.lineageId = project._id;
     project.parentProjectId = null;
@@ -7531,6 +7653,9 @@ const createProject = async (req, res) => {
     return;
   } catch (error) {
     console.error("Error creating project:", error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     // [DEBUG] Log full validation error details
     if (error.name === "ValidationError") {
       console.error(
@@ -7558,18 +7683,20 @@ const getProjects = async (req, res) => {
     const collapseRevisions =
       String(req.query.collapseRevisions || "true").toLowerCase() !== "false";
 
-    const projects = await populateMockupUploaders(
-      Project.find(query)
-        .populate("createdBy", "firstName lastName")
-        .populate("projectLeadId", "firstName lastName avatarUrl")
-        .populate(
-          "assistantLeadId",
-          "firstName lastName employeeId email avatarUrl",
-        )
-        .populate("acknowledgements.user", "firstName lastName name avatarUrl")
-        .populate("endOfDayUpdateBy", "firstName lastName department")
-        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
-        .sort({ createdAt: -1 }),
+    const projects = await populateProjectReferences(
+      populateMockupUploaders(
+        Project.find(query)
+          .populate("createdBy", "firstName lastName")
+          .populate("projectLeadId", "firstName lastName avatarUrl")
+          .populate(
+            "assistantLeadId",
+            "firstName lastName employeeId email avatarUrl",
+          )
+          .populate("acknowledgements.user", "firstName lastName name avatarUrl")
+          .populate("endOfDayUpdateBy", "firstName lastName department")
+          .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+          .sort({ createdAt: -1 }),
+      ),
     ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
@@ -7594,6 +7721,81 @@ const getProjects = async (req, res) => {
       `${new Date().toISOString()} - Error fetching projects: ${error.stack}\n`,
     );
     res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Search projects that can be attached as order references
+// @route   GET /api/projects/reference-search
+// @access  Private (Front Desk/Admin)
+const searchReferenceProjects = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Only Front Desk and Admin can search reference orders.",
+      });
+    }
+
+    const queryText = normalizeOptionalText(req.query.q).slice(0, 80);
+    const excludeId = normalizeOptionalText(req.query.excludeId);
+    const limit = Math.min(
+      Math.max(Number.parseInt(req.query.limit, 10) || 10, 1),
+      20,
+    );
+
+    if (queryText.length < 2) {
+      return res.json([]);
+    }
+
+    const matcher = new RegExp(escapeRegExp(queryText), "i");
+    const query = {
+      $and: [
+        excludeId && isValidObjectId(excludeId)
+          ? { _id: { $ne: excludeId } }
+          : {},
+        {
+          $or: [
+            { orderId: matcher },
+            { "details.projectName": matcher },
+            { "details.projectNameRaw": matcher },
+            { "details.projectIndicator": matcher },
+            { "details.client": matcher },
+          ],
+        },
+        {
+          $or: [
+            { isLatestVersion: { $ne: false } },
+            { isLatestVersion: { $exists: false } },
+          ],
+        },
+      ],
+    };
+
+    const projects = await Project.find(query)
+      .select(
+        "_id orderId projectType status departments createdAt details.projectName details.projectIndicator details.client",
+      )
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    return res.json(
+      projects.map((project) => ({
+        _id: project._id,
+        orderId: normalizeOrderNumber(project.orderId),
+        projectName: normalizeOptionalText(project.details?.projectName),
+        projectIndicator: normalizeOptionalText(
+          project.details?.projectIndicator,
+        ),
+        client: normalizeOptionalText(project.details?.client),
+        projectType: normalizeOptionalText(project.projectType),
+        status: normalizeOptionalText(project.status),
+        departments: Array.isArray(project.departments) ? project.departments : [],
+        createdAt: project.createdAt,
+      })),
+    );
+  } catch (error) {
+    console.error("Error searching reference projects:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
 };
 
@@ -7883,19 +8085,21 @@ const getUserStats = async (req, res) => {
 // @access  Private
 const getProjectById = async (req, res) => {
   try {
-    const project = await populateMockupUploaders(
-      Project.findById(req.params.id)
-        .populate("createdBy", "firstName lastName")
-        .populate(
-          "projectLeadId",
-          "firstName lastName employeeId email avatarUrl",
-        )
-        .populate(
-          "assistantLeadId",
-          "firstName lastName employeeId email avatarUrl",
-        )
-        .populate("acknowledgements.user", "firstName lastName name avatarUrl")
-        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+    const project = await populateProjectReferences(
+      populateMockupUploaders(
+        Project.findById(req.params.id)
+          .populate("createdBy", "firstName lastName")
+          .populate(
+            "projectLeadId",
+            "firstName lastName employeeId email avatarUrl",
+          )
+          .populate(
+            "assistantLeadId",
+            "firstName lastName employeeId email avatarUrl",
+          )
+          .populate("acknowledgements.user", "firstName lastName name avatarUrl")
+          .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+      ),
     );
 
     if (project) {
@@ -7909,12 +8113,36 @@ const getProjectById = async (req, res) => {
       const isFrontDesk = hasDepartmentAccess(req.user, FRONT_DESK_DEPARTMENT);
       const canFrontDeskAccessProject =
         isFrontDesk && requestSource === "frontdesk";
+      const referenceFromId = normalizeOptionalText(req.query.referenceFrom);
+      let canReferenceAccessProject = false;
+
+      if (
+        referenceFromId &&
+        isValidObjectId(referenceFromId) &&
+        toObjectIdString(referenceFromId) !== toObjectIdString(project._id)
+      ) {
+        const sourceProject = await Project.findById(referenceFromId)
+          .select(
+            "_id createdBy projectLeadId assistantLeadId departments referenceProjects",
+          )
+          .lean();
+        const sourceReferences = Array.isArray(sourceProject?.referenceProjects)
+          ? sourceProject.referenceProjects
+          : [];
+        const sourceReferencesTarget = sourceReferences.some(
+          (entry) => toObjectIdString(entry?.project) === toObjectIdString(project._id),
+        );
+        canReferenceAccessProject =
+          Boolean(sourceProject && sourceReferencesTarget) &&
+          canMutateProject(req.user, sourceProject, "department");
+      }
 
       if (
         req.user.role !== "admin" &&
         !isLead &&
         !isAssistant &&
-        !canFrontDeskAccessProject
+        !canFrontDeskAccessProject &&
+        !canReferenceAccessProject
       ) {
         return res
           .status(403)
@@ -7928,7 +8156,14 @@ const getProjectById = async (req, res) => {
       ) {
         applyVisibleProjectBatchesForUser(project, req.user);
       }
-      res.json(project);
+      const responseProject = project.toObject ? project.toObject() : project;
+      if (canReferenceAccessProject) {
+        responseProject.referenceAccess = {
+          granted: true,
+          fromProjectId: referenceFromId,
+        };
+      }
+      res.json(responseProject);
     } else {
       res.status(404).json({ message: "Project not found" });
     }
@@ -14955,6 +15190,8 @@ const updateProject = async (req, res) => {
       priority, // [NEW]
       corporateEmergency, // [NEW]
       workstreamCode,
+      referenceProjects,
+      referenceProjectIds,
     } = req.body;
 
     // Parse JSON fields if they are strings (Multipart/form-data behavior)
@@ -14970,6 +15207,10 @@ const updateProject = async (req, res) => {
       existingAttachments = JSON.parse(existingAttachments);
     if (typeof quoteDetails === "string")
       quoteDetails = JSON.parse(quoteDetails);
+    if (typeof referenceProjects === "string")
+      referenceProjects = JSON.parse(referenceProjects);
+    if (typeof referenceProjectIds === "string")
+      referenceProjectIds = JSON.parse(referenceProjectIds);
     if (typeof corporateEmergency === "string" && corporateEmergency.startsWith("{"))
       corporateEmergency = JSON.parse(corporateEmergency);
     if (typeof lead === "string" && lead.startsWith("{"))
@@ -15072,6 +15313,8 @@ const updateProject = async (req, res) => {
       priority = undefined;
       corporateEmergency = undefined;
       workstreamCode = undefined;
+      referenceProjects = undefined;
+      referenceProjectIds = undefined;
     }
 
     const requestedOrderNumber = normalizeOrderNumber(orderId);
@@ -15153,6 +15396,9 @@ const updateProject = async (req, res) => {
       assistantLead: project.assistantLeadId,
       orderRef: project.orderRef,
       status: project.status,
+      referenceProjects: Array.isArray(project.referenceProjects)
+        ? [...project.referenceProjects]
+        : [],
     };
 
     // Track if details changed for sectionUpdates
@@ -15482,6 +15728,21 @@ const updateProject = async (req, res) => {
       detailsChanged = true;
     }
 
+    const hasReferenceProjectUpdate =
+      referenceProjectIds !== undefined || referenceProjects !== undefined;
+    if (hasReferenceProjectUpdate) {
+      project.referenceProjects = await resolveReferenceProjectEntries(
+        referenceProjectIds !== undefined ? referenceProjectIds : referenceProjects,
+        {
+          currentProjectId: project._id,
+          actorId: req.user._id || req.user.id,
+          existingReferences: oldValues.referenceProjects,
+        },
+      );
+      project.sectionUpdates.details = new Date();
+      detailsChanged = true;
+    }
+
     const linkedOrder = await ensureOrderRecord({
       orderNumber: hasOrderNumberUpdate
         ? project.orderId
@@ -15588,6 +15849,20 @@ const updateProject = async (req, res) => {
     if (attachmentsChanged) {
       changes.push(`Reference Materials updated (${nextAttachments.length} file(s))`);
     }
+    const previousReferenceProjectIds = new Set(
+      normalizeReferenceProjectInputs(oldValues.referenceProjects),
+    );
+    const nextReferenceProjectIds = normalizeReferenceProjectInputs(
+      updatedProject.referenceProjects,
+    );
+    const referenceProjectsChanged =
+      previousReferenceProjectIds.size !== nextReferenceProjectIds.length ||
+      nextReferenceProjectIds.some((id) => !previousReferenceProjectIds.has(id));
+    if (referenceProjectsChanged) {
+      changes.push(
+        `Reference Orders updated (${nextReferenceProjectIds.length})`,
+      );
+    }
     if (itemsChanged) {
       changes.push("Order Items updated");
     }
@@ -15634,10 +15909,18 @@ const updateProject = async (req, res) => {
         after: `${nextAttachments.length} file(s)`,
       });
     }
+    if (referenceProjectsChanged) {
+      orderRevisionChangeDetails.push({
+        label: "Reference Orders",
+        before: `${previousReferenceProjectIds.size} project(s)`,
+        after: `${nextReferenceProjectIds.length} project(s)`,
+      });
+    }
     const orderRevisionChanged =
       briefOverviewChanged ||
       sampleImageChanged ||
       attachmentsChanged ||
+      referenceProjectsChanged ||
       itemsChanged;
 
     const prevLeadId = oldValues.lead ? oldValues.lead.toString() : null;
@@ -15760,6 +16043,7 @@ const updateProject = async (req, res) => {
       if (itemsChanged) revisionParts.push("Order Items");
       if (sampleImageChanged) revisionParts.push("Primary Reference Image");
       if (attachmentsChanged) revisionParts.push("Reference Materials");
+      if (referenceProjectsChanged) revisionParts.push("Reference Orders");
 
       updatedProject.orderRevisionMeta = {
         updatedAt: new Date(),
@@ -15814,14 +16098,19 @@ const updateProject = async (req, res) => {
       }
     }
 
-    const populatedProject = await Project.findById(updatedProject._id)
-      .populate("createdBy", "firstName lastName")
-      .populate("projectLeadId", "firstName lastName employeeId email")
-      .populate("assistantLeadId", "firstName lastName employeeId email")
-      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone");
+    const populatedProject = await populateProjectReferences(
+      Project.findById(updatedProject._id)
+        .populate("createdBy", "firstName lastName")
+        .populate("projectLeadId", "firstName lastName employeeId email")
+        .populate("assistantLeadId", "firstName lastName employeeId email")
+        .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone"),
+    );
 
     res.json(populatedProject);
   } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     const safeStringify = (value) => {
       if (value === undefined) return "undefined";
       if (value === null) return "null";
@@ -18128,6 +18417,7 @@ module.exports = {
   getDashboardCounts,
   getNextActions,
   getDeliveryCalendar,
+  searchReferenceProjects,
   getStageBottlenecks,
   getOrderGroups,
   getOrderGroupByNumber,

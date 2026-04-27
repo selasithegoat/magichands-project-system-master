@@ -11,6 +11,7 @@ import {
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
+import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
@@ -3077,6 +3078,12 @@ const EngagedProjectActions = ({ user }) => {
                 </div>
               )}
             </article>
+
+            <ReferenceProjectsCard
+              project={project}
+              variant="engaged"
+              className="engaged-scope-card"
+            />
           </div>
         </section>
       )}

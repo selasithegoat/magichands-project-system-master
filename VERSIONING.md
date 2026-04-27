@@ -18,7 +18,7 @@ entry whenever the `MAJOR` number changes:
 
 ```json
 {
-  "2": "Andromada",
+  "2": "Andromeda",
   "3": "Triangulum"
 }
 ```
@@ -32,14 +32,14 @@ entry whenever the `MAJOR` number changes:
 4. Tag the commit:
 
 ```bash
-git tag -a v2.6.0 -m "Release v2.6.0"
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
 ```
 
 5. Push the commit and tag:
 
 ```bash
 git push origin main
-git push origin v2.6.0
+git push origin vX.Y.Z
 ```
 
 ## Runtime Metadata

@@ -79,6 +79,8 @@ const normalizeSearchSuffix = (value) => {
 };
 
 export const canAccessProjectDetails = (user, project) => {
+  if (project?.referenceAccess?.granted) return true;
+
   const userId = toEntityId(user?._id || user?.id);
   if (!userId) return false;
 

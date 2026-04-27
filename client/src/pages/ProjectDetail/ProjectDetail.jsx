@@ -70,6 +70,7 @@ import {
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 // Lazy Load PDF Component
@@ -792,6 +793,7 @@ const ProjectDetail = ({ user }) => {
     useAuthorizedProjectNavigation(user);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const referenceFromParam = searchParams.get("referenceFrom") || "";
   const [activeTab, setActiveTab] = useState(tabParam || "Overview");
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -888,7 +890,14 @@ const ProjectDetail = ({ user }) => {
   const fetchProject = async () => {
     try {
       setIsAccessRedirecting(false);
-      const res = await fetch(`/api/projects/${id}`);
+      const projectParams = new URLSearchParams();
+      if (referenceFromParam) {
+        projectParams.set("referenceFrom", referenceFromParam);
+      }
+      const projectUrl = projectParams.toString()
+        ? `/api/projects/${id}?${projectParams.toString()}`
+        : `/api/projects/${id}`;
+      const res = await fetch(projectUrl);
       if (!res.ok) {
         if (res.status === 403) {
           setProject(null);
@@ -935,7 +944,7 @@ const ProjectDetail = ({ user }) => {
 
   useEffect(() => {
     if (id) fetchProject();
-  }, [id]);
+  }, [id, referenceFromParam]);
 
   useEffect(() => {
     if (loading || !project || canViewProjectDetails || isAccessRedirecting) {
@@ -1455,6 +1464,7 @@ const ProjectDetail = ({ user }) => {
               {project.projectType === "Quote" && (
                 <QuoteChecklistCard project={project} />
               )}
+              <ReferenceProjectsCard project={project} />
               {showFeedbackSection && (
                 <FeedbackCard feedbacks={project.feedbacks} />
               )}

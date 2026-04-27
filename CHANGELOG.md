@@ -6,6 +6,13 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-04-27
+
+- Added optional reference orders to Front Desk order intake and revision.
+- Added reference order search by order number, client, and project name.
+- Added clickable reference order cards for project detail and engaged department views.
+- Added reference access so engaged users can open linked projects for context.
+
 ## [2.6.0] - 2026-04-27
 
 - Added a shared app version source in `VERSION`.

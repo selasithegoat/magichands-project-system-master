@@ -57,6 +57,71 @@ const formatFileSize = (bytes) => {
 
 const createEmptyItem = () => ({ description: "", breakdown: "", qty: 1 });
 
+const toProjectId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value).trim();
+  }
+  if (typeof value === "object") {
+    if (value._id) return toProjectId(value._id);
+    if (value.id) return String(value.id).trim();
+    if (value.value) return String(value.value).trim();
+  }
+  return "";
+};
+
+const getReferenceProjectRecord = (value) => value?.project || value || {};
+
+const normalizeReferenceProjectOption = (value) => {
+  const record = getReferenceProjectRecord(value);
+  const id = toProjectId(record);
+  if (!id) return null;
+  const details = record.details || {};
+
+  return {
+    _id: id,
+    orderId: String(record.orderId || value?.orderId || "").trim(),
+    projectName: String(
+      details.projectName || record.projectName || value?.projectName || "",
+    ).trim(),
+    projectIndicator: String(
+      details.projectIndicator ||
+        record.projectIndicator ||
+        value?.projectIndicator ||
+        "",
+    ).trim(),
+    client: String(
+      details.client || record.client || value?.client || "",
+    ).trim(),
+    projectType: String(record.projectType || value?.projectType || "").trim(),
+    status: String(record.status || value?.status || "").trim(),
+    departments: Array.isArray(record.departments)
+      ? record.departments
+      : Array.isArray(value?.departments)
+        ? value.departments
+        : [],
+  };
+};
+
+const normalizeReferenceProjectList = (value) => {
+  const source = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  return source
+    .map(normalizeReferenceProjectOption)
+    .filter((item) => {
+      if (!item?._id || seen.has(item._id)) return false;
+      seen.add(item._id);
+      return true;
+    });
+};
+
+const getReferenceProjectLabel = (project) => {
+  const orderId = String(project?.orderId || "").trim();
+  const projectName = String(project?.projectName || "").trim();
+  if (orderId && projectName) return `${orderId} - ${projectName}`;
+  return orderId || projectName || "Referenced project";
+};
+
 const toDateTimeLocal = (value) => {
   if (!value) return "";
   const parsed = new Date(value);
@@ -210,6 +275,12 @@ const NewOrders = ({ user = null }) => {
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
+  const [selectedReferenceProjects, setSelectedReferenceProjects] = useState([]);
+  const [referenceProjectQuery, setReferenceProjectQuery] = useState("");
+  const [referenceProjectSuggestions, setReferenceProjectSuggestions] =
+    useState([]);
+  const [isReferenceProjectSearching, setIsReferenceProjectSearching] =
+    useState(false);
   const [leads, setLeads] = useState([]);
   const [existingOrderNumbers, setExistingOrderNumbers] = useState([]);
   const [clientSuggestions, setClientSuggestions] = useState([]);
@@ -508,6 +579,62 @@ const NewOrders = ({ user = null }) => {
   const showClientDropdown =
     isClientDropdownOpen && filteredClientSuggestions.length > 0;
 
+  useEffect(() => {
+    const query = String(referenceProjectQuery || "").trim();
+    if (query.length < 2) {
+      setReferenceProjectSuggestions([]);
+      setIsReferenceProjectSearching(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timerId = window.setTimeout(async () => {
+      setIsReferenceProjectSearching(true);
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          limit: "8",
+        });
+        if (editingId) params.set("excludeId", editingId);
+        const response = await fetch(
+          `/api/projects/reference-search?${params.toString()}`,
+          {
+            credentials: "include",
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          setReferenceProjectSuggestions([]);
+          return;
+        }
+        const payload = await response.json().catch(() => []);
+        const selectedIds = new Set(
+          selectedReferenceProjects.map((item) => item._id),
+        );
+        setReferenceProjectSuggestions(
+          normalizeReferenceProjectList(payload).filter(
+            (item) => !selectedIds.has(item._id),
+          ),
+        );
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          console.error("Failed to search reference projects", error);
+          setReferenceProjectSuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsReferenceProjectSearching(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timerId);
+      controller.abort();
+    };
+  }, [editingId, referenceProjectQuery, selectedReferenceProjects]);
+
   const handleClientSuggestionSelect = (suggestion) => {
     setFormData((prev) => ({
       ...prev,
@@ -516,6 +643,23 @@ const NewOrders = ({ user = null }) => {
       clientPhone: suggestion?.autofill?.clientPhone || "",
     }));
     setIsClientDropdownOpen(false);
+  };
+
+  const addReferenceProject = (project) => {
+    const option = normalizeReferenceProjectOption(project);
+    if (!option?._id) return;
+    setSelectedReferenceProjects((prev) => {
+      if (prev.some((item) => item._id === option._id)) return prev;
+      return [...prev, option];
+    });
+    setReferenceProjectQuery("");
+    setReferenceProjectSuggestions([]);
+  };
+
+  const removeReferenceProject = (projectId) => {
+    setSelectedReferenceProjects((prev) =>
+      prev.filter((item) => item._id !== projectId),
+    );
   };
 
   const applyProjectToForm = (project) => {
@@ -554,6 +698,9 @@ const NewOrders = ({ user = null }) => {
     setExistingSampleImageNote(String(project.details?.sampleImageNote || ""));
     setExistingAttachments(
       normalizeReferenceAttachments(project.details?.attachments || []),
+    );
+    setSelectedReferenceProjects(
+      normalizeReferenceProjectList(project.referenceProjects || []),
     );
     setSelectedClientMockups([]);
     setSelectedClientMockupNotes({});
@@ -649,6 +796,9 @@ const NewOrders = ({ user = null }) => {
           setExistingAttachments(
             normalizeReferenceAttachments(storedDraft.existingAttachments || []),
           );
+          setSelectedReferenceProjects(
+            normalizeReferenceProjectList(storedDraft.selectedReferenceProjects || []),
+          );
         } else {
           setFormData(fallbackFormData);
           setSelectedFiles([]);
@@ -660,6 +810,7 @@ const NewOrders = ({ user = null }) => {
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
+          setSelectedReferenceProjects([]);
         }
       } catch (error) {
         console.error("Failed to restore New Order draft", error);
@@ -674,6 +825,7 @@ const NewOrders = ({ user = null }) => {
         setExistingSampleImage("");
         setExistingSampleImageNote("");
         setExistingAttachments([]);
+        setSelectedReferenceProjects([]);
       }
 
       if (!isCancelled) {
@@ -727,6 +879,7 @@ const NewOrders = ({ user = null }) => {
       existingSampleImage,
       existingSampleImageNote,
       existingAttachments,
+      selectedReferenceProjects,
     };
 
     const timerId = window.setTimeout(() => {
@@ -753,6 +906,7 @@ const NewOrders = ({ user = null }) => {
     hasResolvedCurrentUser,
     isCreateMode,
     isDraftHydrated,
+    selectedReferenceProjects,
     selectedFileNotes,
   ]);
 
@@ -909,6 +1063,9 @@ const NewOrders = ({ user = null }) => {
       setExistingSampleImage("");
       setExistingSampleImageNote("");
       setExistingAttachments([]);
+      setSelectedReferenceProjects([]);
+      setReferenceProjectQuery("");
+      setReferenceProjectSuggestions([]);
       setEditingProjectStatus("");
       setIsClientDropdownOpen(false);
     },
@@ -988,6 +1145,10 @@ const NewOrders = ({ user = null }) => {
       ),
     );
     formPayload.append("items", JSON.stringify(formData.items));
+    formPayload.append(
+      "referenceProjectIds",
+      JSON.stringify(selectedReferenceProjects.map((project) => project._id)),
+    );
     if (!editingId) {
       formPayload.append("sampleRequired", String(Boolean(formData.sampleRequired)));
     }
@@ -1100,6 +1261,9 @@ const NewOrders = ({ user = null }) => {
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
+          setSelectedReferenceProjects([]);
+          setReferenceProjectQuery("");
+          setReferenceProjectSuggestions([]);
         }
 
         const nextPath =
@@ -1780,6 +1944,87 @@ const NewOrders = ({ user = null }) => {
                   placeholder="High-level summary (e.g. '3 Large banners for stage background')"
                   rows="2"
                 ></textarea>
+              </div>
+
+              <div className="form-group reference-project-field">
+                <label htmlFor="referenceProjectSearch">
+                  Reference Orders (Optional)
+                </label>
+                <div className="reference-project-search">
+                  <input
+                    type="text"
+                    id="referenceProjectSearch"
+                    value={referenceProjectQuery}
+                    onChange={(event) =>
+                      setReferenceProjectQuery(event.target.value)
+                    }
+                    className="form-input"
+                    placeholder="Search by order number, client, or project name"
+                    autoComplete="off"
+                  />
+                  {referenceProjectQuery.trim().length >= 2 && (
+                    <div className="reference-project-results">
+                      {isReferenceProjectSearching ? (
+                        <div className="reference-project-empty">
+                          Searching...
+                        </div>
+                      ) : referenceProjectSuggestions.length > 0 ? (
+                        referenceProjectSuggestions.map((project) => (
+                          <button
+                            type="button"
+                            key={project._id}
+                            className="reference-project-result"
+                            onClick={() => addReferenceProject(project)}
+                          >
+                            <span className="reference-project-result-title">
+                              {getReferenceProjectLabel(project)}
+                            </span>
+                            <span className="reference-project-result-meta">
+                              {[
+                                project.client,
+                                project.projectType,
+                                project.status,
+                              ]
+                                .filter(Boolean)
+                                .join(" - ")}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="reference-project-empty">
+                          No matching projects found.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {selectedReferenceProjects.length > 0 && (
+                  <div className="reference-project-chip-list">
+                    {selectedReferenceProjects.map((project) => (
+                      <div key={project._id} className="reference-project-chip">
+                        <div>
+                          <strong>{getReferenceProjectLabel(project)}</strong>
+                          <span>
+                            {[project.client, project.status]
+                              .filter(Boolean)
+                              .join(" - ")}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeReferenceProject(project._id)}
+                          aria-label={`Remove ${getReferenceProjectLabel(project)}`}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <span className="field-help-text">
+                  These projects will be visible and clickable for engaged
+                  departments.
+                </span>
               </div>
             </div>
 

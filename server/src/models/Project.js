@@ -485,6 +485,51 @@ const ProjectStatusHistorySchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ReferenceProjectSchema = new mongoose.Schema(
+  {
+    project: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      required: true,
+    },
+    orderId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    projectName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    client: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    projectType: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    status: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    addedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    addedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true },
+);
+
 const ProjectSchema = new mongoose.Schema(
   {
     orderId: {
@@ -601,6 +646,10 @@ const ProjectSchema = new mongoose.Schema(
         preventive: String,
       },
     ], // Step 4
+    referenceProjects: {
+      type: [ReferenceProjectSchema],
+      default: [],
+    },
     challenges: [
       {
         title: String,
@@ -1312,6 +1361,7 @@ ProjectSchema.index({ "cancellation.isCancelled": 1, createdAt: -1 });
 ProjectSchema.index({ lineageId: 1, versionNumber: -1 });
 ProjectSchema.index({ isLatestVersion: 1, status: 1, createdAt: -1 });
 ProjectSchema.index({ status: 1, statusChangedAt: 1 });
+ProjectSchema.index({ "referenceProjects.project": 1 });
 
 ProjectSchema.statics.buildStatusSla = buildStatusSla;
 
