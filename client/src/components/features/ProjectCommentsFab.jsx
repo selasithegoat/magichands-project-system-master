@@ -187,14 +187,14 @@ const ProjectCommentsFab = ({ user }) => {
       try {
         const response = await fetch(
           appendPortalSource(
-            `/api/projects/${projectId}/comments/${commentId}/read`,
+            `/api/projects/${projectId}/comments/read`,
             requestSource,
           ),
           {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ commentIds: [commentId] }),
           },
         );
         if (!response.ok) {

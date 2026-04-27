@@ -6,6 +6,10 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-04-27
+
+- Fixed the unread comments modal to mark comments as read through the shared bulk read endpoint, avoiding 404 errors on deployed builds.
+
 ## [2.8.1] - 2026-04-27
 
 - Fixed the unread comments modal so comments leave the list immediately after being opened and marked read.
