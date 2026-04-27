@@ -1,7 +1,7 @@
 .delivery-calendar-fab {
   position: fixed;
   right: 24px;
-  bottom: 96px;
+  bottom: 168px;
   z-index: 890;
   display: inline-flex;
   align-items: center;
@@ -25,7 +25,7 @@
 }
 
 .delivery-calendar-fab.with-frontdesk-fab {
-  bottom: 168px;
+  bottom: 240px;
 }
 
 .delivery-calendar-fab:hover,
@@ -711,7 +711,7 @@
 @media (max-width: 720px) {
   .delivery-calendar-fab {
     right: 16px;
-    bottom: 76px;
+    bottom: 136px;
     padding: 0.6rem;
   }
 
@@ -721,7 +721,7 @@
   }
 
   .delivery-calendar-fab.with-frontdesk-fab {
-    bottom: 136px;
+    bottom: 196px;
   }
 
   .delivery-calendar-overlay {

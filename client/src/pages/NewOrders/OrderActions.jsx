@@ -31,6 +31,7 @@ import {
 } from "../../utils/mockupWorkflow";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import "./NewOrders.css";
 
@@ -5004,6 +5005,7 @@ const OrderActions = () => {
             </div>
           </div>
         </section>
+
           </main>
 
           <aside className="order-actions-sidebar">
@@ -5146,6 +5148,14 @@ const OrderActions = () => {
                 )}
               </div>
             </section>
+
+            <ProjectComments
+              projectId={project._id}
+              currentUser={currentUser}
+              source="frontdesk"
+              className="order-actions-comments"
+              title="Order Comments"
+            />
 
             <section className="order-revision-section">
               <div className="updates-standalone-header">

@@ -20,8 +20,8 @@ import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/Proj
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
+import ProjectComments from "@client/components/features/ProjectComments";
 import {
-  getQuoteRequirementMode,
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
   isQuoteCostCompleted,
@@ -104,6 +104,15 @@ const formatSupplySource = (value) => {
   const list = normalizeSupplySourceList(value);
   if (!list.length) return "N/A";
   return list.join(", ");
+};
+
+const normalizeContentTabKey = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "comments") return "comments";
+  if (normalized === "updates") return "updates";
+  if (normalized === "order" || normalized === "order & files") return "order";
+  if (normalized === "overview") return "overview";
+  return "";
 };
 
 const getLatestProjectFeedbackTimestamp = (feedbackEntries = []) =>
@@ -884,7 +893,6 @@ const ProjectDetails = ({ user }) => {
   });
   const [smsSubmitting, setSmsSubmitting] = useState(false);
   const [smsSendingId, setSmsSendingId] = useState("");
-  const [smsSkippingId, setSmsSkippingId] = useState("");
   const [undoingDept, setUndoingDept] = useState(null);
   const [isTogglingHold, setIsTogglingHold] = useState(false);
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
@@ -917,7 +925,10 @@ const ProjectDetails = ({ user }) => {
   const [isProjectTypeModalOpen, setIsProjectTypeModalOpen] = useState(false);
   const [isChangingProjectType, setIsChangingProjectType] = useState(false);
   const [projectTypeChangeError, setProjectTypeChangeError] = useState("");
-  const [activeContentTab, setActiveContentTab] = useState("overview");
+  const [activeContentTab, setActiveContentTab] = useState(() => {
+    const requestedTab = new URLSearchParams(location.search || "").get("tab");
+    return normalizeContentTabKey(requestedTab) || "overview";
+  });
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteDecisionNoteDraft, setQuoteDecisionNoteDraft] = useState("");
   const [statusConfirmModal, setStatusConfirmModal] = useState({
@@ -1008,6 +1019,15 @@ const ProjectDetails = ({ user }) => {
       window.clearInterval(timerId);
     };
   }, []);
+
+  useEffect(() => {
+    const requestedTab = normalizeContentTabKey(
+      new URLSearchParams(location.search || "").get("tab"),
+    );
+    if (requestedTab) {
+      setActiveContentTab(requestedTab);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (mockupCarouselVersions.length === 0) {
@@ -2040,33 +2060,6 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
-  const handleSkipSmsPrompt = async (promptId) => {
-    if (!project?._id || !promptId) return;
-    setSmsSkippingId(promptId);
-    try {
-      const res = await fetch(
-        `/api/projects/${project._id}/sms-prompts/${promptId}?source=admin`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ state: "skipped" }),
-        },
-      );
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to skip SMS.");
-      }
-      await fetchSmsPrompts();
-      toast.success("SMS prompt skipped.");
-    } catch (err) {
-      console.error("Error skipping SMS:", err);
-      toast.error(err.message || "Failed to skip SMS.");
-    } finally {
-      setSmsSkippingId("");
-    }
-  };
-
   const handleSaveLead = async () => {
     if (!ensureProjectIsEditable()) return;
     try {
@@ -2855,6 +2848,7 @@ const ProjectDetails = ({ user }) => {
     { key: "overview", label: "Overview" },
     { key: "order", label: "Order & Files" },
     { key: "updates", label: "Updates" },
+    { key: "comments", label: "Comments" },
   ];
   const hasHeaderAlerts = Boolean(
     (isCorporateProject && corporateEmergencyEnabled) ||
@@ -4897,6 +4891,16 @@ const ProjectDetails = ({ user }) => {
             </div>
           )}
             </>
+          )}
+
+          {activeContentTab === "comments" && (
+            <ProjectComments
+              projectId={project._id}
+              currentUser={user}
+              source="admin"
+              className="admin-project-comments-panel"
+              title="Admin Project Comments"
+            />
           )}
         </div>
 

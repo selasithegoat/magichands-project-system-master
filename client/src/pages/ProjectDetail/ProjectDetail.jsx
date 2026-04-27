@@ -71,8 +71,10 @@ import ProductionRiskSuggestionModal from "../../components/features/ProductionR
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
+import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
+import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 // Lazy Load PDF Component
 const ProjectPdfDownload = React.lazy(
   () => import("../../components/features/ProjectPdfDownload"),
@@ -797,6 +799,7 @@ const ProjectDetail = ({ user }) => {
   const tabParam = searchParams.get("tab");
   const referenceFromParam = searchParams.get("referenceFrom") || "";
   const [activeTab, setActiveTab] = useState(tabParam || "Overview");
+  const requestSource = resolvePortalSource();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -896,9 +899,10 @@ const ProjectDetail = ({ user }) => {
       if (referenceFromParam) {
         projectParams.set("referenceFrom", referenceFromParam);
       }
-      const projectUrl = projectParams.toString()
+      const projectBaseUrl = projectParams.toString()
         ? `/api/projects/${id}?${projectParams.toString()}`
         : `/api/projects/${id}`;
+      const projectUrl = appendPortalSource(projectBaseUrl, requestSource);
       const res = await fetch(projectUrl);
       if (!res.ok) {
         if (res.status === 403) {
@@ -946,7 +950,18 @@ const ProjectDetail = ({ user }) => {
 
   useEffect(() => {
     if (id) fetchProject();
-  }, [id, referenceFromParam]);
+  }, [id, referenceFromParam, requestSource]);
+
+  useEffect(() => {
+    if (
+      tabParam &&
+      ["Overview", "Updates", "Comments", "Challenges", "Activities"].includes(
+        tabParam,
+      )
+    ) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   useEffect(() => {
     if (loading || !project || canViewProjectDetails || isAccessRedirecting) {
@@ -1422,7 +1437,7 @@ const ProjectDetail = ({ user }) => {
           {renderProjectName(project.details, null, "Untitled Project")}
         </div>
         <nav className="header-nav">
-          {["Overview", "Updates", "Challenges", "Activities"].map((tab) => (
+          {["Overview", "Updates", "Comments", "Challenges", "Activities"].map((tab) => (
             <Link
               key={tab}
               to="#"
@@ -1536,6 +1551,13 @@ const ProjectDetail = ({ user }) => {
         )}
         {activeTab === "Updates" && (
           <ProjectUpdates project={project} currentUser={user} />
+        )}
+        {activeTab === "Comments" && (
+          <ProjectComments
+            projectId={project._id}
+            currentUser={user}
+            source={requestSource}
+          />
         )}
         {activeTab === "Challenges" && (
           <ProjectChallenges project={project} onUpdate={fetchProject} />

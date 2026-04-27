@@ -78,7 +78,14 @@ const normalizeSearchSuffix = (value) => {
   return `?${normalized}`;
 };
 
+const normalizeHashSuffix = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return normalized.startsWith("#") ? normalized : `#${normalized}`;
+};
+
 export const canAccessProjectDetails = (user, project) => {
+  if (user?.role === "admin") return true;
   if (project?.referenceAccess?.granted) return true;
 
   const userId = toEntityId(user?._id || user?.id);
@@ -99,6 +106,7 @@ export const buildAuthorizedProjectDestinations = ({
   user,
   project,
   detailSearch = "",
+  hash = "",
   fallbackPath = "/client",
   allowGenericEngaged = false,
 } = {}) => {
@@ -108,12 +116,23 @@ export const buildAuthorizedProjectDestinations = ({
   }
 
   const destinations = [];
-  const detailPath = `/detail/${projectId}${normalizeSearchSuffix(detailSearch)}`;
+  const hashSuffix = normalizeHashSuffix(hash);
+  const detailPath = `/detail/${projectId}${normalizeSearchSuffix(detailSearch)}${hashSuffix}`;
+  const adminDetailPath = `/projects/${projectId}${normalizeSearchSuffix(detailSearch)}${hashSuffix}`;
   const projectDepartments = Array.isArray(project?.departments)
     ? project.departments
     : [];
 
-  if (canAccessProjectDetails(user, project)) {
+  if (user?.role === "admin") {
+    destinations.push({
+      key: "admin-detail",
+      label: "Admin Project",
+      description: "Open the admin project detail view.",
+      path: adminDetailPath,
+    });
+  }
+
+  if (user?.role !== "admin" && canAccessProjectDetails(user, project)) {
     destinations.push({
       key: "detail",
       label: "Project Details",
@@ -127,7 +146,7 @@ export const buildAuthorizedProjectDestinations = ({
       key: "frontdesk",
       label: "Order Actions",
       description: "Open the Front Desk order workflow for this project.",
-      path: `/new-orders/actions/${projectId}`,
+      path: `/new-orders/actions/${projectId}${hashSuffix}`,
     });
   }
 
@@ -139,7 +158,7 @@ export const buildAuthorizedProjectDestinations = ({
       key: "engaged",
       label: "Engaged Actions",
       description: "Open the department engagement action page.",
-      path: `/engaged-projects/actions/${projectId}`,
+      path: `/engaged-projects/actions/${projectId}${hashSuffix}`,
     });
   }
 
@@ -162,6 +181,7 @@ export const resolveProjectNavigation = ({
   user,
   project,
   detailSearch = "",
+  hash = "",
   fallbackPath = "/client",
   allowGenericEngaged = false,
 } = {}) => {
@@ -169,6 +189,7 @@ export const resolveProjectNavigation = ({
     user,
     project,
     detailSearch,
+    hash,
     fallbackPath,
     allowGenericEngaged,
   });

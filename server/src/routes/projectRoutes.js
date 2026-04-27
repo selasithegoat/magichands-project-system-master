@@ -81,6 +81,16 @@ const {
   getDepartmentUpdateBoard,
   saveDepartmentUpdateBoard,
 } = require("../controllers/departmentUpdateBoardController");
+const {
+  getProjectCommentFeed,
+  getProjectComments,
+  getProjectCommentMentionUsers,
+  markProjectCommentsRead,
+  markProjectCommentRead,
+  createProjectComment,
+  updateProjectComment,
+  deleteProjectComment,
+} = require("../controllers/projectCommentController");
 const { protect } = require("../middleware/authMiddleware");
 const {
   requireProjectNotOnHold,
@@ -241,7 +251,15 @@ router.post(
   protect,
   suggestProductionRisks,
 );
+router.get("/comments/feed", protect, getProjectCommentFeed);
 router.get("/:id/activity", protect, getProjectActivity);
+router.get("/:id/comments/mentionable-users", protect, getProjectCommentMentionUsers);
+router.get("/:id/comments", protect, getProjectComments);
+router.post("/:id/comments", protect, createProjectComment);
+router.post("/:id/comments/read", protect, markProjectCommentsRead);
+router.post("/:id/comments/:commentId/read", protect, markProjectCommentRead);
+router.patch("/:id/comments/:commentId", protect, updateProjectComment);
+router.delete("/:id/comments/:commentId", protect, deleteProjectComment);
 router.post("/:id/items", protect, enforceProjectNotOnHold, addItemToProject);
 router.patch(
   "/:id/items/:itemId",

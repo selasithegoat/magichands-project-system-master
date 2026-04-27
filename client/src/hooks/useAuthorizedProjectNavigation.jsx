@@ -22,6 +22,7 @@ const useAuthorizedProjectNavigation = (user) => {
     (project, options = {}) => {
       const {
         detailSearch = "",
+        hash = "",
         fallbackPath = "/client",
         replace = false,
         onBeforeNavigate,
@@ -34,6 +35,7 @@ const useAuthorizedProjectNavigation = (user) => {
         user,
         project,
         detailSearch,
+        hash,
         fallbackPath,
         allowGenericEngaged,
       });

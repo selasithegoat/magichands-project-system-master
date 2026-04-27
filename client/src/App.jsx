@@ -536,6 +536,20 @@ function App() {
           }
         />
         <Route
+          path="/projects/:id"
+          element={
+            <ProtectedLayout
+              activeView="projects"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <ProjectDetail user={user} onProjectChange={fetchDashboardCounts} />
+            </ProtectedLayout>
+          }
+        />
+        <Route
           path="/history"
           element={
             <ProtectedLayout

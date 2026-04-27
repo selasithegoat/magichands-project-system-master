@@ -5,6 +5,7 @@ import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
 import ReminderAlertModal from "../features/ReminderAlertModal";
 import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
+import ProjectCommentsFab from "../features/ProjectCommentsFab";
 import "./Layout.css";
 // Icons
 import XIcon from "../icons/XIcon";
@@ -665,7 +666,7 @@ const Layout = ({
     }
   };
 
-  const handleMarkSingleRead = async (notification, options = {}) => {
+  const handleMarkSingleRead = async (notification) => {
     const id = notification._id;
     const projectId = notification.project?._id || notification.project;
     const type = notification.type;
@@ -1080,6 +1081,8 @@ const Layout = ({
           <span className="frontdesk-fab-label">Orders</span>
         </button>
       )}
+
+      <ProjectCommentsFab user={user} />
 
       {/* Page Content */}
       <main className="layout-content">{children}</main>

@@ -4,6 +4,7 @@ import Sidebar from "../../components/Sidebar/Sidebar";
 import Header from "../../components/Header/Header";
 import StageBottleneckAlert from "../../components/StageBottleneckAlert/StageBottleneckAlert";
 import DeliveryCalendarFab from "@client/components/features/DeliveryCalendarFab";
+import ProjectCommentsFab from "@client/components/features/ProjectCommentsFab";
 import { useNavigate } from "react-router-dom";
 
 const DashboardLayout = ({ children, user, onLogout }) => {
@@ -40,6 +41,7 @@ const DashboardLayout = ({ children, user, onLogout }) => {
           onOpenProject={(project) => navigate(`/projects/${project?._id}`)}
         />
       )}
+      {isAdminUser && <ProjectCommentsFab user={user} />}
     </div>
   );
 };

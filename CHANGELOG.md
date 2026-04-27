@@ -6,6 +6,18 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-04-27
+
+- Added project-scoped comment threads with replies for authorized project users.
+- Added comment access from Project Details, Front Desk Order Actions, and Engaged Actions.
+- Moved Front Desk and Engaged action comments into their sidebars for persistent project context.
+- Added project-scoped user mentions in comments with mention notifications.
+- Added a global comments FAB with project/comment context and deep links back to comment threads.
+- Added admin project detail routing so admins can open project comments from the admin portal.
+- Changed the comments FAB to show only unread comments from other users.
+- Added comment edit/delete controls for authors and admins.
+- Added comment notifications and realtime refresh support.
+
 ## [2.7.1] - 2026-04-27
 
 - Blocked project completion until full payment, authorization, or P.O. is verified.

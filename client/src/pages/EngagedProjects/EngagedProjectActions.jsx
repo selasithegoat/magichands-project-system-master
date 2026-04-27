@@ -12,6 +12,7 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
+import ProjectComments from "../../components/features/ProjectComments";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
@@ -4619,6 +4620,13 @@ const EngagedProjectActions = ({ user }) => {
           )}
         </div>
       </section>
+
+      <ProjectComments
+        projectId={project._id}
+        currentUser={user}
+        source="engaged"
+        className="engaged-comments-panel"
+      />
 
       {(showPendingProductionWarning || showPendingDeliveryWarning) && (
         <section className="engaged-context-card caution">
