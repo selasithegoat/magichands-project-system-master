@@ -3,6 +3,41 @@ const clientsByUserId = new Map();
 const clientUserLookup = new Map();
 let heartbeat = null;
 
+const writeEvent = (eventName, payload = {}, options = {}) => {
+  if (clients.size === 0) return;
+
+  const broadcast = Boolean(options?.broadcast);
+  const rawUserIds = Array.isArray(options?.userIds) ? options.userIds : [];
+  const userIds = Array.from(
+    new Set(rawUserIds.map((entry) => String(entry || "").trim()).filter(Boolean)),
+  );
+
+  if (!broadcast && userIds.length === 0) {
+    return;
+  }
+
+  const data = JSON.stringify({ ts: Date.now(), ...payload });
+  const message = `event: ${eventName}\ndata: ${data}\n\n`;
+
+  if (broadcast) {
+    for (const res of clients) {
+      res.write(message);
+    }
+    return;
+  }
+
+  const delivered = new Set();
+  for (const userId of userIds) {
+    const bucket = clientsByUserId.get(userId);
+    if (!bucket) continue;
+    for (const res of bucket) {
+      if (delivered.has(res)) continue;
+      delivered.add(res);
+      res.write(message);
+    }
+  }
+};
+
 const startHeartbeat = () => {
   if (heartbeat) return;
   heartbeat = setInterval(() => {
@@ -69,38 +104,11 @@ const broadcastNotificationChange = (payload = {}) => {
 };
 
 const broadcastChatChange = (payload = {}, options = {}) => {
-  if (clients.size === 0) return;
+  writeEvent("chat_changed", payload, options);
+};
 
-  const broadcast = Boolean(options?.broadcast);
-  const rawUserIds = Array.isArray(options?.userIds) ? options.userIds : [];
-  const userIds = Array.from(
-    new Set(rawUserIds.map((entry) => String(entry || "").trim()).filter(Boolean)),
-  );
-
-  if (!broadcast && userIds.length === 0) {
-    return;
-  }
-
-  const data = JSON.stringify({ ts: Date.now(), ...payload });
-  const message = `event: chat_changed\ndata: ${data}\n\n`;
-
-  if (broadcast) {
-    for (const res of clients) {
-      res.write(message);
-    }
-    return;
-  }
-
-  const delivered = new Set();
-  for (const userId of userIds) {
-    const bucket = clientsByUserId.get(userId);
-    if (!bucket) continue;
-    for (const res of bucket) {
-      if (delivered.has(res)) continue;
-      delivered.add(res);
-      res.write(message);
-    }
-  }
+const broadcastChatTyping = (payload = {}, options = {}) => {
+  writeEvent("chat_typing", payload, options);
 };
 
 const broadcastPresenceChange = (payload = {}) => {
@@ -118,5 +126,6 @@ module.exports = {
   broadcastDataChange,
   broadcastNotificationChange,
   broadcastChatChange,
+  broadcastChatTyping,
   broadcastPresenceChange,
 };

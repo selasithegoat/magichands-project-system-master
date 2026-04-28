@@ -6,6 +6,8 @@ import React, {
   useRef,
   useState,
 } from "react";
+import twemoji from "@twemoji/api";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { useNavigate } from "react-router-dom";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
 import UserAvatar from "../ui/UserAvatar";
@@ -37,6 +39,9 @@ const CHAT_OPEN_EVENT_NAME = "mh:open-chat";
 const INCOMING_PREVIEW_HIDE_MS = 4800;
 const INCOMING_PREVIEW_EXIT_MS = 240;
 const CHAT_UNREAD_PREVIEW_LIMIT = 5;
+const CHAT_TYPING_PING_INTERVAL_MS = 2200;
+const CHAT_TYPING_IDLE_TIMEOUT_MS = 3200;
+const CHAT_TYPING_REMOTE_TIMEOUT_MS = 4600;
 const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
 const CHAT_ATTACHMENT_ACCEPT =
   "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
@@ -147,6 +152,24 @@ const BackIcon = ({ width = 18, height = 18 }) => (
   </svg>
 );
 
+const SmileIcon = ({ width = 18, height = 18 }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M9 10h.01" />
+    <path d="M15 10h.01" />
+    <path d="M8.4 14.1c.8 1.3 2.2 2 3.6 2s2.8-.7 3.6-2" />
+  </svg>
+);
+
 const toIdString = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") {
@@ -169,6 +192,93 @@ const toIdString = (value) => {
 };
 
 const toText = (value) => String(value || "").trim();
+
+const CHAT_TWEMOJI_FOLDER = "svg";
+const CHAT_TWEMOJI_EXTENSION = ".svg";
+const CHAT_TWEMOJI_CLASSNAME = "chat-dock-inline-emoji";
+
+const escapeHtml = (value) =>
+  String(value || "").replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return character;
+    }
+  });
+
+const getEmojiUnified = (value) => {
+  const safeValue = String(value || "");
+  if (!safeValue) return "";
+
+  try {
+    return twemoji.convert.toCodePoint(safeValue);
+  } catch {
+    return "";
+  }
+};
+
+const CHAT_DEFAULT_REACTIONS = CHAT_REACTION_EMOJIS.map(getEmojiUnified).filter(
+  Boolean,
+);
+
+const getTwemojiUrl = (unified) => {
+  const safeUnified = toText(unified).toLowerCase();
+  if (!safeUnified) return "";
+  return `${twemoji.base}${CHAT_TWEMOJI_FOLDER}/${safeUnified}${CHAT_TWEMOJI_EXTENSION}`;
+};
+
+const renderChatInlineText = (value, key) => {
+  const safeValue = String(value || "");
+  if (!safeValue) return safeValue;
+  if (!twemoji.test(safeValue)) return safeValue;
+
+  return (
+    <span
+      key={key}
+      dangerouslySetInnerHTML={{
+        __html: twemoji.parse(escapeHtml(safeValue), {
+          className: CHAT_TWEMOJI_CLASSNAME,
+          ext: CHAT_TWEMOJI_EXTENSION,
+          folder: CHAT_TWEMOJI_FOLDER,
+        }),
+      }}
+    />
+  );
+};
+
+const EmojiGlyph = ({ emoji, size = 18, className = "" }) => {
+  const unified = getEmojiUnified(emoji);
+  const src = getTwemojiUrl(unified);
+
+  if (!src) {
+    return (
+      <span className={className} aria-hidden="true">
+        {emoji}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={emoji}
+      className={`chat-dock-emoji-glyph${className ? ` ${className}` : ""}`}
+      width={size}
+      height={size}
+      draggable="false"
+      loading="lazy"
+    />
+  );
+};
 
 const formatThreadTime = (value) => {
   if (!value) return "";
@@ -242,6 +352,16 @@ const getChatPresenceMeta = (presence) => {
     label: "Offline",
     title: "",
   };
+};
+
+const getTypingLabel = (userName = "", { includeName = false } = {}) => {
+  const safeUserName = toText(userName);
+  if (!includeName || !safeUserName) {
+    return "Typing...";
+  }
+
+  const shortName = safeUserName.split(/\s+/).filter(Boolean)[0] || safeUserName;
+  return `${shortName} is typing...`;
 };
 
 const isMessageWithinEditWindow = (message) => {
@@ -698,6 +818,10 @@ const renderChatMessageBody = (
   if (!content) return content;
 
   const parts = [];
+  const appendTextPart = (value, suffix) => {
+    if (!value) return;
+    parts.push(renderChatInlineText(value, `${keyPrefix}-${suffix}`));
+  };
   const mentionPattern = /(^|[\s(])(@[a-z0-9._-]+)/gi;
   let lastIndex = 0;
   let match;
@@ -708,11 +832,11 @@ const renderChatMessageBody = (
     const mentionStart = match.index + leadingText.length;
 
     if (match.index > lastIndex) {
-      parts.push(content.slice(lastIndex, match.index));
+      appendTextPart(content.slice(lastIndex, match.index), `text-${lastIndex}`);
     }
 
     if (leadingText) {
-      parts.push(leadingText);
+      appendTextPart(leadingText, `lead-${mentionStart}`);
     }
 
     const normalizedHandle = normalizeMentionHandle(mentionText.replace(/^@/, ""));
@@ -746,10 +870,12 @@ const renderChatMessageBody = (
   }
 
   if (lastIndex < content.length) {
-    parts.push(content.slice(lastIndex));
+    appendTextPart(content.slice(lastIndex), `tail-${lastIndex}`);
   }
 
-  return parts.length > 0 ? parts : content;
+  return parts.length > 0
+    ? parts
+    : renderChatInlineText(content, `${keyPrefix}-plain`);
 };
 
 const buildProjectLabel = (project) => {
@@ -852,11 +978,12 @@ const createPendingAttachment = (file) => {
   };
 };
 
-const ChatDock = ({ user }) => {
+const ChatDock = ({ user, theme = "light" }) => {
   const navigate = useNavigate();
   const currentUserId = toIdString(user?._id || user?.id);
   const portalSource = useMemo(() => resolvePortalSource(), []);
   const portalPositionClass = portalSource === "admin" ? "portal-admin" : "";
+  const pickerTheme = theme === "dark" ? Theme.DARK : Theme.LIGHT;
   const [isOpen, setIsOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
@@ -878,6 +1005,8 @@ const ChatDock = ({ user }) => {
   const [selectedProjects, setSelectedProjects] = useState([]);
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [composerEmojiPickerOpen, setComposerEmojiPickerOpen] = useState(false);
+  const [typingThreads, setTypingThreads] = useState({});
   const [error, setError] = useState("");
   const [incomingPreview, setIncomingPreview] = useState(null);
   const [incomingPreviewVisible, setIncomingPreviewVisible] = useState(false);
@@ -934,6 +1063,13 @@ const ChatDock = ({ user }) => {
   const attachmentInputRef = useRef(null);
   const composerTextareaRef = useRef(null);
   const pendingAttachmentsRef = useRef([]);
+  const typingStateRef = useRef({
+    threadId: "",
+    isTyping: false,
+    lastSentAt: 0,
+  });
+  const typingIdleTimerRef = useRef(null);
+  const typingIndicatorTimersRef = useRef(new Map());
   const incomingPreviewHideTimerRef = useRef(null);
   const incomingPreviewClearTimerRef = useRef(null);
 
@@ -942,6 +1078,8 @@ const ChatDock = ({ user }) => {
     [activeThreadId, threads],
   );
   const isPublicThread = activeThread?.type === "public";
+  const isDirectThread = activeThread?.type === "direct";
+  const activeTypingThread = activeThreadId ? typingThreads[activeThreadId] || null : null;
   const currentUserSummary = useMemo(
     () => ({
       _id: currentUserId,
@@ -1040,6 +1178,39 @@ const ChatDock = ({ user }) => {
   }, [isOpen, threads]);
   const unreadPreviewThreads = unreadPreviewData.threads;
   const hiddenUnreadPreviewThreadCount = unreadPreviewData.hiddenCount;
+  const activeDirectReadReceipt = useMemo(() => {
+    if (!isDirectThread || messages.length === 0) {
+      return null;
+    }
+
+    const latestMessage = messages[messages.length - 1];
+    if (
+      !latestMessage?._id ||
+      Boolean(latestMessage?.isDeleted) ||
+      toIdString(latestMessage?.sender?._id) !== currentUserId
+    ) {
+      return null;
+    }
+
+    const messageCreatedAt = latestMessage?.createdAt
+      ? new Date(latestMessage.createdAt)
+      : null;
+    const counterpartLastReadAt = activeThread?.counterpartLastReadAt
+      ? new Date(activeThread.counterpartLastReadAt)
+      : null;
+    const hasValidMessageDate =
+      messageCreatedAt && !Number.isNaN(messageCreatedAt.getTime());
+    const hasValidReadDate =
+      counterpartLastReadAt && !Number.isNaN(counterpartLastReadAt.getTime());
+
+    return {
+      messageId: latestMessage._id,
+      isSeen:
+        Boolean(hasValidMessageDate) &&
+        Boolean(hasValidReadDate) &&
+        counterpartLastReadAt.getTime() >= messageCreatedAt.getTime(),
+    };
+  }, [activeThread?.counterpartLastReadAt, currentUserId, isDirectThread, messages]);
 
   const updateThreadsState = useCallback((nextValue) => {
     setThreads((prev) => {
@@ -1359,6 +1530,201 @@ const ChatDock = ({ user }) => {
     }
   }, [replacePendingAttachments]);
 
+  const clearTypingIndicatorTimer = useCallback((threadId) => {
+    const normalizedThreadId = toIdString(threadId);
+    if (!normalizedThreadId) return;
+
+    const timerId = typingIndicatorTimersRef.current.get(normalizedThreadId);
+    if (timerId) {
+      window.clearTimeout(timerId);
+      typingIndicatorTimersRef.current.delete(normalizedThreadId);
+    }
+  }, []);
+
+  const removeRemoteTypingState = useCallback(
+    (threadId, userId = "") => {
+      const normalizedThreadId = toIdString(threadId);
+      const normalizedUserId = toIdString(userId);
+      if (!normalizedThreadId) return;
+
+      clearTypingIndicatorTimer(normalizedThreadId);
+      setTypingThreads((prev) => {
+        const currentEntry = prev[normalizedThreadId];
+        if (!currentEntry) {
+          return prev;
+        }
+
+        if (
+          normalizedUserId &&
+          toIdString(currentEntry?.userId) !== normalizedUserId
+        ) {
+          return prev;
+        }
+
+        const nextState = { ...prev };
+        delete nextState[normalizedThreadId];
+        return nextState;
+      });
+    },
+    [clearTypingIndicatorTimer],
+  );
+
+  const upsertRemoteTypingState = useCallback(
+    (threadId, userId, userName = "") => {
+      const normalizedThreadId = toIdString(threadId);
+      const normalizedUserId = toIdString(userId);
+      if (!normalizedThreadId || !normalizedUserId) return;
+
+      clearTypingIndicatorTimer(normalizedThreadId);
+      setTypingThreads((prev) => ({
+        ...prev,
+        [normalizedThreadId]: {
+          userId: normalizedUserId,
+          userName: toText(userName),
+        },
+      }));
+
+      const timerId = window.setTimeout(() => {
+        typingIndicatorTimersRef.current.delete(normalizedThreadId);
+        setTypingThreads((prev) => {
+          const currentEntry = prev[normalizedThreadId];
+          if (
+            !currentEntry ||
+            toIdString(currentEntry?.userId) !== normalizedUserId
+          ) {
+            return prev;
+          }
+
+          const nextState = { ...prev };
+          delete nextState[normalizedThreadId];
+          return nextState;
+        });
+      }, CHAT_TYPING_REMOTE_TIMEOUT_MS);
+
+      typingIndicatorTimersRef.current.set(normalizedThreadId, timerId);
+    },
+    [clearTypingIndicatorTimer],
+  );
+
+  const postTypingState = useCallback(async (threadId, isTyping) => {
+    const normalizedThreadId = toIdString(threadId);
+    if (!normalizedThreadId) return;
+
+    try {
+      await fetch(`/api/chat/threads/${normalizedThreadId}/typing`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isTyping: Boolean(isTyping) }),
+      });
+    } catch (typingError) {
+      console.error("Failed to update chat typing state", typingError);
+    }
+  }, []);
+
+  const stopOwnTyping = useCallback(
+    (threadId = typingStateRef.current.threadId) => {
+      const normalizedThreadId = toIdString(threadId);
+      if (typingIdleTimerRef.current) {
+        window.clearTimeout(typingIdleTimerRef.current);
+        typingIdleTimerRef.current = null;
+      }
+
+      const currentTypingState = typingStateRef.current;
+      if (
+        !normalizedThreadId ||
+        currentTypingState.threadId !== normalizedThreadId
+      ) {
+        return;
+      }
+
+      typingStateRef.current = {
+        threadId: normalizedThreadId,
+        isTyping: false,
+        lastSentAt: 0,
+      };
+
+      if (currentTypingState.isTyping) {
+        void postTypingState(normalizedThreadId, false);
+      }
+    },
+    [postTypingState],
+  );
+
+  const syncOwnTypingState = useCallback(
+    (nextValue, { threadId = activeThreadId, threadType = activeThread?.type } = {}) => {
+      const normalizedThreadId = toIdString(threadId);
+      const hasComposerContent = String(nextValue || "").length > 0;
+
+      if (
+        !normalizedThreadId ||
+        threadType !== "direct" ||
+        !isOpenRef.current ||
+        !hasComposerContent
+      ) {
+        void stopOwnTyping(normalizedThreadId || typingStateRef.current.threadId);
+        return;
+      }
+
+      if (typingIdleTimerRef.current) {
+        window.clearTimeout(typingIdleTimerRef.current);
+      }
+
+      typingIdleTimerRef.current = window.setTimeout(() => {
+        void stopOwnTyping(normalizedThreadId);
+      }, CHAT_TYPING_IDLE_TIMEOUT_MS);
+
+      const now = Date.now();
+      const currentTypingState = typingStateRef.current;
+      const shouldBroadcastTyping =
+        currentTypingState.threadId !== normalizedThreadId ||
+        !currentTypingState.isTyping ||
+        now - currentTypingState.lastSentAt >= CHAT_TYPING_PING_INTERVAL_MS;
+
+      typingStateRef.current = {
+        threadId: normalizedThreadId,
+        isTyping: true,
+        lastSentAt: shouldBroadcastTyping ? now : currentTypingState.lastSentAt,
+      };
+
+      if (shouldBroadcastTyping) {
+        void postTypingState(normalizedThreadId, true);
+      }
+    },
+    [activeThread?.type, activeThreadId, postTypingState, stopOwnTyping],
+  );
+
+  useEffect(() => {
+    const currentTypingThreadId = typingStateRef.current.threadId;
+    if (
+      currentTypingThreadId &&
+      (!isOpen || currentTypingThreadId !== activeThreadId || activeThread?.type !== "direct")
+    ) {
+      void stopOwnTyping(currentTypingThreadId);
+    }
+  }, [activeThread?.type, activeThreadId, isOpen, stopOwnTyping]);
+
+  useEffect(
+    () => () => {
+      if (typingIdleTimerRef.current) {
+        window.clearTimeout(typingIdleTimerRef.current);
+        typingIdleTimerRef.current = null;
+      }
+
+      typingIndicatorTimersRef.current.forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+      typingIndicatorTimersRef.current.clear();
+
+      if (typingStateRef.current.isTyping && typingStateRef.current.threadId) {
+        void postTypingState(typingStateRef.current.threadId, false);
+      }
+    },
+    [postTypingState],
+  );
+
   const addPendingFiles = useCallback(
     (incomingFiles) => {
       const nextFiles = Array.from(incomingFiles || []).filter(Boolean);
@@ -1446,6 +1812,7 @@ const ChatDock = ({ user }) => {
   useEffect(() => {
     if (!isOpen) {
       resetProjectRoutePicker();
+      setComposerEmojiPickerOpen(false);
     }
   }, [isOpen, resetProjectRoutePicker]);
 
@@ -1532,6 +1899,25 @@ const ChatDock = ({ user }) => {
   }, [openReactionPickerId]);
 
   useEffect(() => {
+    if (!composerEmojiPickerOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (event.target?.closest?.(".chat-dock-composer-emoji-wrap")) {
+        return;
+      }
+      setComposerEmojiPickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [composerEmojiPickerOpen]);
+
+  useEffect(() => {
     if (!isThreadMenuOpen) return undefined;
 
     const handlePointerDown = (event) => {
@@ -1578,6 +1964,8 @@ const ChatDock = ({ user }) => {
     setIsThreadMenuOpen(false);
     setReplyTarget(null);
     setOpenReactionPickerId("");
+    setComposerEmojiPickerOpen(false);
+    setProjectPickerOpen(false);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -2005,6 +2393,8 @@ const ChatDock = ({ user }) => {
       const changedThreadId = toIdString(event?.detail?.threadId);
       const changedMessageId = toIdString(event?.detail?.messageId);
       const senderId = toIdString(event?.detail?.senderId);
+      const readerId = toIdString(event?.detail?.readerId);
+      const readAt = toText(event?.detail?.readAt);
       const isThreadMutatingChange = [
         "message_created",
         "message_updated",
@@ -2021,6 +2411,26 @@ const ChatDock = ({ user }) => {
         changedMessageId &&
         senderId &&
         senderId !== currentUserId;
+
+      if (changeType === "thread_read" && changedThreadId && readerId) {
+        updateThreadsState((prev) =>
+          prev.map((thread) => {
+            if (toIdString(thread?._id) !== changedThreadId) {
+              return thread;
+            }
+
+            return {
+              ...thread,
+              counterpartLastReadAt: readAt || thread?.counterpartLastReadAt || null,
+            };
+          }),
+        );
+        return;
+      }
+
+      if (changeType === "message_created" && changedThreadId && senderId) {
+        removeRemoteTypingState(changedThreadId, senderId);
+      }
 
       if (
         isIncomingMessage &&
@@ -2105,9 +2515,35 @@ const ChatDock = ({ user }) => {
     invalidateMessageFetchCache,
     isRecentLocalChatChange,
     loadingOlderMessages,
+    removeRemoteTypingState,
     showIncomingPreview,
+    updateThreadsState,
     user?.notificationSettings?.sound,
   ]);
+
+  useEffect(() => {
+    if (!currentUserId) return undefined;
+
+    const handleChatTyping = (event) => {
+      const threadId = toIdString(event?.detail?.threadId);
+      const userId = toIdString(event?.detail?.userId);
+      if (!threadId || !userId || userId === currentUserId) {
+        return;
+      }
+
+      if (event?.detail?.isTyping) {
+        upsertRemoteTypingState(threadId, userId, event?.detail?.userName);
+        return;
+      }
+
+      removeRemoteTypingState(threadId, userId);
+    };
+
+    window.addEventListener("mh:chat-typing", handleChatTyping);
+    return () => {
+      window.removeEventListener("mh:chat-typing", handleChatTyping);
+    };
+  }, [currentUserId, removeRemoteTypingState, upsertRemoteTypingState]);
 
   useEffect(() => {
     if (!currentUserId) return undefined;
@@ -2516,6 +2952,48 @@ const ChatDock = ({ user }) => {
     event.target.value = "";
   };
 
+  const handleToggleProjectPicker = useCallback(() => {
+    setComposerEmojiPickerOpen(false);
+    setProjectPickerOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleComposerEmojiPicker = useCallback(() => {
+    setProjectPickerOpen(false);
+    setComposerEmojiPickerOpen((prev) => !prev);
+  }, []);
+
+  const handleSelectComposerEmoji = useCallback(
+    (emojiData) => {
+      const nextEmoji = toText(emojiData?.emoji);
+      if (!nextEmoji) return;
+
+      const textarea = composerTextareaRef.current;
+      const currentValue = textarea?.value ?? composer;
+      const selectionStart = textarea?.selectionStart ?? currentValue.length;
+      const selectionEnd = textarea?.selectionEnd ?? currentValue.length;
+      const nextComposer =
+        `${currentValue.slice(0, selectionStart)}${nextEmoji}` +
+        currentValue.slice(selectionEnd);
+      const nextCaretPosition = selectionStart + nextEmoji.length;
+
+      setComposer(nextComposer);
+      syncComposerMentionState(nextComposer, nextCaretPosition);
+      syncOwnTypingState(nextComposer, {
+        threadId: activeThreadId,
+        threadType: activeThread?.type,
+      });
+
+      window.requestAnimationFrame(() => {
+        composerTextareaRef.current?.focus();
+        composerTextareaRef.current?.setSelectionRange(
+          nextCaretPosition,
+          nextCaretPosition,
+        );
+      });
+    },
+    [activeThread?.type, activeThreadId, composer, syncComposerMentionState, syncOwnTypingState],
+  );
+
   const handleRemovePendingAttachment = (attachmentId) => {
     replacePendingAttachments((prev) =>
       prev.filter((attachment) => attachment.id !== attachmentId),
@@ -2535,6 +3013,10 @@ const ChatDock = ({ user }) => {
 
       setComposer(nextComposer);
       clearMentionState();
+      syncOwnTypingState(nextComposer, {
+        threadId: activeThreadId,
+        threadType: activeThread?.type,
+      });
 
       window.requestAnimationFrame(() => {
         composerTextareaRef.current?.focus();
@@ -2544,7 +3026,14 @@ const ChatDock = ({ user }) => {
         );
       });
     },
-    [activeMention, clearMentionState, composer],
+    [
+      activeMention,
+      activeThread?.type,
+      activeThreadId,
+      clearMentionState,
+      composer,
+      syncOwnTypingState,
+    ],
   );
 
   const handleComposerChange = (event) => {
@@ -2552,6 +3041,10 @@ const ChatDock = ({ user }) => {
     const nextCaretPosition = event.target.selectionStart;
     setComposer(nextValue);
     syncComposerMentionState(nextValue, nextCaretPosition);
+    syncOwnTypingState(nextValue, {
+      threadId: activeThreadId,
+      threadType: activeThread?.type,
+    });
   };
 
   const handleComposerSelect = (event) => {
@@ -2691,7 +3184,6 @@ const ChatDock = ({ user }) => {
           });
         }
 
-        setOpenReactionPickerId("");
       } catch (reactionError) {
         setError(reactionError.message || "Failed to update reaction.");
       } finally {
@@ -2721,6 +3213,7 @@ const ChatDock = ({ user }) => {
 
     setSending(true);
     setError("");
+    void stopOwnTyping(activeThreadId);
 
     try {
       const payload = new FormData();
@@ -2778,6 +3271,7 @@ const ChatDock = ({ user }) => {
       clearPendingAttachments();
       setReplyTarget(null);
       setProjectPickerOpen(false);
+      setComposerEmojiPickerOpen(false);
       resetProjectRoutePicker();
       void markThreadRead(activeThreadId);
     } catch (sendError) {
@@ -3304,6 +3798,9 @@ const ChatDock = ({ user }) => {
                     threads.map((thread) => {
                       const isActive = thread._id === activeThreadId;
                       const unreadCount = Number(thread.unreadCount) || 0;
+                      const isThreadTyping =
+                        thread?.type === "direct" &&
+                        Boolean(typingThreads[toIdString(thread?._id)]);
                       return (
                         <button
                           key={thread._id}
@@ -3322,7 +3819,14 @@ const ChatDock = ({ user }) => {
                           </span>
                           <span className="chat-dock-thread-copy">
                             <strong>{thread.name}</strong>
-                            <small>{thread.lastMessagePreview || "No messages yet."}</small>
+                            <small className={isThreadTyping ? "chat-dock-thread-typing" : ""}>
+                              {isThreadTyping
+                                ? getTypingLabel()
+                                : renderChatInlineText(
+                                    thread.lastMessagePreview || "No messages yet.",
+                                    `${thread._id}-preview`,
+                                  )}
+                            </small>
                           </span>
                           <span className="chat-dock-thread-meta">
                             <small>{formatThreadTime(thread.lastMessageAt)}</small>
@@ -3383,11 +3887,21 @@ const ChatDock = ({ user }) => {
                                 <strong>{activeThread.counterpart.name}</strong>
                                 <small
                                   className={`chat-dock-user-presence ${
-                                    presenceMeta.isOnline ? "online" : ""
+                                    activeTypingThread
+                                      ? "typing"
+                                      : presenceMeta.isOnline
+                                        ? "online"
+                                        : ""
                                   }`}
-                                  title={presenceMeta.title || undefined}
+                                  title={
+                                    activeTypingThread
+                                      ? "Typing now"
+                                      : presenceMeta.title || undefined
+                                  }
                                 >
-                                  {presenceMeta.label}
+                                  {activeTypingThread
+                                    ? getTypingLabel(activeTypingThread.userName)
+                                    : presenceMeta.label}
                                 </small>
                               </div>
                             </div>
@@ -3472,6 +3986,17 @@ const ChatDock = ({ user }) => {
                           ? message.attachments
                           : [];
                         const reactions = normalizeChatReactions(message?.reactions);
+                        const isReadReceiptTarget =
+                          activeDirectReadReceipt?.messageId === message._id;
+                        const statusParts = [
+                          wasEdited ? "Edited" : "",
+                          isArchivedMessage ? "Archived" : "",
+                          isReadReceiptTarget
+                            ? activeDirectReadReceipt?.isSeen
+                              ? "Seen"
+                              : "Sent"
+                            : "",
+                        ].filter(Boolean);
 
                         return (
                           <div
@@ -3511,7 +4036,12 @@ const ChatDock = ({ user }) => {
                                     Replying to{" "}
                                     {getReplySenderLabel(replyReference, currentUserId)}
                                   </span>
-                                  <small>{replyReference.preview}</small>
+                                  <small>
+                                    {renderChatInlineText(
+                                      replyReference.preview,
+                                      `${message._id}-reply-preview`,
+                                    )}
+                                  </small>
                                 </button>
                               )}
                               {isEditingMessage ? (
@@ -3687,7 +4217,7 @@ const ChatDock = ({ user }) => {
                                           reaction.count === 1 ? "" : "s"
                                         }`}
                                       >
-                                        <span>{reaction.emoji}</span>
+                                        <EmojiGlyph emoji={reaction.emoji} size={16} />
                                         <small>{reaction.count}</small>
                                       </button>
                                     );
@@ -3765,10 +4295,14 @@ const ChatDock = ({ user }) => {
                                 showReplyAction ||
                                 (isMine && !isDeleted && !isArchivedMessage)) && (
                                 <div className="chat-dock-message-footer">
-                                  <span className="chat-dock-message-status">
-                                    {[wasEdited ? "Edited" : "", isArchivedMessage ? "Archived" : ""]
-                                      .filter(Boolean)
-                                      .join(" | ")}
+                                  <span
+                                    className={`chat-dock-message-status ${
+                                      isReadReceiptTarget && activeDirectReadReceipt?.isSeen
+                                        ? "seen"
+                                        : ""
+                                    }`}
+                                  >
+                                    {statusParts.join(" | ")}
                                   </span>
                                   <div className="chat-dock-message-footer-actions">
                                     {canReactToMessage && !isEditingMessage && (
@@ -3787,39 +4321,32 @@ const ChatDock = ({ user }) => {
                                         </button>
                                         {isReactionPickerOpen && (
                                           <div className="chat-dock-reaction-picker">
-                                            {CHAT_REACTION_EMOJIS.map((emoji) => {
-                                              const activeReaction = reactions.find(
-                                                (entry) => entry.emoji === emoji,
-                                              );
-                                              const reactedByCurrentUser =
-                                                activeReaction?.userIds.includes(
-                                                  currentUserId,
-                                                );
-
-                                              return (
-                                                <button
-                                                  key={`${message._id}-picker-${emoji}`}
-                                                  type="button"
-                                                  className={`chat-dock-reaction-option ${
-                                                    reactedByCurrentUser ? "active" : ""
-                                                  }`}
-                                                  onClick={() =>
-                                                    void handleToggleReaction(
-                                                      message._id,
-                                                      emoji,
-                                                    )
-                                                  }
-                                                  disabled={
-                                                    reactingMessageId === message._id
-                                                  }
-                                                >
-                                                  <span>{emoji}</span>
-                                                  {activeReaction?.count ? (
-                                                    <small>{activeReaction.count}</small>
-                                                  ) : null}
-                                                </button>
-                                              );
-                                            })}
+                                            <EmojiPicker
+                                              allowExpandReactions
+                                              autoFocusSearch={false}
+                                              emojiStyle={EmojiStyle.TWITTER}
+                                              getEmojiUrl={getTwemojiUrl}
+                                              height={360}
+                                              lazyLoadEmojis
+                                              onEmojiClick={(emojiData) =>
+                                                void handleToggleReaction(
+                                                  message._id,
+                                                  emojiData.emoji,
+                                                )
+                                              }
+                                              onReactionClick={(emojiData) =>
+                                                void handleToggleReaction(
+                                                  message._id,
+                                                  emojiData.emoji,
+                                                )
+                                              }
+                                              previewConfig={{ showPreview: false }}
+                                              reactions={CHAT_DEFAULT_REACTIONS}
+                                              reactionsDefaultOpen
+                                              searchPlaceholder="Pick a reaction"
+                                              theme={pickerTheme}
+                                              width={320}
+                                            />
                                           </div>
                                         )}
                                       </div>
@@ -3916,12 +4443,42 @@ const ChatDock = ({ user }) => {
 
                   <div className="chat-dock-composer">
                     <div className="chat-dock-composer-toolbar">
+                      <div className="chat-dock-composer-emoji-wrap">
+                        <button
+                          type="button"
+                          className={`chat-dock-toolbar-btn ${
+                            composerEmojiPickerOpen ? "active" : ""
+                          }`}
+                          onClick={handleToggleComposerEmojiPicker}
+                          aria-expanded={composerEmojiPickerOpen}
+                          aria-label="Add emoji"
+                        >
+                          <SmileIcon width="16" height="16" />
+                          Emoji
+                        </button>
+                        {composerEmojiPickerOpen && (
+                          <div className="chat-dock-composer-emoji-picker">
+                            <EmojiPicker
+                              autoFocusSearch={false}
+                              emojiStyle={EmojiStyle.TWITTER}
+                              getEmojiUrl={getTwemojiUrl}
+                              height={360}
+                              lazyLoadEmojis
+                              onEmojiClick={handleSelectComposerEmoji}
+                              previewConfig={{ showPreview: false }}
+                              searchPlaceholder="Find an emoji"
+                              theme={pickerTheme}
+                              width={320}
+                            />
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         className={`chat-dock-toolbar-btn ${
                           projectPickerOpen ? "active" : ""
                         }`}
-                        onClick={() => setProjectPickerOpen((prev) => !prev)}
+                        onClick={handleToggleProjectPicker}
                       >
                         <FolderIcon width="16" height="16" />
                         Link Project
@@ -3948,7 +4505,12 @@ const ChatDock = ({ user }) => {
                       <div className="chat-dock-reply-preview">
                         <div className="chat-dock-reply-preview-copy">
                           <span>Replying to {getReplySenderLabel(replyTarget, currentUserId)}</span>
-                          <small>{replyTarget.preview}</small>
+                          <small>
+                            {renderChatInlineText(
+                              replyTarget.preview,
+                              `${replyTarget.messageId || activeThreadId}-reply-target`,
+                            )}
+                          </small>
                         </div>
                         <button
                           type="button"
@@ -4232,7 +4794,10 @@ const ChatDock = ({ user }) => {
                 )}
               </div>
               <p className="chat-dock-incoming-preview-message">
-                {preview.messagePreview}
+                {renderChatInlineText(
+                  preview.messagePreview,
+                  `${preview.threadId}-incoming-preview`,
+                )}
               </p>
             </button>
           ))}

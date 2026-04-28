@@ -13,9 +13,11 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
     "@react-pdf/renderer": "^4.3.2",
+    "@twemoji/api": "^17.0.2",
     "buffer": "^6.0.3",
     "date-fns": "^4.1.0",
     "docx": "^9.5.1",
+    "emoji-picker-react": "^4.19.1",
     "file-saver": "^2.0.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

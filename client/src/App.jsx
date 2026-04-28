@@ -724,7 +724,7 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
-      {user?._id && <ChatDock user={user} />}
+      {user?._id && <ChatDock user={user} theme={theme} />}
       <ConfirmDialog
         isOpen={isLogoutDialogOpen}
         title="Confirm Sign Out"

@@ -6,6 +6,12 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-04-28
+
+- Added a library-backed emoji picker and Twemoji rendering for chat messages and reactions.
+- Updated the chat emoji picker to stay open until outside click and follow the global app theme.
+- Added direct-chat typing indicators and sender-side read receipts.
+
 ## [2.8.3] - 2026-04-27
 
 - Fixed the project route choice modal to label the lead detail option as "Lead Project" instead of "Admin Project".

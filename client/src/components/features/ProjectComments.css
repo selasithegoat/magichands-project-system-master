@@ -1,7 +1,7 @@
 .project-comments-panel {
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  width: 700px;
+  width: 100%;
   margin: 0 auto;
   background: var(--bg-card);
   color: var(--text-primary);

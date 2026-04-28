@@ -768,6 +768,11 @@
   color: var(--text-secondary);
 }
 
+.chat-dock-thread-typing {
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
 .chat-dock-thread-meta {
   display: flex;
   flex-direction: column;
@@ -885,6 +890,10 @@
 
 .chat-dock-user-presence.online {
   color: #22c55e;
+}
+
+.chat-dock-user-presence.typing {
+  color: var(--primary-color);
 }
 
 .chat-dock-counterpart {
@@ -1196,20 +1205,22 @@
   left: 0;
   right: auto;
   bottom: calc(100% + 0.55rem);
-  display: flex;
-  align-items: center;
-  gap: 0.36rem;
-  padding: 0.46rem;
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-  background: var(--chat-elevated);
-  box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.45);
+  padding: 0.35rem;
+  border-radius: 20px;
   z-index: 20;
 }
 
 .chat-dock-message-row.mine .chat-dock-reaction-picker {
   left: auto;
   right: 0;
+}
+
+.chat-dock-reaction-picker aside.EmojiPickerReact,
+.chat-dock-composer-emoji-picker aside.EmojiPickerReact {
+  width: min(320px, calc(100vw - 2.5rem)) !important;
+  max-width: calc(100vw - 2.5rem);
+  border-color: var(--border-color);
+  box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.45);
 }
 
 .chat-dock-reaction-option {
@@ -1329,6 +1340,11 @@
   letter-spacing: 0.01em;
   color: var(--text-secondary);
   opacity: 0.82;
+}
+
+.chat-dock-message-status.seen {
+  color: var(--primary-color);
+  opacity: 1;
 }
 
 .chat-dock-message-menu-wrap {
@@ -1510,6 +1526,10 @@
 
 .chat-dock-message-bubble.mine .chat-dock-message-status {
   color: rgba(248, 250, 252, 0.8);
+}
+
+.chat-dock-message-bubble.mine .chat-dock-message-status.seen {
+  color: rgba(248, 250, 252, 0.96);
 }
 
 .chat-dock-message-bubble.mine .chat-dock-reply-quote {
@@ -1813,7 +1833,36 @@
 
 .chat-dock-composer-toolbar {
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+}
+
+.chat-dock-composer-emoji-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.chat-dock-composer-emoji-picker {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.72rem);
+  z-index: 5;
+}
+
+.chat-dock-inline-emoji,
+.chat-dock-emoji-glyph {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.chat-dock-inline-emoji {
+  width: 1.1em;
+  height: 1.1em;
+  margin: 0 0.02em;
+  vertical-align: -0.18em;
+}
+
+.chat-dock-emoji-glyph {
+  vertical-align: middle;
 }
 
 .chat-dock-reply-preview {

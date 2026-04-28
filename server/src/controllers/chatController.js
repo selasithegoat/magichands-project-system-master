@@ -15,7 +15,14 @@ const {
   toMessageShapeFromArchiveRecord,
   upsertChatAttachmentIndexEntries,
 } = require("../services/chatArchiveService");
-const { broadcastChatChange } = require("../utils/realtimeHub");
+const {
+  broadcastChatChange,
+  broadcastChatTyping,
+} = require("../utils/realtimeHub");
+const {
+  startTypingSession,
+  stopTypingSession,
+} = require("../utils/chatTypingService");
 const { createNotification } = require("../utils/notificationService");
 const { resolvePresenceMap } = require("../utils/presenceService");
 
@@ -33,6 +40,7 @@ const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 const CHAT_ARCHIVE_WINDOW_MS = CHAT_ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
 const CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH = 160;
+const CHAT_TYPING_IDLE_MS = 4200;
 const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
 const CHAT_REACTION_EMOJI_SET = new Set(CHAT_REACTION_EMOJIS);
 const PRODUCTION_SUB_DEPARTMENTS = new Set([
@@ -580,6 +588,11 @@ const hasThreadAccess = (thread, userId) => {
   const participants = Array.isArray(thread.participants) ? thread.participants : [];
   return participants.some((entry) => toIdString(entry) === userId);
 };
+
+const getThreadParticipantIds = (thread) =>
+  Array.isArray(thread?.participants)
+    ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
+    : [];
 
 const getLastReadAt = (thread, userId) => {
   const readState = Array.isArray(thread?.readState) ? thread.readState : [];
@@ -1166,9 +1179,7 @@ const isMessageEditable = (message) => {
 };
 
 const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
-  const participantIds = Array.isArray(thread?.participants)
-    ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
-    : [];
+  const participantIds = getThreadParticipantIds(thread);
   const counterpartId =
     thread?.type === "direct"
       ? participantIds.find((entry) => entry !== currentUserId) || currentUserId
@@ -1176,6 +1187,10 @@ const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
   const counterpart = counterpartId ? userMap[counterpartId] || null : null;
   const lastMessageSenderId = toIdString(thread?.lastMessageSender);
   const lastReadAt = getLastReadAt(thread, currentUserId);
+  const counterpartLastReadAt =
+    thread?.type === "direct" && counterpartId
+      ? getLastReadAt(thread, counterpartId)
+      : null;
   const clearedAt = getClearedAt(thread, currentUserId);
   const unreadCount = await resolveThreadUnreadCount(
     thread,
@@ -1200,6 +1215,8 @@ const serializeThreadSummary = async (thread, currentUserId, userMap = {}) => {
     participants: participantIds
       .map((entry) => userMap[entry])
       .filter(Boolean),
+    counterpartLastReadAt:
+      thread?.type === "direct" ? counterpartLastReadAt || null : null,
     lastMessagePreview: hideLastMessagePreview
       ? ""
       : toText(thread?.lastMessagePreview),
@@ -1530,11 +1547,29 @@ const sendMessage = async (req, res) => {
       { [senderSummary._id]: senderSummary },
     );
 
-    const participantIds = Array.isArray(thread.participants)
-      ? thread.participants.map((entry) => toIdString(entry)).filter(Boolean)
-      : [];
+    const participantIds = getThreadParticipantIds(thread);
     const targetUserIds =
       thread.type === "public" ? [] : Array.from(new Set(participantIds));
+
+    if (thread.type === "direct") {
+      const typingStopped = stopTypingSession({
+        threadId: toIdString(thread._id),
+        userId: currentUserId,
+      });
+      if (typingStopped) {
+        broadcastChatTyping(
+          {
+            threadId: toIdString(thread._id),
+            userId: currentUserId,
+            userName: getUserDisplayName(req.user),
+            isTyping: false,
+          },
+          {
+            userIds: targetUserIds.filter((userId) => userId !== currentUserId),
+          },
+        );
+      }
+    }
 
     broadcastChatChange(
       {
@@ -1892,9 +1927,29 @@ const markThreadRead = async (req, res) => {
       _id: threadId,
       $or: [{ type: "public" }, { participants: req.user._id }],
     };
-    const thread = await ChatThread.findOne(accessFilter).select("_id");
+    const thread = await ChatThread.findOne(accessFilter).select(
+      "_id type participants readState lastMessageAt",
+    );
     if (!thread || !currentUserId) {
       return res.status(404).json({ message: "Chat thread not found." });
+    }
+
+    const previousReadAt = getLastReadAt(thread, currentUserId);
+    const latestMessageAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt) : null;
+    if (!latestMessageAt || Number.isNaN(latestMessageAt.getTime())) {
+      await setThreadUnreadStateForUser(threadId, currentUserId, 0, null);
+      return res.json({ ok: true });
+    }
+
+    if (previousReadAt) {
+      const previousReadDate = new Date(previousReadAt);
+      if (
+        !Number.isNaN(previousReadDate.getTime()) &&
+        latestMessageAt.getTime() <= previousReadDate.getTime()
+      ) {
+        await setThreadUnreadStateForUser(threadId, currentUserId, 0, null);
+        return res.json({ ok: true });
+      }
     }
 
     const nextReadAt = new Date();
@@ -1930,10 +1985,123 @@ const markThreadRead = async (req, res) => {
 
     await setThreadUnreadStateForUser(threadId, currentUserId, 0, null);
 
+    if (thread.type === "direct") {
+      const targetUserIds = getThreadParticipantIds(thread).filter(
+        (userId) => userId !== currentUserId,
+      );
+      if (targetUserIds.length > 0) {
+        broadcastChatChange(
+          {
+            threadId,
+            threadType: thread.type,
+            changeType: "thread_read",
+            readerId: currentUserId,
+            readAt: nextReadAt,
+          },
+          {
+            userIds: targetUserIds,
+          },
+        );
+      }
+    }
+
     return res.json({ ok: true });
   } catch (error) {
     console.error("Error marking chat thread as read:", error);
     return res.status(500).json({ message: "Server error updating chat read state." });
+  }
+};
+
+const setThreadTyping = async (req, res) => {
+  try {
+    const currentUserId = toIdString(req.user?._id);
+    const threadId = toIdString(req.params?.id);
+    if (!mongoose.Types.ObjectId.isValid(threadId)) {
+      return res.status(400).json({ message: "Invalid chat thread." });
+    }
+
+    const accessFilter = {
+      _id: threadId,
+      $or: [{ type: "public" }, { participants: req.user._id }],
+    };
+    const thread = await ChatThread.findOne(accessFilter).select(
+      "_id type participants",
+    );
+    if (!thread || !currentUserId) {
+      return res.status(404).json({ message: "Chat thread not found." });
+    }
+
+    if (thread.type !== "direct") {
+      return res.json({ ok: true });
+    }
+
+    const targetUserIds = getThreadParticipantIds(thread).filter(
+      (userId) => userId !== currentUserId,
+    );
+    if (targetUserIds.length === 0) {
+      return res.json({ ok: true });
+    }
+
+    const typingUserName = getUserDisplayName(req.user);
+    const isTyping = Boolean(req.body?.isTyping);
+
+    if (isTyping) {
+      startTypingSession({
+        threadId,
+        userId: currentUserId,
+        ttlMs: CHAT_TYPING_IDLE_MS,
+        onExpire: () => {
+          broadcastChatTyping(
+            {
+              threadId,
+              userId: currentUserId,
+              userName: typingUserName,
+              isTyping: false,
+            },
+            {
+              userIds: targetUserIds,
+            },
+          );
+        },
+      });
+
+      broadcastChatTyping(
+        {
+          threadId,
+          userId: currentUserId,
+          userName: typingUserName,
+          isTyping: true,
+        },
+        {
+          userIds: targetUserIds,
+        },
+      );
+
+      return res.json({ ok: true });
+    }
+
+    const typingStopped = stopTypingSession({
+      threadId,
+      userId: currentUserId,
+    });
+    if (typingStopped) {
+      broadcastChatTyping(
+        {
+          threadId,
+          userId: currentUserId,
+          userName: typingUserName,
+          isTyping: false,
+        },
+        {
+          userIds: targetUserIds,
+        },
+      );
+    }
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("Error updating chat typing state:", error);
+    return res.status(500).json({ message: "Server error updating chat typing." });
   }
 };
 
@@ -2169,6 +2337,7 @@ module.exports = {
   deleteMessage,
   updateMessage,
   markThreadRead,
+  setThreadTyping,
   clearThreadMessages,
   searchUsers,
   searchProjects,
