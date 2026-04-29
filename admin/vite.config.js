@@ -14,8 +14,19 @@ export default defineConfig(({ command }) => ({
       react: resolve(__dirname, "node_modules/react"),
       "react-dom": resolve(__dirname, "node_modules/react-dom"),
       "react-router-dom": resolve(__dirname, "node_modules/react-router-dom"),
+      "emoji-picker-react": resolve(
+        __dirname,
+        "node_modules/emoji-picker-react",
+      ),
+      "@twemoji/api": resolve(__dirname, "node_modules/@twemoji/api"),
     },
-    dedupe: ["react", "react-dom", "react-router-dom"],
+    dedupe: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "emoji-picker-react",
+      "@twemoji/api",
+    ],
   },
   server: {
     port: 3000,

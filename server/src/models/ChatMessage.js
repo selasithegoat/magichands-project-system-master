@@ -104,7 +104,7 @@ const ChatReactionSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: 16,
+      maxlength: 64,
     },
     users: {
       type: [

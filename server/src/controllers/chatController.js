@@ -41,8 +41,26 @@ const CHAT_ARCHIVE_WINDOW_MS = CHAT_ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 const CHAT_MENTION_NOTIFICATION_SOURCE_PREFIX = "chat_mention";
 const CHAT_MENTION_NOTIFICATION_PREVIEW_LENGTH = 160;
 const CHAT_TYPING_IDLE_MS = 4200;
-const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
-const CHAT_REACTION_EMOJI_SET = new Set(CHAT_REACTION_EMOJIS);
+const CHAT_REACTION_EMOJIS = [
+  "\u{1f44d}",
+  "\u2764\ufe0f",
+  "\u{1f602}",
+  "\u{1f62e}",
+  "\u{1f622}",
+  "\u{1f389}",
+  "\u{1f525}",
+  "\u2705",
+];
+const CHAT_REACTION_MAX_LENGTH = 64;
+const CHAT_REACTION_EMOJI_ORDER = new Map(
+  CHAT_REACTION_EMOJIS.map((emoji, index) => [
+    emoji.replace(/\ufe0f/g, ""),
+    index,
+  ]),
+);
+const CHAT_REACTION_BLOCKED_TEXT_REGEX = /[\p{Control}\p{White_Space}]/u;
+const CHAT_REACTION_EMOJI_SIGNAL_REGEX =
+  /\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Regional_Indicator}|[#*0-9]\ufe0f?\u20e3/u;
 const PRODUCTION_SUB_DEPARTMENTS = new Set([
   "dtf",
   "uv-dtf",
@@ -461,9 +479,36 @@ const serializeReplyTo = (replyTo) => {
   };
 };
 
+const getGraphemeSegments = (value) => {
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    return Array.from(
+      new Intl.Segmenter("en", { granularity: "grapheme" }).segment(value),
+      (entry) => entry.segment,
+    );
+  }
+
+  return Array.from(value);
+};
+
 const normalizeReactionEmoji = (value) => {
-  const emoji = toText(value);
-  return CHAT_REACTION_EMOJI_SET.has(emoji) ? emoji : "";
+  const emoji = toText(value).normalize("NFC");
+  if (
+    !emoji ||
+    emoji.length > CHAT_REACTION_MAX_LENGTH ||
+    CHAT_REACTION_BLOCKED_TEXT_REGEX.test(emoji) ||
+    !CHAT_REACTION_EMOJI_SIGNAL_REGEX.test(emoji)
+  ) {
+    return "";
+  }
+
+  return getGraphemeSegments(emoji).length === 1 ? emoji : "";
+};
+
+const getReactionSortIndex = (emoji) => {
+  const sortKey = toText(emoji).replace(/\ufe0f/g, "");
+  return CHAT_REACTION_EMOJI_ORDER.has(sortKey)
+    ? CHAT_REACTION_EMOJI_ORDER.get(sortKey)
+    : Number.MAX_SAFE_INTEGER;
 };
 
 const serializeReactions = (reactions = []) =>
@@ -493,10 +538,12 @@ const serializeReactions = (reactions = []) =>
       if (right.count !== left.count) {
         return right.count - left.count;
       }
-      return (
-        CHAT_REACTION_EMOJIS.indexOf(left.emoji) -
-        CHAT_REACTION_EMOJIS.indexOf(right.emoji)
-      );
+      const leftSortIndex = getReactionSortIndex(left.emoji);
+      const rightSortIndex = getReactionSortIndex(right.emoji);
+      if (leftSortIndex !== rightSortIndex) {
+        return leftSortIndex - rightSortIndex;
+      }
+      return left.emoji.localeCompare(right.emoji);
     });
 
 const applyReactionToggleToMessage = (message, actorId, emoji) => {
@@ -1862,7 +1909,7 @@ const toggleMessageReaction = async (req, res) => {
     }
 
     if (!emoji) {
-      return res.status(400).json({ message: "Choose a supported reaction." });
+      return res.status(400).json({ message: "Choose an emoji reaction." });
     }
 
     const thread = await ChatThread.findById(threadId);

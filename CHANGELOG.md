@@ -6,6 +6,12 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-04-29
+
+- Expanded chat reactions so users can react with any single emoji from the emoji picker.
+- Reduced and repositioned chat reaction and composer emoji controls, including an icon-only composer emoji button before send.
+- Added admin portal emoji picker dependencies so the shared chat dock reaction and emoji picker UI is available there.
+
 ## [2.9.0] - 2026-04-28
 
 - Added a library-backed emoji picker and Twemoji rendering for chat messages and reactions.

@@ -42,7 +42,13 @@ const CHAT_UNREAD_PREVIEW_LIMIT = 5;
 const CHAT_TYPING_PING_INTERVAL_MS = 2200;
 const CHAT_TYPING_IDLE_TIMEOUT_MS = 3200;
 const CHAT_TYPING_REMOTE_TIMEOUT_MS = 4600;
-const CHAT_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥", "✅"];
+const CHAT_DEFAULT_REACTIONS = [
+  "1f44d",
+  "2764-fe0f",
+  "1f602",
+  "1f62e",
+  "1f389",
+];
 const CHAT_ATTACHMENT_ACCEPT =
   "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.cdr";
 const CHAT_SAFE_IMAGE_EXTENSIONS = new Set([
@@ -226,12 +232,15 @@ const getEmojiUnified = (value) => {
   }
 };
 
-const CHAT_DEFAULT_REACTIONS = CHAT_REACTION_EMOJIS.map(getEmojiUnified).filter(
-  Boolean,
-);
+const normalizeTwemojiUnified = (unified) => {
+  const safeUnified = toText(unified).toLowerCase();
+  if (!safeUnified) return "";
+  if (safeUnified.includes("-200d-")) return safeUnified;
+  return safeUnified.replace(/-fe0f|-fe0e/g, "");
+};
 
 const getTwemojiUrl = (unified) => {
-  const safeUnified = toText(unified).toLowerCase();
+  const safeUnified = normalizeTwemojiUnified(unified);
   if (!safeUnified) return "";
   return `${twemoji.base}${CHAT_TWEMOJI_FOLDER}/${safeUnified}${CHAT_TWEMOJI_EXTENSION}`;
 };
@@ -4443,36 +4452,6 @@ const ChatDock = ({ user, theme = "light" }) => {
 
                   <div className="chat-dock-composer">
                     <div className="chat-dock-composer-toolbar">
-                      <div className="chat-dock-composer-emoji-wrap">
-                        <button
-                          type="button"
-                          className={`chat-dock-toolbar-btn ${
-                            composerEmojiPickerOpen ? "active" : ""
-                          }`}
-                          onClick={handleToggleComposerEmojiPicker}
-                          aria-expanded={composerEmojiPickerOpen}
-                          aria-label="Add emoji"
-                        >
-                          <SmileIcon width="16" height="16" />
-                          Emoji
-                        </button>
-                        {composerEmojiPickerOpen && (
-                          <div className="chat-dock-composer-emoji-picker">
-                            <EmojiPicker
-                              autoFocusSearch={false}
-                              emojiStyle={EmojiStyle.TWITTER}
-                              getEmojiUrl={getTwemojiUrl}
-                              height={360}
-                              lazyLoadEmojis
-                              onEmojiClick={handleSelectComposerEmoji}
-                              previewConfig={{ showPreview: false }}
-                              searchPlaceholder="Find an emoji"
-                              theme={pickerTheme}
-                              width={320}
-                            />
-                          </div>
-                        )}
-                      </div>
                       <button
                         type="button"
                         className={`chat-dock-toolbar-btn ${
@@ -4731,6 +4710,36 @@ const ChatDock = ({ user, theme = "light" }) => {
                         placeholder={`Message ${activeThread.name}`}
                         rows="2"
                       />
+                      <div className="chat-dock-composer-emoji-wrap">
+                        <button
+                          type="button"
+                          className={`chat-dock-composer-emoji-btn ${
+                            composerEmojiPickerOpen ? "active" : ""
+                          }`}
+                          onClick={handleToggleComposerEmojiPicker}
+                          aria-expanded={composerEmojiPickerOpen}
+                          aria-label="Add emoji"
+                          title="Add emoji"
+                        >
+                          <SmileIcon width="16" height="16" />
+                        </button>
+                        {composerEmojiPickerOpen && (
+                          <div className="chat-dock-composer-emoji-picker">
+                            <EmojiPicker
+                              autoFocusSearch={false}
+                              emojiStyle={EmojiStyle.TWITTER}
+                              getEmojiUrl={getTwemojiUrl}
+                              height={360}
+                              lazyLoadEmojis
+                              onEmojiClick={handleSelectComposerEmoji}
+                              previewConfig={{ showPreview: false }}
+                              searchPlaceholder="Find an emoji"
+                              theme={pickerTheme}
+                              width={320}
+                            />
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         className="chat-dock-send-btn"
