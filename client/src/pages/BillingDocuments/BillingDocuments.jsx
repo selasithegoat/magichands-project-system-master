@@ -137,6 +137,43 @@ const DEFAULT_TAX_ENTRIES = [
 
 const CURRENCY_SYMBOL = "GH\u00a2";
 const DEFAULT_RECEIPT_ACCOUNT_TYPE = "Accounts receivable";
+const BILLING_PRINT_PAGE_STYLE_ID = "billing-print-page-size";
+
+const prepareBillingPrintPage = (orientation = "portrait") => {
+  if (typeof document === "undefined") return;
+
+  document.getElementById(BILLING_PRINT_PAGE_STYLE_ID)?.remove();
+
+  const isLandscape = orientation === "landscape";
+  const style = document.createElement("style");
+  style.id = BILLING_PRINT_PAGE_STYLE_ID;
+  style.textContent = `
+    @page {
+      size: A4 ${isLandscape ? "landscape" : "portrait"};
+      margin: 0;
+    }
+
+    @media print {
+      html,
+      body {
+        width: ${isLandscape ? "297mm" : "210mm"} !important;
+        min-height: 0 !important;
+        height: auto !important;
+      }
+
+      .billing-preview-pane,
+      .billing-paper {
+        width: ${isLandscape ? "297mm" : "210mm"} !important;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const cleanup = () => {
+    document.getElementById(BILLING_PRINT_PAGE_STYLE_ID)?.remove();
+  };
+  window.addEventListener("afterprint", cleanup, { once: true });
+};
 
 const isReceivableWaybill = (meta) =>
   meta?.kind === "waybill" && Boolean(meta.receivable);
@@ -1735,16 +1772,19 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   };
 
   const printDocument = () => {
-    window.print();
+    prepareBillingPrintPage(formMeta.kind === "waybill" ? "landscape" : "portrait");
+    window.setTimeout(() => window.print(), 0);
   };
 
   const printInvoice = () => {
     setActivePreview("invoice");
+    prepareBillingPrintPage("portrait");
     window.setTimeout(() => window.print(), 0);
   };
 
   const printReceipt = (receipt) => {
     selectReceipt(receipt);
+    prepareBillingPrintPage("portrait");
     window.setTimeout(() => window.print(), 0);
   };
 

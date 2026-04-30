@@ -815,7 +815,6 @@
   width: min(100%, 980px);
   min-height: 430px;
   padding: 26px 28px 22px;
-  page: billing-waybill;
 }
 
 .billing-waybill-header {
@@ -1271,20 +1270,22 @@
   margin: 0;
 }
 
-@page billing-waybill {
-  size: A4 landscape;
-  margin: 0;
-}
-
 @media print {
   html,
   body {
-    width: 210mm;
-    min-height: 297mm;
+    width: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
     background: #ffffff !important;
+  }
+
+  html:has(.billing-preview-pane.waybill-preview),
+  body:has(.billing-preview-pane.waybill-preview) {
+    width: 297mm !important;
+    min-height: 0 !important;
   }
 
   body * {
@@ -1339,15 +1340,24 @@
     border: 0 !important;
     overflow: visible !important;
     background: #ffffff !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
   }
 
   .billing-preview-pane.waybill-preview {
     width: 297mm !important;
   }
 
+  .billing-documents-page:has(.billing-preview-pane.waybill-preview),
+  .billing-documents-workspace:has(.billing-preview-pane.waybill-preview),
+  .billing-document-editor:has(.billing-preview-pane.waybill-preview),
+  .billing-editor-grid:has(.billing-preview-pane.waybill-preview) {
+    width: 297mm !important;
+  }
+
   .billing-paper {
     width: 210mm !important;
-    min-height: 297mm !important;
+    min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
     padding: 12mm 12mm 14mm !important;
@@ -1356,18 +1366,17 @@
     overflow: visible !important;
     font-size: 12px !important;
     line-height: 1.22 !important;
-    break-after: auto;
-    page-break-after: auto;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
   .billing-waybill-paper {
     width: 297mm !important;
-    min-height: 105mm !important;
+    min-height: 0 !important;
     height: auto !important;
     padding: 10mm 12mm !important;
-    page: billing-waybill;
     font-size: 12px !important;
   }
 
