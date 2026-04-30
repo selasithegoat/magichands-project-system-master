@@ -1032,6 +1032,8 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [receipts, setReceipts] = useState([]);
+  const [linkedWaybills, setLinkedWaybills] = useState([]);
+  const [linkedWaybillsLoading, setLinkedWaybillsLoading] = useState(false);
   const [receiptForm, setReceiptForm] = useState(() => makeReceiptForm());
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [activePreview, setActivePreview] = useState("invoice");
@@ -1180,13 +1182,55 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     [makeReceiptApiUrl, syncReceiptState],
   );
 
+  const fetchLinkedWaybills = useCallback(
+    async (invoice) => {
+      if (!invoice?._id || getMeta(invoice.documentType).kind !== "invoice") {
+        setLinkedWaybills([]);
+        return;
+      }
+
+      const sourceNumbers = [
+        invoice.documentNumber,
+        invoice.sourceQuoteNumber,
+      ].filter(Boolean);
+      if (!sourceNumbers.length) {
+        setLinkedWaybills([]);
+        return;
+      }
+
+      setLinkedWaybillsLoading(true);
+      try {
+        const res = await fetch(
+          makeApiUrl("", {
+            kind: "waybill",
+            linkedInvoiceNumber: sourceNumbers.join(","),
+          }),
+          { credentials: "include", cache: "no-store" },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load linked waybills.");
+        }
+
+        setLinkedWaybills(Array.isArray(data.documents) ? data.documents : []);
+      } catch (waybillError) {
+        setLinkedWaybills([]);
+        setError(waybillError.message || "Failed to load linked waybills.");
+      } finally {
+        setLinkedWaybillsLoading(false);
+      }
+    },
+    [makeApiUrl],
+  );
+
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
 
   useEffect(() => {
     fetchReceipts(form);
-  }, [fetchReceipts, form._id, form.documentType]);
+    fetchLinkedWaybills(form);
+  }, [fetchLinkedWaybills, fetchReceipts, form._id, form.documentType]);
 
   useRealtimeRefresh(fetchDocuments, {
     enabled: canAccess,
@@ -1194,20 +1238,34 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   });
 
   const selectDocument = (document) => {
+    const selectingCurrentDocument = selectedId === document._id;
+    const nextMeta = getMeta(document.documentType);
+
     setSelectedId(document._id);
     setForm(normalizeDocumentForForm(document));
-    setReceipts([]);
-    setSelectedReceiptId("");
-    setReceiptForm(createReceiptDraftFromInvoice(document));
+    if (!selectingCurrentDocument || nextMeta.kind !== "invoice") {
+      setReceipts([]);
+      setSelectedReceiptId("");
+      setReceiptForm(createReceiptDraftFromInvoice(document));
+    }
+    if (!selectingCurrentDocument || nextMeta.kind !== "invoice") {
+      setLinkedWaybills([]);
+    }
     setActivePreview("invoice");
     setNotice("");
     setError("");
+
+    if (selectingCurrentDocument && nextMeta.kind === "invoice") {
+      fetchReceipts(document);
+      fetchLinkedWaybills(document);
+    }
   };
 
   const startNewDocument = (documentType = "magichands_invoice") => {
     setSelectedId("");
     setForm(createBlankForm(documentType));
     setReceipts([]);
+    setLinkedWaybills([]);
     setSelectedReceiptId("");
     setReceiptForm(makeReceiptForm());
     setActivePreview("invoice");
@@ -2428,6 +2486,53 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                         )}
                       </div>
                     </>
+                  )}
+                </fieldset>
+              )}
+
+              {formMeta.kind === "invoice" && (
+                <fieldset>
+                  <legend>Linked waybills</legend>
+                  {!form._id ? (
+                    <p className="billing-field-note">
+                      Save this invoice before viewing linked waybills.
+                    </p>
+                  ) : linkedWaybillsLoading ? (
+                    <p className="billing-field-note">Loading linked waybills...</p>
+                  ) : linkedWaybills.length ? (
+                    <div className="billing-linked-waybills-list">
+                      {linkedWaybills.map((waybill) => {
+                        const waybillMeta = getMeta(waybill.documentType);
+                        return (
+                          <button
+                            type="button"
+                            className="billing-linked-waybill-row"
+                            key={waybill._id}
+                            onClick={() => selectDocument(waybill)}
+                          >
+                            <span>
+                              <strong>
+                                {getDocumentNoun(waybillMeta)} #
+                                {waybill.documentNumber}
+                              </strong>
+                              <small>{waybillMeta.label}</small>
+                            </span>
+                            <span>
+                              <em>{formatDate(waybill.issueDate)}</em>
+                              <small>
+                                {waybill.lineItems?.length || 0} item
+                                {(waybill.lineItems?.length || 0) === 1 ? "" : "s"}
+                              </small>
+                            </span>
+                            <StatusBadge status={waybill.status} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="billing-field-note">
+                      No waybills are linked to this invoice yet.
+                    </p>
                   )}
                 </fieldset>
               )}

@@ -431,6 +431,10 @@ const buildListQuery = (req) => {
   const brand = toInlineText(req.query.brand);
   const status = toInlineText(req.query.status);
   const search = toInlineText(req.query.search);
+  const linkedInvoiceNumbers = toInlineText(req.query.linkedInvoiceNumber)
+    .split(",")
+    .map(parseManualDocumentNumber)
+    .filter(Boolean);
 
   if (documentType) query.documentType = documentType;
   if (kind === "invoice" || kind === "quote" || kind === "waybill") {
@@ -438,6 +442,11 @@ const buildListQuery = (req) => {
   }
   if (brand === "magichands" || brand === "magic_gifts") query.brand = brand;
   if (DOCUMENT_STATUSES.has(status)) query.status = status;
+  if (linkedInvoiceNumbers.length === 1) {
+    query.linkedInvoiceNumber = linkedInvoiceNumbers[0];
+  } else if (linkedInvoiceNumbers.length > 1) {
+    query.linkedInvoiceNumber = { $in: [...new Set(linkedInvoiceNumbers)] };
+  }
 
   if (search) {
     const regex = new RegExp(escapeRegex(search), "i");

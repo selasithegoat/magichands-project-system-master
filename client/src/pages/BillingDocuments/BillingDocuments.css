@@ -527,6 +527,7 @@
 .billing-tax-editor,
 .billing-receipt-editor,
 .billing-receipts-list,
+.billing-linked-waybills-list,
 .billing-inline-actions {
   grid-column: 1 / -1;
 }
@@ -534,7 +535,8 @@
 .billing-items-editor,
 .billing-payments-editor,
 .billing-tax-editor,
-.billing-receipts-list {
+.billing-receipts-list,
+.billing-linked-waybills-list {
   display: grid;
   gap: 0.75rem;
 }
@@ -622,6 +624,54 @@
 .billing-receipt-row.active {
   border-color: color-mix(in srgb, var(--billing-primary) 40%, var(--billing-border));
   background: var(--billing-primary-soft);
+}
+
+.billing-linked-waybill-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-control-radius);
+  background: var(--billing-surface-alt);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.billing-linked-waybill-row:hover,
+.billing-linked-waybill-row:focus-visible {
+  border-color: color-mix(in srgb, var(--billing-primary) 40%, var(--billing-border));
+  background: var(--billing-primary-soft);
+  transform: translateY(-1px);
+}
+
+.billing-linked-waybill-row strong,
+.billing-linked-waybill-row small,
+.billing-linked-waybill-row em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.billing-linked-waybill-row small {
+  color: var(--billing-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.billing-linked-waybill-row em {
+  color: var(--billing-text);
+  font-style: normal;
+  font-weight: 900;
 }
 
 .billing-receipt-select {
@@ -1178,7 +1228,8 @@
   .billing-payment-row,
   .billing-tax-row,
   .billing-receipt-editor,
-  .billing-receipt-select {
+  .billing-receipt-select,
+  .billing-linked-waybill-row {
     grid-template-columns: 1fr;
   }
 
