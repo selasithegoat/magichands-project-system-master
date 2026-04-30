@@ -6,6 +6,11 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026--4-30
+
+- Added Billing Documents
+(Invoices, Quotes, Receipts, Waybill)
+
 ## [2.9.1] - 2026-04-29
 
 - Expanded chat reactions so users can react with any single emoji from the emoji picker.
