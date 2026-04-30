@@ -4,6 +4,7 @@ const {
   requireBillingDocumentAccess,
   getBillingDocuments,
   getBillingDocumentById,
+  getWaybillSourceDocument,
   createBillingDocument,
   updateBillingDocument,
   convertQuoteToInvoice,
@@ -16,6 +17,7 @@ router.use(protect);
 router.use(requireBillingDocumentAccess);
 
 router.route("/").get(getBillingDocuments).post(createBillingDocument);
+router.get("/waybill-source", getWaybillSourceDocument);
 router
   .route("/:id")
   .get(getBillingDocumentById)

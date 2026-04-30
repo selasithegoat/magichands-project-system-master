@@ -24,6 +24,10 @@ const BILLING_DOCUMENT_STATUSES = [
 
 const BillingDocumentLineItemSchema = new mongoose.Schema(
   {
+    sourceLineItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
     description: {
       type: String,
       trim: true,

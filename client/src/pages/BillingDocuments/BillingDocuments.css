@@ -551,6 +551,25 @@
   flex-wrap: wrap;
 }
 
+.billing-source-loader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px dashed var(--billing-border);
+  border-radius: var(--billing-control-radius);
+  background: var(--billing-surface-alt);
+}
+
+.billing-source-loader span,
+.billing-item-source-note {
+  color: var(--billing-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .billing-item-row,
 .billing-payment-row,
 .billing-tax-row {
@@ -652,6 +671,16 @@
 
 .billing-item-row label:first-child {
   grid-column: auto;
+}
+
+.billing-item-source-note {
+  grid-column: 1 / -1;
+  margin: -0.25rem 0 0;
+}
+
+.billing-item-row input[readonly] {
+  background: color-mix(in srgb, var(--billing-input) 72%, var(--billing-border));
+  color: var(--billing-muted);
 }
 
 .billing-tax-toggle {

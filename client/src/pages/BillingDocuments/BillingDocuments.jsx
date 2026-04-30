@@ -239,12 +239,27 @@ const toLines = (value) =>
 
 const cloneArray = (value) => (Array.isArray(value) ? [...value] : []);
 
+const calculateWaybillItemRemaining = (item = {}) => {
+  if (!isBlankValue(item.availableQuantity)) {
+    return Math.max(
+      0,
+      roundMoney(toNumber(item.availableQuantity, 0) - toNumber(item.quantity, 0)),
+    );
+  }
+
+  return toNumber(item.quantityRemaining, 0);
+};
+
 const makeLineItem = (item = {}) => ({
   _id: item._id || "",
+  sourceLineItemId: item.sourceLineItemId || "",
   description: item.description || "",
   quantity: item.quantity ?? "",
   unitPrice: item.unitPrice ?? "",
   quantityRemaining: item.quantityRemaining ?? "",
+  sourceQuantity: item.sourceQuantity ?? "",
+  previouslyWaybilled: item.previouslyWaybilled ?? "",
+  availableQuantity: item.availableQuantity ?? "",
 });
 
 const makePaymentEntry = (entry = {}) => ({
@@ -478,10 +493,11 @@ const buildPayload = (form) => ({
   currency: form.currency || "GHS",
   companySnapshot: form.companySnapshot,
   lineItems: form.lineItems.map((item) => ({
+    sourceLineItemId: item.sourceLineItemId || "",
     description: item.description,
     quantity: toNumber(item.quantity, 0),
     unitPrice: toNumber(item.unitPrice, 0),
-    quantityRemaining: toNumber(item.quantityRemaining, 0),
+    quantityRemaining: calculateWaybillItemRemaining(item),
   })),
   paymentEntries: form.paymentEntries.map((entry) => ({
     label: entry.label,
@@ -972,9 +988,10 @@ const BillingWaybillPreview = ({ form }) => {
                 {isBlankValue(item.quantity) ? "" : formatQuantity(item.quantity)}
               </td>
               <td>
-                {isBlankValue(item.quantityRemaining)
+                {isBlankValue(item.availableQuantity) &&
+                isBlankValue(item.quantityRemaining)
                   ? ""
-                  : formatQuantity(item.quantityRemaining)}
+                  : formatQuantity(calculateWaybillItemRemaining(item))}
               </td>
             </tr>
           ))}
@@ -1010,6 +1027,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sourceLookupLoading, setSourceLookupLoading] = useState(false);
   const [receiptSaving, setReceiptSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -1236,12 +1254,95 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     }));
   };
 
+  const loadWaybillSource = async () => {
+    if (formMeta.kind !== "waybill") return;
+
+    const sourceNumber = isReceivableWaybill(formMeta)
+      ? form.documentNumber
+      : form.linkedInvoiceNumber;
+
+    if (!sourceNumber) {
+      setNotice("");
+      setError("Enter an invoice or quote number before loading details.");
+      return;
+    }
+
+    setSourceLookupLoading(true);
+    setNotice("");
+    setError("");
+    try {
+      const res = await fetch(
+        makeApiUrl("/waybill-source", {
+          documentType: form.documentType,
+          number: sourceNumber,
+          currentDocumentId: form._id,
+        }),
+        { credentials: "include", cache: "no-store" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load invoice or quote details.");
+      }
+
+      const sourceDocument = data.sourceDocument || {};
+      const loadedItems = Array.isArray(data.lineItems) && data.lineItems.length
+        ? data.lineItems.map(makeLineItem)
+        : [makeLineItem()];
+      const sourceMeta = getMeta(sourceDocument.documentType);
+      const linkedInvoiceNumber =
+        data.linkedInvoiceNumber || sourceDocument.documentNumber || sourceNumber;
+
+      setForm((prev) => {
+        const prevMeta = getMeta(prev.documentType);
+        const isReceivable = isReceivableWaybill(prevMeta);
+
+        return {
+          ...prev,
+          documentNumber: isReceivable
+            ? prev.documentNumber || sourceNumber
+            : prev.documentNumber,
+          linkedInvoiceNumber: linkedInvoiceNumber || prev.linkedInvoiceNumber,
+          linkedInvoiceDocument: sourceDocument._id || "",
+          client: {
+            name: sourceDocument.client?.name || prev.client.name,
+            location: sourceDocument.client?.location || prev.client.location,
+            address:
+              sourceDocument.client?.address ||
+              sourceDocument.client?.location ||
+              prev.client.address,
+          },
+          projectTitle: sourceDocument.projectTitle || prev.projectTitle,
+          currency: sourceDocument.currency || prev.currency,
+          lineItems: loadedItems,
+        };
+      });
+      setNotice(
+        `Loaded ${loadedItems.length} item${loadedItems.length === 1 ? "" : "s"} from ${getDocumentNoun(sourceMeta)} #${sourceDocument.documentNumber}.`,
+      );
+    } catch (lookupError) {
+      setError(lookupError.message || "Failed to load invoice or quote details.");
+    } finally {
+      setSourceLookupLoading(false);
+    }
+  };
+
   const updateLineItem = (index, key, value) => {
     setForm((prev) => ({
       ...prev,
-      lineItems: prev.lineItems.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [key]: value } : item,
-      ),
+      lineItems: prev.lineItems.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        const nextItem = { ...item, [key]: value };
+        if (
+          getMeta(prev.documentType).kind === "waybill" &&
+          key === "quantity" &&
+          !isBlankValue(nextItem.availableQuantity)
+        ) {
+          nextItem.quantityRemaining = calculateWaybillItemRemaining(nextItem);
+        }
+
+        return nextItem;
+      }),
     }));
   };
 
@@ -1876,7 +1977,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                 )}
                 {formMeta.kind === "waybill" && !isReceivableWaybill(formMeta) && (
                   <label>
-                    Linked invoice # (optional)
+                    Linked invoice / quote # (optional)
                     <input
                       type="number"
                       min="1"
@@ -1888,6 +1989,21 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                       }
                     />
                   </label>
+                )}
+                {formMeta.kind === "waybill" && (
+                  <div className="billing-source-loader billing-wide-field">
+                    <button
+                      type="button"
+                      className="billing-secondary-button"
+                      onClick={loadWaybillSource}
+                      disabled={sourceLookupLoading}
+                    >
+                      {sourceLookupLoading ? "Loading..." : "Load invoice / quote"}
+                    </button>
+                    <span>
+                      Pull client details and item balances from the linked source.
+                    </span>
+                  </div>
                 )}
                 {formMeta.kind === "invoice" && form.sourceQuoteNumber && (
                   <label>
@@ -1992,7 +2108,12 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={item.quantityRemaining}
+                            value={
+                              isBlankValue(item.availableQuantity)
+                                ? item.quantityRemaining
+                                : calculateWaybillItemRemaining(item)
+                            }
+                            readOnly={!isBlankValue(item.availableQuantity)}
                             onChange={(event) =>
                               updateLineItem(
                                 index,
@@ -2039,6 +2160,15 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                       >
                         x
                       </button>
+                      {formMeta.kind === "waybill" &&
+                        !isBlankValue(item.sourceQuantity) && (
+                          <p className="billing-item-source-note">
+                            Source qty {formatQuantity(item.sourceQuantity)} /
+                            previously waybilled{" "}
+                            {formatQuantity(item.previouslyWaybilled)} /
+                            available {formatQuantity(item.availableQuantity)}
+                          </p>
+                        )}
                     </div>
                   ))}
                 </div>

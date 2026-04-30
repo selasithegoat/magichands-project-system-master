@@ -125,6 +125,12 @@ const toPositiveMoney = (value) => Math.max(0, roundMoney(toNumber(value)));
 
 const toPositiveQuantity = (value) => Math.max(0, roundMoney(toNumber(value, 0)));
 
+const toObjectIdOrNull = (value) => {
+  if (!value) return null;
+  const id = String(value);
+  return mongoose.Types.ObjectId.isValid(id) ? id : null;
+};
+
 const toDateOrNull = (value) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -239,6 +245,8 @@ const sanitizeLineItems = (value, kind = "invoice") => {
       const total = roundMoney(quantity * unitPrice);
 
       return {
+        sourceLineItemId:
+          kind === "waybill" ? toObjectIdOrNull(item?.sourceLineItemId) : null,
         description: toMultilineText(item?.description).slice(0, 1600),
         quantity,
         unitPrice,
@@ -259,6 +267,7 @@ const sanitizeLineItems = (value, kind = "invoice") => {
     : [
         {
           description: "",
+          sourceLineItemId: null,
           quantity: 0,
           unitPrice: 0,
           quantityRemaining: 0,
@@ -471,19 +480,312 @@ const getDocumentNumberLabel = (documentType, kind) => {
   return "Waybill";
 };
 
-const resolveLinkedInvoiceDocument = async (invoiceNumber) => {
-  const number = parseManualDocumentNumber(invoiceNumber);
-  if (!number) return null;
+const normalizeLineDescription = (value) => toInlineText(value).toLowerCase();
 
-  const invoice = await BillingDocument.findOne({
-    kind: "invoice",
-    documentNumber: number,
-  })
+const sourceIdToString = (value) => (value ? String(value) : "");
+
+const buildSourceDocumentQuery = (number, documentType) => {
+  const meta = DOCUMENT_TYPE_META[documentType] || {};
+  const query = {
+    kind: { $in: ["invoice", "quote"] },
+    $or: [
+      { documentNumber: number },
+      { kind: "invoice", sourceQuoteNumber: number },
+    ],
+  };
+
+  if (meta.kind === "waybill" && !meta.receivable) {
+    query.brand = meta.brand;
+  }
+
+  return query;
+};
+
+const scoreSourceDocument = (document, requestedNumber, documentType) => {
+  const meta = DOCUMENT_TYPE_META[documentType] || {};
+  let score = 0;
+
+  if (meta.brand && document.brand === meta.brand) score += 20;
+  if (document.kind === "invoice" && document.documentNumber === requestedNumber) {
+    score += 60;
+  }
+  if (document.kind === "invoice" && document.sourceQuoteNumber === requestedNumber) {
+    score += 50;
+  }
+  if (document.kind === "quote" && document.documentNumber === requestedNumber) {
+    score += 40;
+  }
+
+  return score;
+};
+
+const findSourceDocumentsByNumber = async (sourceNumber, documentType) => {
+  const number = parseManualDocumentNumber(sourceNumber);
+  if (!number) return [];
+
+  const documents = await BillingDocument.find(
+    buildSourceDocumentQuery(number, documentType),
+  )
     .sort({ createdAt: -1 })
-    .select("_id")
     .lean();
 
-  return invoice?._id || null;
+  return documents.sort((first, second) => {
+    const scoreDifference =
+      scoreSourceDocument(second, number, documentType) -
+      scoreSourceDocument(first, number, documentType);
+    if (scoreDifference) return scoreDifference;
+    return new Date(second.createdAt || 0) - new Date(first.createdAt || 0);
+  });
+};
+
+const resolveLinkedSourceDocument = async (sourceNumber, documentType) => {
+  const [sourceDocument] = await findSourceDocumentsByNumber(
+    sourceNumber,
+    documentType,
+  );
+  return sourceDocument || null;
+};
+
+const buildSourceLineLookup = (sourceDocument) => {
+  const byId = new Map();
+  const byDescription = new Map();
+  const items = Array.isArray(sourceDocument?.lineItems)
+    ? sourceDocument.lineItems
+    : [];
+
+  items.forEach((item) => {
+    const id = sourceIdToString(item?._id);
+    if (!id) return;
+
+    byId.set(id, item);
+
+    const descriptionKey = normalizeLineDescription(item?.description);
+    if (descriptionKey && !byDescription.has(descriptionKey)) {
+      byDescription.set(descriptionKey, id);
+    }
+  });
+
+  return { byId, byDescription, items };
+};
+
+const matchSourceLineId = (item, sourceLookup) => {
+  const explicitId = toObjectIdOrNull(item?.sourceLineItemId);
+  if (explicitId && sourceLookup.byId.has(explicitId)) return explicitId;
+
+  const descriptionKey = normalizeLineDescription(item?.description);
+  return descriptionKey ? sourceLookup.byDescription.get(descriptionKey) || "" : "";
+};
+
+const getSourceDocumentNumbers = (sourceDocument) => {
+  const numbers = [parseManualDocumentNumber(sourceDocument?.documentNumber)];
+  const sourceQuoteNumber = parseManualDocumentNumber(
+    sourceDocument?.sourceQuoteNumber,
+  );
+  if (sourceQuoteNumber) numbers.push(sourceQuoteNumber);
+  return [...new Set(numbers.filter(Boolean))];
+};
+
+const getWaybillUsageBySourceLine = async (
+  sourceDocument,
+  currentDocumentId = null,
+  documentType = "",
+) => {
+  const sourceLookup = buildSourceLineLookup(sourceDocument);
+  const sourceDocumentId = sourceIdToString(sourceDocument?._id);
+  const sourceNumbers = getSourceDocumentNumbers(sourceDocument);
+  const orConditions = [];
+
+  if (sourceDocumentId) {
+    orConditions.push({ linkedInvoiceDocument: sourceDocumentId });
+  }
+  if (sourceNumbers.length) {
+    orConditions.push({ linkedInvoiceNumber: { $in: sourceNumbers } });
+  }
+  if (!orConditions.length) return new Map();
+
+  const query = {
+    kind: "waybill",
+    $or: orConditions,
+  };
+  const usageDocumentType = resolveDocumentType(documentType);
+  if (DOCUMENT_TYPE_META[usageDocumentType]?.kind === "waybill") {
+    query.documentType = usageDocumentType;
+  }
+  const currentId = toObjectIdOrNull(currentDocumentId);
+  if (currentId) query._id = { $ne: currentId };
+
+  const waybills = await BillingDocument.find(query).select("lineItems").lean();
+  const usage = new Map();
+
+  waybills.forEach((waybill) => {
+    (waybill.lineItems || []).forEach((item) => {
+      const sourceLineId = matchSourceLineId(item, sourceLookup);
+      if (!sourceLineId) return;
+      const nextQuantity = roundMoney(
+        (usage.get(sourceLineId) || 0) + toPositiveQuantity(item.quantity),
+      );
+      usage.set(sourceLineId, nextQuantity);
+    });
+  });
+
+  return usage;
+};
+
+const buildWaybillSourceLineItems = async (
+  sourceDocument,
+  currentDocumentId = null,
+  documentType = "",
+) => {
+  const usage = await getWaybillUsageBySourceLine(
+    sourceDocument,
+    currentDocumentId,
+    documentType,
+  );
+
+  return (sourceDocument.lineItems || []).map((item) => {
+    const sourceLineItemId = sourceIdToString(item._id);
+    const sourceQuantity = toPositiveQuantity(item.quantity);
+    const previouslyWaybilled = toPositiveQuantity(
+      usage.get(sourceLineItemId) || 0,
+    );
+    const availableQuantity = Math.max(
+      0,
+      roundMoney(sourceQuantity - previouslyWaybilled),
+    );
+
+    return {
+      sourceLineItemId,
+      description: item.description || "",
+      quantity: availableQuantity,
+      unitPrice: 0,
+      quantityRemaining: 0,
+      total: 0,
+      sourceQuantity,
+      previouslyWaybilled,
+      availableQuantity,
+    };
+  });
+};
+
+const applyWaybillSourceBalances = async ({
+  sourceDocument,
+  lineItems,
+  currentDocumentId = null,
+  documentType = "",
+}) => {
+  if (!sourceDocument) return { lineItems };
+
+  const sourceLookup = buildSourceLineLookup(sourceDocument);
+  const usage = await getWaybillUsageBySourceLine(
+    sourceDocument,
+    currentDocumentId,
+    documentType,
+  );
+  const balancedLineItems = [];
+
+  for (const item of lineItems) {
+    const sourceLineId = matchSourceLineId(item, sourceLookup);
+    if (!sourceLineId) {
+      balancedLineItems.push({
+        ...item,
+        sourceLineItemId: null,
+        unitPrice: 0,
+        total: 0,
+      });
+      continue;
+    }
+
+    const sourceItem = sourceLookup.byId.get(sourceLineId);
+    const sourceQuantity = toPositiveQuantity(sourceItem?.quantity);
+    const previouslyWaybilled = toPositiveQuantity(usage.get(sourceLineId) || 0);
+    const currentQuantity = toPositiveQuantity(item.quantity);
+    const availableQuantity = Math.max(
+      0,
+      roundMoney(sourceQuantity - previouslyWaybilled),
+    );
+    const quantityRemaining = roundMoney(availableQuantity - currentQuantity);
+
+    if (quantityRemaining < -0.009) {
+      return {
+        error: `Qty for "${toInlineText(sourceItem?.description) || "item"}" exceeds the remaining balance. ${availableQuantity} available.`,
+      };
+    }
+
+    balancedLineItems.push({
+      ...item,
+      sourceLineItemId: sourceLineId,
+      description: item.description || sourceItem?.description || "",
+      quantity: currentQuantity,
+      unitPrice: 0,
+      quantityRemaining: Math.max(0, quantityRemaining),
+      total: 0,
+    });
+  }
+
+  return { lineItems: balancedLineItems };
+};
+
+const serializeSourceDocument = (document) => ({
+  _id: sourceIdToString(document._id),
+  documentType: document.documentType,
+  documentNumber: document.documentNumber,
+  sourceQuoteNumber: document.sourceQuoteNumber || null,
+  brand: document.brand,
+  kind: document.kind,
+  status: document.status,
+  issueDate: document.issueDate,
+  client: document.client,
+  projectTitle: document.projectTitle,
+  currency: document.currency || "GHS",
+});
+
+const getWaybillSourceDocument = async (req, res) => {
+  try {
+    const documentType = resolveDocumentType(req.query.documentType);
+    const meta = DOCUMENT_TYPE_META[documentType];
+    if (!meta || meta.kind !== "waybill") {
+      return res.status(400).json({
+        message: "Select a waybill type before loading invoice or quote details.",
+      });
+    }
+
+    const requestedNumber = parseManualDocumentNumber(req.query.number);
+    if (!requestedNumber) {
+      return res.status(400).json({
+        message: "Enter a valid invoice or quote number to load.",
+      });
+    }
+
+    const matches = await findSourceDocumentsByNumber(
+      requestedNumber,
+      documentType,
+    );
+    const sourceDocument = matches[0];
+    if (!sourceDocument) {
+      return res.status(404).json({
+        message: "No matching invoice or quote was found.",
+      });
+    }
+
+    const lineItems = await buildWaybillSourceLineItems(
+      sourceDocument,
+      req.query.currentDocumentId,
+      documentType,
+    );
+
+    return res.json({
+      sourceDocument: serializeSourceDocument(sourceDocument),
+      matches: matches.map(serializeSourceDocument),
+      requestedNumber,
+      linkedInvoiceNumber: sourceDocument.documentNumber,
+      lineItems,
+    });
+  } catch (error) {
+    console.error("Failed to load waybill source document", error);
+    return res.status(500).json({
+      message: "Failed to load invoice or quote details.",
+    });
+  }
 };
 
 const getBillingDocuments = async (req, res) => {
@@ -549,9 +851,22 @@ const createBillingDocument = async (req, res) => {
           ? documentNumber
           : sanitized.linkedInvoiceNumber
         : null;
-    const linkedInvoiceDocument = await resolveLinkedInvoiceDocument(
+    const linkedSourceDocument = await resolveLinkedSourceDocument(
       linkedInvoiceNumber,
+      sanitized.documentType,
     );
+    if (sanitized.kind === "waybill" && linkedSourceDocument) {
+      const balanced = await applyWaybillSourceBalances({
+        sourceDocument: linkedSourceDocument,
+        lineItems: sanitized.lineItems,
+        documentType: sanitized.documentType,
+      });
+      if (balanced.error) {
+        return res.status(400).json({ message: balanced.error });
+      }
+      sanitized.lineItems = balanced.lineItems;
+      sanitized.totals = calculateTotals(sanitized.lineItems, [], []);
+    }
 
     const document = await BillingDocument.create({
       ...sanitized,
@@ -561,7 +876,7 @@ const createBillingDocument = async (req, res) => {
           ? parseManualDocumentNumber(req.body?.sourceQuoteNumber)
           : null,
       linkedInvoiceNumber,
-      linkedInvoiceDocument,
+      linkedInvoiceDocument: linkedSourceDocument?._id || null,
       createdBy: req.user?._id || null,
       updatedBy: req.user?._id || null,
     });
@@ -627,9 +942,24 @@ const updateBillingDocument = async (req, res) => {
       document.linkedInvoiceNumber = meta.receivable
         ? document.documentNumber
         : sanitized.linkedInvoiceNumber;
-      document.linkedInvoiceDocument = await resolveLinkedInvoiceDocument(
+      const linkedSourceDocument = await resolveLinkedSourceDocument(
         document.linkedInvoiceNumber,
+        document.documentType,
       );
+      if (linkedSourceDocument) {
+        const balanced = await applyWaybillSourceBalances({
+          sourceDocument: linkedSourceDocument,
+          lineItems: sanitized.lineItems,
+          currentDocumentId: document._id,
+          documentType: document.documentType,
+        });
+        if (balanced.error) {
+          return res.status(400).json({ message: balanced.error });
+        }
+        document.lineItems = balanced.lineItems;
+        document.totals = calculateTotals(document.lineItems, [], []);
+      }
+      document.linkedInvoiceDocument = linkedSourceDocument?._id || null;
     }
 
     await document.save();
@@ -803,6 +1133,7 @@ module.exports = {
   requireBillingDocumentAccess,
   getBillingDocuments,
   getBillingDocumentById,
+  getWaybillSourceDocument,
   createBillingDocument,
   updateBillingDocument,
   convertQuoteToInvoice,
