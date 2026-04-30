@@ -719,7 +719,7 @@ const EngagedProjectActions = ({ user }) => {
     if (!matchedDepartments.length) return false;
 
     if (
-      isLeadGraphicsMockupUser &&
+      isGraphicsLeadForProject &&
       matchedDepartments.some((departmentName) =>
         GRAPHICS_SUB_DEPARTMENTS.includes(normalizeDepartmentId(departmentName)),
       )
@@ -922,8 +922,10 @@ const EngagedProjectActions = ({ user }) => {
     const projectLeadId = normalizeObjectId(project?.projectLeadId);
     return Boolean(currentUserId && projectLeadId && currentUserId === projectLeadId);
   }, [user, project?.projectLeadId]);
-  const isLeadGraphicsMockupUser =
+  const isGraphicsLeadForProject =
     isProjectLeadForProject && userEngagedDepts.includes("Graphics");
+  const isLeadBlockedFromOwnEngagement =
+    isProjectLeadForProject && !isGraphicsLeadForProject;
   const projectItems = useMemo(
     () => (Array.isArray(project?.items) ? project.items : []),
     [project?.items],
@@ -1530,9 +1532,7 @@ const EngagedProjectActions = ({ user }) => {
   });
 
   const handleCompleteStatus = async (targetProject, action) => {
-    const isLeadGraphicsMockupAction =
-      isLeadGraphicsMockupUser && action?.dept === "Graphics";
-    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -1643,7 +1643,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openNewBatchForm = () => {
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -1694,7 +1694,7 @@ const EngagedProjectActions = ({ user }) => {
 
   const openEditBatchForm = (batch) => {
     if (!batch) return;
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -1749,7 +1749,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleSaveBatch = async () => {
     if (!project) return;
     const isEditingBatch = Boolean(batchEditingId);
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -1944,7 +1944,7 @@ const EngagedProjectActions = ({ user }) => {
 
   const handleBatchStatusUpdate = async (batch, nextStatus) => {
     if (!project || !batch || !nextStatus) return;
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -1977,7 +1977,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleSubmitUpdate = async () => {
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2031,7 +2031,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const handleAcknowledge = async (targetProject, department) => {
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2071,7 +2071,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openAcknowledgeModal = (targetProject, department) => {
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2174,9 +2174,7 @@ const EngagedProjectActions = ({ user }) => {
   ]);
 
   const openCompleteModal = (targetProject, action) => {
-    const isLeadGraphicsMockupAction =
-      isLeadGraphicsMockupUser && action?.dept === "Graphics";
-    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2191,9 +2189,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openMockupModal = (targetProject, action, mode = "revision") => {
-    const isLeadGraphicsMockupAction =
-      isLeadGraphicsMockupUser && action?.dept === "Graphics";
-    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2223,7 +2219,7 @@ const EngagedProjectActions = ({ user }) => {
   };
 
   const openMockupDeleteModal = (version) => {
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2261,9 +2257,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleUploadMockup = async (e) => {
     e.preventDefault();
     if (!mockupTarget) return;
-    const isLeadGraphicsMockupAction =
-      isLeadGraphicsMockupUser && mockupTarget?.action?.dept === "Graphics";
-    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2449,7 +2443,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleConfirmMockupDelete = async () => {
     if (!mockupDeleteModal.open || !mockupDeleteModal.version) return;
     if (!project?._id) return;
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2547,7 +2541,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleConfirmQuotePreviousSamplesRetrieved = async (targetProject) => {
     if (!targetProject?._id || !isQuoteProject) return false;
 
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2642,7 +2636,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleSubmitQuoteSampleProduction = async (targetProject) => {
     if (!targetProject?._id || !isQuoteProject) return false;
 
-    if (isProjectLeadForProject) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -2769,7 +2763,7 @@ const EngagedProjectActions = ({ user }) => {
   const handleConfirmQuoteMockupRequirement = async (targetProject) => {
     if (!targetProject?._id || !isQuoteProject) return false;
 
-    if (isProjectLeadForProject && !isLeadGraphicsMockupUser) {
+    if (isLeadBlockedFromOwnEngagement) {
       setToast({
         type: "error",
         message:
@@ -3140,7 +3134,7 @@ const EngagedProjectActions = ({ user }) => {
         </section>
       )}
 
-      {isProjectLeadForProject && (
+      {isLeadBlockedFromOwnEngagement && (
         <div className="engaged-warning-banner">
           You are the assigned Project Lead for this project. Engagement actions
           are disabled on this page for your account.
@@ -3161,7 +3155,7 @@ const EngagedProjectActions = ({ user }) => {
               <span className="engaged-section-chip">
                 {batchRemainingCount} items / {batchRemainingQtyTotal} qty available
               </span>
-              {canCreateBatches && !batchFormOpen && !isProjectLeadForProject && (
+              {canCreateBatches && !batchFormOpen && !isLeadBlockedFromOwnEngagement && (
                 <button
                   type="button"
                   className="engaged-batch-create-btn"
@@ -3338,18 +3332,18 @@ const EngagedProjectActions = ({ user }) => {
                       : "";
                 const canAdvance =
                   Boolean(nextStatus) &&
-                  !isProjectLeadForProject &&
+                  !isLeadBlockedFromOwnEngagement &&
                   (!isAdminUser || isAdminPackagingUser) &&
                   ((canManageProductionBatches &&
                     BATCH_PRODUCTION_STATUS_SET.has(nextStatus)) ||
                     (hasPackagingRole &&
                       BATCH_PACKAGING_STATUS_SET.has(nextStatus)));
                 const canEditBatch =
-                  !isProjectLeadForProject &&
+                  !isLeadBlockedFromOwnEngagement &&
                   batch?.status !== "cancelled" &&
                   canManageProductionBatches;
                 const canEditPackagingRecord =
-                  !isProjectLeadForProject &&
+                  !isLeadBlockedFromOwnEngagement &&
                   canManagePackagingBatches &&
                   BATCH_PACKAGING_EDITABLE_STATUS_SET.has(
                     normalizeBatchStatus(batch?.status),
@@ -3468,7 +3462,7 @@ const EngagedProjectActions = ({ user }) => {
                     ? "No batches are assigned to your production subdepartment yet."
                     : "Split production into smaller batches to track progress."}
                 </p>
-                {canCreateBatches && !batchFormOpen && !isProjectLeadForProject && (
+                {canCreateBatches && !batchFormOpen && !isLeadBlockedFromOwnEngagement && (
                   <button
                     type="button"
                     className="btn-primary"
@@ -3571,7 +3565,7 @@ const EngagedProjectActions = ({ user }) => {
                         const acknowledgedBy = getFullName(acknowledgement?.user);
                         const canAcknowledge =
                           !isAcknowledged &&
-                          !isProjectLeadForProject &&
+                          !isLeadBlockedFromOwnEngagement &&
                           (
                             !isQuoteProject ||
                             quoteDepartmentAcknowledgementWindowOpen
@@ -3597,7 +3591,7 @@ const EngagedProjectActions = ({ user }) => {
                               title={
                                 isAcknowledged
                                   ? "Already acknowledged"
-                                  : isProjectLeadForProject
+                                  : isLeadBlockedFromOwnEngagement
                                     ? "Project leads cannot take engagement actions on their own projects here."
                                   : !isQuoteProject ||
                                       quoteDepartmentAcknowledgementWindowOpen
@@ -3631,8 +3625,6 @@ const EngagedProjectActions = ({ user }) => {
                     const actionKey = `${project._id}:${action.complete}`;
                     const isUpdating = statusUpdating === actionKey;
                     const isMockupAction = action.dept === "Graphics";
-                    const isLeadGraphicsMockupAction =
-                      isLeadGraphicsMockupUser && isMockupAction;
                     const isQuoteGraphicsAction = isQuoteProject && isMockupAction;
                     const quoteMockupStatus = String(
                       quoteMockupRequirement?.status || "",
@@ -3681,7 +3673,7 @@ const EngagedProjectActions = ({ user }) => {
                         : isPending);
                     const canUploadMockup =
                       !isUpdating &&
-                      (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
+                      !isLeadBlockedFromOwnEngagement &&
                       (isQuoteGraphicsAction
                         ? quoteCanUploadMockupRequirement
                         : isPending);
@@ -3689,7 +3681,7 @@ const EngagedProjectActions = ({ user }) => {
                       clientMockupAwaitingValidation &&
                       !clientMockupValidationSubmitting &&
                       !isUpdating &&
-                      (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
+                      !isLeadBlockedFromOwnEngagement &&
                       (isQuoteGraphicsAction
                         ? quoteAllowsMockupWorkflowStatus
                         : isPending);
@@ -3697,13 +3689,13 @@ const EngagedProjectActions = ({ user }) => {
                       clientMockupValidated &&
                       !clientMockupValidationResetSubmitting &&
                       !isUpdating &&
-                      (!isProjectLeadForProject || isLeadGraphicsMockupAction) &&
+                      !isLeadBlockedFromOwnEngagement &&
                       (isQuoteGraphicsAction ? quoteAllowsMockupWorkflowStatus : true);
 
                     let disabledReason = "";
                     if (!isQuoteGraphicsAction && !isPending) {
                       disabledReason = `Waiting for ${action.pending}.`;
-                    } else if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                    } else if (isLeadBlockedFromOwnEngagement) {
                       disabledReason =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (blockedBySample) {
@@ -3717,7 +3709,7 @@ const EngagedProjectActions = ({ user }) => {
                     }
 
                     let mockupUploadTitle = "Upload approved mockup";
-                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                    if (isLeadBlockedFromOwnEngagement) {
                       mockupUploadTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
@@ -3756,7 +3748,7 @@ const EngagedProjectActions = ({ user }) => {
                     }
 
                     let mockupConfirmTitle = "Confirm mockup completion";
-                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                    if (isLeadBlockedFromOwnEngagement) {
                       mockupConfirmTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
@@ -3808,7 +3800,7 @@ const EngagedProjectActions = ({ user }) => {
                     }
 
                     let validateClientMockupTitle = "Validate the client-provided mockup";
-                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                    if (isLeadBlockedFromOwnEngagement) {
                       validateClientMockupTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
@@ -3830,7 +3822,7 @@ const EngagedProjectActions = ({ user }) => {
 
                     let undoClientMockupValidationTitle =
                       "Undo Graphics validation and return this mockup to pending review";
-                    if (isProjectLeadForProject && !isLeadGraphicsMockupAction) {
+                    if (isLeadBlockedFromOwnEngagement) {
                       undoClientMockupValidationTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (isQuoteGraphicsAction && quoteWorkflowBlocked) {
@@ -3912,8 +3904,7 @@ const EngagedProjectActions = ({ user }) => {
                               disabled={
                                 isUpdating ||
                                 !canConfirmMockupCompletion ||
-                                (isProjectLeadForProject &&
-                                  !isLeadGraphicsMockupAction)
+                                isLeadBlockedFromOwnEngagement
                               }
                               title={mockupConfirmTitle}
                             >
@@ -3927,7 +3918,7 @@ const EngagedProjectActions = ({ user }) => {
                             disabled={
                               !isPending ||
                               isUpdating ||
-                              isProjectLeadForProject ||
+                              isLeadBlockedFromOwnEngagement ||
                               blockedBySample ||
                               blockedByBatchProduction
                             }
@@ -4164,11 +4155,11 @@ const EngagedProjectActions = ({ user }) => {
                       QUOTE_PREVIOUS_SAMPLES_RETRIEVE_STATUSES.has(
                         quotePreviousSamplesStatus,
                       ) &&
-                      !isProjectLeadForProject &&
+                      !isLeadBlockedFromOwnEngagement &&
                       !retrievalUpdating;
 
                     let retrievalTitle = "Confirm sample retrieval";
-                    if (isProjectLeadForProject) {
+                    if (isLeadBlockedFromOwnEngagement) {
                       retrievalTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (quoteWorkflowBlocked) {
@@ -4246,12 +4237,12 @@ const EngagedProjectActions = ({ user }) => {
                       quoteSectionActionReady &&
                       quoteMockupReadyForSampleProduction &&
                       sampleProductionTransitions.length > 0 &&
-                      !isProjectLeadForProject &&
+                      !isLeadBlockedFromOwnEngagement &&
                       !sampleProductionUpdating;
 
                     let sampleProductionTitle =
                       "Submit sample production to Front Desk";
-                    if (isProjectLeadForProject) {
+                    if (isLeadBlockedFromOwnEngagement) {
                       sampleProductionTitle =
                         "Project leads cannot take engagement actions on their own projects here.";
                     } else if (quoteWorkflowBlocked) {

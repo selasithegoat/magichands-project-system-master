@@ -225,6 +225,11 @@ const isUserAssignedProjectLead = (user, project) => {
   return Boolean(userId && leadId && userId === leadId);
 };
 
+const isGraphicsDepartmentUser = (user) =>
+  normalizeDepartments(user?.department)
+    .map(canonicalizeDepartmentToken)
+    .some((department) => department === "graphics");
+
 const broadcastProjectUpdateChange = (req, projectId, updateId) => {
   const normalizedProjectId = normalizeObjectId(projectId);
   const normalizedUpdateId = normalizeObjectId(updateId);
@@ -311,7 +316,8 @@ exports.createProjectUpdate = async (req, res) => {
 
     if (
       isEngagedPortalRequest(req) &&
-      isUserAssignedProjectLead(req.user, project)
+      isUserAssignedProjectLead(req.user, project) &&
+      !isGraphicsDepartmentUser(req.user)
     ) {
       return res.status(403).json({
         message:

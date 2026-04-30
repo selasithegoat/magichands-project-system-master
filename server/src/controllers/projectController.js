@@ -417,7 +417,7 @@ const isGraphicsDepartmentUser = (user) => {
       : [];
   return departments
     .map(normalizeDepartmentValue)
-    .includes("graphics");
+    .some((token) => GRAPHICS_DEPARTMENT_TOKENS.has(token));
 };
 
 const canValidateClientMockup = (user) => {
@@ -923,7 +923,7 @@ const getQuoteDepartmentEngagementGuard = ({
     isUserAssignedProjectLead(user, project) &&
     isGraphicsDepartmentUser(user) &&
     matchedDepartmentTokens.some(
-      (departmentToken) => normalizeDepartmentValue(departmentToken) === "graphics",
+      (departmentToken) => canonicalizeDepartment(departmentToken) === "graphics",
     );
   if (isGraphicsLeadException) {
     return null;
@@ -1021,18 +1021,16 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
   }
   const engagedActionTypes = new Set(["acknowledge", "status", "mockup"]);
   const isEngagedPortalMutation = isEngagedPortalRequest(req);
-  const requestedStatus = toText(req.body?.status);
-  const isGraphicsLeadOwnMockupAction =
+  const isGraphicsLeadOwnEngagedAction =
     isEngagedPortalMutation &&
     isUserAssignedProjectLead(req.user, project) &&
     isGraphicsDepartmentUser(req.user) &&
-    (action === "mockup" ||
-      (action === "status" && requestedStatus === "Mockup Completed"));
+    engagedActionTypes.has(action);
   if (
     isUserAssignedProjectLead(req.user, project) &&
     isEngagedPortalMutation &&
     engagedActionTypes.has(action) &&
-    !isGraphicsLeadOwnMockupAction
+    !isGraphicsLeadOwnEngagedAction
   ) {
     res.status(403).json({
       message:
@@ -9106,9 +9104,15 @@ const updateProjectStatus = async (req, res) => {
     ];
 
     if (!isAdmin && !isFinishing) {
-      const userDepts = req.user.department || [];
+      const userDeptCanonical = new Set(
+        toDepartmentArray(req.user.department)
+          .map(canonicalizeDepartment)
+          .filter(Boolean),
+      );
       const deptAction = deptActions.find(
-        (action) => userDepts.includes(action.dept) && newStatus === action.to,
+        (action) =>
+          userDeptCanonical.has(canonicalizeDepartment(action.dept)) &&
+          newStatus === action.to,
       );
 
       if (!deptAction) {
@@ -9570,9 +9574,14 @@ const transitionQuoteRequirement = async (req, res) => {
     }
 
     const isEngagedPortalMutation = isEngagedPortalRequest(req);
+    const isGraphicsLeadOwnEngagedAction =
+      isEngagedPortalMutation &&
+      isUserAssignedProjectLead(req.user, project) &&
+      isGraphicsDepartmentUser(req.user);
     if (
       isUserAssignedProjectLead(req.user, project) &&
-      isEngagedPortalMutation
+      isEngagedPortalMutation &&
+      !isGraphicsLeadOwnEngagedAction
     ) {
       return res.status(403).json({
         message:
@@ -10304,8 +10313,8 @@ const canUserCompleteDepartmentAction = ({ project, user, match }) => {
   const leadId = toObjectIdString(project?.projectLeadId);
   const isProjectLead = Boolean(currentUserId && leadId && currentUserId === leadId);
 
-  if (isProjectLead && match.key !== "graphics") return false;
-  if (isProjectLead && match.key === "graphics") return true;
+  if (isProjectLead && isGraphicsDepartmentUser(user)) return true;
+  if (isProjectLead) return false;
 
   return hasAcknowledgementForTokens(project, match.tokens);
 };
@@ -10326,10 +10335,12 @@ const addDepartmentNextActions = ({ project, user, actions }) => {
     const isProjectLead = Boolean(
       currentUserId && leadId && currentUserId === leadId,
     );
+    const isLeadBlockedFromEngagement =
+      isProjectLead && !isGraphicsDepartmentUser(user);
 
     if (
       scopeReady &&
-      !isProjectLead &&
+      !isLeadBlockedFromEngagement &&
       hasPendingAcknowledgementForTokens(project, match.tokens)
     ) {
       actions.push(
@@ -12894,13 +12905,8 @@ const uploadProjectMockup = async (req, res) => {
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
 
-    const userDepts = Array.isArray(req.user.department)
-      ? req.user.department
-      : req.user.department
-        ? [req.user.department]
-        : [];
     const isAdmin = req.user.role === "admin";
-    const isGraphics = userDepts.includes("Graphics/Design");
+    const isGraphics = isGraphicsDepartmentUser(req.user);
 
     if (!isAdmin && !isGraphics) {
       return res
@@ -13210,13 +13216,8 @@ const deleteProjectMockupVersion = async (req, res) => {
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "mockup")) return;
 
-    const userDepts = Array.isArray(req.user.department)
-      ? req.user.department
-      : req.user.department
-        ? [req.user.department]
-        : [];
     const isAdmin = req.user.role === "admin";
-    const isGraphics = userDepts.includes("Graphics/Design");
+    const isGraphics = isGraphicsDepartmentUser(req.user);
 
     if (!isAdmin && !isGraphics) {
       return res.status(403).json({
