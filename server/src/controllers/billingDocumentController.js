@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const BillingDocument = require("../models/BillingDocument");
 const BillingDocumentCounter = require("../models/BillingDocumentCounter");
+const BillingReceipt = require("../models/BillingReceipt");
 
 const DOCUMENT_TYPE_META = {
   magichands_invoice: { brand: "magichands", kind: "invoice" },
@@ -540,6 +541,21 @@ const updateBillingDocument = async (req, res) => {
     }
 
     await document.save();
+    if (document.kind === "invoice") {
+      await BillingReceipt.updateMany(
+        { invoiceDocument: document._id },
+        {
+          $set: {
+            brand: document.brand,
+            invoiceDocumentType: document.documentType,
+            referenceInvoiceNumber: document.documentNumber,
+            companySnapshot: document.companySnapshot,
+            currency: document.currency || "GHS",
+          },
+        },
+      );
+    }
+
     if (manualNumber) {
       await syncDocumentCounter(document.documentType, manualNumber);
     }
@@ -677,6 +693,10 @@ const deleteBillingDocument = async (req, res) => {
         sourceQuote.updatedBy = req.user?._id || null;
         await sourceQuote.save();
       }
+    }
+
+    if (document.kind === "invoice") {
+      await BillingReceipt.deleteMany({ invoiceDocument: document._id });
     }
 
     await document.deleteOne();

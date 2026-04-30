@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import TrashIcon from "../../components/icons/TrashIcon";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import Toast from "../../components/ui/Toast";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import "./BillingDocuments.css";
 
@@ -116,11 +117,13 @@ const DEFAULT_TAX_ENTRIES = [
 ];
 
 const CURRENCY_SYMBOL = "GH\u00a2";
+const DEFAULT_RECEIPT_ACCOUNT_TYPE = "Accounts receivable";
 
 const EMPTY_CONFIRM_DIALOG = {
   isOpen: false,
   action: "",
   targetDocument: null,
+  targetReceipt: null,
   title: "",
   message: "",
   confirmText: "Confirm",
@@ -214,6 +217,58 @@ const makePaymentEntry = (entry = {}) => ({
   receiptNumber: entry.receiptNumber || "",
   date: toDateInput(entry.date) || "",
   amount: entry.amount ?? "",
+});
+
+const makeReceiptForm = (entry = {}) => ({
+  _id: entry._id || "",
+  receiptNumber: entry.receiptNumber || "",
+  accountType: entry.accountType || DEFAULT_RECEIPT_ACCOUNT_TYPE,
+  customerName: entry.customerName || "",
+  customerLocation: entry.customerLocation || "",
+  customerPhone: entry.customerPhone || "",
+  projectTitle: entry.projectTitle || "",
+  receiptDate: toDateInput(entry.receiptDate) || todayIso(),
+  amount: entry.amount ?? "",
+});
+
+const receiptToPaymentEntry = (receipt = {}) =>
+  makePaymentEntry({
+    _id: receipt._id || "",
+    label: "Receipt",
+    receiptNumber: receipt.receiptNumber || "",
+    date: receipt.receiptDate,
+    amount: receipt.amount ?? 0,
+  });
+
+const receiptsToPaymentEntries = (receipts = []) =>
+  receipts.map(receiptToPaymentEntry);
+
+const createReceiptDraftFromInvoice = (invoice, amount = "") => {
+  const customerLines = toLines(invoice?.client?.name);
+
+  return makeReceiptForm({
+    accountType: DEFAULT_RECEIPT_ACCOUNT_TYPE,
+    customerName: customerLines[0] || invoice?.client?.name || "",
+    customerLocation: invoice?.client?.location || "",
+    customerPhone: "",
+    projectTitle: invoice?.projectTitle || "",
+    receiptDate: todayIso(),
+    amount,
+  });
+};
+
+const buildReceiptPayload = (receiptForm, invoice) => ({
+  invoiceDocument: invoice._id,
+  receiptNumber: receiptForm.receiptNumber,
+  accountType: receiptForm.accountType,
+  customerName: receiptForm.customerName,
+  customerLocation: receiptForm.customerLocation,
+  customerPhone: receiptForm.customerPhone,
+  projectTitle: receiptForm.projectTitle,
+  receiptDate: receiptForm.receiptDate,
+  amount: toNumber(receiptForm.amount, 0),
+  currency: invoice.currency || "GHS",
+  companySnapshot: invoice.companySnapshot,
 });
 
 const makeTaxEntry = (entry = {}) => ({
@@ -654,6 +709,108 @@ const BillingPreview = ({ form, totals }) => {
   );
 };
 
+const BillingReceiptPreview = ({ receipt, invoice }) => {
+  const meta = getMeta(invoice.documentType);
+  const company =
+    receipt.companySnapshot || invoice.companySnapshot || COMPANY_PROFILES[meta.brand];
+  const amount = toNumber(receipt.amount, 0);
+  const receiptDate = receipt.receiptDate || todayIso();
+  const receiptNumber = receipt.receiptNumber || "Pending";
+  const invoiceNumber =
+    receipt.referenceInvoiceNumber || invoice.documentNumber || "Pending";
+  const customerName =
+    receipt.customerName || toLines(invoice.client.name)[0] || invoice.client.name || "";
+  const customerLocation = receipt.customerLocation || invoice.client.location || "";
+  const projectTitle = receipt.projectTitle || invoice.projectTitle || "\u00a0";
+  const accountType = receipt.accountType || DEFAULT_RECEIPT_ACCOUNT_TYPE;
+  const footerAmount =
+    meta.brand === "magichands"
+      ? `${CURRENCY_SYMBOL} ${formatMoney(amount)}`
+      : formatMoney(amount);
+  const accountLine = [
+    accountType,
+    customerName,
+    invoiceNumber,
+    formatDate(receiptDate),
+  ]
+    .filter(Boolean)
+    .join(" - ");
+
+  return (
+    <section className={`billing-paper billing-receipt-paper ${meta.brand}`}>
+      <header className="billing-paper-header">
+        <h2>Receipt</h2>
+        {meta.brand === "magichands" ? (
+          <img src="/mhlogo.png" alt="Magichands" className="billing-mh-logo" />
+        ) : (
+          <img
+            src="/magic-gifts-logo.png"
+            alt="Magic Gifts"
+            className="billing-magic-gifts-logo"
+          />
+        )}
+      </header>
+
+      <section className="billing-paper-meta">
+        <div className="billing-paper-client">
+          {toLines(customerName).length ? (
+            toLines(customerName).map((line) => <strong key={line}>{line}</strong>)
+          ) : (
+            <strong>&nbsp;</strong>
+          )}
+          {customerLocation && <span>{customerLocation}</span>}
+          {receipt.customerPhone && <span>{receipt.customerPhone}</span>}
+        </div>
+
+        <dl className="billing-paper-facts">
+          <div>
+            <dt>Date</dt>
+            <dd>{formatDate(receiptDate)}</dd>
+          </div>
+          <div>
+            <dt>Receipt #</dt>
+            <dd>{receiptNumber}</dd>
+          </div>
+        </dl>
+
+        <div className="billing-paper-company">
+          <strong>{company.name}</strong>
+          {(company.addressLines || []).map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+          {company.telephone && <span>Tel: {company.telephone}</span>}
+          {company.tinNumber && <span>Tin Number: {company.tinNumber}</span>}
+        </div>
+      </section>
+
+      <h3 className="billing-project-title">{projectTitle}</h3>
+
+      <table className="billing-items-table billing-receipt-table">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{accountLine || "\u00a0"}</td>
+            <td>{formatMoney(amount)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td className="billing-footer-label">Total</td>
+            <td className="billing-footer-amount">
+              <strong>{footerAmount}</strong>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  );
+};
+
 const BillingDocuments = ({ user, requestSource = "" }) => {
   const portalSource = requestSource || resolvePortalSource();
   const [documents, setDocuments] = useState([]);
@@ -664,8 +821,13 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [receiptSaving, setReceiptSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [receipts, setReceipts] = useState([]);
+  const [receiptForm, setReceiptForm] = useState(() => makeReceiptForm());
+  const [selectedReceiptId, setSelectedReceiptId] = useState("");
+  const [activePreview, setActivePreview] = useState("invoice");
   const [confirmDialog, setConfirmDialog] = useState(EMPTY_CONFIRM_DIALOG);
   const canAccess = userHasBillingAccess(user);
   const totals = useMemo(
@@ -673,6 +835,8 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     [form.lineItems, form.paymentEntries, form.taxEntries],
   );
   const formMeta = getMeta(form.documentType);
+  const feedbackMessage = error || notice;
+  const feedbackType = error ? "error" : "success";
 
   const makeApiUrl = useCallback(
     (path = "", params = {}) => {
@@ -683,6 +847,20 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
       const query = urlParams.toString();
       const url = `/api/billing-documents${path}${query ? `?${query}` : ""}`;
+      return appendPortalSource(url, portalSource);
+    },
+    [portalSource],
+  );
+
+  const makeReceiptApiUrl = useCallback(
+    (path = "", params = {}) => {
+      const urlParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) urlParams.set(key, value);
+      });
+
+      const query = urlParams.toString();
+      const url = `/api/billing-receipts${path}${query ? `?${query}` : ""}`;
       return appendPortalSource(url, portalSource);
     },
     [portalSource],
@@ -724,18 +902,96 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     }
   }, [canAccess, makeApiUrl, search, selectedId, statusFilter, typeFilter]);
 
+  const syncReceiptState = useCallback(
+    (nextReceipts, invoiceId, { replacePayments = false } = {}) => {
+      const normalizedReceipts = Array.isArray(nextReceipts) ? nextReceipts : [];
+      setReceipts(normalizedReceipts);
+
+      if (replacePayments || normalizedReceipts.length > 0) {
+        setForm((prev) =>
+          prev._id === invoiceId
+            ? {
+                ...prev,
+                paymentEntries: receiptsToPaymentEntries(normalizedReceipts),
+              }
+            : prev,
+        );
+      }
+    },
+    [],
+  );
+
+  const fetchReceipts = useCallback(
+    async (invoice) => {
+      if (!invoice?._id || getMeta(invoice.documentType).kind !== "invoice") {
+        setReceipts([]);
+        setSelectedReceiptId("");
+        setReceiptForm(makeReceiptForm());
+        setActivePreview("invoice");
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          makeReceiptApiUrl("", { invoiceId: invoice._id }),
+          { credentials: "include", cache: "no-store" },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load billing receipts.");
+        }
+
+        const nextReceipts = Array.isArray(data.receipts) ? data.receipts : [];
+        syncReceiptState(nextReceipts, invoice._id, {
+          replacePayments: nextReceipts.length > 0,
+        });
+        setSelectedReceiptId((current) =>
+          current && nextReceipts.some((receipt) => receipt._id === current)
+            ? current
+            : "",
+        );
+        setReceiptForm((current) =>
+          current._id && nextReceipts.some((receipt) => receipt._id === current._id)
+            ? current
+            : createReceiptDraftFromInvoice(
+                invoice,
+                Math.max(
+                  0,
+                  calculateTotals(
+                    invoice.lineItems || [],
+                    invoice.paymentEntries || [],
+                    invoice.taxEntries || [],
+                  ).balanceDue || 0,
+                ),
+              ),
+        );
+      } catch (receiptError) {
+        setError(receiptError.message || "Failed to load billing receipts.");
+      }
+    },
+    [makeReceiptApiUrl, syncReceiptState],
+  );
+
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
 
+  useEffect(() => {
+    fetchReceipts(form);
+  }, [fetchReceipts, form._id, form.documentType]);
+
   useRealtimeRefresh(fetchDocuments, {
     enabled: canAccess,
-    paths: ["/api/billing-documents"],
+    paths: ["/api/billing-documents", "/api/billing-receipts"],
   });
 
   const selectDocument = (document) => {
     setSelectedId(document._id);
     setForm(normalizeDocumentForForm(document));
+    setReceipts([]);
+    setSelectedReceiptId("");
+    setReceiptForm(createReceiptDraftFromInvoice(document));
+    setActivePreview("invoice");
     setNotice("");
     setError("");
   };
@@ -743,6 +999,10 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const startNewDocument = (documentType = "magichands_invoice") => {
     setSelectedId("");
     setForm(createBlankForm(documentType));
+    setReceipts([]);
+    setSelectedReceiptId("");
+    setReceiptForm(makeReceiptForm());
+    setActivePreview("invoice");
     setNotice("");
     setError("");
   };
@@ -803,32 +1063,104 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     }));
   };
 
-  const updatePaymentEntry = (index, key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      paymentEntries: prev.paymentEntries.map((entry, entryIndex) =>
-        entryIndex === index ? { ...entry, [key]: value } : entry,
+  const startNewReceipt = (amount = "") => {
+    setSelectedReceiptId("");
+    setReceiptForm(
+      createReceiptDraftFromInvoice(
+        form,
+        amount === "" ? Math.max(0, totals.balanceDue || 0) : amount,
       ),
+    );
+    setActivePreview("receipt");
+    setNotice("");
+    setError("");
+  };
+
+  const selectReceipt = (receipt) => {
+    setSelectedReceiptId(receipt._id);
+    setReceiptForm(makeReceiptForm(receipt));
+    setActivePreview("receipt");
+    setNotice("");
+    setError("");
+  };
+
+  const updateReceiptForm = (key, value) => {
+    setReceiptForm((prev) => ({
+      ...prev,
+      [key]: value,
     }));
   };
 
-  const addPaymentEntry = (amount = 0) => {
-    setForm((prev) => ({
-      ...prev,
-      paymentEntries: [
-        ...prev.paymentEntries,
-        makePaymentEntry({ amount: amount || totals.balanceDue || 0 }),
-      ],
-    }));
+  const saveReceipt = async () => {
+    if (!form._id || formMeta.kind !== "invoice") {
+      setError("Save the invoice before adding a receipt.");
+      return;
+    }
+
+    setReceiptSaving(true);
+    setNotice("");
+    setError("");
+    try {
+      const isExisting = Boolean(receiptForm._id);
+      const res = await fetch(
+        makeReceiptApiUrl(isExisting ? `/${receiptForm._id}` : ""),
+        {
+          method: isExisting ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(buildReceiptPayload(receiptForm, form)),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to save billing receipt.");
+      }
+
+      const savedReceipt = data.receipt;
+      const nextReceipts = Array.isArray(data.receipts) ? data.receipts : [];
+      syncReceiptState(nextReceipts, form._id, { replacePayments: true });
+      setSelectedReceiptId(savedReceipt._id);
+      setReceiptForm(makeReceiptForm(savedReceipt));
+      setActivePreview("receipt");
+      setNotice(`Receipt #${savedReceipt.receiptNumber} saved.`);
+      fetchDocuments();
+    } catch (receiptError) {
+      setError(receiptError.message || "Failed to save billing receipt.");
+    } finally {
+      setReceiptSaving(false);
+    }
   };
 
-  const removePaymentEntry = (index) => {
-    setForm((prev) => ({
-      ...prev,
-      paymentEntries: prev.paymentEntries.filter(
-        (_, entryIndex) => entryIndex !== index,
-      ),
-    }));
+  const deleteReceipt = async (receipt) => {
+    if (!receipt?._id || !form._id) return;
+
+    setReceiptSaving(true);
+    setNotice("");
+    setError("");
+    try {
+      const res = await fetch(makeReceiptApiUrl(`/${receipt._id}`), {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to delete billing receipt.");
+      }
+
+      const nextReceipts = Array.isArray(data.receipts) ? data.receipts : [];
+      syncReceiptState(nextReceipts, form._id, { replacePayments: true });
+      setSelectedReceiptId("");
+      setReceiptForm(
+        createReceiptDraftFromInvoice(form, Math.max(0, totals.balanceDue || 0)),
+      );
+      setActivePreview("invoice");
+      setNotice(data.message || "Billing receipt deleted permanently.");
+      fetchDocuments();
+    } catch (receiptError) {
+      setError(receiptError.message || "Failed to delete billing receipt.");
+    } finally {
+      setReceiptSaving(false);
+    }
   };
 
   const toggleTaxEntries = (enabled) => {
@@ -881,6 +1213,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
       const savedDocument = data.document;
       setSelectedId(savedDocument._id);
       setForm(normalizeDocumentForForm(savedDocument));
+      setActivePreview("invoice");
       setDocuments((prev) => {
         const withoutSaved = prev.filter((document) => document._id !== savedDocument._id);
         return [savedDocument, ...withoutSaved];
@@ -926,6 +1259,22 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
       targetDocument,
       title: "Delete Invoice",
       message: `Permanently delete ${targetMeta.label} #${number}? This cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      type: "danger",
+    });
+  };
+
+  const openDeleteReceiptDialog = (receipt) => {
+    if (!receipt?._id) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      action: "delete-receipt",
+      targetDocument: form,
+      targetReceipt: receipt,
+      title: "Delete Receipt",
+      message: `Permanently delete receipt #${receipt.receiptNumber}? This cannot be undone.`,
       confirmText: "Delete",
       cancelText: "Cancel",
       type: "danger",
@@ -1003,7 +1352,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   };
 
   const handleConfirmDialog = async () => {
-    const { action, targetDocument } = confirmDialog;
+    const { action, targetDocument, targetReceipt } = confirmDialog;
     closeConfirmDialog();
 
     if (action === "convert-quote") {
@@ -1013,11 +1362,26 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
     if (action === "delete-invoice") {
       await deleteInvoiceDocument(targetDocument);
+      return;
+    }
+
+    if (action === "delete-receipt") {
+      await deleteReceipt(targetReceipt);
     }
   };
 
   const printDocument = () => {
     window.print();
+  };
+
+  const printInvoice = () => {
+    setActivePreview("invoice");
+    window.setTimeout(() => window.print(), 0);
+  };
+
+  const printReceipt = (receipt) => {
+    selectReceipt(receipt);
+    window.setTimeout(() => window.print(), 0);
   };
 
   if (!canAccess) {
@@ -1064,9 +1428,17 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
         </div>
       </header>
 
-      {(notice || error) && (
-        <div className={`billing-message ${error ? "error" : "success"}`}>
-          {error || notice}
+      {feedbackMessage && (
+        <div className="ui-toast-container">
+          <Toast
+            key={`${feedbackType}-${feedbackMessage}`}
+            message={feedbackMessage}
+            type={feedbackType}
+            onClose={() => {
+              setNotice("");
+              setError("");
+            }}
+          />
         </div>
       )}
 
@@ -1480,32 +1852,30 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
               {formMeta.kind === "invoice" && (
                 <fieldset>
-                  <legend>Receipts / payments</legend>
-                  <div className="billing-payments-editor">
-                    {form.paymentEntries.map((entry, index) => (
-                      <div
-                        className="billing-payment-row"
-                        key={entry._id || index}
-                      >
+                  <legend>Linked receipts</legend>
+                  {!form._id ? (
+                    <p className="billing-field-note">
+                      Save this invoice before creating linked receipts.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="billing-receipt-editor">
                         <label>
-                          Label
+                          Account type
                           <input
-                            value={entry.label}
+                            value={receiptForm.accountType}
                             onChange={(event) =>
-                              updatePaymentEntry(index, "label", event.target.value)
+                              updateReceiptForm("accountType", event.target.value)
                             }
                           />
                         </label>
                         <label>
                           Receipt #
                           <input
-                            value={entry.receiptNumber}
+                            value={receiptForm.receiptNumber}
+                            placeholder="Auto generated"
                             onChange={(event) =>
-                              updatePaymentEntry(
-                                index,
-                                "receiptNumber",
-                                event.target.value,
-                              )
+                              updateReceiptForm("receiptNumber", event.target.value)
                             }
                           />
                         </label>
@@ -1513,9 +1883,9 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                           Date
                           <input
                             type="date"
-                            value={entry.date}
+                            value={receiptForm.receiptDate}
                             onChange={(event) =>
-                              updatePaymentEntry(index, "date", event.target.value)
+                              updateReceiptForm("receiptDate", event.target.value)
                             }
                           />
                         </label>
@@ -1525,41 +1895,135 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={entry.amount}
+                            value={receiptForm.amount}
                             onChange={(event) =>
-                              updatePaymentEntry(index, "amount", event.target.value)
+                              updateReceiptForm("amount", event.target.value)
                             }
                           />
                         </label>
+                        <label className="billing-wide-field">
+                          Customer name
+                          <textarea
+                            rows="2"
+                            value={receiptForm.customerName}
+                            onChange={(event) =>
+                              updateReceiptForm("customerName", event.target.value)
+                            }
+                          />
+                        </label>
+                        <label>
+                          Location
+                          <input
+                            value={receiptForm.customerLocation}
+                            onChange={(event) =>
+                              updateReceiptForm(
+                                "customerLocation",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          Phone
+                          <input
+                            value={receiptForm.customerPhone}
+                            onChange={(event) =>
+                              updateReceiptForm("customerPhone", event.target.value)
+                            }
+                          />
+                        </label>
+                        <label className="billing-wide-field">
+                          Project title
+                          <textarea
+                            rows="2"
+                            value={receiptForm.projectTitle}
+                            onChange={(event) =>
+                              updateReceiptForm("projectTitle", event.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <div className="billing-inline-actions">
                         <button
                           type="button"
-                          className="billing-icon-button"
-                          onClick={() => removePaymentEntry(index)}
-                          aria-label="Remove payment"
+                          className="billing-primary-button"
+                          onClick={saveReceipt}
+                          disabled={receiptSaving}
                         >
-                          x
+                          {receiptSaving ? "Saving..." : "Save receipt"}
+                        </button>
+                        <button
+                          type="button"
+                          className="billing-secondary-button"
+                          onClick={() => startNewReceipt()}
+                        >
+                          <PlusIcon />
+                          New receipt
+                        </button>
+                        <button
+                          type="button"
+                          className="billing-secondary-button"
+                          onClick={() => startNewReceipt(totals.balanceDue)}
+                          disabled={totals.balanceDue <= 0}
+                        >
+                          Use balance due
+                        </button>
+                        <button
+                          type="button"
+                          className="billing-secondary-button"
+                          onClick={printInvoice}
+                        >
+                          <PrinterIcon />
+                          Invoice preview
                         </button>
                       </div>
-                    ))}
-                  </div>
-                  <div className="billing-inline-actions">
-                    <button
-                      type="button"
-                      className="billing-secondary-button"
-                      onClick={() => addPaymentEntry()}
-                    >
-                      <PlusIcon />
-                      Add receipt
-                    </button>
-                    <button
-                      type="button"
-                      className="billing-secondary-button"
-                      onClick={() => addPaymentEntry(totals.balanceDue)}
-                      disabled={totals.balanceDue <= 0}
-                    >
-                      Mark paid in full
-                    </button>
-                  </div>
+
+                      <div className="billing-receipts-list">
+                        {receipts.map((receipt) => (
+                          <div
+                            key={receipt._id}
+                            className={`billing-receipt-row ${
+                              selectedReceiptId === receipt._id ? "active" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className="billing-receipt-select"
+                              onClick={() => selectReceipt(receipt)}
+                            >
+                              <strong>Receipt #{receipt.receiptNumber}</strong>
+                              <span>{formatDate(receipt.receiptDate)}</span>
+                              <em>
+                                {CURRENCY_SYMBOL} {formatMoney(receipt.amount)}
+                              </em>
+                            </button>
+                            <button
+                              type="button"
+                              className="billing-icon-button billing-print-icon-button"
+                              onClick={() => printReceipt(receipt)}
+                              aria-label={`Print receipt #${receipt.receiptNumber}`}
+                            >
+                              <PrinterIcon />
+                            </button>
+                            <button
+                              type="button"
+                              className="billing-icon-button"
+                              onClick={() => openDeleteReceiptDialog(receipt)}
+                              aria-label={`Delete receipt #${receipt.receiptNumber}`}
+                            >
+                              <TrashIcon width={15} height={15} />
+                            </button>
+                          </div>
+                        ))}
+                        {!receipts.length && (
+                          <p className="billing-field-note">
+                            No linked receipts yet.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </fieldset>
               )}
 
@@ -1601,7 +2065,14 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
             </form>
 
             <div className="billing-preview-pane">
-              <BillingPreview form={form} totals={totals} />
+              {activePreview === "receipt" && formMeta.kind === "invoice" ? (
+                <BillingReceiptPreview
+                  receipt={receiptForm}
+                  invoice={form}
+                />
+              ) : (
+                <BillingPreview form={form} totals={totals} />
+              )}
             </div>
           </div>
         </section>

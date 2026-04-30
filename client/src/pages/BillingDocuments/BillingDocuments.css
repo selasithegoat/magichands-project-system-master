@@ -169,22 +169,6 @@
   box-shadow: none;
 }
 
-.billing-message {
-  margin-bottom: 1rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--billing-success) 42%, var(--billing-border));
-  border-radius: var(--billing-control-radius);
-  background: var(--billing-success-soft);
-  color: var(--billing-success);
-  font-weight: 700;
-}
-
-.billing-message.error {
-  border-color: var(--billing-danger-border);
-  background: var(--billing-danger-soft);
-  color: var(--billing-danger);
-}
-
 .billing-documents-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -540,15 +524,26 @@
 .billing-items-editor,
 .billing-payments-editor,
 .billing-tax-editor,
+.billing-receipt-editor,
+.billing-receipts-list,
 .billing-inline-actions {
   grid-column: 1 / -1;
 }
 
 .billing-items-editor,
 .billing-payments-editor,
-.billing-tax-editor {
+.billing-tax-editor,
+.billing-receipts-list {
   display: grid;
   gap: 0.75rem;
+}
+
+.billing-field-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--billing-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .billing-inline-actions {
@@ -577,6 +572,77 @@
 
 .billing-tax-row {
   grid-template-columns: minmax(0, 1fr) 120px 140px 36px;
+}
+
+.billing-receipt-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 0.95rem;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-control-radius);
+  background: var(--billing-surface-alt);
+}
+
+.billing-receipt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-control-radius);
+  background: var(--billing-surface-alt);
+}
+
+.billing-receipt-row.active {
+  border-color: color-mix(in srgb, var(--billing-primary) 40%, var(--billing-border));
+  background: var(--billing-primary-soft);
+}
+
+.billing-receipt-select {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.billing-receipt-select strong,
+.billing-receipt-select span,
+.billing-receipt-select em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.billing-receipt-select span {
+  color: var(--billing-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.billing-receipt-select em {
+  color: var(--billing-text);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.billing-print-icon-button {
+  border-color: color-mix(in srgb, var(--billing-primary) 35%, var(--billing-border));
+  background: var(--billing-primary-soft);
+  color: var(--billing-primary);
+}
+
+.billing-print-icon-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .billing-item-row label:first-child {
@@ -654,6 +720,11 @@
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.billing-receipt-paper {
+  min-height: 650px;
+  padding: 42px 38px;
 }
 
 .billing-paper-header {
@@ -797,6 +868,31 @@
   font-weight: 900;
 }
 
+.billing-receipt-table {
+  margin-top: 1.1rem;
+}
+
+.billing-receipt-table th:first-child,
+.billing-receipt-table td:first-child {
+  width: auto;
+  text-align: left;
+}
+
+.billing-receipt-table th:last-child,
+.billing-receipt-table td:last-child {
+  width: 118px;
+  text-align: right;
+}
+
+.billing-receipt-table tfoot .billing-footer-label {
+  border: 0;
+  text-align: right;
+}
+
+.billing-receipt-table tfoot .billing-footer-amount {
+  border-top: 0;
+}
+
 .billing-paper-notes {
   gap: 0.25rem;
   font-size: 12px;
@@ -838,7 +934,8 @@
 @container (max-width: 740px) {
   .billing-item-row,
   .billing-payment-row,
-  .billing-tax-row {
+  .billing-tax-row,
+  .billing-receipt-editor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -883,7 +980,9 @@
   .billing-form fieldset,
   .billing-item-row,
   .billing-payment-row,
-  .billing-tax-row {
+  .billing-tax-row,
+  .billing-receipt-editor,
+  .billing-receipt-select {
     grid-template-columns: 1fr;
   }
 
