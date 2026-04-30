@@ -132,6 +132,11 @@ const calculateTotals = (lineItems, paymentEntries, taxEntries = []) => {
   };
 };
 
+const isPaidInFull = (totals) =>
+  toPositiveMoney(totals?.totalAmount) > 0 &&
+  toPositiveMoney(totals?.paidAmount) > 0 &&
+  roundMoney(totals?.balanceDue) <= 0;
+
 const receiptToPaymentEntry = (receipt) => ({
   label: "Receipt",
   receiptNumber: String(receipt.receiptNumber || ""),
@@ -156,6 +161,13 @@ const syncInvoiceReceipts = async (invoiceId, userId = null) => {
     paymentEntries,
     invoice.taxEntries,
   );
+  if (
+    invoice.kind === "invoice" &&
+    invoice.status !== "void" &&
+    isPaidInFull(invoice.totals)
+  ) {
+    invoice.status = "paid";
+  }
   invoice.updatedBy = userId || invoice.updatedBy || null;
   await invoice.save();
 
@@ -236,9 +248,15 @@ const buildReceiptQuery = (req) => {
   return query;
 };
 
-const sendReceipt = async (res, receipt, invoiceId, status = 200) => {
+const sendReceipt = async (
+  res,
+  receipt,
+  invoiceId,
+  status = 200,
+  invoice = null,
+) => {
   const receipts = invoiceId ? await listReceiptsForInvoice(invoiceId) : [];
-  return res.status(status).json({ receipt, receipts });
+  return res.status(status).json({ receipt, receipts, invoice });
 };
 
 const handleDuplicateReceiptNumber = (error, res) => {
@@ -322,8 +340,11 @@ const createBillingReceipt = async (req, res) => {
       await syncReceiptCounter(receiptType, manualNumber);
     }
 
-    await syncInvoiceReceipts(invoice._id, req.user?._id || null);
-    return sendReceipt(res, receipt.toObject(), invoice._id, 201);
+    const syncedInvoice = await syncInvoiceReceipts(
+      invoice._id,
+      req.user?._id || null,
+    );
+    return sendReceipt(res, receipt.toObject(), invoice._id, 201, syncedInvoice);
   } catch (error) {
     if (handleDuplicateReceiptNumber(error, res)) return undefined;
     console.error("Failed to create billing receipt", error);
@@ -375,8 +396,11 @@ const updateBillingReceipt = async (req, res) => {
       await syncReceiptCounter(receipt.receiptType, manualNumber);
     }
 
-    await syncInvoiceReceipts(invoice._id, req.user?._id || null);
-    return sendReceipt(res, receipt.toObject(), invoice._id);
+    const syncedInvoice = await syncInvoiceReceipts(
+      invoice._id,
+      req.user?._id || null,
+    );
+    return sendReceipt(res, receipt.toObject(), invoice._id, 200, syncedInvoice);
   } catch (error) {
     if (handleDuplicateReceiptNumber(error, res)) return undefined;
     console.error("Failed to update billing receipt", error);
@@ -397,11 +421,12 @@ const deleteBillingReceipt = async (req, res) => {
 
     const invoiceId = receipt.invoiceDocument;
     await receipt.deleteOne();
-    await syncInvoiceReceipts(invoiceId, req.user?._id || null);
+    const invoice = await syncInvoiceReceipts(invoiceId, req.user?._id || null);
     const receipts = await listReceiptsForInvoice(invoiceId);
 
     return res.json({
       receipts,
+      invoice,
       message: "Billing receipt deleted permanently.",
     });
   } catch (error) {

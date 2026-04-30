@@ -903,15 +903,16 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   }, [canAccess, makeApiUrl, search, selectedId, statusFilter, typeFilter]);
 
   const syncReceiptState = useCallback(
-    (nextReceipts, invoiceId, { replacePayments = false } = {}) => {
+    (nextReceipts, invoiceId, { replacePayments = false, invoice = null } = {}) => {
       const normalizedReceipts = Array.isArray(nextReceipts) ? nextReceipts : [];
       setReceipts(normalizedReceipts);
 
-      if (replacePayments || normalizedReceipts.length > 0) {
+      if (replacePayments || normalizedReceipts.length > 0 || invoice?.status) {
         setForm((prev) =>
           prev._id === invoiceId
             ? {
                 ...prev,
+                status: invoice?.status || prev.status,
                 paymentEntries: receiptsToPaymentEntries(normalizedReceipts),
               }
             : prev,
@@ -1118,7 +1119,10 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
       const savedReceipt = data.receipt;
       const nextReceipts = Array.isArray(data.receipts) ? data.receipts : [];
-      syncReceiptState(nextReceipts, form._id, { replacePayments: true });
+      syncReceiptState(nextReceipts, form._id, {
+        replacePayments: true,
+        invoice: data.invoice,
+      });
       setSelectedReceiptId(savedReceipt._id);
       setReceiptForm(makeReceiptForm(savedReceipt));
       setActivePreview("receipt");
@@ -1148,7 +1152,10 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
       }
 
       const nextReceipts = Array.isArray(data.receipts) ? data.receipts : [];
-      syncReceiptState(nextReceipts, form._id, { replacePayments: true });
+      syncReceiptState(nextReceipts, form._id, {
+        replacePayments: true,
+        invoice: data.invoice,
+      });
       setSelectedReceiptId("");
       setReceiptForm(
         createReceiptDraftFromInvoice(form, Math.max(0, totals.balanceDue || 0)),
