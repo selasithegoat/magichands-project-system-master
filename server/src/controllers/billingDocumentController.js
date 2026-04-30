@@ -463,17 +463,13 @@ const getBillingDocumentById = async (req, res) => {
 const createBillingDocument = async (req, res) => {
   try {
     const sanitized = sanitizeDocumentInput(req.body);
-    const manualNumber =
-      sanitized.kind === "invoice" && hasSubmittedDocumentNumber(req.body)
-        ? parseManualDocumentNumber(req.body.documentNumber)
-        : null;
-    if (
-      sanitized.kind === "invoice" &&
-      hasSubmittedDocumentNumber(req.body) &&
-      !manualNumber
-    ) {
+    const manualNumber = hasSubmittedDocumentNumber(req.body)
+      ? parseManualDocumentNumber(req.body.documentNumber)
+      : null;
+    if (hasSubmittedDocumentNumber(req.body) && !manualNumber) {
+      const numberLabel = sanitized.kind === "invoice" ? "Invoice" : "Quote";
       return res.status(400).json({
-        message: "Invoice number must be a positive whole number.",
+        message: `${numberLabel} number must be a positive whole number.`,
       });
     }
 
@@ -512,17 +508,13 @@ const updateBillingDocument = async (req, res) => {
     }
 
     const sanitized = sanitizeDocumentInput(req.body, document);
-    const manualNumber =
-      document.kind === "invoice" && hasSubmittedDocumentNumber(req.body)
-        ? parseManualDocumentNumber(req.body.documentNumber)
-        : null;
-    if (
-      document.kind === "invoice" &&
-      hasSubmittedDocumentNumber(req.body) &&
-      !manualNumber
-    ) {
+    const manualNumber = hasSubmittedDocumentNumber(req.body)
+      ? parseManualDocumentNumber(req.body.documentNumber)
+      : null;
+    if (hasSubmittedDocumentNumber(req.body) && !manualNumber) {
+      const numberLabel = document.kind === "invoice" ? "Invoice" : "Quote";
       return res.status(400).json({
-        message: "Invoice number must be a positive whole number.",
+        message: `${numberLabel} number must be a positive whole number.`,
       });
     }
 

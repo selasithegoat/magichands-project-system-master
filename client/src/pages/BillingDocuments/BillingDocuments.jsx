@@ -429,8 +429,7 @@ const calculateTotals = (lineItems, paymentEntries, taxEntries = []) => {
 
 const buildPayload = (form) => ({
   documentType: form.documentType,
-  documentNumber:
-    getMeta(form.documentType).kind === "invoice" ? form.documentNumber : "",
+  documentNumber: form.documentNumber,
   status: form.status,
   issueDate: form.issueDate,
   dueDate: getMeta(form.documentType).kind === "invoice" ? form.dueDate : "",
@@ -558,7 +557,7 @@ const BillingPreview = ({ form, totals }) => {
             </div>
           )}
           <div>
-            <dt>{isInvoice ? "Invoice number" : "Reference"}</dt>
+            <dt>{isInvoice ? "Invoice number" : "Quote number"}</dt>
             <dd>{form.documentNumber || "Pending"}</dd>
           </div>
           {isInvoice && form.sourceQuoteNumber && (
@@ -1635,22 +1634,20 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                     <option value="void">Void</option>
                   </select>
                 </label>
-                {formMeta.kind === "invoice" && (
-                  <label>
-                    Invoice number
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      inputMode="numeric"
-                      placeholder={form._id ? "" : "Auto generated"}
-                      value={form.documentNumber}
-                      onChange={(event) =>
-                        updateForm(["documentNumber"], event.target.value)
-                      }
-                    />
-                  </label>
-                )}
+                <label>
+                  {formMeta.kind === "invoice" ? "Invoice number" : "Quote number"}
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder={form._id ? "" : "Auto generated"}
+                    value={form.documentNumber}
+                    onChange={(event) =>
+                      updateForm(["documentNumber"], event.target.value)
+                    }
+                  />
+                </label>
                 <label>
                   Issue date
                   <input
