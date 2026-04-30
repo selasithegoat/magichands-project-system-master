@@ -30,6 +30,9 @@ const THREAD_HIDDEN_OPEN_POLL_INTERVAL_MS = 60000;
 const THREAD_HIDDEN_IDLE_POLL_INTERVAL_MS = 120000;
 const THREAD_FETCH_DEDUPE_MS = 1200;
 const MESSAGE_FETCH_DEDUPE_MS = 900;
+const CHAT_MESSAGE_PAGE_SIZE = 60;
+const CHAT_MESSAGE_FETCH_MAX_LIMIT = 100;
+const CHAT_UNREAD_CONTEXT_MESSAGES = 6;
 const USER_SEARCH_CACHE_MS = 30000;
 const PROJECT_SEARCH_CACHE_MS = 20000;
 const LOCAL_CHANGE_MATCH_WINDOW_MS = 5000;
@@ -516,6 +519,18 @@ const getThreadActivityTimestamp = (thread) => {
 const compareThreadsByActivityDesc = (left, right) =>
   getThreadActivityTimestamp(right) - getThreadActivityTimestamp(left);
 
+const clampChatMessageFetchLimit = (limit = CHAT_MESSAGE_PAGE_SIZE) => {
+  const safeLimit = Number(limit) || CHAT_MESSAGE_PAGE_SIZE;
+  return Math.min(CHAT_MESSAGE_FETCH_MAX_LIMIT, Math.max(1, safeLimit));
+};
+
+const resolveUnreadChatMessageFetchLimit = (unreadCount = 0) => {
+  const safeUnreadCount = Math.max(0, Number(unreadCount) || 0);
+  return clampChatMessageFetchLimit(
+    Math.max(CHAT_MESSAGE_PAGE_SIZE, safeUnreadCount + CHAT_UNREAD_CONTEXT_MESSAGES),
+  );
+};
+
 const areStringArraysEqual = (left, right) => {
   const safeLeft = Array.isArray(left) ? left : [];
   const safeRight = Array.isArray(right) ? right : [];
@@ -761,6 +776,17 @@ const buildMentionHandle = (user) => {
 const getChatUserDisplayName = (entry) =>
   toText(entry?.name) ||
   `${toText(entry?.firstName)} ${toText(entry?.lastName)}`.trim();
+
+const getChatUserAvatarUrl = (entry) =>
+  toText(
+    entry?.avatarUrl ||
+      entry?.avatar ||
+      entry?.photoUrl ||
+      entry?.photo ||
+      entry?.profileImage ||
+      entry?.profilePicture ||
+      entry?.imageUrl,
+  );
 
 const getActiveMention = (text, caretPosition) => {
   if (!Number.isFinite(caretPosition)) return null;
@@ -1077,6 +1103,11 @@ const ChatDock = ({ user, theme = "light" }) => {
     isTyping: false,
     lastSentAt: 0,
   });
+  const activeThreadRef = useRef(null);
+  const unreadScrollTargetRef = useRef({
+    threadId: "",
+    unreadCount: 0,
+  });
   const typingIdleTimerRef = useRef(null);
   const typingIndicatorTimersRef = useRef(new Map());
   const incomingPreviewHideTimerRef = useRef(null);
@@ -1095,7 +1126,7 @@ const ChatDock = ({ user, theme = "light" }) => {
       firstName: user?.firstName,
       lastName: user?.lastName,
       name: user?.name,
-      avatarUrl: user?.avatarUrl,
+      avatarUrl: getChatUserAvatarUrl(user),
       role: user?.role,
       department: Array.isArray(user?.department)
         ? user.department
@@ -1105,11 +1136,17 @@ const ChatDock = ({ user, theme = "light" }) => {
     }),
     [
       currentUserId,
+      user?.avatar,
       user?.avatarUrl,
       user?.department,
       user?.firstName,
+      user?.imageUrl,
       user?.lastName,
       user?.name,
+      user?.photo,
+      user?.photoUrl,
+      user?.profileImage,
+      user?.profilePicture,
       user?.role,
     ],
   );
@@ -1171,7 +1208,8 @@ const ChatDock = ({ user, theme = "light" }) => {
           threadId: toIdString(thread?._id),
           senderName,
           senderAvatarUrl:
-            toText(sender?.avatarUrl) || toText(thread?.counterpart?.avatarUrl),
+            getChatUserAvatarUrl(sender) ||
+            getChatUserAvatarUrl(thread?.counterpart),
           threadName: threadName && threadName !== senderName ? threadName : "",
           messagePreview: toText(thread?.lastMessagePreview) || "Sent a message",
           unreadCount: Number(thread?.unreadCount) || 0,
@@ -1430,6 +1468,10 @@ const ChatDock = ({ user, theme = "light" }) => {
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
   }, [activeThreadId]);
+
+  useEffect(() => {
+    activeThreadRef.current = activeThread;
+  }, [activeThread]);
 
   useEffect(() => {
     isOpenRef.current = isOpen;
@@ -2145,6 +2187,7 @@ const ChatDock = ({ user, theme = "light" }) => {
         mode = "replace",
         force = false,
         showLoading = false,
+        limit = CHAT_MESSAGE_PAGE_SIZE,
         minIntervalMs = MESSAGE_FETCH_DEDUPE_MS,
       } = {},
     ) => {
@@ -2156,7 +2199,8 @@ const ChatDock = ({ user, theme = "light" }) => {
 
       const isPrepend = mode === "prepend";
       const shouldReplace = mode === "replace";
-      const requestKey = `${threadId}|${before || "latest"}`;
+      const messageFetchLimit = clampChatMessageFetchLimit(limit);
+      const requestKey = `${threadId}|${before || "latest"}|${messageFetchLimit}`;
       const cachedState = messageFetchStateRef.current.get(requestKey);
       const now = Date.now();
       const requestIdRef = isPrepend
@@ -2180,7 +2224,13 @@ const ChatDock = ({ user, theme = "light" }) => {
         } else if (mode === "preserve") {
           setMessages((prev) => mergeChatMessages(prev, nextMessages));
         } else {
-          messageScrollActionRef.current = "bottom";
+          const unreadTarget = unreadScrollTargetRef.current;
+          messageScrollActionRef.current =
+            unreadTarget.threadId === threadId &&
+            unreadTarget.unreadCount > 0 &&
+            nextMessages.length > 0
+              ? "first-unread"
+              : "bottom";
           setMessages(nextMessages);
           setMessagesHasOlder(Boolean(responseData?.hasOlder));
         }
@@ -2227,7 +2277,7 @@ const ChatDock = ({ user, theme = "light" }) => {
 
       const requestPromise = (async () => {
         const params = new URLSearchParams();
-        params.set("limit", "60");
+        params.set("limit", String(messageFetchLimit));
         if (before) {
           params.set("before", before);
         }
@@ -2362,11 +2412,20 @@ const ChatDock = ({ user, theme = "light" }) => {
 
   useEffect(() => {
     if (!isOpen || !activeThreadId) return;
+    const openingUnreadCount =
+      Number(activeThreadRef.current?.unreadCount) || 0;
+    unreadScrollTargetRef.current = {
+      threadId: activeThreadId,
+      unreadCount: Math.max(0, openingUnreadCount),
+    };
     setMessages([]);
     setMessagesHasOlder(false);
     messageScrollActionRef.current = "";
     prependScrollStateRef.current = null;
-    void fetchMessages(activeThreadId, { showLoading: true });
+    void fetchMessages(activeThreadId, {
+      showLoading: true,
+      limit: resolveUnreadChatMessageFetchLimit(openingUnreadCount),
+    });
   }, [activeThreadId, fetchMessages, isOpen]);
 
   useLayoutEffect(() => {
@@ -2390,9 +2449,39 @@ const ChatDock = ({ user, theme = "light" }) => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
 
+    if (messageScrollActionRef.current === "first-unread") {
+      const unreadTarget = unreadScrollTargetRef.current;
+      const unreadCount = Math.max(0, Number(unreadTarget?.unreadCount) || 0);
+      const firstUnreadIndex = Math.max(messages.length - unreadCount, 0);
+      const firstUnreadMessageId = toIdString(messages[firstUnreadIndex]?._id);
+      const firstUnreadMessageNode = firstUnreadMessageId
+        ? document.getElementById(`chat-dock-message-${firstUnreadMessageId}`)
+        : null;
+
+      if (
+        firstUnreadMessageNode &&
+        unreadTarget.threadId === activeThreadId &&
+        unreadCount > 0
+      ) {
+        firstUnreadMessageNode.scrollIntoView({
+          behavior: "auto",
+          block: "start",
+        });
+      } else {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "auto",
+          block: "end",
+        });
+      }
+      unreadScrollTargetRef.current = {
+        threadId: "",
+        unreadCount: 0,
+      };
+    }
+
     messageScrollActionRef.current = "";
     prependScrollStateRef.current = null;
-  }, [isOpen, messages]);
+  }, [activeThreadId, isOpen, messages]);
 
   useEffect(() => {
     if (!currentUserId) return undefined;
@@ -2491,7 +2580,8 @@ const ChatDock = ({ user, theme = "light" }) => {
           threadName: changedThread?.name,
           senderName,
           senderAvatarUrl:
-            toText(sender?.avatarUrl) || toText(changedThread?.counterpart?.avatarUrl),
+            getChatUserAvatarUrl(sender) ||
+            getChatUserAvatarUrl(changedThread?.counterpart),
           messagePreview,
         });
       });
@@ -2876,7 +2966,6 @@ const ChatDock = ({ user, theme = "light" }) => {
 
     if (threads.some((thread) => thread?._id === threadId)) {
       setActiveThreadId(threadId);
-      void markThreadRead(threadId);
       return;
     }
 
@@ -2890,7 +2979,6 @@ const ChatDock = ({ user, theme = "light" }) => {
     dismissIncomingPreview,
     fetchThreads,
     incomingPreview?.threadId,
-    markThreadRead,
     resetProjectRoutePicker,
     threads,
   ]);
@@ -3772,7 +3860,7 @@ const ChatDock = ({ user, theme = "light" }) => {
                           <span className="chat-dock-user-avatar-wrap">
                             <UserAvatar
                               name={entry.name}
-                              src={entry.avatarUrl}
+                              src={getChatUserAvatarUrl(entry)}
                               width="32px"
                               height="32px"
                             />
@@ -3819,11 +3907,27 @@ const ChatDock = ({ user, theme = "light" }) => {
                           } ${unreadCount > 0 ? "unread" : ""}`}
                           onClick={() => handleSelectThread(thread._id)}
                         >
-                          <span className="chat-dock-thread-icon" aria-hidden="true">
+                          <span
+                            className={`chat-dock-thread-icon ${
+                              thread.type === "direct" && thread.counterpart
+                                ? "avatar"
+                                : ""
+                            }`}
+                            aria-hidden="true"
+                          >
                             {thread.type === "public" ? (
                               <UsersIcon width="16" height="16" />
                             ) : (
-                              <PersonIcon width="16" height="16" />
+                              thread.counterpart ? (
+                                <UserAvatar
+                                  name={thread.counterpart.name || thread.name}
+                                  src={getChatUserAvatarUrl(thread.counterpart)}
+                                  width="36px"
+                                  height="36px"
+                                />
+                              ) : (
+                                <PersonIcon width="16" height="16" />
+                              )
                             )}
                           </span>
                           <span className="chat-dock-thread-copy">
@@ -3881,9 +3985,9 @@ const ChatDock = ({ user, theme = "light" }) => {
                               <span className="chat-dock-user-avatar-wrap">
                                 <UserAvatar
                                   name={activeThread.counterpart.name}
-                                  src={activeThread.counterpart.avatarUrl}
-                                  width="28px"
-                                  height="28px"
+                                  src={getChatUserAvatarUrl(activeThread.counterpart)}
+                                  width="30px"
+                                  height="30px"
                                 />
                                 {presenceMeta.isOnline && (
                                   <span
@@ -4014,12 +4118,14 @@ const ChatDock = ({ user, theme = "light" }) => {
                             className={`chat-dock-message-row ${isMine ? "mine" : ""}`}
                           >
                             {!isMine && (
-                              <UserAvatar
-                                name={message?.sender?.name}
-                                src={message?.sender?.avatarUrl}
-                                width="30px"
-                                height="30px"
-                              />
+                              <span className="chat-dock-user-avatar-wrap chat-dock-message-avatar">
+                                <UserAvatar
+                                  name={message?.sender?.name}
+                                  src={getChatUserAvatarUrl(message?.sender)}
+                                  width="32px"
+                                  height="32px"
+                                />
+                              </span>
                             )}
                             <div
                               className={`chat-dock-message-bubble ${
@@ -4668,9 +4774,9 @@ const ChatDock = ({ user, theme = "light" }) => {
                                     <span className="chat-dock-user-avatar-wrap">
                                       <UserAvatar
                                         name={entry.name}
-                                        src={entry.avatarUrl}
-                                        width="30px"
-                                        height="30px"
+                                        src={getChatUserAvatarUrl(entry)}
+                                        width="32px"
+                                        height="32px"
                                       />
                                       {presenceMeta.isOnline && (
                                         <span
@@ -4788,8 +4894,8 @@ const ChatDock = ({ user, theme = "light" }) => {
                   <UserAvatar
                     name={preview.senderName}
                     src={preview.senderAvatarUrl}
-                    width="44px"
-                    height="44px"
+                    width="40px"
+                    height="40px"
                   />
                 </span>
                 <span className="chat-dock-incoming-preview-copy">

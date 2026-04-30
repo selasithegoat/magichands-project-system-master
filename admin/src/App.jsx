@@ -304,7 +304,7 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
-      {user?._id && <ChatDock user={user} />}
+      {user?._id && <ChatDock user={user} theme="dark" />}
       <Toaster
         position="top-right"
         reverseOrder={false}

@@ -1447,16 +1447,24 @@
 
 /* Custom Scrollbar */
 .card-scroll-area::-webkit-scrollbar {
-  width: 6px;
+  width: var(--scrollbar-size, 10px);
 }
 
 .card-scroll-area::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track, transparent);
+  border-radius: var(--scrollbar-radius, 999px);
 }
 
 .card-scroll-area::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
+  border: 2px solid transparent;
+  border-radius: var(--scrollbar-radius, 999px);
+  background:
+    linear-gradient(
+      180deg,
+      var(--scrollbar-thumb-hover, #94a3b8),
+      var(--scrollbar-thumb, var(--border-color))
+    )
+    padding-box;
 }
 
 /* Emergency Theme */

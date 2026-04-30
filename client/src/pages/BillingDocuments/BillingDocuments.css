@@ -6,7 +6,10 @@
   --billing-border: var(--border-color, #e2e8f0);
   --billing-focus: var(--border-focus, var(--primary-color, #2563eb));
   --billing-primary: var(--btn-bg, var(--primary-color, #2563eb));
-  --billing-primary-hover: var(--btn-hover, var(--primary-color-hover, #1d4ed8));
+  --billing-primary-hover: var(
+    --btn-hover,
+    var(--primary-color-hover, #1d4ed8)
+  );
   --billing-primary-text: var(--btn-text, var(--text-invert, #ffffff));
   --billing-primary-soft: var(--primary-soft, rgba(37, 99, 235, 0.12));
   --billing-text: var(--text-primary, #1e293b);
@@ -105,7 +108,11 @@
 }
 
 .billing-primary-button {
-  border-color: color-mix(in srgb, var(--billing-primary) 72%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 72%,
+    var(--billing-border)
+  );
   background: var(--billing-primary);
   color: var(--billing-primary-text);
   box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 0.08));
@@ -133,7 +140,11 @@
 
 .billing-primary-button:hover,
 .billing-primary-button:focus-visible {
-  border-color: color-mix(in srgb, var(--billing-primary-hover) 78%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary-hover) 78%,
+    var(--billing-border)
+  );
   background: var(--billing-primary-hover);
 }
 
@@ -156,7 +167,11 @@
     var(--billing-danger) 50%,
     var(--billing-danger-border)
   );
-  background: color-mix(in srgb, var(--billing-danger) 14%, var(--billing-danger-soft));
+  background: color-mix(
+    in srgb,
+    var(--billing-danger) 14%,
+    var(--billing-danger-soft)
+  );
   color: var(--billing-danger);
 }
 
@@ -177,7 +192,11 @@
   margin: 0;
   padding: 0.9rem;
   border-bottom: 1px solid var(--billing-border);
-  background: color-mix(in srgb, var(--billing-card) 90%, var(--billing-surface-alt));
+  background: color-mix(
+    in srgb,
+    var(--billing-card) 90%,
+    var(--billing-surface-alt)
+  );
 }
 
 .billing-documents-toolbar label,
@@ -244,24 +263,25 @@
 .billing-document-list {
   position: fixed;
   top: 90px;
-  left: calc((var(--billing-list-width) - var(--billing-list-peek)) * -1);
+  left: calc(var(--billing-list-width) * -1);
   z-index: 980;
   width: var(--billing-list-width);
   max-height: calc(100vh - 180px);
   display: flex;
   flex-direction: column;
+  box-shadow: none;
   transition:
     transform 0.22s ease,
     box-shadow 0.22s ease;
 }
 
 .billing-documents-page.admin-portal .billing-document-list {
-  left: calc((var(--billing-list-width) - var(--billing-list-peek)) * -1);
+  left: calc(var(--billing-list-width) * -1);
 }
 
 .billing-document-list:hover,
 .billing-document-list:focus-within {
-  transform: translateX(calc(var(--billing-list-width) - var(--billing-list-peek)));
+  transform: translateX(var(--billing-list-width));
   box-shadow:
     var(--shadow-lg, 0 18px 36px rgb(0 0 0 / 0.16)),
     var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 0.06));
@@ -269,7 +289,7 @@
 
 .billing-documents-page.admin-portal .billing-document-list:hover,
 .billing-documents-page.admin-portal .billing-document-list:focus-within {
-  transform: translateX(calc(var(--billing-list-width) - var(--billing-list-peek)));
+  transform: translateX(var(--billing-list-width));
 }
 
 .billing-document-list::after {
@@ -331,7 +351,11 @@
 
 .billing-list-item:hover,
 .billing-list-item.active {
-  border-color: color-mix(in srgb, var(--billing-primary) 34%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 34%,
+    var(--billing-border)
+  );
   background: var(--billing-primary-soft);
 }
 
@@ -378,7 +402,11 @@
     var(--billing-danger) 50%,
     var(--billing-danger-border)
   );
-  background: color-mix(in srgb, var(--billing-danger) 14%, var(--billing-danger-soft));
+  background: color-mix(
+    in srgb,
+    var(--billing-danger) 14%,
+    var(--billing-danger-soft)
+  );
   transform: translateY(-1px);
 }
 
@@ -426,7 +454,11 @@
 
 .billing-status-badge.sent,
 .billing-status-badge.accepted {
-  border-color: color-mix(in srgb, var(--billing-primary) 32%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 32%,
+    var(--billing-border)
+  );
   background: var(--billing-primary-soft);
   color: var(--billing-primary);
 }
@@ -434,7 +466,11 @@
 .billing-status-badge.converted,
 .billing-status-badge.delivered,
 .billing-status-badge.paid {
-  border-color: color-mix(in srgb, var(--billing-success) 35%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-success) 35%,
+    var(--billing-border)
+  );
   background: var(--billing-success-soft);
   color: var(--billing-success);
 }
@@ -485,7 +521,10 @@
 
 .billing-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(430px, var(--billing-preview-width));
+  grid-template-columns: minmax(0, 1.08fr) minmax(
+      430px,
+      var(--billing-preview-width)
+    );
   gap: 1.25rem;
   padding: 1.25rem;
   align-items: start;
@@ -504,12 +543,18 @@
   padding: 1.15rem;
   border: 1px solid var(--billing-border);
   border-radius: var(--billing-radius);
-  background: color-mix(in srgb, var(--billing-card) 92%, var(--billing-surface-alt));
+  background: color-mix(
+    in srgb,
+    var(--billing-card) 92%,
+    var(--billing-surface-alt)
+  );
 }
 
 .billing-form legend {
   padding: 0 0.35rem;
-  color: var(--billing-text);
+  color: #13b04d;
+  font-size: 2rem;
+  font-variant: all-small-caps;
   font-weight: 900;
 }
 
@@ -622,7 +667,11 @@
 }
 
 .billing-receipt-row.active {
-  border-color: color-mix(in srgb, var(--billing-primary) 40%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 40%,
+    var(--billing-border)
+  );
   background: var(--billing-primary-soft);
 }
 
@@ -648,7 +697,11 @@
 
 .billing-linked-waybill-row:hover,
 .billing-linked-waybill-row:focus-visible {
-  border-color: color-mix(in srgb, var(--billing-primary) 40%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 40%,
+    var(--billing-border)
+  );
   background: var(--billing-primary-soft);
   transform: translateY(-1px);
 }
@@ -709,7 +762,11 @@
 }
 
 .billing-print-icon-button {
-  border-color: color-mix(in srgb, var(--billing-primary) 35%, var(--billing-border));
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 35%,
+    var(--billing-border)
+  );
   background: var(--billing-primary-soft);
   color: var(--billing-primary);
 }
@@ -729,7 +786,11 @@
 }
 
 .billing-item-row input[readonly] {
-  background: color-mix(in srgb, var(--billing-input) 72%, var(--billing-border));
+  background: color-mix(
+    in srgb,
+    var(--billing-input) 72%,
+    var(--billing-border)
+  );
   color: var(--billing-muted);
 }
 
@@ -819,7 +880,10 @@
 
 .billing-waybill-header {
   display: grid;
-  grid-template-columns: minmax(260px, 1.1fr) minmax(96px, 0.45fr) minmax(180px, 0.75fr);
+  grid-template-columns: minmax(260px, 1.1fr) minmax(96px, 0.45fr) minmax(
+      180px,
+      0.75fr
+    );
   gap: 1.2rem;
   align-items: start;
   margin-bottom: 0.8rem;
@@ -1514,5 +1578,226 @@
 
   .billing-paper-payment {
     margin-top: 0.9rem !important;
+  }
+}
+
+@media screen {
+/* Admin portal alignment */
+.billing-documents-page.admin-portal {
+  --billing-bg: var(--bg-dark, #0f172a);
+  --billing-card: var(--bg-card, #1e293b);
+  --billing-surface-alt: color-mix(in srgb, var(--bg-dark, #0f172a) 78%, var(--bg-card, #1e293b));
+  --billing-input: var(--bg-dark, #0f172a);
+  --billing-border: var(--border-color, #334155);
+  --billing-focus: var(--border-focus, #3b82f6);
+  --billing-primary: var(--btn-bg, #819db5);
+  --billing-primary-hover: var(--btn-hover, #6c8aa3);
+  --billing-primary-text: var(--btn-text, #0f172a);
+  --billing-primary-soft: rgba(var(--primary-rgb, 96, 165, 250), 0.12);
+  --billing-radius: var(--radius-lg, 8px);
+  --billing-control-radius: var(--radius-md, 6px);
+  --billing-preview-top: 90px;
+  --billing-admin-sidebar-width: 260px;
+  --scrollbar-size: 10px;
+  --scrollbar-radius: 999px;
+  --scrollbar-track: rgba(15, 23, 42, 0.48);
+  --scrollbar-track-hover: rgba(30, 41, 59, 0.72);
+  --scrollbar-thumb: rgba(129, 157, 181, 0.72);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.94);
+  --scrollbar-thumb-active: rgba(96, 165, 250, 0.92);
+  width: 100%;
+  max-width: 1560px;
+  padding: 1.5rem;
+}
+
+.billing-documents-page.admin-portal,
+.billing-documents-page.admin-portal * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--scrollbar-radius);
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar-track:hover {
+  background: var(--scrollbar-track-hover);
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--scrollbar-radius);
+  background:
+    linear-gradient(180deg, var(--scrollbar-thumb-hover), var(--scrollbar-thumb))
+    padding-box;
+  box-shadow: inset 0 0 0 1px rgba(248, 250, 252, 0.08);
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, rgba(203, 213, 225, 0.98), var(--scrollbar-thumb-hover))
+    padding-box;
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar-thumb:active {
+  background:
+    linear-gradient(180deg, var(--scrollbar-thumb-active), var(--scrollbar-thumb-hover))
+    padding-box;
+}
+
+.billing-documents-page.admin-portal *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.billing-documents-page.admin-portal .billing-documents-header {
+  margin-bottom: 1.25rem;
+}
+
+.billing-documents-page.admin-portal .billing-documents-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.billing-documents-page.admin-portal .billing-documents-header p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.billing-documents-page.admin-portal .billing-eyebrow {
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+}
+
+.billing-documents-page.admin-portal .billing-primary-button,
+.billing-documents-page.admin-portal .billing-secondary-button,
+.billing-documents-page.admin-portal .billing-icon-button {
+  border-radius: var(--radius-sm, 4px);
+  box-shadow: none;
+}
+
+.billing-documents-page.admin-portal .billing-primary-button,
+.billing-documents-page.admin-portal .billing-secondary-button {
+  min-height: 42px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.billing-documents-page.admin-portal .billing-primary-button:hover,
+.billing-documents-page.admin-portal .billing-primary-button:focus-visible,
+.billing-documents-page.admin-portal .billing-secondary-button:hover,
+.billing-documents-page.admin-portal .billing-secondary-button:focus-visible {
+  transform: none;
+  box-shadow: none;
+}
+
+.billing-documents-page.admin-portal .billing-secondary-button {
+  background: var(--billing-input);
+  color: var(--text-primary);
+}
+
+.billing-documents-page.admin-portal .billing-secondary-button:hover,
+.billing-documents-page.admin-portal .billing-secondary-button:focus-visible {
+  border-color: var(--text-secondary);
+  background: var(--billing-card);
+}
+
+.billing-documents-page.admin-portal .billing-document-list,
+.billing-documents-page.admin-portal .billing-document-editor,
+.billing-documents-page.admin-portal .billing-preview-pane {
+  border-radius: var(--radius-lg, 8px);
+  border-color: var(--border-color);
+  background: var(--billing-card);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+}
+
+.billing-documents-page.admin-portal .billing-document-list {
+  top: 90px;
+  left: calc(var(--billing-admin-sidebar-width) - var(--billing-list-width));
+  z-index: 90;
+}
+
+.billing-documents-page.admin-portal .billing-document-list:hover,
+.billing-documents-page.admin-portal .billing-document-list:focus-within {
+  transform: translateX(var(--billing-list-width));
+  box-shadow: 0 18px 36px -16px rgb(0 0 0 / 0.6);
+}
+
+.billing-documents-page.admin-portal .billing-document-list::after {
+  border-color: var(--border-color);
+  border-radius: var(--radius-md, 6px) 0 0 var(--radius-md, 6px);
+  background: var(--btn-bg, #819db5);
+  color: var(--btn-text, #0f172a);
+  box-shadow: 0 8px 16px -6px rgb(0 0 0 / 0.55);
+}
+
+.billing-documents-page.admin-portal .billing-list-header,
+.billing-documents-page.admin-portal .billing-documents-toolbar,
+.billing-documents-page.admin-portal .billing-editor-header {
+  border-color: var(--border-color);
+  background: color-mix(in srgb, var(--bg-card, #1e293b) 86%, var(--bg-dark, #0f172a));
+}
+
+.billing-documents-page.admin-portal .billing-documents-toolbar input,
+.billing-documents-page.admin-portal .billing-documents-toolbar select,
+.billing-documents-page.admin-portal .billing-form input,
+.billing-documents-page.admin-portal .billing-form select,
+.billing-documents-page.admin-portal .billing-form textarea {
+  border-radius: var(--radius-md, 6px);
+  background: var(--billing-input);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.billing-documents-page.admin-portal .billing-documents-toolbar input::placeholder,
+.billing-documents-page.admin-portal .billing-form input::placeholder,
+.billing-documents-page.admin-portal .billing-form textarea::placeholder {
+  color: var(--text-placeholder, var(--text-tertiary));
+}
+
+.billing-documents-page.admin-portal .billing-documents-toolbar input:focus,
+.billing-documents-page.admin-portal .billing-documents-toolbar select:focus,
+.billing-documents-page.admin-portal .billing-form input:focus,
+.billing-documents-page.admin-portal .billing-form select:focus,
+.billing-documents-page.admin-portal .billing-form textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.billing-documents-page.admin-portal .billing-list-item:hover,
+.billing-documents-page.admin-portal .billing-list-item.active,
+.billing-documents-page.admin-portal .billing-receipt-row.active,
+.billing-documents-page.admin-portal .billing-linked-waybill-row:hover,
+.billing-documents-page.admin-portal .billing-linked-waybill-row:focus-visible {
+  background: rgba(var(--primary-rgb, 96, 165, 250), 0.1);
+  border-color: rgba(var(--primary-rgb, 96, 165, 250), 0.3);
+}
+
+.billing-documents-page.admin-portal .billing-item-row,
+.billing-documents-page.admin-portal .billing-payment-row,
+.billing-documents-page.admin-portal .billing-tax-row,
+.billing-documents-page.admin-portal .billing-receipt-editor,
+.billing-documents-page.admin-portal .billing-receipt-row,
+.billing-documents-page.admin-portal .billing-linked-waybill-row,
+.billing-documents-page.admin-portal .billing-source-loader {
+  border-color: var(--border-color);
+  background: var(--billing-surface-alt);
+}
+
+.billing-documents-page.admin-portal .billing-preview-pane {
+  background: var(--billing-surface-alt);
+}
+}
+
+@media screen and (max-width: 1024px) {
+  .billing-documents-page.admin-portal {
+    --billing-admin-sidebar-width: 0px;
   }
 }

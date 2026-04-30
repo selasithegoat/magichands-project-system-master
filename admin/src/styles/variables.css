@@ -71,6 +71,15 @@
     0 4px 8px -6px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 18px 36px -16px rgb(0 0 0 / 0.6),
     0 10px 18px -10px rgb(0 0 0 / 0.5);
+
+  /* Scrollbars */
+  --scrollbar-size: 10px;
+  --scrollbar-radius: 999px;
+  --scrollbar-track: rgba(15, 23, 42, 0.48);
+  --scrollbar-track-hover: rgba(30, 41, 59, 0.72);
+  --scrollbar-thumb: rgba(129, 157, 181, 0.72);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.94);
+  --scrollbar-thumb-active: rgba(96, 165, 250, 0.92);
 }
 
 body {

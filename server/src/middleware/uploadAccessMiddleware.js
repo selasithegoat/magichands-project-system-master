@@ -14,18 +14,6 @@ const PROJECT_BOUND_CATEGORIES = new Set([
   "scope-reference-materials",
   "client-feedback",
 ]);
-const GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST = new Set(
-  String(process.env.AUTH_USERS_GLOBAL_DEPARTMENTS || "")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean),
-);
-
-if (GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST.size === 0) {
-  ["Administration", "Front Desk", "Stores"].forEach((value) =>
-    GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST.add(value.toLowerCase()),
-  );
-}
 
 const toObjectIdString = (value) => {
   if (!value) return "";
@@ -313,31 +301,9 @@ const findProjectForToken = async ({ token, projectSlug, requester }) => {
   return candidates[0];
 };
 
-const hasGlobalDirectoryAccess = (requesterDepartments) =>
-  requesterDepartments.some((department) =>
-    GLOBAL_DIRECTORY_DEPARTMENT_ALLOWLIST.has(department),
-  );
-
 const canAccessAvatar = (requester, owner) => {
   if (!requester || !owner) return false;
-  if (requester.role === "admin") return true;
-
-  const requesterId = toObjectIdString(requester._id || requester.id);
-  const ownerId = toObjectIdString(owner._id || owner.id);
-  if (requesterId && ownerId && requesterId === ownerId) return true;
-
-  const requesterDepartments = toDepartmentArray(requester.department)
-    .map((department) => String(department || "").trim().toLowerCase())
-    .filter(Boolean);
-  if (hasGlobalDirectoryAccess(requesterDepartments)) return true;
-
-  const ownerDepartments = toDepartmentArray(owner.department)
-    .map((department) => String(department || "").trim().toLowerCase())
-    .filter(Boolean);
-
-  return ownerDepartments.some((department) =>
-    requesterDepartments.includes(department),
-  );
+  return true;
 };
 
 const canAccessChatUpload = (requester, thread) => {

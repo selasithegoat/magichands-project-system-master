@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 const getInitials = (name) => {
   if (!name) return "?";
@@ -20,6 +20,8 @@ const UserAvatar = ({
   height = "24px",
   backgroundColor = "#fbbf24",
   textColor = "#FFFFFF",
+  className = "",
+  style = {},
 }) => {
   const widthNum = parseInt(width, 10) || 24;
   const heightNum = parseInt(height, 10) || 24;
@@ -27,9 +29,15 @@ const UserAvatar = ({
   const fontSize = Math.max(10, Math.round(size * 0.45));
   const initials = getInitials(name);
   const imageSrc = typeof src === "string" ? src.trim() : "";
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageSrc]);
 
   return (
     <div
+      className={className}
       style={{
         width,
         height,
@@ -46,14 +54,16 @@ const UserAvatar = ({
         lineHeight: 1,
         flexShrink: 0,
         overflow: "hidden",
+        ...style,
       }}
       aria-label={name || "User"}
       title={name || "User"}
     >
-      {imageSrc ? (
+      {imageSrc && !imageFailed ? (
         <img
           src={imageSrc}
           alt={name || "User"}
+          onError={() => setImageFailed(true)}
           style={{
             width: "100%",
             height: "100%",
