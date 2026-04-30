@@ -713,6 +713,22 @@ const BillingReceiptPreview = ({ receipt, invoice }) => {
   const company =
     receipt.companySnapshot || invoice.companySnapshot || COMPANY_PROFILES[meta.brand];
   const amount = toNumber(receipt.amount, 0);
+  const receiptId = receipt._id || "";
+  const savedPayments = Array.isArray(invoice.paymentEntries)
+    ? invoice.paymentEntries
+    : [];
+  const invoiceTotals = calculateTotals(
+    invoice.lineItems || [],
+    savedPayments,
+    invoice.taxEntries || [],
+  );
+  const paidExcludingCurrentReceipt = savedPayments.reduce((sum, entry) => {
+    if (receiptId && entry._id === receiptId) return sum;
+    return sum + toNumber(entry.amount, 0);
+  }, 0);
+  const balanceDue = roundMoney(
+    invoiceTotals.totalAmount - paidExcludingCurrentReceipt - amount,
+  );
   const receiptDate = receipt.receiptDate || todayIso();
   const receiptNumber = receipt.receiptNumber || "Pending";
   const invoiceNumber =
@@ -726,6 +742,10 @@ const BillingReceiptPreview = ({ receipt, invoice }) => {
     meta.brand === "magichands"
       ? `${CURRENCY_SYMBOL} ${formatMoney(amount)}`
       : formatMoney(amount);
+  const footerBalanceDue =
+    meta.brand === "magichands"
+      ? `${CURRENCY_SYMBOL} ${formatMoney(balanceDue)}`
+      : formatMoney(balanceDue);
   const accountLine = [
     accountType,
     customerName,
@@ -802,6 +822,12 @@ const BillingReceiptPreview = ({ receipt, invoice }) => {
             <td className="billing-footer-label">Total</td>
             <td className="billing-footer-amount">
               <strong>{footerAmount}</strong>
+            </td>
+          </tr>
+          <tr>
+            <td className="billing-footer-label">Balance due</td>
+            <td className="billing-footer-amount">
+              <strong>{footerBalanceDue}</strong>
             </td>
           </tr>
         </tfoot>

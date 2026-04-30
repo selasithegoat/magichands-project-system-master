@@ -738,6 +738,7 @@
 .billing-paper-header h2 {
   margin: 0;
   font-size: 29px;
+  font-variant: all-petite-caps;
   line-height: 1;
 }
 
