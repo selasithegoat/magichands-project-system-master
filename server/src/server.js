@@ -41,6 +41,7 @@ const digestRoutes = require("./routes/digestRoutes");
 const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
+const billingDocumentRoutes = require("./routes/billingDocumentRoutes");
 const helpRoutes = require("./routes/helpRoutes");
 const systemRoutes = require("./routes/systemRoutes");
 const { broadcastDataChange } = require("./utils/realtimeHub");
@@ -374,6 +375,7 @@ const realtimePaths = [
   "/api/reminders",
   "/api/admin",
   "/api/inventory",
+  "/api/billing-documents",
 ];
 app.use((req, res, next) => {
   if (!req.originalUrl.startsWith("/api")) return next();
@@ -427,6 +429,7 @@ app.use("/api/digests", digestRoutes);
 app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/billing-documents", billingDocumentRoutes);
 app.use("/api/help", helpRoutes);
 app.use("/api/system", systemRoutes);
 

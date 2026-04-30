@@ -32,6 +32,9 @@ const NewOrdersForm = lazy(
 const MinimalQuoteForm = lazy(
   () => import("@client/pages/CreateProject/QuoteWizard/MinimalQuoteForm"),
 );
+const BillingDocuments = lazy(
+  () => import("@client/pages/BillingDocuments/BillingDocuments"),
+);
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
@@ -230,6 +233,16 @@ function App() {
               <ProtectedRoute>
                 <AdminFrontDeskScope>
                   <MinimalQuoteForm />
+                </AdminFrontDeskScope>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/billing-documents"
+            element={
+              <ProtectedRoute>
+                <AdminFrontDeskScope>
+                  <BillingDocuments user={user} requestSource="admin" />
                 </AdminFrontDeskScope>
               </ProtectedRoute>
             }

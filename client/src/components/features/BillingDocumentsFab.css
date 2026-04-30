@@ -1,0 +1,94 @@
+.billing-documents-fab {
+  --billing-fab-primary: var(--btn-bg, var(--primary-color, #2563eb));
+  --billing-fab-hover: var(--btn-hover, var(--primary-color-hover, #1d4ed8));
+  --billing-fab-text: var(--btn-text, var(--text-invert, #ffffff));
+  --billing-fab-border: var(--border-color, rgba(37, 99, 235, 0.42));
+
+  position: fixed;
+  right: 24px;
+  bottom: 240px;
+  z-index: 905;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--billing-fab-primary) 58%, var(--billing-fab-border));
+  border-radius: 999px;
+  background: var(--billing-fab-primary);
+  color: var(--billing-fab-text);
+  cursor: pointer;
+  box-shadow: var(--shadow-md, 0 8px 16px rgb(0 0 0 / 0.18));
+  transition:
+    gap 0.2s ease,
+    padding 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.billing-documents-fab.with-frontdesk-stack {
+  bottom: 312px;
+}
+
+.billing-documents-fab:hover,
+.billing-documents-fab:focus-visible {
+  gap: 0.6rem;
+  padding-right: 1.05rem;
+  transform: translateY(-2px);
+  background: var(--billing-fab-hover);
+  box-shadow: var(--shadow-lg, 0 18px 36px rgb(0 0 0 / 0.22));
+}
+
+.billing-documents-fab.active {
+  border-color: color-mix(in srgb, var(--billing-fab-hover) 70%, var(--billing-fab-border));
+  background: var(--billing-fab-hover);
+}
+
+.billing-documents-fab-icon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--billing-fab-text) 16%, transparent);
+}
+
+.billing-documents-fab-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.billing-documents-fab-label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: max-width 0.2s ease, opacity 0.16s ease;
+}
+
+.billing-documents-fab:hover .billing-documents-fab-label,
+.billing-documents-fab:focus-visible .billing-documents-fab-label {
+  max-width: 86px;
+  opacity: 1;
+}
+
+@media (max-width: 720px) {
+  .billing-documents-fab {
+    right: 16px;
+    bottom: 196px;
+    padding: 0.6rem;
+  }
+
+  .billing-documents-fab.with-frontdesk-stack {
+    bottom: 256px;
+  }
+
+  .billing-documents-fab:hover,
+  .billing-documents-fab:focus-visible {
+    padding-right: 0.88rem;
+  }
+}

@@ -83,6 +83,13 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
             Orders Management
           </NavLink>
           <NavLink
+            to="/billing-documents"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <ReportsIcon className="nav-icon" />
+            Billing Documents
+          </NavLink>
+          <NavLink
             to="/cancelled-orders"
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >

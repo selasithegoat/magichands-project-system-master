@@ -34,6 +34,9 @@ const OrderActions = lazy(() => import("./pages/NewOrders/OrderActions"));
 const FrontDeskOrders = lazy(
   () => import("./pages/FrontDeskOrders/FrontDeskOrders"),
 );
+const BillingDocuments = lazy(
+  () => import("./pages/BillingDocuments/BillingDocuments"),
+);
 const EndOfDayUpdate = lazy(
   () => import("./pages/EndOfDayUpdate/EndOfDayUpdate"),
 );
@@ -588,6 +591,20 @@ function App() {
               engagedCount={engagedCount}
             >
               <FrontDeskOrders />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path="/billing-documents"
+          element={
+            <ProtectedLayout
+              activeView="new-orders"
+              user={user}
+              navigate={navigate}
+              projectCount={projectCount}
+              engagedCount={engagedCount}
+            >
+              <BillingDocuments user={user} />
             </ProtectedLayout>
           }
         />

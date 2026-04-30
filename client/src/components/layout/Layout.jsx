@@ -5,6 +5,7 @@ import NotificationModal from "../ui/NotificationModal";
 import Toast from "../ui/Toast";
 import ReminderAlertModal from "../features/ReminderAlertModal";
 import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
+import BillingDocumentsFab from "../features/BillingDocumentsFab";
 import ProjectCommentsFab from "../features/ProjectCommentsFab";
 import "./Layout.css";
 // Icons
@@ -1067,6 +1068,8 @@ const Layout = ({
           onOpenProject={openProjectFromCalendar}
         />
       )}
+
+      {isFrontDeskUser && <BillingDocumentsFab hasFrontDeskStack />}
 
       {isFrontDeskUser && (
         <button
