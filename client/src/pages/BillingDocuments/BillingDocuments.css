@@ -432,6 +432,7 @@
 }
 
 .billing-status-badge.converted,
+.billing-status-badge.delivered,
 .billing-status-badge.paid {
   border-color: color-mix(in srgb, var(--billing-success) 35%, var(--billing-border));
   background: var(--billing-success-soft);
@@ -564,6 +565,10 @@
 
 .billing-item-row {
   grid-template-columns: minmax(0, 1fr) 96px 126px 96px 36px;
+}
+
+.billing-item-row.waybill-item-row {
+  grid-template-columns: minmax(0, 1fr) 96px 126px 36px;
 }
 
 .billing-payment-row {
@@ -725,6 +730,167 @@
 .billing-receipt-paper {
   min-height: 650px;
   padding: 42px 38px;
+}
+
+.billing-waybill-paper {
+  width: min(100%, 980px);
+  min-height: 430px;
+  padding: 26px 28px 22px;
+  page: billing-waybill;
+}
+
+.billing-waybill-header {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(96px, 0.45fr) minmax(180px, 0.75fr);
+  gap: 1.2rem;
+  align-items: start;
+  margin-bottom: 0.8rem;
+}
+
+.billing-waybill-title-block {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.billing-waybill-title-block h2 {
+  width: max-content;
+  margin: 0;
+  padding: 0.28rem 0.65rem;
+  border-radius: 5px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 25px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.billing-waybill-address-box,
+.billing-waybill-reference-box {
+  min-height: 72px;
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 2px solid #111827;
+}
+
+.billing-waybill-address-box span,
+.billing-waybill-reference-box span {
+  white-space: pre-line;
+}
+
+.billing-waybill-number {
+  min-height: 84px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.billing-waybill-number span,
+.billing-waybill-number em {
+  color: #374151;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.billing-waybill-number strong {
+  color: #111827;
+  font-size: 24px;
+  letter-spacing: 0.08em;
+}
+
+.billing-waybill-brand {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+  text-align: right;
+}
+
+.billing-waybill-brand .billing-mh-logo,
+.billing-waybill-brand .billing-magic-gifts-logo {
+  width: 150px;
+  max-width: none;
+}
+
+.billing-waybill-brand span {
+  font-weight: 800;
+}
+
+.billing-waybill-project {
+  margin: 0.2rem 0 0.55rem;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.billing-waybill-table {
+  width: 100%;
+  min-height: 170px;
+  border-collapse: collapse;
+}
+
+.billing-waybill-table th,
+.billing-waybill-table td {
+  border: 2px solid #111827;
+  padding: 0.5rem 0.6rem;
+  vertical-align: top;
+}
+
+.billing-waybill-table th {
+  font-size: 13px;
+  font-weight: 900;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.billing-waybill-table th:first-child,
+.billing-waybill-table td:first-child {
+  width: 58px;
+  text-align: center;
+}
+
+.billing-waybill-table th:nth-child(3),
+.billing-waybill-table td:nth-child(3),
+.billing-waybill-table th:nth-child(4),
+.billing-waybill-table td:nth-child(4) {
+  width: 145px;
+  text-align: center;
+}
+
+.billing-waybill-table tbody tr {
+  height: 82px;
+}
+
+.billing-waybill-table td span {
+  display: block;
+}
+
+.billing-waybill-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 1.25fr);
+  gap: 1.5rem;
+  align-items: end;
+  margin-top: 0.65rem;
+  color: #111827;
+}
+
+.billing-waybill-contact {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.billing-waybill-signatures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 0.65rem 1rem;
+  font-size: 16px;
+  text-transform: uppercase;
 }
 
 .billing-paper-header {
@@ -1025,6 +1191,11 @@
   margin: 0;
 }
 
+@page billing-waybill {
+  size: A4 landscape;
+  margin: 0;
+}
+
 @media print {
   html,
   body {
@@ -1090,6 +1261,10 @@
     background: #ffffff !important;
   }
 
+  .billing-preview-pane.waybill-preview {
+    width: 297mm !important;
+  }
+
   .billing-paper {
     width: 210mm !important;
     min-height: 297mm !important;
@@ -1105,6 +1280,63 @@
     page-break-after: auto;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+
+  .billing-waybill-paper {
+    width: 297mm !important;
+    min-height: 105mm !important;
+    height: auto !important;
+    padding: 10mm 12mm !important;
+    page: billing-waybill;
+    font-size: 12px !important;
+  }
+
+  .billing-waybill-header {
+    grid-template-columns: minmax(0, 1.1fr) 36mm 48mm !important;
+    gap: 8mm !important;
+    margin-bottom: 5mm !important;
+  }
+
+  .billing-waybill-title-block h2 {
+    font-size: 22px !important;
+  }
+
+  .billing-waybill-address-box,
+  .billing-waybill-reference-box {
+    min-height: 22mm !important;
+  }
+
+  .billing-waybill-number strong {
+    font-size: 22px !important;
+  }
+
+  .billing-waybill-brand .billing-mh-logo,
+  .billing-waybill-brand .billing-magic-gifts-logo {
+    width: 38mm !important;
+  }
+
+  .billing-waybill-table {
+    min-height: 42mm !important;
+  }
+
+  .billing-waybill-table tbody tr {
+    height: 20mm !important;
+  }
+
+  .billing-waybill-table th,
+  .billing-waybill-table td {
+    padding: 0.28rem 0.4rem !important;
+  }
+
+  .billing-waybill-footer {
+    grid-template-columns: minmax(0, 1fr) 112mm !important;
+    gap: 8mm !important;
+    margin-top: 4mm !important;
+  }
+
+  .billing-waybill-signatures {
+    grid-template-columns: minmax(0, 1fr) 34mm !important;
+    font-size: 14px !important;
   }
 
   .billing-paper-header {

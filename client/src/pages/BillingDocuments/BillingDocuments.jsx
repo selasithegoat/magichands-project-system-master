@@ -20,6 +20,12 @@ const DOCUMENT_TYPES = [
     kind: "quote",
   },
   {
+    value: "magichands_waybill",
+    label: "Magichands Waybill",
+    brand: "magichands",
+    kind: "waybill",
+  },
+  {
     value: "magic_gifts_quote",
     label: "Magic Gifts Quote",
     brand: "magic_gifts",
@@ -30,6 +36,19 @@ const DOCUMENT_TYPES = [
     label: "Magic Gifts Invoice",
     brand: "magic_gifts",
     kind: "invoice",
+  },
+  {
+    value: "magic_gifts_waybill",
+    label: "Magic Gifts Waybill",
+    brand: "magic_gifts",
+    kind: "waybill",
+  },
+  {
+    value: "receivable_waybill",
+    label: "Receivable Waybill",
+    brand: "magichands",
+    kind: "waybill",
+    receivable: true,
   },
 ];
 
@@ -118,6 +137,22 @@ const DEFAULT_TAX_ENTRIES = [
 
 const CURRENCY_SYMBOL = "GH\u00a2";
 const DEFAULT_RECEIPT_ACCOUNT_TYPE = "Accounts receivable";
+
+const isReceivableWaybill = (meta) =>
+  meta?.kind === "waybill" && Boolean(meta.receivable);
+
+const getDocumentNoun = (meta) => {
+  if (meta.kind === "invoice") return "Invoice";
+  if (meta.kind === "quote") return "Quote";
+  if (isReceivableWaybill(meta)) return "Invoice / quote";
+  return "Waybill";
+};
+
+const getDocumentNumberLabel = (meta) =>
+  isReceivableWaybill(meta) ? "Invoice / quote number" : `${getDocumentNoun(meta)} number`;
+
+const getDocumentDateLabel = (meta) =>
+  meta.kind === "waybill" ? "Date" : meta.kind === "invoice" ? "Invoice date" : "Issue date";
 
 const EMPTY_CONFIRM_DIALOG = {
   isOpen: false,
@@ -209,6 +244,7 @@ const makeLineItem = (item = {}) => ({
   description: item.description || "",
   quantity: item.quantity ?? "",
   unitPrice: item.unitPrice ?? "",
+  quantityRemaining: item.quantityRemaining ?? "",
 });
 
 const makePaymentEntry = (entry = {}) => ({
@@ -324,6 +360,8 @@ const createBlankForm = (documentType = "magichands_invoice") => {
     taxEntries: [],
     sourceQuoteNumber: "",
     sourceQuoteDocument: "",
+    linkedInvoiceNumber: "",
+    linkedInvoiceDocument: "",
     companySnapshot: defaults.companySnapshot,
     notes: defaults.notes,
   };
@@ -369,6 +407,8 @@ const normalizeDocumentForForm = (document) => {
     taxEntries,
     sourceQuoteNumber: document.sourceQuoteNumber || "",
     sourceQuoteDocument: document.sourceQuoteDocument || "",
+    linkedInvoiceNumber: document.linkedInvoiceNumber || "",
+    linkedInvoiceDocument: document.linkedInvoiceDocument || "",
     companySnapshot: {
       ...defaults.companySnapshot,
       ...(document.companySnapshot || {}),
@@ -441,6 +481,7 @@ const buildPayload = (form) => ({
     description: item.description,
     quantity: toNumber(item.quantity, 0),
     unitPrice: toNumber(item.unitPrice, 0),
+    quantityRemaining: toNumber(item.quantityRemaining, 0),
   })),
   paymentEntries: form.paymentEntries.map((entry) => ({
     label: entry.label,
@@ -456,6 +497,8 @@ const buildPayload = (form) => ({
     .filter((entry) => entry.label || entry.rate),
   sourceQuoteNumber:
     getMeta(form.documentType).kind === "invoice" ? form.sourceQuoteNumber : "",
+  linkedInvoiceNumber:
+    getMeta(form.documentType).kind === "waybill" ? form.linkedInvoiceNumber : "",
   notes: form.notes,
 });
 
@@ -547,7 +590,7 @@ const BillingPreview = ({ form, totals }) => {
 
         <dl className="billing-paper-facts">
           <div>
-            <dt>{isInvoice ? "Invoice date" : "Issue date"}</dt>
+            <dt>{getDocumentDateLabel(meta)}</dt>
             <dd>{formatDate(form.issueDate)}</dd>
           </div>
           {isInvoice && (
@@ -557,7 +600,7 @@ const BillingPreview = ({ form, totals }) => {
             </div>
           )}
           <div>
-            <dt>{isInvoice ? "Invoice number" : "Quote number"}</dt>
+            <dt>{getDocumentNumberLabel(meta)}</dt>
             <dd>{form.documentNumber || "Pending"}</dd>
           </div>
           {isInvoice && form.sourceQuoteNumber && (
@@ -836,6 +879,127 @@ const BillingReceiptPreview = ({ receipt, invoice }) => {
   );
 };
 
+const BillingWaybillPreview = ({ form }) => {
+  const meta = getMeta(form.documentType);
+  const isReceivable = isReceivableWaybill(meta);
+  const company = form.companySnapshot || COMPANY_PROFILES[meta.brand];
+  const itemRows = form.lineItems.length ? form.lineItems : [makeLineItem()];
+  const deliveryAddress = toLines(form.client.address).length
+    ? form.client.address
+    : form.client.location;
+  const title = isReceivable ? "RECEIVABLE WAY BILL" : "WAY BILL";
+
+  return (
+    <section
+      className={`billing-paper billing-waybill-paper ${meta.brand} ${
+        isReceivable ? "receivable" : ""
+      }`}
+    >
+      <header className="billing-waybill-header">
+        <div className="billing-waybill-title-block">
+          <h2>{title}</h2>
+          {isReceivable ? (
+            <div className="billing-waybill-reference-box">
+              <strong>Order / quote number:</strong>
+              <span>{form.documentNumber || "\u00a0"}</span>
+            </div>
+          ) : (
+            <div className="billing-waybill-address-box">
+              <strong>Delivery Address:</strong>
+              <span>{deliveryAddress || "\u00a0"}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="billing-waybill-number">
+          {isReceivable ? (
+            form.linkedInvoiceNumber ? (
+              <>
+                <span>Invoice #</span>
+                <strong>{form.linkedInvoiceNumber}</strong>
+              </>
+            ) : null
+          ) : (
+            <>
+              <span>No.</span>
+              <strong>{form.documentNumber || "Pending"}</strong>
+              {form.linkedInvoiceNumber && (
+                <em>Invoice #{form.linkedInvoiceNumber}</em>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="billing-waybill-brand">
+          {meta.brand === "magichands" ? (
+            <img src="/mhlogo.png" alt="Magichands" className="billing-mh-logo" />
+          ) : (
+            <img
+              src="/magic-gifts-logo.png"
+              alt="Magic Gifts"
+              className="billing-magic-gifts-logo"
+            />
+          )}
+          <span>Date: {formatDate(form.issueDate)}</span>
+        </div>
+      </header>
+
+      {form.projectTitle && (
+        <h3 className="billing-waybill-project">{form.projectTitle}</h3>
+      )}
+
+      <table className="billing-waybill-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Description</th>
+            <th>Qty</th>
+            <th>Qty remaining</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itemRows.map((item, index) => (
+            <tr key={item._id || `${index}-${item.description}`}>
+              <td>{index + 1}</td>
+              <td>
+                {toLines(item.description).length
+                  ? toLines(item.description).map((line) => (
+                      <span key={line}>{line}</span>
+                    ))
+                  : "\u00a0"}
+              </td>
+              <td>
+                {isBlankValue(item.quantity) ? "" : formatQuantity(item.quantity)}
+              </td>
+              <td>
+                {isBlankValue(item.quantityRemaining)
+                  ? ""
+                  : formatQuantity(item.quantityRemaining)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <footer className="billing-waybill-footer">
+        <div className="billing-waybill-contact">
+          <strong>{company.name}</strong>
+          {(company.addressLines || []).map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+          {company.telephone && <span>Tel: {company.telephone}</span>}
+        </div>
+        <div className="billing-waybill-signatures">
+          <span>Delivered by: ................................</span>
+          <span>Sign: ........................</span>
+          <span>Received by: ................................</span>
+          <span>Sign: ........................</span>
+        </div>
+      </footer>
+    </section>
+  );
+};
+
 const BillingDocuments = ({ user, requestSource = "" }) => {
   const portalSource = requestSource || resolvePortalSource();
   const [documents, setDocuments] = useState([]);
@@ -1056,10 +1220,19 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     setForm((prev) => ({
       ...prev,
       documentType,
+      status:
+        meta.kind === "waybill" && ["converted", "paid"].includes(prev.status)
+          ? "draft"
+          : meta.kind === "invoice" && prev.status === "converted"
+            ? "draft"
+            : prev.status,
       dueDate: meta.kind === "invoice" ? prev.dueDate : "",
       paymentEntries: meta.kind === "invoice" ? prev.paymentEntries : [],
+      taxEntries: meta.kind === "waybill" ? [] : prev.taxEntries,
+      linkedInvoiceNumber: meta.kind === "waybill" ? prev.linkedInvoiceNumber : "",
+      linkedInvoiceDocument: "",
       companySnapshot: defaults.companySnapshot,
-      notes: defaults.notes,
+      notes: meta.kind === "waybill" ? getDefaultNotes(meta.brand) : defaults.notes,
     }));
   };
 
@@ -1282,14 +1455,14 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
   const openDeleteInvoiceDialog = (targetDocument = form) => {
     const targetMeta = getMeta(targetDocument.documentType);
-    if (!targetDocument?._id || targetMeta.kind !== "invoice") return;
+    if (!targetDocument?._id || targetMeta.kind === "quote") return;
 
     const number = targetDocument.documentNumber || "Pending";
     setConfirmDialog({
       isOpen: true,
       action: "delete-invoice",
       targetDocument,
-      title: "Delete Invoice",
+      title: `Delete ${targetMeta.kind === "waybill" ? "Waybill" : "Invoice"}`,
       message: `Permanently delete ${targetMeta.label} #${number}? This cannot be undone.`,
       confirmText: "Delete",
       cancelText: "Cancel",
@@ -1349,7 +1522,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
   const deleteInvoiceDocument = async (targetDocument = form) => {
     const targetMeta = getMeta(targetDocument.documentType);
-    if (!targetDocument?._id || targetMeta.kind !== "invoice") return;
+    if (!targetDocument?._id || targetMeta.kind === "quote") return;
 
     const number = targetDocument.documentNumber || "Pending";
     setSaving(true);
@@ -1514,6 +1687,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                 <option value="sent">Sent</option>
                 <option value="accepted">Accepted</option>
                 <option value="converted">Converted</option>
+                <option value="delivered">Delivered</option>
                 <option value="paid">Paid</option>
                 <option value="void">Void</option>
               </select>
@@ -1535,8 +1709,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                   >
                     <span>
                       <strong>
-                        {meta.kind === "invoice" ? "Invoice" : "Quote"} #
-                        {document.documentNumber}
+                        {getDocumentNoun(meta)} #{document.documentNumber}
                       </strong>
                       <small>{meta.label}</small>
                     </span>
@@ -1546,14 +1719,14 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                     </span>
                     <StatusBadge status={document.status} />
                   </button>
-                  {meta.kind === "invoice" && (
+                  {meta.kind !== "quote" && (
                     <button
                       type="button"
                       className="billing-list-delete"
                       onClick={() => openDeleteInvoiceDialog(document)}
                       disabled={saving}
-                      title={`Delete invoice #${document.documentNumber}`}
-                      aria-label={`Delete invoice #${document.documentNumber}`}
+                      title={`Delete ${meta.label} #${document.documentNumber}`}
+                      aria-label={`Delete ${meta.label} #${document.documentNumber}`}
                     >
                       <TrashIcon width={15} height={15} />
                     </button>
@@ -1590,7 +1763,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                   Convert to invoice
                 </button>
               )}
-              {formMeta.kind === "invoice" && form._id && (
+              {formMeta.kind !== "quote" && form._id && (
                 <button
                   type="button"
                   className="billing-secondary-button billing-danger-button"
@@ -1656,18 +1829,27 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                     {formMeta.kind === "quote" && (
                       <option value="converted">Converted</option>
                     )}
+                    {formMeta.kind === "waybill" && (
+                      <option value="delivered">Delivered</option>
+                    )}
                     {formMeta.kind === "invoice" && <option value="paid">Paid</option>}
                     <option value="void">Void</option>
                   </select>
                 </label>
                 <label>
-                  {formMeta.kind === "invoice" ? "Invoice number" : "Quote number"}
+                  {getDocumentNumberLabel(formMeta)}
                   <input
                     type="number"
                     min="1"
                     step="1"
                     inputMode="numeric"
-                    placeholder={form._id ? "" : "Auto generated"}
+                    placeholder={
+                      isReceivableWaybill(formMeta)
+                        ? "Invoice / quote number"
+                        : form._id
+                          ? ""
+                          : "Auto generated"
+                    }
                     value={form.documentNumber}
                     onChange={(event) =>
                       updateForm(["documentNumber"], event.target.value)
@@ -1675,7 +1857,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                   />
                 </label>
                 <label>
-                  Issue date
+                  {formMeta.kind === "waybill" ? "Date" : "Issue date"}
                   <input
                     type="date"
                     value={form.issueDate}
@@ -1689,6 +1871,21 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                       type="date"
                       value={form.dueDate}
                       onChange={(event) => updateForm(["dueDate"], event.target.value)}
+                    />
+                  </label>
+                )}
+                {formMeta.kind === "waybill" && !isReceivableWaybill(formMeta) && (
+                  <label>
+                    Linked invoice # (optional)
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={form.linkedInvoiceNumber}
+                      onChange={(event) =>
+                        updateForm(["linkedInvoiceNumber"], event.target.value)
+                      }
                     />
                   </label>
                 )}
@@ -1706,9 +1903,15 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
               </fieldset>
 
               <fieldset>
-                <legend>Client</legend>
+                <legend>
+                  {formMeta.kind === "waybill" ? "Waybill details" : "Client"}
+                </legend>
                 <label className="billing-wide-field">
-                  Client name
+                  {formMeta.kind === "waybill"
+                    ? isReceivableWaybill(formMeta)
+                      ? "Client / sender name"
+                      : "Client / recipient name"
+                    : "Client name"}
                   <textarea
                     rows="3"
                     value={form.client.name}
@@ -1717,6 +1920,18 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                     }
                   />
                 </label>
+                {formMeta.kind === "waybill" && (
+                  <label className="billing-wide-field">
+                    Delivery address
+                    <textarea
+                      rows="3"
+                      value={form.client.address}
+                      onChange={(event) =>
+                        updateForm(["client", "address"], event.target.value)
+                      }
+                    />
+                  </label>
+                )}
                 <label>
                   Location
                   <input
@@ -1742,7 +1957,12 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                 <legend>Items</legend>
                 <div className="billing-items-editor">
                   {form.lineItems.map((item, index) => (
-                    <div className="billing-item-row" key={item._id || index}>
+                    <div
+                      className={`billing-item-row ${
+                        formMeta.kind === "waybill" ? "waybill-item-row" : ""
+                      }`}
+                      key={item._id || index}
+                    >
                       <label>
                         Description
                         <textarea
@@ -1765,29 +1985,51 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                           }
                         />
                       </label>
-                      <label>
-                        Unit price
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.unitPrice}
-                          onChange={(event) =>
-                            updateLineItem(index, "unitPrice", event.target.value)
-                          }
-                        />
-                      </label>
-                      <div className="billing-item-total">
-                        <span>Total</span>
-                        <strong>
-                          {isBlankValue(item.quantity) && isBlankValue(item.unitPrice)
-                            ? ""
-                            : formatMoney(
-                                toNumber(item.quantity, 0) *
-                                  toNumber(item.unitPrice, 0),
-                              )}
-                        </strong>
-                      </div>
+                      {formMeta.kind === "waybill" ? (
+                        <label>
+                          Qty remaining
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.quantityRemaining}
+                            onChange={(event) =>
+                              updateLineItem(
+                                index,
+                                "quantityRemaining",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </label>
+                      ) : (
+                        <>
+                          <label>
+                            Unit price
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPrice}
+                              onChange={(event) =>
+                                updateLineItem(index, "unitPrice", event.target.value)
+                              }
+                            />
+                          </label>
+                          <div className="billing-item-total">
+                            <span>Total</span>
+                            <strong>
+                              {isBlankValue(item.quantity) &&
+                              isBlankValue(item.unitPrice)
+                                ? ""
+                                : formatMoney(
+                                    toNumber(item.quantity, 0) *
+                                      toNumber(item.unitPrice, 0),
+                                  )}
+                            </strong>
+                          </div>
+                        </>
+                      )}
                       <button
                         type="button"
                         className="billing-icon-button"
@@ -1810,75 +2052,78 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                 </button>
               </fieldset>
 
-              <fieldset>
-                <legend>Tax information</legend>
-                <label className="billing-tax-toggle">
-                  <input
-                    type="checkbox"
-                    checked={form.taxEntries.length > 0}
-                    onChange={(event) => toggleTaxEntries(event.target.checked)}
-                  />
-                  <span>Add tax information</span>
-                </label>
-                {form.taxEntries.length > 0 && (
-                  <>
-                    <div className="billing-tax-editor">
-                      {form.taxEntries.map((entry, index) => (
-                        <div className="billing-tax-row" key={entry._id || index}>
-                          <label>
-                            Tax label
-                            <input
-                              value={entry.label}
-                              onChange={(event) =>
-                                updateTaxEntry(index, "label", event.target.value)
-                              }
-                            />
-                          </label>
-                          <label>
-                            Rate %
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={entry.rate}
-                              onChange={(event) =>
-                                updateTaxEntry(index, "rate", event.target.value)
-                              }
-                            />
-                          </label>
-                          <div className="billing-tax-amount">
-                            <span>Amount</span>
-                            <strong>
-                              {CURRENCY_SYMBOL}{" "}
-                              {formatMoney(
-                                (totals.subtotal * toNumber(entry.rate, 0)) / 100,
-                              )}
-                            </strong>
+              {formMeta.kind !== "waybill" && (
+                <fieldset>
+                  <legend>Tax information</legend>
+                  <label className="billing-tax-toggle">
+                    <input
+                      type="checkbox"
+                      checked={form.taxEntries.length > 0}
+                      onChange={(event) => toggleTaxEntries(event.target.checked)}
+                    />
+                    <span>Add tax information</span>
+                  </label>
+                  {form.taxEntries.length > 0 && (
+                    <>
+                      <div className="billing-tax-editor">
+                        {form.taxEntries.map((entry, index) => (
+                          <div className="billing-tax-row" key={entry._id || index}>
+                            <label>
+                              Tax label
+                              <input
+                                value={entry.label}
+                                onChange={(event) =>
+                                  updateTaxEntry(index, "label", event.target.value)
+                                }
+                              />
+                            </label>
+                            <label>
+                              Rate %
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={entry.rate}
+                                onChange={(event) =>
+                                  updateTaxEntry(index, "rate", event.target.value)
+                                }
+                              />
+                            </label>
+                            <div className="billing-tax-amount">
+                              <span>Amount</span>
+                              <strong>
+                                {CURRENCY_SYMBOL}{" "}
+                                {formatMoney(
+                                  (totals.subtotal * toNumber(entry.rate, 0)) /
+                                    100,
+                                )}
+                              </strong>
+                            </div>
+                            <button
+                              type="button"
+                              className="billing-icon-button"
+                              onClick={() => removeTaxEntry(index)}
+                              aria-label="Remove tax"
+                            >
+                              x
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className="billing-icon-button"
-                            onClick={() => removeTaxEntry(index)}
-                            aria-label="Remove tax"
-                          >
-                            x
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="billing-inline-actions">
-                      <button
-                        type="button"
-                        className="billing-secondary-button"
-                        onClick={addTaxEntry}
-                      >
-                        <PlusIcon />
-                        Add tax line
-                      </button>
-                    </div>
-                  </>
-                )}
-              </fieldset>
+                        ))}
+                      </div>
+                      <div className="billing-inline-actions">
+                        <button
+                          type="button"
+                          className="billing-secondary-button"
+                          onClick={addTaxEntry}
+                        >
+                          <PlusIcon />
+                          Add tax line
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </fieldset>
+              )}
 
               {formMeta.kind === "invoice" && (
                 <fieldset>
@@ -2057,49 +2302,57 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                 </fieldset>
               )}
 
-              <fieldset>
-                <legend>Notes</legend>
-                <label className="billing-wide-field">
-                  Terms
-                  <textarea
-                    rows="5"
-                    value={form.notes.terms.join("\n")}
-                    onChange={(event) =>
-                      updateForm(["notes", "terms"], toLines(event.target.value))
-                    }
-                  />
-                </label>
-                <label className="billing-wide-field">
-                  Payment instructions
-                  <textarea
-                    rows="7"
-                    value={form.notes.paymentInstructions.join("\n")}
-                    onChange={(event) =>
-                      updateForm(
-                        ["notes", "paymentInstructions"],
-                        toLines(event.target.value),
-                      )
-                    }
-                  />
-                </label>
-                <label className="billing-wide-field">
-                  Deposit note
-                  <input
-                    value={form.notes.depositNote}
-                    onChange={(event) =>
-                      updateForm(["notes", "depositNote"], event.target.value)
-                    }
-                  />
-                </label>
-              </fieldset>
+              {formMeta.kind !== "waybill" && (
+                <fieldset>
+                  <legend>Notes</legend>
+                  <label className="billing-wide-field">
+                    Terms
+                    <textarea
+                      rows="5"
+                      value={form.notes.terms.join("\n")}
+                      onChange={(event) =>
+                        updateForm(["notes", "terms"], toLines(event.target.value))
+                      }
+                    />
+                  </label>
+                  <label className="billing-wide-field">
+                    Payment instructions
+                    <textarea
+                      rows="7"
+                      value={form.notes.paymentInstructions.join("\n")}
+                      onChange={(event) =>
+                        updateForm(
+                          ["notes", "paymentInstructions"],
+                          toLines(event.target.value),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="billing-wide-field">
+                    Deposit note
+                    <input
+                      value={form.notes.depositNote}
+                      onChange={(event) =>
+                        updateForm(["notes", "depositNote"], event.target.value)
+                      }
+                    />
+                  </label>
+                </fieldset>
+              )}
             </form>
 
-            <div className="billing-preview-pane">
+            <div
+              className={`billing-preview-pane ${
+                formMeta.kind === "waybill" ? "waybill-preview" : ""
+              }`}
+            >
               {activePreview === "receipt" && formMeta.kind === "invoice" ? (
                 <BillingReceiptPreview
                   receipt={receiptForm}
                   invoice={form}
                 />
+              ) : formMeta.kind === "waybill" ? (
+                <BillingWaybillPreview form={form} />
               ) : (
                 <BillingPreview form={form} totals={totals} />
               )}

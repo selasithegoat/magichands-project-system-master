@@ -3,17 +3,21 @@ const mongoose = require("mongoose");
 const BILLING_DOCUMENT_TYPES = [
   "magichands_invoice",
   "magichands_quote",
+  "magichands_waybill",
   "magic_gifts_invoice",
   "magic_gifts_quote",
+  "magic_gifts_waybill",
+  "receivable_waybill",
 ];
 
 const BILLING_DOCUMENT_BRANDS = ["magichands", "magic_gifts"];
-const BILLING_DOCUMENT_KINDS = ["invoice", "quote"];
+const BILLING_DOCUMENT_KINDS = ["invoice", "quote", "waybill"];
 const BILLING_DOCUMENT_STATUSES = [
   "draft",
   "sent",
   "accepted",
   "converted",
+  "delivered",
   "paid",
   "void",
 ];
@@ -31,6 +35,11 @@ const BillingDocumentLineItemSchema = new mongoose.Schema(
       default: 1,
     },
     unitPrice: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    quantityRemaining: {
       type: Number,
       min: 0,
       default: 0,
@@ -281,6 +290,16 @@ const BillingDocumentSchema = new mongoose.Schema(
       type: String,
       enum: [...BILLING_DOCUMENT_TYPES, null],
       default: null,
+    },
+    linkedInvoiceDocument: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "BillingDocument",
+      default: null,
+    },
+    linkedInvoiceNumber: {
+      type: Number,
+      default: null,
+      index: true,
     },
     convertedToDocument: {
       type: mongoose.Schema.Types.ObjectId,

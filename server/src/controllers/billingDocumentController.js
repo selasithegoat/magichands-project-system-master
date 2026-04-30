@@ -6,8 +6,15 @@ const BillingReceipt = require("../models/BillingReceipt");
 const DOCUMENT_TYPE_META = {
   magichands_invoice: { brand: "magichands", kind: "invoice" },
   magichands_quote: { brand: "magichands", kind: "quote" },
+  magichands_waybill: { brand: "magichands", kind: "waybill" },
   magic_gifts_invoice: { brand: "magic_gifts", kind: "invoice" },
   magic_gifts_quote: { brand: "magic_gifts", kind: "quote" },
+  magic_gifts_waybill: { brand: "magic_gifts", kind: "waybill" },
+  receivable_waybill: {
+    brand: "magichands",
+    kind: "waybill",
+    receivable: true,
+  },
 };
 
 const DOCUMENT_TYPES = Object.keys(DOCUMENT_TYPE_META);
@@ -16,6 +23,7 @@ const DOCUMENT_STATUSES = new Set([
   "sent",
   "accepted",
   "converted",
+  "delivered",
   "paid",
   "void",
 ]);
@@ -220,26 +228,43 @@ const sanitizeClient = (value) => {
   };
 };
 
-const sanitizeLineItems = (value) => {
+const sanitizeLineItems = (value, kind = "invoice") => {
   const items = Array.isArray(value) ? value : [];
   const sanitized = items
     .map((item) => {
       const quantity = toPositiveQuantity(item?.quantity);
-      const unitPrice = toPositiveMoney(item?.unitPrice);
+      const unitPrice =
+        kind === "waybill" ? 0 : toPositiveMoney(item?.unitPrice);
+      const quantityRemaining = toPositiveQuantity(item?.quantityRemaining);
       const total = roundMoney(quantity * unitPrice);
 
       return {
         description: toMultilineText(item?.description).slice(0, 1600),
         quantity,
         unitPrice,
+        quantityRemaining,
         total,
       };
     })
-    .filter((item) => item.description || item.quantity || item.unitPrice);
+    .filter(
+      (item) =>
+        item.description ||
+        item.quantity ||
+        item.unitPrice ||
+        item.quantityRemaining,
+    );
 
   return sanitized.length
     ? sanitized
-    : [{ description: "", quantity: 0, unitPrice: 0, total: 0 }];
+    : [
+        {
+          description: "",
+          quantity: 0,
+          unitPrice: 0,
+          quantityRemaining: 0,
+          total: 0,
+        },
+      ];
 };
 
 const sanitizePaymentEntries = (value) => {
@@ -318,13 +343,18 @@ const sanitizeDocumentInput = (body = {}, existingDocument = null) => {
     meta.kind === "invoice"
       ? incomingDueDate || existingDocument?.dueDate || addDays(issueDate, 14)
       : null;
-  const lineItems = sanitizeLineItems(body.lineItems);
+  const lineItems = sanitizeLineItems(body.lineItems, meta.kind);
   const itemSubtotal = roundMoney(
     lineItems.reduce((sum, item) => sum + toPositiveMoney(item.total), 0),
   );
-  const taxEntries = sanitizeTaxEntries(body.taxEntries, itemSubtotal);
+  const taxEntries =
+    meta.kind === "waybill" ? [] : sanitizeTaxEntries(body.taxEntries, itemSubtotal);
   const paymentEntries =
     meta.kind === "invoice" ? sanitizePaymentEntries(body.paymentEntries) : [];
+  const linkedInvoiceNumber =
+    meta.kind === "waybill"
+      ? parseManualDocumentNumber(body.linkedInvoiceNumber)
+      : null;
 
   return {
     documentType,
@@ -344,6 +374,7 @@ const sanitizeDocumentInput = (body = {}, existingDocument = null) => {
     taxEntries,
     notes: sanitizeNotes(body.notes, meta.brand),
     totals: calculateTotals(lineItems, paymentEntries, taxEntries),
+    linkedInvoiceNumber,
   };
 };
 
@@ -393,7 +424,9 @@ const buildListQuery = (req) => {
   const search = toInlineText(req.query.search);
 
   if (documentType) query.documentType = documentType;
-  if (kind === "invoice" || kind === "quote") query.kind = kind;
+  if (kind === "invoice" || kind === "quote" || kind === "waybill") {
+    query.kind = kind;
+  }
   if (brand === "magichands" || brand === "magic_gifts") query.brand = brand;
   if (DOCUMENT_STATUSES.has(status)) query.status = status;
 
@@ -407,7 +440,10 @@ const buildListQuery = (req) => {
     ];
 
     if (numericSearch > 0) {
-      query.$or.push({ documentNumber: numericSearch });
+      query.$or.push(
+        { documentNumber: numericSearch },
+        { linkedInvoiceNumber: numericSearch },
+      );
     }
   }
 
@@ -425,6 +461,29 @@ const handleDuplicateDocumentNumber = (error, res) => {
       "That document number already exists for this billing document type.",
   });
   return true;
+};
+
+const getDocumentNumberLabel = (documentType, kind) => {
+  const meta = DOCUMENT_TYPE_META[documentType] || {};
+  if (meta.receivable) return "Invoice / quote";
+  if (kind === "invoice") return "Invoice";
+  if (kind === "quote") return "Quote";
+  return "Waybill";
+};
+
+const resolveLinkedInvoiceDocument = async (invoiceNumber) => {
+  const number = parseManualDocumentNumber(invoiceNumber);
+  if (!number) return null;
+
+  const invoice = await BillingDocument.findOne({
+    kind: "invoice",
+    documentNumber: number,
+  })
+    .sort({ createdAt: -1 })
+    .select("_id")
+    .lean();
+
+  return invoice?._id || null;
 };
 
 const getBillingDocuments = async (req, res) => {
@@ -463,23 +522,46 @@ const getBillingDocumentById = async (req, res) => {
 const createBillingDocument = async (req, res) => {
   try {
     const sanitized = sanitizeDocumentInput(req.body);
+    const meta = DOCUMENT_TYPE_META[sanitized.documentType];
     const manualNumber = hasSubmittedDocumentNumber(req.body)
       ? parseManualDocumentNumber(req.body.documentNumber)
       : null;
     if (hasSubmittedDocumentNumber(req.body) && !manualNumber) {
-      const numberLabel = sanitized.kind === "invoice" ? "Invoice" : "Quote";
+      const numberLabel = getDocumentNumberLabel(
+        sanitized.documentType,
+        sanitized.kind,
+      );
       return res.status(400).json({
         message: `${numberLabel} number must be a positive whole number.`,
+      });
+    }
+    if (meta.receivable && !manualNumber) {
+      return res.status(400).json({
+        message: "Invoice / quote number is required for receivable waybills.",
       });
     }
 
     const documentNumber =
       manualNumber || (await allocateDocumentNumber(sanitized.documentType));
+    const linkedInvoiceNumber =
+      sanitized.kind === "waybill"
+        ? meta.receivable
+          ? documentNumber
+          : sanitized.linkedInvoiceNumber
+        : null;
+    const linkedInvoiceDocument = await resolveLinkedInvoiceDocument(
+      linkedInvoiceNumber,
+    );
 
     const document = await BillingDocument.create({
       ...sanitized,
       documentNumber,
-      sourceQuoteNumber: parseManualDocumentNumber(req.body?.sourceQuoteNumber),
+      sourceQuoteNumber:
+        sanitized.kind === "invoice"
+          ? parseManualDocumentNumber(req.body?.sourceQuoteNumber)
+          : null,
+      linkedInvoiceNumber,
+      linkedInvoiceDocument,
       createdBy: req.user?._id || null,
       updatedBy: req.user?._id || null,
     });
@@ -508,13 +590,22 @@ const updateBillingDocument = async (req, res) => {
     }
 
     const sanitized = sanitizeDocumentInput(req.body, document);
+    const meta = DOCUMENT_TYPE_META[document.documentType];
     const manualNumber = hasSubmittedDocumentNumber(req.body)
       ? parseManualDocumentNumber(req.body.documentNumber)
       : null;
     if (hasSubmittedDocumentNumber(req.body) && !manualNumber) {
-      const numberLabel = document.kind === "invoice" ? "Invoice" : "Quote";
+      const numberLabel = getDocumentNumberLabel(
+        document.documentType,
+        document.kind,
+      );
       return res.status(400).json({
         message: `${numberLabel} number must be a positive whole number.`,
+      });
+    }
+    if (meta.receivable && !manualNumber) {
+      return res.status(400).json({
+        message: "Invoice / quote number is required for receivable waybills.",
       });
     }
 
@@ -529,6 +620,15 @@ const updateBillingDocument = async (req, res) => {
     if (document.kind === "invoice" && "sourceQuoteNumber" in req.body) {
       document.sourceQuoteNumber = parseManualDocumentNumber(
         req.body.sourceQuoteNumber,
+      );
+    }
+
+    if (document.kind === "waybill") {
+      document.linkedInvoiceNumber = meta.receivable
+        ? document.documentNumber
+        : sanitized.linkedInvoiceNumber;
+      document.linkedInvoiceDocument = await resolveLinkedInvoiceDocument(
+        document.linkedInvoiceNumber,
       );
     }
 
