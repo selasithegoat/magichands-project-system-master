@@ -243,7 +243,7 @@
 
 .billing-document-list {
   position: fixed;
-  top: 156px;
+  top: 90px;
   left: calc((var(--billing-list-width) - var(--billing-list-peek)) * -1);
   z-index: 980;
   width: var(--billing-list-width);
