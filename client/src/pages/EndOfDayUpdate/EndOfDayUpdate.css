@@ -17,6 +17,14 @@
   flex-wrap: wrap;
 }
 
+.eod-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .page-header h1 {
   font-size: 1.8rem;
   font-weight: 700;
@@ -88,6 +96,7 @@
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   transition: background-color 0.2s;
 }
@@ -99,6 +108,182 @@
 .download-btn:disabled {
   background-color: var(--text-tertiary);
   cursor: not-allowed;
+}
+
+.download-btn svg,
+.eod-action-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.eod-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.eod-action-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--primary-color) 55%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-card));
+  color: var(--primary-color);
+}
+
+.eod-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.eod-filter-panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.eod-filter-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.eod-filter-heading svg {
+  color: var(--primary-color);
+}
+
+.eod-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.85rem;
+  align-items: end;
+}
+
+.eod-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.eod-search-field {
+  grid-column: span 2;
+}
+
+.eod-filter-field > span {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.eod-filter-field input,
+.eod-filter-field select,
+.eod-search-control {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.eod-filter-field input,
+.eod-filter-field select {
+  padding: 0.5rem 0.75rem;
+}
+
+.eod-filter-field select {
+  cursor: pointer;
+}
+
+.eod-search-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+}
+
+.eod-search-control svg {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+}
+
+.eod-search-control input {
+  min-height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.eod-filter-field input:focus,
+.eod-filter-field select:focus,
+.eod-search-control:focus-within {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.14);
+}
+
+.eod-search-control input:focus {
+  box-shadow: none;
+}
+
+.eod-filter-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.eod-clear-filters-btn {
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--surface-alt) 72%, var(--bg-card));
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.eod-clear-filters-btn:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 55%, var(--border-color));
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-card));
 }
 
 /* Rest of the file content... */
@@ -368,6 +553,15 @@
     align-items: flex-start;
   }
 
+  .eod-header-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .eod-header-actions button {
+    flex: 1 1 180px;
+  }
+
   .eod-route-tabs {
     display: flex;
     width: 100%;
@@ -375,6 +569,23 @@
 
   .eod-route-tab {
     flex: 1 1 0;
+  }
+
+  .eod-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .eod-search-field {
+    grid-column: auto;
+  }
+
+  .eod-filter-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .eod-clear-filters-btn {
+    width: 100%;
   }
 
   .eod-pagination {
