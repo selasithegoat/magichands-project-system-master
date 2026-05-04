@@ -424,6 +424,7 @@ const normalizeDocumentForForm = (document) => {
 
   const meta = getMeta(document.documentType);
   const defaults = getBrandDefaults(meta.brand);
+  const companySnapshot = document.companySnapshot || {};
   const issueDate = toDateInput(document.issueDate) || todayIso();
   const lineItems = Array.isArray(document.lineItems)
     ? document.lineItems.map(makeLineItem)
@@ -463,11 +464,10 @@ const normalizeDocumentForForm = (document) => {
     linkedInvoiceDocument: document.linkedInvoiceDocument || "",
     companySnapshot: {
       ...defaults.companySnapshot,
-      ...(document.companySnapshot || {}),
-      addressLines:
-        document.companySnapshot?.addressLines?.length > 0
-          ? cloneArray(document.companySnapshot.addressLines)
-          : defaults.companySnapshot.addressLines,
+      ...companySnapshot,
+      addressLines: Array.isArray(companySnapshot.addressLines)
+        ? cloneArray(companySnapshot.addressLines)
+        : defaults.companySnapshot.addressLines,
     },
     notes: {
       ...defaults.notes,
@@ -2114,6 +2114,70 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                     />
                   </label>
                 )}
+              </fieldset>
+
+              <fieldset>
+                <legend>Billing meta</legend>
+                <label className="billing-wide-field">
+                  Company name
+                  <input
+                    value={form.companySnapshot?.name || ""}
+                    onChange={(event) =>
+                      updateForm(["companySnapshot", "name"], event.target.value)
+                    }
+                  />
+                </label>
+                <label className="billing-wide-field">
+                  Company address
+                  <textarea
+                    rows="3"
+                    value={(form.companySnapshot?.addressLines || []).join("\n")}
+                    onChange={(event) =>
+                      updateForm(
+                        ["companySnapshot", "addressLines"],
+                        toLines(event.target.value),
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Telephone
+                  <input
+                    value={form.companySnapshot?.telephone || ""}
+                    onChange={(event) =>
+                      updateForm(
+                        ["companySnapshot", "telephone"],
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Tin number
+                  <input
+                    value={form.companySnapshot?.tinNumber || ""}
+                    onChange={(event) =>
+                      updateForm(
+                        ["companySnapshot", "tinNumber"],
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+                <div className="billing-inline-actions">
+                  <button
+                    type="button"
+                    className="billing-secondary-button"
+                    onClick={() =>
+                      updateForm(
+                        ["companySnapshot"],
+                        getBrandDefaults(formMeta.brand).companySnapshot,
+                      )
+                    }
+                  >
+                    Use brand defaults
+                  </button>
+                </div>
               </fieldset>
 
               <fieldset>

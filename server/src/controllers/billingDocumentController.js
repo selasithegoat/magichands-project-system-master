@@ -212,15 +212,19 @@ const sanitizeStringArray = (value) => {
 const sanitizeCompanySnapshot = (value, brand) => {
   const fallback = getDefaultCompanySnapshot(brand);
   const source = value && typeof value === "object" ? value : {};
+  const hasField = (key) => Object.prototype.hasOwnProperty.call(source, key);
 
   return {
-    name: toInlineText(source.name) || fallback.name,
-    addressLines:
-      sanitizeStringArray(source.addressLines).length > 0
-        ? sanitizeStringArray(source.addressLines)
-        : [...fallback.addressLines],
-    telephone: toInlineText(source.telephone) || fallback.telephone,
-    tinNumber: toInlineText(source.tinNumber) || fallback.tinNumber,
+    name: hasField("name") ? toInlineText(source.name) : fallback.name,
+    addressLines: hasField("addressLines")
+      ? sanitizeStringArray(source.addressLines)
+      : [...fallback.addressLines],
+    telephone: hasField("telephone")
+      ? toInlineText(source.telephone)
+      : fallback.telephone,
+    tinNumber: hasField("tinNumber")
+      ? toInlineText(source.tinNumber)
+      : fallback.tinNumber,
   };
 };
 
