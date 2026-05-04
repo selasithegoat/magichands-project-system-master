@@ -347,6 +347,57 @@ const buildInitialIntakeMockupVersions = (
     });
 };
 
+const getHighestMockupVersionNumber = (versions = []) =>
+  (Array.isArray(versions) ? versions : []).reduce((maxVersion, entry) => {
+    const parsedVersion = Number.parseInt(entry?.version, 10);
+    if (!Number.isFinite(parsedVersion) || parsedVersion <= 0) {
+      return maxVersion;
+    }
+    return Math.max(maxVersion, parsedVersion);
+  }, 0);
+
+const sortMockupVersionEntries = (versions = []) =>
+  [...(Array.isArray(versions) ? versions : [])].sort((left, right) => {
+    const leftVersion = Number.parseInt(left?.version, 10) || 0;
+    const rightVersion = Number.parseInt(right?.version, 10) || 0;
+    if (leftVersion !== rightVersion) return leftVersion - rightVersion;
+    const leftTime = left?.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
+    const rightTime = right?.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
+    return leftTime - rightTime;
+  });
+
+const appendIntakeMockupVersionsToProject = ({
+  project,
+  versions = [],
+} = {}) => {
+  const incomingVersions = Array.isArray(versions)
+    ? versions.filter((entry) => entry?.fileUrl)
+    : [];
+  if (!project || incomingVersions.length === 0) return [];
+
+  ensureProjectMockupVersions(project);
+  const existingVersions = Array.isArray(project?.mockup?.versions)
+    ? [...project.mockup.versions]
+    : [];
+  const nextVersionStart = getHighestMockupVersionNumber(existingVersions) + 1;
+  const rebasedVersions = incomingVersions.map((entry) => ({
+    ...entry,
+    version: nextVersionStart,
+  }));
+  const latestEntry = rebasedVersions[rebasedVersions.length - 1];
+
+  project.mockup = project.mockup || {};
+  project.mockup.versions = sortMockupVersionEntries([
+    ...existingVersions,
+    ...rebasedVersions,
+  ]);
+  syncProjectMockupFromVersion(project, latestEntry, {
+    approvedVersion: null,
+  });
+
+  return rebasedVersions;
+};
+
 const cleanupUploadedFilesSafely = async (req) => {
   try {
     await upload.cleanupRequestFiles(req);
@@ -15359,6 +15410,51 @@ const updateProject = async (req, res) => {
       referenceProjectIds = undefined;
     }
 
+    const clientMockupRevisionVersions = !isLeadAcceptance
+      ? buildInitialIntakeMockupVersions(req, req.user?._id)
+      : [];
+    const approvedMockupRevisionVersions = !isLeadAcceptance
+      ? buildInitialIntakeMockupVersions(req, req.user?._id, {
+          fileField: "approvedMockup",
+          notesField: "approvedMockupNotes",
+          noteCandidates: ["approvedMockupNote"],
+          clientApprovedAtIntake: true,
+        })
+      : [];
+    if (
+      clientMockupRevisionVersions.length > 0 &&
+      approvedMockupRevisionVersions.length > 0
+    ) {
+      await cleanupUploadedFilesSafely(req);
+      return res.status(400).json({
+        message:
+          "Choose either Client Mockup or Already Approved Mockup for an order revision, not both.",
+      });
+    }
+    const incomingMockupRevisionVersions =
+      approvedMockupRevisionVersions.length > 0
+        ? approvedMockupRevisionVersions
+        : clientMockupRevisionVersions;
+    const mockupRevisionPart =
+      approvedMockupRevisionVersions.length > 0
+        ? "Already Approved Mockup"
+        : clientMockupRevisionVersions.length > 0
+          ? "Client Mockup"
+          : "";
+    const mockupRevisionActivityLabel =
+      approvedMockupRevisionVersions.length > 0
+        ? "Client-approved mockup"
+        : clientMockupRevisionVersions.length > 0
+          ? "Client provided mockup"
+          : "";
+    const mockupRevisionUpdateLabel =
+      approvedMockupRevisionVersions.length > 0
+        ? "Approved client mockup"
+        : clientMockupRevisionVersions.length > 0
+          ? "Client mockup"
+          : "";
+    let appendedMockupRevisionVersions = [];
+
     const requestedOrderNumber = normalizeOrderNumber(orderId);
     const hasOrderNumberUpdate = Boolean(requestedOrderNumber);
     const hasOrderRefUpdate = orderRef !== undefined;
@@ -15441,6 +15537,7 @@ const updateProject = async (req, res) => {
       referenceProjects: Array.isArray(project.referenceProjects)
         ? [...project.referenceProjects]
         : [],
+      mockupVersions: getNormalizedMockupVersions(project),
     };
 
     // Track if details changed for sectionUpdates
@@ -15636,6 +15733,16 @@ const updateProject = async (req, res) => {
     } else if (hasSampleImageNoteUpdate) {
       project.details.sampleImageNote = normalizedSampleImageNote;
       detailsChanged = true;
+    }
+
+    if (incomingMockupRevisionVersions.length > 0) {
+      appendedMockupRevisionVersions = appendIntakeMockupVersionsToProject({
+        project,
+        versions: incomingMockupRevisionVersions,
+      });
+      if (appendedMockupRevisionVersions.length > 0) {
+        detailsChanged = true;
+      }
     }
 
     // Initialize sectionUpdates if not exists
@@ -15917,6 +16024,15 @@ const updateProject = async (req, res) => {
     if (attachmentsChanged) {
       changes.push(`Reference Materials updated (${nextAttachments.length} file(s))`);
     }
+    const mockupRevisionChanged = appendedMockupRevisionVersions.length > 0;
+    const nextMockupVersions = mockupRevisionChanged
+      ? getNormalizedMockupVersions(updatedProject)
+      : oldValues.mockupVersions;
+    if (mockupRevisionChanged) {
+      changes.push(
+        `${mockupRevisionPart} uploaded (${appendedMockupRevisionVersions.length} file(s))`,
+      );
+    }
     const previousReferenceProjectIds = new Set(
       normalizeReferenceProjectInputs(oldValues.referenceProjects),
     );
@@ -15977,6 +16093,13 @@ const updateProject = async (req, res) => {
         after: `${nextAttachments.length} file(s)`,
       });
     }
+    if (mockupRevisionChanged) {
+      orderRevisionChangeDetails.push({
+        label: mockupRevisionPart,
+        before: `${oldValues.mockupVersions.length} mockup file(s)`,
+        after: `${nextMockupVersions.length} mockup file(s)`,
+      });
+    }
     if (referenceProjectsChanged) {
       orderRevisionChangeDetails.push({
         label: "Reference Orders",
@@ -15988,6 +16111,7 @@ const updateProject = async (req, res) => {
       briefOverviewChanged ||
       sampleImageChanged ||
       attachmentsChanged ||
+      mockupRevisionChanged ||
       referenceProjectsChanged ||
       itemsChanged;
 
@@ -16052,6 +16176,38 @@ const updateProject = async (req, res) => {
       );
     }
 
+    if (appendedMockupRevisionVersions.length > 0) {
+      for (const entry of appendedMockupRevisionVersions) {
+        const versionLabel = buildMockupVersionLabel(entry.version);
+        await logActivity(
+          updatedProject._id,
+          req.user._id,
+          "mockup_upload",
+          `${mockupRevisionActivityLabel} ${versionLabel} uploaded during order revision${
+            entry.fileName ? ` (${entry.fileName})` : ""
+          }.`,
+          {
+            mockup: {
+              version: entry.version,
+              source: entry.source,
+              intakeUpload: true,
+              clientApprovedAtIntake: Boolean(entry.clientApprovedAtIntake),
+              fileName: entry.fileName,
+              fileUrl: entry.fileUrl,
+              graphicsReviewStatus: entry.graphicsReview?.status || "pending",
+            },
+          },
+        );
+
+        await createProjectSystemUpdateAndSnapshot({
+          project: updatedProject,
+          authorId: req.user._id || req.user.id,
+          category: "Graphics",
+          content: `${mockupRevisionUpdateLabel} ${versionLabel} uploaded during order revision. Graphics review pending.`,
+        });
+      }
+    }
+
     const directlyNotifiedUserIds = new Set();
 
     // Notify Lead / Assistant Lead assignments
@@ -16111,6 +16267,7 @@ const updateProject = async (req, res) => {
       if (itemsChanged) revisionParts.push("Order Items");
       if (sampleImageChanged) revisionParts.push("Primary Reference Image");
       if (attachmentsChanged) revisionParts.push("Reference Materials");
+      if (mockupRevisionChanged) revisionParts.push(mockupRevisionPart);
       if (referenceProjectsChanged) revisionParts.push("Reference Orders");
 
       updatedProject.orderRevisionMeta = {

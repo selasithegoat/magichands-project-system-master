@@ -314,6 +314,7 @@ const NewOrders = ({ user = null }) => {
     REVISION_LOCKED_STATUSES.has(String(editingProjectStatus || ""));
   const reopenedProject = location.state?.reopenedProject || null;
   const isCreateMode = !editingId && !reopenedProject;
+  const shouldShowIntakeMockupUploads = isCreateMode || isRevisionMode;
   const routeProjectType = location.state?.projectType || "Standard";
   const routePriority = location.state?.priority || "Normal";
   const portalSource = useMemo(() => resolvePortalSource(), []);
@@ -1502,7 +1503,7 @@ const NewOrders = ({ user = null }) => {
               </div>
             </div>
 
-            {isCreateMode && (
+            {shouldShowIntakeMockupUploads && (
               <>
                 <div className="divider"></div>
 

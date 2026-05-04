@@ -192,9 +192,19 @@ const isImageAsset = (fileName = "", fileType = "") => {
   return IMAGE_EXTENSIONS.has(path.extname(toText(fileName)).toLowerCase());
 };
 
+const getMockupFileLabel = (entry = {}) => {
+  const source = toText(entry?.source).toLowerCase();
+  const isClientUpload = source === "client" || Boolean(entry?.intakeUpload);
+  if (isClientUpload && entry?.clientApprovedAtIntake) {
+    return "Already Approved Mockup";
+  }
+  if (isClientUpload) return "Client Mockup";
+  return "Mockup";
+};
+
 const collectProjectFiles = (project) => {
   const files = [];
-  const pushFile = (entry, label) => {
+  const pushFile = (entry, label, category = "general") => {
     const fileUrl =
       toText(entry?.fileUrl) || toText(entry?.url) || toText(entry?.path);
     if (!fileUrl) return;
@@ -213,6 +223,7 @@ const collectProjectFiles = (project) => {
       note,
       localPath,
       isImage: isImageAsset(fileName, fileType),
+      category,
     });
   };
 
@@ -225,20 +236,88 @@ const collectProjectFiles = (project) => {
         note: toText(project?.details?.sampleImageNote),
       },
       "Sample Image",
+      "sampleImage",
     );
   }
 
   (Array.isArray(project?.details?.attachments) ? project.details.attachments : []).forEach(
-    (entry) => pushFile(entry, "Order Attachment"),
+    (entry) => pushFile(entry, "Order Attachment", "referenceMaterial"),
+  );
+
+  const mockupVersions = Array.isArray(project?.mockup?.versions)
+    ? project.mockup.versions
+    : [];
+  const mockupEntries =
+    mockupVersions.length > 0
+      ? mockupVersions
+      : toText(project?.mockup?.fileUrl)
+        ? [project.mockup]
+        : [];
+  mockupEntries.forEach((entry) =>
+    pushFile(entry, getMockupFileLabel(entry), "mockup"),
   );
 
   (
     Array.isArray(project?.quoteDetails?.bidSubmission?.documents)
       ? project.quoteDetails.bidSubmission.documents
       : []
-  ).forEach((entry) => pushFile(entry, "Bid Submission Document"));
+  ).forEach((entry) => pushFile(entry, "Bid Submission Document", "bidSubmission"));
 
   return files;
+};
+
+const buildEmailAttachments = (files = []) => {
+  const attachments = [];
+  const seenAttachmentKeys = new Set();
+
+  (Array.isArray(files) ? files : []).forEach((file) => {
+    if (!file.localPath || !fs.existsSync(file.localPath)) return;
+    const key = `${file.localPath}|${file.label}`;
+    if (seenAttachmentKeys.has(key)) return;
+    seenAttachmentKeys.add(key);
+
+    const attachment = {
+      filename: file.fileName || path.basename(file.localPath),
+      path: file.localPath,
+    };
+
+    if (file.fileType) {
+      attachment.contentType = file.fileType;
+    }
+
+    attachments.push(attachment);
+  });
+
+  return attachments;
+};
+
+const collectRevisionEmailFiles = (project, revisionParts = []) => {
+  const cleanParts = (Array.isArray(revisionParts) ? revisionParts : [])
+    .map((part) => toText(part).toLowerCase())
+    .filter(Boolean);
+  if (cleanParts.length === 0) return [];
+
+  const includesPart = (label) => cleanParts.includes(label.toLowerCase());
+  const includesMockupPart = cleanParts.some((part) => part.includes("mockup"));
+  const includesDocumentPart = cleanParts.some(
+    (part) => part.includes("document") || part.includes("bid"),
+  );
+
+  return collectProjectFiles(project).filter((file) => {
+    if (file.category === "sampleImage") {
+      return includesPart("Primary Reference Image");
+    }
+    if (file.category === "referenceMaterial") {
+      return includesPart("Reference Materials");
+    }
+    if (file.category === "mockup") {
+      return includesMockupPart;
+    }
+    if (file.category === "bidSubmission") {
+      return includesDocumentPart;
+    }
+    return false;
+  });
 };
 
 const buildProjectCreationEmailHtml = ({ project, creatorName, requestBaseUrl }) => {
@@ -732,27 +811,7 @@ const sendProjectCreationEmail = async ({ projectId, creator = null, requestBase
   const creatorName =
     getUserDisplayName(project?.createdBy) || getUserDisplayName(creator) || "Front Desk";
   const files = collectProjectFiles(project);
-
-  const attachments = [];
-  const seenAttachmentKeys = new Set();
-
-  files.forEach((file) => {
-    if (!file.localPath || !fs.existsSync(file.localPath)) return;
-    const key = `${file.localPath}|${file.label}`;
-    if (seenAttachmentKeys.has(key)) return;
-    seenAttachmentKeys.add(key);
-
-    const attachment = {
-      filename: file.fileName || path.basename(file.localPath),
-      path: file.localPath,
-    };
-
-    if (file.fileType) {
-      attachment.contentType = file.fileType;
-    }
-
-    attachments.push(attachment);
-  });
+  const attachments = buildEmailAttachments(files);
 
   const subjectPrefix = project?.projectType === "Quote" ? "New Quote Created" : "New Order Created";
   const subject = buildProjectCreationEmailSubject(project);
@@ -858,6 +917,10 @@ const sendProjectRevisionEmail = async ({
     eventType,
     reopenContext,
   });
+  const attachments =
+    eventType === "update"
+      ? buildEmailAttachments(collectRevisionEmailFiles(project, cleanParts))
+      : [];
 
   const delivery = await sendEmailDetailed(
     recipients.join(", "),
@@ -867,6 +930,7 @@ const sendProjectRevisionEmail = async ({
       html,
       inReplyTo: thread?.inReplyTo,
       references: thread?.references,
+      attachments,
     },
   );
   const sent = Boolean(delivery?.sent);
