@@ -1767,6 +1767,32 @@
   background: rgba(239, 68, 68, 0.12);
 }
 
+.project-mockup-status.workflow-awaiting_graphics_review,
+.project-mockup-status.workflow-pending_client_approval {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.project-mockup-status.workflow-graphics_validated,
+.project-mockup-status.workflow-client_approved {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.project-mockup-status.workflow-client_rejected {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.project-mockup-status.workflow-superseded {
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #475569;
+  background: rgba(148, 163, 184, 0.12);
+}
+
 .project-mockup-reason {
   font-size: 0.78rem;
   color: #b91c1c;
@@ -1831,6 +1857,52 @@
   color: #991b1b;
 }
 
+.project-mockup-chip.workflow-awaiting_graphics_review,
+.project-mockup-chip.workflow-pending_client_approval {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.project-mockup-chip.workflow-graphics_validated,
+.project-mockup-chip.workflow-client_approved {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.project-mockup-chip.workflow-client_rejected {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.project-mockup-chip.workflow-superseded {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(148, 163, 184, 0.12);
+  color: #475569;
+}
+
+.project-mockup-chip.active.workflow-awaiting_graphics_review,
+.project-mockup-chip.active.workflow-pending_client_approval {
+  border-color: rgba(245, 158, 11, 0.7);
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.project-mockup-chip.active.workflow-graphics_validated,
+.project-mockup-chip.active.workflow-client_approved {
+  border-color: rgba(16, 185, 129, 0.65);
+  background: rgba(16, 185, 129, 0.2);
+  color: #065f46;
+}
+
+.project-mockup-chip.active.workflow-client_rejected {
+  border-color: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
 .project-mockup-links {
   display: flex;
   flex-wrap: wrap;
@@ -1856,6 +1928,126 @@
 .project-mockup-note {
   font-size: 0.78rem;
   color: var(--text-secondary);
+}
+
+.admin-mockup-upload-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-mockup-upload-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.admin-mockup-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.admin-mockup-upload-panel {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.26);
+}
+
+.admin-mockup-upload-panel.is-locked {
+  opacity: 0.65;
+}
+
+.admin-mockup-upload-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-mockup-upload-panel-header h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.admin-mockup-upload-panel-header span {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.admin-mockup-upload-panel input[type="file"] {
+  width: 100%;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.admin-mockup-upload-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.admin-mockup-upload-file {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.admin-mockup-upload-file strong,
+.admin-mockup-upload-file span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-mockup-upload-file strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.admin-mockup-upload-file span {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.admin-mockup-upload-file textarea {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  padding: 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.admin-mockup-upload-file button {
+  justify-self: start;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 0.32rem 0.62rem;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .admin-mockup-upload-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Status Change Confirmation */

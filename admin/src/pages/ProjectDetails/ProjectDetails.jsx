@@ -21,12 +21,22 @@ import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemin
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
 import ProjectComments from "@client/components/features/ProjectComments";
+import { buildFileKey } from "@client/utils/referenceAttachments";
 import {
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
   isQuoteCostCompleted,
   normalizeQuoteStatus,
 } from "@client/utils/quoteStatus";
+import {
+  getLatestMockupVersion,
+  getMockupApprovalStatus,
+  getMockupVersionSourceLabel,
+  getMockupVersions,
+  getMockupWorkflowLabel,
+  getMockupWorkflowState,
+  isMockupReadyForCompletion,
+} from "@client/utils/mockupWorkflow";
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -104,6 +114,29 @@ const formatSupplySource = (value) => {
   const list = normalizeSupplySourceList(value);
   if (!list.length) return "N/A";
   return list.join(", ");
+};
+
+const formatFileSize = (bytes) => {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(size) / Math.log(1024)),
+  );
+  const value = size / 1024 ** exponent;
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+};
+
+const mergeUniqueFiles = (existingFiles, incomingFiles) => {
+  const seen = new Set(existingFiles.map((file) => buildFileKey(file)));
+  const dedupedIncoming = incomingFiles.filter((file) => {
+    const key = buildFileKey(file);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return [...existingFiles, ...dedupedIncoming];
 };
 
 const normalizeContentTabKey = (value) => {
@@ -603,86 +636,6 @@ const formatBillingMissingLabels = (missing = []) =>
   (Array.isArray(missing) ? missing : [])
     .map((key) => BILLING_REQUIREMENT_LABELS[key] || key)
     .filter(Boolean);
-
-const getMockupApprovalStatus = (approval = {}) => {
-  const explicit = String(approval?.status || "")
-    .trim()
-    .toLowerCase();
-  if (explicit === "pending" || explicit === "approved" || explicit === "rejected") {
-    return explicit;
-  }
-  if (approval?.isApproved) return "approved";
-  if (approval?.rejectedAt || approval?.rejectedBy || approval?.rejectionReason) {
-    return "rejected";
-  }
-  return "pending";
-};
-
-const getMockupVersions = (mockup = {}) => {
-  const rawVersions = Array.isArray(mockup?.versions) ? mockup.versions : [];
-  const normalized = rawVersions
-    .map((entry, index) => {
-      const parsedVersion = Number.parseInt(entry?.version, 10);
-      const version =
-        Number.isFinite(parsedVersion) && parsedVersion > 0
-          ? parsedVersion
-          : index + 1;
-      const approvalStatus = getMockupApprovalStatus(entry?.clientApproval || {});
-      return {
-        entryId: entry?._id || entry?.id || null,
-        version,
-        fileUrl: String(entry?.fileUrl || "").trim(),
-        fileName: String(entry?.fileName || "").trim(),
-        fileType: String(entry?.fileType || "").trim(),
-        note: String(entry?.note || "").trim(),
-        uploadedAt: entry?.uploadedAt || null,
-        clientApproval: {
-          status: approvalStatus,
-          approvedAt: entry?.clientApproval?.approvedAt || null,
-          rejectedAt: entry?.clientApproval?.rejectedAt || null,
-          rejectionReason: String(
-            entry?.clientApproval?.rejectionReason ||
-              entry?.clientApproval?.note ||
-              "",
-          ).trim(),
-        },
-      };
-    })
-    .filter((entry) => entry.fileUrl);
-
-  if (normalized.length === 0 && mockup?.fileUrl) {
-    const parsedVersion = Number.parseInt(mockup?.version, 10);
-    const version =
-      Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
-    const approvalStatus = getMockupApprovalStatus(mockup?.clientApproval || {});
-    normalized.push({
-      entryId: mockup?._id || mockup?.id || null,
-      version,
-      fileUrl: String(mockup.fileUrl || "").trim(),
-      fileName: String(mockup.fileName || "").trim(),
-      fileType: String(mockup.fileType || "").trim(),
-      note: String(mockup.note || "").trim(),
-      uploadedAt: mockup.uploadedAt || null,
-      clientApproval: {
-        status: approvalStatus,
-        approvedAt: mockup?.clientApproval?.approvedAt || null,
-        rejectedAt: mockup?.clientApproval?.rejectedAt || null,
-        rejectionReason: String(
-          mockup?.clientApproval?.rejectionReason ||
-            mockup?.clientApproval?.note ||
-            "",
-        ).trim(),
-      },
-    });
-  }
-
-  return normalized.sort((left, right) => {
-    if (left.version !== right.version) return left.version - right.version;
-    const leftTime = left.uploadedAt ? new Date(left.uploadedAt).getTime() : 0;
-    const rightTime = right.uploadedAt ? new Date(right.uploadedAt).getTime() : 0;
-    return leftTime - rightTime;
-  });
-};
 
 const getSampleApprovalStatus = (sampleApproval = {}) => {
   const explicit = String(sampleApproval?.status || "")
@@ -1739,6 +1692,17 @@ const ProjectDetails = ({ user }) => {
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [selectedClientMockups, setSelectedClientMockups] = useState([]);
+  const [selectedClientMockupNotes, setSelectedClientMockupNotes] = useState({});
+  const [selectedApprovedMockups, setSelectedApprovedMockups] = useState([]);
+  const [selectedApprovedMockupNotes, setSelectedApprovedMockupNotes] = useState({});
+
+  const clearMockupUploadDrafts = () => {
+    setSelectedClientMockups([]);
+    setSelectedClientMockupNotes({});
+    setSelectedApprovedMockups([]);
+    setSelectedApprovedMockupNotes({});
+  };
 
   const applyProjectToState = (data) => {
     if (!data) return;
@@ -2098,6 +2062,7 @@ const ProjectDetails = ({ user }) => {
   const handleEditToggle = () => {
     if (!project) return;
     if (!isEditing && !ensureProjectIsEditable()) return;
+    clearMockupUploadDrafts();
     // Reset form to current project state when opening edit
     if (!isEditing) {
       setEditForm({
@@ -2132,6 +2097,13 @@ const ProjectDetails = ({ user }) => {
   const handleSave = async () => {
     if (!ensureProjectIsEditable()) return;
     try {
+      if (selectedClientMockups.length > 0 && selectedApprovedMockups.length > 0) {
+        alert(
+          "Choose either Client Mockup or Already Approved Mockup for this revision, not both.",
+        );
+        return;
+      }
+
       // Construct payload with flattened fields as expected by the controller
       const payload = {
         orderId: editForm.orderId,
@@ -2149,16 +2121,59 @@ const ProjectDetails = ({ user }) => {
         packagingType: editForm.packagingType,
       };
 
-      const res = await fetch(`/api/projects/${id}`, {
+      const hasMockupUploads =
+        selectedClientMockups.length > 0 || selectedApprovedMockups.length > 0;
+      const requestOptions = {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(payload),
-      });
+      };
+
+      if (hasMockupUploads) {
+        const formPayload = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          formPayload.append(key, value ?? "");
+        });
+
+        if (selectedClientMockups.length > 0) {
+          selectedClientMockups.forEach((file) => {
+            formPayload.append("clientMockup", file);
+          });
+          formPayload.append(
+            "clientMockupNotes",
+            JSON.stringify(
+              selectedClientMockups.map(
+                (file) => selectedClientMockupNotes[buildFileKey(file)] || "",
+              ),
+            ),
+          );
+        }
+
+        if (selectedApprovedMockups.length > 0) {
+          selectedApprovedMockups.forEach((file) => {
+            formPayload.append("approvedMockup", file);
+          });
+          formPayload.append(
+            "approvedMockupNotes",
+            JSON.stringify(
+              selectedApprovedMockups.map(
+                (file) => selectedApprovedMockupNotes[buildFileKey(file)] || "",
+              ),
+            ),
+          );
+        }
+
+        requestOptions.body = formPayload;
+      } else {
+        requestOptions.headers = { "Content-Type": "application/json" };
+        requestOptions.body = JSON.stringify(payload);
+      }
+
+      const res = await fetch(`/api/projects/${id}`, requestOptions);
 
       if (res.ok) {
         const updatedProject = await res.json();
         applyProjectToState(updatedProject);
+        clearMockupUploadDrafts();
         setIsEditing(false);
       } else {
         console.error("Failed to update project");
@@ -2559,7 +2574,7 @@ const ProjectDetails = ({ user }) => {
   const activeMockupVersion =
     mockupCarouselVersions[mockupCarouselIndex] || mockupCarouselVersions[0] || null;
   const activeMockupLabel = activeMockupVersion
-    ? `v${activeMockupVersion.version}`
+    ? `${getMockupVersionSourceLabel(activeMockupVersion)} v${activeMockupVersion.version}`
     : "Mockup";
   const activeMockupFileUrl = resolveExternalFileUrl(
     activeMockupVersion?.fileUrl || "",
@@ -2571,6 +2586,12 @@ const ProjectDetails = ({ user }) => {
   const activeMockupDecision = getMockupApprovalStatus(
     activeMockupVersion?.clientApproval || {},
   );
+  const activeMockupWorkflowState = getMockupWorkflowState(activeMockupVersion);
+  const activeMockupWorkflowLabel = getMockupWorkflowLabel(activeMockupVersion, {
+    readyForQuote:
+      project?.projectType === "Quote" &&
+      isMockupReadyForCompletion(activeMockupVersion),
+  });
   const activeMockupReason = String(
     activeMockupVersion?.clientApproval?.rejectionReason || "",
   ).trim();
@@ -2581,11 +2602,15 @@ const ProjectDetails = ({ user }) => {
   const activeMockupIsPdf =
     activeMockupFileType === "application/pdf" ||
     /\.pdf$/i.test(activeMockupFileUrl || "");
-  const latestMockupVersion =
-    mockupCarouselVersions[mockupCarouselVersions.length - 1] || null;
+  const latestMockupVersion = getLatestMockupVersion(project?.mockup || {});
   const latestMockupDecisionStatus = getMockupApprovalStatus(
     latestMockupVersion?.clientApproval || project?.mockup?.clientApproval || {},
   );
+  const latestMockupWorkflowLabel = getMockupWorkflowLabel(latestMockupVersion, {
+    readyForQuote:
+      project?.projectType === "Quote" &&
+      isMockupReadyForCompletion(latestMockupVersion),
+  });
   const paymentLabels = {
     part_payment: "Part Payment",
     full_payment: "Full Payment",
@@ -2636,7 +2661,7 @@ const ProjectDetails = ({ user }) => {
     ? "Select at least one quote requirement to continue."
     : "";
   const quoteMockupReadyForSubmission =
-    latestMockupDecisionStatus === "approved";
+    isMockupReadyForCompletion(latestMockupVersion);
   const quoteCostVerification = project?.quoteDetails?.costVerification || {};
   const quoteCostUpdatedAt =
     quoteCostVerification?.completedAt || quoteCostVerification?.updatedAt || null;
@@ -3589,6 +3614,164 @@ const ProjectDetails = ({ user }) => {
               </div>
             </div>
 
+          {isEditing && (
+            <div className="detail-card admin-mockup-upload-card">
+              <h3 className="card-title">Mockup Intake Uploads</h3>
+              <p className="admin-mockup-upload-hint">
+                Add either client-provided mockups or mockups already approved by
+                the client. Graphics will validate uploaded files before the
+                workflow continues.
+              </p>
+              <div className="admin-mockup-upload-grid">
+                <div
+                  className={`admin-mockup-upload-panel ${
+                    selectedApprovedMockups.length > 0 ? "is-locked" : ""
+                  }`}
+                >
+                  <div className="admin-mockup-upload-panel-header">
+                    <h4>Client Mockup</h4>
+                    <span>
+                      {selectedApprovedMockups.length > 0
+                        ? "Clear approved mockups first"
+                        : "Client supplied"}
+                    </span>
+                  </div>
+                  <input
+                    type="file"
+                    id="admin-client-mockup-upload"
+                    multiple
+                    disabled={selectedApprovedMockups.length > 0}
+                    onChange={(event) => {
+                      const nextFiles = Array.from(event.target.files || []);
+                      if (nextFiles.length > 0) {
+                        setSelectedClientMockups((current) =>
+                          mergeUniqueFiles(current, nextFiles),
+                        );
+                      }
+                      event.target.value = null;
+                    }}
+                  />
+                  {selectedClientMockups.length > 0 && (
+                    <div className="admin-mockup-upload-list">
+                      {selectedClientMockups.map((file) => {
+                        const fileKey = buildFileKey(file);
+                        return (
+                          <div className="admin-mockup-upload-file" key={fileKey}>
+                            <div>
+                              <strong>{file.name}</strong>
+                              <span>{formatFileSize(file.size)}</span>
+                            </div>
+                            <textarea
+                              rows="2"
+                              placeholder="Note for Graphics"
+                              value={selectedClientMockupNotes[fileKey] || ""}
+                              onChange={(event) =>
+                                setSelectedClientMockupNotes((current) => ({
+                                  ...current,
+                                  [fileKey]: event.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedClientMockups((current) =>
+                                  current.filter(
+                                    (entry) => buildFileKey(entry) !== fileKey,
+                                  ),
+                                );
+                                setSelectedClientMockupNotes((current) => {
+                                  const next = { ...current };
+                                  delete next[fileKey];
+                                  return next;
+                                });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className={`admin-mockup-upload-panel ${
+                    selectedClientMockups.length > 0 ? "is-locked" : ""
+                  }`}
+                >
+                  <div className="admin-mockup-upload-panel-header">
+                    <h4>Already Approved Mockup</h4>
+                    <span>
+                      {selectedClientMockups.length > 0
+                        ? "Clear client mockups first"
+                        : "Client approved"}
+                    </span>
+                  </div>
+                  <input
+                    type="file"
+                    id="admin-approved-mockup-upload"
+                    multiple
+                    disabled={selectedClientMockups.length > 0}
+                    onChange={(event) => {
+                      const nextFiles = Array.from(event.target.files || []);
+                      if (nextFiles.length > 0) {
+                        setSelectedApprovedMockups((current) =>
+                          mergeUniqueFiles(current, nextFiles),
+                        );
+                      }
+                      event.target.value = null;
+                    }}
+                  />
+                  {selectedApprovedMockups.length > 0 && (
+                    <div className="admin-mockup-upload-list">
+                      {selectedApprovedMockups.map((file) => {
+                        const fileKey = buildFileKey(file);
+                        return (
+                          <div className="admin-mockup-upload-file" key={fileKey}>
+                            <div>
+                              <strong>{file.name}</strong>
+                              <span>{formatFileSize(file.size)}</span>
+                            </div>
+                            <textarea
+                              rows="2"
+                              placeholder="Note for Graphics"
+                              value={selectedApprovedMockupNotes[fileKey] || ""}
+                              onChange={(event) =>
+                                setSelectedApprovedMockupNotes((current) => ({
+                                  ...current,
+                                  [fileKey]: event.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedApprovedMockups((current) =>
+                                  current.filter(
+                                    (entry) => buildFileKey(entry) !== fileKey,
+                                  ),
+                                );
+                                setSelectedApprovedMockupNotes((current) => {
+                                  const next = { ...current };
+                                  delete next[fileKey];
+                                  return next;
+                                });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Feedback */}
           {showFeedbackSection && (
             <div className="detail-card">
@@ -3875,16 +4058,18 @@ const ProjectDetails = ({ user }) => {
                       </span>
                       <span className="quote-requirement-admin-status">
                         {quoteMockupReadyForSubmission
-                          ? "Approved / Ready for Quote"
+                          ? latestMockupWorkflowLabel
                           : latestMockupDecisionStatus === "rejected"
                             ? "Rejected"
-                            : "Pending"}
+                            : latestMockupVersion
+                              ? latestMockupWorkflowLabel
+                              : "Pending"}
                       </span>
                     </div>
                     <div className="quote-requirement-admin-updated">
                       Latest:{" "}
                       {latestMockupVersion?.version
-                        ? `v${latestMockupVersion.version}`
+                        ? `${getMockupVersionSourceLabel(latestMockupVersion)} v${latestMockupVersion.version}`
                         : "N/A"}
                     </div>
                     {latestMockupVersion?.uploadedAt && (
@@ -3952,10 +4137,12 @@ const ProjectDetails = ({ user }) => {
                     <div className="quote-requirement-admin-updated">
                       Mockup:{" "}
                       {quoteMockupReadyForSubmission
-                        ? "Approved / Ready"
+                        ? latestMockupWorkflowLabel
                         : latestMockupDecisionStatus === "rejected"
                           ? "Rejected"
-                          : "Pending"}
+                          : latestMockupVersion
+                            ? latestMockupWorkflowLabel
+                            : "Pending"}
                     </div>
                     {quoteSampleProductionRequirement.updatedAt && (
                       <div className="quote-requirement-admin-updated">
@@ -4210,12 +4397,10 @@ const ProjectDetails = ({ user }) => {
                   <span>{activeMockupFileName}</span>
                 </div>
 
-                <div className={`project-mockup-status ${activeMockupDecision}`}>
-                  {activeMockupDecision === "approved"
-                    ? "Client Approved"
-                    : activeMockupDecision === "rejected"
-                      ? "Client Rejected"
-                      : "Pending Client Decision"}
+                <div
+                  className={`project-mockup-status ${activeMockupDecision} workflow-${activeMockupWorkflowState}`}
+                >
+                  {activeMockupWorkflowLabel}
                 </div>
                 {activeMockupDecision === "rejected" && activeMockupReason && (
                   <div className="project-mockup-reason">
@@ -4228,6 +4413,7 @@ const ProjectDetails = ({ user }) => {
                     const status = getMockupApprovalStatus(
                       entry.clientApproval || {},
                     );
+                    const workflowState = getMockupWorkflowState(entry);
                     return (
                       <button
                         key={
@@ -4237,12 +4423,12 @@ const ProjectDetails = ({ user }) => {
                         }
                         type="button"
                         title={entry.fileName || ""}
-                        className={`project-mockup-chip status-${status} ${
+                        className={`project-mockup-chip status-${status} workflow-${workflowState} ${
                           mockupCarouselIndex === index ? "active" : ""
                         }`}
                         onClick={() => setMockupCarouselIndex(index)}
                       >
-                        v{entry.version}
+                        {getMockupVersionSourceLabel(entry)} v{entry.version}
                       </button>
                     );
                   })}
