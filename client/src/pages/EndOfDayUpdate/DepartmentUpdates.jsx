@@ -10,6 +10,8 @@ const createClientId = (prefix = "dept-update") =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const toText = (value) => String(value || "").trim();
+const toEditableText = (value) =>
+  value === null || value === undefined ? "" : String(value);
 const cloneBoard = (value) =>
   value ? JSON.parse(JSON.stringify(value)) : value;
 
@@ -21,9 +23,9 @@ const getUserDisplayName = (user) => {
 };
 
 const getCellValue = (row, column) => {
-  if (column.id === "dept") return toText(row?.dept);
-  if (column.id === "lead") return toText(row?.leadName);
-  return toText(row?.values?.[column.id]);
+  if (column.id === "dept") return toEditableText(row?.dept);
+  if (column.id === "lead") return toEditableText(row?.leadName);
+  return toEditableText(row?.values?.[column.id]);
 };
 
 const formatDateDisplay = (value) => {
