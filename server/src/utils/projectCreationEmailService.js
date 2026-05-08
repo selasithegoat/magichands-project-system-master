@@ -92,6 +92,47 @@ const formatValue = (value) => {
   return toText(value) || "N/A";
 };
 
+const shouldPreserveLineBreaks = (label = "") =>
+  /^brief overview$/i.test(toText(label));
+
+const getLinePreservedEmailLines = (value) => {
+  const rawText = toText(value);
+  if (!rawText) return [];
+
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+};
+
+const formatLinePreservedValueHtml = (value) => {
+  const lines = getLinePreservedEmailLines(value);
+  if (!lines.length) return escapeHtml(formatValue(value));
+
+  return `
+    <div style="margin:0;padding:8px 10px;border-left:3px solid #bfdbfe;background:#f8fafc;">
+      ${lines
+        .map(
+          (line, index) => `
+            <div style="margin:0;padding:${index === 0 ? "0 0 6px" : "6px 0"};${
+              index === lines.length - 1 ? "" : "border-bottom:1px solid #e2e8f0;"
+            }line-height:1.6;color:#0f172a;">
+              ${escapeHtml(line)}
+            </div>
+          `.trim(),
+        )
+        .join("")}
+    </div>
+  `.trim();
+};
+
+const formatEmailValueHtml = (label, value) => {
+  if (shouldPreserveLineBreaks(label)) {
+    return formatLinePreservedValueHtml(value);
+  }
+  return escapeHtml(formatValue(value));
+};
+
 const buildSectionHtml = (title, rows = []) => {
   const validRows = rows.filter(([, value]) => value !== undefined);
   if (!validRows.length) return "";
@@ -104,7 +145,7 @@ const buildSectionHtml = (title, rows = []) => {
             ${escapeHtml(label)}
           </td>
           <td style="padding:10px 12px;border:1px solid #dbe3ef;color:#0f172a;vertical-align:top;">
-            ${escapeHtml(formatValue(value))}
+            ${formatEmailValueHtml(label, value)}
           </td>
         </tr>
       `.trim(),
