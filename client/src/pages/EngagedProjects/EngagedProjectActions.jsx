@@ -3638,6 +3638,10 @@ const EngagedProjectActions = ({ user }) => {
                       !quoteWorkflowBlocked &&
                       quoteMockupRequirement.isRequired &&
                       quoteSectionActionReady;
+                    const quoteAllowsMockupUpload =
+                      isQuoteGraphicsAction &&
+                      !quoteWorkflowBlocked &&
+                      quoteMockupRequirement.isRequired;
                     const mockupAlreadySubmitted = Boolean(mockupUrl);
                     const clientMockupAwaitingValidation =
                       isMockupAction && mockupAwaitingGraphicsValidation;
@@ -3650,19 +3654,7 @@ const EngagedProjectActions = ({ user }) => {
                     const quoteMockupAlreadyCompleted =
                       isQuoteGraphicsAction && quoteMockupCompletionConfirmed;
                     const quoteCanUploadMockupRequirement =
-                      quoteAllowsMockupWorkflowStatus &&
-                      (
-                        !mockupAlreadySubmitted ||
-                        mockupApprovalRejected ||
-                        [
-                          "assigned",
-                          "in_progress",
-                          "client_revision_requested",
-                          "blocked",
-                          "dept_submitted",
-                          "frontdesk_review",
-                        ].includes(quoteMockupStatus)
-                      );
+                      quoteAllowsMockupUpload;
                     const canConfirmMockupCompletion =
                       isMockupAction &&
                       mockupAlreadySubmitted &&
@@ -3722,12 +3714,6 @@ const EngagedProjectActions = ({ user }) => {
                     ) {
                       mockupUploadTitle =
                         "Mockup is not marked as required for this quote.";
-                    } else if (
-                      isQuoteGraphicsAction &&
-                      !quoteSectionActionReady
-                    ) {
-                      mockupUploadTitle =
-                        "Acknowledge your engaged department first.";
                     } else if (
                       isQuoteGraphicsAction &&
                       !quoteCanUploadMockupRequirement

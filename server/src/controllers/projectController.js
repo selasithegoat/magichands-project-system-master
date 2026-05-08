@@ -12966,21 +12966,16 @@ const uploadProjectMockup = async (req, res) => {
     }
 
     if (isQuoteProject(project)) {
-      const engagementGuard = getQuoteDepartmentEngagementGuard({
-        project,
-        user: req.user,
-        allowedDepartments: ["graphics"],
+      project.quoteDetails = normalizeQuoteDetailsWorkflow({
+        quoteDetailsInput: project.quoteDetails || {},
+        existingQuoteDetails: project.quoteDetails || {},
       });
-      if (engagementGuard) {
-        return res.status(400).json({
-          code: engagementGuard.code,
-          missing: engagementGuard.missing,
-          message: engagementGuard.message,
-        });
-      }
     }
 
-    if (!isMockupWorkflowStatusAllowed(project, project.status)) {
+    if (
+      !isQuoteProject(project) &&
+      !isMockupWorkflowStatusAllowed(project, project.status)
+    ) {
       return res.status(400).json({
         message: getMockupWorkflowStatusMessage(project),
       });
@@ -13108,25 +13103,23 @@ const uploadProjectMockup = async (req, res) => {
     });
 
     let quoteMockupRequirementAutoMoved = null;
+    let quoteMockupUploadStatusSync = null;
     if (isQuoteProject(project)) {
-      project.quoteDetails = normalizeQuoteDetailsWorkflow({
-        quoteDetailsInput: project.quoteDetails || {},
-        existingQuoteDetails: project.quoteDetails || {},
-      });
-
       const requirementItem = project.quoteDetails?.requirementItems?.mockup;
       const fromStatus = toText(requirementItem?.status).toLowerCase() || "assigned";
       const shouldAutoMove =
         Boolean(requirementItem?.isRequired) &&
-        ["assigned", "in_progress", "client_revision_requested", "blocked"].includes(
-          fromStatus,
-        );
+        !["dept_submitted", "not_required"].includes(fromStatus);
 
       if (shouldAutoMove) {
-        const transitionSequence =
-          fromStatus === "in_progress"
-            ? ["dept_submitted"]
-            : ["in_progress", "dept_submitted"];
+        const transitionSequence = [
+          "assigned",
+          "blocked",
+          "cancelled",
+          "client_revision_requested",
+        ].includes(fromStatus)
+          ? ["in_progress", "dept_submitted"]
+          : ["dept_submitted"];
         const transitionTime = new Date();
         const transitionNote =
           trimmedNote ||
@@ -13157,11 +13150,25 @@ const uploadProjectMockup = async (req, res) => {
         project.markModified("quoteDetails.requirementItems");
 
         const statusSync = syncQuoteProjectStatusByRequirements(project);
+        quoteMockupUploadStatusSync = statusSync;
         quoteMockupRequirementAutoMoved = {
           fromStatus,
           toStatus: "dept_submitted",
           statusSync,
         };
+      } else if (Boolean(requirementItem?.isRequired)) {
+        const transitionTime = new Date();
+        const transitionNote =
+          trimmedNote ||
+          `Mockup ${buildMockupVersionLabel(latestVersion)} uploaded.`;
+
+        requirementItem.updatedAt = transitionTime;
+        requirementItem.updatedBy = req.user._id;
+        requirementItem.completionConfirmedAt = null;
+        requirementItem.completionConfirmedBy = null;
+        requirementItem.note = transitionNote;
+        project.markModified("quoteDetails.requirementItems");
+        quoteMockupUploadStatusSync = syncQuoteProjectStatusByRequirements(project);
       }
     }
 
@@ -13213,20 +13220,21 @@ const uploadProjectMockup = async (req, res) => {
         },
       );
 
-      if (quoteMockupRequirementAutoMoved.statusSync?.changed) {
-        await logActivity(
-          project._id,
-          req.user._id,
-          "status_change",
-          `Project status updated to ${quoteMockupRequirementAutoMoved.statusSync.toStatus}`,
-          {
-            statusChange: {
-              from: quoteMockupRequirementAutoMoved.statusSync.fromStatus,
-              to: quoteMockupRequirementAutoMoved.statusSync.toStatus,
-            },
+    }
+
+    if (quoteMockupUploadStatusSync?.changed) {
+      await logActivity(
+        project._id,
+        req.user._id,
+        "status_change",
+        `Project status updated to ${quoteMockupUploadStatusSync.toStatus}`,
+        {
+          statusChange: {
+            from: quoteMockupUploadStatusSync.fromStatus,
+            to: quoteMockupUploadStatusSync.toStatus,
           },
-        );
-      }
+        },
+      );
     }
 
     for (const entry of newEntries) {
