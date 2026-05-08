@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
+import { fileURLToPath } from "url";
+
+const adminRoot = fileURLToPath(new URL(".", import.meta.url));
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
@@ -10,15 +13,15 @@ export default defineConfig(({ command }) => ({
   plugins: [react()],
   resolve: {
     alias: {
-      "@client": resolve(__dirname, "../client/src"),
-      react: resolve(__dirname, "node_modules/react"),
-      "react-dom": resolve(__dirname, "node_modules/react-dom"),
-      "react-router-dom": resolve(__dirname, "node_modules/react-router-dom"),
+      "@client": resolve(adminRoot, "../client/src"),
+      react: resolve(adminRoot, "node_modules/react"),
+      "react-dom": resolve(adminRoot, "node_modules/react-dom"),
+      "react-router-dom": resolve(adminRoot, "node_modules/react-router-dom"),
       "emoji-picker-react": resolve(
-        __dirname,
+        adminRoot,
         "node_modules/emoji-picker-react",
       ),
-      "@twemoji/api": resolve(__dirname, "node_modules/@twemoji/api"),
+      "@twemoji/api": resolve(adminRoot, "node_modules/@twemoji/api"),
     },
     dedupe: [
       "react",
@@ -31,10 +34,15 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 3000,
     fs: {
-      allow: [resolve(__dirname, "..")],
+      allow: [resolve(adminRoot, "..")],
     },
     proxy: {
       "/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/uploads": {
         target: "http://localhost:5000",
         changeOrigin: true,
         secure: false,

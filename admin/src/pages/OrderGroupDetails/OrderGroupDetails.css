@@ -35,6 +35,31 @@
   align-items: flex-end;
 }
 
+.group-download-btn {
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.18);
+  color: #bfdbfe;
+  border-radius: 10px;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.group-download-btn:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.75);
+  background: rgba(59, 130, 246, 0.28);
+}
+
+.group-download-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .group-meta-pill {
   padding: 0.35rem 0.75rem;
   border-radius: 999px;

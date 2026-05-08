@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
+import { downloadGroupProjectBrief } from "../../utils/groupProjectBriefDownload";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import "./OrderGroupDetails.css";
@@ -346,10 +347,11 @@ const OrderGroupDetails = ({ user }) => {
   const [error, setError] = useState("");
   const [group, setGroup] = useState(null);
   const [selectedLead, setSelectedLead] = useState("All");
+  const [briefDownloading, setBriefDownloading] = useState(false);
 
   const orderNumber = String(orderNumberParam || "").trim();
 
-  const fetchGroup = async () => {
+  const fetchGroup = useCallback(async () => {
     if (!orderNumber) {
       setError("Order number is missing.");
       setLoading(false);
@@ -374,13 +376,16 @@ const OrderGroupDetails = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchGroup();
   }, [orderNumber]);
 
-  const projects = Array.isArray(group?.projects) ? group.projects : [];
+  useEffect(() => {
+    void fetchGroup();
+  }, [fetchGroup]);
+
+  const projects = useMemo(
+    () => (Array.isArray(group?.projects) ? group.projects : []),
+    [group?.projects],
+  );
   const leadGroups = useMemo(() => buildLeadGroups(projects), [projects]);
   const leadPills = useMemo(() => {
     const pills = leadGroups.map((groupEntry) => ({
@@ -400,6 +405,22 @@ const OrderGroupDetails = ({ user }) => {
   const openProjectDetails = (projectId) => {
     if (!projectId) return;
     navigate(`/projects/${projectId}`);
+  };
+
+  const handleDownloadBrief = async () => {
+    try {
+      setBriefDownloading(true);
+      await downloadGroupProjectBrief({
+        group,
+        projects,
+        orderNumber: group?.orderNumber || orderNumber,
+      });
+    } catch (downloadError) {
+      console.error("Failed to download group project brief:", downloadError);
+      alert(downloadError.message || "Failed to download group project brief.");
+    } finally {
+      setBriefDownloading(false);
+    }
   };
 
   if (loading) {
@@ -455,6 +476,14 @@ const OrderGroupDetails = ({ user }) => {
           </p>
         </div>
         <div className="order-group-meta">
+          <button
+            type="button"
+            className="group-download-btn"
+            onClick={handleDownloadBrief}
+            disabled={projects.length === 0 || briefDownloading}
+          >
+            {briefDownloading ? "Preparing Brief..." : "Download Brief"}
+          </button>
           <span className="group-meta-pill">
             Updated {formatDateTime(group?.updatedAt || projects[0]?.updatedAt)}
           </span>
