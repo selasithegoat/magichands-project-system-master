@@ -6,6 +6,17 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-05-08
+
+- Added filtering to the EOD updates page for easier review of submitted updates.
+- Added a downloadable Admin Group Project brief with grouped project details, lead sections, mockup images, and reference file snippets.
+- Added client mockup intake handling in Admin Project Details, including workflow controls for uploaded client mockups.
+- Made billing document metadata editable from the billing documents workflow.
+- Fixed order revisions so mockup uploads are included in revision handling and notification emails.
+- Fixed engaged actions so Graphics users can act on projects assigned to their own department.
+- Fixed Department Updates table inputs so the spacebar can be used normally while typing.
+- Improved brief overview formatting in exported group briefs and scope emails by preserving typed line-by-line structure.
+
 ## [3.0.0] - 2026-04-30
 
 - Added billing documents
