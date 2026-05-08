@@ -9941,6 +9941,165 @@ const transitionQuoteRequirement = async (req, res) => {
   }
 };
 
+// @desc    Validate or undo validation for multi-item quote requirements
+// @route   PATCH /api/projects/:id/quote-requirements/validation
+// @access  Private (Admin or Front Desk)
+const updateQuoteRequirementsValidation = async (req, res) => {
+  try {
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Not authorized to validate quote requirements.",
+      });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!ensureProjectMutationAccess(req, res, project, "billing")) return;
+
+    if (!isQuoteProject(project)) {
+      return res.status(400).json({
+        message: "Quote requirements validation is only available for quote projects.",
+      });
+    }
+
+    project.quoteDetails = normalizeQuoteDetailsWorkflow({
+      quoteDetailsInput: project.quoteDetails || {},
+      existingQuoteDetails: project.quoteDetails || {},
+    });
+
+    const quoteState = getQuoteRequirementProgressState(project);
+    if (quoteState.checklistState.mode === "none") {
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_BLOCKED",
+        message:
+          "Quote requirements are not configured yet. Configure at least one quote requirement before validating the quote.",
+      });
+    }
+
+    if (!quoteState.checklistState.hasMultipleRequirements) {
+      return res.status(400).json({
+        message:
+          "Quote requirements validation is only available for quotes with multiple requirements.",
+      });
+    }
+
+    if (!isQuoteScopeApprovalReadyForDepartments(project)) {
+      return res.status(400).json({
+        message:
+          "Scope approval must be completed before validating quote requirements.",
+      });
+    }
+
+    if (project.invoice?.sent) {
+      return res.status(400).json({
+        message:
+          "Undo quote sent before changing quote requirements validation.",
+      });
+    }
+
+    const normalizedStatus = normalizeStatusForStorageByProjectType(
+      project.status,
+      "Quote",
+    );
+    if (["Completed", "Finished", "Declined"].includes(normalizedStatus)) {
+      return res.status(400).json({
+        message:
+          "Closed quotes cannot change quote requirements validation.",
+      });
+    }
+
+    const requestedAction = toText(req.body?.action).toLowerCase();
+    const shouldValidate =
+      requestedAction === "undo" || requestedAction === "reset"
+        ? false
+        : requestedAction === "validate"
+          ? true
+          : parseBooleanFlag(req.body?.validated, true);
+
+    if (shouldValidate && !quoteState.allRequirementsReadyForSubmission) {
+      const missingLabels = quoteState.missingRequirementKeys
+        .map((key) => QUOTE_REQUIREMENT_LABELS[key] || key)
+        .filter(Boolean);
+      return res.status(400).json({
+        code: "QUOTE_REQUIREMENTS_PENDING",
+        message:
+          missingLabels.length > 0
+            ? `Complete all selected quote requirements before validation. Pending: ${missingLabels.join(", ")}.`
+            : "Complete all selected quote requirements before validation.",
+      });
+    }
+
+    if (
+      !shouldValidate &&
+      !["Pending Quote Submission", "Pending Quote Requirements"].includes(
+        normalizedStatus,
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Quote requirements validation can only be undone before the quote is sent.",
+      });
+    }
+
+    const oldStatus = project.status;
+    const nextStatus = shouldValidate
+      ? "Pending Quote Submission"
+      : "Pending Quote Requirements";
+
+    if (oldStatus === nextStatus) {
+      return res.json(project);
+    }
+
+    project.status = nextStatus;
+    await project.save();
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "update",
+      shouldValidate
+        ? "Quote requirements validation completed."
+        : "Quote requirements validation undone.",
+      {
+        quoteRequirementsValidation: {
+          validated: shouldValidate,
+          fromStatus: oldStatus,
+          toStatus: nextStatus,
+        },
+      },
+    );
+
+    await logActivity(
+      project._id,
+      req.user._id,
+      "status_change",
+      `Project status updated to ${project.status}`,
+      {
+        statusChange: { from: oldStatus, to: project.status },
+      },
+    );
+
+    const actorName = getUserDisplayName(req.user);
+    const projectRef = getProjectDisplayRef(project);
+    const projectName = getProjectDisplayName(project);
+    await notifyLeadFromAdminOrderManagement({
+      req,
+      project,
+      title: shouldValidate
+        ? "Quote Requirements Validated"
+        : "Quote Requirements Validation Undone",
+      message: `Front Desk/Admin ${actorName} ${
+        shouldValidate ? "validated" : "undid validation for"
+      } quote requirements on project #${projectRef} (${projectName}).`,
+      type: "UPDATE",
+    });
+
+    return res.json(project);
+  } catch (error) {
+    console.error("Error updating quote requirements validation:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 const NEXT_ACTION_DEFAULT_LIMIT = 8;
 const NEXT_ACTION_MAX_LIMIT = 100;
 const NEXT_ACTION_PROJECT_LIMIT = 500;
@@ -11876,6 +12035,20 @@ const markInvoiceSent = async (req, res) => {
             missingLabels.length > 0
               ? `Complete all selected quote requirements before sending the quote. Pending: ${missingLabels.join(", ")}.`
               : "Complete all selected quote requirements before sending the quote.",
+        });
+      }
+
+      const normalizedQuoteStatus = normalizeStatusForStorageByProjectType(
+        project.status,
+        "Quote",
+      );
+      if (
+        quoteProgress.checklistState.hasMultipleRequirements &&
+        normalizedQuoteStatus === "Pending Quote Requirements"
+      ) {
+        return res.status(400).json({
+          code: "QUOTE_REQUIREMENTS_VALIDATION_PENDING",
+          message: "Validate quote requirements before sending the quote.",
         });
       }
     }
@@ -18666,6 +18839,7 @@ module.exports = {
   updateProjectEndOfDayVisibility,
   updateProjectDeliverySchedule,
   transitionQuoteRequirement,
+  updateQuoteRequirementsValidation,
   updateQuoteCostVerification,
   resetQuoteMockup,
   resetQuotePreviousSamples,

@@ -6,6 +6,9 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+- Added undo controls for multi-requirement quote requirements validation before quote submission.
+- Added an undo action for completed quote cost validation.
+
 ## [3.1.0] - 2026-05-08
 
 - Added filtering to the EOD updates page for easier review of submitted updates.

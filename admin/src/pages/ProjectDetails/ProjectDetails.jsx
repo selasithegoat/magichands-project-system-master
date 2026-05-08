@@ -882,6 +882,10 @@ const ProjectDetails = ({ user }) => {
     const requestedTab = new URLSearchParams(location.search || "").get("tab");
     return normalizeContentTabKey(requestedTab) || "overview";
   });
+  const [
+    quoteRequirementsValidationSubmitting,
+    setQuoteRequirementsValidationSubmitting,
+  ] = useState(false);
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
   const [quoteDecisionNoteDraft, setQuoteDecisionNoteDraft] = useState("");
   const [statusConfirmModal, setStatusConfirmModal] = useState({
@@ -2185,6 +2189,58 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
+  const handleQuoteRequirementsValidation = async (validated) => {
+    if (!ensureProjectIsEditable()) return;
+    if (!project || project.projectType !== "Quote") return;
+    if (quoteRequirementsValidationSubmitting) return;
+
+    if (!validated) {
+      const confirmed = window.confirm(
+        "Undo quote requirements validation? This moves the quote back to Pending Quote Requirements.",
+      );
+      if (!confirmed) return;
+    }
+
+    setQuoteRequirementsValidationSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${id}/quote-requirements/validation?source=admin`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            action: validated ? "validate" : "undo",
+            validated,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message ||
+            "Failed to update quote requirements validation.",
+        );
+      }
+
+      const updatedProject = await res.json();
+      applyProjectToState(updatedProject);
+      toast.success(
+        validated
+          ? "Quote requirements validated."
+          : "Quote requirements validation undone.",
+      );
+    } catch (error) {
+      console.error("Error updating quote requirements validation:", error);
+      toast.error(
+        error.message || "Failed to update quote requirements validation.",
+      );
+    } finally {
+      setQuoteRequirementsValidationSubmitting(false);
+    }
+  };
+
   const handleQuoteDecisionValidation = async (decision) => {
     if (!ensureProjectIsEditable()) return;
     if (!project || project.projectType !== "Quote") return;
@@ -2818,6 +2874,34 @@ const ProjectDetails = ({ user }) => {
   const corporateEmergencyEnabled =
     isCorporateProject && Boolean(project?.corporateEmergency?.isEnabled);
   const invoiceSent = Boolean(project.invoice?.sent);
+  const quoteRequirementsValidationReady =
+    isQuoteProject &&
+    quoteHasMultipleRequirements &&
+    !quoteWorkflowBlocked &&
+    effectiveEnabledRequirements.length > 0 &&
+    pendingQuoteRequirementKeys.length === 0;
+  const showValidateQuoteRequirements =
+    quoteRequirementsValidationReady &&
+    quoteWorkflowStatus === "Pending Quote Requirements" &&
+    !invoiceSent;
+  const showUndoQuoteRequirementsValidation =
+    quoteRequirementsValidationReady &&
+    quoteWorkflowStatus === "Pending Quote Submission" &&
+    !invoiceSent;
+  const canValidateQuoteRequirements =
+    user?.role === "admin" &&
+    !isLeadRestricted &&
+    !isProjectOnHold &&
+    !isCancelledProject &&
+    showValidateQuoteRequirements &&
+    !quoteRequirementsValidationSubmitting;
+  const canUndoQuoteRequirementsValidation =
+    user?.role === "admin" &&
+    !isLeadRestricted &&
+    !isProjectOnHold &&
+    !isCancelledProject &&
+    showUndoQuoteRequirementsValidation &&
+    !quoteRequirementsValidationSubmitting;
   const pendingProductionMissing = isQuoteProject
     ? []
     : getPendingProductionBillingMissing(project);
@@ -4014,6 +4098,41 @@ const ProjectDetails = ({ user }) => {
                             }[key] || key),
                           )
                           .join(", ")}
+                      </div>
+                    )}
+                    {showValidateQuoteRequirements && (
+                      <div className="quote-requirement-admin-helper">
+                        All selected requirements are ready. Validate them before
+                        sending the quote.
+                      </div>
+                    )}
+                    {(showValidateQuoteRequirements ||
+                      showUndoQuoteRequirementsValidation) && (
+                      <div className="quote-requirement-admin-actions">
+                        {showValidateQuoteRequirements && (
+                          <button
+                            type="button"
+                            className="quote-requirement-admin-action validate"
+                            onClick={() => handleQuoteRequirementsValidation(true)}
+                            disabled={!canValidateQuoteRequirements}
+                          >
+                            {quoteRequirementsValidationSubmitting
+                              ? "Validating..."
+                              : "Validate Requirements"}
+                          </button>
+                        )}
+                        {showUndoQuoteRequirementsValidation && (
+                          <button
+                            type="button"
+                            className="quote-requirement-admin-action undo"
+                            onClick={() => handleQuoteRequirementsValidation(false)}
+                            disabled={!canUndoQuoteRequirementsValidation}
+                          >
+                            {quoteRequirementsValidationSubmitting
+                              ? "Undoing..."
+                              : "Undo Validation"}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

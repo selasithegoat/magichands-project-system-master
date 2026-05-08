@@ -742,6 +742,14 @@ const OrderActions = () => {
     useState(false);
   const [quoteSampleProductionResetting, setQuoteSampleProductionResetting] =
     useState(false);
+  const [
+    quoteRequirementsValidationUndoConfirmOpen,
+    setQuoteRequirementsValidationUndoConfirmOpen,
+  ] = useState(false);
+  const [
+    quoteRequirementsValidationSubmitting,
+    setQuoteRequirementsValidationSubmitting,
+  ] = useState(false);
   const [quoteBidDocsSensitive, setQuoteBidDocsSensitive] = useState(false);
   const [quoteBidDocsFiles, setQuoteBidDocsFiles] = useState([]);
   const [quoteBidDocsSaving, setQuoteBidDocsSaving] = useState(false);
@@ -1351,9 +1359,34 @@ const OrderActions = () => {
         bidSubmission: "bid submission documents",
       }[key] || (QUOTE_REQUIREMENT_LABELS[key] || key).toLowerCase()),
   );
+  const quoteRequirementsValidationReady =
+    isQuoteProject &&
+    quoteHasMultipleRequirements &&
+    !quoteWorkflowBlocked &&
+    effectiveEnabledRequirements.length > 0 &&
+    pendingQuoteRequirementKeys.length === 0;
+  const quoteRequirementsValidationPending =
+    quoteRequirementsValidationReady &&
+    quoteWorkflowStatus === "Pending Quote Requirements" &&
+    !invoiceSent;
+  const showValidateQuoteRequirements = quoteRequirementsValidationPending;
+  const showUndoQuoteRequirementsValidation =
+    quoteRequirementsValidationReady &&
+    quoteWorkflowStatus === "Pending Quote Submission" &&
+    !invoiceSent;
+  const canValidateQuoteRequirements =
+    canManageBilling &&
+    showValidateQuoteRequirements &&
+    !quoteRequirementsValidationSubmitting;
+  const canUndoQuoteRequirementsValidation =
+    canManageBilling &&
+    showUndoQuoteRequirementsValidation &&
+    !quoteRequirementsValidationSubmitting;
   const quoteSubmissionBlockedReason = quoteWorkflowBlocked
     ? quoteWorkflowBlockedMessage ||
       "Select at least one quote requirement to continue."
+    : quoteRequirementsValidationPending
+      ? "Validate quote requirements before sending the quote."
     : pendingQuoteRequirementActionLabels.length > 0
       ? `Complete ${pendingQuoteRequirementActionLabels.join(", ")} before sending the quote.`
       : "";
@@ -1361,7 +1394,9 @@ const OrderActions = () => {
     isQuoteProject &&
     !quoteWorkflowBlocked &&
     pendingQuoteRequirementKeys.length === 0 &&
-    effectiveEnabledRequirements.length > 0;
+    effectiveEnabledRequirements.length > 0 &&
+    (!quoteHasMultipleRequirements ||
+      quoteWorkflowStatus === "Pending Quote Submission");
   const quoteCostMissing =
     quoteHasCostRequirement && !quoteCostVerified;
   const quoteMockupMissing =
@@ -1403,6 +1438,11 @@ const OrderActions = () => {
   );
   const quoteDecisionStatus = quoteDecisionState.status;
   const quoteDecisionTaken = isQuoteProject && hasFinalQuoteDecision(quoteDecisionStatus);
+  const showUndoQuoteCostCompletion =
+    quoteHasCostRequirement &&
+    quoteCostVerified;
+  const quoteCostResetLabel =
+    quoteDecisionStatus === "declined" ? "Rework Cost" : "Undo Cost Completed";
   const canValidateQuoteDecision =
     isQuoteProject &&
     canManageBilling &&
@@ -2056,6 +2096,63 @@ const OrderActions = () => {
     } finally {
       setInvoiceUndoSubmitting(false);
     }
+  };
+
+  const submitQuoteRequirementsValidation = async (validated) => {
+    if (!project || !isQuoteProject || !quoteHasMultipleRequirements) return;
+    if (!canManageBilling || quoteRequirementsValidationSubmitting) return;
+
+    setQuoteRequirementsValidationSubmitting(true);
+    try {
+      const res = await fetchWithPortal(
+        `/api/projects/${project._id}/quote-requirements/validation`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: validated ? "validate" : "undo",
+            validated,
+          }),
+        },
+      );
+
+      if (res.ok) {
+        const updated = await res.json();
+        setProject(updated);
+        showToast(
+          validated
+            ? "Quote requirements validated."
+            : "Quote requirements validation undone.",
+          "success",
+        );
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(
+          errorData.message ||
+            "Failed to update quote requirements validation.",
+          "error",
+        );
+      }
+    } catch (error) {
+      console.error("Quote requirements validation error:", error);
+      showToast("Network error. Please try again.", "error");
+    } finally {
+      setQuoteRequirementsValidationSubmitting(false);
+    }
+  };
+
+  const handleValidateQuoteRequirements = () => {
+    submitQuoteRequirementsValidation(true);
+  };
+
+  const handleUndoQuoteRequirementsValidation = () => {
+    if (!project || !isQuoteProject || !quoteHasMultipleRequirements) return;
+    setQuoteRequirementsValidationUndoConfirmOpen(true);
+  };
+
+  const handleConfirmUndoQuoteRequirementsValidation = async () => {
+    setQuoteRequirementsValidationUndoConfirmOpen(false);
+    await submitQuoteRequirementsValidation(false);
   };
 
   const handleQuoteCostVerification = async () => {
@@ -3106,6 +3203,9 @@ const OrderActions = () => {
       ? quoteWorkflowBlockedMessage ||
         "Quote requirement workflows are not configured yet."
       : "",
+    quoteRequirementsValidationPending
+      ? "Quote requirements are ready but validation is pending."
+      : "",
     quoteHasCostRequirement && !quoteCostVerified
       ? "Quote cost is still pending."
       : "",
@@ -3366,9 +3466,15 @@ const OrderActions = () => {
       />
       <ConfirmDialog
         isOpen={quoteCostResetConfirmOpen}
-        title="Rework Cost?"
-        message="This will move the quote back to Pending Cost and reset quote submission and decision."
-        confirmText="Rework Cost"
+        title={`${quoteCostResetLabel}?`}
+        message={
+          quoteDecisionStatus === "declined"
+            ? "This will move the quote back to Pending Cost and reset quote submission and decision."
+            : invoiceSent
+              ? "This will move the quote cost back to pending and reset quote submission and decision."
+              : "This will move the quote cost back to pending so it can be completed again."
+        }
+        confirmText={quoteCostResetLabel}
         cancelText="Cancel"
         type="primary"
         onConfirm={handleConfirmQuoteCostReset}
@@ -3403,6 +3509,20 @@ const OrderActions = () => {
         type="primary"
         onConfirm={handleConfirmQuoteSampleProductionReset}
         onCancel={() => setQuoteSampleProductionResetConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        isOpen={quoteRequirementsValidationUndoConfirmOpen}
+        title="Undo Quote Requirements Validation?"
+        message="This will move the quote back to Pending Quote Requirements. The quote cannot be sent until requirements are validated again."
+        confirmText={
+          quoteRequirementsValidationSubmitting
+            ? "Undoing..."
+            : "Undo Validation"
+        }
+        cancelText="Cancel"
+        type="primary"
+        onConfirm={handleConfirmUndoQuoteRequirementsValidation}
+        onCancel={() => setQuoteRequirementsValidationUndoConfirmOpen(false)}
       />
       <ConfirmDialog
         isOpen={approvedMockupEmailConfirmOpen}
@@ -3725,6 +3845,41 @@ const OrderActions = () => {
                   Pending: {pendingQuoteRequirementLabels.join(", ")}
                 </p>
               )}
+              {quoteRequirementsValidationPending && (
+                <p className="mockup-approval-meta">
+                  All requirements are ready. Validate them before sending the
+                  quote.
+                </p>
+              )}
+              {(showValidateQuoteRequirements ||
+                showUndoQuoteRequirementsValidation) && (
+                <div className="billing-actions">
+                  {showValidateQuoteRequirements && (
+                    <button
+                      type="button"
+                      className="action-btn complete-btn"
+                      onClick={handleValidateQuoteRequirements}
+                      disabled={!canValidateQuoteRequirements}
+                    >
+                      {quoteRequirementsValidationSubmitting
+                        ? "Validating..."
+                        : "Validate Requirements"}
+                    </button>
+                  )}
+                  {showUndoQuoteRequirementsValidation && (
+                    <button
+                      type="button"
+                      className="action-btn undo-btn"
+                      onClick={handleUndoQuoteRequirementsValidation}
+                      disabled={!canUndoQuoteRequirementsValidation}
+                    >
+                      {quoteRequirementsValidationSubmitting
+                        ? "Undoing..."
+                        : "Undo Validation"}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -3775,7 +3930,7 @@ const OrderActions = () => {
                           ? "Cost Completed"
                           : "Complete Cost"}
                     </button>
-                    {quoteDecisionStatus === "declined" && (
+                    {showUndoQuoteCostCompletion && (
                       <button
                         className="action-btn undo-btn"
                         onClick={handleQuoteCostReset}
@@ -3785,7 +3940,7 @@ const OrderActions = () => {
                           quoteCostResetting
                         }
                       >
-                        {quoteCostResetting ? "Resetting..." : "Rework Cost"}
+                        {quoteCostResetting ? "Resetting..." : quoteCostResetLabel}
                       </button>
                     )}
                   </div>

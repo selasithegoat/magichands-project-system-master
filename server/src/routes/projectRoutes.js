@@ -19,6 +19,7 @@ const {
   reactivateProject,
   updateProjectStatus,
   transitionQuoteRequirement,
+  updateQuoteRequirementsValidation,
   updateQuoteCostVerification,
   updateQuoteBidSubmissionDocuments,
   updateQuoteDecision,
@@ -425,6 +426,12 @@ router.post(
   protect,
   enforceProjectNotOnHold,
   emailApprovedProjectMockups,
+);
+router.patch(
+  "/:id/quote-requirements/validation",
+  protect,
+  enforceProjectNotOnHold,
+  updateQuoteRequirementsValidation,
 );
 router.patch(
   "/:id/quote-requirements/:requirementKey/transition",

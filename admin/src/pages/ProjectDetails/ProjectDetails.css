@@ -915,6 +915,40 @@
   color: var(--text-secondary);
 }
 
+.quote-requirement-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.quote-requirement-admin-action {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quote-requirement-admin-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quote-requirement-admin-action.validate {
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.quote-requirement-admin-action.undo {
+  border-color: rgba(249, 115, 22, 0.32);
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.12);
+}
+
 .quote-decision-admin-panel {
   border: 1px solid var(--border-color);
   border-radius: 10px;
