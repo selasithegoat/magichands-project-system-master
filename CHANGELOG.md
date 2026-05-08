@@ -8,6 +8,7 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 - Added undo controls for multi-requirement quote requirements validation before quote submission.
 - Added an undo action for completed quote cost validation.
+- Fixed quote Project Details approvals so quotes beyond Scope Approval show the correct workflow stage.
 
 ## [3.1.0] - 2026-05-08
 

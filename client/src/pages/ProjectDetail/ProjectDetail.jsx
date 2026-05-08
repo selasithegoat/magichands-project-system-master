@@ -269,6 +269,82 @@ const QUOTE_STEPS_BY_MODE = {
 const getQuoteSteps = (mode) =>
   QUOTE_STEPS_BY_MODE[mode] || QUOTE_STEPS_BY_MODE.cost;
 
+const quoteStepsIncludeStatus = (steps, status) =>
+  steps.some((step) => step.statuses.includes(status));
+
+const inferQuoteRequirementModeFromStatus = (status = "") => {
+  const rawStatus = String(status || "").trim();
+  const normalized = normalizeQuoteStatus(rawStatus);
+  const lowered = `${rawStatus} ${normalized}`.toLowerCase();
+
+  if (lowered.includes("quote requirements")) return "multi";
+  if (lowered.includes("bid") || lowered.includes("document")) {
+    return "bidSubmission";
+  }
+  if (lowered.includes("sample production") || lowered.includes("production")) {
+    return "sampleProduction";
+  }
+  if (lowered.includes("mockup")) return "mockup";
+  if (lowered.includes("cost")) return "cost";
+  if (lowered.includes("sample")) return "previousSamples";
+  return "";
+};
+
+const getQuoteRequirementModeForWorkflow = (project, status = "") => {
+  const checklistMode = getQuoteRequirementMode(
+    project?.quoteDetails?.checklist || {},
+  );
+  const normalizedStatus = normalizeQuoteStatus(String(status || "").trim());
+
+  if (!normalizedStatus) return checklistMode;
+
+  const inferredMode = inferQuoteRequirementModeFromStatus(status);
+  if (checklistMode === "cost" && inferredMode && inferredMode !== "cost") {
+    const inferredDisplayStatus = getQuoteStatusDisplay(
+      normalizedStatus,
+      inferredMode,
+    );
+    const inferredSteps = getQuoteSteps(inferredMode);
+
+    if (
+      quoteStepsIncludeStatus(inferredSteps, inferredDisplayStatus) ||
+      quoteStepsIncludeStatus(inferredSteps, normalizedStatus)
+    ) {
+      return inferredMode;
+    }
+  }
+
+  const checklistDisplayStatus = getQuoteStatusDisplay(
+    normalizedStatus,
+    checklistMode,
+  );
+  const checklistSteps = getQuoteSteps(checklistMode);
+
+  if (
+    quoteStepsIncludeStatus(checklistSteps, checklistDisplayStatus) ||
+    quoteStepsIncludeStatus(checklistSteps, normalizedStatus)
+  ) {
+    return checklistMode;
+  }
+
+  if (!inferredMode || inferredMode === checklistMode) return checklistMode;
+
+  const inferredDisplayStatus = getQuoteStatusDisplay(
+    normalizedStatus,
+    inferredMode,
+  );
+  const inferredSteps = getQuoteSteps(inferredMode);
+
+  if (
+    quoteStepsIncludeStatus(inferredSteps, inferredDisplayStatus) ||
+    quoteStepsIncludeStatus(inferredSteps, normalizedStatus)
+  ) {
+    return inferredMode;
+  }
+
+  return checklistMode;
+};
+
 const PENDING_ACCEPTANCE_STATUSES = new Set([
   "Order Created",
   "Quote Created",
@@ -344,8 +420,9 @@ const resolveWorkflowStatus = (project) => {
 
   if (!isProjectOnHold) {
     if (project?.projectType === "Quote") {
-      const requirementMode = getQuoteRequirementMode(
-        project?.quoteDetails?.checklist || {},
+      const requirementMode = getQuoteRequirementModeForWorkflow(
+        project,
+        project?.status || "",
       );
       const normalizedQuote = getQuoteStatusDisplay(
         project?.status || "",
@@ -362,12 +439,14 @@ const resolveWorkflowStatus = (project) => {
       : "";
 
   if (!previousStatus || previousStatus === "On Hold") {
-    return DEFAULT_WORKFLOW_STATUS;
+    return project?.projectType === "Quote"
+      ? DEFAULT_QUOTE_STATUS
+      : DEFAULT_WORKFLOW_STATUS;
   }
 
   const isQuote = project?.projectType === "Quote";
   const requirementMode = isQuote
-    ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+    ? getQuoteRequirementModeForWorkflow(project, previousStatus)
     : "none";
   const validStatuses = isQuote
     ? QUOTE_WORKFLOW_STATUSES
@@ -1132,7 +1211,7 @@ const ProjectDetail = ({ user }) => {
   const isCorporate = project.projectType === "Corporate Job";
   const isQuote = project.projectType === "Quote";
   const quoteRequirementMode = isQuote
-    ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+    ? getQuoteRequirementModeForWorkflow(project, project?.status || workflowStatus)
     : "none";
   const isPendingAcceptanceStatus = PENDING_ACCEPTANCE_STATUSES.has(
     project.status,
@@ -4030,9 +4109,15 @@ const ProductionRisksCard = ({
 };
 
 const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
-  const quoteRequirementMode = getQuoteRequirementMode(
-    project?.quoteDetails?.checklist || {},
-  );
+  const quoteRequirementMode =
+    project?.projectType === "Quote"
+      ? getQuoteRequirementModeForWorkflow(
+          project,
+          project?.hold?.isOnHold
+            ? project?.hold?.previousStatus || workflowStatus
+            : project?.status || workflowStatus,
+        )
+      : "none";
   const calculateProgress = (status, type) => {
     if (type === "Quote") {
       return getQuoteProgressPercent(status, quoteRequirementMode);
@@ -4126,7 +4211,12 @@ const ProgressCard = ({ project, workflowStatus, isOnHold }) => {
 const ApprovalsCard = ({ project, workflowStatus, type, isOnHold }) => {
   const quoteRequirementMode =
     type === "Quote"
-      ? getQuoteRequirementMode(project?.quoteDetails?.checklist || {})
+      ? getQuoteRequirementModeForWorkflow(
+          project,
+          project?.hold?.isOnHold
+            ? project?.hold?.previousStatus || workflowStatus
+            : project?.status || workflowStatus,
+        )
       : "none";
   const steps =
     type === "Quote" ? getQuoteSteps(quoteRequirementMode) : STATUS_STEPS;
