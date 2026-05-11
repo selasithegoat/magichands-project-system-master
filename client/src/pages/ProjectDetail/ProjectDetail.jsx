@@ -76,10 +76,7 @@ import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
-// Lazy Load PDF Component
-const ProjectPdfDownload = React.lazy(
-  () => import("../../components/features/ProjectPdfDownload"),
-);
+import ProjectPdfDownload from "../../components/features/ProjectPdfDownload";
 import PaintbrushIcon from "../../components/icons/PaintbrushIcon";
 import FactoryIcon from "../../components/icons/FactoryIcon";
 import PackageIcon from "../../components/icons/PackageIcon";
@@ -828,7 +825,7 @@ const ProjectDetail = ({ user }) => {
     [deliveryDateValue, deliveryTimeValue],
   );
 
-  // PDF Image Processing & Form Data removed - moved to ProjectPdfDownload component
+  // PDF payload and image conversion are prepared on demand in ProjectPdfDownload.
   const fetchOrderGroupProjects = async (orderNumber, fallbackProject = null) => {
     const normalizedOrder = String(orderNumber || "").trim();
     if (!normalizedOrder) {
@@ -1230,18 +1227,7 @@ const ProjectDetail = ({ user }) => {
               question="What should I do next on this project?"
               project={project}
             />
-            {/* PDF Download Button - Lazy Loaded */}
-            {project && (
-              <React.Suspense
-                fallback={
-                  <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                    Loading PDF...
-                  </span>
-                }
-              >
-                <ProjectPdfDownload project={project} />
-              </React.Suspense>
-            )}
+            {project && <ProjectPdfDownload project={project} />}
 
             {/* Only show Edit if NOT pending acceptance and NOT completed */}
           </div>
