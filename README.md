@@ -1,6 +1,6 @@
 # MagicHands Project System
 
-Multi-portal job/project management system with Client, Admin, and Operations Wallboard portals backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, project updates, notifications, and file uploads.
+Multi-portal job/project management system with Client, Admin, Inventory, and Operations Wallboard portals backed by a Node/Express + MongoDB API. Designed for production workflows, departmental engagement, billing, inventory, project updates, notifications, chat, and file uploads.
 
 ## Disclaimer
 
@@ -24,7 +24,10 @@ This repository contains significant customizations beyond the base template, in
 - Enhanced History views (Completed / Finished / Delivered separation)
 - Dashboard stat recalculations
 - Production sub-department normalization
-- UI and workflow refinements across admin and client portals
+- Quote, mockup, billing, comments, chat, and reminder workflows
+- Inventory management and operations wallboard portals
+- Runtime version metadata and release nicknames
+- UI, workflow, and performance refinements across all portals
 
 Because of these changes, upstream template updates are not merged automatically.
 
@@ -41,23 +44,59 @@ git log HEAD..upstream/master --oneline
 
 ## Features
 
-- Client portal: dashboard, project list, history, engaged projects, profile, and notifications.
-- Admin portal: dashboards, project details, team management, and client overview.
-- Operations wallboard portal: full-screen manager overview of live orders, deadlines, team capacity, and risk signals.
-- Inventory portal: inventory dashboard, records, purchasing orders, and stock activity.
-- Project creation wizards (standard and quote workflows).
-- Departmental engagement + acknowledgements (including production sub-departments).
-- Real-time refresh via polling/realtime hooks.
-- File uploads served from a configurable uploads directory.
-- Notifications with in-app toasts and a notification center.
+### Client Portal
+
+- Dashboard, next actions, ongoing projects, history, profile, activity, help, and engaged project workflows.
+- Standard order intake, quote intake, pending assignments, front desk orders, order actions, and order revisions.
+- Quote lifecycle support including requirement validation, cost validation, mockup/sample/bid tracking, undo controls, and quote-to-order conversion.
+- Project details with updates, comments, mentions, reminders, delivery countdowns, challenges, mockups, billing guards, SMS prompts, and on-demand PDF downloads.
+- Billing documents, receipts, waybills, invoice conversion, and editable billing metadata.
+- Chat dock, notification center, global unread comments access, realtime refresh, and adaptive polling fallback.
+
+### Admin Portal
+
+- Admin dashboard, project management, cancelled orders, order groups, client overview, team management, and analytics.
+- Shared front desk order management, quote intake, order actions, and billing document workflows.
+- Admin project details with mockup intake/review controls, approval/reset actions, comments, updates, stage bottleneck alerts, and grouped project brief exports.
+- Realtime notifications, chat, SMS prompts, and protected admin-only access for Administration users.
+
+### Inventory Portal
+
+- Inventory dashboard, inventory categories, inventory records, price list, stock transactions, client items, suppliers, purchase orders, reports, and settings.
+- Role-gated access for approved inventory users, global search, quick actions, notification dropdown, dark/light appearance, and table density preferences.
+- Inventory reports and exports backed by `/api/inventory` endpoints.
+
+### Operations Wallboard
+
+- Full-screen manager wallboard for live operations, authenticated for admin users.
+- Rotating deck views for overview, risk, flow, team capacity, SLA/forecast, and handoff snapshots.
+- Realtime refresh with a timed fallback, swipe controls, fullscreen mode, and critical alert handling.
+
+### Backend/API
+
+- Express + MongoDB API for projects, updates, auth, notifications, reminders, meetings, realtime SSE, chat, digests, ops wallboard, portal navigation, inventory, billing, help, and system version metadata.
+- Configurable upload directory and upload limits with protected upload access.
+- Runtime app version metadata from `VERSION`, optional major-version nicknames from `VERSION_NICKNAMES.json`, and `GET /api/system/version`.
+
+## Latest Updates
+
+- Improved performance across client and admin by lazy-loading chat, deferring notification sounds, loading global comments only on demand, and generating project PDFs only when downloaded.
+- Reduced background traffic by preferring realtime SSE and pausing fallback polling while realtime connections are healthy.
+- Replaced full project-list summary fetches with purpose-built summary/count endpoints where available.
+- Reduced heavy renders in project detail countdowns, history, billing documents, and ongoing project lists.
+- Fixed upload preview Blob URL cleanup to prevent memory leaks.
+- Stabilized route wrapper components so protected route trees do not remount on every app render.
+- Trimmed client startup weight by limiting Inter font assets to Latin weights and removing the global Buffer polyfill.
+- Added quote validation undo controls and fixed quote approval stage display beyond Scope Approval.
 
 ## Tech Stack
 
-- Frontend: React + Vite (Admin, Client, and Ops Wallboard apps)
+- Frontend: React + Vite (Client, Admin, Inventory, and Ops Wallboard apps)
 - Backend: Node.js + Express
 - Database: MongoDB (Mongoose)
 - Auth: JWT + HttpOnly cookies
 - File uploads: Multer
+- Realtime: Server-Sent Events with adaptive polling fallback
 
 ## Repository Structure
 
@@ -121,7 +160,7 @@ If you use subdomains locally, map them in your hosts file.
 - `ops.magichandsproject.lan`
 - `inventory.magichandsproject.lan`
 
-Then set `ADMIN_HOST`, `CLIENT_HOST`, and `OPS_HOST` to match.
+Then set `CLIENT_HOST`, `ADMIN_HOST`, `OPS_HOST`, and `INVENTORY_HOST` to match.
 
 ## Router-Agnostic LAN Access (No DNS)
 
@@ -155,11 +194,15 @@ npm install
 # Ops wallboard
 cd ../opsportal
 npm install
+
+# Inventory
+cd ../inventoryportal
+npm install
 ```
 
 ## Run (Development)
 
-Open four terminals.
+Open five terminals.
 
 ```bash
 # 1) API server
@@ -223,7 +266,7 @@ cd ../inventoryportal
 npm run build
 ```
 
-Then run the API server (it serves both dist folders when present).
+Then run the API server (it serves the portal dist folders when present).
 
 ```bash
 cd ../server
@@ -302,11 +345,21 @@ This creates a default admin user (check the script for credentials) and updates
 
 - `npm run watch`: Start API with nodemon
 
-### Client/Admin
+### Frontend Portals
 
 - `npm run dev`: Vite dev server
 - `npm run build`: Production build
 - `npm run preview`: Preview build
+
+These script names are available in `client/`, `admin/`, `inventoryportal/`, and `opsportal/`.
+
+## Versioning
+
+- The displayed app version is read from the root `VERSION` file.
+- The server package version should stay aligned with `VERSION` because the API falls back to `server/package.json` if `VERSION` is unavailable.
+- Major-version nicknames live in `VERSION_NICKNAMES.json`.
+- Runtime version metadata is available from `GET /api/system/version` for authenticated users.
+- Frontend package versions are private build package versions and are not the user-facing app version.
 
 ### Security
 
@@ -316,8 +369,9 @@ This creates a default admin user (check the script for credentials) and updates
 ## Notes
 
 - The client portal shows engaged projects based on engaged sub-departments.
-- Notifications are delivered in-app and polled from `/api/notifications`.
+- Notifications are delivered in-app through realtime SSE with polling as a fallback.
 - Project history filters are based on the project delivery date (fallback to order/created date).
+- Large or optional UI surfaces such as chat, comments, notification sounds, and project PDF generation are intentionally deferred until needed.
 
 ## License
 
