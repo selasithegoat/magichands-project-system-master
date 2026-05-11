@@ -1,7 +1,6 @@
 import React, { useState, Suspense, lazy } from "react";
 import "./App.css";
 import Layout from "./components/layout/Layout";
-import ChatDock from "./components/chat/ChatDock";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import Spinner from "./components/ui/Spinner"; // Keep Spinner for initial auth load
 import LoadingFallback from "./components/ui/LoadingFallback"; // [NEW] Use for Suspense fallback
@@ -50,6 +49,7 @@ const EngagedProjectActions = lazy(
   () => import("./pages/EngagedProjects/EngagedProjectActions"),
 );
 const FAQ = lazy(() => import("./pages/FAQ/FAQ"));
+const ChatDock = lazy(() => import("./components/chat/ChatDock"));
 
 import {
   Routes,
@@ -741,7 +741,11 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
-      {user?._id && <ChatDock user={user} theme={theme} />}
+      {user?._id && (
+        <Suspense fallback={null}>
+          <ChatDock user={user} theme={theme} />
+        </Suspense>
+      )}
       <ConfirmDialog
         isOpen={isLogoutDialogOpen}
         title="Confirm Sign Out"

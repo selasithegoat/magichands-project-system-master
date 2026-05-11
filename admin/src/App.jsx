@@ -35,12 +35,12 @@ const MinimalQuoteForm = lazy(
 const BillingDocuments = lazy(
   () => import("@client/pages/BillingDocuments/BillingDocuments"),
 );
+const ChatDock = lazy(() => import("@client/components/chat/ChatDock"));
 import DashboardLayout from "./layouts/DashboardLayout/DashboardLayout";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 import useRealtimeClient from "./hooks/useRealtimeClient";
 import GlobalSmsPrompt from "./components/features/GlobalSmsPrompt";
 import AdminFrontDeskScope from "./components/AdminFrontDeskScope/AdminFrontDeskScope";
-import ChatDock from "@client/components/chat/ChatDock";
 import { clearPersistedFilterState } from "@client/utils/filterPersistence";
 import {
   BrowserRouter as Router,
@@ -304,7 +304,11 @@ function App() {
         </Routes>
       </Suspense>
       {user && <GlobalSmsPrompt user={user} />}
-      {user?._id && <ChatDock user={user} theme="dark" />}
+      {user?._id && (
+        <Suspense fallback={null}>
+          <ChatDock user={user} theme="dark" />
+        </Suspense>
+      )}
       <Toaster
         position="top-right"
         reverseOrder={false}
