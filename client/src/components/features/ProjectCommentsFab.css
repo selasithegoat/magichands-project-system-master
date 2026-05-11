@@ -243,7 +243,8 @@
 }
 
 .project-comments-feed-empty,
-.project-comments-feed-error {
+.project-comments-feed-error,
+.project-comments-feed-more {
   border: 1px dashed var(--border-color, #e2e8f0);
   border-radius: 12px;
   background: var(--surface-alt, #f8fafc);
@@ -251,6 +252,13 @@
   padding: 1rem;
   font-size: 0.86rem;
   text-align: center;
+}
+
+.project-comments-feed-more {
+  border-style: solid;
+  background: rgba(15, 118, 110, 0.07);
+  color: #0f766e;
+  font-weight: 800;
 }
 
 .project-comments-feed-error {

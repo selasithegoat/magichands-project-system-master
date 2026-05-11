@@ -62,6 +62,7 @@ const ProjectCommentSchema = new mongoose.Schema(
 
 ProjectCommentSchema.index({ project: 1, parentComment: 1, createdAt: 1 });
 ProjectCommentSchema.index({ project: 1, createdAt: -1 });
+ProjectCommentSchema.index({ project: 1, isDeleted: 1, createdAt: -1 });
 ProjectCommentSchema.index({ project: 1, mentions: 1 });
 ProjectCommentSchema.index({ project: 1, readBy: 1, author: 1, createdAt: -1 });
 

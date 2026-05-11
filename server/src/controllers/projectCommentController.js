@@ -11,6 +11,38 @@ const MENTION_USER_FIELDS =
 const PROJECT_ACCESS_FIELDS =
   "orderId details.projectName details.projectNameRaw details.projectIndicator createdBy projectLeadId assistantLeadId departments";
 const PROJECT_COMMENT_FEED_PROJECT_FIELDS = `${PROJECT_ACCESS_FIELDS} details.client projectType status`;
+const COMMENT_FEED_DEFAULT_LIMIT = 25;
+const COMMENT_FEED_MAX_LIMIT = 100;
+const COMMENT_DEPARTMENT_QUERY_VALUES = {
+  production: [
+    "Production",
+    "production",
+    "dtf",
+    "uv-dtf",
+    "uv-printing",
+    "engraving",
+    "large-format",
+    "digital-press",
+    "digital-heat-press",
+    "offset-press",
+    "screen-printing",
+    "embroidery",
+    "sublimation",
+    "digital-cutting",
+    "pvc-id",
+    "business-cards",
+    "installation",
+    "overseas",
+    "woodme",
+    "fabrication",
+    "signage",
+    "local-outsourcing",
+    "outside-production",
+  ],
+  graphics: ["Graphics/Design", "graphics", "design"],
+  stores: ["Stores", "stores", "stock", "packaging"],
+  photography: ["Photography", "photography"],
+};
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 
@@ -137,11 +169,11 @@ const serializeCommentFeedItem = (comment, project) => ({
 
 const normalizeCommentFeedLimit = (value) => {
   const rawValue = String(value || "").trim().toLowerCase();
-  if (rawValue === "all") return null;
+  if (rawValue === "all") return COMMENT_FEED_MAX_LIMIT;
 
-  const parsed = Number.parseInt(rawValue || "300", 10);
-  if (!Number.isFinite(parsed)) return 300;
-  return Math.min(Math.max(parsed, 1), 1000);
+  const parsed = Number.parseInt(rawValue || `${COMMENT_FEED_DEFAULT_LIMIT}`, 10);
+  if (!Number.isFinite(parsed)) return COMMENT_FEED_DEFAULT_LIMIT;
+  return Math.min(Math.max(parsed, 1), COMMENT_FEED_MAX_LIMIT);
 };
 
 const normalizeMentionHandle = (value) =>
@@ -267,6 +299,50 @@ const canAccessProjectComments = (user, project) => {
   if (userId && stakeholderIds.has(userId)) return true;
 
   return hasDepartmentOverlap(user.department, project.departments);
+};
+
+const getCommentDepartmentQueryValues = (departments = []) => {
+  const values = new Set();
+
+  toArray(departments).forEach((department) => {
+    const rawValue =
+      department && typeof department === "object"
+        ? department.value || department.label || department.name
+        : department;
+    const rawText = String(rawValue || "").trim();
+    if (rawText) values.add(rawText);
+
+    const canonical = canonicalizeDepartment(rawValue);
+    if (!canonical) return;
+    values.add(canonical);
+    (COMMENT_DEPARTMENT_QUERY_VALUES[canonical] || []).forEach((entry) =>
+      values.add(entry),
+    );
+  });
+
+  return Array.from(values).filter(Boolean);
+};
+
+const buildProjectCommentAccessQuery = (user) => {
+  if (!user) return { _id: null };
+  if (user.role === "admin" || isFrontDeskUser(user)) return {};
+
+  const userId = toIdString(user._id || user.id);
+  const conditions = [];
+  if (userId) {
+    conditions.push(
+      { createdBy: userId },
+      { projectLeadId: userId },
+      { assistantLeadId: userId },
+    );
+  }
+
+  const departmentValues = getCommentDepartmentQueryValues(user.department);
+  if (departmentValues.length > 0) {
+    conditions.push({ departments: { $in: departmentValues } });
+  }
+
+  return conditions.length > 0 ? { $or: conditions } : { _id: null };
 };
 
 const canManageComment = (user, comment) => {
@@ -473,8 +549,14 @@ const getProjectCommentFeed = async (req, res) => {
       return res.status(401).json({ message: "Not authorized" });
     }
 
-    const projects = await Project.find({})
-      .select(PROJECT_COMMENT_FEED_PROJECT_FIELDS)
+    const countOnly = ["count", "badge"].includes(
+      String(req.query?.summary || "").trim().toLowerCase(),
+    );
+    const projectAccessQuery = buildProjectCommentAccessQuery(req.user);
+    const projects = await Project.find(projectAccessQuery)
+      .select(
+        countOnly ? PROJECT_ACCESS_FIELDS : PROJECT_COMMENT_FEED_PROJECT_FIELDS,
+      )
       .lean();
     const accessibleProjects = projects.filter((project) =>
       canAccessProjectComments(req.user, project),
@@ -495,13 +577,17 @@ const getProjectCommentFeed = async (req, res) => {
       readBy: { $ne: currentUserId },
     };
     const limit = normalizeCommentFeedLimit(req.query?.limit);
+
+    if (countOnly) {
+      const count = await ProjectComment.countDocuments(filter);
+      return res.json({ comments: [], count });
+    }
+
     const commentsQuery = ProjectComment.find(filter)
       .populate("author", AUTHOR_FIELDS)
       .sort({ createdAt: -1, _id: -1 });
 
-    if (limit) {
-      commentsQuery.limit(limit);
-    }
+    commentsQuery.limit(limit);
 
     const [count, comments] = await Promise.all([
       ProjectComment.countDocuments(filter),

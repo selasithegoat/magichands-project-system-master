@@ -102,25 +102,72 @@ const CommentBubbleIcon = () => (
   </svg>
 );
 
+const COMMENT_FEED_LIMIT = 25;
+
 const ProjectCommentsFab = ({ user }) => {
   const navigate = useNavigate();
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
   const [isOpen, setIsOpen] = useState(false);
   const [comments, setComments] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const pendingReadCommentIdsRef = useRef(new Set());
   const requestSource = resolvePortalSource();
   const currentUserId = toIdString(user?._id || user?.id);
-  const count = comments.length;
+  const count = unreadCount;
 
-  const feedUrl = useMemo(
-    () => appendPortalSource("/api/projects/comments/feed?limit=all", requestSource),
+  const countUrl = useMemo(
+    () =>
+      appendPortalSource(
+        "/api/projects/comments/feed?summary=count",
+        requestSource,
+      ),
     [requestSource],
   );
 
+  const feedUrl = useMemo(
+    () =>
+      appendPortalSource(
+        `/api/projects/comments/feed?limit=${COMMENT_FEED_LIMIT}`,
+        requestSource,
+      ),
+    [requestSource],
+  );
+
+  const getAdjustedUnreadCount = useCallback((value) => {
+    const serverCount = Number(value) || 0;
+    return Math.max(0, serverCount - pendingReadCommentIdsRef.current.size);
+  }, []);
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!currentUserId) {
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const response = await fetch(countUrl, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+
+      const payload = await response.json().catch(() => ({}));
+      setUnreadCount(getAdjustedUnreadCount(payload.count));
+    } catch (commentsError) {
+      console.error("Failed to load project comment count", commentsError);
+    }
+  }, [countUrl, currentUserId, getAdjustedUnreadCount]);
+
   const fetchComments = useCallback(async () => {
+    if (!currentUserId) {
+      setComments([]);
+      setUnreadCount(0);
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
@@ -136,20 +183,13 @@ const ProjectCommentsFab = ({ user }) => {
 
       const payload = await response.json().catch(() => ({}));
       const nextComments = Array.isArray(payload.comments) ? payload.comments : [];
-      const serverUnreadIds = new Set(
-        nextComments.map((comment) => toIdString(comment?._id)).filter(Boolean),
-      );
-      for (const commentId of pendingReadCommentIdsRef.current) {
-        if (!serverUnreadIds.has(commentId)) {
-          pendingReadCommentIdsRef.current.delete(commentId);
-        }
-      }
       const unreadComments = filterUnreadComments(
         nextComments,
         currentUserId,
         pendingReadCommentIdsRef.current,
       );
       setComments(unreadComments);
+      setUnreadCount(getAdjustedUnreadCount(payload.count));
     } catch (commentsError) {
       console.error("Failed to load project comment feed", commentsError);
       setComments([]);
@@ -157,17 +197,34 @@ const ProjectCommentsFab = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentUserId, feedUrl]);
+  }, [currentUserId, feedUrl, getAdjustedUnreadCount]);
 
   useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
 
-  useRealtimeRefresh(fetchComments, {
-    enabled: Boolean(user?._id || user?.id),
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
+  useEffect(() => {
+    if (isOpen) {
+      fetchComments();
+    }
+  }, [fetchComments, isOpen]);
+
+  useRealtimeRefresh(
+    () => {
+      if (isOpen) {
+        fetchComments();
+      } else {
+        fetchUnreadCount();
+      }
+    },
+    {
+      enabled: Boolean(user?._id || user?.id),
+      paths: ["/api/projects"],
+      excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+      ignoreActorId: currentUserId,
+      shouldRefresh: (detail) => String(detail?.path || "").includes("/comments"),
+    },
+  );
 
   const markCommentRead = useCallback(
     async (comment) => {
@@ -183,6 +240,7 @@ const ProjectCommentsFab = ({ user }) => {
           (currentComment) => toIdString(currentComment?._id) !== commentId,
         ),
       );
+      setUnreadCount((currentCount) => Math.max(0, currentCount - 1));
 
       try {
         const response = await fetch(
@@ -200,13 +258,19 @@ const ProjectCommentsFab = ({ user }) => {
         if (!response.ok) {
           throw new Error(`Failed to mark project comment read: ${response.status}`);
         }
+        pendingReadCommentIdsRef.current.delete(commentId);
+        void fetchUnreadCount();
       } catch (readError) {
         pendingReadCommentIdsRef.current.delete(commentId);
         console.error("Failed to mark project comment read", readError);
-        void fetchComments();
+        if (isOpen) {
+          void fetchComments();
+        } else {
+          void fetchUnreadCount();
+        }
       }
     },
-    [fetchComments, requestSource],
+    [fetchComments, fetchUnreadCount, isOpen, requestSource],
   );
 
   const openComment = (comment) => {
@@ -320,6 +384,11 @@ const ProjectCommentsFab = ({ user }) => {
                       </article>
                     );
                   })}
+                  {count > comments.length && comments.length > 0 && (
+                    <div className="project-comments-feed-more">
+                      Showing latest {comments.length} of {countLabel} unread comments.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
