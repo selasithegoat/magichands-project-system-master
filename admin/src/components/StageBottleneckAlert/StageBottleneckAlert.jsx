@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import "./StageBottleneckAlert.css";
 import { renderProjectName } from "../../utils/projectName";
 import useAdaptivePolling from "@client/hooks/useAdaptivePolling";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const DEFAULT_THRESHOLD_DAYS = 14;
 const POLL_INTERVAL_MS = 3 * 60 * 1000;
@@ -112,6 +113,12 @@ const StageBottleneckAlert = () => {
   useAdaptivePolling(fetchBottlenecks, {
     intervalMs: POLL_INTERVAL_MS,
     hiddenIntervalMs: HIDDEN_POLL_INTERVAL_MS,
+    pauseWhenRealtimeHealthy: true,
+  });
+
+  useRealtimeRefresh(fetchBottlenecks, {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
   });
 
   const alertSignature = useMemo(

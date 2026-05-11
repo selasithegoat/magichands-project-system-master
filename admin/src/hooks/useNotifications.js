@@ -309,6 +309,7 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
     enabled: Boolean(userId),
     intervalMs: NOTIFICATION_POLL_INTERVAL_MS,
     hiddenIntervalMs: HIDDEN_NOTIFICATION_POLL_INTERVAL_MS,
+    pauseWhenRealtimeHealthy: true,
   });
 
   useEffect(() => {
@@ -327,16 +328,30 @@ const useNotifications = ({ soundEnabled = true, userId = "" } = {}) => {
       fetchNotifications();
     };
 
+    const handleNotificationDataChange = (event) => {
+      const path = String(event?.detail?.path || "");
+      const actorId = String(event?.detail?.actorId || "");
+      if (!path.startsWith("/api/notifications")) {
+        return;
+      }
+      if (actorId && actorId !== currentUserId) {
+        return;
+      }
+      fetchNotifications();
+    };
+
     window.addEventListener(
       "mh:notifications-changed",
       handleNotificationRealtime,
     );
+    window.addEventListener("mh:data-changed", handleNotificationDataChange);
 
     return () => {
       window.removeEventListener(
         "mh:notifications-changed",
         handleNotificationRealtime,
       );
+      window.removeEventListener("mh:data-changed", handleNotificationDataChange);
     };
   }, [fetchNotifications, userId]);
 

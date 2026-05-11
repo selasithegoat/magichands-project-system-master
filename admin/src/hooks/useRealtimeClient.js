@@ -1,5 +1,20 @@
 import { useEffect, useRef } from "react";
 
+const REALTIME_STATUS_EVENT = "mh:realtime-status";
+
+const publishRealtimeStatus = (patch = {}) => {
+  if (typeof window === "undefined") return;
+
+  const now = Date.now();
+  const detail = {
+    ...(window.__MH_REALTIME_STATUS__ || {}),
+    ...patch,
+    updatedAt: now,
+  };
+  window.__MH_REALTIME_STATUS__ = detail;
+  window.dispatchEvent(new CustomEvent(REALTIME_STATUS_EVENT, { detail }));
+};
+
 const useRealtimeClient = (enabled = true) => {
   const sourceRef = useRef(null);
 
@@ -8,6 +23,10 @@ const useRealtimeClient = (enabled = true) => {
       if (sourceRef.current) {
         sourceRef.current.close();
         sourceRef.current = null;
+        publishRealtimeStatus({
+          connected: false,
+          lastDisconnectedAt: Date.now(),
+        });
       }
       return;
     }
@@ -18,6 +37,20 @@ const useRealtimeClient = (enabled = true) => {
       withCredentials: true,
     });
     sourceRef.current = source;
+
+    const handleOpen = () => {
+      publishRealtimeStatus({
+        connected: true,
+        lastConnectedAt: Date.now(),
+      });
+    };
+
+    const handleError = () => {
+      publishRealtimeStatus({
+        connected: false,
+        lastErrorAt: Date.now(),
+      });
+    };
 
     const handleChange = (event) => {
       let detail = {};
@@ -67,18 +100,26 @@ const useRealtimeClient = (enabled = true) => {
       );
     };
 
+    source.addEventListener("open", handleOpen);
+    source.addEventListener("error", handleError);
     source.addEventListener("data_changed", handleChange);
     source.addEventListener("notification_changed", handleNotificationChange);
     source.addEventListener("chat_changed", handleChatChange);
     source.addEventListener("presence_changed", handlePresenceChange);
 
     return () => {
+      source.removeEventListener("open", handleOpen);
+      source.removeEventListener("error", handleError);
       source.removeEventListener("data_changed", handleChange);
       source.removeEventListener("notification_changed", handleNotificationChange);
       source.removeEventListener("chat_changed", handleChatChange);
       source.removeEventListener("presence_changed", handlePresenceChange);
       source.close();
       sourceRef.current = null;
+      publishRealtimeStatus({
+        connected: false,
+        lastDisconnectedAt: Date.now(),
+      });
     };
   }, [enabled]);
 };

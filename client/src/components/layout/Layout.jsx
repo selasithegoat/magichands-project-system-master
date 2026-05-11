@@ -554,6 +554,7 @@ const Layout = ({
     enabled: Boolean(user?._id),
     intervalMs: NOTIFICATION_POLL_INTERVAL_MS,
     hiddenIntervalMs: HIDDEN_NOTIFICATION_POLL_INTERVAL_MS,
+    pauseWhenRealtimeHealthy: true,
     runImmediately: false,
   });
 
@@ -573,16 +574,30 @@ const Layout = ({
       fetchNotifications(false);
     };
 
+    const handleNotificationDataChange = (event) => {
+      const path = String(event?.detail?.path || "");
+      const actorId = String(event?.detail?.actorId || "");
+      if (!path.startsWith("/api/notifications")) {
+        return;
+      }
+      if (actorId && actorId !== currentUserId) {
+        return;
+      }
+      fetchNotifications(false);
+    };
+
     window.addEventListener(
       "mh:notifications-changed",
       handleNotificationRealtime,
     );
+    window.addEventListener("mh:data-changed", handleNotificationDataChange);
 
     return () => {
       window.removeEventListener(
         "mh:notifications-changed",
         handleNotificationRealtime,
       );
+      window.removeEventListener("mh:data-changed", handleNotificationDataChange);
     };
   }, [user]);
 

@@ -2406,6 +2406,7 @@ const ChatDock = ({ user, theme = "light" }) => {
     hiddenIntervalMs: isOpen
       ? THREAD_HIDDEN_OPEN_POLL_INTERVAL_MS
       : THREAD_HIDDEN_IDLE_POLL_INTERVAL_MS,
+    pauseWhenRealtimeHealthy: true,
     runImmediately: false,
     refetchOnFocus: isOpen,
   });

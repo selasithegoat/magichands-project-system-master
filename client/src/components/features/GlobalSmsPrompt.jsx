@@ -2,10 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./GlobalSmsPrompt.css";
 import { formatProjectDisplayName } from "../../utils/projectName";
 import useAdaptivePolling from "../../hooks/useAdaptivePolling";
+import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const POLL_INTERVAL_MS = 60000;
 const HIDDEN_POLL_INTERVAL_MS = 5 * 60000;
 const MAX_VISIBLE_PROMPTS = 3;
+
+const isSmsPromptChange = (detail) =>
+  String(detail?.path || "").includes("/sms-prompts");
 
 const toText = (value) => (typeof value === "string" ? value.trim() : "");
 
@@ -120,6 +124,14 @@ const GlobalSmsPrompt = ({ user }) => {
     enabled: canManageSms && !authLost,
     intervalMs: POLL_INTERVAL_MS,
     hiddenIntervalMs: HIDDEN_POLL_INTERVAL_MS,
+    pauseWhenRealtimeHealthy: true,
+  });
+
+  useRealtimeRefresh(fetchPrompts, {
+    enabled: canManageSms && !authLost,
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+    shouldRefresh: isSmsPromptChange,
   });
 
   useEffect(() => {

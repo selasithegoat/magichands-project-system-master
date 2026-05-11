@@ -1,5 +1,12 @@
 import { useEffect, useRef } from "react";
 
+const REALTIME_STATUS_EVENT = "mh:realtime-status";
+
+const getRealtimeConnected = () => {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.__MH_REALTIME_STATUS__?.connected);
+};
+
 const useAdaptivePolling = (
   callback,
   {
@@ -8,6 +15,7 @@ const useAdaptivePolling = (
     hiddenIntervalMs,
     runImmediately = true,
     refetchOnFocus = true,
+    pauseWhenRealtimeHealthy = false,
   } = {},
 ) => {
   const callbackRef = useRef(callback);
@@ -28,6 +36,7 @@ const useAdaptivePolling = (
     let timeoutId;
     let cancelled = false;
     let running = false;
+    let realtimeHealthy = pauseWhenRealtimeHealthy && getRealtimeConnected();
 
     const clearScheduled = () => {
       if (timeoutId) {
@@ -36,9 +45,13 @@ const useAdaptivePolling = (
       }
     };
 
+    const shouldPauseForRealtime = () =>
+      pauseWhenRealtimeHealthy && realtimeHealthy;
+
     const scheduleNext = () => {
       if (cancelled) return;
       clearScheduled();
+      if (shouldPauseForRealtime()) return;
       const isHidden = document.visibilityState === "hidden";
       timeoutId = window.setTimeout(
         () => {
@@ -48,8 +61,12 @@ const useAdaptivePolling = (
       );
     };
 
-    const runPoll = async () => {
+    const runPoll = async ({ force = false } = {}) => {
       if (cancelled || running) return;
+      if (!force && shouldPauseForRealtime()) {
+        clearScheduled();
+        return;
+      }
       running = true;
       try {
         await callbackRef.current?.();
@@ -61,6 +78,10 @@ const useAdaptivePolling = (
 
     const handleVisibilityRefresh = () => {
       if (cancelled) return;
+      if (shouldPauseForRealtime()) {
+        clearScheduled();
+        return;
+      }
       if (document.visibilityState === "visible" && refetchOnFocus) {
         clearScheduled();
         void runPoll();
@@ -69,11 +90,32 @@ const useAdaptivePolling = (
       scheduleNext();
     };
 
+    const handleRealtimeStatus = (event) => {
+      const wasRealtimeHealthy = realtimeHealthy;
+      const nextRealtimeHealthy =
+        typeof event?.detail?.connected === "boolean"
+          ? event.detail.connected
+          : getRealtimeConnected();
+      realtimeHealthy = Boolean(nextRealtimeHealthy);
+
+      if (realtimeHealthy) {
+        clearScheduled();
+        return;
+      }
+
+      if (wasRealtimeHealthy) {
+        scheduleNext();
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityRefresh);
     window.addEventListener("focus", handleVisibilityRefresh);
+    if (pauseWhenRealtimeHealthy) {
+      window.addEventListener(REALTIME_STATUS_EVENT, handleRealtimeStatus);
+    }
 
     if (runImmediately) {
-      void runPoll();
+      void runPoll({ force: true });
     } else {
       scheduleNext();
     }
@@ -83,8 +125,18 @@ const useAdaptivePolling = (
       clearScheduled();
       document.removeEventListener("visibilitychange", handleVisibilityRefresh);
       window.removeEventListener("focus", handleVisibilityRefresh);
+      if (pauseWhenRealtimeHealthy) {
+        window.removeEventListener(REALTIME_STATUS_EVENT, handleRealtimeStatus);
+      }
     };
-  }, [enabled, hiddenIntervalMs, intervalMs, refetchOnFocus, runImmediately]);
+  }, [
+    enabled,
+    hiddenIntervalMs,
+    intervalMs,
+    pauseWhenRealtimeHealthy,
+    refetchOnFocus,
+    runImmediately,
+  ]);
 };
 
 export default useAdaptivePolling;
