@@ -3,14 +3,11 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
 
-import { Buffer } from "buffer";
-window.Buffer = Buffer;
-
 import { BrowserRouter } from "react-router-dom";
 
 try {
   window.__MH_PORTAL__ = "client";
-} catch (error) {
+} catch {
   // ignore portal flag errors
 }
 
@@ -29,7 +26,7 @@ const resolveInitialTheme = () => {
 try {
   const initialTheme = resolveInitialTheme();
   document.documentElement.dataset.theme = initialTheme;
-} catch (error) {
+} catch {
   // ignore theme preflight errors
 }
 

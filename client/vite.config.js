@@ -53,10 +53,7 @@ export default defineConfig(({ mode }) => {
               isNodeModule(id, "react-dom") ||
               isNodeModule(id, "react-router") ||
               isNodeModule(id, "react-router-dom") ||
-              isNodeModule(id, "scheduler") ||
-              isNodeModule(id, "buffer") ||
-              isNodeModule(id, "base64-js") ||
-              isNodeModule(id, "ieee754")
+              isNodeModule(id, "scheduler")
             ) {
               return "vendor";
             }
