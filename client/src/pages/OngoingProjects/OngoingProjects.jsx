@@ -69,22 +69,35 @@ const OngoingProjects = ({
     return "active";
   }, [location.search]);
 
-  React.useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const res = await fetch("/api/projects");
-        if (res.ok) {
-          const data = await res.json();
-          setProjects(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        console.error("Error loading projects:", error);
-      } finally {
-        setLoading(false);
+  const buildProjectsUrl = React.useCallback(() => {
+    const params = new URLSearchParams({
+      view: viewMode,
+      summary: "card",
+    });
+    return `/api/projects?${params.toString()}`;
+  }, [viewMode]);
+
+  const fetchProjects = React.useCallback(async () => {
+    try {
+      const res = await fetch(buildProjectsUrl(), {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(Array.isArray(data) ? data : []);
       }
-    };
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildProjectsUrl]);
+
+  React.useEffect(() => {
+    setLoading(true);
     fetchProjects();
-  }, []);
+  }, [fetchProjects]);
 
   useRealtimeRefresh(() => fetchProjects(), {
     paths: ["/api/projects"],
@@ -92,18 +105,6 @@ const OngoingProjects = ({
   });
 
   const [toast, setToast] = React.useState(null);
-
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch("/api/projects");
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error("Error loading projects:", error);
-    }
-  };
 
   const handleUpdateStatus = async (projectId, currentStatus) => {
     if (currentStatus !== "Completed") {
@@ -133,30 +134,6 @@ const OngoingProjects = ({
       console.error(err);
       setToast({ message: "Server error", type: "error" });
     }
-  };
-
-  // Helper to map status to colors
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "In Progress":
-        return { class: "blue", color: "#2563eb" };
-      case "Pending Approval":
-        return { class: "orange", color: "#f97316" };
-      case "Completed":
-        return { class: "green", color: "#22c55e" };
-      case "On Hold":
-        return { class: "orange", color: "#ea580c" };
-      default:
-        return { class: "blue", color: "#cbd5e1" };
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "Pending";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
   };
 
   const projectsForSelectedView = React.useMemo(() => {

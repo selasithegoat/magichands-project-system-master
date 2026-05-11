@@ -34,17 +34,6 @@ import {
   normalizeQuoteStatus,
 } from "../../utils/quoteStatus";
 
-const HISTORY_PROJECT_STATUSES = new Set(["Finished"]);
-const OVERDUE_EXCLUDED_STATUSES = new Set([
-  "Delivered",
-  "Pending Feedback",
-  "Pending Delivery/Pickup",
-  "Feedback Completed",
-  "Completed",
-  "Finished",
-  "Declined",
-]);
-
 const STATUS_LABEL_OVERRIDES = {
   "Order Created": "Waiting Acceptance",
   "Quote Created": "Waiting Acceptance",
@@ -166,16 +155,37 @@ const TIMELINE_LOOKAHEAD_DAYS = 3;
 const RECENT_PROJECT_LIMIT = 5;
 const IMAGE_FILE_EXTENSIONS = /\.(apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DRAWER_TRANSITION_MS = 280;
+const EMPTY_DASHBOARD_SUMMARY = {
+  stats: {
+    active: 0,
+    pendingAcceptance: 0,
+    completed: 0,
+    overdue: 0,
+    emergencies: 0,
+    pendingDelivery: 0,
+    quotes: 0,
+    corporate: 0,
+    totalLive: 0,
+  },
+  projects: {
+    recentActive: [],
+    recentActiveByDepartment: {},
+    upcomingDeadlines: [],
+    pendingAcceptancePreview: [],
+    quotePreview: [],
+    pendingDeliveryPreview: [],
+    leadPendingAssignments: [],
+  },
+  workload: {
+    departments: [],
+  },
+};
 
 const PENDING_ACCEPTANCE_STATUSES = new Set([
   "Order Created",
   "Quote Created",
   "Pending Acceptance",
 ]);
-const isPendingAcceptanceProject = (project) =>
-  PENDING_ACCEPTANCE_STATUSES.has(project?.status);
-const isPendingDeliveryProject = (project) =>
-  project?.status === "Pending Delivery/Pickup";
 const getProjectTypeValue = (project) =>
   String(project?.projectType || "").trim().toLowerCase();
 const getProjectPriorityValue = (project) =>
@@ -186,8 +196,6 @@ const isCorporateProject = (project) =>
 const isEmergencyProject = (project) =>
   getProjectPriorityValue(project) === "urgent" ||
   getProjectTypeValue(project).includes("emergency");
-const isHistoryProject = (project) =>
-  HISTORY_PROJECT_STATUSES.has(project?.status || "");
 
 const toEntityId = (value) => {
   if (!value) return "";
@@ -364,7 +372,10 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const navigate = useNavigate();
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
-  const [projects, setProjects] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(
+    EMPTY_DASHBOARD_SUMMARY,
+  );
+  const [projectLookup, setProjectLookup] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [projectViewMode, setProjectViewMode] = usePersistedState(
@@ -395,10 +406,14 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const [nextActionsTotal, setNextActionsTotal] = useState(0);
   const [nextActionsLoading, setNextActionsLoading] = useState(true);
 
-  const leadUserId = toEntityId(user?._id || user?.id);
   const previousLeadPendingIdsRef = useRef(new Set());
   const drawerCloseTimeoutRef = useRef(null);
   const drawerOpenFrameRef = useRef(null);
+  const dashboardStats = dashboardSummary.stats || EMPTY_DASHBOARD_SUMMARY.stats;
+  const dashboardProjects =
+    dashboardSummary.projects || EMPTY_DASHBOARD_SUMMARY.projects;
+  const dashboardWorkload =
+    dashboardSummary.workload || EMPTY_DASHBOARD_SUMMARY.workload;
 
   useEffect(() => {
     fetchProjects();
@@ -411,13 +426,6 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   }, {
     paths: ["/api/projects", "/api/updates"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-    shouldRefresh: (detail) => {
-      if (detail.path.startsWith("/api/updates")) {
-        return projects.some((project) => project?._id === detail.projectId);
-      }
-
-      return true;
-    },
   });
 
   const openTimelineDrawer = useCallback(
@@ -485,22 +493,55 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch("/api/projects", {
+      const res = await fetch("/api/projects/dashboard-summary", {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
+        cache: "no-store",
       });
       if (res.ok) {
         const data = await res.json();
-        const sortedProjects = data.sort(
-          (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-        );
-        setProjects(sortedProjects);
+        const nextSummary = {
+          ...EMPTY_DASHBOARD_SUMMARY,
+          ...(data || {}),
+          stats: {
+            ...EMPTY_DASHBOARD_SUMMARY.stats,
+            ...(data?.stats || {}),
+          },
+          projects: {
+            ...EMPTY_DASHBOARD_SUMMARY.projects,
+            ...(data?.projects || {}),
+          },
+          workload: {
+            ...EMPTY_DASHBOARD_SUMMARY.workload,
+            ...(data?.workload || {}),
+          },
+        };
+        setDashboardSummary(nextSummary);
+
+        const byId = new Map();
+        const addProject = (project) => {
+          const projectId = toEntityId(project?._id || project?.id);
+          if (projectId && !byId.has(projectId)) byId.set(projectId, project);
+        };
+        [
+          nextSummary.projects.recentActive,
+          nextSummary.projects.upcomingDeadlines,
+          nextSummary.projects.pendingAcceptancePreview,
+          nextSummary.projects.quotePreview,
+          nextSummary.projects.pendingDeliveryPreview,
+          nextSummary.projects.leadPendingAssignments,
+          ...Object.values(nextSummary.projects.recentActiveByDepartment || {}),
+        ].forEach((list) => {
+          if (Array.isArray(list)) list.forEach(addProject);
+        });
+        setProjectLookup(Array.from(byId.values()));
       } else {
-        console.error("Failed to fetch projects");
+        console.error("Failed to fetch dashboard summary");
       }
     } catch (error) {
-      console.error("Error fetching projects:", error);
+      console.error("Error fetching dashboard summary:", error);
     } finally {
       setIsLoading(false);
     }
@@ -534,7 +575,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     const projectValue =
       projectOrId && typeof projectOrId === "object"
         ? projectOrId
-        : projects.find(
+        : projectLookup.find(
             (entry) =>
               toEntityId(entry?._id || entry?.id) === toEntityId(projectOrId),
           );
@@ -662,90 +703,51 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   };
 
   const pendingAcceptanceProjects = useMemo(
-    () => projects.filter((project) => isPendingAcceptanceProject(project)),
-    [projects],
+    () =>
+      Array.isArray(dashboardProjects.pendingAcceptancePreview)
+        ? dashboardProjects.pendingAcceptancePreview
+        : [],
+    [dashboardProjects.pendingAcceptancePreview],
   );
 
   const activeProjects = useMemo(
     () =>
-      projects.filter(
-        (project) =>
-          !isPendingAcceptanceProject(project) &&
-          !isHistoryProject(project),
-      ),
-    [projects],
+      Array.isArray(dashboardProjects.recentActive)
+        ? dashboardProjects.recentActive
+        : [],
+    [dashboardProjects.recentActive],
   );
 
-  const completedProjects = useMemo(
-    () => projects.filter((project) => isHistoryProject(project)),
-    [projects],
-  );
-  const totalLiveProjects = useMemo(
-    () => projects.filter((project) => !isHistoryProject(project)).length,
-    [projects],
-  );
-
-  const overdueProjects = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return projects.filter((project) => {
-      if (!project?.details?.deliveryDate) return false;
-      const deliveryDate = new Date(project.details.deliveryDate);
-      return (
-        deliveryDate < today &&
-        !OVERDUE_EXCLUDED_STATUSES.has(project.status || "") &&
-        !isHistoryProject(project)
-      );
-    });
-  }, [projects]);
-
-  const emergencyProjects = useMemo(
+  const upcomingDeadlineProjects = useMemo(
     () =>
-      projects.filter(
-        (project) => isEmergencyProject(project) && !isHistoryProject(project),
-      ),
-    [projects],
+      Array.isArray(dashboardProjects.upcomingDeadlines)
+        ? dashboardProjects.upcomingDeadlines
+        : [],
+    [dashboardProjects.upcomingDeadlines],
   );
 
   const pendingDeliveryProjects = useMemo(
     () =>
-      projects.filter(
-        (project) => isPendingDeliveryProject(project) && !isHistoryProject(project),
-      ),
-    [projects],
+      Array.isArray(dashboardProjects.pendingDeliveryPreview)
+        ? dashboardProjects.pendingDeliveryPreview
+        : [],
+    [dashboardProjects.pendingDeliveryPreview],
   );
 
   const quoteProjects = useMemo(
     () =>
-      projects.filter(
-        (project) =>
-          isQuoteProject(project) &&
-          !HISTORY_PROJECT_STATUSES.has(project.status || ""),
-      ),
-    [projects],
-  );
-
-  const corporateProjects = useMemo(
-    () =>
-      projects.filter(
-        (project) =>
-          isCorporateProject(project) &&
-          !HISTORY_PROJECT_STATUSES.has(project.status || ""),
-      ),
-    [projects],
+      Array.isArray(dashboardProjects.quotePreview)
+        ? dashboardProjects.quotePreview
+        : [],
+    [dashboardProjects.quotePreview],
   );
 
   const leadPendingAssignmentProjects = useMemo(
     () =>
-      projects.filter((project) => {
-        const leadId = toEntityId(project?.projectLeadId);
-        return (
-          Boolean(leadUserId) &&
-          leadId === leadUserId &&
-          isPendingAcceptanceProject(project)
-        );
-      }),
-    [projects, leadUserId],
+      Array.isArray(dashboardProjects.leadPendingAssignments)
+        ? dashboardProjects.leadPendingAssignments
+        : [],
+    [dashboardProjects.leadPendingAssignments],
   );
 
   useEffect(() => {
@@ -773,7 +775,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
         label: "Acceptance",
         description: "New projects waiting acceptance",
         route: "/create",
-        count: pendingAcceptanceProjects.length,
+        count: Number(dashboardStats.pendingAcceptance) || 0,
         projects: pendingAcceptanceProjects,
       },
       {
@@ -781,7 +783,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
         label: "Quotes",
         description: "Quote jobs waiting conversion",
         route: "/projects?view=quotes",
-        count: quoteProjects.length,
+        count: Number(dashboardStats.quotes) || 0,
         projects: quoteProjects,
       },
       {
@@ -789,11 +791,18 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
         label: "Delivery",
         description: "Projects ready for delivery",
         route: "/projects?view=pending-delivery",
-        count: pendingDeliveryProjects.length,
+        count: Number(dashboardStats.pendingDelivery) || 0,
         projects: pendingDeliveryProjects,
       },
     ],
-    [quoteProjects, pendingAcceptanceProjects, pendingDeliveryProjects],
+    [
+      dashboardStats.pendingAcceptance,
+      dashboardStats.pendingDelivery,
+      dashboardStats.quotes,
+      quoteProjects,
+      pendingAcceptanceProjects,
+      pendingDeliveryProjects,
+    ],
   );
 
   const activePipelineOption =
@@ -805,22 +814,18 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   );
 
   const workloadStats = useMemo(() => {
-    const departmentCounts = new Map();
-    if (!activeProjects.length) return [];
+    const sourceRows = Array.isArray(dashboardWorkload.departments)
+      ? dashboardWorkload.departments
+      : [];
+    if (!sourceRows.length) return [];
 
-    activeProjects.forEach((project) => {
-      getProjectDepartmentIds(project).forEach((departmentId) => {
-        departmentCounts.set(departmentId, (departmentCounts.get(departmentId) || 0) + 1);
-      });
-    });
-
-    const rows = Array.from(departmentCounts.entries())
-      .map(([departmentId, count], index) => ({
-        departmentId,
-        count,
-        percentage: Math.max(1, Math.round((count / activeProjects.length) * 100)),
+    const rows = sourceRows
+      .map((row, index) => ({
+        departmentId: row.departmentId,
+        count: Number(row.count) || 0,
+        percentage: Number(row.percentage) || 0,
         color: WORKLOAD_COLORS[index % WORKLOAD_COLORS.length],
-        label: getDepartmentLabel(departmentId),
+        label: getDepartmentLabel(row.departmentId),
       }))
       .sort((left, right) => right.count - left.count);
 
@@ -831,23 +836,21 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       ...row,
       trend: getTrendMeta(row.percentage, averagePercentage),
     }));
-  }, [activeProjects]);
+  }, [dashboardWorkload.departments]);
 
   const filteredProjects = useMemo(() => {
     const scopedProjects = selectedWorkloadDept
-      ? activeProjects.filter((project) =>
-          getProjectDepartmentIds(project).includes(selectedWorkloadDept),
-        )
+      ? dashboardProjects.recentActiveByDepartment?.[selectedWorkloadDept] || []
       : activeProjects;
     return scopedProjects.slice(0, RECENT_PROJECT_LIMIT);
-  }, [activeProjects, selectedWorkloadDept]);
+  }, [activeProjects, dashboardProjects.recentActiveByDepartment, selectedWorkloadDept]);
 
   const timelineEvents = useMemo(() => {
     const now = Date.now();
     const windowEnd = now + TIMELINE_LOOKAHEAD_DAYS * DAY_IN_MS;
     const events = [];
 
-    activeProjects.forEach((project) => {
+    upcomingDeadlineProjects.forEach((project) => {
       const dueAt = buildDeliveryDateTime(
         project?.details?.deliveryDate,
         project?.details?.deliveryTime,
@@ -882,7 +885,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     return events
       .sort((left, right) => left.dueAt.getTime() - right.dueAt.getTime())
       .slice(0, 10);
-  }, [activeProjects]);
+  }, [upcomingDeadlineProjects]);
 
   const activeTimelineProject = useMemo(() => {
     if (!activeTimelineEvent) return null;
@@ -890,18 +893,18 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     const targetId = activeTimelineEvent.projectId;
     if (!targetId) return null;
     return (
-      projects.find(
+      projectLookup.find(
         (project) => toEntityId(project?._id || project?.id) === toEntityId(targetId),
       ) || null
     );
-  }, [activeTimelineEvent, projects]);
+  }, [activeTimelineEvent, projectLookup]);
 
   const selectedDepartmentLabel = selectedWorkloadDept
     ? getDepartmentLabel(selectedWorkloadDept)
     : "";
 
   const greetingName = user?.firstName || user?.name || "User";
-  const totalProjectsLabel = `${totalLiveProjects} total projects`;
+  const totalProjectsLabel = `${Number(dashboardStats.totalLive) || 0} total projects`;
 
   const renderProject = (project) => {
     const projectId = toEntityId(project?._id || project?.id);
@@ -1185,7 +1188,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
               <AlertTriangleIcon width="20" height="20" />
             </span>
             <div>
-              <strong>{emergencyProjects.length}</strong>
+              <strong>{Number(dashboardStats.emergencies) || 0}</strong>
               <p>Emergency projects</p>
             </div>
             <ChevronRightIcon width="16" height="16" />
@@ -1197,10 +1200,10 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
               onClick={() => handleStatsNavigate("/projects?view=overdue")}
             >
               <span className="dashboard-kpi-icon overdue">
-                <ClockIcon width="16" height="16" />
+              <ClockIcon width="16" height="16" />
               </span>
               <span>Overdue</span>
-              <strong>{overdueProjects.length}</strong>
+              <strong>{Number(dashboardStats.overdue) || 0}</strong>
             </button>
             <button
               type="button"
@@ -1211,7 +1214,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                 <TruckIcon width="16" height="16" />
               </span>
               <span>Pending Delivery</span>
-              <strong>{pendingDeliveryProjects.length}</strong>
+              <strong>{Number(dashboardStats.pendingDelivery) || 0}</strong>
             </button>
           </div>
         </div>
@@ -1231,7 +1234,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                 <FolderIcon width="16" height="16" />
               </span>
               <span>Active</span>
-              <strong>{activeProjects.length}</strong>
+              <strong>{Number(dashboardStats.active) || 0}</strong>
             </button>
             <button
               type="button"
@@ -1242,7 +1245,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                 <CheckCircleIcon width="16" height="16" />
               </span>
               <span>Completed</span>
-              <strong>{completedProjects.length}</strong>
+              <strong>{Number(dashboardStats.completed) || 0}</strong>
             </button>
             <button
               type="button"
@@ -1253,7 +1256,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
                 <BuildingIcon width="16" height="16" />
               </span>
               <span>Corporate</span>
-              <strong>{corporateProjects.length}</strong>
+              <strong>{Number(dashboardStats.corporate) || 0}</strong>
             </button>
           </div>
         </div>

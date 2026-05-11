@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PendingAssignments.css";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -15,10 +15,13 @@ const PendingAssignments = ({ onStartNew, user }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
-  const fetchAssignments = async () => {
+  const fetchAssignments = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects?view=pending-acceptance&summary=card", {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (res.ok) {
         const data = await res.json();
         const pending = data.filter((p) => {
@@ -35,11 +38,11 @@ const PendingAssignments = ({ onStartNew, user }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchAssignments();
-  }, [user]);
+  }, [fetchAssignments]);
 
   useRealtimeRefresh(() => fetchAssignments(), {
     enabled: Boolean(user),

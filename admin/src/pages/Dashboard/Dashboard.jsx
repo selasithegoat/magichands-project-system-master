@@ -82,25 +82,49 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
-const CLOSED_PROJECT_STATUSES = new Set(["Completed", "Finished", "Declined"]);
-const OVERDUE_EXCLUDED_STATUSES = new Set([
-  "Delivered",
-  "Pending Feedback",
-  "Feedback Completed",
-  "Completed",
-  "Finished",
-  "Declined",
-]);
 const PENDING_ACCEPTANCE_STATUSES = new Set([
   "Order Created",
   "Quote Created",
   "Pending Acceptance",
 ]);
+const EMPTY_ADMIN_DASHBOARD_SUMMARY = {
+  stats: {
+    active: 0,
+    pending: 0,
+    completed: 0,
+    overdue: 0,
+    emergencies: 0,
+    pendingDelivery: 0,
+    quotes: 0,
+    corporate: 0,
+  },
+  projects: {
+    todayCreated: [],
+    recentProjects: [],
+  },
+  workload: {
+    leads: [],
+  },
+  statusOverview: {
+    periods: [
+      {
+        label: "All Time",
+        stats: {
+          inProgress: 0,
+          completed: 0,
+          delayed: 0,
+          total: 0,
+          pIn: 0,
+          pComp: 0,
+          pDel: 0,
+        },
+      },
+    ],
+  },
+};
 
 const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
-const isPendingDeliveryProject = (project) =>
-  project?.status === "Pending Delivery/Pickup";
 const isQuoteProject = (project) => project?.projectType === "Quote";
 const isCorporateProject = (project) => project?.projectType === "Corporate Job";
 const getProjectStatusDisplay = (project) =>
@@ -219,94 +243,24 @@ const StatusDonut = ({ stats }) => {
   );
 };
 
-const ProjectStatusOverview = ({ projects }) => {
+const ProjectStatusOverview = ({ overview }) => {
   const [selectedPeriod, setSelectedPeriod] = useState("All Time");
 
-  // Extract unique months from projects data for the selector
   const periods = useMemo(() => {
-    const months = new Set();
-    projects.forEach((p) => {
-      const date = new Date(p.createdAt || p.orderDate);
-      if (!isNaN(date.getTime())) {
-        const monthYear = date.toLocaleString("en-US", {
-          month: "long",
-          year: "numeric",
-        });
-        months.add(monthYear);
-      }
-    });
+    const nextPeriods = Array.isArray(overview?.periods)
+      ? overview.periods
+      : EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview.periods;
+    return nextPeriods.length
+      ? nextPeriods
+      : EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview.periods;
+  }, [overview]);
 
-    // Sort months chronologically descending
-    return [
-      "All Time",
-      ...Array.from(months).sort((a, b) => new Date(b) - new Date(a)),
-    ];
-  }, [projects]);
-
-  // Filter projects by selected period and calculate stats
-  const stats = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const filtered = projects.filter((p) => {
-      if (selectedPeriod === "All Time") return true;
-      const date = new Date(p.createdAt || p.orderDate);
-      const monthYear = date.toLocaleString("en-US", {
-        month: "long",
-        year: "numeric",
-      });
-      return monthYear === selectedPeriod;
-    });
-
-    let inProgress = 0;
-    let completed = 0;
-    let delayed = 0;
-
-    filtered.forEach((p) => {
-      // Logic:
-      // 1. If status is Completed or Finished -> Completed
-      // 2. If deliveryDate is in the past (overdue) and not delivered -> Delayed
-      // 3. Otherwise -> In Progress (except for 'Completed')
-
-      if (["Completed", "Finished", "Declined"].includes(p.status)) {
-        completed++;
-      } else {
-        const dDate = p.details?.deliveryDate
-          ? new Date(p.details.deliveryDate)
-          : null;
-
-        const postDeliveryStatuses = new Set([
-          "Delivered",
-          "Pending Feedback",
-          "Feedback Completed",
-          "Completed",
-          "Finished",
-          "Declined",
-        ]);
-        // Count as delayed if overdue OR within 3 days (72 hours) of delivery
-        const isUrgent = dDate && dDate - now <= 3 * 24 * 60 * 60 * 1000;
-
-        if (isUrgent && !postDeliveryStatuses.has(p.status)) {
-          delayed++;
-        } else {
-          inProgress++;
-        }
-      }
-    });
-
-    const totalCount = inProgress + completed + delayed;
-    const calcTotal = totalCount || 1; // Avoid division by zero for display
-
-    return {
-      inProgress,
-      completed,
-      delayed,
-      total: totalCount,
-      pIn: Math.round((inProgress / calcTotal) * 100),
-      pComp: Math.round((completed / calcTotal) * 100),
-      pDel: Math.round((delayed / calcTotal) * 100),
-    };
-  }, [projects, selectedPeriod]);
+  const selectedOverview =
+    periods.find((period) => period.label === selectedPeriod) || periods[0];
+  const selectedPeriodValue = selectedOverview?.label || "All Time";
+  const stats =
+    selectedOverview?.stats ||
+    EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview.periods[0].stats;
 
   return (
     <div className="status-overview-card">
@@ -315,12 +269,12 @@ const ProjectStatusOverview = ({ projects }) => {
         <div className="period-selector-wrapper">
           <select
             className="period-select"
-            value={selectedPeriod}
+            value={selectedPeriodValue}
             onChange={(e) => setSelectedPeriod(e.target.value)}
           >
             {periods.map((p) => (
-              <option key={p} value={p}>
-                {p}
+              <option key={p.label} value={p.label}>
+                {p.label}
               </option>
             ))}
           </select>
@@ -372,7 +326,9 @@ const ProjectStatusOverview = ({ projects }) => {
 
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(
+    EMPTY_ADMIN_DASHBOARD_SUMMARY,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     active: 0,
@@ -396,87 +352,46 @@ const Dashboard = ({ user }) => {
 
   const fetchGlobalProjects = async () => {
     try {
-      const res = await fetch("/api/projects?source=admin", {
+      const res = await fetch("/api/projects/dashboard-summary?source=admin", {
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include",
+        cache: "no-store",
       });
 
       if (res.ok) {
         const data = await res.json();
-        calculateStats(data);
-        const sorted = data.sort(
-          (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-        );
-        setProjects(sorted);
+        const nextSummary = {
+          ...EMPTY_ADMIN_DASHBOARD_SUMMARY,
+          ...(data || {}),
+          stats: {
+            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.stats,
+            ...(data?.stats || {}),
+          },
+          projects: {
+            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.projects,
+            ...(data?.projects || {}),
+          },
+          workload: {
+            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.workload,
+            ...(data?.workload || {}),
+          },
+          statusOverview: {
+            ...EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview,
+            ...(data?.statusOverview || {}),
+          },
+        };
+        setDashboardSummary(nextSummary);
+        setStats(nextSummary.stats);
       } else {
-        console.error("Failed to fetch admin projects");
+        console.error("Failed to fetch admin dashboard summary");
       }
     } catch (error) {
-      console.error("Error fetching projects:", error);
+      console.error("Error fetching dashboard summary:", error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const calculateStats = (data) => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    let active = 0;
-    let pending = 0;
-    let completed = 0;
-    let overdue = 0;
-    let emergencies = 0;
-    let pendingDelivery = 0;
-    let quotes = 0;
-    let corporate = 0;
-
-    data.forEach((p) => {
-      if (isEmergencyProject(p)) {
-        emergencies++;
-      }
-
-      if (isPendingDeliveryProject(p)) {
-        pendingDelivery++;
-      }
-
-      if (isQuoteProject(p) && !CLOSED_PROJECT_STATUSES.has(p.status)) {
-        quotes++;
-      }
-      if (isCorporateProject(p) && !CLOSED_PROJECT_STATUSES.has(p.status)) {
-        corporate++;
-      }
-
-      if (CLOSED_PROJECT_STATUSES.has(p.status)) {
-        completed++;
-      } else {
-        active++;
-        if (PENDING_ACCEPTANCE_STATUSES.has(p.status)) {
-          pending++;
-        }
-        if (p.details?.deliveryDate) {
-          const dDate = new Date(p.details.deliveryDate);
-          // Count as overdue if already passed OR within 3 days (72 hours)
-          const isUrgent = dDate - now <= 3 * 24 * 60 * 60 * 1000;
-          if (isUrgent && !OVERDUE_EXCLUDED_STATUSES.has(p.status)) {
-            overdue++;
-          }
-        }
-      }
-    });
-
-    setStats({
-      active,
-      pending,
-      completed,
-      overdue,
-      emergencies,
-      pendingDelivery,
-      quotes,
-      corporate,
-    });
   };
 
   const getStatusPillClass = (status) => {
@@ -589,27 +504,17 @@ const Dashboard = ({ user }) => {
 
   const priorityCards = statCards.filter((card) => card.group === "priority");
   const overviewCards = statCards.filter((card) => card.group === "overview");
-
-  const todayProjects = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
-
-    return projects
-      .filter((project) => {
-        const dateValue = project?.createdAt || project?.orderDate;
-        if (!dateValue) return false;
-        const createdAt = new Date(dateValue);
-        if (Number.isNaN(createdAt.getTime())) return false;
-        return createdAt >= start && createdAt <= end;
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt || b.orderDate) - new Date(a.createdAt || a.orderDate),
-      );
-  }, [projects]);
+  const dashboardProjects =
+    dashboardSummary.projects || EMPTY_ADMIN_DASHBOARD_SUMMARY.projects;
+  const recentProjects = Array.isArray(dashboardProjects.recentProjects)
+    ? dashboardProjects.recentProjects
+    : [];
+  const todayProjects = Array.isArray(dashboardProjects.todayCreated)
+    ? dashboardProjects.todayCreated
+    : [];
+  const leadWorkload = Array.isArray(dashboardSummary.workload?.leads)
+    ? dashboardSummary.workload.leads
+    : [];
 
   const todayLabel = useMemo(
     () =>
@@ -851,7 +756,7 @@ const Dashboard = ({ user }) => {
       </section>
 
       {/* NEW: Project Status Overview Component */}
-      <ProjectStatusOverview projects={projects} />
+      <ProjectStatusOverview overview={dashboardSummary.statusOverview} />
 
       {/* Main Content Body */}
       <div className="admin-dashboard-body">
@@ -862,7 +767,7 @@ const Dashboard = ({ user }) => {
           </div>
 
           <div className="recent-projects-card">
-            {projects.slice(0, 5).map((project) => (
+            {recentProjects.map((project) => (
               <div
                 key={project._id}
                 className="project-row"
@@ -901,7 +806,7 @@ const Dashboard = ({ user }) => {
                 </div>
               </div>
             ))}
-            {projects.length === 0 && (
+            {recentProjects.length === 0 && (
               <div
                 style={{
                   padding: "3rem",
@@ -923,29 +828,7 @@ const Dashboard = ({ user }) => {
 
           <div className="chart-card">
             {(() => {
-              const leadCounts = {};
-              const activeOnes = projects.filter(
-                (p) =>
-                  p.status !== "Completed" &&
-                  p.status !== "Finished" &&
-                  p.status !== "Declined" &&
-                  p.status !== "Delivered" &&
-                  p.status !== "Pending Feedback" &&
-                  p.status !== "Feedback Completed",
-              );
-
-              // Calculate counts per lead
-              activeOnes.forEach((p) => {
-                const leadName = getLeadDisplay(p, "Unassigned");
-                leadCounts[leadName] = (leadCounts[leadName] || 0) + 1;
-              });
-
-              // Sort by count descending
-              const sortedLeads = Object.entries(leadCounts).sort(
-                ([, a], [, b]) => b - a,
-              );
-
-              if (sortedLeads.length === 0) {
+              if (leadWorkload.length === 0) {
                 return (
                   <div
                     style={{
@@ -972,13 +855,10 @@ const Dashboard = ({ user }) => {
                 "#14b8a6", // Teal
               ];
 
-              return sortedLeads.map(([leadName, count], idx) => {
-                // Calculate percentage relative to Total Active Projects
-                const percent =
-                  activeOnes.length > 0
-                    ? Math.round((count / activeOnes.length) * 100)
-                    : 0;
-
+              return leadWorkload.map((row, idx) => {
+                const leadName = row.leadName || "Unassigned";
+                const count = Number(row.count) || 0;
+                const percent = Number(row.percentage) || 0;
                 return (
                   <div key={leadName} className="dept-bar-group">
                     <div className="dept-header">

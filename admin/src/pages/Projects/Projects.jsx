@@ -145,7 +145,7 @@ const isUrgentProject = (project) => {
   );
 };
 
-const getDefaultFilterStatus = (mode) => "All";
+const getDefaultFilterStatus = () => "All";
 
 const getMappedStatusFilter = (normalizedStatus, mode) => {
   if (!normalizedStatus) return null;
@@ -316,28 +316,24 @@ const Projects = ({ user }) => {
 
   const fetchProjects = async () => {
     try {
-      const [projectsRes, groupedRes] = await Promise.all([
-        fetch("/api/projects?source=admin", {
+      const groupedRes = await fetch(
+        "/api/projects/orders?source=admin&collapseRevisions=true",
+        {
           credentials: "include",
-        }),
-        fetch("/api/projects/orders?source=admin&collapseRevisions=true", {
-          credentials: "include",
-        }),
-      ]);
-
-      let projectsData = [];
-
-      if (projectsRes.ok) {
-        const data = await projectsRes.json();
-        projectsData = Array.isArray(data) ? data : [];
-      } else {
-        console.error("Failed to fetch projects");
-      }
+        },
+      );
 
       if (groupedRes.ok) {
         const groupedData = await groupedRes.json();
         setGroupedOrders(Array.isArray(groupedData) ? groupedData : []);
       } else {
+        const projectsRes = await fetch("/api/projects?source=admin", {
+          credentials: "include",
+        });
+        const projectsPayload = projectsRes.ok ? await projectsRes.json() : [];
+        const projectsData = Array.isArray(projectsPayload)
+          ? projectsPayload
+          : [];
         setGroupedOrders(buildFallbackOrderGroups(projectsData));
         console.error("Failed to fetch grouped orders");
       }
@@ -499,17 +495,6 @@ const Projects = ({ user }) => {
     group?.client ||
     projects.find((project) => project?.details?.client)?.details?.client ||
     "-";
-
-  const getGroupLeadText = (projects = []) => {
-    const leads = Array.from(
-      new Set(
-        projects
-          .map((project) => getLeadDisplay(project, "Unassigned"))
-          .filter(Boolean),
-      ),
-    );
-    return leads.length > 0 ? leads.join(", ") : "Unassigned";
-  };
 
   const getGroupStatusSummary = (projects = []) => {
     const statuses = Array.from(

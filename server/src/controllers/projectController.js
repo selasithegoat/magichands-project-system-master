@@ -1243,6 +1243,621 @@ const BOTTLENECK_DEFAULT_DAYS = 14;
 const BOTTLENECK_MIN_DAYS = 1;
 const BOTTLENECK_MAX_DAYS = 90;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const DASHBOARD_PENDING_ACCEPTANCE_STATUSES = [
+  "Order Created",
+  "Quote Created",
+  "Pending Acceptance",
+];
+const DASHBOARD_CLIENT_HISTORY_STATUSES = ["Finished"];
+const DASHBOARD_ADMIN_CLOSED_STATUSES = ["Completed", "Finished", "Declined"];
+const DASHBOARD_CLIENT_OVERDUE_EXCLUDED_STATUSES = [
+  "Delivered",
+  "Pending Feedback",
+  "Pending Delivery/Pickup",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+  "Declined",
+];
+const DASHBOARD_ADMIN_OVERDUE_EXCLUDED_STATUSES = [
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+  "Declined",
+];
+const DASHBOARD_WORKLOAD_EXCLUDED_STATUSES = [
+  "Completed",
+  "Finished",
+  "Declined",
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+];
+const DASHBOARD_CARD_PROJECT_SELECT = [
+  "_id",
+  "orderId",
+  "orderRef",
+  "orderDate",
+  "receivedTime",
+  "projectType",
+  "priority",
+  "status",
+  "statusChangedAt",
+  "statusHistory",
+  "createdAt",
+  "updatedAt",
+  "versionNumber",
+  "projectLeadId",
+  "assistantLeadId",
+  "referenceAccess",
+  "departments",
+  "details.projectName",
+  "details.projectNameRaw",
+  "details.projectIndicator",
+  "details.client",
+  "details.lead",
+  "details.assistantLead",
+  "details.deliveryDate",
+  "details.deliveryTime",
+  "details.sampleImage",
+  "details.attachments",
+  "sampleImage",
+  "attachments",
+  "mockup",
+  "sampleRequirement",
+  "corporateEmergency",
+  "sampleApproval",
+  "quoteDetails.checklist",
+  "cancellation",
+  "hold",
+].join(" ");
+const DASHBOARD_META_PROJECT_SELECT = [
+  "_id",
+  "orderId",
+  "orderDate",
+  "projectType",
+  "priority",
+  "status",
+  "createdAt",
+  "updatedAt",
+  "projectLeadId",
+  "assistantLeadId",
+  "departments",
+  "details.lead",
+  "details.assistantLead",
+  "details.deliveryDate",
+  "details.deliveryTime",
+].join(" ");
+
+const startOfToday = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+};
+
+const endOfToday = () => {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  return today;
+};
+
+const parsePositiveInteger = (value, fallback, max) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+};
+
+const buildProjectTypeCondition = (pattern) => ({
+  projectType: { $regex: pattern, $options: "i" },
+});
+
+const buildProjectViewCondition = (viewValue = "") => {
+  const view = String(viewValue || "").trim().toLowerCase();
+  const today = startOfToday();
+
+  switch (view) {
+    case "pending-acceptance":
+    case "pending":
+    case "assignments":
+      return { status: { $in: DASHBOARD_PENDING_ACCEPTANCE_STATUSES } };
+    case "completed":
+    case "finished":
+      return { status: { $in: DASHBOARD_CLIENT_HISTORY_STATUSES } };
+    case "overdue":
+      return {
+        "details.deliveryDate": { $lt: today },
+        status: { $nin: DASHBOARD_CLIENT_OVERDUE_EXCLUDED_STATUSES },
+      };
+    case "emergencies":
+    case "emergency":
+      return {
+        $and: [
+          {
+            $or: [
+              buildProjectTypeCondition("emergency"),
+              { priority: { $regex: "^urgent$", $options: "i" } },
+            ],
+          },
+          { status: { $nin: DASHBOARD_CLIENT_HISTORY_STATUSES } },
+        ],
+      };
+    case "pending-delivery":
+    case "delivery":
+      return {
+        status: "Pending Delivery/Pickup",
+      };
+    case "quotes":
+    case "quote":
+      return {
+        $and: [
+          buildProjectTypeCondition("quote"),
+          { status: { $nin: [...DASHBOARD_CLIENT_HISTORY_STATUSES, ...DASHBOARD_PENDING_ACCEPTANCE_STATUSES] } },
+        ],
+      };
+    case "corporate":
+      return {
+        $and: [
+          buildProjectTypeCondition("corporate"),
+          { status: { $nin: DASHBOARD_CLIENT_HISTORY_STATUSES } },
+        ],
+      };
+    case "active":
+      return {
+        status: {
+          $nin: [
+            ...DASHBOARD_PENDING_ACCEPTANCE_STATUSES,
+            ...DASHBOARD_CLIENT_HISTORY_STATUSES,
+          ],
+        },
+      };
+    default:
+      return {};
+  }
+};
+
+const normalizeDashboardProject = (project) => normalizeProjectStatusFields(project);
+
+const populateDashboardProjectQuery = (query) =>
+  query
+    .populate("createdBy", "firstName lastName")
+    .populate("projectLeadId", "firstName lastName avatarUrl")
+    .populate("assistantLeadId", "firstName lastName employeeId email avatarUrl")
+    .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone");
+
+const fetchDashboardCardProjects = async (
+  req,
+  condition = {},
+  { limit = 5, sort = { createdAt: -1 } } = {},
+) => {
+  const { query: accessQuery } = buildProjectAccessQuery(req);
+  const query = mergeQueryWithCondition(accessQuery, condition);
+  const safeLimit = parsePositiveInteger(limit, 5, 100);
+
+  const projects = await populateDashboardProjectQuery(
+    Project.find(query)
+      .select(DASHBOARD_CARD_PROJECT_SELECT)
+      .sort(sort)
+      .limit(safeLimit),
+  ).lean();
+
+  projects.forEach(normalizeDashboardProject);
+  return projects;
+};
+
+const fetchDashboardCardProjectsByIds = async (req, ids = []) => {
+  const uniqueIds = Array.from(new Set(ids.map(toObjectIdString).filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  const { query: accessQuery } = buildProjectAccessQuery(req);
+  const query = mergeQueryWithCondition(accessQuery, {
+    _id: { $in: uniqueIds },
+  });
+
+  const projects = await populateDashboardProjectQuery(
+    Project.find(query).select(DASHBOARD_CARD_PROJECT_SELECT),
+  ).lean();
+  projects.forEach(normalizeDashboardProject);
+
+  const byId = new Map(projects.map((project) => [toObjectIdString(project?._id), project]));
+  return uniqueIds.map((id) => byId.get(id)).filter(Boolean);
+};
+
+const fetchDashboardMetaProjects = async (req, condition = {}) => {
+  const { query: accessQuery } = buildProjectAccessQuery(req);
+  const query = mergeQueryWithCondition(accessQuery, condition);
+  const projects = await Project.find(query)
+    .select(DASHBOARD_META_PROJECT_SELECT)
+    .populate("projectLeadId", "firstName lastName name")
+    .populate("assistantLeadId", "firstName lastName name")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  projects.forEach(normalizeDashboardProject);
+  return projects;
+};
+
+const isDashboardStatus = (project, statuses = []) =>
+  statuses.includes(project?.status || "");
+
+const isDashboardProjectType = (project, typePattern) =>
+  String(project?.projectType || "").toLowerCase().includes(typePattern);
+
+const isDashboardEmergencyProject = (project) =>
+  isDashboardProjectType(project, "emergency") ||
+  String(project?.priority || "").toLowerCase() === "urgent";
+
+const isDashboardPendingDeliveryProject = (project) =>
+  project?.status === "Pending Delivery/Pickup";
+
+const isDashboardQuoteProject = (project) =>
+  isDashboardProjectType(project, "quote");
+
+const isDashboardCorporateProject = (project) =>
+  isDashboardProjectType(project, "corporate");
+
+const isDashboardClientHistoryProject = (project) =>
+  isDashboardStatus(project, DASHBOARD_CLIENT_HISTORY_STATUSES);
+
+const isDashboardAdminClosedProject = (project) =>
+  isDashboardStatus(project, DASHBOARD_ADMIN_CLOSED_STATUSES);
+
+const getDashboardDeliveryDate = (project) => {
+  if (!project?.details?.deliveryDate) return null;
+  const parsed = new Date(project.details.deliveryDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isClientDashboardOverdueProject = (project, today = startOfToday()) => {
+  const deliveryDate = getDashboardDeliveryDate(project);
+  return Boolean(
+    deliveryDate &&
+      deliveryDate < today &&
+      !DASHBOARD_CLIENT_OVERDUE_EXCLUDED_STATUSES.includes(project?.status || "") &&
+      !isDashboardClientHistoryProject(project),
+  );
+};
+
+const isAdminDashboardCriticalProject = (project, today = startOfToday()) => {
+  const deliveryDate = getDashboardDeliveryDate(project);
+  return Boolean(
+    deliveryDate &&
+      deliveryDate.getTime() - today.getTime() <= 3 * DAY_IN_MS &&
+      !DASHBOARD_ADMIN_OVERDUE_EXCLUDED_STATUSES.includes(project?.status || ""),
+  );
+};
+
+const getDashboardPersonName = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") {
+    return /^[a-f0-9]{24}$/i.test(value.trim()) ? "" : value.trim();
+  }
+  const first = value.firstName || "";
+  const last = value.lastName || "";
+  const full = `${first} ${last}`.trim();
+  return full || value.name || value.fullName || value.label || "";
+};
+
+const getDashboardLeadDisplay = (project, fallback = "Unassigned") => {
+  const leadName = getDashboardPersonName(project?.projectLeadId || project?.details?.lead);
+  const assistantName = getDashboardPersonName(
+    project?.assistantLeadId || project?.details?.assistantLead,
+  );
+
+  if (leadName && assistantName && leadName !== assistantName) {
+    return `${leadName.split(/\s+/)[0]} / ${assistantName.split(/\s+/)[0]}`;
+  }
+  return leadName || assistantName || fallback;
+};
+
+const buildDepartmentWorkloadRows = (projects = []) => {
+  const counts = new Map();
+  projects.forEach((project) => {
+    (Array.isArray(project?.departments) ? project.departments : [])
+      .filter(Boolean)
+      .forEach((departmentId) => {
+        counts.set(departmentId, (counts.get(departmentId) || 0) + 1);
+      });
+  });
+
+  const total = projects.length || 1;
+  return Array.from(counts.entries())
+    .map(([departmentId, count]) => ({
+      departmentId,
+      count,
+      percentage: Math.max(1, Math.round((count / total) * 100)),
+    }))
+    .sort((left, right) => right.count - left.count);
+};
+
+const buildLeadWorkloadRows = (projects = []) => {
+  const counts = new Map();
+  projects.forEach((project) => {
+    const leadName = getDashboardLeadDisplay(project, "Unassigned");
+    counts.set(leadName, (counts.get(leadName) || 0) + 1);
+  });
+
+  const total = projects.length || 1;
+  return Array.from(counts.entries())
+    .map(([leadName, count]) => ({
+      leadName,
+      count,
+      percentage: Math.round((count / total) * 100),
+    }))
+    .sort((left, right) => right.count - left.count);
+};
+
+const buildAdminStatusOverviewStats = (projects = []) => {
+  const now = startOfToday();
+  let inProgress = 0;
+  let completed = 0;
+  let delayed = 0;
+
+  projects.forEach((project) => {
+    if (isDashboardAdminClosedProject(project)) {
+      completed += 1;
+      return;
+    }
+
+    const deliveryDate = getDashboardDeliveryDate(project);
+    const isUrgent =
+      deliveryDate && deliveryDate.getTime() - now.getTime() <= 3 * DAY_IN_MS;
+
+    if (
+      isUrgent &&
+      !DASHBOARD_ADMIN_OVERDUE_EXCLUDED_STATUSES.includes(project?.status || "")
+    ) {
+      delayed += 1;
+      return;
+    }
+
+    inProgress += 1;
+  });
+
+  const total = inProgress + completed + delayed;
+  const calcTotal = total || 1;
+  return {
+    inProgress,
+    completed,
+    delayed,
+    total,
+    pIn: Math.round((inProgress / calcTotal) * 100),
+    pComp: Math.round((completed / calcTotal) * 100),
+    pDel: Math.round((delayed / calcTotal) * 100),
+  };
+};
+
+const buildAdminStatusOverview = (projects = []) => {
+  const monthBuckets = new Map();
+  projects.forEach((project) => {
+    const date = new Date(project?.createdAt || project?.orderDate || 0);
+    if (Number.isNaN(date.getTime())) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthBuckets.has(key)) {
+      monthBuckets.set(key, {
+        key,
+        label: date.toLocaleString("en-US", {
+          month: "long",
+          year: "numeric",
+        }),
+        date,
+        projects: [],
+      });
+    }
+    monthBuckets.get(key).projects.push(project);
+  });
+
+  const monthlyPeriods = Array.from(monthBuckets.values())
+    .sort((left, right) => right.date.getTime() - left.date.getTime())
+    .map((entry) => ({
+      label: entry.label,
+      stats: buildAdminStatusOverviewStats(entry.projects),
+    }));
+
+  return {
+    periods: [
+      {
+        label: "All Time",
+        stats: buildAdminStatusOverviewStats(projects),
+      },
+      ...monthlyPeriods,
+    ],
+  };
+};
+
+const buildClientDashboardSummary = async (req) => {
+  const today = startOfToday();
+  const now = Date.now();
+  const deadlineWindowStart = today.getTime();
+  const deadlineWindowEnd = now + 3 * DAY_IN_MS;
+  const activeCondition = buildProjectViewCondition("active");
+  const pendingCondition = buildProjectViewCondition("pending-acceptance");
+  const quoteCondition = buildProjectViewCondition("quotes");
+  const deliveryCondition = buildProjectViewCondition("pending-delivery");
+  const activeMetaProjects = await fetchDashboardMetaProjects(req, activeCondition);
+  const allMetaProjects = await fetchDashboardMetaProjects(req);
+  const departmentWorkload = buildDepartmentWorkloadRows(activeMetaProjects);
+
+  const recentActiveIds = activeMetaProjects.slice(0, 5).map((project) => project._id);
+  const upcomingDeadlineIds = activeMetaProjects
+    .filter((project) => {
+      const deliveryDate = getDashboardDeliveryDate(project);
+      if (!deliveryDate) return false;
+      const deliveryTime = deliveryDate.getTime();
+      return deliveryTime >= deadlineWindowStart && deliveryTime <= deadlineWindowEnd;
+    })
+    .sort(
+      (left, right) =>
+        getDashboardDeliveryDate(left).getTime() -
+        getDashboardDeliveryDate(right).getTime(),
+    )
+    .slice(0, 10)
+    .map((project) => project._id);
+  const recentActiveByDepartmentIds = new Map();
+  activeMetaProjects.forEach((project) => {
+    (Array.isArray(project?.departments) ? project.departments : []).forEach(
+      (departmentId) => {
+        if (!departmentId) return;
+        if (!recentActiveByDepartmentIds.has(departmentId)) {
+          recentActiveByDepartmentIds.set(departmentId, []);
+        }
+        const bucket = recentActiveByDepartmentIds.get(departmentId);
+        if (bucket.length < 5) bucket.push(project._id);
+      },
+    );
+  });
+
+  const departmentIdsToFetch = new Set();
+  recentActiveIds.forEach((id) => departmentIdsToFetch.add(toObjectIdString(id)));
+  upcomingDeadlineIds.forEach((id) =>
+    departmentIdsToFetch.add(toObjectIdString(id)),
+  );
+  recentActiveByDepartmentIds.forEach((ids) => {
+    ids.forEach((id) => departmentIdsToFetch.add(toObjectIdString(id)));
+  });
+
+  const [
+    dashboardCards,
+    pendingPreview,
+    quotePreview,
+    deliveryPreview,
+    leadPendingAssignments,
+  ] = await Promise.all([
+    fetchDashboardCardProjectsByIds(req, Array.from(departmentIdsToFetch)),
+    fetchDashboardCardProjects(req, pendingCondition, { limit: 3 }),
+    fetchDashboardCardProjects(req, quoteCondition, { limit: 3 }),
+    fetchDashboardCardProjects(req, deliveryCondition, { limit: 3 }),
+    fetchDashboardCardProjects(
+      req,
+      mergeQueryWithCondition(pendingCondition, {
+        projectLeadId: req.user?._id,
+      }),
+      { limit: 25 },
+    ),
+  ]);
+
+  const cardsById = new Map(
+    dashboardCards.map((project) => [toObjectIdString(project?._id), project]),
+  );
+  const recentActive = recentActiveIds
+    .map((id) => cardsById.get(toObjectIdString(id)))
+    .filter(Boolean);
+  const recentActiveByDepartment = {};
+  recentActiveByDepartmentIds.forEach((ids, departmentId) => {
+    recentActiveByDepartment[departmentId] = ids
+      .map((id) => cardsById.get(toObjectIdString(id)))
+      .filter(Boolean);
+  });
+
+  const pendingAcceptanceCount = allMetaProjects.filter((project) =>
+    isDashboardStatus(project, DASHBOARD_PENDING_ACCEPTANCE_STATUSES),
+  ).length;
+  const clientLiveProjects = allMetaProjects.filter(
+    (project) => !isDashboardClientHistoryProject(project),
+  );
+
+  return {
+    stats: {
+      active: activeMetaProjects.length,
+      pendingAcceptance: pendingAcceptanceCount,
+      completed: allMetaProjects.filter(isDashboardClientHistoryProject).length,
+      overdue: allMetaProjects.filter((project) =>
+        isClientDashboardOverdueProject(project, today),
+      ).length,
+      emergencies: clientLiveProjects.filter(isDashboardEmergencyProject).length,
+      pendingDelivery: clientLiveProjects.filter(isDashboardPendingDeliveryProject).length,
+      quotes: clientLiveProjects.filter(isDashboardQuoteProject).length,
+      corporate: clientLiveProjects.filter(isDashboardCorporateProject).length,
+      totalLive: clientLiveProjects.length,
+    },
+    projects: {
+      recentActive,
+      recentActiveByDepartment,
+      upcomingDeadlines: upcomingDeadlineIds
+        .map((id) => cardsById.get(toObjectIdString(id)))
+        .filter(Boolean),
+      pendingAcceptancePreview: pendingPreview,
+      quotePreview,
+      pendingDeliveryPreview: deliveryPreview,
+      leadPendingAssignments,
+    },
+    workload: {
+      departments: departmentWorkload,
+    },
+  };
+};
+
+const buildAdminDashboardSummary = async (req) => {
+  const todayStart = startOfToday();
+  const todayEnd = endOfToday();
+  const allMetaProjects = await fetchDashboardMetaProjects(req);
+  const activeWorkloadProjects = allMetaProjects.filter(
+    (project) => !DASHBOARD_WORKLOAD_EXCLUDED_STATUSES.includes(project?.status || ""),
+  );
+  const todayIds = allMetaProjects
+    .filter((project) => {
+      const date = new Date(project?.createdAt || project?.orderDate || 0);
+      return !Number.isNaN(date.getTime()) && date >= todayStart && date <= todayEnd;
+    })
+    .map((project) => project._id);
+  const recentIds = allMetaProjects.slice(0, 5).map((project) => project._id);
+
+  const [todayCreated, recentProjects] = await Promise.all([
+    fetchDashboardCardProjectsByIds(req, todayIds),
+    fetchDashboardCardProjectsByIds(req, recentIds),
+  ]);
+
+  const stats = allMetaProjects.reduce(
+    (acc, project) => {
+      if (isDashboardEmergencyProject(project)) acc.emergencies += 1;
+      if (isDashboardPendingDeliveryProject(project)) acc.pendingDelivery += 1;
+      if (isDashboardQuoteProject(project) && !isDashboardAdminClosedProject(project)) {
+        acc.quotes += 1;
+      }
+      if (
+        isDashboardCorporateProject(project) &&
+        !isDashboardAdminClosedProject(project)
+      ) {
+        acc.corporate += 1;
+      }
+      if (isDashboardAdminClosedProject(project)) {
+        acc.completed += 1;
+        return acc;
+      }
+      acc.active += 1;
+      if (isDashboardStatus(project, DASHBOARD_PENDING_ACCEPTANCE_STATUSES)) {
+        acc.pending += 1;
+      }
+      if (isAdminDashboardCriticalProject(project, todayStart)) {
+        acc.overdue += 1;
+      }
+      return acc;
+    },
+    {
+      active: 0,
+      pending: 0,
+      completed: 0,
+      overdue: 0,
+      emergencies: 0,
+      pendingDelivery: 0,
+      quotes: 0,
+      corporate: 0,
+    },
+  );
+
+  return {
+    stats,
+    projects: {
+      todayCreated,
+      recentProjects,
+    },
+    workload: {
+      leads: buildLeadWorkloadRows(activeWorkloadProjects),
+    },
+    statusOverview: buildAdminStatusOverview(allMetaProjects),
+  };
+};
 
 const getLineageKey = (project = {}) => {
   const rawLineageId = project?.lineageId;
@@ -7743,26 +8358,39 @@ const createProject = async (req, res) => {
 // @access  Private
 const getProjects = async (req, res) => {
   try {
-    const { query } = buildProjectAccessQuery(req);
+    const { query: accessQuery } = buildProjectAccessQuery(req);
     const groupByOrder =
       String(req.query.groupBy || "").toLowerCase() === "order";
     const collapseRevisions =
       String(req.query.collapseRevisions || "true").toLowerCase() !== "false";
+    const viewCondition = buildProjectViewCondition(req.query.view);
+    const query = mergeQueryWithCondition(accessQuery, viewCondition);
+    const summaryMode =
+      String(req.query.summary || "").trim().toLowerCase() === "card";
+    const limit = parsePositiveInteger(req.query.limit, 0, 500);
+
+    let projectQuery = Project.find(query)
+      .populate("createdBy", "firstName lastName")
+      .populate("projectLeadId", "firstName lastName avatarUrl")
+      .populate(
+        "assistantLeadId",
+        "firstName lastName employeeId email avatarUrl",
+      )
+      .populate("acknowledgements.user", "firstName lastName name avatarUrl")
+      .populate("endOfDayUpdateBy", "firstName lastName department")
+      .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
+      .sort({ createdAt: -1 });
+
+    if (summaryMode) {
+      projectQuery = projectQuery.select(DASHBOARD_CARD_PROJECT_SELECT);
+    }
+
+    if (!groupByOrder && limit > 0) {
+      projectQuery = projectQuery.limit(limit);
+    }
 
     const projects = await populateProjectReferences(
-      populateMockupUploaders(
-        Project.find(query)
-          .populate("createdBy", "firstName lastName")
-          .populate("projectLeadId", "firstName lastName avatarUrl")
-          .populate(
-            "assistantLeadId",
-            "firstName lastName employeeId email avatarUrl",
-          )
-          .populate("acknowledgements.user", "firstName lastName name avatarUrl")
-          .populate("endOfDayUpdateBy", "firstName lastName department")
-          .populate("orderRef", "orderNumber orderDate client clientEmail clientPhone")
-          .sort({ createdAt: -1 }),
-      ),
+      populateMockupUploaders(projectQuery),
     ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
@@ -11053,6 +11681,24 @@ const getDeliveryCalendar = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching delivery calendar:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @desc    Get lightweight dashboard summary payloads
+// @route   GET /api/projects/dashboard-summary
+// @access  Private
+const getDashboardSummary = async (req, res) => {
+  try {
+    const isAdminSummary =
+      String(req.query.source || "").toLowerCase() === "admin";
+    const summary = isAdminSummary
+      ? await buildAdminDashboardSummary(req)
+      : await buildClientDashboardSummary(req);
+
+    return res.json(summary);
+  } catch (error) {
+    console.error("Error fetching dashboard summary:", error);
     return res.status(500).json({ message: "Server Error" });
   }
 };
@@ -18820,6 +19466,7 @@ const updateProjectBatchStatus = async (req, res) => {
 module.exports = {
   createProject,
   getProjects,
+  getDashboardSummary,
   getDashboardCounts,
   getNextActions,
   getDeliveryCalendar,

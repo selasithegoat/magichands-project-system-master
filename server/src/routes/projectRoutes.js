@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   createProject,
   getProjects,
+  getDashboardSummary,
   getDashboardCounts,
   getNextActions,
   getDeliveryCalendar,
@@ -241,6 +242,7 @@ router.get("/clients", protect, getClients); // [NEW] - Get all clients with the
 router.get("/orders", protect, getOrderGroups);
 router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
+router.get("/dashboard-summary", protect, getDashboardSummary);
 router.get("/dashboard-counts", protect, getDashboardCounts);
 router.get("/next-actions", protect, getNextActions);
 router.get("/delivery-calendar", protect, getDeliveryCalendar);
