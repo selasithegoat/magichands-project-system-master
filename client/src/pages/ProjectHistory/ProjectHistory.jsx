@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import "./ProjectHistory.css";
 // Icons
 import ChevronLeftIcon from "../../components/icons/ChevronLeftIcon";
@@ -11,6 +11,55 @@ import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 
 const HISTORY_FILTER_OPTIONS = ["All", "This Month", "Last Month", "Older"];
+const HISTORY_RENDER_BATCH_SIZE = 24;
+
+const getProjectDate = (project) => {
+  const dateStr =
+    project.details?.deliveryDate || project.orderDate || project.createdAt;
+  const parsedDate = dateStr ? new Date(dateStr) : null;
+  return parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null;
+};
+
+const buildMonthBoundaries = () => {
+  const now = new Date();
+  return {
+    thisMonthStart: new Date(now.getFullYear(), now.getMonth(), 1),
+    nextMonth: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+    lastMonthStart: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+  };
+};
+
+const getDateBucket = (projectDate, boundaries) => {
+  if (!projectDate) return "unknown";
+
+  if (
+    projectDate >= boundaries.thisMonthStart &&
+    projectDate < boundaries.nextMonth
+  ) {
+    return "thisMonth";
+  }
+  if (
+    projectDate >= boundaries.lastMonthStart &&
+    projectDate < boundaries.thisMonthStart
+  ) {
+    return "lastMonth";
+  }
+  return "older";
+};
+
+const buildHistorySearchText = (project) => {
+  const details = project.details || {};
+  return [
+    project.orderId,
+    details.projectName,
+    details.client,
+    details.clientName,
+    details.department,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+};
 
 const ProjectHistory = ({ onBack, user }) => {
   const [filter, setFilter] = usePersistedState(
@@ -27,118 +76,126 @@ const ProjectHistory = ({ onBack, user }) => {
   );
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [visibleLimit, setVisibleLimit] = useState(HISTORY_RENDER_BATCH_SIZE);
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
 
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
-  useRealtimeRefresh(() => fetchHistory(), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
-
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        // History should only show Finished projects
         const finished = data.filter((p) => p.status === "Finished");
-        setProjects(finished.reverse()); // Show newest first
+        setProjects(finished);
       }
     } catch (error) {
       console.error("Error loading history:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleViewDetails = (project) => {
-    navigateToProject(project, {
-      fallbackPath: "/client",
-      title: "Choose Authorized Page",
-      message:
-        "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
-    });
-  };
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
-  const getProjectDate = (project) => {
-    const dateStr =
-      project.details?.deliveryDate || project.orderDate || project.createdAt;
-    const d = dateStr ? new Date(dateStr) : null;
-    return d && !isNaN(d.getTime()) ? d : null;
-  };
+  useRealtimeRefresh(fetchHistory, {
+    paths: ["/api/projects"],
+    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+  });
 
-  const getDateBucket = (project) => {
-    const projectDate = getProjectDate(project);
-    if (!projectDate) return "unknown";
-
-    const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-    if (projectDate >= thisMonthStart && projectDate < nextMonth) {
-      return "thisMonth";
-    }
-    if (projectDate >= lastMonthStart && projectDate < thisMonthStart) {
-      return "lastMonth";
-    }
-    return "older";
-  };
-
-  const matchesFilter = (project) => {
-    if (filter === "All") return true;
-    const bucket = getDateBucket(project);
-    if (filter === "This Month") return bucket === "thisMonth";
-    if (filter === "Last Month") return bucket === "lastMonth";
-    return bucket === "older";
-  };
-
-  const matchesSearch = (project) => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return true;
-
-    const details = project.details || {};
-    const orderId = (project.orderId || "").toLowerCase();
-    const projectName = (details.projectName || "").toLowerCase();
-    const client = (
-      details.client ||
-      details.clientName ||
-      details.department ||
-      ""
-    ).toLowerCase();
-
-    return (
-      orderId.includes(query) ||
-      projectName.includes(query) ||
-      client.includes(query)
-    );
-  };
-
-  const filteredProjects = projects.filter(
-    (project) => matchesFilter(project) && matchesSearch(project),
+  const handleViewDetails = useCallback(
+    (project) => {
+      navigateToProject(project, {
+        fallbackPath: "/client",
+        title: "Choose Authorized Page",
+        message:
+          "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+      });
+    },
+    [navigateToProject],
   );
+
+  const monthBoundaries = useMemo(buildMonthBoundaries, []);
+  const normalizedSearchQuery = useMemo(
+    () => searchQuery.trim().toLowerCase(),
+    [searchQuery],
+  );
+
+  const historyDerived = useMemo(() => {
+    const nextBucketCounts = {
+      thisMonth: 0,
+      lastMonth: 0,
+      older: 0,
+      unknown: 0,
+    };
+    let latestDate = null;
+
+    const projectEntries = projects.map((project) => {
+      const projectDate = getProjectDate(project);
+      const bucket = getDateBucket(projectDate, monthBoundaries);
+      nextBucketCounts[bucket] += 1;
+
+      if (projectDate && (!latestDate || projectDate > latestDate)) {
+        latestDate = projectDate;
+      }
+
+      return {
+        bucket,
+        project,
+        projectDate,
+        searchText: buildHistorySearchText(project),
+      };
+    });
+
+    return {
+      bucketCounts: nextBucketCounts,
+      latestDeliveryDate: latestDate,
+      projectEntries,
+    };
+  }, [monthBoundaries, projects]);
+
+  const filteredProjects = useMemo(() => {
+    const bucketFilter =
+      filter === "This Month"
+        ? "thisMonth"
+        : filter === "Last Month"
+          ? "lastMonth"
+          : filter === "Older"
+            ? "older"
+            : "";
+
+    return historyDerived.projectEntries
+      .filter((entry) => {
+        if (bucketFilter && entry.bucket !== bucketFilter) return false;
+        if (!normalizedSearchQuery) return true;
+        return entry.searchText.includes(normalizedSearchQuery);
+      })
+      .sort((left, right) => {
+        const leftTime = left.projectDate?.getTime() || 0;
+        const rightTime = right.projectDate?.getTime() || 0;
+        return rightTime - leftTime;
+      })
+      .map((entry) => entry.project);
+  }, [filter, historyDerived.projectEntries, normalizedSearchQuery]);
+
+  useEffect(() => {
+    setVisibleLimit(HISTORY_RENDER_BATCH_SIZE);
+  }, [filter, searchQuery]);
+
+  const visibleProjects = useMemo(
+    () => filteredProjects.slice(0, visibleLimit),
+    [filteredProjects, visibleLimit],
+  );
+  const remainingProjectCount = Math.max(
+    filteredProjects.length - visibleProjects.length,
+    0,
+  );
+  const hasMoreProjects = remainingProjectCount > 0;
 
   const totalCount = projects.length;
-  const bucketCounts = projects.reduce(
-    (acc, project) => {
-      const bucket = getDateBucket(project);
-      if (bucket === "thisMonth") acc.thisMonth += 1;
-      if (bucket === "lastMonth") acc.lastMonth += 1;
-      if (bucket === "older") acc.older += 1;
-      if (bucket === "unknown") acc.unknown += 1;
-      return acc;
-    },
-    { thisMonth: 0, lastMonth: 0, older: 0, unknown: 0 },
-  );
-
-  const latestDeliveryDate = projects
-    .map(getProjectDate)
-    .filter(Boolean)
-    .sort((a, b) => b - a)[0];
+  const bucketCounts = historyDerived.bucketCounts;
+  const latestDeliveryDate = historyDerived.latestDeliveryDate;
   const latestDeliveryLabel = latestDeliveryDate
     ? latestDeliveryDate.toLocaleDateString("en-US", {
         month: "short",
@@ -238,17 +295,17 @@ const ProjectHistory = ({ onBack, user }) => {
               <div className="history-results-title">
                 <span className="history-results-label">Showing</span>
                 <span className="history-results-count">
-                  {filteredProjects.length}
+                  {visibleProjects.length}
                 </span>
                 <span className="history-results-total">
-                  of {totalCount} projects
+                  of {filteredProjects.length} matching projects
                 </span>
               </div>
               <div className="history-results-meta">Newest first</div>
             </div>
 
             <div className="history-cards-grid">
-              {filteredProjects.map((project, index) => (
+              {visibleProjects.map((project, index) => (
                 <HistoryProjectCard
                   key={project._id}
                   project={project}
@@ -257,6 +314,25 @@ const ProjectHistory = ({ onBack, user }) => {
                 />
               ))}
             </div>
+            {hasMoreProjects && (
+              <div className="history-list-pagination">
+                <span className="history-list-meta">
+                  {totalCount} completed projects total
+                </span>
+                <button
+                  type="button"
+                  className="history-list-more"
+                  onClick={() =>
+                    setVisibleLimit((currentLimit) =>
+                      currentLimit + HISTORY_RENDER_BATCH_SIZE,
+                    )
+                  }
+                >
+                  Show {Math.min(HISTORY_RENDER_BATCH_SIZE, remainingProjectCount)}{" "}
+                  more
+                </button>
+              </div>
+            )}
           </>
         )}
       </section>

@@ -131,6 +131,34 @@
   gap: 1.5rem;
 }
 
+.ongoing-list-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.ongoing-list-more {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.ongoing-list-more:hover,
+.ongoing-list-more:focus-visible {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
 @media (min-width: 768px) {
   .projects-grid {
     grid-template-columns: 1fr 1fr;

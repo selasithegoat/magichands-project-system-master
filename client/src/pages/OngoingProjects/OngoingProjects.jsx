@@ -35,6 +35,7 @@ const isEmergencyProject = (project) =>
   project?.projectType === "Emergency" || project?.priority === "Urgent";
 const isHistoryProject = (project) =>
   HISTORY_PROJECT_STATUSES.has(project?.status || "");
+const PROJECT_RENDER_BATCH_SIZE = 24;
 
 const OngoingProjects = ({
   onBack,
@@ -50,6 +51,9 @@ const OngoingProjects = ({
   const [searchQuery, setSearchQuery] = usePersistedState(
     "client-ongoing-projects-search",
     "",
+  );
+  const [visibleLimit, setVisibleLimit] = React.useState(
+    PROJECT_RENDER_BATCH_SIZE,
   );
 
   const viewMode = React.useMemo(() => {
@@ -207,6 +211,19 @@ const OngoingProjects = ({
     });
   }, [projectsForSelectedView, searchQuery]);
 
+  React.useEffect(() => {
+    setVisibleLimit(PROJECT_RENDER_BATCH_SIZE);
+  }, [searchQuery, viewMode]);
+
+  const visibleProjects = React.useMemo(
+    () => filteredProjects.slice(0, visibleLimit),
+    [filteredProjects, visibleLimit],
+  );
+  const remainingProjectCount = Math.max(
+    filteredProjects.length - visibleProjects.length,
+    0,
+  );
+  const hasMoreProjects = remainingProjectCount > 0;
   const totalActive = projectsForSelectedView.length;
   const visibleCount = filteredProjects.length;
   const isFiltering = searchQuery.trim().length > 0;
@@ -285,7 +302,7 @@ const OngoingProjects = ({
         ) : filteredProjects.length === 0 ? (
           <p>No projects found for this view.</p>
         ) : (
-          filteredProjects.map((p) => (
+          visibleProjects.map((p) => (
             <ProjectCard
               key={p._id}
               project={p}
@@ -295,6 +312,24 @@ const OngoingProjects = ({
           ))
         )}
       </div>
+      {!loading && hasMoreProjects && (
+        <div className="ongoing-list-pagination">
+          <span className="ongoing-list-meta">
+            Showing {visibleProjects.length} of {filteredProjects.length}
+          </span>
+          <button
+            type="button"
+            className="ongoing-list-more"
+            onClick={() =>
+              setVisibleLimit((currentLimit) =>
+                currentLimit + PROJECT_RENDER_BATCH_SIZE,
+              )
+            }
+          >
+            Show {Math.min(PROJECT_RENDER_BATCH_SIZE, remainingProjectCount)} more
+          </button>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

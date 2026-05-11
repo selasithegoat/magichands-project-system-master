@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import TrashIcon from "../../components/icons/TrashIcon";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -138,6 +138,7 @@ const DEFAULT_TAX_ENTRIES = [
 const CURRENCY_SYMBOL = "GH\u00a2";
 const DEFAULT_RECEIPT_ACCOUNT_TYPE = "Accounts receivable";
 const BILLING_PRINT_PAGE_STYLE_ID = "billing-print-page-size";
+const DOCUMENT_LIST_BATCH_SIZE = 40;
 
 const prepareBillingPrintPage = (orientation = "portrait") => {
   if (typeof document === "undefined") return;
@@ -1062,6 +1063,9 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [documentListLimit, setDocumentListLimit] = useState(
+    DOCUMENT_LIST_BATCH_SIZE,
+  );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sourceLookupLoading, setSourceLookupLoading] = useState(false);
@@ -1080,9 +1084,20 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     () => calculateTotals(form.lineItems, form.paymentEntries, form.taxEntries),
     [form.lineItems, form.paymentEntries, form.taxEntries],
   );
+  const formRef = useRef(form);
+  formRef.current = form;
   const formMeta = getMeta(form.documentType);
   const feedbackMessage = error || notice;
   const feedbackType = error ? "error" : "success";
+  const visibleDocuments = useMemo(
+    () => documents.slice(0, documentListLimit),
+    [documents, documentListLimit],
+  );
+  const remainingDocumentCount = Math.max(
+    documents.length - visibleDocuments.length,
+    0,
+  );
+  const hasMoreDocuments = remainingDocumentCount > 0;
 
   const makeApiUrl = useCallback(
     (path = "", params = {}) => {
@@ -1265,8 +1280,27 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   }, [fetchDocuments]);
 
   useEffect(() => {
-    fetchReceipts(form);
-    fetchLinkedWaybills(form);
+    setDocumentListLimit(DOCUMENT_LIST_BATCH_SIZE);
+  }, [search, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const selectedIndex = documents.findIndex(
+      (document) => document._id === selectedId,
+    );
+    if (selectedIndex < documentListLimit) return;
+
+    setDocumentListLimit(
+      Math.ceil((selectedIndex + 1) / DOCUMENT_LIST_BATCH_SIZE) *
+        DOCUMENT_LIST_BATCH_SIZE,
+    );
+  }, [documentListLimit, documents, selectedId]);
+
+  useEffect(() => {
+    const currentForm = formRef.current;
+    fetchReceipts(currentForm);
+    fetchLinkedWaybills(currentForm);
   }, [fetchLinkedWaybills, fetchReceipts, form._id, form.documentType]);
 
   useRealtimeRefresh(fetchDocuments, {
@@ -1850,7 +1884,13 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
         <aside className="billing-document-list" aria-label="Billing documents">
           <div className="billing-list-header">
             <strong>Documents</strong>
-            <span>{loading ? "Loading" : `${documents.length} shown`}</span>
+            <span>
+              {loading
+                ? "Loading"
+                : documents.length
+                  ? `${visibleDocuments.length} of ${documents.length} shown`
+                  : "0 shown"}
+            </span>
           </div>
           <section className="billing-documents-toolbar">
             <label className="billing-list-search">
@@ -1893,7 +1933,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
             </label>
           </section>
           <div className="billing-list-scroll">
-            {documents.map((document) => {
+            {visibleDocuments.map((document) => {
               const meta = getMeta(document.documentType);
               const active = selectedId === document._id;
               return (
@@ -1933,6 +1973,20 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
                 </div>
               );
             })}
+            {hasMoreDocuments && (
+              <button
+                type="button"
+                className="billing-list-more"
+                onClick={() =>
+                  setDocumentListLimit((currentLimit) =>
+                    currentLimit + DOCUMENT_LIST_BATCH_SIZE,
+                  )
+                }
+              >
+                Show {Math.min(DOCUMENT_LIST_BATCH_SIZE, remainingDocumentCount)}{" "}
+                more
+              </button>
+            )}
             {!documents.length && !loading && (
               <div className="billing-empty-state">
                 <ReceiptIcon />

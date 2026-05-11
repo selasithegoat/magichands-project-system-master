@@ -416,6 +416,30 @@
   transform: none;
 }
 
+.billing-list-more {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--billing-border);
+  border-radius: var(--billing-control-radius);
+  background: var(--billing-surface);
+  color: var(--billing-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.billing-list-more:hover,
+.billing-list-more:focus-visible {
+  border-color: color-mix(
+    in srgb,
+    var(--billing-primary) 42%,
+    var(--billing-border)
+  );
+  background: var(--billing-primary-soft);
+}
+
 .billing-list-item span {
   min-width: 0;
 }
