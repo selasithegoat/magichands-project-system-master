@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import TextArea from "../../components/ui/TextArea";
@@ -15,6 +15,7 @@ import PersonIcon from "../../components/icons/PersonIcon";
 import FolderIcon from "../../components/icons/FolderIcon";
 import "./Step1.css";
 import ProgressBar from "../../components/ui/ProgressBar";
+import useObjectUrls from "../../hooks/useObjectUrls";
 import {
   buildFileKey,
   normalizeReferenceAttachments,
@@ -99,13 +100,23 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
   const existingAttachments = normalizeReferenceAttachments(
     formData.attachments || [],
   );
-  const clientMockupFiles = Array.isArray(formData.clientMockups)
-    ? formData.clientMockups.filter(
-        (file) => file && typeof file?.name === "string",
-      )
-    : formData.clientMockup && typeof formData.clientMockup?.name === "string"
-      ? [formData.clientMockup]
-      : [];
+  const clientMockupFiles = useMemo(
+    () =>
+      Array.isArray(formData.clientMockups)
+        ? formData.clientMockups.filter(
+            (file) => file && typeof file?.name === "string",
+          )
+        : formData.clientMockup && typeof formData.clientMockup?.name === "string"
+          ? [formData.clientMockup]
+          : [],
+    [formData.clientMockup, formData.clientMockups],
+  );
+  const formFiles = useMemo(
+    () => (Array.isArray(formData.files) ? formData.files : []),
+    [formData.files],
+  );
+  const clientMockupPreviewUrls = useObjectUrls(clientMockupFiles);
+  const filePreviewUrls = useObjectUrls(formFiles);
   const clientMockupNotes =
     formData.clientMockupNotes && typeof formData.clientMockupNotes === "object"
       ? formData.clientMockupNotes
@@ -541,9 +552,10 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                             background: "#f8fafc",
                           }}
                         >
-                          {file.type?.startsWith("image/") ? (
+                          {file.type?.startsWith("image/") &&
+                          clientMockupPreviewUrls[fileKey] ? (
                             <img
-                              src={URL.createObjectURL(file)}
+                              src={clientMockupPreviewUrls[fileKey]}
                               alt="Client mockup"
                               style={{
                                 width: "100%",
@@ -705,7 +717,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
             )}
 
             {/* New Files Preview Grid */}
-            {formData.files && formData.files.length > 0 && (
+            {formFiles.length > 0 && (
               <div
                 style={{
                   marginTop: "1rem",
@@ -714,7 +726,7 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                   gap: "1rem",
                 }}
               >
-                {formData.files.map((file, idx) => {
+                {formFiles.map((file, idx) => {
                   const fileKey = buildFileKey(file);
                   const noteValue =
                     (formData.fileNotes || {})[fileKey] || "";
@@ -737,9 +749,10 @@ const Step1 = ({ formData, setFormData, onNext, onCancel, isEditing }) => {
                           background: "#f8fafc",
                         }}
                       >
-                        {file.type.startsWith("image/") ? (
+                        {file.type.startsWith("image/") &&
+                        filePreviewUrls[fileKey] ? (
                           <img
-                            src={URL.createObjectURL(file)}
+                            src={filePreviewUrls[fileKey]}
                             alt="Preview"
                             style={{
                               width: "100%",

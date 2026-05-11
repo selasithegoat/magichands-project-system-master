@@ -3,7 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
-import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
+import {
+  buildFileKey,
+  normalizeReferenceAttachments,
+} from "../../utils/referenceAttachments";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import {
   formatQuoteDecisionStatus,
@@ -33,6 +36,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
+import useObjectUrls from "../../hooks/useObjectUrls";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -752,6 +756,7 @@ const OrderActions = () => {
   ] = useState(false);
   const [quoteBidDocsSensitive, setQuoteBidDocsSensitive] = useState(false);
   const [quoteBidDocsFiles, setQuoteBidDocsFiles] = useState([]);
+  const quoteBidDocPreviewUrls = useObjectUrls(quoteBidDocsFiles);
   const [quoteBidDocsSaving, setQuoteBidDocsSaving] = useState(false);
   const [quoteDecisionNote, setQuoteDecisionNote] = useState("");
   const [quoteDecisionSubmitting, setQuoteDecisionSubmitting] = useState(false);
@@ -4250,17 +4255,19 @@ const OrderActions = () => {
                         );
                       })}
                       {quoteBidDocsFiles.map((file, index) => {
+                        const fileKey =
+                          buildFileKey(file) || `${file.name}-${index}`;
                         const isImage = file.type?.startsWith("image/");
                         const previewUrl = isImage
-                          ? URL.createObjectURL(file)
+                          ? quoteBidDocPreviewUrls[fileKey] || ""
                           : "";
                         return (
                           <div
-                            key={`${file.name}-${index}`}
+                            key={fileKey}
                             className="reference-file-tile"
                           >
                             <div className="file-icon">
-                              {isImage ? (
+                              {isImage && previewUrl ? (
                                 <img src={previewUrl} alt={file.name} />
                               ) : (
                                 <span>FILE</span>

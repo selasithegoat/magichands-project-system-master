@@ -15,6 +15,7 @@ import CalendarIcon from "../../../components/icons/CalendarIcon";
 import ClockIcon from "../../../components/icons/ClockIcon";
 import ConfirmationModal from "../../../components/ui/ConfirmationModal";
 import ContextualHelpLink from "../../../components/features/ContextualHelpLink";
+import useObjectUrls from "../../../hooks/useObjectUrls";
 import {
   buildFileKey,
   normalizeReferenceAttachments,
@@ -121,6 +122,8 @@ const MinimalQuoteForm = () => {
   const [selectedClientMockups, setSelectedClientMockups] = useState([]);
   const [selectedClientMockupNotes, setSelectedClientMockupNotes] = useState({});
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
+  const clientMockupPreviewUrls = useObjectUrls(selectedClientMockups);
+  const filePreviewUrls = useObjectUrls(selectedFiles);
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
@@ -997,9 +1000,10 @@ const MinimalQuoteForm = () => {
                       return (
                         <div key={fileKey} className="reference-file-tile">
                           <div className="file-icon">
-                            {file.type.startsWith("image/") ? (
+                            {file.type.startsWith("image/") &&
+                            clientMockupPreviewUrls[fileKey] ? (
                               <img
-                                src={URL.createObjectURL(file)}
+                                src={clientMockupPreviewUrls[fileKey]}
                                 alt="client mockup preview"
                               />
                             ) : (
@@ -1179,8 +1183,9 @@ const MinimalQuoteForm = () => {
                   return (
                   <div key={fileKey || idx} className="reference-file-tile">
                     <div className="file-icon">
-                      {file.type.startsWith("image/") ? (
-                        <img src={URL.createObjectURL(file)} alt="preview" />
+                      {file.type.startsWith("image/") &&
+                      filePreviewUrls[fileKey] ? (
+                        <img src={filePreviewUrls[fileKey]} alt="preview" />
                       ) : (
                         <FolderIcon />
                       )}

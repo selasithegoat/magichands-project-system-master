@@ -15,6 +15,7 @@ import Select from "../../components/ui/Select";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
+import useObjectUrls from "../../hooks/useObjectUrls";
 import {
   buildFileKey,
   normalizeReferenceAttachments,
@@ -272,6 +273,9 @@ const NewOrders = ({ user = null }) => {
     {},
   );
   const [selectedFileNotes, setSelectedFileNotes] = useState({});
+  const clientMockupPreviewUrls = useObjectUrls(selectedClientMockups);
+  const approvedMockupPreviewUrls = useObjectUrls(selectedApprovedMockups);
+  const filePreviewUrls = useObjectUrls(selectedFiles);
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
@@ -1566,9 +1570,10 @@ const NewOrders = ({ user = null }) => {
                         return (
                           <div key={fileKey} className="reference-file-tile">
                             <div className="file-icon">
-                              {file.type.startsWith("image/") ? (
+                              {file.type.startsWith("image/") &&
+                              clientMockupPreviewUrls[fileKey] ? (
                                 <img
-                                  src={URL.createObjectURL(file)}
+                                  src={clientMockupPreviewUrls[fileKey]}
                                   alt="client mockup preview"
                                 />
                               ) : (
@@ -1679,9 +1684,10 @@ const NewOrders = ({ user = null }) => {
                         return (
                           <div key={fileKey} className="reference-file-tile">
                             <div className="file-icon">
-                              {file.type.startsWith("image/") ? (
+                              {file.type.startsWith("image/") &&
+                              approvedMockupPreviewUrls[fileKey] ? (
                                 <img
-                                  src={URL.createObjectURL(file)}
+                                  src={approvedMockupPreviewUrls[fileKey]}
                                   alt="approved mockup preview"
                                 />
                               ) : (
@@ -2321,8 +2327,9 @@ const NewOrders = ({ user = null }) => {
                     return (
                     <div key={fileKey || idx} className="reference-file-tile">
                       <div className="file-icon">
-                        {file.type.startsWith("image/") ? (
-                          <img src={URL.createObjectURL(file)} alt="preview" />
+                        {file.type.startsWith("image/") &&
+                        filePreviewUrls[fileKey] ? (
+                          <img src={filePreviewUrls[fileKey]} alt="preview" />
                         ) : (
                           <FolderIcon />
                         )}

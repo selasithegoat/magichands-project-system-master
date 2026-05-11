@@ -8,7 +8,6 @@ import CheckIcon from "../../components/icons/CheckIcon";
 import WarningIcon from "../../components/icons/WarningIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
-import { normalizeReferenceAttachments } from "../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
 
 import "./Step5.css";
@@ -70,12 +69,6 @@ const formatContactType = (value) => {
   return String(value || "").trim();
 };
 
-const isImageReference = (fileUrl = "", fileType = "") => {
-  const normalizedType = String(fileType || "").toLowerCase();
-  if (normalizedType.startsWith("image/")) return true;
-  return /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(String(fileUrl || ""));
-};
-
 const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
   const [isChecked, setIsChecked] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -86,7 +79,6 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
     type: "",
   });
   const [isFadingOut, setIsFadingOut] = useState(false);
-  const [imageUrls, setImageUrls] = useState({});
   const selectedSupplySources = normalizeSupplySources(formData.supplySource);
   const sampleApprovalRequired = Boolean(formData.sampleRequired);
   const corporateEmergencyEnabled =
@@ -94,94 +86,6 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
     Boolean(formData.corporateEmergency);
   const showSpecialRequirements =
     sampleApprovalRequired || corporateEmergencyEnabled;
-
-  // [New] Pre-fetch images for PDF to avoid "invalid extension" and CORS issues in react-pdf
-  React.useEffect(() => {
-    const fetchImages = async () => {
-      const urls = {};
-      const pathsToFetch = [];
-
-      // Add Sample Image
-      const sampleImg =
-        formData.sampleImage ||
-        (formData.details && formData.details.sampleImage);
-      if (
-        sampleImg &&
-        typeof sampleImg === "string" &&
-        sampleImg.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/i)
-      ) {
-        pathsToFetch.push(sampleImg);
-      }
-
-      // Add Attachments
-      const attachmentItems = normalizeReferenceAttachments(
-        formData.attachments || [],
-      );
-      attachmentItems.forEach((attachment) => {
-        if (isImageReference(attachment.fileUrl, attachment.fileType)) {
-          pathsToFetch.push(attachment.fileUrl);
-        }
-      });
-
-      if (pathsToFetch.length === 0) return;
-
-      await Promise.all(
-        pathsToFetch.map(async (path) => {
-          try {
-            // 1. Fetch Blob
-            const res = await fetch(`${path}`);
-            if (!res.ok) throw new Error(`Status ${res.status}`);
-            const blob = await res.blob();
-
-            // 2. Load into Image to allow Canvas conversion (normalizes formats like WebP/Gif -> PNG)
-            const img = new Image();
-            const blobUrl = URL.createObjectURL(blob);
-            img.src = blobUrl;
-
-            await new Promise((resolve, reject) => {
-              img.onload = () => resolve();
-              img.onerror = (e) => reject(e);
-            });
-
-            // 3. Draw to Canvas and Export as PNG
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0);
-
-            // 4. Get PNG Blob
-            const pngBlob = await new Promise((resolve) =>
-              canvas.toBlob(resolve, "image/png"),
-            );
-
-            // 5. Create Object URL for the PNG
-            const pngUrl = URL.createObjectURL(pngBlob);
-            urls[path] = pngUrl; // Mapped to original path
-
-            // Cleanup temp url
-            URL.revokeObjectURL(blobUrl);
-          } catch (err) {
-            console.error(`Error processing image ${path}:`, err);
-          }
-        }),
-      );
-
-      setImageUrls(urls);
-    };
-
-    fetchImages();
-
-    // Cleanup URL objects on unmount
-    return () => {
-      // We can't easily iterate values here to revoke, relying on page refresh/GC is acceptable for now
-      // or we could store them in a ref to clear.
-      // Ideally:
-      // Object.values(urls).forEach(url => URL.revokeObjectURL(url));
-      // But urls is local. We'd need to use state.
-    };
-  }, [formData]);
-
   const handleCreateClick = () => {
     if (!isChecked) {
       triggerToast("Please verify the information before submitting.", "error");
@@ -215,15 +119,6 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
       }, 2000);
     } else {
       triggerToast(result.message || "Failed to create project", "error");
-    }
-  };
-
-  const handleDownloadClick = () => {
-    if (!isChecked) {
-      triggerToast(
-        "Please verify the information before downloading.",
-        "error",
-      );
     }
   };
 
