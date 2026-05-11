@@ -79,6 +79,8 @@ const MyActivities = lazy(() => import("./pages/MyActivities/MyActivities"));
 const APP_SPLASH_DURATION_MS = 1600;
 const THEME_STORAGE_KEY = "mh-client-theme";
 
+const ClientLayoutContext = React.createContext(null);
+
 const normalizeThemePreference = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
   return normalized === "light" || normalized === "dark" ? normalized : "";
@@ -101,6 +103,66 @@ const StartupSplash = ({ versionInfo }) => {
         )}
       </div>
     </div>
+  );
+};
+
+const ProtectedLayout = ({
+  children,
+  activeView,
+  user: routeUser,
+  projectCount: routeProjectCount,
+  engagedCount: routeEngagedCount,
+  theme: routeTheme,
+  navigate: routeNavigate,
+  onToggleTheme: routeToggleTheme,
+  onSignOut: routeSignOut,
+}) => {
+  const layoutContext = React.useContext(ClientLayoutContext);
+  const user = routeUser ?? layoutContext?.user;
+  const navigate = routeNavigate ?? layoutContext?.navigate;
+  const projectCount = routeProjectCount ?? layoutContext?.projectCount ?? 0;
+  const engagedCount = routeEngagedCount ?? layoutContext?.engagedCount ?? 0;
+  const theme = routeTheme ?? layoutContext?.theme;
+  const onToggleTheme = routeToggleTheme ?? layoutContext?.onToggleTheme;
+  const onSignOut = routeSignOut ?? layoutContext?.onSignOut;
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const navigateTo = (path) => {
+    if (navigate) {
+      navigate(path);
+    }
+  };
+
+  return (
+    <Layout
+      activeView={activeView}
+      user={user}
+      projectCount={projectCount}
+      engagedCount={engagedCount}
+      theme={theme}
+      onToggleTheme={onToggleTheme}
+      onNavigateDashboard={() => navigateTo("/client")}
+      onNavigateProject={() => navigateTo("/projects")}
+      onNavigateHistory={() => navigateTo("/history")}
+      onNavigateProfile={() => navigateTo("/profile")}
+      onNavigateNewOrders={() => navigateTo("/new-orders")}
+      onNavigateEndOfDay={() => navigateTo("/end-of-day")}
+      onNavigateEngagedProjects={() => navigateTo("/engaged-projects")}
+      onNavigateInventory={() => {
+        window.location.href = buildPortalUrl("inventory");
+      }}
+      onNavigateHelp={() => navigateTo("/faq")}
+      onCreateProject={() => navigateTo("/create")}
+      onNavigateAdmin={() => {
+        window.location.href = buildPortalUrl("admin");
+      }}
+      onSignOut={onSignOut}
+    >
+      {children}
+    </Layout>
   );
 };
 
@@ -170,12 +232,12 @@ function App() {
     [accountKey],
   );
 
-  const handleToggleTheme = async () => {
+  const handleToggleTheme = React.useCallback(async () => {
     if (!accountKey) return;
     const nextTheme = theme === "dark" ? "light" : "dark";
     toggleTheme();
     await syncThemePreference(nextTheme);
-  };
+  }, [accountKey, syncThemePreference, theme, toggleTheme]);
 
   // Initialize auto-logout (5 minutes)
   useInactivityLogout(5 * 60 * 1000, () => setUser(null), Boolean(user?._id));
@@ -311,9 +373,9 @@ function App() {
     }
   };
 
-  const handleRequestLogout = () => {
+  const handleRequestLogout = React.useCallback(() => {
     setIsLogoutDialogOpen(true);
-  };
+  }, []);
 
   const handleCancelLogout = () => {
     setIsLogoutDialogOpen(false);
@@ -324,44 +386,26 @@ function App() {
     await performLogout();
   };
 
-  const ProtectedLayout = ({
-    children,
-    activeView,
-    onSignOut = handleRequestLogout,
-  }) => {
-    if (!user) {
-      return <Navigate to="/login" replace />;
-    }
-
-    return (
-      <Layout
-        activeView={activeView}
-        user={user}
-        projectCount={projectCount}
-        engagedCount={engagedCount}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        onNavigateDashboard={() => navigate("/client")}
-        onNavigateProject={() => navigate("/projects")}
-        onNavigateHistory={() => navigate("/history")}
-        onNavigateProfile={() => navigate("/profile")}
-        onNavigateNewOrders={() => navigate("/new-orders")}
-        onNavigateEndOfDay={() => navigate("/end-of-day")}
-        onNavigateEngagedProjects={() => navigate("/engaged-projects")}
-        onNavigateInventory={() => {
-          window.location.href = buildPortalUrl("inventory");
-        }}
-        onNavigateHelp={() => navigate("/faq")}
-        onCreateProject={() => navigate("/create")}
-        onNavigateAdmin={() => {
-          window.location.href = buildPortalUrl("admin");
-        }}
-        onSignOut={onSignOut}
-      >
-        {children}
-      </Layout>
-    );
-  };
+  const layoutContextValue = React.useMemo(
+    () => ({
+      user,
+      navigate,
+      projectCount,
+      engagedCount,
+      theme,
+      onToggleTheme: handleToggleTheme,
+      onSignOut: handleRequestLogout,
+    }),
+    [
+      user,
+      navigate,
+      projectCount,
+      engagedCount,
+      theme,
+      handleToggleTheme,
+      handleRequestLogout,
+    ],
+  );
 
   if (showPostLoginSplash) {
     return <StartupSplash versionInfo={splashVersionInfo} />;
@@ -383,7 +427,7 @@ function App() {
   }
 
   return (
-    <>
+    <ClientLayoutContext.Provider value={layoutContextValue}>
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
         <Route
@@ -755,7 +799,7 @@ function App() {
         onConfirm={handleConfirmLogout}
         onCancel={handleCancelLogout}
       />
-    </>
+    </ClientLayoutContext.Provider>
   );
 }
 

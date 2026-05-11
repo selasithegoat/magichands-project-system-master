@@ -64,6 +64,38 @@ const hasAdminPortalAccess = (user) =>
       normalizeDepartments(user.department).includes("administration"),
   );
 
+const AdminRouteContext = React.createContext(null);
+
+const LoadingScreen = () => (
+  <div
+    style={{
+      height: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0f172a",
+      color: "#94a3b8",
+    }}
+  >
+    Loading...
+  </div>
+);
+
+const ProtectedRoute = ({ children }) => {
+  const authContext = React.useContext(AdminRouteContext);
+  const user = authContext?.user;
+
+  if (!hasAdminPortalAccess(user)) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <DashboardLayout user={user} onLogout={authContext?.onLogout}>
+      {children}
+    </DashboardLayout>
+  );
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +126,7 @@ function App() {
     setUser(hasAdminPortalAccess(userData) ? userData : null);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = React.useCallback(async () => {
     setUser(null);
     clearPersistedFilterState();
     try {
@@ -106,44 +138,26 @@ function App() {
     } catch (err) {
       console.error("Logout failed", err);
     }
-  };
+  }, []);
 
   // Inactivity Timeout (5 minutes)
   useInactivityLogout(5 * 60 * 1000, () => setUser(null), Boolean(user?._id));
   useRealtimeClient(Boolean(user));
 
-  const LoadingScreen = () => (
-    <div
-      style={{
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#0f172a",
-        color: "#94a3b8",
-      }}
-    >
-      Loading...
-    </div>
+  const authContextValue = React.useMemo(
+    () => ({
+      user,
+      onLogout: handleLogout,
+    }),
+    [user, handleLogout],
   );
 
   if (loading) {
     return <LoadingScreen />;
   }
 
-  const ProtectedRoute = ({ children }) => {
-    if (!hasAdminPortalAccess(user)) {
-      return <Navigate to="/login" replace />;
-    }
-    return (
-      <DashboardLayout user={user} onLogout={handleLogout}>
-        {children}
-      </DashboardLayout>
-    );
-  };
-
   return (
-    <>
+    <AdminRouteContext.Provider value={authContextValue}>
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
           <Route
@@ -323,7 +337,7 @@ function App() {
           style: { pointerEvents: "none" },
         }}
       />
-    </>
+    </AdminRouteContext.Provider>
   );
 }
 
