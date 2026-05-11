@@ -20,6 +20,7 @@ import ProjectTypeChangeModal from "../../components/ProjectTypeChangeModal/Proj
 import ProjectRemindersCard from "../../components/ProjectReminders/ProjectRemindersCard";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import Modal from "../../components/Modal/Modal";
+import DeliveryCountdownBadge from "@client/components/features/DeliveryCountdownBadge";
 import ProjectComments from "@client/components/features/ProjectComments";
 import { buildFileKey } from "@client/utils/referenceAttachments";
 import {
@@ -650,36 +651,6 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
   return "pending";
 };
 
-const SECOND_IN_MS = 1000;
-const DAY_IN_SECONDS = 24 * 60 * 60;
-const COUNTDOWN_RING_SIZE = 104;
-const COUNTDOWN_RING_STROKE_WIDTH = 5;
-const COUNTDOWN_RING_RADIUS = (COUNTDOWN_RING_SIZE - COUNTDOWN_RING_STROKE_WIDTH) / 2;
-const COUNTDOWN_RING_CIRCUMFERENCE = 2 * Math.PI * COUNTDOWN_RING_RADIUS;
-const TWO_WEEKS_IN_SECONDS = 14 * 24 * 60 * 60;
-
-const clampProgress = (value) => Math.max(0, Math.min(1, value));
-
-const getCountdownRingProgress = (unit, countdown) => {
-  const unitValue = Number.parseInt(countdown?.[unit], 10);
-  if (!Number.isFinite(unitValue)) return 0;
-
-  if (unit === "days") {
-    const totalSeconds = Number(countdown?.totalSeconds) || 0;
-    return clampProgress(totalSeconds / TWO_WEEKS_IN_SECONDS);
-  }
-
-  if (unit === "hours") {
-    return clampProgress(unitValue / 24);
-  }
-
-  if (unit === "minutes") {
-    return clampProgress(unitValue / 60);
-  }
-
-  return 0;
-};
-
 const parseDeliveryTimeParts = (value) => {
   if (!value) return { hours: 23, minutes: 59, seconds: 59 };
   const raw = String(value).trim();
@@ -739,6 +710,31 @@ const buildDeliveryDeadline = (deliveryDate, deliveryTime) => {
   );
 };
 
+const DELIVERY_COMPLETED_STATUS_KEYS = new Set([
+  "delivered",
+  "pending feedback",
+  "feedback completed",
+  "completed",
+  "finished",
+]);
+
+const normalizeStatusKey = (value) => String(value || "")
+  .trim()
+  .toLowerCase();
+
+const isDeliveryCompletedStatus = (status) => {
+  const normalized = normalizeStatusKey(status);
+  if (!normalized) return false;
+  if (DELIVERY_COMPLETED_STATUS_KEYS.has(normalized)) return true;
+  if (normalized.startsWith("delivered")) return true;
+  if (normalized.startsWith("pending feedback")) return true;
+  if (normalized.startsWith("feedback completed")) return true;
+  if (normalized.includes("delivery") && normalized.includes("complete")) {
+    return true;
+  }
+  return false;
+};
+
 // Add missing icons locally
 const DownloadIcon = ({ width = 14, height = 14, color = "currentColor" }) => (
   <svg
@@ -789,45 +785,6 @@ const FolderIcon = ({ width = 24, height = 24, color = "currentColor" }) => (
   </svg>
 );
 
-const RingCountdownUnit = ({ value, label, progress }) => {
-  const normalizedValue = String(value).padStart(2, "0");
-  const strokeDashoffset = COUNTDOWN_RING_CIRCUMFERENCE * (1 - clampProgress(progress));
-
-  return (
-    <div className="delivery-countdown-ring-unit">
-      <div className="delivery-countdown-ring-shell">
-        <svg
-          className="delivery-countdown-ring-svg"
-          viewBox={`0 0 ${COUNTDOWN_RING_SIZE} ${COUNTDOWN_RING_SIZE}`}
-          aria-hidden="true"
-          focusable="false"
-        >
-          <circle
-            className="delivery-countdown-ring-track"
-            cx={COUNTDOWN_RING_SIZE / 2}
-            cy={COUNTDOWN_RING_SIZE / 2}
-            r={COUNTDOWN_RING_RADIUS}
-          />
-          <circle
-            className="delivery-countdown-ring-progress"
-            cx={COUNTDOWN_RING_SIZE / 2}
-            cy={COUNTDOWN_RING_SIZE / 2}
-            r={COUNTDOWN_RING_RADIUS}
-            strokeDasharray={COUNTDOWN_RING_CIRCUMFERENCE}
-            strokeDashoffset={strokeDashoffset}
-          />
-        </svg>
-        <div className="delivery-countdown-ring-content">
-          <span className="delivery-countdown-ring-value">{normalizedValue}</span>
-          <span className="delivery-countdown-ring-label">
-            {String(label).toLowerCase()}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const ProjectDetails = ({ user }) => {
   const { id } = useParams();
   const location = useLocation();
@@ -868,7 +825,6 @@ const ProjectDetails = ({ user }) => {
   });
   const [billingGuardSubmitting, setBillingGuardSubmitting] = useState(false);
   const [dismissedGuardKey, setDismissedGuardKey] = useState("");
-  const [countdownNowMs, setCountdownNowMs] = useState(Date.now());
   const [isTogglingSampleRequirement, setIsTogglingSampleRequirement] =
     useState(false);
   const [isTogglingCorporateEmergency, setIsTogglingCorporateEmergency] =
@@ -967,15 +923,6 @@ const ProjectDetails = ({ user }) => {
     project?.projectType !== "Quote" &&
     batchProgress &&
     (batchProgress.totalQty > 0 || batches.length > 0);
-
-  useEffect(() => {
-    const timerId = window.setInterval(() => {
-      setCountdownNowMs(Date.now());
-    }, 1000);
-    return () => {
-      window.clearInterval(timerId);
-    };
-  }, []);
 
   useEffect(() => {
     const requestedTab = normalizeContentTabKey(
@@ -2305,38 +2252,15 @@ const ProjectDetails = ({ user }) => {
     () => buildDeliveryDeadline(deliveryDateValue, deliveryTimeValue),
     [deliveryDateValue, deliveryTimeValue],
   );
-  const deliveryCountdown = useMemo(() => {
-    if (!deliveryDeadline || Number.isNaN(deliveryDeadline.getTime())) {
-      return {
-        days: "--",
-        hours: "--",
-        minutes: "--",
-        seconds: "--",
-        totalSeconds: 0,
-        isNearDelivery: false,
-        isOverdue: false,
-      };
-    }
-
-    const deltaMs = deliveryDeadline.getTime() - countdownNowMs;
-    const isOverdue = deltaMs < 0;
-    const totalSeconds = Math.floor(Math.abs(deltaMs) / SECOND_IN_MS);
-    const isNearDelivery = !isOverdue && totalSeconds <= DAY_IN_SECONDS;
-    const days = Math.floor(totalSeconds / (24 * 60 * 60));
-    const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
-    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
-    const seconds = totalSeconds % 60;
-
-    return {
-      days: String(days).padStart(2, "0"),
-      hours: String(hours).padStart(2, "0"),
-      minutes: String(minutes).padStart(2, "0"),
-      seconds: String(seconds).padStart(2, "0"),
-      totalSeconds,
-      isNearDelivery,
-      isOverdue,
-    };
-  }, [countdownNowMs, deliveryDeadline]);
+  const feedbacksSorted = useMemo(
+    () =>
+      (project?.feedbacks || []).slice().sort((a, b) => {
+        const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      }),
+    [project?.feedbacks],
+  );
 
   useEffect(() => {
     if (!project?._id || billingGuardModal.open) return;
@@ -2941,11 +2865,13 @@ const ProjectDetails = ({ user }) => {
   const projectVersion =
     Number.isFinite(parsedVersion) && parsedVersion > 0 ? parsedVersion : 1;
   const showVersionTag = projectVersion > 1;
-  const feedbacksSorted = (project.feedbacks || []).slice().sort((a, b) => {
-    const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return bTime - aTime;
-  });
+  const isDeliveryCompleted =
+    isDeliveryCompletedStatus(project?.status) ||
+    isDeliveryCompletedStatus(quoteWorkflowStatus);
+  const deadlineMs = deliveryDeadline?.getTime?.();
+  const deliveredAtSource = Number.isFinite(deadlineMs)
+    ? deliveryDeadline
+    : project?.details?.deliveryDate || project?.updatedAt;
   const showFeedbackSection = [
     "Delivered",
     "Pending Feedback",
@@ -3118,32 +3044,11 @@ const ProjectDetails = ({ user }) => {
           </p>
         </div>
 
-        <div
-          className={`delivery-countdown-badge ${deliveryCountdown.isNearDelivery ? "is-near-delivery" : ""} ${deliveryCountdown.isOverdue ? "is-overdue" : ""}`}
-          role="status"
-          aria-live="polite"
-        >
-          <span className="delivery-countdown-title">
-            {deliveryCountdown.isOverdue ? "Delivery Overdue" : "Delivery Countdown"}
-          </span>
-          <div className="delivery-countdown-rings">
-            <RingCountdownUnit
-              value={deliveryCountdown.days}
-              label="Days"
-              progress={getCountdownRingProgress("days", deliveryCountdown)}
-            />
-            <RingCountdownUnit
-              value={deliveryCountdown.hours}
-              label="Hours"
-              progress={getCountdownRingProgress("hours", deliveryCountdown)}
-            />
-            <RingCountdownUnit
-              value={deliveryCountdown.minutes}
-              label="Minutes"
-              progress={getCountdownRingProgress("minutes", deliveryCountdown)}
-            />
-          </div>
-        </div>
+        <DeliveryCountdownBadge
+          deadline={deliveryDeadline}
+          isCompleted={isDeliveryCompleted}
+          completedAt={deliveredAtSource}
+        />
 
         <div className="header-right-panel">
           <div className="header-status-row">
