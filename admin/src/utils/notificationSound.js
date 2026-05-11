@@ -14,33 +14,22 @@ const lastPlayedAt = {
   reminder: 0,
 };
 
-const soundCache = {
-  notification: null,
-  reminder: null,
-};
-
 const resolveSoundKind = (notificationType) =>
   String(notificationType || "").toUpperCase() === "REMINDER"
     ? "reminder"
     : "notification";
 
-const createSound = (kind) => {
+const createPlaybackSound = (kind) => {
   if (typeof window === "undefined" || typeof Audio === "undefined") return null;
 
   const src = SOUND_SRC[kind];
   if (!src) return null;
 
-  const audio = new Audio(src);
-  audio.preload = "auto";
+  const audio = new Audio();
+  audio.preload = "none";
   audio.volume = SOUND_VOLUME;
+  audio.src = src;
   return audio;
-};
-
-const getSound = (kind) => {
-  if (!soundCache[kind]) {
-    soundCache[kind] = createSound(kind);
-  }
-  return soundCache[kind];
 };
 
 const removeUnlockListeners = (handler) => {
@@ -51,19 +40,12 @@ const removeUnlockListeners = (handler) => {
 };
 
 export const initNotificationSound = () => {
-  if (typeof window === "undefined" || unlockListenersAttached) return;
-
-  const primeSounds = () => {
-    const notificationSound = getSound("notification");
-    const reminderSound = getSound("reminder");
-
-    notificationSound?.load?.();
-    reminderSound?.load?.();
-  };
+  if (typeof window === "undefined" || unlockListenersAttached || hasUserInteraction) {
+    return;
+  }
 
   const handleInteractionUnlock = () => {
     hasUserInteraction = true;
-    primeSounds();
     removeUnlockListeners(handleInteractionUnlock);
     unlockListenersAttached = false;
   };
@@ -76,8 +58,6 @@ export const initNotificationSound = () => {
     passive: true,
   });
   unlockListenersAttached = true;
-
-  primeSounds();
 };
 
 export const playNotificationSound = async (
@@ -92,16 +72,13 @@ export const playNotificationSound = async (
     return false;
   }
 
-  const baseSound = getSound(kind);
-  if (!baseSound) return false;
+  const sound = createPlaybackSound(kind);
+  if (!sound) return false;
 
   lastPlayedAt[kind] = now;
 
   try {
-    // Clone so repeated alerts can overlap naturally.
-    const instance = baseSound.cloneNode(true);
-    instance.volume = SOUND_VOLUME;
-    await instance.play();
+    await sound.play();
     return true;
   } catch {
     return false;
