@@ -6,9 +6,18 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-05-11
+
 - Added undo controls for multi-requirement quote requirements validation before quote submission.
 - Added an undo action for completed quote cost validation.
 - Fixed quote Project Details approvals so quotes beyond Scope Approval show the correct workflow stage.
+- Improved performance across client and admin by lazy-loading chat, deferring notification sounds, loading global comments only on demand, and generating project PDFs only when downloaded.
+- Reduced background traffic by preferring realtime SSE and pausing fallback polling while realtime connections are healthy.
+- Replaced full project-list summary fetches with purpose-built summary/count endpoints where available.
+- Reduced heavy renders in project detail countdowns, history, billing documents, and ongoing project lists.
+- Fixed upload preview Blob URL cleanup to prevent memory leaks.
+- Stabilized route wrapper components so protected route trees do not remount on every app render.
+- Trimmed client startup weight by limiting Inter font assets to Latin weights and removing the global Buffer polyfill.
 
 ## [3.1.0] - 2026-05-08
 
