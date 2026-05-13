@@ -6,6 +6,10 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-05-13
+
+- Fixed inactivity session handling so active users are not logged out before the configured timeout.
+
 ## [3.2.0] - 2026-05-11
 
 - Added undo controls for multi-requirement quote requirements validation before quote submission.
