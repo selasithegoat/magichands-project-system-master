@@ -9,6 +9,7 @@ This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 ## [3.2.1] - 2026-05-13
 
 - Fixed inactivity session handling so active users are not logged out before the configured timeout.
+- Updated the version badge nickname to Andromeda 2.2 for the 3.2 release line.
 
 ## [3.2.0] - 2026-05-11
 

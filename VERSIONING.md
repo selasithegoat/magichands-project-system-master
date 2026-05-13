@@ -13,13 +13,16 @@ Use the numbers this way:
 - `MINOR`: new backward-compatible features, for example `2.6.0`.
 - `MAJOR`: breaking workflow, API, or data changes, for example `3.0.0`.
 
-Major version nicknames live in `VERSION_NICKNAMES.json`. Add or update one
-entry whenever the `MAJOR` number changes:
+Version nicknames live in `VERSION_NICKNAMES.json`. Add or update entries by
+exact, minor, or major version. Exact entries take priority, then minor, then
+major:
 
 ```json
 {
   "2": "Andromeda",
-  "3": "Triangulum"
+  "3": "Andromeda 2.0",
+  "3.2": "Andromeda 2.2",
+  "3.2.1": "Andromeda 2.2 Patch 1"
 }
 ```
 
@@ -51,7 +54,7 @@ GET /api/system/version
 ```
 
 The response includes the app version, commit, branch, environment, and server
-start time. It also includes the major-version nickname when one exists.
+start time. It also includes the best matching version nickname when one exists.
 Deployment tools can override metadata with these environment variables:
 
 - `APP_VERSION`

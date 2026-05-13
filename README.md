@@ -76,7 +76,7 @@ git log HEAD..upstream/master --oneline
 
 - Express + MongoDB API for projects, updates, auth, notifications, reminders, meetings, realtime SSE, chat, digests, ops wallboard, portal navigation, inventory, billing, help, and system version metadata.
 - Configurable upload directory and upload limits with protected upload access.
-- Runtime app version metadata from `VERSION`, optional major-version nicknames from `VERSION_NICKNAMES.json`, and `GET /api/system/version`.
+- Runtime app version metadata from `VERSION`, optional release nicknames from `VERSION_NICKNAMES.json`, and `GET /api/system/version`.
 
 ## Latest Updates
 
@@ -357,7 +357,7 @@ These script names are available in `client/`, `admin/`, `inventoryportal/`, and
 
 - The displayed app version is read from the root `VERSION` file.
 - The server package version should stay aligned with `VERSION` because the API falls back to `server/package.json` if `VERSION` is unavailable.
-- Major-version nicknames live in `VERSION_NICKNAMES.json`.
+- Release nicknames live in `VERSION_NICKNAMES.json`.
 - Runtime version metadata is available from `GET /api/system/version` for authenticated users.
 - Frontend package versions are private build package versions and are not the user-facing app version.
 

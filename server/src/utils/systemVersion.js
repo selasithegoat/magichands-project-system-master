@@ -45,9 +45,17 @@ const readJsonFile = (filePath) => {
   }
 };
 
-const getMajorVersion = (version) => {
-  const major = Number.parseInt(String(version || "").split(".")[0], 10);
-  return Number.isFinite(major) && major > 0 ? String(major) : "";
+const getNicknameKeys = (version) => {
+  const [major, minor, patch] = String(version || "")
+    .split(".")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return [
+    major && minor && patch ? `${major}.${minor}.${patch}` : "",
+    major && minor ? `${major}.${minor}` : "",
+    major || "",
+  ].filter(Boolean);
 };
 
 const resolveVersion = () =>
@@ -61,8 +69,13 @@ const resolveVersionNickname = (version) => {
   if (override) return override;
 
   const nicknames = readJsonFile(versionNicknamesFilePath);
-  const major = getMajorVersion(version);
-  return major ? toCleanString(nicknames[major]) || null : null;
+  const keys = getNicknameKeys(version);
+  for (const key of keys) {
+    const nickname = toCleanString(nicknames[key]);
+    if (nickname) return nickname;
+  }
+
+  return null;
 };
 
 const gitStatus = readGitValue(["status", "--short"]);
