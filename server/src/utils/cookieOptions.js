@@ -3,8 +3,18 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_AUTH_COOKIE_GRACE_MS = 90 * 1000;
+
+const getDefaultAuthCookieMaxAgeMs = () =>
+  DEFAULT_INACTIVITY_TIMEOUT_MS +
+  toPositiveInt(process.env.AUTH_COOKIE_GRACE_MS, DEFAULT_AUTH_COOKIE_GRACE_MS);
+
 const getAuthCookieMaxAgeMs = () =>
-  toPositiveInt(process.env.AUTH_COOKIE_MAX_AGE_MS, 5 * 60 * 1000);
+  toPositiveInt(
+    process.env.AUTH_COOKIE_MAX_AGE_MS,
+    getDefaultAuthCookieMaxAgeMs(),
+  );
 
 const resolveCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === "production";
