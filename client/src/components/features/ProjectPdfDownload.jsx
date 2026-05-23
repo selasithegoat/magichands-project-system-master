@@ -174,8 +174,12 @@ const ProjectPdfDownload = ({ project }) => {
       project?.projectType === "Corporate Job" &&
       Boolean(project?.corporateEmergency?.isEnabled);
     const sampleImageNote = String(details?.sampleImageNote || "").trim();
+    const orderNumber = String(
+      project.orderId || project.orderRef?.orderNumber || "",
+    ).trim();
 
     return {
+      orderNumber,
       projectName: resolveProjectNameForForm(details) || details.projectName,
       projectIndicator: details.projectIndicator || "",
       contactType: details.contactType,

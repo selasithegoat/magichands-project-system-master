@@ -337,6 +337,10 @@ const ProjectSummaryPDF = ({
             </Text>
           </View>
           <View style={styles.row}>
+            <Text style={styles.label}>Order Number:</Text>
+            <Text style={styles.value}>{formData.orderNumber || "N/A"}</Text>
+          </View>
+          <View style={styles.row}>
             <Text style={styles.label}>Contact Type:</Text>
             <Text style={styles.value}>
               {formData.contactType || "None"}
