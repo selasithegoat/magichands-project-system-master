@@ -1156,6 +1156,70 @@ const resolveEngagedDepartmentFilters = (departments = []) => {
   return Array.from(filters);
 };
 
+const QUOTE_GRAPHICS_MOCKUP_ENGAGED_STATUSES = [
+  "Scope Approval Completed",
+  "Pending Quote Requirements",
+  "Pending Mockup",
+  "Pending Production",
+  "Pending Sample Production",
+];
+const QUOTE_GRAPHICS_MOCKUP_REQUIREMENT_STATUSES = [
+  "not_required",
+  "assigned",
+  "in_progress",
+  "dept_submitted",
+  "frontdesk_review",
+  "sent_to_client",
+  "client_approved",
+  "client_revision_requested",
+  "blocked",
+];
+
+const buildQuoteGraphicsMockupEngagementCondition = () => ({
+  projectType: "Quote",
+  status: { $in: QUOTE_GRAPHICS_MOCKUP_ENGAGED_STATUSES },
+  $and: [
+    {
+      $or: [
+        { "quoteDetails.checklist.mockup": true },
+        { "quoteDetails.checklist.sampleProduction": true },
+        { "quoteDetails.requirementItems.mockup.isRequired": true },
+        { "quoteDetails.requirementItems.sampleProduction.isRequired": true },
+      ],
+    },
+    {
+      $or: [
+        {
+          "quoteDetails.requirementItems.mockup.status": {
+            $in: QUOTE_GRAPHICS_MOCKUP_REQUIREMENT_STATUSES,
+          },
+        },
+        { "quoteDetails.requirementItems.mockup.status": { $exists: false } },
+      ],
+    },
+    {
+      $or: [
+        {
+          "quoteDetails.requirementItems.mockup.completionConfirmedAt": {
+            $exists: false,
+          },
+        },
+        { "quoteDetails.requirementItems.mockup.completionConfirmedAt": null },
+      ],
+    },
+    {
+      $or: [
+        {
+          "quoteDetails.requirementItems.mockup.completionConfirmedBy": {
+            $exists: false,
+          },
+        },
+        { "quoteDetails.requirementItems.mockup.completionConfirmedBy": null },
+      ],
+    },
+  ],
+});
+
 const buildProjectAccessQuery = (req) => {
   let query = {};
   const isReportMode = req.query.mode === "report";
@@ -1195,8 +1259,13 @@ const buildProjectAccessQuery = (req) => {
   }
 
   if (isEngagedMode && !(hasAdminPortalAccess(req.user) && isAdminPortal)) {
+    const engagedConditions = [{ departments: { $in: engagedDepartmentFilters } }];
+    if (engagedDepartmentFilters.includes("graphics")) {
+      engagedConditions.push(buildQuoteGraphicsMockupEngagementCondition());
+    }
+
     query = mergeQueryWithCondition(query, {
-      departments: { $in: engagedDepartmentFilters },
+      $or: engagedConditions,
     });
   }
 

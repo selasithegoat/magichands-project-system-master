@@ -139,6 +139,24 @@ const QUOTE_PRE_DEPARTMENTAL_STATUS_SET = new Set([
   "Pending Scope Approval",
 ]);
 const QUOTE_MOCKUP_WORKFLOW_STATUS_SET = new Set(["Pending Mockup"]);
+const QUOTE_REQUIREMENTS_VALIDATED_STATUSES = new Set([
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
+  "Completed",
+  "Finished",
+  "Declined",
+]);
+const QUOTE_MOCKUP_VISIBLE_WORK_STATUSES = new Set([
+  "assigned",
+  "in_progress",
+  "dept_submitted",
+  "frontdesk_review",
+  "sent_to_client",
+  "client_approved",
+  "client_revision_requested",
+  "blocked",
+]);
 const QUOTE_MOCKUP_SUBMIT_TRANSITIONS = {
   assigned: ["in_progress", "dept_submitted"],
   in_progress: ["dept_submitted"],
@@ -339,6 +357,66 @@ const getQuoteRequirementState = (project = {}, key = "") => {
     updatedAt: rawItem?.updatedAt || null,
     note: String(rawItem?.note || "").trim(),
   };
+};
+
+const resolveQuoteChecklistForProject = (projectRecord) => {
+  const base = normalizeQuoteChecklist(
+    projectRecord?.quoteDetails?.checklist || {},
+  );
+  const sampleProductionSelected = Boolean(base.sampleProduction);
+  const requirementItems = projectRecord?.quoteDetails?.requirementItems || {};
+
+  Object.keys(base).forEach((key) => {
+    if (!base[key] && requirementItems?.[key]?.isRequired) {
+      if (sampleProductionSelected && key === "mockup") return;
+      base[key] = true;
+    }
+  });
+
+  return base;
+};
+
+const getQuoteSummaryForProjectRecord = (projectRecord) =>
+  getQuoteRequirementSummary(resolveQuoteChecklistForProject(projectRecord));
+
+const getEffectiveQuoteMockupRequirementForProject = (projectRecord) => {
+  const summary = getQuoteSummaryForProjectRecord(projectRecord);
+  const base = getQuoteRequirementState(projectRecord, QUOTE_REQUIREMENT_MOCKUP_KEY);
+  if (summary.includesSampleProduction) {
+    return {
+      ...base,
+      isRequired: true,
+      status: base.status === "not_required" ? "assigned" : base.status,
+    };
+  }
+  return base;
+};
+
+const isQuoteRequirementsValidated = (projectRecord) =>
+  QUOTE_REQUIREMENTS_VALIDATED_STATUSES.has(
+    String(normalizeQuoteStatus(projectRecord?.status || "")).trim(),
+  );
+
+const isQuoteGraphicsMockupWorkOpen = (projectRecord) => {
+  if (projectRecord?.projectType !== "Quote") return false;
+
+  const normalizedQuoteStatus = String(
+    normalizeQuoteStatus(projectRecord?.status || ""),
+  ).trim();
+  if (!isScopeApprovalComplete(normalizedQuoteStatus)) return false;
+  if (QUOTE_REQUIREMENTS_VALIDATED_STATUSES.has(normalizedQuoteStatus)) {
+    return false;
+  }
+
+  const summary = getQuoteSummaryForProjectRecord(projectRecord);
+  if (!summary.includesMockup) return false;
+  if (isQuoteMockupCompletionConfirmed(projectRecord, summary.mode)) {
+    return false;
+  }
+
+  const requirement = getEffectiveQuoteMockupRequirementForProject(projectRecord);
+  if (!requirement.isRequired) return false;
+  return QUOTE_MOCKUP_VISIBLE_WORK_STATUSES.has(requirement.status);
 };
 
 const formatBillingRequirementLabels = (missing = []) =>
@@ -675,10 +753,21 @@ const EngagedProjectActions = ({ user }) => {
 
   const projectEngagedSubDepts = useMemo(() => {
     if (!project) return [];
-    return normalizeDepartmentList(project.departments).filter((dept) =>
+    const matchedDepartments = normalizeDepartmentList(project.departments).filter((dept) =>
       engagedSubDepts.includes(dept),
     );
-  }, [project, engagedSubDepts]);
+    if (
+      userEngagedDepts.includes("Graphics") &&
+      isQuoteGraphicsMockupWorkOpen(project)
+    ) {
+      GRAPHICS_SUB_DEPARTMENTS.forEach((dept) => {
+        if (engagedSubDepts.includes(dept) && !matchedDepartments.includes(dept)) {
+          matchedDepartments.push(dept);
+        }
+      });
+    }
+    return matchedDepartments;
+  }, [project, engagedSubDepts, userEngagedDepts]);
   const projectProductionSubDepts = useMemo(
     () =>
       Array.from(
@@ -702,7 +791,20 @@ const EngagedProjectActions = ({ user }) => {
 
   const getQuoteActionDepartmentsForCurrentUser = (projectRecord) => {
     const targetDepartments = normalizeDepartmentList(projectRecord?.departments);
-    return targetDepartments.filter((dept) => engagedSubDepts.includes(dept));
+    const matchedDepartments = targetDepartments.filter((dept) =>
+      engagedSubDepts.includes(dept),
+    );
+    if (
+      userEngagedDepts.includes("Graphics") &&
+      isQuoteGraphicsMockupWorkOpen(projectRecord)
+    ) {
+      GRAPHICS_SUB_DEPARTMENTS.forEach((dept) => {
+        if (engagedSubDepts.includes(dept) && !matchedDepartments.includes(dept)) {
+          matchedDepartments.push(dept);
+        }
+      });
+    }
+    return matchedDepartments;
   };
 
   const isQuoteDepartmentActionReadyForCurrentUser = (projectRecord) => {
@@ -724,6 +826,19 @@ const EngagedProjectActions = ({ user }) => {
         GRAPHICS_SUB_DEPARTMENTS.includes(normalizeDepartmentId(departmentName)),
       )
     ) {
+      return true;
+    }
+
+    const actualDepartments = normalizeDepartmentList(projectRecord?.departments);
+    const hasImplicitGraphicsMockupWork =
+      isQuoteGraphicsMockupWorkOpen(projectRecord) &&
+      matchedDepartments.some((departmentName) =>
+        GRAPHICS_SUB_DEPARTMENTS.includes(normalizeDepartmentId(departmentName)),
+      ) &&
+      !actualDepartments.some((departmentName) =>
+        GRAPHICS_SUB_DEPARTMENTS.includes(normalizeDepartmentId(departmentName)),
+      );
+    if (hasImplicitGraphicsMockupWork) {
       return true;
     }
 
@@ -768,25 +883,10 @@ const EngagedProjectActions = ({ user }) => {
   const quoteWorkflowStatus = isQuoteProject
     ? normalizeQuoteStatus(project?.status || "")
     : project?.status || "";
-  const resolveQuoteChecklist = (projectRecord) => {
-    const base = normalizeQuoteChecklist(
-      projectRecord?.quoteDetails?.checklist || {},
-    );
-    const sampleProductionSelected = Boolean(base.sampleProduction);
-    const requirementItems =
-      projectRecord?.quoteDetails?.requirementItems || {};
-    Object.keys(base).forEach((key) => {
-      if (!base[key] && requirementItems?.[key]?.isRequired) {
-        if (sampleProductionSelected && key === "mockup") {
-          return;
-        }
-        base[key] = true;
-      }
-    });
-    return base;
-  };
-
-  const quoteChecklist = isQuoteProject ? resolveQuoteChecklist(project) : {};
+  const quoteChecklist = useMemo(
+    () => (isQuoteProject ? resolveQuoteChecklistForProject(project) : {}),
+    [isQuoteProject, project],
+  );
   const quoteRequirementSummary = useMemo(
     () => getQuoteRequirementSummary(quoteChecklist),
     [quoteChecklist],
@@ -794,8 +894,14 @@ const EngagedProjectActions = ({ user }) => {
   const quoteRequirementMode = isQuoteProject
     ? quoteRequirementSummary.mode
     : "none";
+  const quoteHasMultipleRequirements =
+    isQuoteProject && quoteRequirementSummary.hasMultipleRequirements;
   const quoteHasSampleProductionRequirement =
     isQuoteProject && quoteRequirementSummary.includesSampleProduction;
+  const quoteRequirementsValidatedByFrontDesk =
+    isQuoteProject &&
+    quoteHasMultipleRequirements &&
+    isQuoteRequirementsValidated(project);
   const quoteWorkflowBlocked =
     isQuoteProject && quoteRequirementMode === "none";
   const quoteWorkflowBlockedMessage = quoteWorkflowBlocked
@@ -2829,6 +2935,19 @@ const EngagedProjectActions = ({ user }) => {
       return false;
     }
 
+    const targetQuoteSummary = getQuoteSummaryForProjectRecord(targetProject);
+    if (
+      targetQuoteSummary.hasMultipleRequirements &&
+      isQuoteRequirementsValidated(targetProject)
+    ) {
+      setToast({
+        type: "error",
+        message:
+          "Front Desk has already validated this quote. Mockup completion can no longer be changed here.",
+      });
+      return false;
+    }
+
     if (isQuoteMockupCompletionConfirmed(targetProject, quoteRequirementMode)) {
       setToast({
         type: "success",
@@ -3494,8 +3613,20 @@ const EngagedProjectActions = ({ user }) => {
               !(isQuoteProject && ["Stores", "Production"].includes(section.key));
             const isProductionSection = section.key === "Production";
             const isStoresSection = section.key === "Stores";
+            const actualProjectDepartments = normalizeDepartmentList(
+              project?.departments,
+            );
+            const sectionHasImplicitGraphicsMockupWork =
+              section.key === "Graphics" &&
+              isQuoteGraphicsMockupWorkOpen(project) &&
+              !actualProjectDepartments.some((departmentName) =>
+                GRAPHICS_SUB_DEPARTMENTS.includes(
+                  normalizeDepartmentId(departmentName),
+                ),
+              );
             const quoteSectionAcknowledged = isQuoteProject
-              ? section.subDepts.some((dept) => acknowledgedDepts.has(dept))
+              ? sectionHasImplicitGraphicsMockupWork ||
+                section.subDepts.some((dept) => acknowledgedDepts.has(dept))
               : true;
             const quoteSectionActionReady =
               !isQuoteProject ||
@@ -3653,6 +3784,9 @@ const EngagedProjectActions = ({ user }) => {
                       isMockupAction && isMockupClientRejected(latestMockupVersion);
                     const quoteMockupAlreadyCompleted =
                       isQuoteGraphicsAction && quoteMockupCompletionConfirmed;
+                    const quoteMockupLockedByFrontDeskValidation =
+                      isQuoteGraphicsAction &&
+                      quoteRequirementsValidatedByFrontDesk;
                     const quoteCanUploadMockupRequirement =
                       quoteAllowsMockupUpload;
                     const canConfirmMockupCompletion =
@@ -3660,6 +3794,7 @@ const EngagedProjectActions = ({ user }) => {
                       mockupAlreadySubmitted &&
                       mockupReadyForCompletion &&
                       !quoteMockupAlreadyCompleted &&
+                      !quoteMockupLockedByFrontDeskValidation &&
                       (isQuoteGraphicsAction
                         ? quoteAllowsMockupWorkflowStatus
                         : isPending);
@@ -3764,6 +3899,12 @@ const EngagedProjectActions = ({ user }) => {
                     ) {
                       mockupConfirmTitle =
                         "Mockup completion has already been confirmed.";
+                    } else if (
+                      isQuoteGraphicsAction &&
+                      quoteMockupLockedByFrontDeskValidation
+                    ) {
+                      mockupConfirmTitle =
+                        "Front Desk has already validated this quote.";
                     } else if (
                       isQuoteGraphicsAction &&
                       quoteMockupStatus === "client_approved"

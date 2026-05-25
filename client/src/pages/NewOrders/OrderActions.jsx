@@ -1194,8 +1194,10 @@ const OrderActions = () => {
     isQuoteProject && quoteRequirementMode === "previousSamples";
   const isBidSubmissionOnlyQuote =
     isQuoteProject && quoteRequirementMode === "bidSubmission";
-  const effectiveEnabledRequirements =
-    quoteRequirementSummary.effectiveEnabledKeys || [];
+  const effectiveEnabledRequirements = useMemo(
+    () => quoteRequirementSummary.effectiveEnabledKeys || [],
+    [quoteRequirementSummary.effectiveEnabledKeys],
+  );
   const quoteHasMultipleRequirements =
     isQuoteProject && quoteRequirementSummary.hasMultipleRequirements;
   const quoteHasCostRequirement =
@@ -1337,15 +1339,31 @@ const OrderActions = () => {
   const bidSubmissionIsSensitive = Boolean(bidSubmissionDetails.isSensitive);
   const bidSubmissionHasDocuments = bidSubmissionDocuments.length > 0;
   const bidSubmissionReady = bidSubmissionIsSensitive || bidSubmissionHasDocuments;
-  const quoteRequirementCompletionMap = {
-    cost: !quoteHasCostRequirement || quoteCostVerified,
-    mockup: !quoteHasMockupRequirement || quoteMockupReadyForSubmission,
-    previousSamples:
-      !quoteHasPreviousSamplesRequirement || quotePreviousSamplesReadyForSubmission,
-    sampleProduction:
-      !quoteHasSampleProductionRequirement || quoteSampleProductionReadyForSubmission,
-    bidSubmission: !quoteHasBidSubmissionRequirement || bidSubmissionReady,
-  };
+  const quoteRequirementCompletionMap = useMemo(
+    () => ({
+      cost: !quoteHasCostRequirement || quoteCostVerified,
+      mockup: !quoteHasMockupRequirement || quoteMockupReadyForSubmission,
+      previousSamples:
+        !quoteHasPreviousSamplesRequirement ||
+        quotePreviousSamplesReadyForSubmission,
+      sampleProduction:
+        !quoteHasSampleProductionRequirement ||
+        quoteSampleProductionReadyForSubmission,
+      bidSubmission: !quoteHasBidSubmissionRequirement || bidSubmissionReady,
+    }),
+    [
+      quoteHasCostRequirement,
+      quoteCostVerified,
+      quoteHasMockupRequirement,
+      quoteMockupReadyForSubmission,
+      quoteHasPreviousSamplesRequirement,
+      quotePreviousSamplesReadyForSubmission,
+      quoteHasSampleProductionRequirement,
+      quoteSampleProductionReadyForSubmission,
+      quoteHasBidSubmissionRequirement,
+      bidSubmissionReady,
+    ],
+  );
   const pendingQuoteRequirementKeys = effectiveEnabledRequirements.filter(
     (key) => !quoteRequirementCompletionMap[key],
   );
@@ -1466,15 +1484,86 @@ const OrderActions = () => {
     !isQuoteProject && project?.quoteDetails?.decision?.convertedAt
       ? project.quoteDetails.decision.convertedAt
       : null;
-  const workflowJourney = useMemo(
-    () =>
-      resolveWorkflowJourney(
-        quoteWorkflowStatusDisplay,
-        isQuoteProject,
-        quoteRequirementMode,
-      ),
-    [quoteWorkflowStatusDisplay, isQuoteProject, quoteRequirementMode],
-  );
+  const workflowJourney = useMemo(() => {
+    const defaultJourney = resolveWorkflowJourney(
+      quoteWorkflowStatusDisplay,
+      isQuoteProject,
+      quoteRequirementMode,
+    );
+
+    if (!isQuoteProject || !quoteHasMultipleRequirements) {
+      return defaultJourney;
+    }
+
+    const normalizedStatus = String(quoteWorkflowStatus || "").trim();
+    const pendingRequirementKeys = effectiveEnabledRequirements.filter(
+      (key) => !quoteRequirementCompletionMap[key],
+    );
+    const firstPendingRequirementKey = pendingRequirementKeys[0] || "";
+    const scopePending = ["Quote Created", "Pending Scope Approval"].includes(
+      normalizedStatus,
+    );
+    const requirementsReady =
+      pendingRequirementKeys.length === 0 &&
+      effectiveEnabledRequirements.length > 0;
+    const quoteSubmissionActive =
+      ["Pending Quote Submission", "Quote Submission Completed"].includes(
+        normalizedStatus,
+      ) ||
+      (normalizedStatus === "Pending Quote Requirements" && requirementsReady);
+    const decisionActive = normalizedStatus === "Pending Client Decision";
+    const closedDecision = ["Completed", "Finished", "Declined"].includes(
+      normalizedStatus,
+    );
+
+    const requirementSteps = effectiveEnabledRequirements.map((key) => {
+      const isComplete = Boolean(quoteRequirementCompletionMap[key]);
+      const isActive =
+        !isComplete &&
+        !scopePending &&
+        normalizedStatus === "Pending Quote Requirements" &&
+        key === firstPendingRequirementKey;
+
+      return {
+        key: `requirement-${key}`,
+        requirementKey: key,
+        label: QUOTE_REQUIREMENT_LABELS[key] || key,
+        state: isComplete ? "complete" : isActive ? "active" : "upcoming",
+        detail: isComplete ? "Complete" : "Pending",
+      };
+    });
+
+    return [
+      {
+        key: "scope",
+        label: "Scope",
+        state: scopePending ? "active" : "complete",
+      },
+      ...requirementSteps,
+      {
+        key: "submission",
+        label: "Quote Submission",
+        state: closedDecision || decisionActive
+          ? "complete"
+          : quoteSubmissionActive
+            ? "active"
+            : "upcoming",
+      },
+      {
+        key: "decision",
+        label: "Client Decision",
+        state: closedDecision ? "complete" : decisionActive ? "active" : "upcoming",
+      },
+    ];
+  }, [
+    quoteWorkflowStatusDisplay,
+    isQuoteProject,
+    quoteRequirementMode,
+    quoteHasMultipleRequirements,
+    quoteWorkflowStatus,
+    effectiveEnabledRequirements,
+    quoteRequirementCompletionMap,
+  ]);
   const activeJourneyStep = workflowJourney.find((item) => item.state === "active");
 
   useEffect(() => {
@@ -1512,6 +1601,67 @@ const OrderActions = () => {
     activeJourneyStep ||
     workflowJourney[0] ||
     null;
+  const focusedRequirementKey =
+    focusedJourneyStep?.requirementKey ||
+    (focusedJourneyStep?.key?.startsWith("requirement-")
+      ? focusedJourneyStep.key.replace("requirement-", "")
+      : "");
+  const getRequirementSectionId = (requirementKey = "") =>
+    ({
+      cost: "order-actions-cost",
+      mockup: "order-actions-mockup",
+      previousSamples: "order-actions-previous-samples",
+      sampleProduction: "order-actions-sample-production",
+      bidSubmission: "order-actions-bid-submission",
+    }[requirementKey] || "order-actions-requirements");
+  const focusedJourneyActionLabel = focusedRequirementKey
+    ? `Open ${QUOTE_REQUIREMENT_LABELS[focusedRequirementKey] || "Requirement"}`
+    : focusedJourneyStep?.key === "billing" ||
+        focusedJourneyStep?.key === "submission"
+      ? "Open Billing"
+      : focusedJourneyStep?.key === "mockup" ||
+          focusedJourneyStep?.key === "requirements"
+        ? "Open Mockup"
+        : focusedJourneyStep?.key === "delivery" ||
+            focusedJourneyStep?.key === "decision"
+          ? "Open Activity"
+          : "Review Scope";
+  const openFocusedJourneyStep = () => {
+    if (!focusedJourneyStep) return;
+    if (focusedRequirementKey) {
+      if (
+        focusedRequirementKey === "cost" ||
+        focusedRequirementKey === "bidSubmission"
+      ) {
+        setBillingPanelOpen(true);
+      }
+      jumpToSection(getRequirementSectionId(focusedRequirementKey));
+      return;
+    }
+    if (
+      focusedJourneyStep.key === "mockup" ||
+      focusedJourneyStep.key === "requirements"
+    ) {
+      jumpToSection("order-actions-mockup");
+      return;
+    }
+    if (
+      focusedJourneyStep.key === "billing" ||
+      focusedJourneyStep.key === "submission"
+    ) {
+      setBillingPanelOpen(true);
+      jumpToSection("order-actions-billing");
+      return;
+    }
+    if (
+      focusedJourneyStep.key === "delivery" ||
+      focusedJourneyStep.key === "decision"
+    ) {
+      jumpToSection("order-actions-updates");
+      return;
+    }
+    openFullOrderRevision();
+  };
   const mentionablePeople = useMemo(() => {
     const people = [];
     const pushPerson = (value) => {
@@ -3590,39 +3740,9 @@ const OrderActions = () => {
                 <button
                   type="button"
                   className="action-btn"
-                  onClick={() => {
-                    if (!focusedJourneyStep) return;
-                    if (
-                      focusedJourneyStep.key === "mockup" ||
-                      focusedJourneyStep.key === "requirements"
-                    ) {
-                      jumpToSection("order-actions-mockup");
-                      return;
-                    }
-                    if (focusedJourneyStep.key === "billing") {
-                      setBillingPanelOpen(true);
-                      jumpToSection("order-actions-billing");
-                      return;
-                    }
-                    if (
-                      focusedJourneyStep.key === "delivery" ||
-                      focusedJourneyStep.key === "decision"
-                    ) {
-                      jumpToSection("order-actions-updates");
-                      return;
-                    }
-                    openFullOrderRevision();
-                  }}
+                  onClick={openFocusedJourneyStep}
                 >
-                  {focusedJourneyStep?.key === "billing"
-                    ? "Open Billing"
-                    : focusedJourneyStep?.key === "mockup" ||
-                        focusedJourneyStep?.key === "requirements"
-                      ? "Open Mockup"
-                      : focusedJourneyStep?.key === "delivery" ||
-                          focusedJourneyStep?.key === "decision"
-                        ? "Open Activity"
-                        : "Review Scope"}
+                  {focusedJourneyActionLabel}
                 </button>
               </div>
               <div className="workflow-stepper">
@@ -3636,7 +3756,14 @@ const OrderActions = () => {
                     onClick={() => setFocusedWorkflowStep(step.key)}
                   >
                     <span className="workflow-step-index">{index + 1}</span>
-                    <span className="workflow-step-label">{step.label}</span>
+                    <span className="workflow-step-content">
+                      <span className="workflow-step-label">{step.label}</span>
+                      {step.detail && (
+                        <span className="workflow-step-detail">
+                          {step.detail}
+                        </span>
+                      )}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -3829,7 +3956,7 @@ const OrderActions = () => {
           </div>
 
           {isQuoteProject && quoteHasMultipleRequirements && (
-            <div className="action-card">
+            <div className="action-card" id="order-actions-requirements">
               <h3>Quote Requirements</h3>
               <p>
                 Progress across all selected quote requirements before quote
@@ -3889,7 +4016,7 @@ const OrderActions = () => {
           )}
 
           {isQuoteProject && quoteHasCostRequirement && (
-            <div className="action-card">
+            <div className="action-card" id="order-actions-cost">
               <h3>Cost</h3>
               <p>Complete the quote cost before sending the quote.</p>
               {quoteWorkflowBlocked ? (
@@ -4026,7 +4153,7 @@ const OrderActions = () => {
           )}
 
           {isQuoteProject && quoteHasPreviousSamplesRequirement && (
-            <div className="action-card">
+            <div className="action-card" id="order-actions-previous-samples">
               <h3>Sample Retrieval</h3>
               <p>
                 Confirm that previous samples/work done have been retrieved
@@ -4102,7 +4229,7 @@ const OrderActions = () => {
           )}
 
           {isQuoteProject && quoteHasSampleProductionRequirement && (
-            <div className="action-card">
+            <div className="action-card" id="order-actions-sample-production">
               <h3>Sample Production</h3>
               <p>
                 Production will submit sample production after the mockup is cleared.
@@ -4159,7 +4286,7 @@ const OrderActions = () => {
           )}
 
           {isQuoteProject && quoteHasBidSubmissionRequirement && (
-            <div className="action-card">
+            <div className="action-card" id="order-actions-bid-submission">
               <h3>Bid Submission / Documents</h3>
               <p>
                 Upload bid submission or supporting documents before confirming

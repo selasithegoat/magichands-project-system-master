@@ -126,6 +126,21 @@ const QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES = new Set([
   "client_revision_requested",
   "blocked",
 ]);
+const QUOTE_MOCKUP_VISIBLE_WORK_STATUSES = new Set([
+  ...QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES,
+  "dept_submitted",
+  "frontdesk_review",
+  "sent_to_client",
+  "client_approved",
+]);
+const QUOTE_MOCKUP_WORK_CLOSED_STATUSES = new Set([
+  "Pending Quote Submission",
+  "Quote Submission Completed",
+  "Pending Client Decision",
+  "Completed",
+  "Finished",
+  "Declined",
+]);
 const QUOTE_SAMPLE_PRODUCTION_COMPLETE_STATUSES = new Set([
   "dept_submitted",
   "frontdesk_review",
@@ -238,6 +253,61 @@ const getQuoteRequirementState = (project = {}, key = "") => {
     isRequired,
     status,
   };
+};
+
+const resolveQuoteChecklistForProject = (projectRecord) => {
+  const base = normalizeQuoteChecklist(
+    projectRecord?.quoteDetails?.checklist || {},
+  );
+  const sampleProductionSelected = Boolean(base.sampleProduction);
+  const requirementItems = projectRecord?.quoteDetails?.requirementItems || {};
+
+  Object.keys(base).forEach((key) => {
+    if (!base[key] && requirementItems?.[key]?.isRequired) {
+      if (sampleProductionSelected && key === "mockup") return;
+      base[key] = true;
+    }
+  });
+
+  return base;
+};
+
+const getQuoteSummaryForProjectRecord = (projectRecord) =>
+  getQuoteRequirementSummary(resolveQuoteChecklistForProject(projectRecord));
+
+const getEffectiveQuoteMockupRequirementForProject = (projectRecord) => {
+  const summary = getQuoteSummaryForProjectRecord(projectRecord);
+  const base = getQuoteRequirementState(projectRecord, "mockup");
+  if (summary.includesSampleProduction) {
+    return {
+      ...base,
+      isRequired: true,
+      status: base.status === "not_required" ? "assigned" : base.status,
+    };
+  }
+  return base;
+};
+
+const isQuoteGraphicsMockupWorkOpen = (projectRecord) => {
+  if (projectRecord?.projectType !== "Quote") return false;
+
+  const normalizedQuoteStatus = String(
+    normalizeQuoteStatus(projectRecord?.status || ""),
+  ).trim();
+  if (!isScopeApprovalComplete(normalizedQuoteStatus)) return false;
+  if (QUOTE_MOCKUP_WORK_CLOSED_STATUSES.has(normalizedQuoteStatus)) {
+    return false;
+  }
+
+  const summary = getQuoteSummaryForProjectRecord(projectRecord);
+  if (!summary.includesMockup) return false;
+  if (isQuoteMockupCompletionConfirmed(projectRecord, summary.mode)) {
+    return false;
+  }
+
+  const requirement = getEffectiveQuoteMockupRequirementForProject(projectRecord);
+  if (!requirement.isRequired) return false;
+  return QUOTE_MOCKUP_VISIBLE_WORK_STATUSES.has(requirement.status);
 };
 
 const EngagedProjects = ({ user }) => {
@@ -484,6 +554,13 @@ const EngagedProjects = ({ user }) => {
             );
           if (hasDeptMatch) return true;
           if (
+            userEngagedDepts.includes("Graphics") &&
+            ["All", "Graphics"].includes(departmentFilter) &&
+            isQuoteGraphicsMockupWorkOpen(project)
+          ) {
+            return true;
+          }
+          if (
             !hasPackagingRole ||
             !["All", "Stores"].includes(departmentFilter)
           )
@@ -598,6 +675,10 @@ const EngagedProjects = ({ user }) => {
   };
 
   const projectHasDept = (project, dept) => {
+    if (dept === "Graphics" && isQuoteGraphicsMockupWorkOpen(project)) {
+      return true;
+    }
+
     const projDepts = normalizeDepartmentList(project.departments);
     const relevantTokens = userDepartmentTokensByDept[dept] || [];
     return projDepts.some((d) => relevantTokens.includes(d));
@@ -627,7 +708,21 @@ const EngagedProjects = ({ user }) => {
     const relevantTokens = getRelevantDepartmentTokens(dept);
     if (!relevantTokens.length) return [];
     const projectDepartments = normalizeDepartmentList(project?.departments);
-    return projectDepartments.filter((token) => relevantTokens.includes(token));
+    const matched = projectDepartments.filter((token) =>
+      relevantTokens.includes(token),
+    );
+
+    if (
+      matched.length === 0 &&
+      dept === "Graphics" &&
+      isQuoteGraphicsMockupWorkOpen(project)
+    ) {
+      return relevantTokens.filter((token) =>
+        GRAPHICS_SUB_DEPARTMENTS.includes(token),
+      );
+    }
+
+    return matched;
   };
 
   const getAcknowledgedDepartmentSet = (project) =>
@@ -639,6 +734,16 @@ const EngagedProjects = ({ user }) => {
 
   const isDepartmentAcknowledged = (project, dept) => {
     const matchedDepartments = getMatchedProjectDepartments(project, dept);
+    if (
+      matchedDepartments.length > 0 &&
+      dept === "Graphics" &&
+      isQuoteGraphicsMockupWorkOpen(project) &&
+      !normalizeDepartmentList(project?.departments).some((token) =>
+        matchedDepartments.includes(token),
+      )
+    ) {
+      return true;
+    }
     if (!matchedDepartments.length) return false;
     const acknowledged = getAcknowledgedDepartmentSet(project);
     return matchedDepartments.some((token) => acknowledged.has(token));
@@ -646,6 +751,16 @@ const EngagedProjects = ({ user }) => {
 
   const hasPendingDepartmentAcknowledgement = (project, dept) => {
     const matchedDepartments = getMatchedProjectDepartments(project, dept);
+    if (
+      matchedDepartments.length > 0 &&
+      dept === "Graphics" &&
+      isQuoteGraphicsMockupWorkOpen(project) &&
+      !normalizeDepartmentList(project?.departments).some((token) =>
+        matchedDepartments.includes(token),
+      )
+    ) {
+      return false;
+    }
     if (!matchedDepartments.length) return false;
     const acknowledged = getAcknowledgedDepartmentSet(project);
     return matchedDepartments.some((token) => !acknowledged.has(token));
@@ -660,39 +775,8 @@ const EngagedProjects = ({ user }) => {
     return isDepartmentAcknowledged(project, dept);
   };
 
-  const resolveQuoteChecklist = (projectRecord) => {
-    const base = normalizeQuoteChecklist(
-      projectRecord?.quoteDetails?.checklist || {},
-    );
-    const sampleProductionSelected = Boolean(base.sampleProduction);
-    const requirementItems =
-      projectRecord?.quoteDetails?.requirementItems || {};
-
-    Object.keys(base).forEach((key) => {
-      if (!base[key] && requirementItems?.[key]?.isRequired) {
-        if (sampleProductionSelected && key === "mockup") return;
-        base[key] = true;
-      }
-    });
-
-    return base;
-  };
-
   const getQuoteSummaryForProject = (project) =>
-    getQuoteRequirementSummary(resolveQuoteChecklist(project));
-
-  const getEffectiveQuoteMockupRequirement = (project) => {
-    const summary = getQuoteSummaryForProject(project);
-    const base = getQuoteRequirementState(project, "mockup");
-    if (summary.includesSampleProduction) {
-      return {
-        ...base,
-        isRequired: true,
-        status: base.status === "not_required" ? "assigned" : base.status,
-      };
-    }
-    return base;
-  };
+    getQuoteSummaryForProjectRecord(project);
 
   const isQuoteDepartmentActionCompleted = (project, dept) => {
     const summary = getQuoteSummaryForProject(project);
@@ -725,9 +809,7 @@ const EngagedProjects = ({ user }) => {
 
     if (dept === "Graphics") {
       if (!summary.includesMockup) return false;
-      const requirement = getEffectiveQuoteMockupRequirement(project);
-      if (!requirement.isRequired) return false;
-      return QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES.has(requirement.status);
+      return isQuoteGraphicsMockupWorkOpen(project);
     }
 
     if (dept === "Production") {
@@ -760,25 +842,13 @@ const EngagedProjects = ({ user }) => {
     const latestMockupVersion = getLatestMockupVersion(project?.mockup || {});
 
     if (project?.projectType === "Quote") {
-      const normalizedQuoteStatus = String(
-        normalizeQuoteStatus(project?.status || ""),
-      ).trim();
-      if (!isScopeApprovalComplete(normalizedQuoteStatus)) return false;
-
-      const summary = getQuoteSummaryForProject(project);
-      if (!summary.includesMockup) return false;
-      if (isQuoteMockupCompletionConfirmed(project, summary.mode)) return false;
-
-      const requirement = getEffectiveQuoteMockupRequirement(project);
-      if (!requirement.isRequired) return false;
-      if (!QUOTE_MOCKUP_PENDING_UPLOAD_STATUSES.has(requirement.status)) {
-        return false;
-      }
+      if (!isQuoteGraphicsMockupWorkOpen(project)) return false;
 
       if (!latestMockupVersion?.fileUrl) return true;
       return (
         isMockupAwaitingGraphicsValidation(latestMockupVersion) ||
-        isMockupClientRejected(latestMockupVersion)
+        isMockupClientRejected(latestMockupVersion) ||
+        isQuoteGraphicsMockupWorkOpen(project)
       );
     }
 
@@ -896,7 +966,7 @@ const EngagedProjects = ({ user }) => {
   const kpiFilterLabels = {
     all: "All Active Projects",
     pendingAcceptance: "Pending Acceptance",
-    waitingMockup: "Waiting for Mockup Upload",
+    waitingMockup: "Waiting for Mockup",
     completedActions: "Department Completion",
   };
 
@@ -1318,12 +1388,12 @@ const EngagedProjects = ({ user }) => {
               aria-pressed={kpiFilter === "waitingMockup"}
             >
               <div className="engaged-kpi-header">
-                <span>Waiting for Mockup Upload</span>
+                <span>Waiting for Mockup</span>
                 <strong>{waitingForMockupUploadCount}</strong>
               </div>
               <p>
-                Graphics projects currently waiting for a first mockup upload or
-                a revised upload.
+                Graphics projects currently waiting for mockup upload, review,
+                revision, or completion.
               </p>
             </button>
           )}

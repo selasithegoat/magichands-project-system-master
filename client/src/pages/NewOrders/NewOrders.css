@@ -2557,6 +2557,24 @@
   line-height: 1.2;
 }
 
+.workflow-step-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.workflow-step-detail {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.workflow-step.complete .workflow-step-detail {
+  color: var(--success);
+}
+
 .workflow-step.complete {
   border-color: rgba(16, 185, 129, 0.35);
   background: var(--success-soft);
