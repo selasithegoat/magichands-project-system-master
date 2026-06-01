@@ -242,6 +242,18 @@ const BATCH_PRODUCTION_COMPLETE_STATUS_SET = new Set([
   "packaged",
   "delivered",
 ]);
+const BATCH_RECOVERY_CREATION_STATUSES = new Set([
+  "Production Completed",
+  "Pending Quality Control",
+  "Quality Control Completed",
+  "Pending Photography",
+  "Photography Completed",
+  "Pending Packaging",
+  "Packaging Completed",
+  "Pending Delivery/Pickup",
+  "Delivered",
+  "Pending Feedback",
+]);
 
 const getBatchStatusLabel = (status) =>
   BATCH_STATUS_LABELS[status] || status || "Unknown";
@@ -321,6 +333,11 @@ const formatDeliveredOutOfTotal = (qty, totalQty) => {
 const getBatchQtyLeft = (qty, totalQty) => {
   if (!Number.isFinite(qty) || totalQty <= 0) return null;
   return Math.max(totalQty - qty, 0);
+};
+const clampBatchStageQty = (qty, totalQty) => {
+  if (!Number.isFinite(qty)) return qty;
+  const normalizedQty = Math.max(qty, 0);
+  return totalQty > 0 ? Math.min(normalizedQty, totalQty) : normalizedQty;
 };
 
 const formatQuoteRequirementStatus = (status = "") => {
@@ -1057,6 +1074,11 @@ const EngagedProjectActions = ({ user }) => {
     () => batches.filter((batch) => batch?.status !== "cancelled"),
     [batches],
   );
+  const hasExistingProjectBatches = useMemo(() => {
+    const activeCount = Number(batchAccessSummary?.activeCount);
+    if (Number.isFinite(activeCount)) return activeCount > 0;
+    return activeBatches.length > 0;
+  }, [activeBatches.length, batchAccessSummary]);
   const batchItemMap = useMemo(
     () => buildProjectItemMap(projectItems),
     [projectItems],
@@ -1111,7 +1133,10 @@ const EngagedProjectActions = ({ user }) => {
       }, 0),
     [projectItems, batchRemainingByItem],
   );
+  const hasBatchAllocationShortfall =
+    hasExistingProjectBatches && batchRemainingQtyTotal > 0;
   const batchProductionComplete = useMemo(() => {
+    if (hasBatchAllocationShortfall) return false;
     if (typeof batchAccessSummary?.productionComplete === "boolean") {
       return batchAccessSummary.productionComplete;
     }
@@ -1121,7 +1146,7 @@ const EngagedProjectActions = ({ user }) => {
         normalizeBatchStatus(batch?.status),
       ),
     );
-  }, [activeBatches, batchAccessSummary]);
+  }, [activeBatches, batchAccessSummary, hasBatchAllocationShortfall]);
   const nextBatchNumber = useMemo(() => {
     const totalCount = Number(batchAccessSummary?.totalCount);
     if (Number.isFinite(totalCount) && totalCount >= 0) return totalCount + 1;
@@ -1133,8 +1158,14 @@ const EngagedProjectActions = ({ user }) => {
   const canShowBatchSection =
     (hasBatches || canCreateBatches || canManagePackagingBatches) &&
     (!isAdminUser || isAdminPackagingUser);
+  const canRecoverIncompleteBatchProduction =
+    !isQuoteProject &&
+    hasBatchAllocationShortfall &&
+    BATCH_RECOVERY_CREATION_STATUSES.has(project?.status || "");
   const canCreateBatchNow =
-    canCreateBatches && project?.status === "Pending Production";
+    canCreateBatches &&
+    (project?.status === "Pending Production" ||
+      canRecoverIncompleteBatchProduction);
   const canShowApprovedMockupReference = useMemo(() => {
     if (!project) return false;
     const statusCandidate =
@@ -1768,7 +1799,9 @@ const EngagedProjectActions = ({ user }) => {
       setToast({
         type: "error",
         message:
-          "Batches can only be created when the project is Pending Production.",
+          hasExistingProjectBatches
+            ? "New batches are only available while production is pending or when existing batches leave project quantity unassigned."
+            : "Batches can only be created when the project is Pending Production.",
       });
       return;
     }
@@ -1867,7 +1900,9 @@ const EngagedProjectActions = ({ user }) => {
       setToast({
         type: "error",
         message:
-          "Batches can only be created when the project is Pending Production.",
+          hasExistingProjectBatches
+            ? "New batches are only available while production is pending or when existing batches leave project quantity unassigned."
+            : "Batches can only be created when the project is Pending Production.",
       });
       return;
     }
@@ -3283,7 +3318,9 @@ const EngagedProjectActions = ({ user }) => {
                   title={
                     canCreateBatchNow
                       ? "Create new batch"
-                      : "Available once project is Pending Production"
+                      : hasExistingProjectBatches && batchRemainingQtyTotal > 0
+                        ? "Available when incomplete batch production can be reopened"
+                        : "Available once project is Pending Production"
                   }
                 >
                   New Batch
@@ -3419,21 +3456,25 @@ const EngagedProjectActions = ({ user }) => {
                 const statusLabel = getBatchStatusLabel(batch?.status);
                 const nextStatus = getNextBatchStatus(batch?.status);
                 const batchTotalQty = getBatchTotalQty(batch);
-                const overallProjectQty =
-                  projectItemTotalQty > 0 ? projectItemTotalQty : batchTotalQty;
-                const producedQtyValue = Number(batch?.packaging?.receivedQty);
-                const deliveredQtyValue = Number(batch?.delivery?.deliveredQty);
+                const producedQtyValue = clampBatchStageQty(
+                  Number(batch?.packaging?.receivedQty),
+                  batchTotalQty,
+                );
+                const deliveredQtyValue = clampBatchStageQty(
+                  Number(batch?.delivery?.deliveredQty),
+                  batchTotalQty,
+                );
                 const producedQtyLabel = formatBatchQty(
                   producedQtyValue,
                   batchTotalQty,
                 );
                 const deliveredQtyLabel = formatDeliveredOutOfTotal(
                   deliveredQtyValue,
-                  overallProjectQty,
+                  batchTotalQty,
                 );
                 const deliveredQtyLeft = getBatchQtyLeft(
                   deliveredQtyValue,
-                  overallProjectQty,
+                  batchTotalQty,
                 );
                 const producedQtyLeft = getBatchQtyLeft(
                   producedQtyValue,
@@ -3590,7 +3631,9 @@ const EngagedProjectActions = ({ user }) => {
                     title={
                       canCreateBatchNow
                         ? "Create first batch"
-                        : "Available once project is Pending Production"
+                        : hasExistingProjectBatches && batchRemainingQtyTotal > 0
+                          ? "Available when incomplete batch production can be reopened"
+                          : "Available once project is Pending Production"
                     }
                   >
                     Create First Batch

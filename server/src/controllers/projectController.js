@@ -3373,6 +3373,29 @@ const getBatchProgressGuard = (project, targetStatus = "") => {
 
   return null;
 };
+const canCreateBatchAtCurrentStatus = (project = {}) => {
+  if (isQuoteProject(project)) return false;
+
+  const batches = Array.isArray(project?.batches) ? project.batches : [];
+  const activeBatchCount = batches.filter(
+    (entry) => normalizeBatchStatus(entry?.status) !== "cancelled",
+  ).length;
+  if (activeBatchCount === 0) {
+    return toText(project.status) === "Pending Production";
+  }
+
+  if (hasFullBatchAllocationCoverage(project) && areAllBatchesProduced(project)) {
+    return toText(project.status) === "Pending Production";
+  }
+
+  const flow = STANDARD_STATUS_FLOW;
+  const pendingProductionIndex = flow.indexOf("Pending Production");
+  const currentIndex = flow.indexOf(toText(project.status));
+  if (pendingProductionIndex === -1 || currentIndex === -1) return false;
+  if (currentIndex < pendingProductionIndex) return false;
+
+  return !["Completed", "Finished"].includes(toText(project.status));
+};
 const reconcileProjectStatusForBatchProduction = async (
   project,
   actor,
@@ -3465,13 +3488,8 @@ const buildProjectBatchAccessSummary = (project = {}) => {
   return {
     totalCount: batches.length,
     activeCount: activeBatches.length,
-    productionComplete:
-      activeBatches.length === 0 ||
-      activeBatches.every((batch) =>
-        BATCH_PRODUCED_STATUS_SET.has(
-          normalizeBatchStatus(batch?.status),
-        ),
-      ),
+    productionComplete: areAllBatchesProduced(project),
+    deliveryComplete: areAllBatchesDelivered(project),
     allocationByItem,
   };
 };
@@ -19084,9 +19102,10 @@ const createProjectBatch = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    if (toText(project.status) !== "Pending Production") {
+    if (!canCreateBatchAtCurrentStatus(project)) {
       return res.status(400).json({
-        message: "Batches can only be created once the project is Pending Production.",
+        message:
+          "Batches can only be created while production is pending or when existing batches do not cover the full project quantity.",
       });
     }
 
@@ -19122,6 +19141,7 @@ const createProjectBatch = async (req, res) => {
 
     project.batches = Array.isArray(project.batches) ? project.batches : [];
     project.batches.push(newBatch);
+    await reconcileProjectStatusForBatchProduction(project, req.user);
     project.markModified("batches");
     await project.save();
 
