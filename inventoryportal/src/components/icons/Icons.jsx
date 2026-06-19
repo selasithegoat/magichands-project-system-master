@@ -197,6 +197,20 @@ export const BellIcon = ({ className, size }) => (
   </IconBase>
 );
 
+export const CartIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M4 5h2l2.1 10.2a2 2 0 0 0 2 1.6h6.8a2 2 0 0 0 1.9-1.4L21 8H7"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="10" cy="20" r="1.5" stroke="currentColor" strokeWidth="1.6" />
+    <circle cx="18" cy="20" r="1.5" stroke="currentColor" strokeWidth="1.6" />
+  </IconBase>
+);
+
 export const PlusIcon = ({ className }) => (
   <IconBase className={className}>
     <path d="M12 5v14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -434,6 +448,23 @@ export const ClockIcon = ({ className }) => (
   <IconBase className={className}>
     <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.6" />
     <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </IconBase>
+);
+
+export const XIcon = ({ className }) => (
+  <IconBase className={className}>
+    <path
+      d="M6 6l12 12"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+    <path
+      d="M18 6 6 18"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
   </IconBase>
 );
 

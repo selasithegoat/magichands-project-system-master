@@ -6,6 +6,7 @@ import Toast from "../ui/Toast";
 import ReminderAlertModal from "../features/ReminderAlertModal";
 import DeliveryCalendarFab from "../features/DeliveryCalendarFab";
 import BillingDocumentsFab from "../features/BillingDocumentsFab";
+import MaterialRequestsFab from "../features/MaterialRequestsFab";
 import ProjectCommentsFab from "../features/ProjectCommentsFab";
 import "./Layout.css";
 // Icons
@@ -1100,6 +1101,7 @@ const Layout = ({
         </button>
       )}
 
+      <MaterialRequestsFab user={user} hasFrontDeskStack={isFrontDeskUser} />
       <ProjectCommentsFab user={user} />
 
       {/* Page Content */}

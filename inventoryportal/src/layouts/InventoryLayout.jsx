@@ -1,9 +1,25 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import MaterialRequestsBanner from "../components/materials/MaterialRequestsBanner";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import ToastStack from "../components/ui/ToastStack";
 import "./InventoryLayout.css";
+
+const MATERIAL_REVIEW_DEPARTMENTS = new Set(["stores", "stock", "packaging"]);
+
+const canReviewMaterialRequests = (user) => {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const departments = Array.isArray(user.department)
+    ? user.department
+    : user.department
+      ? [user.department]
+      : [];
+  return departments
+    .map((department) => String(department || "").trim().toLowerCase())
+    .some((department) => MATERIAL_REVIEW_DEPARTMENTS.has(department));
+};
 
 const InventoryLayout = ({
   navItems,
@@ -25,6 +41,7 @@ const InventoryLayout = ({
 }) => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+  const showMaterialRequests = canReviewMaterialRequests(user);
 
   const handleLogoutRequest = () => setIsLogoutOpen(true);
   const handleLogoutClose = () => setIsLogoutOpen(false);
@@ -88,6 +105,7 @@ const InventoryLayout = ({
         {children}
         <ToastStack />
       </main>
+      {showMaterialRequests && <MaterialRequestsBanner />}
       <ConfirmDialog
         isOpen={isLogoutOpen}
         title="Sign out"
