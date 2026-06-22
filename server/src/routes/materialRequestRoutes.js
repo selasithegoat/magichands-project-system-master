@@ -14,6 +14,7 @@ router.use(protect);
 
 router.route("/").get(getMaterialRequests).post(createMaterialRequest);
 router.route("/:id").patch(updateMaterialRequest).delete(deleteMaterialRequest);
+router.post("/:id/delete", deleteMaterialRequest);
 router.patch("/:id/status", updateMaterialRequestStatus);
 
 module.exports = router;

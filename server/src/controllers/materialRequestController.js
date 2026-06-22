@@ -281,7 +281,11 @@ const updateMaterialRequestStatus = async (req, res) => {
 
     const request = await MaterialRequest.findById(req.params.id);
     if (!request) {
-      return res.status(404).json({ message: "Material request not found." });
+      return res.json({
+        id: req.params.id,
+        message: "Material request deleted.",
+        alreadyDeleted: true,
+      });
     }
 
     request.status = status;

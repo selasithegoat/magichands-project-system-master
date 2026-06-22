@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { TrashIcon, XIcon } from "../icons/Icons";
 import { fetchInventory } from "../../utils/inventoryApi";
+import { showToast } from "../../utils/toast";
 import "./MaterialRequestsBanner.css";
 
 const STATUS_OPTIONS = ["Pending", "In Review", "Fulfilled", "Declined"];
@@ -39,6 +40,37 @@ const getRequesterName = (request) => {
     if (populated.employeeId) return populated.employeeId;
   }
   return request?.requestedByName || request?.requestedByEmployeeId || "User";
+};
+
+const requestMaterialDelete = async (path, method = "DELETE") => {
+  const response = await fetch(path, {
+    method,
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const requestError = new Error(
+      payload?.message || "Failed to delete material request.",
+    );
+    requestError.status = response.status;
+    throw requestError;
+  }
+  return payload;
+};
+
+const deleteMaterialRequestById = async (requestId) => {
+  try {
+    return await requestMaterialDelete(
+      buildSourcePath(`/api/material-requests/${requestId}`),
+    );
+  } catch (deleteError) {
+    if (deleteError.status !== 404) throw deleteError;
+    return requestMaterialDelete(
+      buildSourcePath(`/api/material-requests/${requestId}/delete`),
+      "POST",
+    );
+  }
 };
 
 const MaterialRequestsBanner = () => {
@@ -141,9 +173,11 @@ const MaterialRequestsBanner = () => {
     setError("");
 
     try {
-      await fetchInventory(buildSourcePath(`/api/material-requests/${requestId}`), {
-        method: "DELETE",
-        toast: { success: "Material request deleted." },
+      await deleteMaterialRequestById(requestId);
+      showToast({
+        type: "success",
+        title: "Success",
+        message: "Material request deleted.",
       });
       setRequests((previous) => previous.filter((item) => item._id !== requestId));
       await fetchRequests();

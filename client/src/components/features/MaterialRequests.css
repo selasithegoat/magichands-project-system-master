@@ -519,7 +519,7 @@
 
 .material-review-peek-tab {
   position: absolute;
-  top: 56px;
+  top: 200px;
   right: -1px;
   width: var(--material-review-tab-width);
   min-height: 132px;

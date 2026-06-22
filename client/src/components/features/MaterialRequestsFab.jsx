@@ -43,6 +43,34 @@ const getInitialForm = (department) => ({
   notes: "",
 });
 
+const requestMaterialDelete = async (path, method = "DELETE") => {
+  const response = await fetch(path, {
+    method,
+    credentials: "include",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const requestError = new Error(
+      payload?.message || "Failed to delete material request.",
+    );
+    requestError.status = response.status;
+    throw requestError;
+  }
+  return payload;
+};
+
+const deleteMaterialRequestById = async (requestId) => {
+  try {
+    return await requestMaterialDelete(`/api/material-requests/${requestId}`);
+  } catch (deleteError) {
+    if (deleteError.status !== 404) throw deleteError;
+    return requestMaterialDelete(
+      `/api/material-requests/${requestId}/delete`,
+      "POST",
+    );
+  }
+};
+
 const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
   const departmentOptions = useMemo(
     () => toArray(user?.department).map((item) => String(item || "").trim()).filter(Boolean),
@@ -216,15 +244,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
     setSuccess("");
 
     try {
-      const response = await fetch(`/api/material-requests/${requestId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || "Failed to delete material request.");
-      }
-
+      await deleteMaterialRequestById(requestId);
       setRequests((previous) => previous.filter((item) => item._id !== requestId));
       if (editingRequestId === requestId) {
         setEditingRequestId("");

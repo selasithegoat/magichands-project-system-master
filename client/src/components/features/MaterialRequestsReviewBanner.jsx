@@ -42,6 +42,38 @@ const getRequesterName = (request) => {
   return request?.requestedByName || request?.requestedByEmployeeId || "User";
 };
 
+const requestMaterialDelete = async (path, requestSource, method = "DELETE") => {
+  const response = await fetch(buildSourcePath(path, requestSource), {
+    method,
+    credentials: "include",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const requestError = new Error(
+      payload?.message || "Failed to delete material request.",
+    );
+    requestError.status = response.status;
+    throw requestError;
+  }
+  return payload;
+};
+
+const deleteMaterialRequestById = async (requestId, requestSource) => {
+  try {
+    return await requestMaterialDelete(
+      `/api/material-requests/${requestId}`,
+      requestSource,
+    );
+  } catch (deleteError) {
+    if (deleteError.status !== 404) throw deleteError;
+    return requestMaterialDelete(
+      `/api/material-requests/${requestId}/delete`,
+      requestSource,
+      "POST",
+    );
+  }
+};
+
 const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [requests, setRequests] = useState([]);
@@ -146,17 +178,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
     setError("");
 
     try {
-      const response = await fetch(
-        buildSourcePath(`/api/material-requests/${requestId}`, requestSource),
-        {
-          method: "DELETE",
-          credentials: "include",
-        },
-      );
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || "Failed to delete material request.");
-      }
+      await deleteMaterialRequestById(requestId, requestSource);
       setRequests((previous) => previous.filter((item) => item._id !== requestId));
       await fetchRequests();
     } catch (deleteError) {
