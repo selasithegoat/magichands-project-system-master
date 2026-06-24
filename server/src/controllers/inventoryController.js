@@ -276,14 +276,45 @@ const buildRegistryConflict = ({ itemName, itemId, registry }) => {
   return null;
 };
 
-const ensureInventoryItemIdentity = async ({ itemName, itemId }) => {
+const registryMatchesIdentity = ({ registry, itemName, itemId }) =>
+  Boolean(
+    registry &&
+      normalizeKey(registry.itemName) === normalizeKey(itemName) &&
+      normalizeKey(registry.itemId) === normalizeKey(itemId),
+  );
+
+const saveInventoryItemIdentity = async (registry, { itemName, itemId }) => {
+  registry.itemName = parseStringValue(itemName);
+  registry.itemId = parseStringValue(itemId);
+  registry.itemNameKey = normalizeKey(itemName);
+  registry.itemIdKey = normalizeKey(itemId);
+  await registry.save();
+};
+
+const findRegistryConflictForIdentity = async ({ itemName, itemId }) => {
+  const itemNameKey = normalizeKey(itemName);
+  const itemIdKey = normalizeKey(itemId);
+  const latest = await InventoryItemIdentity.findOne({
+    $or: [{ itemNameKey }, { itemIdKey }],
+  }).lean();
+  return buildRegistryConflict({ itemName, itemId, registry: latest });
+};
+
+const ensureInventoryItemIdentity = async ({
+  itemName,
+  itemId,
+  previousItemName,
+  previousItemId,
+}) => {
   const itemNameKey = normalizeKey(itemName);
   const itemIdKey = normalizeKey(itemId);
   if (!itemNameKey || !itemIdKey) return { ok: false };
+  const hasPreviousIdentity =
+    normalizeKey(previousItemName) && normalizeKey(previousItemId);
 
   const existing = await InventoryItemIdentity.findOne({
     $or: [{ itemNameKey }, { itemIdKey }],
-  }).lean();
+  });
 
   if (existing) {
     const conflict = buildRegistryConflict({
@@ -291,8 +322,57 @@ const ensureInventoryItemIdentity = async ({ itemName, itemId }) => {
       itemId,
       registry: existing,
     });
-    if (conflict) return { conflict };
+    if (conflict) {
+      if (
+        !hasPreviousIdentity ||
+        !registryMatchesIdentity({
+          registry: existing,
+          itemName: previousItemName,
+          itemId: previousItemId,
+        })
+      ) {
+        return { conflict };
+      }
+
+      try {
+        await saveInventoryItemIdentity(existing, { itemName, itemId });
+        return { ok: true };
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          const latestConflict = await findRegistryConflictForIdentity({
+            itemName,
+            itemId,
+          });
+          if (latestConflict) return { conflict: latestConflict };
+          return { ok: true };
+        }
+        throw error;
+      }
+    }
     return { ok: true };
+  }
+
+  if (hasPreviousIdentity) {
+    const previousRegistry = await InventoryItemIdentity.findOne({
+      itemNameKey: normalizeKey(previousItemName),
+      itemIdKey: normalizeKey(previousItemId),
+    });
+    if (previousRegistry) {
+      try {
+        await saveInventoryItemIdentity(previousRegistry, { itemName, itemId });
+        return { ok: true };
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          const latestConflict = await findRegistryConflictForIdentity({
+            itemName,
+            itemId,
+          });
+          if (latestConflict) return { conflict: latestConflict };
+          return { ok: true };
+        }
+        throw error;
+      }
+    }
   }
 
   try {
@@ -305,13 +385,9 @@ const ensureInventoryItemIdentity = async ({ itemName, itemId }) => {
     return { ok: true };
   } catch (error) {
     if (isDuplicateKeyError(error)) {
-      const latest = await InventoryItemIdentity.findOne({
-        $or: [{ itemNameKey }, { itemIdKey }],
-      }).lean();
-      const conflict = buildRegistryConflict({
+      const conflict = await findRegistryConflictForIdentity({
         itemName,
         itemId,
-        registry: latest,
       });
       if (conflict) return { conflict };
       return { ok: true };
@@ -1634,6 +1710,8 @@ const updateClientItem = async (req, res) => {
     const identityResult = await ensureInventoryItemIdentity({
       itemName: nextItemName,
       itemId: nextOrderNo,
+      previousItemName,
+      previousItemId: previousOrderNo,
     });
     if (identityResult?.conflict) {
       return res.status(409).json({
@@ -3069,6 +3147,8 @@ const updateInventoryRecord = async (req, res) => {
     const identityResult = await ensureInventoryItemIdentity({
       itemName: nextItem,
       itemId: nextSku,
+      previousItemName: previousItem,
+      previousItemId: previousSku,
     });
     if (identityResult?.conflict) {
       return res.status(409).json({
@@ -3921,6 +4001,8 @@ const updateStockTransaction = async (req, res) => {
     const identityResult = await ensureInventoryItemIdentity({
       itemName: nextItem,
       itemId: nextSku,
+      previousItemName: previousItem,
+      previousItemId: previousSku,
     });
     if (identityResult?.conflict) {
       return res.status(409).json({
