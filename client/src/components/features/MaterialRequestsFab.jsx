@@ -3,6 +3,7 @@ import CartIcon from "../icons/CartIcon";
 import EditIcon from "../icons/EditIcon";
 import TrashIcon from "../icons/TrashIcon";
 import XIcon from "../icons/XIcon";
+import ConfirmationModal from "../ui/ConfirmationModal";
 import "./MaterialRequests.css";
 
 const PRIORITY_OPTIONS = ["Low", "Normal", "High", "Urgent"];
@@ -42,6 +43,8 @@ const getInitialForm = (department) => ({
   neededBy: "",
   notes: "",
 });
+
+const isProjectRequest = (request) => request?.requestType === "project";
 
 const requestMaterialDelete = async (path, method = "DELETE") => {
   const response = await fetch(path, {
@@ -86,6 +89,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [confirmDeleteRequest, setConfirmDeleteRequest] = useState(null);
   const successTimerRef = useRef(null);
   const isEditing = Boolean(editingRequestId);
 
@@ -230,14 +234,10 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
     }
   };
 
-  const deleteRequest = async (request) => {
+  const deleteRequest = async () => {
+    const request = confirmDeleteRequest;
     const requestId = request?._id;
     if (!requestId || deletingId || submitting) return;
-
-    const confirmed = window.confirm(
-      `Delete "${request.materialName || "this material"}" request?`,
-    );
-    if (!confirmed) return;
 
     setDeletingId(requestId);
     setError("");
@@ -256,6 +256,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
       setError(deleteError.message || "Failed to delete material request.");
     } finally {
       setDeletingId("");
+      setConfirmDeleteRequest(null);
     }
   };
 
@@ -264,6 +265,18 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
 
   return (
     <>
+      <ConfirmationModal
+        isOpen={Boolean(confirmDeleteRequest)}
+        title="Delete Material Request"
+        message={`Delete "${
+          confirmDeleteRequest?.materialName || "this material"
+        }" request?`}
+        onConfirm={deleteRequest}
+        onCancel={() => setConfirmDeleteRequest(null)}
+        confirmText={deletingId ? "Deleting..." : "Delete Request"}
+        cancelText="Cancel"
+      />
+
       <button
         type="button"
         className={[
@@ -406,7 +419,16 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                     {requests.map((request) => (
                       <article className="material-request-card" key={request._id}>
                         <div className="material-request-card-header">
-                          <strong>{request.materialName}</strong>
+                          <div className="material-request-title-line">
+                            <span
+                              className={`material-request-type-badge ${
+                                isProjectRequest(request) ? "order" : "material"
+                              }`}
+                            >
+                              {isProjectRequest(request) ? "Order Item" : "Material"}
+                            </span>
+                            <strong>{request.materialName}</strong>
+                          </div>
                           <span
                             className={`material-request-chip ${statusClass(
                               request.status,
@@ -425,22 +447,39 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                             <span>Needed {formatDate(request.neededBy)}</span>
                           ) : null}
                         </div>
+                        {isProjectRequest(request) ? (
+                          <div className="material-request-project-context">
+                            <span>Project</span>
+                            <strong>
+                              {request.projectName ||
+                                request.projectOrderId ||
+                                "Project request"}
+                            </strong>
+                            {request.projectOrderId ? (
+                              <small>Order {request.projectOrderId}</small>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {request.notes ? <p>{request.notes}</p> : null}
                         <div className="material-request-card-actions">
-                          <button
-                            type="button"
-                            className="material-request-mini-button"
-                            onClick={() => startEditRequest(request)}
-                            disabled={submitting || Boolean(deletingId)}
-                            aria-label={`Edit ${request.materialName || "material request"}`}
-                            title="Edit request"
-                          >
-                            <EditIcon />
-                          </button>
+                          {!isProjectRequest(request) ? (
+                            <button
+                              type="button"
+                              className="material-request-mini-button"
+                              onClick={() => startEditRequest(request)}
+                              disabled={submitting || Boolean(deletingId)}
+                              aria-label={`Edit ${
+                                request.materialName || "material request"
+                              }`}
+                              title="Edit request"
+                            >
+                              <EditIcon />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="material-request-mini-button danger"
-                            onClick={() => deleteRequest(request)}
+                            onClick={() => setConfirmDeleteRequest(request)}
                             disabled={submitting || Boolean(deletingId)}
                             aria-label={
                               deletingId === request._id

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TrashIcon from "../icons/TrashIcon";
 import XIcon from "../icons/XIcon";
+import ConfirmationModal from "../ui/ConfirmationModal";
 import "./MaterialRequests.css";
 
-const STATUS_OPTIONS = ["Pending", "In Review", "Fulfilled", "Declined"];
+const STATUS_OPTIONS = ["Pending", "In Review", "Ordered", "Fulfilled", "Declined"];
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -41,6 +42,11 @@ const getRequesterName = (request) => {
   }
   return request?.requestedByName || request?.requestedByEmployeeId || "User";
 };
+
+const isProjectRequest = (request) => request?.requestType === "project";
+
+const getProjectRequestTitle = (request) =>
+  request?.projectName || request?.projectOrderId || "Project request";
 
 const requestMaterialDelete = async (path, requestSource, method = "DELETE") => {
   const response = await fetch(buildSourcePath(path, requestSource), {
@@ -85,6 +91,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [confirmDeleteRequest, setConfirmDeleteRequest] = useState(null);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -165,15 +172,10 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
     }
   };
 
-  const deleteRequest = async (request) => {
+  const deleteRequest = async () => {
+    const request = confirmDeleteRequest;
     const requestId = request?._id;
     if (!requestId || updatingId || deletingId) return;
-
-    const confirmed = window.confirm(
-      `Delete "${request.materialName || "this material"}" request?`,
-    );
-    if (!confirmed) return;
-
     setDeletingId(requestId);
     setError("");
 
@@ -185,10 +187,23 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
       setError(deleteError.message || "Failed to delete material request.");
     } finally {
       setDeletingId("");
+      setConfirmDeleteRequest(null);
     }
   };
 
   return (
+    <>
+      <ConfirmationModal
+        isOpen={Boolean(confirmDeleteRequest)}
+        title="Delete Material Request"
+        message={`Delete "${
+          confirmDeleteRequest?.materialName || "this material"
+        }" request?`}
+        onConfirm={deleteRequest}
+        onCancel={() => setConfirmDeleteRequest(null)}
+        confirmText={deletingId ? "Deleting..." : "Delete Request"}
+        cancelText="Cancel"
+      />
     <section
       className={`material-review-shell ${portalClass} ${isOpen ? "is-open" : ""}`.trim()}
       aria-label="Material requests"
@@ -277,7 +292,16 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                 {requests.map((request) => (
                   <article className="material-review-card" key={request._id}>
                     <div className="material-review-card-header">
-                      <strong>{request.materialName}</strong>
+                      <div className="material-review-title-line">
+                        <span
+                          className={`material-review-type-badge ${
+                            isProjectRequest(request) ? "order" : "material"
+                          }`}
+                        >
+                          {isProjectRequest(request) ? "Order Item" : "Material"}
+                        </span>
+                        <strong>{request.materialName}</strong>
+                      </div>
                       <span
                         className={`material-review-chip ${toStatusClass(
                           request.status,
@@ -301,6 +325,29 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                       <span>{getRequesterName(request)}</span>
                       <span>{formatDate(request.createdAt)}</span>
                     </div>
+                    {isProjectRequest(request) ? (
+                      <div className="material-review-project-context">
+                        <span>Order Item Request</span>
+                        <strong>{getProjectRequestTitle(request)}</strong>
+                        <div className="material-review-meta">
+                          {request.projectOrderId ? (
+                            <span>Order {request.projectOrderId}</span>
+                          ) : null}
+                          {request.projectClientName ? (
+                            <span>{request.projectClientName}</span>
+                          ) : null}
+                          {request.inventorySku ? (
+                            <span>ID {request.inventorySku}</span>
+                          ) : null}
+                          {request.inventoryWarehouse ? (
+                            <span>{request.inventoryWarehouse}</span>
+                          ) : null}
+                        </div>
+                        {request.projectItemBreakdown ? (
+                          <p>{request.projectItemBreakdown}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {request.notes ? <p>{request.notes}</p> : null}
                     <div className="material-review-card-actions">
                       {STATUS_OPTIONS.map((status) => (
@@ -319,7 +366,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                       <button
                         type="button"
                         className="material-review-status-button danger"
-                        onClick={() => deleteRequest(request)}
+                        onClick={() => setConfirmDeleteRequest(request)}
                         disabled={updatingId === request._id || deletingId === request._id}
                         aria-label={
                           deletingId === request._id
@@ -341,6 +388,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
         </div>
       </aside>
     </section>
+    </>
   );
 };
 

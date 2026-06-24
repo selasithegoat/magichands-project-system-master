@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const MaterialRequest = require("../models/MaterialRequest");
+const InventoryRecord = require("../models/InventoryRecord");
+const Project = require("../models/Project");
 
 const REVIEWER_DEPARTMENTS = new Set([
   "administration",
@@ -11,6 +13,7 @@ const REVIEWER_DEPARTMENTS = new Set([
 const VALID_STATUSES = new Set([
   "Pending",
   "In Review",
+  "Ordered",
   "Fulfilled",
   "Declined",
 ]);
@@ -18,6 +21,23 @@ const VALID_STATUSES = new Set([
 const VALID_PRIORITIES = new Set(["Low", "Normal", "High", "Urgent"]);
 
 const parseString = (value) => String(value ?? "").trim();
+
+const toEntityId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (value._id) return toEntityId(value._id);
+  if (value.id) return toEntityId(value.id);
+  return "";
+};
+
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildSearchRegex = (value) => {
+  const term = parseString(value).slice(0, 120);
+  if (!term) return null;
+  return new RegExp(escapeRegex(term), "i");
+};
 
 const normalizeDepartmentKey = (value) =>
   parseString(value)
@@ -118,6 +138,188 @@ const buildSummary = (requests) => {
 const isRequestOwner = (request, user) =>
   String(request?.requestedBy || "") === String(user?._id || "");
 
+const canCreateProjectRequest = (project, user) => {
+  if (!project || !user) return false;
+  if (user.role === "admin") return true;
+
+  const userId = toEntityId(user._id || user.id);
+  const allowedLeadIds = [
+    project.projectLeadId,
+    project.assistantLeadId,
+  ]
+    .map(toEntityId)
+    .filter(Boolean);
+
+  return Boolean(userId && allowedLeadIds.includes(userId));
+};
+
+const findProjectItem = (project, projectItemId) => {
+  const normalizedItemId = toEntityId(projectItemId);
+  if (!normalizedItemId) return null;
+
+  if (typeof project.items?.id === "function") {
+    const subdocument = project.items.id(normalizedItemId);
+    if (subdocument) return subdocument;
+  }
+
+  return (project.items || []).find(
+    (item) => toEntityId(item?._id || item?.id) === normalizedItemId,
+  );
+};
+
+const getProjectName = (project) =>
+  parseString(project?.details?.projectNameRaw) ||
+  parseString(project?.details?.projectName) ||
+  parseString(project?.orderId) ||
+  "Untitled Project";
+
+const getProjectClientName = (project) =>
+  parseString(project?.details?.client) || parseString(project?.clientName);
+
+const formatInventoryMatch = (record) => ({
+  _id: record?._id,
+  item: parseString(record?.item),
+  sku: parseString(record?.sku),
+  brand: parseString(record?.brand),
+  category: parseString(record?.category),
+  warehouse: parseString(record?.warehouse || record?.subtext),
+  shelfLocation: parseString(record?.shelfLocation),
+  qtyValue:
+    typeof record?.qtyValue === "number" && Number.isFinite(record.qtyValue)
+      ? record.qtyValue
+      : null,
+  qtyLabel: parseString(record?.qtyLabel),
+  qtyMeta: parseString(record?.qtyMeta),
+  status: parseString(record?.status),
+  variants: Array.isArray(record?.variants)
+    ? record.variants.slice(0, 4).map((variant) => ({
+        name: parseString(variant?.name),
+        color: parseString(variant?.color),
+        sku: parseString(variant?.sku),
+        qtyValue:
+          typeof variant?.qtyValue === "number" && Number.isFinite(variant.qtyValue)
+            ? variant.qtyValue
+            : null,
+        qtyLabel: parseString(variant?.qtyLabel),
+        status: parseString(variant?.status),
+      }))
+    : [],
+});
+
+const buildInventorySnapshot = (record) => {
+  if (!record) return {};
+  const formatted = formatInventoryMatch(record);
+  return {
+    inventoryRecord: record._id,
+    inventoryItemName: formatted.item,
+    inventorySku: formatted.sku,
+    inventoryWarehouse: formatted.warehouse,
+    inventoryShelfLocation: formatted.shelfLocation,
+    inventoryStatus: formatted.status,
+    inventoryQtyLabel: formatted.qtyLabel,
+    inventoryQtyValue: formatted.qtyValue,
+  };
+};
+
+const readProjectMaterialRequestPayload = async (user, body = {}) => {
+  const projectId = parseString(body.projectId || body.project);
+  const projectItemId = parseString(body.projectItemId);
+  const rawPriority = parseString(body.priority) || "Normal";
+  const priority = VALID_PRIORITIES.has(rawPriority) ? rawPriority : "Normal";
+  const rawNeededBy = parseString(body.neededBy);
+  const neededBy = rawNeededBy ? new Date(rawNeededBy) : null;
+  const unit = parseString(body.unit) || "pcs";
+  const notes = parseString(body.notes);
+  const inventoryRecordId = parseString(
+    body.inventoryRecordId || body.inventoryRecord || body.inventoryMatchId,
+  );
+
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    return { error: "Choose a valid project for this material request." };
+  }
+  if (!mongoose.Types.ObjectId.isValid(projectItemId)) {
+    return { error: "Choose an item from the project order list." };
+  }
+  if (neededBy && Number.isNaN(neededBy.getTime())) {
+    return { error: "Needed by date is invalid." };
+  }
+
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return { error: "Project not found.", statusCode: 404 };
+  }
+  if (!canCreateProjectRequest(project, user)) {
+    return {
+      error: "Only the assigned project lead can request materials for this project.",
+      statusCode: 403,
+    };
+  }
+
+  const projectItem = findProjectItem(project, projectItemId);
+  if (!projectItem) {
+    return { error: "Selected project item was not found.", statusCode: 404 };
+  }
+
+  const materialName = parseString(projectItem.description || body.materialName);
+  const quantity = parseString(projectItem.qty || body.quantity);
+  const department =
+    resolveRequestedDepartment(user, body.department) ||
+    normalizeDepartmentList(user?.department)[0] ||
+    "Project Lead";
+  const departmentKey = normalizeDepartmentKey(department);
+
+  if (!materialName) {
+    return { error: "Selected project item does not have a description." };
+  }
+  if (!quantity) {
+    return { error: "Selected project item does not have a quantity." };
+  }
+  if (!departmentKey) {
+    return {
+      error: "Choose one of your departments for this material request.",
+    };
+  }
+
+  let inventorySnapshot = {};
+  if (inventoryRecordId) {
+    if (!mongoose.Types.ObjectId.isValid(inventoryRecordId)) {
+      return { error: "Selected inventory item is invalid." };
+    }
+    const inventoryRecord = await InventoryRecord.findById(inventoryRecordId).lean();
+    if (!inventoryRecord) {
+      return { error: "Selected inventory item was not found.", statusCode: 404 };
+    }
+    inventorySnapshot = buildInventorySnapshot(inventoryRecord);
+  }
+
+  return {
+    data: {
+      requestType: "project",
+      materialName,
+      quantity,
+      unit,
+      department,
+      departmentKey,
+      priority,
+      neededBy,
+      notes,
+      project: project._id,
+      projectOrderId: parseString(project.orderId),
+      projectName: getProjectName(project),
+      projectClientName: getProjectClientName(project),
+      projectLeadName: getUserDisplayName(user),
+      projectItemId: projectItem._id,
+      projectItemDescription: materialName,
+      projectItemBreakdown: parseString(projectItem.breakdown),
+      projectItemQuantity:
+        typeof projectItem.qty === "number" && Number.isFinite(projectItem.qty)
+          ? projectItem.qty
+          : null,
+      ...inventorySnapshot,
+    },
+  };
+};
+
 const readMaterialRequestPayload = (user, body = {}) => {
   const materialName = parseString(body.materialName);
   const quantity = parseString(body.quantity);
@@ -159,6 +361,41 @@ const readMaterialRequestPayload = (user, body = {}) => {
   };
 };
 
+const getMaterialRequestInventoryMatches = async (req, res) => {
+  try {
+    const search = buildSearchRegex(req.query.query || req.query.search);
+    if (!search) {
+      return res.json({ matches: [] });
+    }
+
+    const records = await InventoryRecord.find({
+      $or: [
+        { item: search },
+        { brand: search },
+        { sku: search },
+        { category: search },
+        { subtext: search },
+        { warehouse: search },
+        { shelfLocation: search },
+        { "variants.name": search },
+        { "variants.color": search },
+        { "variants.sku": search },
+      ],
+    })
+      .select(
+        "item sku brand category warehouse subtext shelfLocation qtyValue qtyLabel qtyMeta status variants updatedAt",
+      )
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(8)
+      .lean();
+
+    res.json({ matches: records.map(formatInventoryMatch) });
+  } catch (error) {
+    console.error("Error fetching material request inventory matches:", error);
+    res.status(500).json({ message: "Failed to fetch inventory matches." });
+  }
+};
+
 const getMaterialRequests = async (req, res) => {
   try {
     const limit = Math.min(
@@ -196,9 +433,16 @@ const getMaterialRequests = async (req, res) => {
 
 const createMaterialRequest = async (req, res) => {
   try {
-    const payload = readMaterialRequestPayload(req.user, req.body);
+    const requestType =
+      parseString(req.body.requestType).toLowerCase() === "project"
+        ? "project"
+        : "department";
+    const payload =
+      requestType === "project"
+        ? await readProjectMaterialRequestPayload(req.user, req.body)
+        : readMaterialRequestPayload(req.user, req.body);
     if (payload.error) {
-      return res.status(400).json({ message: payload.error });
+      return res.status(payload.statusCode || 400).json({ message: payload.error });
     }
 
     const request = await MaterialRequest.create({
@@ -211,6 +455,7 @@ const createMaterialRequest = async (req, res) => {
 
     const populated = await MaterialRequest.findById(request._id)
       .populate("requestedBy", "firstName lastName employeeId department avatarUrl")
+      .populate("statusUpdatedBy", "firstName lastName employeeId")
       .lean();
 
     res.status(201).json(populated);
@@ -336,6 +581,7 @@ const deleteMaterialRequest = async (req, res) => {
 };
 
 module.exports = {
+  getMaterialRequestInventoryMatches,
   getMaterialRequests,
   createMaterialRequest,
   updateMaterialRequest,

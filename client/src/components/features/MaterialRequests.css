@@ -397,6 +397,43 @@
   justify-content: space-between;
 }
 
+.material-request-title-line,
+.material-review-title-line {
+  min-width: 0;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.material-request-type-badge,
+.material-review-type-badge {
+  width: fit-content;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  font-size: 0.64rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.material-request-type-badge.material,
+.material-review-type-badge.material {
+  border: 1px solid color-mix(in srgb, var(--material-success) 50%, var(--material-border));
+  background: color-mix(in srgb, var(--material-success) 18%, var(--material-card));
+  color: var(--material-success);
+}
+
+.material-request-type-badge.order,
+.material-review-type-badge.order {
+  border: 1px solid color-mix(in srgb, var(--material-primary) 60%, var(--material-border));
+  background: color-mix(in srgb, var(--material-primary) 20%, var(--material-card));
+  color: var(--material-primary);
+  box-shadow: inset 4px 0 0 var(--material-primary);
+  padding-left: 0.75rem;
+}
+
 .material-request-card-actions {
   justify-content: flex-end;
   margin-top: 0.65rem;
@@ -419,6 +456,50 @@
   font-size: 0.82rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.material-review-project-context {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--material-border);
+  border-radius: 10px;
+  background: var(--material-surface);
+  padding: 0.7rem;
+}
+
+.material-review-project-context > span {
+  color: var(--material-primary);
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.material-review-project-context strong {
+  font-size: 0.86rem;
+}
+
+.material-request-project-context {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--material-border);
+  border-radius: 10px;
+  background: var(--material-card);
+  padding: 0.6rem;
+}
+
+.material-request-project-context span {
+  color: var(--material-primary);
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.material-request-project-context small {
+  color: var(--material-muted);
+  font-weight: 800;
 }
 
 .material-request-chip,
@@ -445,6 +526,12 @@
 .material-review-chip.fulfilled {
   background: var(--material-success-soft);
   color: var(--material-success);
+}
+
+.material-request-chip.ordered,
+.material-review-chip.ordered {
+  background: var(--material-soft);
+  color: var(--material-primary);
 }
 
 .material-request-chip.declined,

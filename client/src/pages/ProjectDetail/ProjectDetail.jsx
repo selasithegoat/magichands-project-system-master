@@ -82,6 +82,8 @@ import FactoryIcon from "../../components/icons/FactoryIcon";
 import PackageIcon from "../../components/icons/PackageIcon";
 import TruckIcon from "../../components/icons/TruckIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
+import CartIcon from "../../components/icons/CartIcon";
+import XIcon from "../../components/icons/XIcon";
 
 const STATUS_STEPS = [
   { label: "Order Created", statuses: ["Order Created"] },
@@ -1387,9 +1389,11 @@ const ProjectDetail = ({ user }) => {
               />
               <OrderItemsCard
                 items={project.items}
+                project={project}
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={true}
+                canRequestFromStores={isProjectLead}
               />
               <ReferenceMaterialsCard project={project} />
               <ApprovedMockupCard
@@ -2458,11 +2462,36 @@ const DepartmentsCard = ({
   );
 };
 
+const PROJECT_REQUEST_PRIORITIES = ["Low", "Normal", "High", "Urgent"];
+
+const getProjectRequestInitialForm = () => ({
+  priority: "Normal",
+  neededBy: "",
+  unit: "pcs",
+  notes: "",
+});
+
+const buildInventoryMatchQuery = (item) =>
+  String(item?.description || item?.breakdown || "").trim();
+
+const getInventoryQuantityLabel = (match) => {
+  if (!match) return "Quantity not set";
+  if (match.qtyLabel) return match.qtyLabel;
+  if (Number.isFinite(Number(match.qtyValue))) return `${match.qtyValue} units`;
+  return "Quantity not set";
+};
+
+const getInventoryLocationLabel = (match) =>
+  [match?.warehouse, match?.shelfLocation].filter(Boolean).join(" / ") ||
+  "Location not set";
+
 const OrderItemsCard = ({
   items = [],
+  project,
   projectId,
   onUpdate,
   readOnly = false,
+  canRequestFromStores = false,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // Track item being edited
@@ -2479,6 +2508,21 @@ const OrderItemsCard = ({
     message: "",
     onConfirm: null,
   });
+  const [requestItem, setRequestItem] = useState(null);
+  const [requestForm, setRequestForm] = useState(getProjectRequestInitialForm);
+  const [inventoryMatches, setInventoryMatches] = useState([]);
+  const [selectedInventoryId, setSelectedInventoryId] = useState("");
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestError, setRequestError] = useState("");
+  const [inventoryError, setInventoryError] = useState("");
+
+  const selectedInventoryMatch = useMemo(
+    () =>
+      inventoryMatches.find((match) => match._id === selectedInventoryId) ||
+      null,
+    [inventoryMatches, selectedInventoryId],
+  );
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -2593,6 +2637,287 @@ const OrderItemsCard = ({
     }
   };
 
+  const closeProjectRequest = (options = {}) => {
+    if (requestSubmitting && !options.force) return;
+    setRequestItem(null);
+    setRequestForm(getProjectRequestInitialForm());
+    setInventoryMatches([]);
+    setSelectedInventoryId("");
+    setRequestError("");
+    setInventoryError("");
+  };
+
+  const updateProjectRequestField = (field, value) => {
+    setRequestForm((previous) => ({ ...previous, [field]: value }));
+    if (requestError) setRequestError("");
+  };
+
+  const openProjectRequest = async (item) => {
+    if (!item?._id || !canRequestFromStores) return;
+
+    setRequestItem(item);
+    setRequestForm(getProjectRequestInitialForm());
+    setInventoryMatches([]);
+    setSelectedInventoryId("");
+    setRequestError("");
+    setInventoryError("");
+
+    const query = buildInventoryMatchQuery(item);
+    if (!query) return;
+
+    setInventoryLoading(true);
+    try {
+      const response = await fetch(
+        `/api/material-requests/inventory-matches?query=${encodeURIComponent(query)}`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to load inventory matches.");
+      }
+      const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+      setInventoryMatches(matches);
+      setSelectedInventoryId(matches[0]?._id || "");
+    } catch (matchError) {
+      setInventoryError(matchError.message || "Failed to load inventory matches.");
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const submitProjectMaterialRequest = async () => {
+    if (!requestItem?._id || requestSubmitting) return;
+
+    setRequestSubmitting(true);
+    setRequestError("");
+
+    try {
+      const response = await fetch("/api/material-requests", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestType: "project",
+          projectId: project?._id || projectId,
+          projectItemId: requestItem._id,
+          inventoryRecordId: selectedInventoryId,
+          unit: requestForm.unit.trim() || "pcs",
+          priority: requestForm.priority,
+          neededBy: requestForm.neededBy,
+          notes: requestForm.notes.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to send Stores request.");
+      }
+
+      closeProjectRequest({ force: true });
+      showToast("Stores request sent to Admin and Stores.", "success");
+    } catch (submitError) {
+      setRequestError(submitError.message || "Failed to send Stores request.");
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
+  const projectRequestModal =
+    requestItem && typeof document !== "undefined"
+      ? createPortal(
+          <div className="project-material-request-overlay" onClick={closeProjectRequest}>
+            <section
+              className="project-material-request-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="project-material-request-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="project-material-request-header">
+                <div>
+                  <span>Stores Request</span>
+                  <h3 id="project-material-request-title">Request Project Item</h3>
+                </div>
+                <button
+                  type="button"
+                  className="project-material-request-close"
+                  onClick={closeProjectRequest}
+                  aria-label="Close Stores request"
+                >
+                  <XIcon width="18" height="18" />
+                </button>
+              </header>
+
+              <div className="project-material-request-body">
+                <section className="project-material-request-summary">
+                  <div>
+                    <span className="project-material-request-label">Order Item</span>
+                    <strong>{requestItem.description || "Untitled item"}</strong>
+                    {requestItem.breakdown ? <p>{requestItem.breakdown}</p> : null}
+                  </div>
+                  <div className="project-material-request-qty">
+                    <span>Qty</span>
+                    <strong>{requestItem.qty || "--"}</strong>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Project</dt>
+                      <dd>
+                        {renderProjectName(
+                          project?.details,
+                          null,
+                          project?.orderId || "Untitled Project",
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Order</dt>
+                      <dd>{project?.orderId || "--"}</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <section className="project-material-inventory">
+                  <div className="project-material-section-title">
+                    <span>Inventory Match</span>
+                    {inventoryLoading ? <small>Checking...</small> : null}
+                  </div>
+
+                  {inventoryError ? (
+                    <p className="project-material-request-error">{inventoryError}</p>
+                  ) : null}
+
+                  {inventoryLoading ? (
+                    <div className="project-material-empty">Loading inventory...</div>
+                  ) : inventoryMatches.length ? (
+                    <div className="project-material-match-list">
+                      {inventoryMatches.map((match) => (
+                        <button
+                          type="button"
+                          key={match._id}
+                          className={`project-material-match-card ${
+                            selectedInventoryId === match._id ? "selected" : ""
+                          }`}
+                          onClick={() => setSelectedInventoryId(match._id)}
+                        >
+                          <strong>{match.item || "Unnamed inventory item"}</strong>
+                          <span>{match.sku || "No item ID"}</span>
+                          <span>{getInventoryQuantityLabel(match)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="project-material-empty">
+                      No matching inventory item found.
+                    </div>
+                  )}
+
+                  <div className="project-material-preview">
+                    {selectedInventoryMatch ? (
+                      <>
+                        <strong>{selectedInventoryMatch.item}</strong>
+                        <span>{selectedInventoryMatch.status || "Status not set"}</span>
+                        <span>{getInventoryLocationLabel(selectedInventoryMatch)}</span>
+                        <span>{getInventoryQuantityLabel(selectedInventoryMatch)}</span>
+                        {selectedInventoryMatch.brand ? (
+                          <span>{selectedInventoryMatch.brand}</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <strong>Manual review</strong>
+                        <span>Stores/Admin will verify availability.</span>
+                      </>
+                    )}
+                  </div>
+                </section>
+
+                <section className="project-material-request-form">
+                  <label>
+                    <span>Priority</span>
+                    <select
+                      value={requestForm.priority}
+                      onChange={(event) =>
+                        updateProjectRequestField("priority", event.target.value)
+                      }
+                    >
+                      {PROJECT_REQUEST_PRIORITIES.map((priority) => (
+                        <option key={priority} value={priority}>
+                          {priority}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Needed By</span>
+                    <input
+                      type="date"
+                      value={requestForm.neededBy}
+                      onChange={(event) =>
+                        updateProjectRequestField("neededBy", event.target.value)
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    <span>Unit</span>
+                    <input
+                      type="text"
+                      value={requestForm.unit}
+                      onChange={(event) =>
+                        updateProjectRequestField("unit", event.target.value)
+                      }
+                      maxLength={40}
+                    />
+                  </label>
+
+                  <label className="full-width">
+                    <span>Note</span>
+                    <textarea
+                      rows="4"
+                      value={requestForm.notes}
+                      onChange={(event) =>
+                        updateProjectRequestField("notes", event.target.value)
+                      }
+                      maxLength={800}
+                    />
+                  </label>
+
+                  {requestError ? (
+                    <p className="project-material-request-error full-width">
+                      {requestError}
+                    </p>
+                  ) : null}
+                </section>
+              </div>
+
+              <footer className="project-material-request-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={closeProjectRequest}
+                  disabled={requestSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={submitProjectMaterialRequest}
+                  disabled={requestSubmitting}
+                >
+                  {requestSubmitting ? "Sending..." : "Send Request"}
+                </button>
+              </footer>
+            </section>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="detail-card">
       {/* Toast Container */}
@@ -2618,6 +2943,7 @@ const OrderItemsCard = ({
         confirmText="Yes, Delete"
         cancelText="No, Keep It"
       />
+      {projectRequestModal}
 
       <div className="card-header">
         <h3 className="card-title">📦 Order Items</h3>
@@ -2698,7 +3024,7 @@ const OrderItemsCard = ({
             <tr>
               <th>DESCRIPTION</th>
               <th style={{ textAlign: "right" }}>QTY</th>
-              <th style={{ width: "80px" }}></th>
+              <th style={{ width: canRequestFromStores || !readOnly ? "112px" : "80px" }}></th>
             </tr>
           </thead>
           <tbody>
@@ -2712,23 +3038,40 @@ const OrderItemsCard = ({
                 </td>
                 <td className="item-qty">{item.qty}</td>
                 <td>
-                  {!readOnly && (
-                    <div
-                      style={{ display: "flex", justifyContent: "flex-end" }}
-                    >
+                  {(canRequestFromStores || !readOnly) && (
+                    <div className="item-action-row">
+                      {canRequestFromStores && (
+                        <button
+                          type="button"
+                          className="btn-icon-small stores-request"
+                          onClick={() => openProjectRequest(item)}
+                          disabled={!item?._id}
+                          aria-label={`Request ${item.description || "item"} from Stores`}
+                          title="Request from Stores"
+                        >
+                          <CartIcon />
+                        </button>
+                      )}
+                      {!readOnly && (
+                        <>
                       <button
                         className="btn-icon-small"
                         onClick={() => startEditing(item)}
-                        style={{ marginRight: "0.5rem" }}
+                        aria-label={`Edit ${item.description || "item"}`}
+                        title="Edit item"
                       >
                         <EditIcon width="14" height="14" color="#64748b" />
                       </button>
                       <button
                         className="btn-icon-small delete"
                         onClick={() => handleDeleteItem(item._id)}
+                        aria-label={`Delete ${item.description || "item"}`}
+                        title="Delete item"
                       >
                         <TrashIcon width="14" height="14" color="#ef4444" />
                       </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </td>

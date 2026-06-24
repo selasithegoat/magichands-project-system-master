@@ -258,6 +258,39 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   justify-content: space-between;
 }
 
+.inventory-material-title-line {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.inventory-material-type-badge {
+  width: fit-content;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inventory-material-type-badge.material {
+  border: 1px solid color-mix(in srgb, var(--inventory-material-success) 52%, var(--inventory-material-border));
+  background: color-mix(in srgb, var(--inventory-material-success) 16%, var(--inventory-material-bg));
+  color: var(--inventory-material-success);
+}
+
+.inventory-material-type-badge.order {
+  border: 1px solid color-mix(in srgb, var(--inventory-material-primary) 60%, var(--inventory-material-border));
+  background: color-mix(in srgb, var(--inventory-material-primary) 20%, var(--inventory-material-bg));
+  color: var(--inventory-material-primary);
+  box-shadow: inset 4px 0 0 var(--inventory-material-primary);
+  padding-left: 12px;
+}
+
 .inventory-material-card strong {
   min-width: 0;
   overflow: hidden;
@@ -273,6 +306,27 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.inventory-material-project-context {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--inventory-material-border);
+  border-radius: var(--radius-sm);
+  background: var(--inventory-material-bg);
+  padding: 10px;
+}
+
+.inventory-material-project-context > span {
+  color: var(--inventory-material-primary);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.inventory-material-project-context strong {
+  white-space: normal;
 }
 
 .inventory-material-chip {
@@ -296,6 +350,11 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
 .inventory-material-chip.fulfilled {
   background: var(--inventory-material-success-soft);
   color: var(--inventory-material-success);
+}
+
+.inventory-material-chip.ordered {
+  background: var(--inventory-material-primary-soft);
+  color: var(--inventory-material-primary);
 }
 
 .inventory-material-chip.declined {

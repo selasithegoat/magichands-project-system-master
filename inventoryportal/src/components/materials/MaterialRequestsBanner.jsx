@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { TrashIcon, XIcon } from "../icons/Icons";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import { fetchInventory } from "../../utils/inventoryApi";
 import { showToast } from "../../utils/toast";
 import "./MaterialRequestsBanner.css";
 
-const STATUS_OPTIONS = ["Pending", "In Review", "Fulfilled", "Declined"];
+const STATUS_OPTIONS = ["Pending", "In Review", "Ordered", "Fulfilled", "Declined"];
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -41,6 +42,11 @@ const getRequesterName = (request) => {
   }
   return request?.requestedByName || request?.requestedByEmployeeId || "User";
 };
+
+const isProjectRequest = (request) => request?.requestType === "project";
+
+const getProjectRequestTitle = (request) =>
+  request?.projectName || request?.projectOrderId || "Project request";
 
 const requestMaterialDelete = async (path, method = "DELETE") => {
   const response = await fetch(path, {
@@ -86,6 +92,7 @@ const MaterialRequestsBanner = () => {
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [confirmDeleteRequest, setConfirmDeleteRequest] = useState(null);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -160,15 +167,10 @@ const MaterialRequestsBanner = () => {
     }
   };
 
-  const deleteRequest = async (request) => {
+  const deleteRequest = async () => {
+    const request = confirmDeleteRequest;
     const requestId = request?._id;
     if (!requestId || updatingId || deletingId) return;
-
-    const confirmed = window.confirm(
-      `Delete "${request.materialName || "this material"}" request?`,
-    );
-    if (!confirmed) return;
-
     setDeletingId(requestId);
     setError("");
 
@@ -185,10 +187,23 @@ const MaterialRequestsBanner = () => {
       setError(deleteError.message || "Failed to delete material request.");
     } finally {
       setDeletingId("");
+      setConfirmDeleteRequest(null);
     }
   };
 
   const content = (
+    <>
+    <ConfirmDialog
+      isOpen={Boolean(confirmDeleteRequest)}
+      title="Delete Material Request"
+      message={`Delete "${
+        confirmDeleteRequest?.materialName || "this material"
+      }" request?`}
+      confirmText={deletingId ? "Deleting..." : "Delete Request"}
+      cancelText="Cancel"
+      onConfirm={deleteRequest}
+      onClose={() => setConfirmDeleteRequest(null)}
+    />
     <section
       className={`inventory-material-shell ${isActive ? "is-active" : ""} ${
         isOpen ? "is-open" : ""
@@ -280,7 +295,16 @@ const MaterialRequestsBanner = () => {
                 {requests.map((request) => (
                   <article className="inventory-material-card" key={request._id}>
                     <div className="inventory-material-card-header">
-                      <strong>{request.materialName}</strong>
+                      <div className="inventory-material-title-line">
+                        <span
+                          className={`inventory-material-type-badge ${
+                            isProjectRequest(request) ? "order" : "material"
+                          }`}
+                        >
+                          {isProjectRequest(request) ? "Order Item" : "Material"}
+                        </span>
+                        <strong>{request.materialName}</strong>
+                      </div>
                       <span className={`inventory-material-chip ${statusClass(request.status)}`}>
                         {request.status || "Pending"}
                       </span>
@@ -300,6 +324,29 @@ const MaterialRequestsBanner = () => {
                       <span>{getRequesterName(request)}</span>
                       <span>{formatDate(request.createdAt)}</span>
                     </div>
+                    {isProjectRequest(request) ? (
+                      <div className="inventory-material-project-context">
+                        <span>Order Item Request</span>
+                        <strong>{getProjectRequestTitle(request)}</strong>
+                        <div className="inventory-material-meta">
+                          {request.projectOrderId ? (
+                            <span>Order {request.projectOrderId}</span>
+                          ) : null}
+                          {request.projectClientName ? (
+                            <span>{request.projectClientName}</span>
+                          ) : null}
+                          {request.inventorySku ? (
+                            <span>ID {request.inventorySku}</span>
+                          ) : null}
+                          {request.inventoryWarehouse ? (
+                            <span>{request.inventoryWarehouse}</span>
+                          ) : null}
+                        </div>
+                        {request.projectItemBreakdown ? (
+                          <p>{request.projectItemBreakdown}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {request.notes ? <p>{request.notes}</p> : null}
                     <div className="inventory-material-actions">
                       {STATUS_OPTIONS.map((status) => (
@@ -316,7 +363,7 @@ const MaterialRequestsBanner = () => {
                       <button
                         type="button"
                         className="danger"
-                        onClick={() => deleteRequest(request)}
+                        onClick={() => setConfirmDeleteRequest(request)}
                         disabled={updatingId === request._id || deletingId === request._id}
                         aria-label={
                           deletingId === request._id
@@ -340,6 +387,7 @@ const MaterialRequestsBanner = () => {
         </div>
       </aside>
     </section>
+    </>
   );
 
   if (typeof document === "undefined") return content;
