@@ -1,5 +1,39 @@
 const mongoose = require("mongoose");
 
+const MaterialRequestItemSchema = new mongoose.Schema(
+  {
+    materialName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    quantity: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    unit: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    projectItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    projectItemBreakdown: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    projectItemQuantity: {
+      type: Number,
+      default: null,
+    },
+  },
+  { _id: true },
+);
+
 const MaterialRequestSchema = new mongoose.Schema(
   {
     materialName: {
@@ -16,6 +50,10 @@ const MaterialRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    items: {
+      type: [MaterialRequestItemSchema],
+      default: [],
     },
     department: {
       type: String,

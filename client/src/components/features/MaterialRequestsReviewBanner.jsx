@@ -48,6 +48,27 @@ const isProjectRequest = (request) => request?.requestType === "project";
 const getProjectRequestTitle = (request) =>
   request?.projectName || request?.projectOrderId || "Project request";
 
+const getRequestItems = (request) => {
+  if (Array.isArray(request?.items) && request.items.length) {
+    return request.items;
+  }
+  if (!request?.materialName) return [];
+  return [
+    {
+      materialName: request.materialName,
+      quantity: request.quantity,
+      unit: request.unit,
+      projectItemId: request.projectItemId,
+    },
+  ];
+};
+
+const getRequestTitle = (request) => {
+  const items = getRequestItems(request);
+  if (items.length > 1) return `${items.length} materials requested`;
+  return items[0]?.materialName || "Material request";
+};
+
 const requestMaterialDelete = async (path, requestSource, method = "DELETE") => {
   const response = await fetch(buildSourcePath(path, requestSource), {
     method,
@@ -196,9 +217,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
       <ConfirmationModal
         isOpen={Boolean(confirmDeleteRequest)}
         title="Delete Material Request"
-        message={`Delete "${
-          confirmDeleteRequest?.materialName || "this material"
-        }" request?`}
+        message={`Delete the "${getRequestTitle(confirmDeleteRequest)}" request?`}
         onConfirm={deleteRequest}
         onCancel={() => setConfirmDeleteRequest(null)}
         confirmText={deletingId ? "Deleting..." : "Delete Request"}
@@ -300,7 +319,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                         >
                           {isProjectRequest(request) ? "Order Item" : "Material"}
                         </span>
-                        <strong>{request.materialName}</strong>
+                        <strong>{getRequestTitle(request)}</strong>
                       </div>
                       <span
                         className={`material-review-chip ${toStatusClass(
@@ -312,8 +331,8 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                     </div>
                     <div className="material-review-meta">
                       <span>
-                        {request.quantity}
-                        {request.unit ? ` ${request.unit}` : ""}
+                        {getRequestItems(request).length}{" "}
+                        {getRequestItems(request).length === 1 ? "item" : "items"}
                       </span>
                       <span>{request.department}</span>
                       {request.priority ? <span>{request.priority}</span> : null}
@@ -324,6 +343,26 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                     <div className="material-review-meta">
                       <span>{getRequesterName(request)}</span>
                       <span>{formatDate(request.createdAt)}</span>
+                    </div>
+                    <div className="material-review-line-items">
+                      {getRequestItems(request).map((item, index) => (
+                        <div
+                          className="material-review-line-item"
+                          key={item._id || `${request._id}-${index}`}
+                        >
+                          <span>{index + 1}</span>
+                          <div className="material-review-line-item-name">
+                            <strong>{item.materialName}</strong>
+                            {isProjectRequest(request) && !item.projectItemId ? (
+                              <em>Purchase</em>
+                            ) : null}
+                          </div>
+                          <small>
+                            {item.quantity}
+                            {item.unit ? ` ${item.unit}` : ""}
+                          </small>
+                        </div>
+                      ))}
                     </div>
                     {isProjectRequest(request) ? (
                       <div className="material-review-project-context">
@@ -371,7 +410,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                         aria-label={
                           deletingId === request._id
                             ? "Deleting material request"
-                            : `Delete ${request.materialName || "material request"}`
+                            : `Delete ${getRequestTitle(request)}`
                         }
                         title="Delete request"
                       >

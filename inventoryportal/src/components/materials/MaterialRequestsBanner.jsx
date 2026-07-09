@@ -48,6 +48,27 @@ const isProjectRequest = (request) => request?.requestType === "project";
 const getProjectRequestTitle = (request) =>
   request?.projectName || request?.projectOrderId || "Project request";
 
+const getRequestItems = (request) => {
+  if (Array.isArray(request?.items) && request.items.length) {
+    return request.items;
+  }
+  if (!request?.materialName) return [];
+  return [
+    {
+      materialName: request.materialName,
+      quantity: request.quantity,
+      unit: request.unit,
+      projectItemId: request.projectItemId,
+    },
+  ];
+};
+
+const getRequestTitle = (request) => {
+  const items = getRequestItems(request);
+  if (items.length > 1) return `${items.length} materials requested`;
+  return items[0]?.materialName || "Material request";
+};
+
 const requestMaterialDelete = async (path, method = "DELETE") => {
   const response = await fetch(path, {
     method,
@@ -196,9 +217,7 @@ const MaterialRequestsBanner = () => {
     <ConfirmDialog
       isOpen={Boolean(confirmDeleteRequest)}
       title="Delete Material Request"
-      message={`Delete "${
-        confirmDeleteRequest?.materialName || "this material"
-      }" request?`}
+      message={`Delete the "${getRequestTitle(confirmDeleteRequest)}" request?`}
       confirmText={deletingId ? "Deleting..." : "Delete Request"}
       cancelText="Cancel"
       onConfirm={deleteRequest}
@@ -303,7 +322,7 @@ const MaterialRequestsBanner = () => {
                         >
                           {isProjectRequest(request) ? "Order Item" : "Material"}
                         </span>
-                        <strong>{request.materialName}</strong>
+                        <strong>{getRequestTitle(request)}</strong>
                       </div>
                       <span className={`inventory-material-chip ${statusClass(request.status)}`}>
                         {request.status || "Pending"}
@@ -311,8 +330,8 @@ const MaterialRequestsBanner = () => {
                     </div>
                     <div className="inventory-material-meta">
                       <span>
-                        {request.quantity}
-                        {request.unit ? ` ${request.unit}` : ""}
+                        {getRequestItems(request).length}{" "}
+                        {getRequestItems(request).length === 1 ? "item" : "items"}
                       </span>
                       <span>{request.department}</span>
                       {request.priority ? <span>{request.priority}</span> : null}
@@ -323,6 +342,26 @@ const MaterialRequestsBanner = () => {
                     <div className="inventory-material-meta">
                       <span>{getRequesterName(request)}</span>
                       <span>{formatDate(request.createdAt)}</span>
+                    </div>
+                    <div className="inventory-material-line-items">
+                      {getRequestItems(request).map((item, index) => (
+                        <div
+                          className="inventory-material-line-item"
+                          key={item._id || `${request._id}-${index}`}
+                        >
+                          <span>{index + 1}</span>
+                          <div className="inventory-material-line-item-name">
+                            <strong>{item.materialName}</strong>
+                            {isProjectRequest(request) && !item.projectItemId ? (
+                              <em>Purchase</em>
+                            ) : null}
+                          </div>
+                          <small>
+                            {item.quantity}
+                            {item.unit ? ` ${item.unit}` : ""}
+                          </small>
+                        </div>
+                      ))}
                     </div>
                     {isProjectRequest(request) ? (
                       <div className="inventory-material-project-context">
@@ -368,7 +407,7 @@ const MaterialRequestsBanner = () => {
                         aria-label={
                           deletingId === request._id
                             ? "Deleting material request"
-                            : `Delete ${request.materialName || "material request"}`
+                            : `Delete ${getRequestTitle(request)}`
                         }
                         title="Delete request"
                       >

@@ -34,17 +34,43 @@ const statusClass = (status) =>
     .toLowerCase()
     .replace(/\s+/g, "-");
 
-const getInitialForm = (department) => ({
-  department,
+const getEmptyRequestItem = () => ({
+  clientId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   materialName: "",
   quantity: "",
   unit: "",
+});
+
+const getInitialForm = (department) => ({
+  department,
   priority: "Normal",
   neededBy: "",
   notes: "",
+  items: [getEmptyRequestItem()],
 });
 
 const isProjectRequest = (request) => request?.requestType === "project";
+
+const getRequestItems = (request) => {
+  if (Array.isArray(request?.items) && request.items.length) {
+    return request.items;
+  }
+  if (!request?.materialName) return [];
+  return [
+    {
+      materialName: request.materialName,
+      quantity: request.quantity,
+      unit: request.unit,
+      projectItemId: request.projectItemId,
+    },
+  ];
+};
+
+const getRequestTitle = (request) => {
+  const items = getRequestItems(request);
+  if (items.length > 1) return `${items.length} materials`;
+  return items[0]?.materialName || "Material request";
+};
 
 const requestMaterialDelete = async (path, method = "DELETE") => {
   const response = await fetch(path, {
@@ -159,6 +185,34 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
     if (success) setSuccess("");
   };
 
+  const updateItemField = (clientId, field, value) => {
+    setForm((previous) => ({
+      ...previous,
+      items: previous.items.map((item) =>
+        item.clientId === clientId ? { ...item, [field]: value } : item,
+      ),
+    }));
+    if (error) setError("");
+    if (success) setSuccess("");
+  };
+
+  const addItem = () => {
+    setForm((previous) => ({
+      ...previous,
+      items: [...previous.items, getEmptyRequestItem()],
+    }));
+  };
+
+  const removeItem = (clientId) => {
+    setForm((previous) => ({
+      ...previous,
+      items:
+        previous.items.length > 1
+          ? previous.items.filter((item) => item.clientId !== clientId)
+          : previous.items,
+    }));
+  };
+
   const cancelEdit = () => {
     setEditingRequestId("");
     setForm(getInitialForm(form.department || defaultDepartment));
@@ -168,15 +222,20 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
 
   const startEditRequest = (request) => {
     if (!request?._id || submitting || deletingId) return;
+    const requestItems = getRequestItems(request);
     setEditingRequestId(request._id);
     setForm({
       department: request.department || defaultDepartment,
-      materialName: request.materialName || "",
-      quantity: request.quantity || "",
-      unit: request.unit || "",
       priority: PRIORITY_OPTIONS.includes(request.priority) ? request.priority : "Normal",
       neededBy: toDateInputValue(request.neededBy),
       notes: request.notes || "",
+      items: requestItems.map((item) => ({
+        clientId:
+          item._id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        materialName: item.materialName || "",
+        quantity: item.quantity || "",
+        unit: item.unit || "",
+      })),
     });
     setError("");
     setSuccess("");
@@ -209,9 +268,11 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...form,
-            materialName: form.materialName.trim(),
-            quantity: form.quantity.trim(),
-            unit: form.unit.trim(),
+            items: form.items.map((item) => ({
+              materialName: item.materialName.trim(),
+              quantity: item.quantity.trim(),
+              unit: item.unit.trim(),
+            })),
             notes: form.notes.trim(),
           }),
         },
@@ -261,16 +322,19 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
   };
 
   const canSubmit =
-    form.department && form.materialName.trim() && form.quantity.trim() && !submitting;
+    form.department &&
+    form.items.length > 0 &&
+    form.items.every(
+      (item) => item.materialName.trim() && item.quantity.trim(),
+    ) &&
+    !submitting;
 
   return (
     <>
       <ConfirmationModal
         isOpen={Boolean(confirmDeleteRequest)}
         title="Delete Material Request"
-        message={`Delete "${
-          confirmDeleteRequest?.materialName || "this material"
-        }" request?`}
+        message={`Delete the "${getRequestTitle(confirmDeleteRequest)}" request?`}
         onConfirm={deleteRequest}
         onCancel={() => setConfirmDeleteRequest(null)}
         confirmText={deletingId ? "Deleting..." : "Delete Request"}
@@ -353,38 +417,94 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                   </select>
                 </label>
 
-                <label className="material-request-field full-width">
-                  <span>Material</span>
-                  <input
-                    type="text"
-                    value={form.materialName}
-                    onChange={(event) => updateField("materialName", event.target.value)}
-                    placeholder="Item name"
-                    maxLength={120}
-                  />
-                </label>
+                <section
+                  className="material-request-items-editor"
+                  aria-labelledby="material-request-items-title"
+                >
+                  <div className="material-request-items-heading">
+                    <div>
+                      <h3 id="material-request-items-title">Materials</h3>
+                      <p>Add everything needed for this request.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="material-request-add-item"
+                      onClick={addItem}
+                      disabled={form.items.length >= 25}
+                    >
+                      + Add material
+                    </button>
+                  </div>
 
-                <label className="material-request-field">
-                  <span>Quantity</span>
-                  <input
-                    type="text"
-                    value={form.quantity}
-                    onChange={(event) => updateField("quantity", event.target.value)}
-                    placeholder="10"
-                    maxLength={60}
-                  />
-                </label>
-
-                <label className="material-request-field">
-                  <span>Unit</span>
-                  <input
-                    type="text"
-                    value={form.unit}
-                    onChange={(event) => updateField("unit", event.target.value)}
-                    placeholder="pcs, packs, rolls"
-                    maxLength={40}
-                  />
-                </label>
+                  <div className="material-request-items-list">
+                    {form.items.map((item, index) => (
+                      <div className="material-request-item-editor" key={item.clientId}>
+                        <div className="material-request-item-number">
+                          <span>{index + 1}</span>
+                          <strong>Material {index + 1}</strong>
+                        </div>
+                        <label className="material-request-field material-name">
+                          <span>Material</span>
+                          <input
+                            type="text"
+                            value={item.materialName}
+                            onChange={(event) =>
+                              updateItemField(
+                                item.clientId,
+                                "materialName",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="Item name"
+                            maxLength={120}
+                          />
+                        </label>
+                        <label className="material-request-field">
+                          <span>Quantity</span>
+                          <input
+                            type="text"
+                            value={item.quantity}
+                            onChange={(event) =>
+                              updateItemField(
+                                item.clientId,
+                                "quantity",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="10"
+                            maxLength={60}
+                          />
+                        </label>
+                        <label className="material-request-field">
+                          <span>Unit</span>
+                          <input
+                            type="text"
+                            value={item.unit}
+                            onChange={(event) =>
+                              updateItemField(
+                                item.clientId,
+                                "unit",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="pcs, packs, rolls"
+                            maxLength={40}
+                          />
+                        </label>
+                        {form.items.length > 1 ? (
+                          <button
+                            type="button"
+                            className="material-request-remove-item"
+                            onClick={() => removeItem(item.clientId)}
+                            aria-label={`Remove material ${index + 1}`}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
 
                 <label className="material-request-field">
                   <span>Needed By</span>
@@ -427,7 +547,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                             >
                               {isProjectRequest(request) ? "Order Item" : "Material"}
                             </span>
-                            <strong>{request.materialName}</strong>
+                            <strong>{getRequestTitle(request)}</strong>
                           </div>
                           <span
                             className={`material-request-chip ${statusClass(
@@ -439,13 +559,33 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                         </div>
                         <div className="material-request-meta">
                           <span>
-                            {request.quantity}
-                            {request.unit ? ` ${request.unit}` : ""}
+                            {getRequestItems(request).length}{" "}
+                            {getRequestItems(request).length === 1 ? "item" : "items"}
                           </span>
                           <span>{request.department}</span>
                           {request.neededBy ? (
                             <span>Needed {formatDate(request.neededBy)}</span>
                           ) : null}
+                        </div>
+                        <div className="material-request-line-items">
+                          {getRequestItems(request).map((item, index) => (
+                            <div
+                              className="material-request-line-item"
+                              key={item._id || `${request._id}-${index}`}
+                            >
+                              <span>{index + 1}</span>
+                              <div className="material-request-line-item-name">
+                                <strong>{item.materialName}</strong>
+                                {isProjectRequest(request) && !item.projectItemId ? (
+                                  <em>Purchase</em>
+                                ) : null}
+                              </div>
+                              <small>
+                                {item.quantity}
+                                {item.unit ? ` ${item.unit}` : ""}
+                              </small>
+                            </div>
+                          ))}
                         </div>
                         {isProjectRequest(request) ? (
                           <div className="material-request-project-context">
@@ -468,9 +608,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                               className="material-request-mini-button"
                               onClick={() => startEditRequest(request)}
                               disabled={submitting || Boolean(deletingId)}
-                              aria-label={`Edit ${
-                                request.materialName || "material request"
-                              }`}
+                              aria-label={`Edit ${getRequestTitle(request)}`}
                               title="Edit request"
                             >
                               <EditIcon />
@@ -484,7 +622,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                             aria-label={
                               deletingId === request._id
                                 ? "Deleting material request"
-                                : `Delete ${request.materialName || "material request"}`
+                                : `Delete ${getRequestTitle(request)}`
                             }
                             title="Delete request"
                           >

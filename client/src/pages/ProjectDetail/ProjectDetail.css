@@ -1212,7 +1212,7 @@
 }
 
 .project-material-request-modal {
-  width: min(840px, 100%);
+  width: min(940px, 100%);
   max-height: min(860px, calc(100vh - 48px));
   display: flex;
   flex-direction: column;
@@ -1283,6 +1283,7 @@
 }
 
 .project-material-request-summary,
+.project-material-order-items,
 .project-material-inventory,
 .project-material-request-form {
   min-width: 0;
@@ -1290,6 +1291,21 @@
   border-radius: 12px;
   background: var(--surface-alt);
   padding: 0.9rem;
+}
+
+.project-material-request-summary {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.project-material-order-items {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.project-material-request-form {
+  grid-column: 1;
+  grid-row: 3;
 }
 
 .project-material-request-summary {
@@ -1375,11 +1391,204 @@
 }
 
 .project-material-inventory {
-  grid-row: span 2;
+  grid-column: 2;
+  grid-row: 1 / span 3;
   display: flex;
   min-height: 360px;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.project-material-order-items {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.project-material-order-items > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.project-material-order-item-list {
+  max-height: 170px;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.45rem;
+  padding-right: 0.2rem;
+}
+
+.project-material-order-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 0.65rem 0.7rem;
+  cursor: pointer;
+}
+
+.project-material-order-item.selected {
+  border-color: color-mix(in srgb, var(--primary-color, #2563eb) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 8%, var(--bg-card));
+}
+
+.project-material-order-item input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-color, #2563eb);
+}
+
+.project-material-order-item > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.project-material-order-item strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.project-material-order-item small,
+.project-material-order-item b,
+.project-material-inventory-note {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.project-material-order-item b {
+  white-space: nowrap;
+}
+
+.project-material-inventory-note {
+  display: block;
+  line-height: 1.4;
+}
+
+.project-material-edit-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.15rem;
+}
+
+.project-material-edit-heading > strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.project-material-edit-heading button,
+.project-material-line-remove {
+  min-height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--primary-color, #2563eb);
+  padding: 0 0.65rem;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.project-material-edit-heading button:hover {
+  border-color: color-mix(in srgb, var(--primary-color, #2563eb) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 8%, var(--bg-card));
+}
+
+.project-material-edit-heading button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.project-material-line-editor-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.project-material-line-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 0.38fr) minmax(82px, 0.45fr);
+  gap: 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 0.7rem;
+}
+
+.project-material-line-editor-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.project-material-line-editor-title > span {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 12%, var(--bg-card));
+  color: var(--primary-color, #2563eb);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.project-material-line-editor-title strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.project-material-line-editor label {
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.project-material-line-editor label > span {
+  color: var(--text-tertiary);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.project-material-line-editor input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  padding: 0.6rem 0.65rem;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.project-material-line-editor input:focus {
+  outline: none;
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #2563eb) 12%, transparent);
+}
+
+.project-material-line-remove {
+  grid-column: 1 / -1;
+  justify-self: end;
+  color: var(--danger, #b91c1c);
+}
+
+.project-material-line-remove:hover {
+  border-color: color-mix(in srgb, var(--danger, #b91c1c) 42%, var(--border-color));
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .project-material-section-title {
@@ -2001,8 +2210,15 @@
     padding: 0.9rem;
   }
 
-  .project-material-inventory {
+  .project-material-request-summary,
+  .project-material-order-items,
+  .project-material-inventory,
+  .project-material-request-form {
+    grid-column: 1;
     grid-row: auto;
+  }
+
+  .project-material-inventory {
     min-height: 0;
   }
 
@@ -2013,6 +2229,23 @@
 
   .project-material-request-summary dl {
     grid-template-columns: 1fr;
+  }
+
+  .project-material-edit-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .project-material-edit-heading button {
+    width: 100%;
+  }
+
+  .project-material-line-editor {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .project-material-line-editor .material-name {
+    grid-column: 1 / -1;
   }
 
   .project-material-request-footer {

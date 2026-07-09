@@ -2467,8 +2467,16 @@ const PROJECT_REQUEST_PRIORITIES = ["Low", "Normal", "High", "Urgent"];
 const getProjectRequestInitialForm = () => ({
   priority: "Normal",
   neededBy: "",
-  unit: "pcs",
   notes: "",
+});
+
+const createProjectRequestLine = (item = {}, isManual = false) => ({
+  clientId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  projectItemId: isManual ? "" : String(item?._id || ""),
+  materialName: isManual ? "" : String(item?.description || ""),
+  quantity: isManual ? "" : String(item?.qty ?? ""),
+  unit: "pcs",
+  breakdown: isManual ? "" : String(item?.breakdown || ""),
 });
 
 const buildInventoryMatchQuery = (item) =>
@@ -2509,6 +2517,8 @@ const OrderItemsCard = ({
     onConfirm: null,
   });
   const [requestItem, setRequestItem] = useState(null);
+  const [selectedProjectItemIds, setSelectedProjectItemIds] = useState([]);
+  const [projectRequestLines, setProjectRequestLines] = useState([]);
   const [requestForm, setRequestForm] = useState(getProjectRequestInitialForm);
   const [inventoryMatches, setInventoryMatches] = useState([]);
   const [selectedInventoryId, setSelectedInventoryId] = useState("");
@@ -2523,7 +2533,6 @@ const OrderItemsCard = ({
       null,
     [inventoryMatches, selectedInventoryId],
   );
-
   const showToast = (message, type = "info") => {
     setToast({ message, type });
   };
@@ -2640,6 +2649,8 @@ const OrderItemsCard = ({
   const closeProjectRequest = (options = {}) => {
     if (requestSubmitting && !options.force) return;
     setRequestItem(null);
+    setSelectedProjectItemIds([]);
+    setProjectRequestLines([]);
     setRequestForm(getProjectRequestInitialForm());
     setInventoryMatches([]);
     setSelectedInventoryId("");
@@ -2656,6 +2667,8 @@ const OrderItemsCard = ({
     if (!item?._id || !canRequestFromStores) return;
 
     setRequestItem(item);
+    setSelectedProjectItemIds([String(item._id)]);
+    setProjectRequestLines([createProjectRequestLine(item)]);
     setRequestForm(getProjectRequestInitialForm());
     setInventoryMatches([]);
     setSelectedInventoryId("");
@@ -2688,8 +2701,82 @@ const OrderItemsCard = ({
     }
   };
 
+  const toggleProjectRequestItem = (itemId) => {
+    const normalizedId = String(itemId || "");
+    if (!normalizedId || normalizedId === String(requestItem?._id || "")) return;
+
+    const isSelected = selectedProjectItemIds.includes(normalizedId);
+    setSelectedProjectItemIds((previous) =>
+      isSelected
+        ? previous.filter((id) => id !== normalizedId)
+        : [...previous, normalizedId],
+    );
+    setProjectRequestLines((previous) => {
+      if (isSelected) {
+        return previous.filter((line) => line.projectItemId !== normalizedId);
+      }
+      const projectItem = items.find(
+        (item) => String(item?._id || "") === normalizedId,
+      );
+      return projectItem
+        ? [...previous, createProjectRequestLine(projectItem)]
+        : previous;
+    });
+  };
+
+  const updateProjectRequestLine = (clientId, field, value) => {
+    setProjectRequestLines((previous) =>
+      previous.map((line) =>
+        line.clientId === clientId ? { ...line, [field]: value } : line,
+      ),
+    );
+    const primaryLine = projectRequestLines.find(
+      (line) => line.projectItemId === String(requestItem?._id || ""),
+    );
+    if (
+      field === "materialName" &&
+      primaryLine?.clientId === clientId &&
+      value !== primaryLine.materialName
+    ) {
+      setSelectedInventoryId("");
+    }
+    if (requestError) setRequestError("");
+  };
+
+  const addManualProjectRequestLine = () => {
+    if (projectRequestLines.length >= 25) return;
+    setProjectRequestLines((previous) => [
+      ...previous,
+      createProjectRequestLine({}, true),
+    ]);
+    if (requestError) setRequestError("");
+  };
+
+  const removeProjectRequestLine = (line) => {
+    if (!line?.clientId || line.projectItemId === String(requestItem?._id || "")) {
+      return;
+    }
+    setProjectRequestLines((previous) =>
+      previous.filter((item) => item.clientId !== line.clientId),
+    );
+    if (line.projectItemId) {
+      setSelectedProjectItemIds((previous) =>
+        previous.filter((id) => id !== line.projectItemId),
+      );
+    }
+  };
+
   const submitProjectMaterialRequest = async () => {
-    if (!requestItem?._id || requestSubmitting) return;
+    if (
+      !requestItem?._id ||
+      !projectRequestLines.length ||
+      projectRequestLines.some(
+        (line) => !line.materialName.trim() || !line.quantity.trim(),
+      ) ||
+      requestSubmitting
+    ) {
+      return;
+    }
 
     setRequestSubmitting(true);
     setRequestError("");
@@ -2703,8 +2790,14 @@ const OrderItemsCard = ({
           requestType: "project",
           projectId: project?._id || projectId,
           projectItemId: requestItem._id,
+          projectItemIds: selectedProjectItemIds,
           inventoryRecordId: selectedInventoryId,
-          unit: requestForm.unit.trim() || "pcs",
+          items: projectRequestLines.map((line) => ({
+            projectItemId: line.projectItemId || undefined,
+            materialName: line.materialName.trim(),
+            quantity: line.quantity.trim(),
+            unit: line.unit.trim() || "pcs",
+          })),
           priority: requestForm.priority,
           neededBy: requestForm.neededBy,
           notes: requestForm.notes.trim(),
@@ -2738,7 +2831,7 @@ const OrderItemsCard = ({
               <header className="project-material-request-header">
                 <div>
                   <span>Stores Request</span>
-                  <h3 id="project-material-request-title">Request Project Item</h3>
+                  <h3 id="project-material-request-title">Request Project Materials</h3>
                 </div>
                 <button
                   type="button"
@@ -2753,7 +2846,9 @@ const OrderItemsCard = ({
               <div className="project-material-request-body">
                 <section className="project-material-request-summary">
                   <div>
-                    <span className="project-material-request-label">Order Item</span>
+                    <span className="project-material-request-label">
+                      Primary Order Item
+                    </span>
                     <strong>{requestItem.description || "Untitled item"}</strong>
                     {requestItem.breakdown ? <p>{requestItem.breakdown}</p> : null}
                   </div>
@@ -2779,9 +2874,141 @@ const OrderItemsCard = ({
                   </dl>
                 </section>
 
+                <section className="project-material-order-items">
+                  <div className="project-material-section-title">
+                    <span>Items in this request</span>
+                    <small>
+                      {projectRequestLines.length}{" "}
+                      {projectRequestLines.length === 1 ? "item" : "items"}
+                    </small>
+                  </div>
+                  <p>
+                    Select another order item, edit its request details, or add a
+                    new purchase material.
+                  </p>
+                  <div className="project-material-order-item-list">
+                    {items.map((item) => {
+                      const itemId = String(item?._id || "");
+                      const isPrimary = itemId === String(requestItem._id);
+                      const isSelected = selectedProjectItemIds.includes(itemId);
+                      return (
+                        <label
+                          className={`project-material-order-item ${
+                            isSelected ? "selected" : ""
+                          }`}
+                          key={itemId}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={isPrimary}
+                            onChange={() => toggleProjectRequestItem(itemId)}
+                          />
+                          <span>
+                            <strong>{item.description || "Untitled item"}</strong>
+                            {item.breakdown ? <small>{item.breakdown}</small> : null}
+                          </span>
+                          <b>Qty {item.qty || "--"}</b>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="project-material-edit-heading">
+                    <strong>Request details</strong>
+                    <button
+                      type="button"
+                      onClick={addManualProjectRequestLine}
+                      disabled={projectRequestLines.length >= 25}
+                    >
+                      + Add purchase material
+                    </button>
+                  </div>
+                  <div className="project-material-line-editor-list">
+                    {projectRequestLines.map((line, index) => {
+                      const isPrimary =
+                        line.projectItemId === String(requestItem._id);
+                      return (
+                        <div
+                          className="project-material-line-editor"
+                          key={line.clientId}
+                        >
+                          <div className="project-material-line-editor-title">
+                            <span>{index + 1}</span>
+                            <strong>
+                              {line.projectItemId
+                                ? isPrimary
+                                  ? "Primary order item"
+                                  : "Order item"
+                                : "Purchase material"}
+                            </strong>
+                          </div>
+                          <label className="material-name">
+                            <span>Material</span>
+                            <input
+                              type="text"
+                              value={line.materialName}
+                              onChange={(event) =>
+                                updateProjectRequestLine(
+                                  line.clientId,
+                                  "materialName",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Material name"
+                              maxLength={120}
+                            />
+                          </label>
+                          <label>
+                            <span>Quantity</span>
+                            <input
+                              type="text"
+                              value={line.quantity}
+                              onChange={(event) =>
+                                updateProjectRequestLine(
+                                  line.clientId,
+                                  "quantity",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="1"
+                              maxLength={60}
+                            />
+                          </label>
+                          <label>
+                            <span>Unit</span>
+                            <input
+                              type="text"
+                              value={line.unit}
+                              onChange={(event) =>
+                                updateProjectRequestLine(
+                                  line.clientId,
+                                  "unit",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="pcs"
+                              maxLength={40}
+                            />
+                          </label>
+                          {!isPrimary ? (
+                            <button
+                              type="button"
+                              className="project-material-line-remove"
+                              onClick={() => removeProjectRequestLine(line)}
+                              aria-label={`Remove request item ${index + 1}`}
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
                 <section className="project-material-inventory">
                   <div className="project-material-section-title">
-                    <span>Inventory Match</span>
+                    <span>Inventory Match · Primary Item</span>
                     {inventoryLoading ? <small>Checking...</small> : null}
                   </div>
 
@@ -2832,6 +3059,11 @@ const OrderItemsCard = ({
                       </>
                     )}
                   </div>
+                  {projectRequestLines.length > 1 ? (
+                    <small className="project-material-inventory-note">
+                      Stores will match the additional items during review.
+                    </small>
+                  ) : null}
                 </section>
 
                 <section className="project-material-request-form">
@@ -2859,18 +3091,6 @@ const OrderItemsCard = ({
                       onChange={(event) =>
                         updateProjectRequestField("neededBy", event.target.value)
                       }
-                    />
-                  </label>
-
-                  <label>
-                    <span>Unit</span>
-                    <input
-                      type="text"
-                      value={requestForm.unit}
-                      onChange={(event) =>
-                        updateProjectRequestField("unit", event.target.value)
-                      }
-                      maxLength={40}
                     />
                   </label>
 
@@ -2907,7 +3127,14 @@ const OrderItemsCard = ({
                   type="button"
                   className="btn-primary"
                   onClick={submitProjectMaterialRequest}
-                  disabled={requestSubmitting}
+                  disabled={
+                    requestSubmitting ||
+                    !projectRequestLines.length ||
+                    projectRequestLines.some(
+                      (line) =>
+                        !line.materialName.trim() || !line.quantity.trim(),
+                    )
+                  }
                 >
                   {requestSubmitting ? "Sending..." : "Send Request"}
                 </button>

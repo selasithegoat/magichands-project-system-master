@@ -19,6 +19,7 @@ const VALID_STATUSES = new Set([
 ]);
 
 const VALID_PRIORITIES = new Set(["Low", "Normal", "High", "Urgent"]);
+const MAX_REQUEST_ITEMS = 25;
 
 const parseString = (value) => String(value ?? "").trim();
 
@@ -221,14 +222,66 @@ const buildInventorySnapshot = (record) => {
   };
 };
 
+const readRequestItems = (body = {}) => {
+  const rawItems =
+    Array.isArray(body.items) && body.items.length
+      ? body.items
+      : [
+          {
+            materialName: body.materialName,
+            quantity: body.quantity,
+            unit: body.unit,
+          },
+        ];
+
+  if (rawItems.length > MAX_REQUEST_ITEMS) {
+    return {
+      error: `A material request can contain up to ${MAX_REQUEST_ITEMS} items.`,
+    };
+  }
+
+  const items = rawItems.map((item) => ({
+    materialName: parseString(
+      item?.materialName ?? item?.name ?? item?.description,
+    ),
+    quantity: parseString(item?.quantity ?? item?.qty),
+    unit: parseString(item?.unit),
+  }));
+
+  const incompleteItemIndex = items.findIndex(
+    (item) => !item.materialName || !item.quantity,
+  );
+  if (incompleteItemIndex >= 0) {
+    return {
+      error: `Item ${incompleteItemIndex + 1} needs a material name and quantity.`,
+    };
+  }
+
+  return { data: items };
+};
+
 const readProjectMaterialRequestPayload = async (user, body = {}) => {
   const projectId = parseString(body.projectId || body.project);
-  const projectItemId = parseString(body.projectItemId);
+  const submittedItems =
+    Array.isArray(body.items) && body.items.length ? body.items : null;
+  const primaryProjectItemId = parseString(body.projectItemId);
+  const projectItemIds = Array.from(
+    new Set(
+      (
+        submittedItems
+          ? submittedItems.map((item) => item?.projectItemId)
+          : Array.isArray(body.projectItemIds) && body.projectItemIds.length
+            ? body.projectItemIds
+            : [body.projectItemId]
+      )
+        .map(parseString)
+        .filter(Boolean),
+    ),
+  );
   const rawPriority = parseString(body.priority) || "Normal";
   const priority = VALID_PRIORITIES.has(rawPriority) ? rawPriority : "Normal";
   const rawNeededBy = parseString(body.neededBy);
   const neededBy = rawNeededBy ? new Date(rawNeededBy) : null;
-  const unit = parseString(body.unit) || "pcs";
   const notes = parseString(body.notes);
   const inventoryRecordId = parseString(
     body.inventoryRecordId || body.inventoryRecord || body.inventoryMatchId,
@@ -237,8 +290,17 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
   if (!mongoose.Types.ObjectId.isValid(projectId)) {
     return { error: "Choose a valid project for this material request." };
   }
-  if (!mongoose.Types.ObjectId.isValid(projectItemId)) {
+  if (!mongoose.Types.ObjectId.isValid(primaryProjectItemId)) {
     return { error: "Choose an item from the project order list." };
+  }
+  const requestItemCount = submittedItems?.length || projectItemIds.length;
+  if (requestItemCount > MAX_REQUEST_ITEMS) {
+    return {
+      error: `A project request can contain up to ${MAX_REQUEST_ITEMS} items.`,
+    };
+  }
+  if (projectItemIds.some((itemId) => !mongoose.Types.ObjectId.isValid(itemId))) {
+    return { error: "Choose valid items from the project order list." };
   }
   if (neededBy && Number.isNaN(neededBy.getTime())) {
     return { error: "Needed by date is invalid." };
@@ -255,13 +317,67 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
     };
   }
 
-  const projectItem = findProjectItem(project, projectItemId);
+  const linkedProjectItems = projectItemIds.map((itemId) => ({
+    itemId,
+    item: findProjectItem(project, itemId),
+  }));
+  if (linkedProjectItems.some(({ item }) => !item)) {
+    return { error: "One of the selected project items was not found.", statusCode: 404 };
+  }
+
+  const projectItemMap = new Map(
+    linkedProjectItems.map(({ itemId, item }) => [itemId, item]),
+  );
+  const projectItem =
+    projectItemMap.get(primaryProjectItemId) ||
+    findProjectItem(project, primaryProjectItemId);
   if (!projectItem) {
     return { error: "Selected project item was not found.", statusCode: 404 };
   }
 
-  const materialName = parseString(projectItem.description || body.materialName);
-  const quantity = parseString(projectItem.qty || body.quantity);
+  const defaultUnit = parseString(body.unit) || "pcs";
+  const requestItems = submittedItems
+    ? submittedItems.map((item) => {
+        const linkedItemId = parseString(item?.projectItemId);
+        const linkedItem = linkedItemId ? projectItemMap.get(linkedItemId) : null;
+        return {
+          materialName:
+            parseString(item?.materialName ?? item?.name ?? item?.description) ||
+            parseString(linkedItem?.description),
+          quantity:
+            parseString(item?.quantity ?? item?.qty) ||
+            parseString(linkedItem?.qty),
+          unit: parseString(item?.unit) || defaultUnit,
+          projectItemId: linkedItem?._id || null,
+          projectItemBreakdown: parseString(linkedItem?.breakdown),
+          projectItemQuantity:
+            typeof linkedItem?.qty === "number" && Number.isFinite(linkedItem.qty)
+              ? linkedItem.qty
+              : null,
+        };
+      })
+    : linkedProjectItems.map(({ item }) => ({
+        materialName: parseString(item.description),
+        quantity: parseString(item.qty),
+        unit: defaultUnit,
+        projectItemId: item._id,
+        projectItemBreakdown: parseString(item.breakdown),
+        projectItemQuantity:
+          typeof item.qty === "number" && Number.isFinite(item.qty)
+            ? item.qty
+            : null,
+      }));
+
+  const primaryRequestItem = requestItems.find(
+    (item) => toEntityId(item.projectItemId) === primaryProjectItemId,
+  );
+  if (!primaryRequestItem) {
+    return { error: "Keep the selected order item in this project request." };
+  }
+
+  const materialName = primaryRequestItem.materialName;
+  const quantity = primaryRequestItem.quantity;
+  const unit = primaryRequestItem.unit;
   const department =
     resolveRequestedDepartment(user, body.department) ||
     normalizeDepartmentList(user?.department)[0] ||
@@ -273,6 +389,14 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
   }
   if (!quantity) {
     return { error: "Selected project item does not have a quantity." };
+  }
+  const incompleteItemIndex = requestItems.findIndex(
+    (item) => !item.materialName || !item.quantity,
+  );
+  if (incompleteItemIndex >= 0) {
+    return {
+      error: `Request item ${incompleteItemIndex + 1} needs a material name and quantity.`,
+    };
   }
   if (!departmentKey) {
     return {
@@ -298,6 +422,14 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
       materialName,
       quantity,
       unit,
+      items: requestItems.map((item) => ({
+        materialName: item.materialName,
+        quantity: item.quantity,
+        unit: item.unit,
+        projectItemId: item.projectItemId,
+        projectItemBreakdown: item.projectItemBreakdown,
+        projectItemQuantity: item.projectItemQuantity,
+      })),
       department,
       departmentKey,
       priority,
@@ -321,9 +453,14 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
 };
 
 const readMaterialRequestPayload = (user, body = {}) => {
-  const materialName = parseString(body.materialName);
-  const quantity = parseString(body.quantity);
-  const unit = parseString(body.unit);
+  const requestItems = readRequestItems(body);
+  if (requestItems.error) return requestItems;
+
+  const items = requestItems.data;
+  const firstItem = items[0];
+  const materialName = firstItem.materialName;
+  const quantity = firstItem.quantity;
+  const unit = firstItem.unit;
   const department = resolveRequestedDepartment(user, body.department);
   const departmentKey = normalizeDepartmentKey(department);
   const notes = parseString(body.notes);
@@ -352,6 +489,7 @@ const readMaterialRequestPayload = (user, body = {}) => {
       materialName,
       quantity,
       unit,
+      items,
       department,
       departmentKey,
       priority,
