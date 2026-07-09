@@ -34,10 +34,67 @@ const toEntityId = (value) => {
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const buildSearchRegex = (value) => {
+const buildSearchRegexes = (value) => {
   const term = parseString(value).slice(0, 120);
-  if (!term) return null;
-  return new RegExp(escapeRegex(term), "i");
+  if (!term) return [];
+
+  const candidates = [
+    term,
+    ...(term.toLowerCase().match(/[a-z0-9]+/g) || []).filter(
+      (token) => token.length >= 2,
+    ),
+  ];
+
+  return Array.from(
+    new Map(
+      candidates.map((candidate) => [
+        candidate.toLowerCase(),
+        new RegExp(escapeRegex(candidate), "i"),
+      ]),
+    ).values(),
+  ).slice(0, 9);
+};
+
+const scoreInventoryMatch = (record, rawQuery) => {
+  const query = parseString(rawQuery).toLowerCase();
+  if (!query) return 0;
+
+  const item = parseString(record?.item).toLowerCase();
+  const sku = parseString(record?.sku).toLowerCase();
+  const searchableText = [
+    record?.item,
+    record?.sku,
+    record?.brand,
+    record?.category,
+    record?.warehouse,
+    record?.subtext,
+    record?.shelfLocation,
+    ...(Array.isArray(record?.variants)
+      ? record.variants.flatMap((variant) => [
+          variant?.name,
+          variant?.color,
+          variant?.sku,
+        ])
+      : []),
+  ]
+    .map(parseString)
+    .join(" ")
+    .toLowerCase();
+  const tokens = (query.match(/[a-z0-9]+/g) || []).filter(
+    (token) => token.length >= 2,
+  );
+
+  let score = 0;
+  if (sku === query) score += 140;
+  if (item === query) score += 120;
+  if (item.startsWith(query)) score += 80;
+  if (item.includes(query)) score += 60;
+  if (searchableText.includes(query)) score += 35;
+  tokens.forEach((token) => {
+    if (item.includes(token)) score += 18;
+    else if (searchableText.includes(token)) score += 8;
+  });
+  return score;
 };
 
 const normalizeDepartmentKey = (value) =>
@@ -354,9 +411,12 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
             typeof linkedItem?.qty === "number" && Number.isFinite(linkedItem.qty)
               ? linkedItem.qty
               : null,
+          inventoryRecordId:
+            parseString(item?.inventoryRecordId || item?.inventoryRecord) ||
+            (linkedItemId === primaryProjectItemId ? inventoryRecordId : ""),
         };
       })
-    : linkedProjectItems.map(({ item }) => ({
+    : linkedProjectItems.map(({ itemId, item }) => ({
         materialName: parseString(item.description),
         quantity: parseString(item.qty),
         unit: defaultUnit,
@@ -366,6 +426,8 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
           typeof item.qty === "number" && Number.isFinite(item.qty)
             ? item.qty
             : null,
+        inventoryRecordId:
+          itemId === primaryProjectItemId ? inventoryRecordId : "",
       }));
 
   const primaryRequestItem = requestItems.find(
@@ -404,16 +466,36 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
     };
   }
 
-  let inventorySnapshot = {};
-  if (inventoryRecordId) {
-    if (!mongoose.Types.ObjectId.isValid(inventoryRecordId)) {
-      return { error: "Selected inventory item is invalid." };
+  const inventoryRecordIds = Array.from(
+    new Set(requestItems.map((item) => item.inventoryRecordId).filter(Boolean)),
+  );
+  if (
+    inventoryRecordIds.some(
+      (recordId) => !mongoose.Types.ObjectId.isValid(recordId),
+    )
+  ) {
+    return { error: "One of the selected inventory items is invalid." };
+  }
+  if (inventoryRecordIds.length) {
+    const inventoryRecords = await InventoryRecord.find({
+      _id: { $in: inventoryRecordIds },
+    }).lean();
+    const inventoryRecordMap = new Map(
+      inventoryRecords.map((record) => [toEntityId(record._id), record]),
+    );
+    const missingInventoryRecordId = inventoryRecordIds.find(
+      (recordId) => !inventoryRecordMap.has(recordId),
+    );
+    if (missingInventoryRecordId) {
+      return {
+        error: "One of the selected inventory items was not found.",
+        statusCode: 404,
+      };
     }
-    const inventoryRecord = await InventoryRecord.findById(inventoryRecordId).lean();
-    if (!inventoryRecord) {
-      return { error: "Selected inventory item was not found.", statusCode: 404 };
-    }
-    inventorySnapshot = buildInventorySnapshot(inventoryRecord);
+    requestItems.forEach((item) => {
+      const record = inventoryRecordMap.get(item.inventoryRecordId);
+      item.inventorySnapshot = record ? buildInventorySnapshot(record) : {};
+    });
   }
 
   return {
@@ -429,6 +511,7 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
         projectItemId: item.projectItemId,
         projectItemBreakdown: item.projectItemBreakdown,
         projectItemQuantity: item.projectItemQuantity,
+        ...(item.inventorySnapshot || {}),
       })),
       department,
       departmentKey,
@@ -447,7 +530,7 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
         typeof projectItem.qty === "number" && Number.isFinite(projectItem.qty)
           ? projectItem.qty
           : null,
-      ...inventorySnapshot,
+      ...(primaryRequestItem.inventorySnapshot || {}),
     },
   };
 };
@@ -501,33 +584,46 @@ const readMaterialRequestPayload = (user, body = {}) => {
 
 const getMaterialRequestInventoryMatches = async (req, res) => {
   try {
-    const search = buildSearchRegex(req.query.query || req.query.search);
-    if (!search) {
+    const rawQuery = parseString(req.query.query || req.query.search);
+    const searches = buildSearchRegexes(rawQuery);
+    if (!searches.length) {
       return res.json({ matches: [] });
     }
 
+    const searchFields = [
+      "item",
+      "brand",
+      "sku",
+      "category",
+      "subtext",
+      "warehouse",
+      "shelfLocation",
+      "variants.name",
+      "variants.color",
+      "variants.sku",
+    ];
     const records = await InventoryRecord.find({
-      $or: [
-        { item: search },
-        { brand: search },
-        { sku: search },
-        { category: search },
-        { subtext: search },
-        { warehouse: search },
-        { shelfLocation: search },
-        { "variants.name": search },
-        { "variants.color": search },
-        { "variants.sku": search },
-      ],
+      $or: searches.flatMap((search) =>
+        searchFields.map((field) => ({ [field]: search })),
+      ),
     })
       .select(
         "item sku brand category warehouse subtext shelfLocation qtyValue qtyLabel qtyMeta status variants updatedAt",
       )
       .sort({ updatedAt: -1, createdAt: -1 })
-      .limit(8)
+      .limit(40)
       .lean();
 
-    res.json({ matches: records.map(formatInventoryMatch) });
+    res.json({
+      matches: records
+        .map((record) => ({
+          record,
+          score: scoreInventoryMatch(record, rawQuery),
+        }))
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 8)
+        .map(({ record }) => formatInventoryMatch(record)),
+    });
   } catch (error) {
     console.error("Error fetching material request inventory matches:", error);
     res.status(500).json({ message: "Failed to fetch inventory matches." });

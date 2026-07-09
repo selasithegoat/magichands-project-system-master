@@ -1525,6 +1525,11 @@
   padding: 0.7rem;
 }
 
+.project-material-line-editor.active {
+  border-color: color-mix(in srgb, var(--primary-color, #2563eb) 52%, var(--border-color));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #2563eb) 9%, transparent);
+}
+
 .project-material-line-editor-title {
   grid-column: 1 / -1;
   display: flex;

@@ -2479,9 +2479,6 @@ const createProjectRequestLine = (item = {}, isManual = false) => ({
   breakdown: isManual ? "" : String(item?.breakdown || ""),
 });
 
-const buildInventoryMatchQuery = (item) =>
-  String(item?.description || item?.breakdown || "").trim();
-
 const getInventoryQuantityLabel = (match) => {
   if (!match) return "Quantity not set";
   if (match.qtyLabel) return match.qtyLabel;
@@ -2521,18 +2518,77 @@ const OrderItemsCard = ({
   const [projectRequestLines, setProjectRequestLines] = useState([]);
   const [requestForm, setRequestForm] = useState(getProjectRequestInitialForm);
   const [inventoryMatches, setInventoryMatches] = useState([]);
-  const [selectedInventoryId, setSelectedInventoryId] = useState("");
+  const [activeInventoryLineId, setActiveInventoryLineId] = useState("");
+  const [inventorySelections, setInventorySelections] = useState({});
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestError, setRequestError] = useState("");
   const [inventoryError, setInventoryError] = useState("");
 
+  const activeInventoryLine = useMemo(
+    () =>
+      projectRequestLines.find(
+        (line) => line.clientId === activeInventoryLineId,
+      ) || null,
+    [activeInventoryLineId, projectRequestLines],
+  );
+  const selectedInventoryId =
+    inventorySelections[activeInventoryLineId] || "";
   const selectedInventoryMatch = useMemo(
     () =>
       inventoryMatches.find((match) => match._id === selectedInventoryId) ||
       null,
     [inventoryMatches, selectedInventoryId],
   );
+
+  useEffect(() => {
+    const query = String(activeInventoryLine?.materialName || "").trim();
+    if (!requestItem || query.length < 2) {
+      setInventoryMatches([]);
+      setInventoryLoading(false);
+      setInventoryError("");
+      return undefined;
+    }
+
+    let controller;
+    setInventoryLoading(true);
+    setInventoryError("");
+    const timer = window.setTimeout(async () => {
+      controller = new AbortController();
+      try {
+        const response = await fetch(
+          `/api/material-requests/inventory-matches?query=${encodeURIComponent(query)}`,
+          {
+            credentials: "include",
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message || "Failed to load inventory matches.");
+        }
+        setInventoryMatches(
+          Array.isArray(payload?.matches) ? payload.matches : [],
+        );
+      } catch (matchError) {
+        if (matchError.name !== "AbortError") {
+          setInventoryMatches([]);
+          setInventoryError(
+            matchError.message || "Failed to load inventory matches.",
+          );
+        }
+      } finally {
+        if (!controller?.signal.aborted) setInventoryLoading(false);
+      }
+    }, 320);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller?.abort();
+    };
+  }, [activeInventoryLine?.materialName, requestItem]);
+
   const showToast = (message, type = "info") => {
     setToast({ message, type });
   };
@@ -2653,7 +2709,8 @@ const OrderItemsCard = ({
     setProjectRequestLines([]);
     setRequestForm(getProjectRequestInitialForm());
     setInventoryMatches([]);
-    setSelectedInventoryId("");
+    setActiveInventoryLineId("");
+    setInventorySelections({});
     setRequestError("");
     setInventoryError("");
   };
@@ -2663,42 +2720,19 @@ const OrderItemsCard = ({
     if (requestError) setRequestError("");
   };
 
-  const openProjectRequest = async (item) => {
+  const openProjectRequest = (item) => {
     if (!item?._id || !canRequestFromStores) return;
 
+    const initialLine = createProjectRequestLine(item);
     setRequestItem(item);
     setSelectedProjectItemIds([String(item._id)]);
-    setProjectRequestLines([createProjectRequestLine(item)]);
+    setProjectRequestLines([initialLine]);
     setRequestForm(getProjectRequestInitialForm());
     setInventoryMatches([]);
-    setSelectedInventoryId("");
+    setActiveInventoryLineId(initialLine.clientId);
+    setInventorySelections({});
     setRequestError("");
     setInventoryError("");
-
-    const query = buildInventoryMatchQuery(item);
-    if (!query) return;
-
-    setInventoryLoading(true);
-    try {
-      const response = await fetch(
-        `/api/material-requests/inventory-matches?query=${encodeURIComponent(query)}`,
-        {
-          credentials: "include",
-          cache: "no-store",
-        },
-      );
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || "Failed to load inventory matches.");
-      }
-      const matches = Array.isArray(payload?.matches) ? payload.matches : [];
-      setInventoryMatches(matches);
-      setSelectedInventoryId(matches[0]?._id || "");
-    } catch (matchError) {
-      setInventoryError(matchError.message || "Failed to load inventory matches.");
-    } finally {
-      setInventoryLoading(false);
-    }
   };
 
   const toggleProjectRequestItem = (itemId) => {
@@ -2706,49 +2740,65 @@ const OrderItemsCard = ({
     if (!normalizedId || normalizedId === String(requestItem?._id || "")) return;
 
     const isSelected = selectedProjectItemIds.includes(normalizedId);
-    setSelectedProjectItemIds((previous) =>
-      isSelected
-        ? previous.filter((id) => id !== normalizedId)
-        : [...previous, normalizedId],
-    );
-    setProjectRequestLines((previous) => {
-      if (isSelected) {
-        return previous.filter((line) => line.projectItemId !== normalizedId);
-      }
-      const projectItem = items.find(
-        (item) => String(item?._id || "") === normalizedId,
+    if (isSelected) {
+      const removedLine = projectRequestLines.find(
+        (line) => line.projectItemId === normalizedId,
       );
-      return projectItem
-        ? [...previous, createProjectRequestLine(projectItem)]
-        : previous;
-    });
+      setSelectedProjectItemIds((previous) =>
+        previous.filter((id) => id !== normalizedId),
+      );
+      setProjectRequestLines((previous) =>
+        previous.filter((line) => line.projectItemId !== normalizedId),
+      );
+      if (removedLine) {
+        setInventorySelections((previous) => {
+          const next = { ...previous };
+          delete next[removedLine.clientId];
+          return next;
+        });
+        if (activeInventoryLineId === removedLine.clientId) {
+          const primaryLine = projectRequestLines.find(
+            (line) =>
+              line.projectItemId === String(requestItem?._id || ""),
+          );
+          setActiveInventoryLineId(primaryLine?.clientId || "");
+        }
+      }
+      return;
+    }
+
+    const projectItem = items.find(
+      (item) => String(item?._id || "") === normalizedId,
+    );
+    if (!projectItem) return;
+    const newLine = createProjectRequestLine(projectItem);
+    setSelectedProjectItemIds((previous) => [...previous, normalizedId]);
+    setProjectRequestLines((previous) => [...previous, newLine]);
+    setActiveInventoryLineId(newLine.clientId);
   };
 
   const updateProjectRequestLine = (clientId, field, value) => {
+    setActiveInventoryLineId(clientId);
     setProjectRequestLines((previous) =>
       previous.map((line) =>
         line.clientId === clientId ? { ...line, [field]: value } : line,
       ),
     );
-    const primaryLine = projectRequestLines.find(
-      (line) => line.projectItemId === String(requestItem?._id || ""),
-    );
-    if (
-      field === "materialName" &&
-      primaryLine?.clientId === clientId &&
-      value !== primaryLine.materialName
-    ) {
-      setSelectedInventoryId("");
+    if (field === "materialName") {
+      setInventorySelections((previous) => {
+        const next = { ...previous };
+        delete next[clientId];
+        return next;
+      });
     }
     if (requestError) setRequestError("");
   };
 
   const addManualProjectRequestLine = () => {
     if (projectRequestLines.length >= 25) return;
-    setProjectRequestLines((previous) => [
-      ...previous,
-      createProjectRequestLine({}, true),
-    ]);
+    const newLine = createProjectRequestLine({}, true);
+    setProjectRequestLines((previous) => [...previous, newLine]);
+    setActiveInventoryLineId(newLine.clientId);
     if (requestError) setRequestError("");
   };
 
@@ -2759,6 +2809,17 @@ const OrderItemsCard = ({
     setProjectRequestLines((previous) =>
       previous.filter((item) => item.clientId !== line.clientId),
     );
+    setInventorySelections((previous) => {
+      const next = { ...previous };
+      delete next[line.clientId];
+      return next;
+    });
+    if (activeInventoryLineId === line.clientId) {
+      const primaryLine = projectRequestLines.find(
+        (item) => item.projectItemId === String(requestItem?._id || ""),
+      );
+      setActiveInventoryLineId(primaryLine?.clientId || "");
+    }
     if (line.projectItemId) {
       setSelectedProjectItemIds((previous) =>
         previous.filter((id) => id !== line.projectItemId),
@@ -2782,6 +2843,9 @@ const OrderItemsCard = ({
     setRequestError("");
 
     try {
+      const primaryLine = projectRequestLines.find(
+        (line) => line.projectItemId === String(requestItem._id),
+      );
       const response = await fetch("/api/material-requests", {
         method: "POST",
         credentials: "include",
@@ -2791,12 +2855,13 @@ const OrderItemsCard = ({
           projectId: project?._id || projectId,
           projectItemId: requestItem._id,
           projectItemIds: selectedProjectItemIds,
-          inventoryRecordId: selectedInventoryId,
+          inventoryRecordId: inventorySelections[primaryLine?.clientId] || "",
           items: projectRequestLines.map((line) => ({
             projectItemId: line.projectItemId || undefined,
             materialName: line.materialName.trim(),
             quantity: line.quantity.trim(),
             unit: line.unit.trim() || "pcs",
+            inventoryRecordId: inventorySelections[line.clientId] || undefined,
           })),
           priority: requestForm.priority,
           neededBy: requestForm.neededBy,
@@ -2929,7 +2994,9 @@ const OrderItemsCard = ({
                         line.projectItemId === String(requestItem._id);
                       return (
                         <div
-                          className="project-material-line-editor"
+                          className={`project-material-line-editor ${
+                            activeInventoryLineId === line.clientId ? "active" : ""
+                          }`}
                           key={line.clientId}
                         >
                           <div className="project-material-line-editor-title">
@@ -2947,6 +3014,7 @@ const OrderItemsCard = ({
                             <input
                               type="text"
                               value={line.materialName}
+                              onFocus={() => setActiveInventoryLineId(line.clientId)}
                               onChange={(event) =>
                                 updateProjectRequestLine(
                                   line.clientId,
@@ -3008,29 +3076,48 @@ const OrderItemsCard = ({
 
                 <section className="project-material-inventory">
                   <div className="project-material-section-title">
-                    <span>Inventory Match · Primary Item</span>
-                    {inventoryLoading ? <small>Checking...</small> : null}
+                    <span>Inventory Match</span>
+                    <small>
+                      {inventoryLoading
+                        ? "Checking..."
+                        : activeInventoryLine?.materialName
+                          ? `For ${activeInventoryLine.materialName}`
+                          : "Type a material name"}
+                    </small>
                   </div>
 
                   {inventoryError ? (
                     <p className="project-material-request-error">{inventoryError}</p>
                   ) : null}
 
-                  {inventoryLoading ? (
+                  {!activeInventoryLine ||
+                  activeInventoryLine.materialName.trim().length < 2 ? (
+                    <div className="project-material-empty">
+                      Type at least 2 characters to see matching inventory.
+                    </div>
+                  ) : inventoryLoading ? (
                     <div className="project-material-empty">Loading inventory...</div>
                   ) : inventoryMatches.length ? (
                     <div className="project-material-match-list">
-                      {inventoryMatches.map((match) => (
+                      {inventoryMatches.map((match, index) => (
                         <button
                           type="button"
                           key={match._id}
                           className={`project-material-match-card ${
                             selectedInventoryId === match._id ? "selected" : ""
                           }`}
-                          onClick={() => setSelectedInventoryId(match._id)}
+                          onClick={() =>
+                            setInventorySelections((previous) => ({
+                              ...previous,
+                              [activeInventoryLineId]: match._id,
+                            }))
+                          }
                         >
                           <strong>{match.item || "Unnamed inventory item"}</strong>
-                          <span>{match.sku || "No item ID"}</span>
+                          <span>
+                            {index === 0 ? "Recommended - " : ""}
+                            {match.sku || "No item ID"}
+                          </span>
                           <span>{getInventoryQuantityLabel(match)}</span>
                         </button>
                       ))}

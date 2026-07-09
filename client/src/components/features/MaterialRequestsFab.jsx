@@ -583,6 +583,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
                               <small>
                                 {item.quantity}
                                 {item.unit ? ` ${item.unit}` : ""}
+                                {item.inventorySku ? ` · ${item.inventorySku}` : ""}
                               </small>
                             </div>
                           ))}

@@ -30,6 +30,45 @@ const MaterialRequestItemSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    inventoryRecord: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "InventoryRecord",
+      default: null,
+    },
+    inventoryItemName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    inventorySku: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    inventoryWarehouse: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    inventoryShelfLocation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    inventoryStatus: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    inventoryQtyLabel: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    inventoryQtyValue: {
+      type: Number,
+      default: null,
+    },
   },
   { _id: true },
 );

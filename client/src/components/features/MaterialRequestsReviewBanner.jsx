@@ -360,6 +360,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                           <small>
                             {item.quantity}
                             {item.unit ? ` ${item.unit}` : ""}
+                            {item.inventorySku ? ` · ID ${item.inventorySku}` : ""}
                           </small>
                         </div>
                       ))}
