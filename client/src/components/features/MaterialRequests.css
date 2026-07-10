@@ -1074,6 +1074,59 @@
   width: 100%;
 }
 
+.material-review-queue-tabs {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding: 0.75rem 1.1rem;
+  border-bottom: 1px solid var(--material-border);
+  background: var(--material-card);
+}
+
+.material-review-queue-tab {
+  min-width: 132px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.12rem 0.45rem;
+  align-items: center;
+  border: 1px solid var(--material-border);
+  border-radius: 12px;
+  background: var(--material-surface);
+  color: var(--material-text);
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.material-review-queue-tab span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.73rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-review-queue-tab strong {
+  color: var(--material-primary);
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.material-review-queue-tab small {
+  grid-column: 1 / -1;
+  color: var(--material-muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.material-review-queue-tab.active {
+  border-color: color-mix(in srgb, var(--material-primary) 56%, var(--material-border));
+  background: var(--material-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--material-primary) 16%, transparent);
+}
+
 .material-review-body {
   flex: 1;
   min-height: 0;
@@ -1092,6 +1145,41 @@
   flex-direction: column;
   gap: 0.72rem;
   padding: 0.85rem;
+}
+
+.material-review-work-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.material-review-work-summary span {
+  border: 1px solid var(--material-border);
+  border-radius: 999px;
+  background: var(--material-card);
+  color: var(--material-muted);
+  padding: 0.22rem 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.material-review-work-summary span.ready {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.material-review-work-summary span.purchase {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: var(--material-warning-soft);
+  color: var(--material-warning);
+}
+
+.material-review-work-summary span.partial {
+  border-color: color-mix(in srgb, var(--material-primary) 36%, var(--material-border));
+  background: var(--material-soft);
+  color: var(--material-primary);
 }
 
 .material-review-card-actions {

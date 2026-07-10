@@ -13,6 +13,15 @@ const STATUS_OPTIONS = [
   "Declined",
 ];
 
+const QUEUE_LANES = [
+  { key: "new", label: "New", hint: "Needs review" },
+  { key: "ready", label: "Ready to Issue", hint: "Stock available" },
+  { key: "purchase", label: "Needs Purchase", hint: "Balance to order" },
+  { key: "partial", label: "Partial", hint: "Some stock issued" },
+  { key: "ordered", label: "Ordered", hint: "Waiting on supply" },
+  { key: "done", label: "Done", hint: "Fulfilled or closed" },
+];
+
 const formatDate = (value) => {
   if (!value) return "";
   const parsed = new Date(value);
@@ -184,6 +193,61 @@ const buildIssueDraft = (item) => {
   };
 };
 
+const getRequestQueueMetrics = (request) => {
+  const items = getRequestItems(request);
+  const totalItems = items.length;
+  const readyItems = items.filter(canIssueLineFromStock).length;
+  const purchaseItems = items.filter((item) => getQuantityToOrder(item) > 0).length;
+  const partialItems = items.filter(
+    (item) => isLinePartiallyFulfilled(item) || getIssuedQuantity(item) > 0,
+  ).length;
+  const fulfilledItems = items.filter(isLineFulfilled).length;
+  const matchedItems = items.filter((item) => Boolean(getInventoryRecordId(item)))
+    .length;
+  const totalToOrder = items.reduce(
+    (sum, item) => sum + getQuantityToOrder(item),
+    0,
+  );
+  const totalIssued = items.reduce((sum, item) => sum + getIssuedQuantity(item), 0);
+
+  return {
+    totalItems,
+    readyItems,
+    purchaseItems,
+    partialItems,
+    fulfilledItems,
+    matchedItems,
+    totalToOrder,
+    totalIssued,
+  };
+};
+
+const requestMatchesQueueLane = (request, laneKey) => {
+  const status = request?.status || "Pending";
+  const metrics = getRequestQueueMetrics(request);
+  const isClosed = status === "Fulfilled" || status === "Declined";
+
+  if (laneKey === "ready") return !isClosed && metrics.readyItems > 0;
+  if (laneKey === "purchase") return !isClosed && metrics.purchaseItems > 0;
+  if (laneKey === "partial") {
+    return (
+      !isClosed &&
+      (status === "Partially Fulfilled" || metrics.partialItems > 0)
+    );
+  }
+  if (laneKey === "ordered") return status === "Ordered";
+  if (laneKey === "done") return isClosed;
+
+  return (
+    !isClosed &&
+    status !== "Ordered" &&
+    status !== "Partially Fulfilled" &&
+    metrics.readyItems === 0 &&
+    metrics.purchaseItems === 0 &&
+    metrics.partialItems === 0
+  );
+};
+
 const requestMaterialDelete = async (path, requestSource, method = "DELETE") => {
   const response = await fetch(buildSourcePath(path, requestSource), {
     method,
@@ -222,7 +286,8 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
   const [departments, setDepartments] = useState([]);
   const [statusCounts, setStatusCounts] = useState({});
   const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("Pending");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [queueFilter, setQueueFilter] = useState("new");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
@@ -283,6 +348,25 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
   const pendingCount = useMemo(
     () => Number(statusCounts?.Pending) || 0,
     [statusCounts],
+  );
+  const queueCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        QUEUE_LANES.map((lane) => [
+          lane.key,
+          requests.filter((request) =>
+            requestMatchesQueueLane(request, lane.key),
+          ).length,
+        ]),
+      ),
+    [requests],
+  );
+  const visibleRequests = useMemo(
+    () =>
+      requests.filter((request) =>
+        requestMatchesQueueLane(request, queueFilter),
+      ),
+    [queueFilter, requests],
   );
   const portalClass = requestSource === "admin" ? "admin-portal" : "";
   const reviewPanelId = `material-review-panel-${requestSource || "portal"}`;
@@ -618,13 +702,34 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
             </button>
           </div>
 
+          <div className="material-review-queue-tabs" role="tablist">
+            {QUEUE_LANES.map((lane) => (
+              <button
+                key={lane.key}
+                type="button"
+                className={`material-review-queue-tab ${
+                  queueFilter === lane.key ? "active" : ""
+                }`.trim()}
+                onClick={() => setQueueFilter(lane.key)}
+                role="tab"
+                aria-selected={queueFilter === lane.key}
+              >
+                <span>{lane.label}</span>
+                <strong>{queueCounts[lane.key] || 0}</strong>
+                <small>{lane.hint}</small>
+              </button>
+            ))}
+          </div>
+
           <div className="material-review-body">
             {error ? <p className="material-review-error">{error}</p> : null}
             {loading && !requests.length ? (
               <div className="material-review-empty">Loading...</div>
-            ) : requests.length ? (
+            ) : visibleRequests.length ? (
               <div className="material-review-grid">
-                {requests.map((request) => (
+                {visibleRequests.map((request) => {
+                  const queueMetrics = getRequestQueueMetrics(request);
+                  return (
                   <article className="material-review-card" key={request._id}>
                     <div className="material-review-card-header">
                       <div className="material-review-title-line">
@@ -659,6 +764,29 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                     <div className="material-review-meta">
                       <span>{getRequesterName(request)}</span>
                       <span>{formatDate(request.createdAt)}</span>
+                    </div>
+                    <div className="material-review-work-summary">
+                      {queueMetrics.readyItems > 0 ? (
+                        <span className="ready">
+                          {queueMetrics.readyItems} ready to issue
+                        </span>
+                      ) : null}
+                      {queueMetrics.purchaseItems > 0 ? (
+                        <span className="purchase">
+                          {formatQty(queueMetrics.totalToOrder)} to order
+                        </span>
+                      ) : null}
+                      {queueMetrics.partialItems > 0 ? (
+                        <span className="partial">
+                          {formatQty(queueMetrics.totalIssued)} issued
+                        </span>
+                      ) : null}
+                      <span>
+                        {queueMetrics.fulfilledItems}/{queueMetrics.totalItems} done
+                      </span>
+                      <span>
+                        {queueMetrics.matchedItems}/{queueMetrics.totalItems} matched
+                      </span>
                     </div>
                     <div className="material-review-line-items">
                       {getRequestItems(request).map((item, index) => {
@@ -794,10 +922,13 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                       </button>
                     </div>
                   </article>
-                ))}
+                );
+                })}
               </div>
             ) : (
-              <div className="material-review-empty">No material requests found.</div>
+              <div className="material-review-empty">
+                No requests in this queue lane.
+              </div>
             )}
           </div>
         </div>
