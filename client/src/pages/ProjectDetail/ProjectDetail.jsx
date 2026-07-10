@@ -2513,6 +2513,7 @@ const OrderItemsCard = ({
     message: "",
     onConfirm: null,
   });
+  const [isProjectRequestOpen, setIsProjectRequestOpen] = useState(false);
   const [requestItem, setRequestItem] = useState(null);
   const [selectedProjectItemIds, setSelectedProjectItemIds] = useState([]);
   const [projectRequestLines, setProjectRequestLines] = useState([]);
@@ -2543,7 +2544,7 @@ const OrderItemsCard = ({
 
   useEffect(() => {
     const query = String(activeInventoryLine?.materialName || "").trim();
-    if (!requestItem || query.length < 2) {
+    if (!isProjectRequestOpen || query.length < 2) {
       setInventoryMatches([]);
       setInventoryLoading(false);
       setInventoryError("");
@@ -2587,7 +2588,7 @@ const OrderItemsCard = ({
       window.clearTimeout(timer);
       controller?.abort();
     };
-  }, [activeInventoryLine?.materialName, requestItem]);
+  }, [activeInventoryLine?.materialName, isProjectRequestOpen]);
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -2704,6 +2705,7 @@ const OrderItemsCard = ({
 
   const closeProjectRequest = (options = {}) => {
     if (requestSubmitting && !options.force) return;
+    setIsProjectRequestOpen(false);
     setRequestItem(null);
     setSelectedProjectItemIds([]);
     setProjectRequestLines([]);
@@ -2724,6 +2726,7 @@ const OrderItemsCard = ({
     if (!item?._id || !canRequestFromStores) return;
 
     const initialLine = createProjectRequestLine(item);
+    setIsProjectRequestOpen(true);
     setRequestItem(item);
     setSelectedProjectItemIds([String(item._id)]);
     setProjectRequestLines([initialLine]);
@@ -2735,9 +2738,26 @@ const OrderItemsCard = ({
     setInventoryError("");
   };
 
+  const openManualProjectRequest = () => {
+    if (!canRequestFromStores) return;
+
+    const initialLine = createProjectRequestLine({}, true);
+    setIsProjectRequestOpen(true);
+    setRequestItem(null);
+    setSelectedProjectItemIds([]);
+    setProjectRequestLines([initialLine]);
+    setRequestForm(getProjectRequestInitialForm());
+    setInventoryMatches([]);
+    setActiveInventoryLineId(initialLine.clientId);
+    setInventorySelections({});
+    setRequestError("");
+    setInventoryError("");
+  };
+
   const toggleProjectRequestItem = (itemId) => {
     const normalizedId = String(itemId || "");
-    if (!normalizedId || normalizedId === String(requestItem?._id || "")) return;
+    const primaryItemId = requestItem?._id ? String(requestItem._id) : "";
+    if (!normalizedId || (primaryItemId && normalizedId === primaryItemId)) return;
 
     const isSelected = selectedProjectItemIds.includes(normalizedId);
     if (isSelected) {
@@ -2757,11 +2777,12 @@ const OrderItemsCard = ({
           return next;
         });
         if (activeInventoryLineId === removedLine.clientId) {
-          const primaryLine = projectRequestLines.find(
+          const fallbackLine = projectRequestLines.find(
             (line) =>
-              line.projectItemId === String(requestItem?._id || ""),
+              line.clientId !== removedLine.clientId &&
+              (!primaryItemId || line.projectItemId === primaryItemId),
           );
-          setActiveInventoryLineId(primaryLine?.clientId || "");
+          setActiveInventoryLineId(fallbackLine?.clientId || "");
         }
       }
       return;
@@ -2803,7 +2824,12 @@ const OrderItemsCard = ({
   };
 
   const removeProjectRequestLine = (line) => {
-    if (!line?.clientId || line.projectItemId === String(requestItem?._id || "")) {
+    const primaryItemId = requestItem?._id ? String(requestItem._id) : "";
+    if (
+      !line?.clientId ||
+      (primaryItemId && line.projectItemId === primaryItemId) ||
+      projectRequestLines.length <= 1
+    ) {
       return;
     }
     setProjectRequestLines((previous) =>
@@ -2815,10 +2841,12 @@ const OrderItemsCard = ({
       return next;
     });
     if (activeInventoryLineId === line.clientId) {
-      const primaryLine = projectRequestLines.find(
-        (item) => item.projectItemId === String(requestItem?._id || ""),
+      const fallbackLine = projectRequestLines.find(
+        (item) =>
+          item.clientId !== line.clientId &&
+          (!primaryItemId || item.projectItemId === primaryItemId),
       );
-      setActiveInventoryLineId(primaryLine?.clientId || "");
+      setActiveInventoryLineId(fallbackLine?.clientId || "");
     }
     if (line.projectItemId) {
       setSelectedProjectItemIds((previous) =>
@@ -2829,7 +2857,6 @@ const OrderItemsCard = ({
 
   const submitProjectMaterialRequest = async () => {
     if (
-      !requestItem?._id ||
       !projectRequestLines.length ||
       projectRequestLines.some(
         (line) => !line.materialName.trim() || !line.quantity.trim(),
@@ -2843,9 +2870,13 @@ const OrderItemsCard = ({
     setRequestError("");
 
     try {
+      const primaryProjectItemId = requestItem?._id ? String(requestItem._id) : "";
       const primaryLine = projectRequestLines.find(
-        (line) => line.projectItemId === String(requestItem._id),
-      );
+        (line) => primaryProjectItemId && line.projectItemId === primaryProjectItemId,
+      ) || projectRequestLines[0];
+      const linkedProjectItemIds = projectRequestLines
+        .map((line) => line.projectItemId)
+        .filter(Boolean);
       const response = await fetch("/api/material-requests", {
         method: "POST",
         credentials: "include",
@@ -2853,8 +2884,8 @@ const OrderItemsCard = ({
         body: JSON.stringify({
           requestType: "project",
           projectId: project?._id || projectId,
-          projectItemId: requestItem._id,
-          projectItemIds: selectedProjectItemIds,
+          projectItemId: requestItem?._id || undefined,
+          projectItemIds: linkedProjectItemIds,
           inventoryRecordId: inventorySelections[primaryLine?.clientId] || "",
           items: projectRequestLines.map((line) => ({
             projectItemId: line.projectItemId || undefined,
@@ -2882,8 +2913,9 @@ const OrderItemsCard = ({
     }
   };
 
+  const isManualProjectRequest = isProjectRequestOpen && !requestItem?._id;
   const projectRequestModal =
-    requestItem && typeof document !== "undefined"
+    isProjectRequestOpen && typeof document !== "undefined"
       ? createPortal(
           <div className="project-material-request-overlay" onClick={closeProjectRequest}>
             <section
@@ -2912,15 +2944,30 @@ const OrderItemsCard = ({
                 <section className="project-material-request-summary">
                   <div>
                     <span className="project-material-request-label">
-                      Primary Order Item
+                      {isManualProjectRequest
+                        ? "Manual Purchase Request"
+                        : "Primary Order Item"}
                     </span>
-                    <strong>{requestItem.description || "Untitled item"}</strong>
-                    {requestItem.breakdown ? <p>{requestItem.breakdown}</p> : null}
+                    <strong>
+                      {isManualProjectRequest
+                        ? "Standalone purchase material"
+                        : requestItem.description || "Untitled item"}
+                    </strong>
+                    {isManualProjectRequest ? (
+                      <p>
+                        Type the actual material needed below. This request does not
+                        have to be tied to an existing order item.
+                      </p>
+                    ) : requestItem.breakdown ? (
+                      <p>{requestItem.breakdown}</p>
+                    ) : null}
                   </div>
-                  <div className="project-material-request-qty">
-                    <span>Qty</span>
-                    <strong>{requestItem.qty || "--"}</strong>
-                  </div>
+                  {!isManualProjectRequest ? (
+                    <div className="project-material-request-qty">
+                      <span>Qty</span>
+                      <strong>{requestItem.qty || "--"}</strong>
+                    </div>
+                  ) : null}
                   <dl>
                     <div>
                       <dt>Project</dt>
@@ -2948,13 +2995,16 @@ const OrderItemsCard = ({
                     </small>
                   </div>
                   <p>
-                    Select another order item, edit its request details, or add a
-                    new purchase material.
+                    {isManualProjectRequest
+                      ? "Optionally attach order items, or keep this as a manual purchase request."
+                      : "Select another order item, edit its request details, or add a new purchase material."}
                   </p>
                   <div className="project-material-order-item-list">
                     {items.map((item) => {
                       const itemId = String(item?._id || "");
-                      const isPrimary = itemId === String(requestItem._id);
+                      const isPrimary =
+                        Boolean(requestItem?._id) &&
+                        itemId === String(requestItem._id);
                       const isSelected = selectedProjectItemIds.includes(itemId);
                       return (
                         <label
@@ -2991,7 +3041,9 @@ const OrderItemsCard = ({
                   <div className="project-material-line-editor-list">
                     {projectRequestLines.map((line, index) => {
                       const isPrimary =
+                        Boolean(requestItem?._id) &&
                         line.projectItemId === String(requestItem._id);
+                      const canRemoveLine = !isPrimary && projectRequestLines.length > 1;
                       return (
                         <div
                           className={`project-material-line-editor ${
@@ -3058,7 +3110,7 @@ const OrderItemsCard = ({
                               maxLength={40}
                             />
                           </label>
-                          {!isPrimary ? (
+                          {canRemoveLine ? (
                             <button
                               type="button"
                               className="project-material-line-remove"
@@ -3261,19 +3313,33 @@ const OrderItemsCard = ({
 
       <div className="card-header">
         <h3 className="card-title">📦 Order Items</h3>
-        {!readOnly && !isAdding && (
-          <button
-            className="edit-link"
-            onClick={() => setIsAdding(true)}
-            style={{
-              fontSize: "0.875rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.25rem",
-            }}
-          >
-            + Add Item
-          </button>
+        {(canRequestFromStores || (!readOnly && !isAdding)) && (
+          <div className="order-items-header-actions">
+            {canRequestFromStores ? (
+              <button
+                type="button"
+                className="edit-link stores-manual-request-link"
+                onClick={openManualProjectRequest}
+                disabled={requestSubmitting}
+              >
+                + Manual Purchase
+              </button>
+            ) : null}
+            {!readOnly && !isAdding ? (
+              <button
+                className="edit-link"
+                onClick={() => setIsAdding(true)}
+                style={{
+                  fontSize: "0.875rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                }}
+              >
+                + Add Item
+              </button>
+            ) : null}
+          </div>
         )}
       </div>
 

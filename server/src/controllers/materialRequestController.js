@@ -416,10 +416,16 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
   if (!mongoose.Types.ObjectId.isValid(projectId)) {
     return { error: "Choose a valid project for this material request." };
   }
-  if (!mongoose.Types.ObjectId.isValid(primaryProjectItemId)) {
-    return { error: "Choose an item from the project order list." };
+  if (
+    primaryProjectItemId &&
+    !mongoose.Types.ObjectId.isValid(primaryProjectItemId)
+  ) {
+    return { error: "Choose a valid item from the project order list." };
   }
   const requestItemCount = submittedItems?.length || projectItemIds.length;
+  if (requestItemCount < 1) {
+    return { error: "Add at least one material to request." };
+  }
   if (requestItemCount > MAX_REQUEST_ITEMS) {
     return {
       error: `A project request can contain up to ${MAX_REQUEST_ITEMS} items.`,
@@ -454,10 +460,11 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
   const projectItemMap = new Map(
     linkedProjectItems.map(({ itemId, item }) => [itemId, item]),
   );
-  const projectItem =
-    projectItemMap.get(primaryProjectItemId) ||
-    findProjectItem(project, primaryProjectItemId);
-  if (!projectItem) {
+  const projectItem = primaryProjectItemId
+    ? projectItemMap.get(primaryProjectItemId) ||
+      findProjectItem(project, primaryProjectItemId)
+    : null;
+  if (primaryProjectItemId && !projectItem) {
     return { error: "Selected project item was not found.", statusCode: 404 };
   }
 
@@ -499,11 +506,13 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
           itemId === primaryProjectItemId ? inventoryRecordId : "",
       }));
 
-  const primaryRequestItem = requestItems.find(
-    (item) => toEntityId(item.projectItemId) === primaryProjectItemId,
-  );
+  const primaryRequestItem = primaryProjectItemId
+    ? requestItems.find(
+        (item) => toEntityId(item.projectItemId) === primaryProjectItemId,
+      )
+    : requestItems[0];
   if (!primaryRequestItem) {
-    return { error: "Keep the selected order item in this project request." };
+    return { error: "Add at least one material to request." };
   }
 
   const materialName = primaryRequestItem.materialName;
@@ -592,11 +601,11 @@ const readProjectMaterialRequestPayload = async (user, body = {}) => {
       projectName: getProjectName(project),
       projectClientName: getProjectClientName(project),
       projectLeadName: getUserDisplayName(user),
-      projectItemId: projectItem._id,
-      projectItemDescription: materialName,
-      projectItemBreakdown: parseString(projectItem.breakdown),
+      projectItemId: projectItem?._id || null,
+      projectItemDescription: projectItem ? materialName : "",
+      projectItemBreakdown: parseString(projectItem?.breakdown),
       projectItemQuantity:
-        typeof projectItem.qty === "number" && Number.isFinite(projectItem.qty)
+        typeof projectItem?.qty === "number" && Number.isFinite(projectItem.qty)
           ? projectItem.qty
           : null,
       ...(primaryRequestItem.inventorySnapshot || {}),

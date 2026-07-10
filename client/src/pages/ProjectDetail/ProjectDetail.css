@@ -592,6 +592,37 @@
   gap: 0.5rem;
 }
 
+.order-items-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.stores-manual-request-link {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 44%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, var(--bg-card));
+  color: var(--primary-color, #2563eb);
+  padding: 0 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.stores-manual-request-link:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-color, #2563eb) 16%, var(--bg-card));
+}
+
+.stores-manual-request-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .meeting-required-pill {
   display: inline-flex;
   align-items: center;
