@@ -31,6 +31,20 @@ import {
 import { resolvePortalSource } from "../../../utils/portalSource";
 import "./MinimalQuoteForm.css";
 
+const REVISION_LOCKED_STATUSES = new Set([
+  "Completed",
+  "Delivered",
+  "Feedback Completed",
+  "Finished",
+]);
+const REVISION_LOCKED_MESSAGE =
+  "Quote revision is locked after completion. Reopen the project to revise it.";
+const REVISION_CANCELLED_MESSAGE =
+  "This project is cancelled and frozen. Reactivate it before making changes.";
+
+const isProjectCancelled = (project) =>
+  Boolean(project?.cancellation?.isCancelled);
+
 const normalizeTimeForInput = (value) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -117,6 +131,9 @@ const MinimalQuoteForm = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
+  const [editingProjectStatus, setEditingProjectStatus] = useState("");
+  const [editingProjectIsCancelled, setEditingProjectIsCancelled] =
+    useState(false);
   const [leads, setLeads] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedClientMockups, setSelectedClientMockups] = useState([]);
@@ -152,9 +169,20 @@ const MinimalQuoteForm = () => {
     items: [{ description: "", breakdown: "", qty: 1 }],
     checklist: { ...defaultChecklist },
   });
+  const isRevisionLocked =
+    Boolean(editingId) &&
+    REVISION_LOCKED_STATUSES.has(String(editingProjectStatus || ""));
+  const isRevisionFrozen = Boolean(editingId) && editingProjectIsCancelled;
+  const revisionBlockMessage = isRevisionFrozen
+    ? REVISION_CANCELLED_MESSAGE
+    : isRevisionLocked
+      ? REVISION_LOCKED_MESSAGE
+      : "";
 
   const applyProjectToForm = (project) => {
     if (!project) return;
+    setEditingProjectStatus(project.status || "");
+    setEditingProjectIsCancelled(isProjectCancelled(project));
     const details = project.details || {};
     const orderRef = project.orderRef || {};
     const resolvedQuoteNumber =
@@ -426,6 +454,10 @@ const MinimalQuoteForm = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (editingId && revisionBlockMessage) {
+      triggerToast(revisionBlockMessage, "error");
+      return;
+    }
     const trimmedOrderNumber = String(formData.quoteNumber || "").trim();
     if (!trimmedOrderNumber) {
       triggerToast("Please enter the Order Number.", "error");
@@ -455,6 +487,11 @@ const MinimalQuoteForm = () => {
   };
 
   const handleConfirmSubmit = async () => {
+    if (editingId && revisionBlockMessage) {
+      setShowConfirmModal(false);
+      triggerToast(revisionBlockMessage, "error");
+      return;
+    }
     setShowConfirmModal(false);
     setIsLoading(true);
 
@@ -1230,6 +1267,12 @@ const MinimalQuoteForm = () => {
             )}
           </div>
 
+          {editingId && revisionBlockMessage && (
+            <div className="revision-blocked-notice" role="alert">
+              {revisionBlockMessage}
+            </div>
+          )}
+
           <div className="minimal-quote-actions">
             <button
               type="button"
@@ -1238,7 +1281,11 @@ const MinimalQuoteForm = () => {
             >
               Cancel
             </button>
-            <button type="submit" className="minimal-quote-btn-submit">
+            <button
+              type="submit"
+              className="minimal-quote-btn-submit"
+              disabled={isLoading || Boolean(editingId && revisionBlockMessage)}
+            >
               {editingId ? "Save Reopened Quote" : "Create Quote Project"}
             </button>
           </div>

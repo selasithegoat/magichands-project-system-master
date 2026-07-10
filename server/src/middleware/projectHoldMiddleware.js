@@ -2,9 +2,13 @@ const Project = require("../models/Project");
 
 const HOLD_MESSAGE =
   "This project is currently on hold. Release it before making changes.";
+const CANCELLED_MESSAGE =
+  "This project is cancelled and frozen. Reactivate it before making changes.";
 
 const isProjectOnHold = (project) =>
   Boolean(project?.hold?.isOnHold) || project?.status === "On Hold";
+const isProjectCancelled = (project) =>
+  Boolean(project?.cancellation?.isCancelled);
 
 const buildHoldPayload = (project) => ({
   reason: project?.hold?.reason || "",
@@ -19,6 +23,17 @@ const sendProjectOnHoldResponse = (res, project) =>
     message: HOLD_MESSAGE,
     hold: buildHoldPayload(project),
   });
+const sendProjectCancelledResponse = (res, project) =>
+  res.status(423).json({
+    code: "PROJECT_CANCELLED",
+    message: CANCELLED_MESSAGE,
+    cancellation: {
+      reason: project?.cancellation?.reason || "",
+      cancelledAt: project?.cancellation?.cancelledAt || null,
+      cancelledBy: project?.cancellation?.cancelledBy || null,
+      resumedStatus: project?.cancellation?.resumedStatus || null,
+    },
+  });
 
 const requireProjectNotOnHold =
   ({ paramName = "id" } = {}) =>
@@ -30,9 +45,15 @@ const requireProjectNotOnHold =
         return res.status(400).json({ message: "Project id is required." });
       }
 
-      const project = await Project.findById(projectId).select("status hold");
+      const project = await Project.findById(projectId).select(
+        "status hold cancellation",
+      );
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
+      }
+
+      if (isProjectCancelled(project)) {
+        return sendProjectCancelledResponse(res, project);
       }
 
       if (isProjectOnHold(project)) {
@@ -47,7 +68,9 @@ const requireProjectNotOnHold =
   };
 
 module.exports = {
+  isProjectCancelled,
   isProjectOnHold,
+  sendProjectCancelledResponse,
   sendProjectOnHoldResponse,
   requireProjectNotOnHold,
 };

@@ -43,6 +43,13 @@ const REVISION_LOCKED_STATUSES = new Set([
   "Feedback Completed",
   "Finished",
 ]);
+const REVISION_LOCKED_MESSAGE =
+  "Order revision is locked after completion. Reopen the project to revise it.";
+const REVISION_CANCELLED_MESSAGE =
+  "This project is cancelled and frozen. Reactivate it before making changes.";
+
+const isProjectCancelled = (project) =>
+  Boolean(project?.cancellation?.isCancelled);
 
 const formatFileSize = (bytes) => {
   const size = Number(bytes);
@@ -300,6 +307,8 @@ const NewOrders = ({ user = null }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [editingProjectStatus, setEditingProjectStatus] = useState("");
+  const [editingProjectIsCancelled, setEditingProjectIsCancelled] =
+    useState(false);
   const [currentUser, setCurrentUser] = useState(user);
   const [hasResolvedCurrentUser, setHasResolvedCurrentUser] = useState(
     Boolean(user),
@@ -316,6 +325,12 @@ const NewOrders = ({ user = null }) => {
   const isRevisionLocked =
     Boolean(editingId) &&
     REVISION_LOCKED_STATUSES.has(String(editingProjectStatus || ""));
+  const isRevisionFrozen = Boolean(editingId) && editingProjectIsCancelled;
+  const revisionBlockMessage = isRevisionFrozen
+    ? REVISION_CANCELLED_MESSAGE
+    : isRevisionLocked
+      ? REVISION_LOCKED_MESSAGE
+      : "";
   const reopenedProject = location.state?.reopenedProject || null;
   const isCreateMode = !editingId && !reopenedProject;
   const shouldShowIntakeMockupUploads = isCreateMode || isRevisionMode;
@@ -670,6 +685,7 @@ const NewOrders = ({ user = null }) => {
   const applyProjectToForm = (project) => {
     if (!project) return;
     setEditingProjectStatus(project.status || "");
+    setEditingProjectIsCancelled(isProjectCancelled(project));
     setFormData({
       orderNumber: project.orderId || "",
       clientName: project.details?.client || "",
@@ -835,6 +851,7 @@ const NewOrders = ({ user = null }) => {
 
       if (!isCancelled) {
         setEditingProjectStatus("");
+        setEditingProjectIsCancelled(false);
         setIsDraftHydrated(true);
       }
     };
@@ -1026,11 +1043,8 @@ const NewOrders = ({ user = null }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (editingId && isRevisionLocked) {
-      showToast(
-        "Order revision is locked after completion. Reopen the project to revise it.",
-        "error",
-      );
+    if (editingId && revisionBlockMessage) {
+      showToast(revisionBlockMessage, "error");
       return;
     }
     const trimmedOrderNumber = String(formData.orderNumber || "").trim();
@@ -1072,6 +1086,7 @@ const NewOrders = ({ user = null }) => {
       setReferenceProjectQuery("");
       setReferenceProjectSuggestions([]);
       setEditingProjectStatus("");
+      setEditingProjectIsCancelled(false);
       setIsClientDropdownOpen(false);
     },
     [routePriority, routeProjectType],
@@ -1096,12 +1111,9 @@ const NewOrders = ({ user = null }) => {
   };
 
   const handleConfirmSubmit = async () => {
-    if (editingId && isRevisionLocked) {
+    if (editingId && revisionBlockMessage) {
       setShowConfirmModal(false);
-      showToast(
-        "Order revision is locked after completion. Reopen the project to revise it.",
-        "error",
-      );
+      showToast(revisionBlockMessage, "error");
       return;
     }
     setShowConfirmModal(false);
@@ -2374,6 +2386,12 @@ const NewOrders = ({ user = null }) => {
               )}
             </div>
 
+            {editingId && revisionBlockMessage && (
+              <div className="revision-blocked-notice" role="alert">
+                {revisionBlockMessage}
+              </div>
+            )}
+
             <div className="form-actions">
               {showCreateCancelAction && (
                 <button
@@ -2388,7 +2406,7 @@ const NewOrders = ({ user = null }) => {
               <button
                 type="submit"
                 className="submit-btn"
-                disabled={isLoading || (editingId && isRevisionLocked)}
+                disabled={isLoading || Boolean(editingId && revisionBlockMessage)}
               >
                 {isLoading
                   ? editingId
