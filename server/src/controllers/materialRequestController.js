@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const MaterialRequest = require("../models/MaterialRequest");
 const InventoryRecord = require("../models/InventoryRecord");
 const Project = require("../models/Project");
+const StockTransaction = require("../models/StockTransaction");
 
 const REVIEWER_DEPARTMENTS = new Set([
   "administration",
@@ -14,6 +15,7 @@ const VALID_STATUSES = new Set([
   "Pending",
   "In Review",
   "Ordered",
+  "Partially Fulfilled",
   "Fulfilled",
   "Declined",
 ]);
@@ -23,9 +25,46 @@ const MAX_REQUEST_ITEMS = 25;
 
 const parseString = (value) => String(value ?? "").trim();
 
+const formatQuantityLabel = (value) => {
+  if (!Number.isFinite(value)) return "";
+  const normalized = Number.isInteger(value) ? value : Number(value.toFixed(2));
+  return `${normalized.toLocaleString("en-US")} Units`;
+};
+
+const computeQtyMetaFromCapacity = (qtyValue, maxQty) => {
+  if (!Number.isFinite(qtyValue) || !Number.isFinite(maxQty) || maxQty <= 0) {
+    return "";
+  }
+  return `${Math.round((qtyValue / maxQty) * 100)}%`;
+};
+
+const parsePositiveQuantity = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const match = String(value).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numeric = Number.parseFloat(match[0]);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
+
+const parseNonNegativeQuantity = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const match = String(value).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numeric = Number.parseFloat(match[0]);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+};
+
+const roundQuantity = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Number(numeric.toFixed(4));
+};
+
 const toEntityId = (value) => {
   if (!value) return "";
   if (typeof value === "string" || typeof value === "number") return String(value);
+  if (value instanceof mongoose.Types.ObjectId) return value.toString();
+  if (typeof value.toHexString === "function") return value.toHexString();
   if (value._id) return toEntityId(value._id);
   if (value.id) return toEntityId(value.id);
   return "";
@@ -193,8 +232,38 @@ const buildSummary = (requests) => {
   };
 };
 
+const populateMaterialRequestQuery = (query) =>
+  query
+    .populate("requestedBy", "firstName lastName employeeId department avatarUrl")
+    .populate("statusUpdatedBy", "firstName lastName employeeId")
+    .populate("items.inventoryRecord", "item sku qtyValue qtyLabel qtyMeta status warehouse shelfLocation subtext")
+    .populate("inventoryRecord", "item sku qtyValue qtyLabel qtyMeta status warehouse shelfLocation subtext")
+    .populate("items.fulfilledBy", "firstName lastName employeeId")
+    .populate("items.stockTransaction", "txid type qty beforeQty afterQty date")
+    .populate("items.stockTransactions", "txid type qty beforeQty afterQty date");
+
+const getPopulatedMaterialRequestById = (requestId) =>
+  populateMaterialRequestQuery(MaterialRequest.findById(requestId)).lean();
+
 const isRequestOwner = (request, user) =>
   String(request?.requestedBy || "") === String(user?._id || "");
+
+const hasFulfilledRequestLine = (request) =>
+  Array.isArray(request?.items) &&
+  request.items.some(
+    (item) =>
+      item?.fulfillmentStatus === "Fulfilled" ||
+      item?.fulfillmentStatus === "Partially Fulfilled" ||
+      (Number(item?.fulfilledQuantity) || 0) > 0,
+  );
+
+const hasUnissuedMatchedRequestLine = (request) =>
+  Array.isArray(request?.items) &&
+  request.items.some(
+    (item) =>
+      toEntityId(item?.inventoryRecord) &&
+      item?.fulfillmentStatus !== "Fulfilled",
+  );
 
 const canCreateProjectRequest = (project, user) => {
   if (!project || !user) return false;
@@ -642,12 +711,9 @@ const getMaterialRequests = async (req, res) => {
     delete summaryFilter.status;
 
     const [requests, summaryRequests] = await Promise.all([
-      MaterialRequest.find(filter)
-        .populate("requestedBy", "firstName lastName employeeId department avatarUrl")
-        .populate("statusUpdatedBy", "firstName lastName employeeId")
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .lean(),
+      populateMaterialRequestQuery(
+        MaterialRequest.find(filter).sort({ createdAt: -1 }).limit(limit),
+      ).lean(),
       MaterialRequest.find(summaryFilter)
         .select("department departmentKey status")
         .sort({ department: 1 })
@@ -687,10 +753,7 @@ const createMaterialRequest = async (req, res) => {
       requesterDepartments: normalizeDepartmentList(req.user.department),
     });
 
-    const populated = await MaterialRequest.findById(request._id)
-      .populate("requestedBy", "firstName lastName employeeId department avatarUrl")
-      .populate("statusUpdatedBy", "firstName lastName employeeId")
-      .lean();
+    const populated = await getPopulatedMaterialRequestById(request._id);
 
     res.status(201).json(populated);
   } catch (error) {
@@ -715,6 +778,12 @@ const updateMaterialRequest = async (req, res) => {
         message: "Only the requester can edit this material request.",
       });
     }
+    if (hasFulfilledRequestLine(request)) {
+      return res.status(400).json({
+        message:
+          "This request has issued stock and can no longer be edited. Create a new request for changes.",
+      });
+    }
 
     const payload = readMaterialRequestPayload(req.user, req.body);
     if (payload.error) {
@@ -729,10 +798,7 @@ const updateMaterialRequest = async (req, res) => {
 
     await request.save();
 
-    const populated = await MaterialRequest.findById(request._id)
-      .populate("requestedBy", "firstName lastName employeeId department avatarUrl")
-      .populate("statusUpdatedBy", "firstName lastName employeeId")
-      .lean();
+    const populated = await getPopulatedMaterialRequestById(request._id);
 
     res.json(populated);
   } catch (error) {
@@ -766,6 +832,12 @@ const updateMaterialRequestStatus = async (req, res) => {
         alreadyDeleted: true,
       });
     }
+    if (status === "Fulfilled" && hasUnissuedMatchedRequestLine(request)) {
+      return res.status(400).json({
+        message:
+          "Issue matched inventory lines from stock before marking this request fulfilled.",
+      });
+    }
 
     request.status = status;
     request.statusNote = parseString(req.body.statusNote);
@@ -773,15 +845,275 @@ const updateMaterialRequestStatus = async (req, res) => {
     request.statusUpdatedAt = new Date();
     await request.save();
 
-    const populated = await MaterialRequest.findById(request._id)
-      .populate("requestedBy", "firstName lastName employeeId department avatarUrl")
-      .populate("statusUpdatedBy", "firstName lastName employeeId")
-      .lean();
+    const populated = await getPopulatedMaterialRequestById(request._id);
 
     res.json(populated);
   } catch (error) {
     console.error("Error updating material request status:", error);
     res.status(500).json({ message: "Failed to update material request." });
+  }
+};
+
+const fulfillMaterialRequestItem = async (req, res) => {
+  try {
+    if (!canReviewMaterialRequests(req.user)) {
+      return res.status(403).json({
+        message: "Only Admin and Stores users can fulfil material requests.",
+      });
+    }
+
+    const requestId = parseString(req.params.id);
+    const itemId = parseString(req.params.itemId);
+    if (
+      !mongoose.Types.ObjectId.isValid(requestId) ||
+      !mongoose.Types.ObjectId.isValid(itemId)
+    ) {
+      return res.status(400).json({ message: "Invalid material request item." });
+    }
+
+    const request = await MaterialRequest.findById(requestId);
+    if (!request) {
+      return res.status(404).json({ message: "Material request not found." });
+    }
+    if (request.status === "Declined") {
+      return res.status(400).json({
+        message: "Declined material requests cannot be fulfilled.",
+      });
+    }
+
+    const lineItem =
+      typeof request.items?.id === "function" ? request.items.id(itemId) : null;
+    if (!lineItem) {
+      return res.status(404).json({ message: "Material request item not found." });
+    }
+    if (lineItem.fulfillmentStatus === "Fulfilled") {
+      return res.status(400).json({
+        message: "This material request item has already been fulfilled.",
+      });
+    }
+
+    const inventoryRecordId = toEntityId(lineItem.inventoryRecord);
+    if (!mongoose.Types.ObjectId.isValid(inventoryRecordId)) {
+      return res.status(400).json({
+        message: "Match this request item to an inventory record before issuing stock.",
+      });
+    }
+
+    const requestedQty = parsePositiveQuantity(lineItem.quantity);
+    const alreadyIssuedQty = roundQuantity(Number(lineItem.fulfilledQuantity) || 0);
+    const remainingBeforeIssue = requestedQty
+      ? roundQuantity(Math.max(requestedQty - alreadyIssuedQty, 0))
+      : null;
+    if (remainingBeforeIssue !== null && remainingBeforeIssue <= 0) {
+      lineItem.fulfillmentStatus = "Fulfilled";
+      lineItem.remainingQuantity = 0;
+      lineItem.quantityToOrder = 0;
+      await request.save();
+      return res.status(400).json({
+        message: "This material request item has already been fully issued.",
+      });
+    }
+
+    const issueQty =
+      parsePositiveQuantity(
+        req.body.issuedQuantity ??
+          req.body.issueQuantity ??
+          req.body.quantity ??
+          req.body.qty,
+      ) ||
+      remainingBeforeIssue ||
+      parsePositiveQuantity(lineItem.quantity);
+    if (!issueQty) {
+      return res.status(400).json({
+        message:
+          "This request item needs a numeric quantity before stock can be issued.",
+      });
+    }
+    if (
+      remainingBeforeIssue !== null &&
+      issueQty > remainingBeforeIssue + 0.0001
+    ) {
+      return res.status(400).json({
+        message: `This line only has ${remainingBeforeIssue} remaining to issue.`,
+      });
+    }
+
+    const totalIssuedQty = roundQuantity(alreadyIssuedQty + issueQty);
+    const calculatedRemainingQty = requestedQty
+      ? roundQuantity(Math.max(requestedQty - totalIssuedQty, 0))
+      : 0;
+    const suppliedQuantityToOrder = parseNonNegativeQuantity(
+      req.body.remainingToOrder ??
+        req.body.quantityToOrder ??
+        req.body.remainingQuantity,
+    );
+    const quantityToOrder =
+      suppliedQuantityToOrder === null
+        ? calculatedRemainingQty
+        : roundQuantity(suppliedQuantityToOrder);
+    if (
+      requestedQty &&
+      quantityToOrder > calculatedRemainingQty + 0.0001
+    ) {
+      return res.status(400).json({
+        message:
+          "The quantity remaining to order cannot be greater than the unissued balance.",
+      });
+    }
+
+    const existingRecord = await InventoryRecord.findById(inventoryRecordId)
+      .select("item sku qtyValue qtyLabel qtyMeta maxQty priceValue warehouse subtext shelfLocation status")
+      .lean();
+    if (!existingRecord) {
+      return res.status(404).json({
+        message: "Matched inventory record was not found.",
+      });
+    }
+
+    const availableQty = Number.isFinite(existingRecord.qtyValue)
+      ? existingRecord.qtyValue
+      : 0;
+    if (availableQty < issueQty) {
+      return res.status(400).json({
+        message: `Not enough stock to issue ${issueQty}. Available stock is ${availableQty}.`,
+      });
+    }
+
+    const updatedInventory = await InventoryRecord.findOneAndUpdate(
+      {
+        _id: inventoryRecordId,
+        qtyValue: { $gte: issueQty },
+      },
+      {
+        $inc: { qtyValue: -issueQty },
+        $set: { updatedBy: req.user._id },
+      },
+      { new: true },
+    );
+    if (!updatedInventory) {
+      return res.status(409).json({
+        message:
+          "Stock changed while fulfilling this request. Refresh and try again.",
+      });
+    }
+
+    const afterQty = Number.isFinite(updatedInventory.qtyValue)
+      ? updatedInventory.qtyValue
+      : 0;
+    const beforeQty = Number((afterQty + issueQty).toFixed(4));
+    const qtyLabel = formatQuantityLabel(afterQty);
+    const qtyMeta = computeQtyMetaFromCapacity(afterQty, updatedInventory.maxQty);
+    const inventoryMetaUpdate = {
+      qtyLabel,
+      qtyMeta,
+      updatedBy: req.user._id,
+    };
+    if (Number.isFinite(updatedInventory.priceValue)) {
+      const valueValue = Number((updatedInventory.priceValue * afterQty).toFixed(2));
+      inventoryMetaUpdate.valueValue = valueValue;
+      inventoryMetaUpdate.value = valueValue.toFixed(2);
+    } else {
+      inventoryMetaUpdate.valueValue = null;
+      inventoryMetaUpdate.value = "";
+    }
+    await InventoryRecord.updateOne(
+      { _id: updatedInventory._id, qtyValue: afterQty },
+      { $set: inventoryMetaUpdate },
+    );
+
+    const now = new Date();
+    const transaction = await StockTransaction.create({
+      txid: `MR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      item: parseString(updatedInventory.item) || lineItem.materialName,
+      sku: parseString(updatedInventory.sku) || parseString(lineItem.inventorySku),
+      type: "Stock Out",
+      qty: -Math.abs(issueQty),
+      beforeQty,
+      afterQty,
+      source:
+        parseString(updatedInventory.warehouse) ||
+        parseString(updatedInventory.subtext) ||
+        parseString(lineItem.inventoryWarehouse),
+      destination: request.projectOrderId
+        ? `Project ${request.projectOrderId}`
+        : request.department,
+      date: now,
+      staff: getUserDisplayName(req.user),
+      notes:
+        parseString(req.body.note) ||
+        (quantityToOrder > 0
+          ? `Issued ${issueQty} for material request ${request._id}: ${lineItem.materialName}. ${quantityToOrder} remaining to order.`
+          : `Issued for material request ${request._id}: ${lineItem.materialName}`),
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
+    });
+
+    const isFullyFulfilled = requestedQty
+      ? totalIssuedQty >= requestedQty - 0.0001
+      : quantityToOrder <= 0;
+
+    lineItem.fulfillmentStatus = isFullyFulfilled
+      ? "Fulfilled"
+      : "Partially Fulfilled";
+    lineItem.fulfilledQuantity = totalIssuedQty;
+    lineItem.remainingQuantity = isFullyFulfilled ? 0 : calculatedRemainingQty;
+    lineItem.quantityToOrder = isFullyFulfilled ? 0 : quantityToOrder;
+    lineItem.fulfilledAt = now;
+    lineItem.fulfilledBy = req.user._id;
+    lineItem.fulfilledByName = getUserDisplayName(req.user);
+    lineItem.fulfillmentNote = parseString(req.body.note);
+    lineItem.stockTransaction = transaction._id;
+    if (!Array.isArray(lineItem.stockTransactions)) {
+      lineItem.stockTransactions = [];
+    }
+    lineItem.stockTransactions.push(transaction._id);
+    lineItem.stockBeforeQty = beforeQty;
+    lineItem.stockAfterQty = afterQty;
+
+    if (toEntityId(request.inventoryRecord) === inventoryRecordId) {
+      request.inventoryQtyValue = afterQty;
+      request.inventoryQtyLabel = qtyLabel;
+      request.inventoryStatus = parseString(updatedInventory.status);
+      request.inventoryWarehouse = parseString(
+        updatedInventory.warehouse || updatedInventory.subtext,
+      );
+      request.inventoryShelfLocation = parseString(updatedInventory.shelfLocation);
+    }
+
+    const requestItems = Array.isArray(request.items) ? request.items : [];
+    const allFulfilled =
+      requestItems.length > 0 &&
+      requestItems.every((item) => item.fulfillmentStatus === "Fulfilled");
+    const anyPartiallyFulfilled = requestItems.some(
+      (item) =>
+        item.fulfillmentStatus === "Partially Fulfilled" ||
+        (Number(item.fulfilledQuantity) || 0) > 0,
+    );
+    request.status = allFulfilled
+      ? "Fulfilled"
+      : anyPartiallyFulfilled
+        ? "Partially Fulfilled"
+        : "In Review";
+    request.statusNote = allFulfilled
+      ? "All matched material lines issued from stock."
+      : quantityToOrder > 0
+        ? `${formatQuantityLabel(issueQty)} issued. ${formatQuantityLabel(
+            quantityToOrder,
+          )} remaining to order.`
+        : "Some matched material lines have been issued from stock.";
+    request.statusUpdatedBy = req.user._id;
+    request.statusUpdatedAt = now;
+
+    await request.save();
+
+    const populated = await getPopulatedMaterialRequestById(request._id);
+    res.json({
+      request: populated,
+      stockTransaction: transaction,
+    });
+  } catch (error) {
+    console.error("Error fulfilling material request item:", error);
+    res.status(500).json({ message: "Failed to fulfil material request item." });
   }
 };
 
@@ -799,6 +1131,12 @@ const deleteMaterialRequest = async (req, res) => {
     if (!isRequestOwner(request, req.user) && !canReviewMaterialRequests(req.user)) {
       return res.status(403).json({
         message: "Only the requester, Admin, or Stores users can delete this request.",
+      });
+    }
+    if (hasFulfilledRequestLine(request)) {
+      return res.status(400).json({
+        message:
+          "This request has issued stock and cannot be deleted from the request queue.",
       });
     }
 
@@ -819,6 +1157,7 @@ module.exports = {
   getMaterialRequests,
   createMaterialRequest,
   updateMaterialRequest,
+  fulfillMaterialRequestItem,
   updateMaterialRequestStatus,
   deleteMaterialRequest,
 };

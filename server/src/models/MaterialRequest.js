@@ -69,6 +69,64 @@ const MaterialRequestItemSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    fulfillmentStatus: {
+      type: String,
+      enum: ["Pending", "Partially Fulfilled", "Fulfilled"],
+      default: "Pending",
+    },
+    fulfilledQuantity: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    remainingQuantity: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    quantityToOrder: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    fulfilledAt: {
+      type: Date,
+      default: null,
+    },
+    fulfilledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    fulfilledByName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    fulfillmentNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    stockTransaction: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "StockTransaction",
+      default: null,
+    },
+    stockTransactions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "StockTransaction",
+      },
+    ],
+    stockBeforeQty: {
+      type: Number,
+      default: null,
+    },
+    stockAfterQty: {
+      type: Number,
+      default: null,
+    },
   },
   { _id: true },
 );
@@ -140,7 +198,14 @@ const MaterialRequestSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "In Review", "Ordered", "Fulfilled", "Declined"],
+      enum: [
+        "Pending",
+        "In Review",
+        "Ordered",
+        "Partially Fulfilled",
+        "Fulfilled",
+        "Declined",
+      ],
       default: "Pending",
     },
     statusNote: {

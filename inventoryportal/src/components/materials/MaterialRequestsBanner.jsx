@@ -6,7 +6,14 @@ import { fetchInventory } from "../../utils/inventoryApi";
 import { showToast } from "../../utils/toast";
 import "./MaterialRequestsBanner.css";
 
-const STATUS_OPTIONS = ["Pending", "In Review", "Ordered", "Fulfilled", "Declined"];
+const STATUS_OPTIONS = [
+  "Pending",
+  "In Review",
+  "Ordered",
+  "Partially Fulfilled",
+  "Fulfilled",
+  "Declined",
+];
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -69,6 +76,114 @@ const getRequestTitle = (request) => {
   return items[0]?.materialName || "Material request";
 };
 
+const formatQty = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  return Number.isInteger(numeric)
+    ? numeric.toLocaleString("en-US")
+    : Number(numeric.toFixed(2)).toLocaleString("en-US");
+};
+
+const parseQtyValue = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const match = String(value).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numeric = Number.parseFloat(match[0]);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const qtyInputValue = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  const rounded = Number(numeric.toFixed(4));
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+};
+
+const getInventoryRecord = (item) =>
+  item?.inventoryRecord && typeof item.inventoryRecord === "object"
+    ? item.inventoryRecord
+    : null;
+
+const getInventoryRecordId = (item) => {
+  const record = item?.inventoryRecord;
+  if (!record) return "";
+  if (typeof record === "string") return record;
+  return record?._id || record?.id || "";
+};
+
+const getInventorySku = (item) =>
+  item?.inventorySku || getInventoryRecord(item)?.sku || "";
+
+const getLiveStockLabel = (item) => {
+  const record = getInventoryRecord(item);
+  if (!record || !Number.isFinite(Number(record.qtyValue))) return "";
+  return `Stock now: ${formatQty(record.qtyValue)}${
+    record.qtyLabel ? ` (${record.qtyLabel})` : ""
+  }`;
+};
+
+const isLineFulfilled = (item) => item?.fulfillmentStatus === "Fulfilled";
+const isLinePartiallyFulfilled = (item) =>
+  item?.fulfillmentStatus === "Partially Fulfilled";
+
+const canIssueLineFromStock = (item) => {
+  const record = getInventoryRecord(item);
+  const available = Number(record?.qtyValue ?? item?.inventoryQtyValue);
+  return (
+    Boolean(getInventoryRecordId(item)) &&
+    !isLineFulfilled(item) &&
+    Number.isFinite(available) &&
+    available > 0
+  );
+};
+
+const getRequestedQuantity = (item) => parseQtyValue(item?.quantity);
+
+const getIssuedQuantity = (item) => {
+  const numeric = Number(item?.fulfilledQuantity);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+};
+
+const getRemainingQuantity = (item) => {
+  const stored = Number(item?.remainingQuantity);
+  if (Number.isFinite(stored) && stored >= 0 && isLinePartiallyFulfilled(item)) {
+    return stored;
+  }
+  const requested = getRequestedQuantity(item);
+  if (requested === null) return null;
+  return Math.max(requested - getIssuedQuantity(item), 0);
+};
+
+const getQuantityToOrder = (item) => {
+  const numeric = Number(item?.quantityToOrder);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+};
+
+const getAvailableQuantity = (item) => {
+  const record = getInventoryRecord(item);
+  const numeric = Number(record?.qtyValue ?? item?.inventoryQtyValue);
+  return Number.isFinite(numeric) ? Math.max(numeric, 0) : null;
+};
+
+const buildIssueDraft = (item) => {
+  const remaining = getRemainingQuantity(item);
+  const available = getAvailableQuantity(item);
+  const issueNow =
+    remaining !== null && available !== null
+      ? Math.min(remaining, available)
+      : (available ?? remaining ?? "");
+  const remainingToOrder =
+    remaining !== null && Number.isFinite(Number(issueNow))
+      ? Math.max(remaining - Number(issueNow), 0)
+      : getQuantityToOrder(item);
+
+  return {
+    issueQuantity: qtyInputValue(issueNow),
+    remainingToOrder: qtyInputValue(remainingToOrder),
+    note: "",
+  };
+};
+
 const requestMaterialDelete = async (path, method = "DELETE") => {
   const response = await fetch(path, {
     method,
@@ -112,8 +227,15 @@ const MaterialRequestsBanner = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
+  const [fulfillingLineKey, setFulfillingLineKey] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const [confirmDeleteRequest, setConfirmDeleteRequest] = useState(null);
+  const [confirmFulfillLine, setConfirmFulfillLine] = useState(null);
+  const [issueDraft, setIssueDraft] = useState({
+    issueQuantity: "",
+    remainingToOrder: "",
+    note: "",
+  });
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -212,6 +334,90 @@ const MaterialRequestsBanner = () => {
     }
   };
 
+  const openFulfillLine = (request, item) => {
+    setConfirmFulfillLine({ request, item });
+    setIssueDraft(buildIssueDraft(item));
+  };
+
+  const closeFulfillLine = () => {
+    if (fulfillingLineKey) return;
+    setConfirmFulfillLine(null);
+    setIssueDraft({ issueQuantity: "", remainingToOrder: "", note: "" });
+  };
+
+  const updateIssueQuantity = (value) => {
+    const remaining = getRemainingQuantity(confirmFulfillLine?.item);
+    const issued = parseQtyValue(value);
+    setIssueDraft((previous) => ({
+      ...previous,
+      issueQuantity: value,
+      remainingToOrder:
+        remaining !== null && issued !== null && issued >= 0
+          ? qtyInputValue(Math.max(remaining - issued, 0))
+          : previous.remainingToOrder,
+    }));
+  };
+
+  const fulfillLine = async () => {
+    const request = confirmFulfillLine?.request;
+    const item = confirmFulfillLine?.item;
+    const itemId = item?._id;
+    const lineKey = request?._id && itemId ? `${request._id}:${itemId}` : "";
+    if (!request?._id || !itemId || updatingId || deletingId || fulfillingLineKey) {
+      return;
+    }
+
+    const issuedQuantity = parseQtyValue(issueDraft.issueQuantity);
+    const remainingToOrder = parseQtyValue(issueDraft.remainingToOrder);
+    if (!issuedQuantity || issuedQuantity <= 0) {
+      setError("Enter the quantity issued from stock.");
+      return;
+    }
+    if (remainingToOrder === null || remainingToOrder < 0) {
+      setError("Enter the quantity remaining to order. Use 0 if nothing remains.");
+      return;
+    }
+
+    setFulfillingLineKey(lineKey);
+    setError("");
+    try {
+      const payload = await fetchInventory(
+        buildSourcePath(
+          `/api/material-requests/${request._id}/items/${itemId}/fulfill`,
+        ),
+        {
+          method: "POST",
+          body: JSON.stringify({
+            issuedQuantity,
+            remainingToOrder,
+            note: issueDraft.note.trim(),
+          }),
+          toast: { success: "Stock issued and request updated." },
+        },
+      );
+      const updatedRequest = payload?.request;
+      if (updatedRequest?._id) {
+        setRequests((previous) =>
+          previous.map((entry) =>
+            entry._id === updatedRequest._id ? updatedRequest : entry,
+          ),
+        );
+      }
+      await fetchRequests();
+    } catch (fulfillError) {
+      setError(fulfillError.message || "Failed to issue stock.");
+    } finally {
+      setFulfillingLineKey("");
+      setConfirmFulfillLine(null);
+      setIssueDraft({ issueQuantity: "", remainingToOrder: "", note: "" });
+    }
+  };
+
+  const issueDialogItem = confirmFulfillLine?.item;
+  const issueDialogAvailable = getAvailableQuantity(issueDialogItem);
+  const issueDialogRemaining = getRemainingQuantity(issueDialogItem);
+  const issueDialogAlreadyIssued = getIssuedQuantity(issueDialogItem);
+
   const content = (
     <>
     <ConfirmDialog
@@ -223,6 +429,110 @@ const MaterialRequestsBanner = () => {
       onConfirm={deleteRequest}
       onClose={() => setConfirmDeleteRequest(null)}
     />
+    {confirmFulfillLine ? (
+      <div
+        className="inventory-issue-dialog-backdrop"
+        role="presentation"
+        onClick={closeFulfillLine}
+      >
+        <form
+          className="inventory-issue-dialog"
+          onClick={(event) => event.stopPropagation()}
+          onSubmit={(event) => {
+            event.preventDefault();
+            fulfillLine();
+          }}
+        >
+          <div>
+            <span className="inventory-issue-dialog-kicker">Issue Stock</span>
+            <h3>{issueDialogItem?.materialName || "Material item"}</h3>
+            <p>
+              Record what is leaving inventory now and what still needs to be
+              ordered later.
+            </p>
+          </div>
+          <div className="inventory-issue-dialog-summary">
+            <span>
+              Requested <strong>{issueDialogItem?.quantity || "-"}</strong>
+              {issueDialogItem?.unit ? ` ${issueDialogItem.unit}` : ""}
+            </span>
+            <span>
+              In stock{" "}
+              <strong>
+                {issueDialogAvailable !== null
+                  ? formatQty(issueDialogAvailable)
+                  : "-"}
+              </strong>
+            </span>
+            <span>
+              Already issued <strong>{formatQty(issueDialogAlreadyIssued) || "0"}</strong>
+            </span>
+            <span>
+              Remaining need{" "}
+              <strong>
+                {issueDialogRemaining !== null
+                  ? formatQty(issueDialogRemaining)
+                  : "-"}
+              </strong>
+            </span>
+          </div>
+          <label className="inventory-issue-dialog-field">
+            <span>Quantity issued now</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              max={issueDialogAvailable ?? undefined}
+              value={issueDraft.issueQuantity}
+              onChange={(event) => updateIssueQuantity(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <label className="inventory-issue-dialog-field">
+            <span>Remaining quantity to order</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={issueDraft.remainingToOrder}
+              onChange={(event) =>
+                setIssueDraft((previous) => ({
+                  ...previous,
+                  remainingToOrder: event.target.value,
+                }))
+              }
+            />
+          </label>
+          <label className="inventory-issue-dialog-field">
+            <span>Note</span>
+            <textarea
+              rows="3"
+              value={issueDraft.note}
+              onChange={(event) =>
+                setIssueDraft((previous) => ({
+                  ...previous,
+                  note: event.target.value,
+                }))
+              }
+              placeholder="Optional: supplier, PO, or balance note"
+            />
+          </label>
+          <div className="inventory-issue-dialog-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={closeFulfillLine}
+              disabled={Boolean(fulfillingLineKey)}
+            >
+              Cancel
+            </button>
+            <button type="submit" disabled={Boolean(fulfillingLineKey)}>
+              {fulfillingLineKey ? "Issuing..." : "Save Issue"}
+            </button>
+          </div>
+        </form>
+      </div>
+    ) : null}
     <section
       className={`inventory-material-shell ${isActive ? "is-active" : ""} ${
         isOpen ? "is-open" : ""
@@ -344,25 +654,84 @@ const MaterialRequestsBanner = () => {
                       <span>{formatDate(request.createdAt)}</span>
                     </div>
                     <div className="inventory-material-line-items">
-                      {getRequestItems(request).map((item, index) => (
+                      {getRequestItems(request).map((item, index) => {
+                        const lineKey = `${request._id}:${item._id || index}`;
+                        const stockLabel = getLiveStockLabel(item);
+                        const inventorySku = getInventorySku(item);
+                        const canIssue = canIssueLineFromStock(item);
+                        const isPartial = isLinePartiallyFulfilled(item);
+                        const issuedQty = getIssuedQuantity(item);
+                        const quantityToOrder = getQuantityToOrder(item);
+                        return (
                         <div
-                          className="inventory-material-line-item"
+                          className={`inventory-material-line-item ${
+                            isLineFulfilled(item)
+                              ? "is-fulfilled"
+                              : isPartial
+                                ? "is-partial"
+                                : ""
+                          }`.trim()}
+                          title={inventorySku ? `Inventory ID ${inventorySku}` : undefined}
                           key={item._id || `${request._id}-${index}`}
                         >
                           <span>{index + 1}</span>
-                          <div className="inventory-material-line-item-name">
-                            <strong>{item.materialName}</strong>
-                            {isProjectRequest(request) && !item.projectItemId ? (
-                              <em>Purchase</em>
-                            ) : null}
-                          </div>
+                          <div className="inventory-material-line-item-main">
+                            <div className="inventory-material-line-item-name">
+                              <strong>{item.materialName}</strong>
+                              {isProjectRequest(request) && !item.projectItemId ? (
+                                <em>Purchase</em>
+                              ) : null}
+                              {isLineFulfilled(item) ? <em>Issued</em> : null}
+                              {isPartial ? <em>Partial</em> : null}
+                            </div>
                           <small>
                             {item.quantity}
                             {item.unit ? ` ${item.unit}` : ""}
                             {item.inventorySku ? ` · ID ${item.inventorySku}` : ""}
                           </small>
+                          {stockLabel ? (
+                            <small className="inventory-material-stock-line">
+                              {stockLabel}
+                            </small>
+                          ) : null}
+                          {issuedQty > 0 ? (
+                            <small className="inventory-material-issued-line">
+                              Issued: {formatQty(issuedQty)}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </small>
+                          ) : null}
+                          {quantityToOrder > 0 ? (
+                            <small className="inventory-material-order-line">
+                              To order: {formatQty(quantityToOrder)}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </small>
+                          ) : null}
+                          </div>
+                          {canIssue ? (
+                            <button
+                              type="button"
+                              className="inventory-material-issue-button"
+                              onClick={() => openFulfillLine(request, item)}
+                              disabled={
+                                Boolean(fulfillingLineKey) ||
+                                updatingId === request._id ||
+                                deletingId === request._id
+                              }
+                            >
+                              {fulfillingLineKey === lineKey
+                                ? "Issuing..."
+                                : isPartial
+                                  ? "Issue balance"
+                                  : "Issue from stock"}
+                            </button>
+                          ) : isLineFulfilled(item) ? (
+                            <small className="inventory-material-issued-note">
+                              After: {formatQty(item.stockAfterQty)}
+                            </small>
+                          ) : null}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {isProjectRequest(request) ? (
                       <div className="inventory-material-project-context">

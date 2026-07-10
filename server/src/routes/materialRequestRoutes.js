@@ -4,6 +4,7 @@ const {
   deleteMaterialRequest,
   getMaterialRequestInventoryMatches,
   getMaterialRequests,
+  fulfillMaterialRequestItem,
   updateMaterialRequest,
   updateMaterialRequestStatus,
 } = require("../controllers/materialRequestController");
@@ -17,6 +18,7 @@ router.route("/").get(getMaterialRequests).post(createMaterialRequest);
 router.get("/inventory-matches", getMaterialRequestInventoryMatches);
 router.route("/:id").patch(updateMaterialRequest).delete(deleteMaterialRequest);
 router.post("/:id/delete", deleteMaterialRequest);
+router.post("/:id/items/:itemId/fulfill", fulfillMaterialRequestItem);
 router.patch("/:id/status", updateMaterialRequestStatus);
 
 module.exports = router;

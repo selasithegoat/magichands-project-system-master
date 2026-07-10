@@ -357,6 +357,11 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   color: var(--inventory-material-primary);
 }
 
+.inventory-material-chip.partially-fulfilled {
+  background: rgba(245, 158, 11, 0.13);
+  color: var(--inventory-material-warning);
+}
+
 .inventory-material-chip.declined {
   background: var(--inventory-material-danger-soft);
   color: var(--inventory-material-danger);
@@ -383,6 +388,16 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   border-radius: var(--radius-sm);
   background: var(--inventory-material-bg);
   padding: 8px 9px;
+}
+
+.inventory-material-line-item.is-fulfilled {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.inventory-material-line-item.is-partial {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.08);
 }
 
 .inventory-material-line-item > span {
@@ -422,10 +437,190 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   text-transform: uppercase;
 }
 
+.inventory-material-line-item-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
 .inventory-material-line-item small {
   color: var(--inventory-material-muted);
   font-size: 11px;
   font-weight: 800;
+}
+
+.inventory-material-stock-line {
+  color: var(--inventory-material-primary) !important;
+}
+
+.inventory-material-issued-line {
+  color: #047857 !important;
+}
+
+.inventory-material-order-line {
+  color: var(--inventory-material-warning) !important;
+}
+
+.inventory-material-issued-note {
+  justify-self: end;
+  color: var(--inventory-material-primary) !important;
+}
+
+.inventory-material-issue-button {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  padding: 6px 9px;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inventory-material-issue-button:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.inventory-material-issue-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.inventory-issue-dialog-backdrop {
+  --inventory-material-card: var(--bg-alt, var(--bg, #ffffff));
+  --inventory-material-bg: var(--bg-alt, var(--bg, #ffffff));
+  --inventory-material-surface: var(--surface-alt, var(--bg, #f8fafc));
+  --inventory-material-field: var(--bg-alt, var(--surface-alt, #ffffff));
+  --inventory-material-text: var(--ink, #0f172a);
+  --inventory-material-muted: var(--ink-muted, #64748b);
+  --inventory-material-border: var(--border, rgba(148, 163, 184, 0.32));
+  --inventory-material-primary: var(--accent, #1d4ed8);
+
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 16px;
+}
+
+.inventory-issue-dialog {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--inventory-material-border);
+  border-radius: var(--radius-lg);
+  background: var(--inventory-material-card, #ffffff);
+  color: var(--inventory-material-text);
+  padding: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  opacity: 1;
+  isolation: isolate;
+}
+
+.inventory-issue-dialog h3,
+.inventory-issue-dialog p {
+  margin: 0;
+}
+
+.inventory-issue-dialog h3 {
+  font-size: 16px;
+}
+
+.inventory-issue-dialog p {
+  margin-top: 5px;
+  color: var(--inventory-material-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.inventory-issue-dialog-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--inventory-material-primary);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inventory-issue-dialog-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.inventory-issue-dialog-summary span {
+  border: 1px solid var(--inventory-material-border);
+  border-radius: var(--radius-sm);
+  background: var(--inventory-material-surface, #f8fafc);
+  color: var(--inventory-material-muted);
+  padding: 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inventory-issue-dialog-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--inventory-material-text);
+  font-size: 14px;
+}
+
+.inventory-issue-dialog-field {
+  display: grid;
+  gap: 6px;
+  color: var(--inventory-material-text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.inventory-issue-dialog-field input,
+.inventory-issue-dialog-field textarea {
+  width: 100%;
+  border: 1px solid var(--inventory-material-border);
+  border-radius: var(--radius-sm);
+  background: var(--inventory-material-field, #ffffff);
+  color: var(--inventory-material-text);
+  padding: 10px 11px;
+  font: inherit;
+  font-weight: 750;
+}
+
+.inventory-issue-dialog-field textarea {
+  resize: vertical;
+}
+
+.inventory-issue-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.inventory-issue-dialog-actions button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--inventory-material-primary);
+  color: #fff;
+  padding: 10px 15px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.inventory-issue-dialog-actions button.secondary {
+  border-color: var(--inventory-material-border);
+  background: var(--inventory-material-card, #ffffff);
+  color: var(--inventory-material-text);
+}
+
+.inventory-issue-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .inventory-material-actions {

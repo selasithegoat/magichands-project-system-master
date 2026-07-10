@@ -641,6 +641,12 @@
   color: var(--material-primary);
 }
 
+.material-request-chip.partially-fulfilled,
+.material-review-chip.partially-fulfilled {
+  background: var(--material-warning-soft);
+  color: var(--material-warning);
+}
+
 .material-request-chip.declined,
 .material-review-chip.declined {
   background: var(--material-danger-soft);
@@ -673,6 +679,16 @@
   border-radius: 9px;
   background: var(--material-card);
   padding: 0.5rem 0.6rem;
+}
+
+.material-review-line-item.is-fulfilled {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.material-review-line-item.is-partial {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.08);
 }
 
 .material-request-line-item > span,
@@ -716,11 +732,197 @@
   text-transform: uppercase;
 }
 
+.material-review-line-item-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
 .material-request-line-item small,
 .material-review-line-item small {
   color: var(--material-muted);
   font-size: 0.72rem;
   font-weight: 850;
+}
+
+.material-review-stock-line {
+  color: var(--material-primary) !important;
+}
+
+.material-review-issued-line {
+  color: #047857 !important;
+}
+
+.material-review-order-line {
+  color: var(--material-warning) !important;
+}
+
+.material-review-issued-note {
+  justify-self: end;
+  color: var(--material-primary) !important;
+}
+
+.material-review-issue-button {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.material-review-issue-button:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.material-review-issue-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.material-issue-dialog-backdrop {
+  --material-primary: var(--btn-bg, var(--primary-color, #2563eb));
+  --material-on-primary: var(--btn-text, var(--text-invert, #ffffff));
+  --material-card: var(--bg-card, var(--surface, #ffffff));
+  --material-surface: var(
+    --surface-alt,
+    var(--bg-input, var(--bg-app, var(--bg-card, #f8fafc)))
+  );
+  --material-field: var(
+    --bg-input,
+    var(--surface-alt, var(--bg-card, #ffffff))
+  );
+  --material-border: var(--border-color, rgba(148, 163, 184, 0.32));
+  --material-text: var(--text-primary, #1e293b);
+  --material-muted: var(--text-secondary, #64748b);
+
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 1rem;
+}
+
+.material-issue-dialog {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 0.85rem;
+  border: 1px solid var(--material-border);
+  border-radius: 16px;
+  background: var(--material-card, #ffffff);
+  color: var(--material-text);
+  padding: 1rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  opacity: 1;
+  isolation: isolate;
+}
+
+.material-issue-dialog h3,
+.material-issue-dialog p {
+  margin: 0;
+}
+
+.material-issue-dialog h3 {
+  font-size: 1rem;
+}
+
+.material-issue-dialog p {
+  margin-top: 0.3rem;
+  color: var(--material-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.material-issue-dialog-kicker {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--material-primary);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.material-issue-dialog-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.material-issue-dialog-summary span {
+  border: 1px solid var(--material-border);
+  border-radius: 10px;
+  background: var(--material-surface, #f8fafc);
+  color: var(--material-muted);
+  padding: 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.material-issue-dialog-summary strong {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--material-text);
+  font-size: 0.9rem;
+}
+
+.material-issue-dialog-field {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--material-text);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.material-issue-dialog-field input,
+.material-issue-dialog-field textarea {
+  width: 100%;
+  border: 1px solid var(--material-border);
+  border-radius: 10px;
+  background: var(--material-field, #ffffff);
+  color: var(--material-text);
+  padding: 0.62rem 0.7rem;
+  font: inherit;
+  font-weight: 750;
+}
+
+.material-issue-dialog-field textarea {
+  resize: vertical;
+}
+
+.material-issue-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.material-issue-dialog-actions button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--material-primary);
+  color: var(--material-on-primary);
+  padding: 0.62rem 0.95rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.material-issue-dialog-actions button.secondary {
+  border-color: var(--material-border);
+  background: var(--material-card, #ffffff);
+  color: var(--material-text);
+}
+
+.material-issue-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .material-request-empty,
