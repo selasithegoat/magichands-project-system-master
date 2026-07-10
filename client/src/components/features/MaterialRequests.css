@@ -1,5 +1,6 @@
 .material-request-fab,
 .material-request-overlay,
+.material-review-detail-backdrop,
 .material-review-shell {
   --material-primary: var(--btn-bg, var(--primary-color, #2563eb));
   --material-primary-hover: var(--btn-hover, var(--primary-color-hover, #1d4ed8));
@@ -1182,14 +1183,252 @@
   color: var(--material-primary);
 }
 
+.material-review-card > .material-review-line-items,
+.material-review-card > .material-review-project-context,
+.material-review-card > p,
+.material-review-card-actions .material-review-status-button {
+  display: none;
+}
+
 .material-review-card-actions {
   margin-top: auto;
+}
+
+.material-review-detail-button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--material-primary) 44%, var(--material-border));
+  border-radius: 999px;
+  background: var(--material-card);
+  color: var(--material-primary);
+  padding: 0 0.8rem;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.material-review-detail-button:hover {
+  background: var(--material-soft);
 }
 
 .material-review-status-button.active {
   border-color: color-mix(in srgb, var(--material-primary) 58%, var(--material-border));
   background: var(--material-soft);
   color: var(--material-primary);
+}
+
+.material-review-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12500;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.material-review-detail-drawer {
+  width: min(540px, calc(100vw - 28px));
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--material-border);
+  background: var(--material-card);
+  color: var(--material-text);
+  box-shadow: -24px 0 60px rgba(15, 23, 42, 0.28);
+}
+
+.material-review-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--material-border);
+  padding: 1rem;
+}
+
+.material-review-detail-header span,
+.material-review-detail-kicker,
+.material-review-detail-section-title span,
+.material-review-detail-meta-grid dt {
+  color: var(--material-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.material-review-detail-header h3 {
+  margin: 0.25rem 0 0;
+  color: var(--material-text);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.material-review-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.material-review-detail-panel {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid var(--material-border);
+  border-radius: 14px;
+  background: var(--material-surface);
+  padding: 0.85rem;
+}
+
+.material-review-detail-panel p {
+  margin: 0;
+  color: var(--material-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.material-review-detail-topline,
+.material-review-detail-section-title,
+.material-review-detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.material-review-detail-topline,
+.material-review-detail-section-title {
+  justify-content: space-between;
+}
+
+.material-review-detail-section-title small {
+  color: var(--material-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.material-review-detail-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.material-review-detail-meta-grid dd {
+  margin: 0.18rem 0 0;
+  color: var(--material-text);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.material-review-detail-lines {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.material-review-detail-line {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid var(--material-border);
+  border-radius: 12px;
+  background: var(--material-card);
+  padding: 0.75rem;
+}
+
+.material-review-detail-line.ready {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.material-review-detail-line.purchase,
+.material-review-detail-line.partial {
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.material-review-detail-line.fulfilled {
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.material-review-detail-line-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.material-review-detail-line-title > span {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--material-soft);
+  color: var(--material-primary);
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
+.material-review-detail-line-title strong {
+  display: block;
+  color: var(--material-text);
+  font-size: 0.86rem;
+  white-space: normal;
+}
+
+.material-review-detail-line-title small,
+.material-review-detail-line-facts span,
+.material-review-timeline span {
+  color: var(--material-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.material-review-detail-line-title em {
+  border-radius: 999px;
+  background: var(--material-soft);
+  color: var(--material-primary);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.material-review-detail-line-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.material-review-detail-line-facts span {
+  border-radius: 999px;
+  background: var(--material-surface);
+  padding: 0.2rem 0.45rem;
+}
+
+.material-review-detail-actions button {
+  min-height: 32px;
+}
+
+.material-review-timeline {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.material-review-timeline li::marker {
+  color: var(--material-primary);
+}
+
+.material-review-timeline strong {
+  display: block;
+  color: var(--material-text);
+  font-size: 0.8rem;
 }
 
 @media (max-width: 1024px) {

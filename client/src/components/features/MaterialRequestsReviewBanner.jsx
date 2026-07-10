@@ -248,6 +248,44 @@ const requestMatchesQueueLane = (request, laneKey) => {
   );
 };
 
+const getLineWorkStatus = (item) => {
+  if (isLineFulfilled(item)) return { label: "Issued", tone: "fulfilled" };
+  if (isLinePartiallyFulfilled(item)) return { label: "Partial", tone: "partial" };
+  if (getQuantityToOrder(item) > 0) return { label: "Needs purchase", tone: "purchase" };
+  if (canIssueLineFromStock(item)) return { label: "Ready to issue", tone: "ready" };
+  if (getInventoryRecordId(item)) return { label: "Matched", tone: "matched" };
+  return { label: "Needs review", tone: "pending" };
+};
+
+const getRequestTimeline = (request) => {
+  if (!request) return [];
+  const entries = [];
+  if (request.createdAt) {
+    entries.push({
+      label: "Request created",
+      meta: `${formatDate(request.createdAt)} by ${getRequesterName(request)}`,
+    });
+  }
+  getRequestItems(request).forEach((item) => {
+    if (item.fulfilledAt) {
+      entries.push({
+        label:
+          item.fulfillmentStatus === "Fulfilled"
+            ? "Stock issued"
+            : "Stock partially issued",
+        meta: `${formatDate(item.fulfilledAt)} - ${item.materialName}`,
+      });
+    }
+  });
+  if (request.statusUpdatedAt) {
+    entries.push({
+      label: `Status set to ${request.status || "Pending"}`,
+      meta: formatDate(request.statusUpdatedAt),
+    });
+  }
+  return entries;
+};
+
 const requestMaterialDelete = async (path, requestSource, method = "DELETE") => {
   const response = await fetch(buildSourcePath(path, requestSource), {
     method,
@@ -295,6 +333,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
   const [deletingId, setDeletingId] = useState("");
   const [confirmDeleteRequest, setConfirmDeleteRequest] = useState(null);
   const [confirmFulfillLine, setConfirmFulfillLine] = useState(null);
+  const [detailRequestId, setDetailRequestId] = useState("");
   const [issueDraft, setIssueDraft] = useState({
     issueQuantity: "",
     remainingToOrder: "",
@@ -368,6 +407,18 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
       ),
     [queueFilter, requests],
   );
+  const detailRequest = useMemo(
+    () => requests.find((request) => request._id === detailRequestId) || null,
+    [detailRequestId, requests],
+  );
+  const detailRequestMetrics = useMemo(
+    () => getRequestQueueMetrics(detailRequest),
+    [detailRequest],
+  );
+  const detailTimeline = useMemo(
+    () => getRequestTimeline(detailRequest),
+    [detailRequest],
+  );
   const portalClass = requestSource === "admin" ? "admin-portal" : "";
   const reviewPanelId = `material-review-panel-${requestSource || "portal"}`;
 
@@ -409,6 +460,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
     try {
       await deleteMaterialRequestById(requestId, requestSource);
       setRequests((previous) => previous.filter((item) => item._id !== requestId));
+      if (detailRequestId === requestId) setDetailRequestId("");
       await fetchRequests();
     } catch (deleteError) {
       setError(deleteError.message || "Failed to delete material request.");
@@ -621,6 +673,255 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
               </button>
             </div>
           </form>
+        </div>
+      ) : null}
+      {detailRequest ? (
+        <div
+          className="material-review-detail-backdrop"
+          role="presentation"
+          onClick={() => setDetailRequestId("")}
+        >
+          <aside
+            className="material-review-detail-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Material request details"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="material-review-detail-header">
+              <div>
+                <span>Request Details</span>
+                <h3>{getRequestTitle(detailRequest)}</h3>
+              </div>
+              <button
+                type="button"
+                className="material-review-icon-button"
+                onClick={() => setDetailRequestId("")}
+                aria-label="Close request details"
+              >
+                <XIcon width={18} height={18} />
+              </button>
+            </header>
+
+            <div className="material-review-detail-body">
+              <section className="material-review-detail-panel">
+                <div className="material-review-detail-topline">
+                  <span
+                    className={`material-review-type-badge ${
+                      isProjectRequest(detailRequest) ? "order" : "material"
+                    }`}
+                  >
+                    {isProjectRequest(detailRequest) ? "Project" : "Department"}
+                  </span>
+                  <span
+                    className={`material-review-chip ${toStatusClass(
+                      detailRequest.status,
+                    )}`}
+                  >
+                    {detailRequest.status || "Pending"}
+                  </span>
+                </div>
+                <dl className="material-review-detail-meta-grid">
+                  <div>
+                    <dt>Requester</dt>
+                    <dd>{getRequesterName(detailRequest)}</dd>
+                  </div>
+                  <div>
+                    <dt>Department</dt>
+                    <dd>{detailRequest.department || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Priority</dt>
+                    <dd>{detailRequest.priority || "Normal"}</dd>
+                  </div>
+                  <div>
+                    <dt>Needed by</dt>
+                    <dd>{formatDate(detailRequest.neededBy) || "-"}</dd>
+                  </div>
+                </dl>
+                <div className="material-review-work-summary">
+                  {detailRequestMetrics.readyItems > 0 ? (
+                    <span className="ready">
+                      {detailRequestMetrics.readyItems} ready to issue
+                    </span>
+                  ) : null}
+                  {detailRequestMetrics.purchaseItems > 0 ? (
+                    <span className="purchase">
+                      {formatQty(detailRequestMetrics.totalToOrder)} to order
+                    </span>
+                  ) : null}
+                  {detailRequestMetrics.partialItems > 0 ? (
+                    <span className="partial">
+                      {formatQty(detailRequestMetrics.totalIssued)} issued
+                    </span>
+                  ) : null}
+                  <span>
+                    {detailRequestMetrics.fulfilledItems}/
+                    {detailRequestMetrics.totalItems} done
+                  </span>
+                  <span>
+                    {detailRequestMetrics.matchedItems}/
+                    {detailRequestMetrics.totalItems} matched
+                  </span>
+                </div>
+              </section>
+
+              {isProjectRequest(detailRequest) ? (
+                <section className="material-review-detail-panel">
+                  <span className="material-review-detail-kicker">Project context</span>
+                  <strong>{getProjectRequestTitle(detailRequest)}</strong>
+                  <div className="material-review-meta">
+                    {detailRequest.projectOrderId ? (
+                      <span>Order {detailRequest.projectOrderId}</span>
+                    ) : null}
+                    {detailRequest.projectClientName ? (
+                      <span>{detailRequest.projectClientName}</span>
+                    ) : null}
+                    {detailRequest.projectItemBreakdown ? (
+                      <span>{detailRequest.projectItemBreakdown}</span>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+
+              {detailRequest.notes ? (
+                <section className="material-review-detail-panel">
+                  <span className="material-review-detail-kicker">Requester note</span>
+                  <p>{detailRequest.notes}</p>
+                </section>
+              ) : null}
+
+              <section className="material-review-detail-panel">
+                <div className="material-review-detail-section-title">
+                  <span>Line items</span>
+                  <small>{getRequestItems(detailRequest).length} total</small>
+                </div>
+                <div className="material-review-detail-lines">
+                  {getRequestItems(detailRequest).map((item, index) => {
+                    const lineKey = `${detailRequest._id}:${item._id || index}`;
+                    const stockLabel = getLiveStockLabel(item);
+                    const inventorySku = getInventorySku(item);
+                    const canIssue = canIssueLineFromStock(item);
+                    const issuedQty = getIssuedQuantity(item);
+                    const quantityToOrder = getQuantityToOrder(item);
+                    const lineStatus = getLineWorkStatus(item);
+                    return (
+                      <div
+                        className={`material-review-detail-line ${lineStatus.tone}`}
+                        key={item._id || `${detailRequest._id}-${index}`}
+                      >
+                        <div className="material-review-detail-line-title">
+                          <span>{index + 1}</span>
+                          <div>
+                            <strong>{item.materialName}</strong>
+                            <small>
+                              Requested: {item.quantity}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </small>
+                          </div>
+                          <em>{lineStatus.label}</em>
+                        </div>
+                        <div className="material-review-detail-line-facts">
+                          {inventorySku ? <span>ID {inventorySku}</span> : null}
+                          {stockLabel ? <span>{stockLabel}</span> : null}
+                          {issuedQty > 0 ? (
+                            <span>
+                              Issued {formatQty(issuedQty)}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </span>
+                          ) : null}
+                          {quantityToOrder > 0 ? (
+                            <span>
+                              To order {formatQty(quantityToOrder)}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </span>
+                          ) : null}
+                          {item.stockAfterQty !== null &&
+                          item.stockAfterQty !== undefined ? (
+                            <span>Stock after {formatQty(item.stockAfterQty)}</span>
+                          ) : null}
+                        </div>
+                        {canIssue ? (
+                          <button
+                            type="button"
+                            className="material-review-issue-button"
+                            onClick={() => openFulfillLine(detailRequest, item)}
+                            disabled={
+                              Boolean(fulfillingLineKey) ||
+                              updatingId === detailRequest._id ||
+                              deletingId === detailRequest._id
+                            }
+                          >
+                            {fulfillingLineKey === lineKey
+                              ? "Issuing..."
+                              : isLinePartiallyFulfilled(item)
+                                ? "Issue balance"
+                                : "Issue from stock"}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="material-review-detail-panel">
+                <div className="material-review-detail-section-title">
+                  <span>Status workflow</span>
+                  <small>Update request state</small>
+                </div>
+                <div className="material-review-detail-actions">
+                  {STATUS_OPTIONS.map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      className={`material-review-status-button ${
+                        detailRequest.status === status ? "active" : ""
+                      }`}
+                      onClick={() => updateStatus(detailRequest, status)}
+                      disabled={
+                        updatingId === detailRequest._id ||
+                        deletingId === detailRequest._id
+                      }
+                    >
+                      {status}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="material-review-status-button danger"
+                    onClick={() => setConfirmDeleteRequest(detailRequest)}
+                    disabled={
+                      updatingId === detailRequest._id ||
+                      deletingId === detailRequest._id
+                    }
+                  >
+                    <TrashIcon width={16} height={16} color="currentColor" />
+                    Delete
+                  </button>
+                </div>
+              </section>
+
+              <section className="material-review-detail-panel">
+                <div className="material-review-detail-section-title">
+                  <span>Activity</span>
+                  <small>{detailTimeline.length || 0} events</small>
+                </div>
+                {detailTimeline.length ? (
+                  <ol className="material-review-timeline">
+                    {detailTimeline.map((entry, index) => (
+                      <li key={`${entry.label}-${index}`}>
+                        <strong>{entry.label}</strong>
+                        <span>{entry.meta}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p>No activity recorded yet.</p>
+                )}
+              </section>
+            </div>
+          </aside>
         </div>
       ) : null}
     <section
@@ -893,6 +1194,13 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
                     ) : null}
                     {request.notes ? <p>{request.notes}</p> : null}
                     <div className="material-review-card-actions">
+                      <button
+                        type="button"
+                        className="material-review-detail-button"
+                        onClick={() => setDetailRequestId(request._id)}
+                      >
+                        View details
+                      </button>
                       {STATUS_OPTIONS.map((status) => (
                         <button
                           key={status}
