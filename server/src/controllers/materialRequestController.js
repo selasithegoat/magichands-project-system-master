@@ -20,6 +20,20 @@ const VALID_STATUSES = new Set([
   "Declined",
 ]);
 
+const VALID_PURCHASE_STATUSES = new Set([
+  "Not Started",
+  "Ordered",
+  "Partially Received",
+  "Received",
+  "Cancelled",
+]);
+
+const ACTIVE_PURCHASE_STATUSES = new Set([
+  "Ordered",
+  "Partially Received",
+  "Received",
+]);
+
 const VALID_PRIORITIES = new Set(["Low", "Normal", "High", "Urgent"]);
 const MAX_REQUEST_ITEMS = 25;
 
@@ -58,6 +72,47 @@ const roundQuantity = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Number(numeric.toFixed(4));
+};
+
+const getLineRequestedQuantity = (item) => parsePositiveQuantity(item?.quantity);
+
+const getLineIssuedQuantity = (item) =>
+  roundQuantity(Number(item?.fulfilledQuantity) || 0);
+
+const getLinePurchaseNeed = (item) => {
+  if (!item || item.fulfillmentStatus === "Fulfilled") return 0;
+
+  const explicitToOrder = roundQuantity(Number(item.quantityToOrder) || 0);
+  if (explicitToOrder > 0) return explicitToOrder;
+
+  const storedRemaining = roundQuantity(Number(item.remainingQuantity) || 0);
+  if (storedRemaining > 0) return storedRemaining;
+
+  const requested = getLineRequestedQuantity(item);
+  if (!requested) return 0;
+
+  return roundQuantity(Math.max(requested - getLineIssuedQuantity(item), 0));
+};
+
+const inferPurchaseStatus = ({ requestedStatus, orderedQuantity, receivedQuantity }) => {
+  if (requestedStatus && VALID_PURCHASE_STATUSES.has(requestedStatus)) {
+    if (
+      requestedStatus === "Received" &&
+      orderedQuantity > 0 &&
+      receivedQuantity > 0 &&
+      receivedQuantity < orderedQuantity
+    ) {
+      return "Partially Received";
+    }
+    return requestedStatus;
+  }
+
+  if (orderedQuantity > 0 && receivedQuantity >= orderedQuantity) {
+    return "Received";
+  }
+  if (receivedQuantity > 0) return "Partially Received";
+  if (orderedQuantity > 0) return "Ordered";
+  return "Not Started";
 };
 
 const toEntityId = (value) => {
@@ -239,6 +294,7 @@ const populateMaterialRequestQuery = (query) =>
     .populate("items.inventoryRecord", "item sku qtyValue qtyLabel qtyMeta status warehouse shelfLocation subtext")
     .populate("inventoryRecord", "item sku qtyValue qtyLabel qtyMeta status warehouse shelfLocation subtext")
     .populate("items.fulfilledBy", "firstName lastName employeeId")
+    .populate("items.purchaseUpdatedBy", "firstName lastName employeeId")
     .populate("items.stockTransaction", "txid type qty beforeQty afterQty date")
     .populate("items.stockTransactions", "txid type qty beforeQty afterQty date");
 
@@ -1126,6 +1182,184 @@ const fulfillMaterialRequestItem = async (req, res) => {
   }
 };
 
+const updateMaterialRequestItemPurchase = async (req, res) => {
+  try {
+    if (!canReviewMaterialRequests(req.user)) {
+      return res.status(403).json({
+        message: "Only Admin and Stores users can update purchase tracking.",
+      });
+    }
+
+    const requestId = parseString(req.params.id);
+    const itemId = parseString(req.params.itemId);
+    if (
+      !mongoose.Types.ObjectId.isValid(requestId) ||
+      !mongoose.Types.ObjectId.isValid(itemId)
+    ) {
+      return res.status(400).json({ message: "Invalid material request item." });
+    }
+
+    const request = await MaterialRequest.findById(requestId);
+    if (!request) {
+      return res.status(404).json({ message: "Material request not found." });
+    }
+    if (request.status === "Declined") {
+      return res.status(400).json({
+        message: "Declined material requests cannot be ordered.",
+      });
+    }
+
+    const lineItem =
+      typeof request.items?.id === "function" ? request.items.id(itemId) : null;
+    if (!lineItem) {
+      return res.status(404).json({ message: "Material request item not found." });
+    }
+    if (lineItem.fulfillmentStatus === "Fulfilled") {
+      return res.status(400).json({
+        message: "This material request item has already been fulfilled.",
+      });
+    }
+
+    const neededQuantity = getLinePurchaseNeed(lineItem);
+    const requestedStatus = parseString(
+      req.body.purchaseStatus || req.body.status,
+    );
+    if (requestedStatus && !VALID_PURCHASE_STATUSES.has(requestedStatus)) {
+      return res.status(400).json({ message: "Invalid purchase status." });
+    }
+
+    const suppliedOrderedQuantity = parseNonNegativeQuantity(
+      req.body.orderedQuantity ??
+        req.body.quantityOrdered ??
+        req.body.orderQuantity,
+    );
+    const suppliedReceivedQuantity = parseNonNegativeQuantity(
+      req.body.receivedQuantity ??
+        req.body.quantityReceived ??
+        req.body.receiveQuantity,
+    );
+
+    let orderedQuantity =
+      suppliedOrderedQuantity === null
+        ? roundQuantity(Number(lineItem.orderedQuantity) || 0)
+        : roundQuantity(suppliedOrderedQuantity);
+    let receivedQuantity =
+      suppliedReceivedQuantity === null
+        ? roundQuantity(Number(lineItem.receivedQuantity) || 0)
+        : roundQuantity(suppliedReceivedQuantity);
+
+    if (requestedStatus === "Ordered" && orderedQuantity <= 0) {
+      orderedQuantity = neededQuantity;
+    }
+    if (requestedStatus === "Received" && orderedQuantity <= 0) {
+      orderedQuantity = neededQuantity || receivedQuantity;
+    }
+    if (
+      requestedStatus === "Received" &&
+      receivedQuantity <= 0 &&
+      orderedQuantity > 0
+    ) {
+      receivedQuantity = orderedQuantity;
+    }
+    if (receivedQuantity > 0 && orderedQuantity <= 0) {
+      orderedQuantity = neededQuantity || receivedQuantity;
+    }
+
+    if (receivedQuantity > orderedQuantity + 0.0001) {
+      return res.status(400).json({
+        message: "Received quantity cannot be greater than ordered quantity.",
+      });
+    }
+
+    const purchaseStatus = inferPurchaseStatus({
+      requestedStatus,
+      orderedQuantity,
+      receivedQuantity,
+    });
+
+    const rawExpectedDeliveryDate = parseString(
+      req.body.expectedDeliveryDate || req.body.expectedDate || req.body.eta,
+    );
+    const expectedDeliveryDate = rawExpectedDeliveryDate
+      ? new Date(rawExpectedDeliveryDate)
+      : null;
+    if (
+      rawExpectedDeliveryDate &&
+      Number.isNaN(expectedDeliveryDate.getTime())
+    ) {
+      return res.status(400).json({ message: "Expected delivery date is invalid." });
+    }
+
+    const now = new Date();
+    lineItem.purchaseStatus = purchaseStatus;
+    lineItem.orderedQuantity = orderedQuantity;
+    lineItem.receivedQuantity = receivedQuantity;
+    lineItem.supplierName = parseString(req.body.supplierName || req.body.supplier);
+    lineItem.purchaseOrderNumber = parseString(
+      req.body.purchaseOrderNumber || req.body.poNumber || req.body.po,
+    );
+    lineItem.expectedDeliveryDate = expectedDeliveryDate;
+    lineItem.purchaseNote = parseString(req.body.purchaseNote || req.body.note);
+    lineItem.purchaseUpdatedAt = now;
+    lineItem.purchaseUpdatedBy = req.user._id;
+    lineItem.purchaseUpdatedByName = getUserDisplayName(req.user);
+
+    if (
+      neededQuantity > 0 &&
+      orderedQuantity > 0 &&
+      (Number(lineItem.quantityToOrder) || 0) <= 0 &&
+      purchaseStatus !== "Cancelled"
+    ) {
+      lineItem.quantityToOrder = neededQuantity;
+      lineItem.remainingQuantity =
+        roundQuantity(Number(lineItem.remainingQuantity) || 0) || neededQuantity;
+    }
+
+    const requestItems = Array.isArray(request.items) ? request.items : [];
+    const allFulfilled =
+      requestItems.length > 0 &&
+      requestItems.every((item) => item.fulfillmentStatus === "Fulfilled");
+    const anyPurchaseActive = requestItems.some((item) =>
+      ACTIVE_PURCHASE_STATUSES.has(parseString(item.purchaseStatus)),
+    );
+    const anyPartiallyFulfilled = requestItems.some(
+      (item) =>
+        item.fulfillmentStatus === "Partially Fulfilled" ||
+        (Number(item.fulfilledQuantity) || 0) > 0,
+    );
+
+    request.status = allFulfilled
+      ? "Fulfilled"
+      : anyPurchaseActive
+        ? "Ordered"
+        : anyPartiallyFulfilled
+          ? "Partially Fulfilled"
+          : request.status === "Ordered"
+            ? "In Review"
+            : request.status || "In Review";
+    request.statusNote =
+      purchaseStatus === "Received"
+        ? `Purchase received for ${lineItem.materialName}. Issue from stock when available.`
+        : purchaseStatus === "Partially Received"
+          ? `Purchase partially received for ${lineItem.materialName}.`
+          : purchaseStatus === "Ordered"
+            ? `Purchase ordered for ${lineItem.materialName}.`
+            : purchaseStatus === "Cancelled"
+              ? `Purchase cancelled for ${lineItem.materialName}.`
+              : `Purchase tracking updated for ${lineItem.materialName}.`;
+    request.statusUpdatedBy = req.user._id;
+    request.statusUpdatedAt = now;
+
+    await request.save();
+
+    const populated = await getPopulatedMaterialRequestById(request._id);
+    res.json({ request: populated });
+  } catch (error) {
+    console.error("Error updating material request purchase tracking:", error);
+    res.status(500).json({ message: "Failed to update purchase tracking." });
+  }
+};
+
 const deleteMaterialRequest = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -1167,6 +1401,7 @@ module.exports = {
   createMaterialRequest,
   updateMaterialRequest,
   fulfillMaterialRequestItem,
+  updateMaterialRequestItemPurchase,
   updateMaterialRequestStatus,
   deleteMaterialRequest,
 };

@@ -15,6 +15,20 @@ const STATUS_OPTIONS = [
   "Declined",
 ];
 
+const PURCHASE_STATUS_OPTIONS = [
+  "Not Started",
+  "Ordered",
+  "Partially Received",
+  "Received",
+  "Cancelled",
+];
+
+const ACTIVE_PURCHASE_STATUSES = new Set([
+  "Ordered",
+  "Partially Received",
+  "Received",
+]);
+
 const QUEUE_LANES = [
   { key: "new", label: "New", hint: "Needs review" },
   { key: "ready", label: "Ready to Issue", hint: "Stock available" },
@@ -33,6 +47,13 @@ const formatDate = (value) => {
     day: "numeric",
     year: "numeric",
   });
+};
+
+const toDateInputValue = (value) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
 };
 
 const statusClass = (status) =>
@@ -174,6 +195,67 @@ const getAvailableQuantity = (item) => {
   return Number.isFinite(numeric) ? Math.max(numeric, 0) : null;
 };
 
+const getPurchaseStatus = (item) =>
+  PURCHASE_STATUS_OPTIONS.includes(item?.purchaseStatus)
+    ? item.purchaseStatus
+    : "Not Started";
+
+const isPurchaseActive = (item) =>
+  ACTIVE_PURCHASE_STATUSES.has(getPurchaseStatus(item));
+
+const getPurchaseOrderedQuantity = (item) => {
+  const numeric = Number(item?.orderedQuantity);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+};
+
+const getPurchaseReceivedQuantity = (item) => {
+  const numeric = Number(item?.receivedQuantity);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+};
+
+const getPurchaseNeedQuantity = (item) => {
+  if (isLineFulfilled(item)) return 0;
+
+  const explicitToOrder = getQuantityToOrder(item);
+  if (explicitToOrder > 0) return explicitToOrder;
+
+  const remaining = getRemainingQuantity(item);
+  if (remaining === null || remaining <= 0) return 0;
+
+  const available = getAvailableQuantity(item);
+  if (available !== null) return Math.max(remaining - available, 0);
+
+  return remaining;
+};
+
+const hasOpenPurchaseNeed = (item) =>
+  getPurchaseNeedQuantity(item) > 0 && !isPurchaseActive(item);
+
+const shouldShowPurchaseTracker = (item) =>
+  !isLineFulfilled(item) &&
+  (getPurchaseNeedQuantity(item) > 0 || getPurchaseStatus(item) !== "Not Started");
+
+const getLineKey = (request, item, index = 0) =>
+  `${request?._id || "request"}:${item?._id || index}`;
+
+const buildPurchaseDraft = (item) => {
+  const purchaseNeed = getPurchaseNeedQuantity(item);
+  const orderedQuantity = getPurchaseOrderedQuantity(item);
+  const receivedQuantity = getPurchaseReceivedQuantity(item);
+  const currentStatus = getPurchaseStatus(item);
+
+  return {
+    purchaseStatus:
+      currentStatus === "Not Started" && purchaseNeed > 0 ? "Ordered" : currentStatus,
+    orderedQuantity: qtyInputValue(orderedQuantity || purchaseNeed),
+    receivedQuantity: qtyInputValue(receivedQuantity),
+    supplierName: item?.supplierName || "",
+    purchaseOrderNumber: item?.purchaseOrderNumber || "",
+    expectedDeliveryDate: toDateInputValue(item?.expectedDeliveryDate),
+    purchaseNote: item?.purchaseNote || "",
+  };
+};
+
 const buildIssueDraft = (item) => {
   const remaining = getRemainingQuantity(item);
   const available = getAvailableQuantity(item);
@@ -197,7 +279,11 @@ const getRequestQueueMetrics = (request) => {
   const items = getRequestItems(request);
   const totalItems = items.length;
   const readyItems = items.filter(canIssueLineFromStock).length;
-  const purchaseItems = items.filter((item) => getQuantityToOrder(item) > 0).length;
+  const purchaseItems = items.filter(hasOpenPurchaseNeed).length;
+  const orderedItems = items.filter(isPurchaseActive).length;
+  const receivedPurchaseItems = items.filter(
+    (item) => getPurchaseStatus(item) === "Received",
+  ).length;
   const partialItems = items.filter(
     (item) => isLinePartiallyFulfilled(item) || getIssuedQuantity(item) > 0,
   ).length;
@@ -205,7 +291,15 @@ const getRequestQueueMetrics = (request) => {
   const matchedItems = items.filter((item) => Boolean(getInventoryRecordId(item)))
     .length;
   const totalToOrder = items.reduce(
-    (sum, item) => sum + getQuantityToOrder(item),
+    (sum, item) => sum + getPurchaseNeedQuantity(item),
+    0,
+  );
+  const totalOrdered = items.reduce(
+    (sum, item) => sum + getPurchaseOrderedQuantity(item),
+    0,
+  );
+  const totalReceived = items.reduce(
+    (sum, item) => sum + getPurchaseReceivedQuantity(item),
     0,
   );
   const totalIssued = items.reduce((sum, item) => sum + getIssuedQuantity(item), 0);
@@ -214,10 +308,14 @@ const getRequestQueueMetrics = (request) => {
     totalItems,
     readyItems,
     purchaseItems,
+    orderedItems,
+    receivedPurchaseItems,
     partialItems,
     fulfilledItems,
     matchedItems,
     totalToOrder,
+    totalOrdered,
+    totalReceived,
     totalIssued,
   };
 };
@@ -235,7 +333,9 @@ const requestMatchesQueueLane = (request, laneKey) => {
       (status === "Partially Fulfilled" || metrics.partialItems > 0)
     );
   }
-  if (laneKey === "ordered") return status === "Ordered";
+  if (laneKey === "ordered") {
+    return !isClosed && (status === "Ordered" || metrics.orderedItems > 0);
+  }
   if (laneKey === "done") return isClosed;
 
   return (
@@ -244,14 +344,23 @@ const requestMatchesQueueLane = (request, laneKey) => {
     status !== "Partially Fulfilled" &&
     metrics.readyItems === 0 &&
     metrics.purchaseItems === 0 &&
+    metrics.orderedItems === 0 &&
     metrics.partialItems === 0
   );
 };
 
 const getLineWorkStatus = (item) => {
+  const purchaseStatus = getPurchaseStatus(item);
   if (isLineFulfilled(item)) return { label: "Issued", tone: "fulfilled" };
+  if (purchaseStatus === "Received") return { label: "Purchase received", tone: "received" };
+  if (purchaseStatus === "Partially Received") {
+    return { label: "Part received", tone: "ordered" };
+  }
+  if (purchaseStatus === "Ordered") return { label: "Ordered", tone: "ordered" };
   if (isLinePartiallyFulfilled(item)) return { label: "Partial", tone: "partial" };
-  if (getQuantityToOrder(item) > 0) return { label: "Needs purchase", tone: "purchase" };
+  if (getPurchaseNeedQuantity(item) > 0) {
+    return { label: "Needs purchase", tone: "purchase" };
+  }
   if (canIssueLineFromStock(item)) return { label: "Ready to issue", tone: "ready" };
   if (getInventoryRecordId(item)) return { label: "Matched", tone: "matched" };
   return { label: "Needs review", tone: "pending" };
@@ -267,6 +376,21 @@ const getRequestTimeline = (request) => {
     });
   }
   getRequestItems(request).forEach((item) => {
+    if (item.purchaseUpdatedAt) {
+      const purchaseMeta = [
+        formatDate(item.purchaseUpdatedAt),
+        item.purchaseOrderNumber ? `PO ${item.purchaseOrderNumber}` : "",
+        item.supplierName,
+      ]
+        .filter(Boolean)
+        .join(" - ");
+      entries.push({
+        label: `Purchase ${getPurchaseStatus(item).toLowerCase()}`,
+        meta: `${purchaseMeta || formatDate(item.purchaseUpdatedAt)} - ${
+          item.materialName
+        }`,
+      });
+    }
     if (item.fulfilledAt) {
       entries.push({
         label:
@@ -331,10 +455,12 @@ const MaterialRequestsBanner = () => {
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [fulfillingLineKey, setFulfillingLineKey] = useState("");
+  const [purchasingLineKey, setPurchasingLineKey] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const [confirmDeleteRequest, setConfirmDeleteRequest] = useState(null);
   const [confirmFulfillLine, setConfirmFulfillLine] = useState(null);
   const [detailRequestId, setDetailRequestId] = useState("");
+  const [purchaseDrafts, setPurchaseDrafts] = useState({});
   const [issueDraft, setIssueDraft] = useState({
     issueQuantity: "",
     remainingToOrder: "",
@@ -423,7 +549,15 @@ const MaterialRequestsBanner = () => {
   };
 
   const updateStatus = async (request, status) => {
-    if (!request?._id || request.status === status || updatingId || deletingId) return;
+    if (
+      !request?._id ||
+      request.status === status ||
+      updatingId ||
+      deletingId ||
+      purchasingLineKey
+    ) {
+      return;
+    }
     setUpdatingId(request._id);
     setError("");
     try {
@@ -448,7 +582,7 @@ const MaterialRequestsBanner = () => {
   const deleteRequest = async () => {
     const request = confirmDeleteRequest;
     const requestId = request?._id;
-    if (!requestId || updatingId || deletingId) return;
+    if (!requestId || updatingId || deletingId || purchasingLineKey) return;
     setDeletingId(requestId);
     setError("");
 
@@ -481,6 +615,91 @@ const MaterialRequestsBanner = () => {
     setIssueDraft({ issueQuantity: "", remainingToOrder: "", note: "" });
   };
 
+  const getPurchaseDraft = (lineKey, item) =>
+    purchaseDrafts[lineKey] || buildPurchaseDraft(item);
+
+  const updatePurchaseDraft = (lineKey, item, updates) => {
+    setPurchaseDrafts((previous) => ({
+      ...previous,
+      [lineKey]: {
+        ...buildPurchaseDraft(item),
+        ...(previous[lineKey] || {}),
+        ...updates,
+      },
+    }));
+  };
+
+  const savePurchaseLine = async (request, item, index) => {
+    const itemId = item?._id;
+    const lineKey = getLineKey(request, item, index);
+    if (
+      !request?._id ||
+      !itemId ||
+      updatingId ||
+      deletingId ||
+      purchasingLineKey
+    ) {
+      return;
+    }
+
+    const draft = getPurchaseDraft(lineKey, item);
+    const orderedQuantity = parseQtyValue(draft.orderedQuantity) ?? 0;
+    const receivedQuantity = parseQtyValue(draft.receivedQuantity) ?? 0;
+    if (orderedQuantity < 0) {
+      setError("Enter a valid ordered quantity. Use 0 if nothing is ordered.");
+      return;
+    }
+    if (receivedQuantity < 0) {
+      setError("Enter a valid received quantity. Use 0 if nothing is received.");
+      return;
+    }
+    if (receivedQuantity > orderedQuantity) {
+      setError("Received quantity cannot be greater than ordered quantity.");
+      return;
+    }
+
+    setPurchasingLineKey(lineKey);
+    setError("");
+    try {
+      const payload = await fetchInventory(
+        buildSourcePath(
+          `/api/material-requests/${request._id}/items/${itemId}/purchase`,
+        ),
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            purchaseStatus: draft.purchaseStatus,
+            orderedQuantity,
+            receivedQuantity,
+            supplierName: draft.supplierName.trim(),
+            purchaseOrderNumber: draft.purchaseOrderNumber.trim(),
+            expectedDeliveryDate: draft.expectedDeliveryDate,
+            purchaseNote: draft.purchaseNote.trim(),
+          }),
+          toast: { success: "Purchase tracking updated." },
+        },
+      );
+      const updatedRequest = payload?.request;
+      if (updatedRequest?._id) {
+        setRequests((previous) =>
+          previous.map((entry) =>
+            entry._id === updatedRequest._id ? updatedRequest : entry,
+          ),
+        );
+      }
+      setPurchaseDrafts((previous) => {
+        const next = { ...previous };
+        delete next[lineKey];
+        return next;
+      });
+      await fetchRequests();
+    } catch (purchaseError) {
+      setError(purchaseError.message || "Failed to update purchase tracking.");
+    } finally {
+      setPurchasingLineKey("");
+    }
+  };
+
   const updateIssueQuantity = (value) => {
     const remaining = getRemainingQuantity(confirmFulfillLine?.item);
     const issued = parseQtyValue(value);
@@ -498,8 +717,15 @@ const MaterialRequestsBanner = () => {
     const request = confirmFulfillLine?.request;
     const item = confirmFulfillLine?.item;
     const itemId = item?._id;
-    const lineKey = request?._id && itemId ? `${request._id}:${itemId}` : "";
-    if (!request?._id || !itemId || updatingId || deletingId || fulfillingLineKey) {
+    const lineKey = getLineKey(request, item);
+    if (
+      !request?._id ||
+      !itemId ||
+      updatingId ||
+      deletingId ||
+      fulfillingLineKey ||
+      purchasingLineKey
+    ) {
       return;
     }
 
@@ -744,6 +970,16 @@ const MaterialRequestsBanner = () => {
                     {formatQty(detailRequestMetrics.totalToOrder)} to order
                   </span>
                 ) : null}
+                {detailRequestMetrics.orderedItems > 0 ? (
+                  <span className="ordered">
+                    {formatQty(detailRequestMetrics.totalOrdered)} ordered
+                  </span>
+                ) : null}
+                {detailRequestMetrics.receivedPurchaseItems > 0 ? (
+                  <span className="received">
+                    {formatQty(detailRequestMetrics.totalReceived)} received
+                  </span>
+                ) : null}
                 {detailRequestMetrics.partialItems > 0 ? (
                   <span className="partial">
                     {formatQty(detailRequestMetrics.totalIssued)} issued
@@ -792,12 +1028,16 @@ const MaterialRequestsBanner = () => {
               </div>
               <div className="inventory-material-detail-lines">
                 {getRequestItems(detailRequest).map((item, index) => {
-                  const lineKey = `${detailRequest._id}:${item._id || index}`;
+                  const lineKey = getLineKey(detailRequest, item, index);
                   const stockLabel = getLiveStockLabel(item);
                   const inventorySku = getInventorySku(item);
                   const canIssue = canIssueLineFromStock(item);
                   const issuedQty = getIssuedQuantity(item);
-                  const quantityToOrder = getQuantityToOrder(item);
+                  const quantityToOrder = getPurchaseNeedQuantity(item);
+                  const purchaseStatus = getPurchaseStatus(item);
+                  const orderedQty = getPurchaseOrderedQuantity(item);
+                  const receivedQty = getPurchaseReceivedQuantity(item);
+                  const purchaseDraft = getPurchaseDraft(lineKey, item);
                   const lineStatus = getLineWorkStatus(item);
                   return (
                     <div
@@ -830,11 +1070,153 @@ const MaterialRequestsBanner = () => {
                             {item.unit ? ` ${item.unit}` : ""}
                           </span>
                         ) : null}
+                        {purchaseStatus !== "Not Started" ? (
+                          <span>Purchase {purchaseStatus}</span>
+                        ) : null}
+                        {orderedQty > 0 ? (
+                          <span>
+                            Ordered {formatQty(orderedQty)}
+                            {item.unit ? ` ${item.unit}` : ""}
+                          </span>
+                        ) : null}
+                        {receivedQty > 0 ? (
+                          <span>
+                            Received {formatQty(receivedQty)}
+                            {item.unit ? ` ${item.unit}` : ""}
+                          </span>
+                        ) : null}
+                        {item.expectedDeliveryDate ? (
+                          <span>ETA {formatDate(item.expectedDeliveryDate)}</span>
+                        ) : null}
                         {item.stockAfterQty !== null &&
                         item.stockAfterQty !== undefined ? (
                           <span>Stock after {formatQty(item.stockAfterQty)}</span>
                         ) : null}
                       </div>
+                      {shouldShowPurchaseTracker(item) ? (
+                        <div className="inventory-material-purchase-tracker">
+                          <div className="inventory-material-purchase-title">
+                            <span>Purchase tracker</span>
+                            <small>
+                              Need {formatQty(quantityToOrder)}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </small>
+                          </div>
+                          <div className="inventory-material-purchase-grid">
+                            <label>
+                              <span>Status</span>
+                              <select
+                                value={purchaseDraft.purchaseStatus}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    purchaseStatus: event.target.value,
+                                  })
+                                }
+                              >
+                                {PURCHASE_STATUS_OPTIONS.map((status) => (
+                                  <option key={status} value={status}>
+                                    {status}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Ordered qty</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={purchaseDraft.orderedQuantity}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    orderedQuantity: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Received qty</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={purchaseDraft.receivedQuantity}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    receivedQuantity: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Expected date</span>
+                              <input
+                                type="date"
+                                value={purchaseDraft.expectedDeliveryDate}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    expectedDeliveryDate: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Supplier</span>
+                              <input
+                                type="text"
+                                value={purchaseDraft.supplierName}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    supplierName: event.target.value,
+                                  })
+                                }
+                                placeholder="Supplier name"
+                              />
+                            </label>
+                            <label>
+                              <span>PO / ref</span>
+                              <input
+                                type="text"
+                                value={purchaseDraft.purchaseOrderNumber}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    purchaseOrderNumber: event.target.value,
+                                  })
+                                }
+                                placeholder="PO number"
+                              />
+                            </label>
+                            <label className="full">
+                              <span>Purchase note</span>
+                              <textarea
+                                rows="2"
+                                value={purchaseDraft.purchaseNote}
+                                onChange={(event) =>
+                                  updatePurchaseDraft(lineKey, item, {
+                                    purchaseNote: event.target.value,
+                                  })
+                                }
+                                placeholder="Supplier, expected delivery, or receiving note"
+                              />
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            className="inventory-material-purchase-save"
+                            onClick={() => savePurchaseLine(detailRequest, item, index)}
+                            disabled={
+                              Boolean(purchasingLineKey) ||
+                              Boolean(fulfillingLineKey) ||
+                              updatingId === detailRequest._id ||
+                              deletingId === detailRequest._id
+                            }
+                          >
+                            {purchasingLineKey === lineKey
+                              ? "Saving purchase..."
+                              : "Save purchase"}
+                          </button>
+                        </div>
+                      ) : null}
                       {canIssue ? (
                         <button
                           type="button"
@@ -842,6 +1224,7 @@ const MaterialRequestsBanner = () => {
                           onClick={() => openFulfillLine(detailRequest, item)}
                           disabled={
                             Boolean(fulfillingLineKey) ||
+                            Boolean(purchasingLineKey) ||
                             updatingId === detailRequest._id ||
                             deletingId === detailRequest._id
                           }
@@ -873,7 +1256,8 @@ const MaterialRequestsBanner = () => {
                     onClick={() => updateStatus(detailRequest, status)}
                     disabled={
                       updatingId === detailRequest._id ||
-                      deletingId === detailRequest._id
+                      deletingId === detailRequest._id ||
+                      Boolean(purchasingLineKey)
                     }
                   >
                     {status}
@@ -885,7 +1269,8 @@ const MaterialRequestsBanner = () => {
                   onClick={() => setConfirmDeleteRequest(detailRequest)}
                   disabled={
                     updatingId === detailRequest._id ||
-                    deletingId === detailRequest._id
+                    deletingId === detailRequest._id ||
+                    Boolean(purchasingLineKey)
                   }
                 >
                   <TrashIcon />
@@ -1068,6 +1453,16 @@ const MaterialRequestsBanner = () => {
                           {formatQty(queueMetrics.totalToOrder)} to order
                         </span>
                       ) : null}
+                      {queueMetrics.orderedItems > 0 ? (
+                        <span className="ordered">
+                          {formatQty(queueMetrics.totalOrdered)} ordered
+                        </span>
+                      ) : null}
+                      {queueMetrics.receivedPurchaseItems > 0 ? (
+                        <span className="received">
+                          {formatQty(queueMetrics.totalReceived)} received
+                        </span>
+                      ) : null}
                       {queueMetrics.partialItems > 0 ? (
                         <span className="partial">
                           {formatQty(queueMetrics.totalIssued)} issued
@@ -1082,13 +1477,13 @@ const MaterialRequestsBanner = () => {
                     </div>
                     <div className="inventory-material-line-items">
                       {getRequestItems(request).map((item, index) => {
-                        const lineKey = `${request._id}:${item._id || index}`;
+                        const lineKey = getLineKey(request, item, index);
                         const stockLabel = getLiveStockLabel(item);
                         const inventorySku = getInventorySku(item);
                         const canIssue = canIssueLineFromStock(item);
                         const isPartial = isLinePartiallyFulfilled(item);
                         const issuedQty = getIssuedQuantity(item);
-                        const quantityToOrder = getQuantityToOrder(item);
+                        const quantityToOrder = getPurchaseNeedQuantity(item);
                         return (
                         <div
                           className={`inventory-material-line-item ${
@@ -1141,6 +1536,7 @@ const MaterialRequestsBanner = () => {
                               onClick={() => openFulfillLine(request, item)}
                               disabled={
                                 Boolean(fulfillingLineKey) ||
+                                Boolean(purchasingLineKey) ||
                                 updatingId === request._id ||
                                 deletingId === request._id
                               }
@@ -1198,7 +1594,11 @@ const MaterialRequestsBanner = () => {
                           type="button"
                           className={request.status === status ? "active" : ""}
                           onClick={() => updateStatus(request, status)}
-                          disabled={updatingId === request._id || deletingId === request._id}
+                          disabled={
+                            updatingId === request._id ||
+                            deletingId === request._id ||
+                            Boolean(purchasingLineKey)
+                          }
                         >
                           {status}
                         </button>
@@ -1207,7 +1607,11 @@ const MaterialRequestsBanner = () => {
                         type="button"
                         className="danger"
                         onClick={() => setConfirmDeleteRequest(request)}
-                        disabled={updatingId === request._id || deletingId === request._id}
+                        disabled={
+                          updatingId === request._id ||
+                          deletingId === request._id ||
+                          Boolean(purchasingLineKey)
+                        }
                         aria-label={
                           deletingId === request._id
                             ? "Deleting material request"

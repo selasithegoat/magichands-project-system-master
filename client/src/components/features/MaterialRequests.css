@@ -1177,6 +1177,18 @@
   color: var(--material-warning);
 }
 
+.material-review-work-summary span.ordered {
+  border-color: color-mix(in srgb, var(--material-primary) 42%, var(--material-border));
+  background: var(--material-soft);
+  color: var(--material-primary);
+}
+
+.material-review-work-summary span.received {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
 .material-review-work-summary span.partial {
   border-color: color-mix(in srgb, var(--material-primary) 36%, var(--material-border));
   background: var(--material-soft);
@@ -1344,11 +1356,13 @@
 }
 
 .material-review-detail-line.purchase,
-.material-review-detail-line.partial {
+.material-review-detail-line.partial,
+.material-review-detail-line.ordered {
   border-color: rgba(245, 158, 11, 0.34);
 }
 
-.material-review-detail-line.fulfilled {
+.material-review-detail-line.fulfilled,
+.material-review-detail-line.received {
   background: rgba(16, 185, 129, 0.08);
 }
 
@@ -1408,6 +1422,95 @@
   border-radius: 999px;
   background: var(--material-surface);
   padding: 0.2rem 0.45rem;
+}
+
+.material-review-purchase-tracker {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--material-warning) 34%, var(--material-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--material-warning-soft) 48%, var(--material-card));
+  padding: 0.75rem;
+}
+
+.material-review-purchase-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.material-review-purchase-title span {
+  color: var(--material-text);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.material-review-purchase-title small {
+  color: var(--material-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.material-review-purchase-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.material-review-purchase-grid label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--material-text);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.material-review-purchase-grid label.full {
+  grid-column: 1 / -1;
+}
+
+.material-review-purchase-grid input,
+.material-review-purchase-grid select,
+.material-review-purchase-grid textarea {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--material-border);
+  border-radius: 10px;
+  background: var(--material-field);
+  color: var(--material-text);
+  padding: 0.48rem 0.58rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.material-review-purchase-grid textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+
+.material-review-purchase-save {
+  justify-self: end;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--material-warning) 46%, var(--material-border));
+  border-radius: 999px;
+  background: var(--material-card);
+  color: var(--material-warning);
+  padding: 0 0.85rem;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.material-review-purchase-save:hover:not(:disabled) {
+  background: var(--material-warning-soft);
+}
+
+.material-review-purchase-save:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .material-review-detail-actions button {

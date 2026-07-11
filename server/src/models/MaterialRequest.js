@@ -89,6 +89,60 @@ const MaterialRequestItemSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    purchaseStatus: {
+      type: String,
+      enum: [
+        "Not Started",
+        "Ordered",
+        "Partially Received",
+        "Received",
+        "Cancelled",
+      ],
+      default: "Not Started",
+    },
+    orderedQuantity: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    receivedQuantity: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    supplierName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    purchaseOrderNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    expectedDeliveryDate: {
+      type: Date,
+      default: null,
+    },
+    purchaseNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    purchaseUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+    purchaseUpdatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    purchaseUpdatedByName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     fulfilledAt: {
       type: Date,
       default: null,

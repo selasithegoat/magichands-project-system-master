@@ -331,6 +331,18 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   color: var(--inventory-material-warning);
 }
 
+.inventory-material-work-summary span.ordered {
+  border-color: color-mix(in srgb, var(--inventory-material-primary) 42%, var(--inventory-material-border));
+  background: var(--inventory-material-primary-soft);
+  color: var(--inventory-material-primary);
+}
+
+.inventory-material-work-summary span.received {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
 .inventory-material-work-summary span.partial {
   border-color: color-mix(in srgb, var(--inventory-material-primary) 36%, var(--inventory-material-border));
   background: var(--inventory-material-primary-soft);
@@ -872,11 +884,13 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
 }
 
 .inventory-material-detail-line.purchase,
-.inventory-material-detail-line.partial {
+.inventory-material-detail-line.partial,
+.inventory-material-detail-line.ordered {
   border-color: rgba(245, 158, 11, 0.34);
 }
 
-.inventory-material-detail-line.fulfilled {
+.inventory-material-detail-line.fulfilled,
+.inventory-material-detail-line.received {
   background: rgba(16, 185, 129, 0.08);
 }
 
@@ -936,6 +950,95 @@ body:has(.sidebar:focus-within) .inventory-material-shell {
   border-radius: 999px;
   background: var(--inventory-material-surface);
   padding: 3px 7px;
+}
+
+.inventory-material-purchase-tracker {
+  display: grid;
+  gap: 11px;
+  border: 1px solid color-mix(in srgb, var(--inventory-material-warning) 34%, var(--inventory-material-border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--inventory-material-warning-soft) 48%, var(--inventory-material-bg));
+  padding: 12px;
+}
+
+.inventory-material-purchase-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inventory-material-purchase-title span {
+  color: var(--inventory-material-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.inventory-material-purchase-title small {
+  color: var(--inventory-material-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.inventory-material-purchase-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.inventory-material-purchase-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--inventory-material-text);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.inventory-material-purchase-grid label.full {
+  grid-column: 1 / -1;
+}
+
+.inventory-material-purchase-grid input,
+.inventory-material-purchase-grid select,
+.inventory-material-purchase-grid textarea {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--inventory-material-border);
+  border-radius: var(--radius-sm);
+  background: var(--inventory-material-field);
+  color: var(--inventory-material-text);
+  padding: 8px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.inventory-material-purchase-grid textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+
+.inventory-material-purchase-save {
+  justify-self: end;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--inventory-material-warning) 46%, var(--inventory-material-border));
+  border-radius: 999px;
+  background: var(--inventory-material-bg);
+  color: var(--inventory-material-warning);
+  padding: 0 13px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.inventory-material-purchase-save:hover:not(:disabled) {
+  background: var(--inventory-material-warning-soft);
+}
+
+.inventory-material-purchase-save:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .inventory-material-detail-actions button {
