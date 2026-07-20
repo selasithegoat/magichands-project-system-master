@@ -8,6 +8,9 @@ import { formatProjectDisplayName } from "./projectName";
 
 const REFERENCE_SNIPPET_LIMIT = 6;
 const MOCKUP_SNIPPET_LIMIT = 6;
+const ATTACHMENT_COLUMNS = 2;
+const ATTACHMENT_PREVIEW_WIDTH = 240;
+const ATTACHMENT_PREVIEW_HEIGHT = 144;
 
 const toText = (value) =>
   value === null || value === undefined ? "" : String(value).trim();
@@ -390,8 +393,12 @@ const renderAttachmentSnippet = ({
 
   const visibleReferences = attachments.slice(0, limit);
   const rows = [];
-  for (let index = 0; index < visibleReferences.length; index += 3) {
-    rows.push(visibleReferences.slice(index, index + 3));
+  for (
+    let index = 0;
+    index < visibleReferences.length;
+    index += ATTACHMENT_COLUMNS
+  ) {
+    rows.push(visibleReferences.slice(index, index + ATTACHMENT_COLUMNS));
   }
 
   const tableRows = rows
@@ -405,13 +412,13 @@ const renderAttachmentSnippet = ({
               const isImage = isImageReference(file.fileUrl, file.fileType);
               const embeddedImage = embeddedImages?.get(absoluteUrl);
               const preview = isImage && embeddedImage
-                ? `<img src="${escapeAttribute(embeddedImage.contentLocation)}" alt="${escapeAttribute(fileName)}" width="72" height="42" style="width:72px;height:42px;max-width:72px;max-height:42px;" />`
+                ? `<img class="reference-image" src="${escapeAttribute(embeddedImage.contentLocation)}" alt="${escapeAttribute(fileName)}" width="${ATTACHMENT_PREVIEW_WIDTH}" height="${ATTACHMENT_PREVIEW_HEIGHT}" style="display:block;width:${ATTACHMENT_PREVIEW_WIDTH}px;height:${ATTACHMENT_PREVIEW_HEIGHT}px;max-width:${ATTACHMENT_PREVIEW_WIDTH}px;max-height:${ATTACHMENT_PREVIEW_HEIGHT}px;margin:0 auto 8px;object-fit:contain;" />`
                 : `<div class="file-preview">${escapeHtml(getFileExtension(fileName))}</div>`;
 
               return `
                 <td>
                   <a href="${escapeAttribute(absoluteUrl)}">
-                    <div class="reference-preview">${preview}</div>
+                    ${preview}
                     ${
                       file.label
                         ? `<div class="reference-label">${escapeHtml(file.label)}</div>`
@@ -627,30 +634,26 @@ const buildBriefHtml = ({ group, projects, orderNumber, embeddedImages }) => {
       border-spacing: 8px;
     }
     .reference-table td {
-      width: 33.33%;
-      padding: 8px;
-      border: 1px solid #d1d5db;
+      width: 50%;
+      padding: 0 4px 12px;
       vertical-align: top;
-      background: #f9fafb;
     }
-    .reference-preview {
-      height: 44px;
-      margin-bottom: 8px;
-      background: #e5e7eb;
-      overflow: hidden;
-      text-align: center;
-    }
-    .reference-preview img {
-      width: 72px;
-      height: 42px;
-      max-width: 72px;
-      max-height: 42px;
+    .reference-image {
+      display: block;
+      width: ${ATTACHMENT_PREVIEW_WIDTH}px;
+      height: ${ATTACHMENT_PREVIEW_HEIGHT}px;
+      max-width: ${ATTACHMENT_PREVIEW_WIDTH}px;
+      max-height: ${ATTACHMENT_PREVIEW_HEIGHT}px;
+      margin: 0 auto 8px;
+      object-fit: contain;
     }
     .file-preview {
-      padding-top: 13px;
+      margin-bottom: 8px;
       color: #374151;
+      font-size: 16px;
       font-weight: 700;
       letter-spacing: 0.08em;
+      text-align: center;
     }
     .reference-name {
       color: #111827;
