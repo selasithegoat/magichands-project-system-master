@@ -34,6 +34,11 @@ import {
   saveNewOrderDraftFiles,
   saveNewOrderDraftMeta,
 } from "../../utils/newOrderDraftStorage";
+import {
+  canManageProjectCreationDrafts,
+  getProjectDraft,
+  saveProjectDraft,
+} from "../../utils/projectDraftApi";
 import { resolvePortalSource } from "../../utils/portalSource";
 import "./NewOrders.css";
 
@@ -64,6 +69,76 @@ const formatFileSize = (bytes) => {
 };
 
 const createEmptyItem = () => ({ description: "", breakdown: "", qty: 1 });
+
+const createEmptyPersistedDraftFiles = () => ({
+  attachments: [],
+  sampleImage: [],
+  clientMockup: [],
+  approvedMockup: [],
+});
+
+const getPersistedDraftFileId = (file) =>
+  String(file?._id || file?.id || "").trim();
+
+const normalizePersistedDraftFile = (file, fieldName, index) => {
+  if (!file || typeof file !== "object") return null;
+  const fileUrl = String(file.fileUrl || file.url || file.path || "").trim();
+  const fileName = String(
+    file.fileName || file.name || fileUrl.split("?")[0].split("/").pop() || "Saved file",
+  ).trim();
+  if (!fileUrl && !getPersistedDraftFileId(file)) return null;
+
+  return {
+    ...file,
+    _id: getPersistedDraftFileId(file),
+    fileUrl,
+    fileName,
+    fileType: String(file.fileType || file.type || "").trim(),
+    size: Number(file.size) || 0,
+    note: String(file.note || file.notes || ""),
+    order: Number.isFinite(Number(file.order)) ? Number(file.order) : index,
+    fieldName,
+  };
+};
+
+const normalizePersistedDraftFileGroup = (value, fieldName) => {
+  const source = Array.isArray(value) ? value : value ? [value] : [];
+  return source
+    .map((file, index) =>
+      normalizePersistedDraftFile(file, fieldName, index),
+    )
+    .filter(Boolean);
+};
+
+const normalizePersistedDraftFiles = (draft) => {
+  const files = draft?.files && typeof draft.files === "object" ? draft.files : {};
+  return {
+    attachments: normalizePersistedDraftFileGroup(
+      files.attachments,
+      "attachments",
+    ),
+    sampleImage: normalizePersistedDraftFileGroup(
+      files.sampleImage,
+      "sampleImage",
+    ),
+    clientMockup: normalizePersistedDraftFileGroup(
+      files.clientMockup,
+      "clientMockup",
+    ),
+    approvedMockup: normalizePersistedDraftFileGroup(
+      files.approvedMockup,
+      "approvedMockup",
+    ),
+  };
+};
+
+const isImageFileRecord = (file) => {
+  const mimeType = String(file?.fileType || file?.type || "").toLowerCase();
+  if (mimeType.startsWith("image/")) return true;
+  return /\.(avif|bmp|gif|jpe?g|png|svg|webp)(?:$|\?)/i.test(
+    String(file?.fileName || file?.name || file?.fileUrl || ""),
+  );
+};
 
 const toProjectId = (value) => {
   if (!value) return "";
@@ -165,25 +240,16 @@ const createNewOrderFormData = ({
   sampleRequired: false,
 });
 
-const isGeneratedOrderNumberDraft = (value) =>
-  /^ORD-\d{6}-\d{4}$/i.test(String(value || "").trim());
-
 const normalizeDraftItems = (items) => {
   if (!Array.isArray(items) || items.length === 0) {
     return [createEmptyItem()];
   }
 
-  return items.map((item) => {
-    const normalizedQty = Number(item?.qty);
-    return {
-      description: String(item?.description || ""),
-      breakdown: String(item?.breakdown || ""),
-      qty:
-        Number.isFinite(normalizedQty) && normalizedQty > 0
-          ? normalizedQty
-          : 1,
-    };
-  });
+  return items.map((item) => ({
+    description: String(item?.description || ""),
+    breakdown: String(item?.breakdown || ""),
+    qty: item?.qty === undefined || item?.qty === null ? 1 : item.qty,
+  }));
 };
 
 const normalizeDraftFiles = (files) =>
@@ -213,22 +279,19 @@ const normalizeDraftFormData = (draftFormData, fallbackFormData) => {
   const draftOrderNumber =
     typeof draft.orderNumber === "string" ? draft.orderNumber.trim() : "";
   const nextProjectType =
-    typeof draft.projectType === "string" && draft.projectType.trim()
+    typeof draft.projectType === "string"
       ? draft.projectType
       : fallbackFormData.projectType;
 
   return {
     ...fallbackFormData,
     ...draft,
-    orderNumber:
-      draftOrderNumber && !isGeneratedOrderNumberDraft(draftOrderNumber)
-        ? draftOrderNumber
-        : fallbackFormData.orderNumber,
+    orderNumber: draftOrderNumber || fallbackFormData.orderNumber,
     clientName: typeof draft.clientName === "string" ? draft.clientName : "",
     clientEmail: typeof draft.clientEmail === "string" ? draft.clientEmail : "",
     clientPhone: typeof draft.clientPhone === "string" ? draft.clientPhone : "",
     contactType:
-      typeof draft.contactType === "string" && draft.contactType.trim()
+      typeof draft.contactType === "string"
         ? draft.contactType
         : fallbackFormData.contactType,
     packagingType:
@@ -242,14 +305,14 @@ const normalizeDraftFormData = (draftFormData, fallbackFormData) => {
       typeof draft.briefOverview === "string" ? draft.briefOverview : "",
     items: normalizeDraftItems(draft.items),
     orderDate:
-      typeof draft.orderDate === "string" && draft.orderDate.trim()
+      typeof draft.orderDate === "string"
         ? draft.orderDate
         : fallbackFormData.orderDate,
     deliveryDate:
       typeof draft.deliveryDate === "string" ? draft.deliveryDate : "",
     projectType: nextProjectType,
     priority:
-      typeof draft.priority === "string" && draft.priority.trim()
+      typeof draft.priority === "string"
         ? draft.priority
         : fallbackFormData.priority,
     corporateEmergency:
@@ -265,6 +328,14 @@ const normalizeDraftFormData = (draftFormData, fallbackFormData) => {
 const NewOrders = ({ user = null }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const editProjectIdFromUrl = useMemo(
+    () => new URLSearchParams(location.search).get("edit") || "",
+    [location.search],
+  );
+  const requestedDraftId = useMemo(
+    () => new URLSearchParams(location.search).get("draft") || "",
+    [location.search],
+  );
   const [formData, setFormData] = useState(() =>
     createNewOrderFormData({
       projectType: location.state?.projectType || "Standard",
@@ -286,6 +357,9 @@ const NewOrders = ({ user = null }) => {
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
+  const [persistedDraftFiles, setPersistedDraftFiles] = useState(
+    createEmptyPersistedDraftFiles,
+  );
   const [selectedReferenceProjects, setSelectedReferenceProjects] = useState([]);
   const [referenceProjectQuery, setReferenceProjectQuery] = useState("");
   const [referenceProjectSuggestions, setReferenceProjectSuggestions] =
@@ -305,7 +379,10 @@ const NewOrders = ({ user = null }) => {
   });
   const [isToastFading, setIsToastFading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [editingId, setEditingId] = useState("");
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [activeDraftId, setActiveDraftId] = useState(requestedDraftId);
+  const [activeDraftRevision, setActiveDraftRevision] = useState(null);
+  const [editingId, setEditingId] = useState(editProjectIdFromUrl);
   const [editingProjectStatus, setEditingProjectStatus] = useState("");
   const [editingProjectIsCancelled, setEditingProjectIsCancelled] =
     useState(false);
@@ -317,6 +394,7 @@ const NewOrders = ({ user = null }) => {
   const draftMetaSaveChainRef = useRef(Promise.resolve());
   const draftFileSaveChainRef = useRef(Promise.resolve());
   const draftPersistenceDisabledRef = useRef(false);
+  const draftSavePromiseRef = useRef(null);
   const isRevisionMode = Boolean(editingId && location.state?.revisionMode);
   const revisionReturnTo =
     editingId && typeof location.state?.returnTo === "string"
@@ -345,6 +423,10 @@ const NewOrders = ({ user = null }) => {
         : [];
     return departments.includes("Front Desk");
   }, [currentUser?.department]);
+  const canManageCreationDrafts = useMemo(
+    () => canManageProjectCreationDrafts(currentUser),
+    [currentUser],
+  );
   const draftAccountKey =
     String(
       currentUser?._id || currentUser?.id || currentUser?.email || "default",
@@ -727,12 +809,14 @@ const NewOrders = ({ user = null }) => {
     setSelectedClientMockupNotes({});
     setSelectedApprovedMockups([]);
     setSelectedApprovedMockupNotes({});
+    setPersistedDraftFiles(createEmptyPersistedDraftFiles());
   };
 
   useEffect(() => {
-    const editParam = new URLSearchParams(location.search).get("edit");
-    setEditingId(editParam || "");
-  }, [location.search]);
+    setEditingId(editProjectIdFromUrl);
+    setActiveDraftId(editProjectIdFromUrl ? "" : requestedDraftId);
+    setActiveDraftRevision(null);
+  }, [editProjectIdFromUrl, requestedDraftId]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -786,6 +870,73 @@ const NewOrders = ({ user = null }) => {
       });
 
       try {
+        if (requestedDraftId) {
+          const serverDraft = await getProjectDraft(requestedDraftId);
+          if (isCancelled) return;
+
+          const draftPayload =
+            serverDraft?.formData &&
+            typeof serverDraft.formData === "object"
+              ? serverDraft.formData
+              : serverDraft?.payload && typeof serverDraft.payload === "object"
+                ? serverDraft.payload
+                : {};
+          const draftType = String(
+            serverDraft?.draftType || draftPayload.draftType || "",
+          ).toLowerCase();
+          if (draftType.includes("quote")) {
+            throw new Error("This is a quote draft and cannot be opened as an order.");
+          }
+
+          const savedFormData =
+            draftPayload.formData && typeof draftPayload.formData === "object"
+              ? draftPayload.formData
+              : draftPayload;
+          setFormData(normalizeDraftFormData(savedFormData, fallbackFormData));
+          setSelectedFiles([]);
+          setSelectedFileNotes({});
+          setSelectedClientMockups([]);
+          setSelectedClientMockupNotes({});
+          setSelectedApprovedMockups([]);
+          setSelectedApprovedMockupNotes({});
+          setExistingSampleImage(
+            typeof draftPayload.existingSampleImage === "string"
+              ? draftPayload.existingSampleImage
+              : "",
+          );
+          setExistingSampleImageNote(
+            typeof draftPayload.existingSampleImageNote === "string"
+              ? draftPayload.existingSampleImageNote
+              : "",
+          );
+          setExistingAttachments(
+            normalizeReferenceAttachments(
+              draftPayload.existingAttachments || [],
+            ),
+          );
+          setSelectedReferenceProjects(
+            normalizeReferenceProjectList(
+              draftPayload.selectedReferenceProjects ||
+                serverDraft?.referenceProjects ||
+                [],
+            ),
+          );
+          setPersistedDraftFiles(normalizePersistedDraftFiles(serverDraft));
+          setActiveDraftId(
+            String(serverDraft?._id || serverDraft?.id || requestedDraftId),
+          );
+          setActiveDraftRevision(Number(serverDraft?.revision) || null);
+
+          const savedScrollY = Number(draftPayload.scrollY);
+          if (Number.isFinite(savedScrollY) && savedScrollY > 0) {
+            window.requestAnimationFrame(() => window.scrollTo(0, savedScrollY));
+          }
+          setEditingProjectStatus("");
+          setEditingProjectIsCancelled(false);
+          setIsDraftHydrated(true);
+          return;
+        }
+
         const storedDraft = await loadNewOrderDraft(draftAccountKey);
         if (isCancelled) return;
 
@@ -800,10 +951,24 @@ const NewOrders = ({ user = null }) => {
               ? storedDraft.selectedFileNotes
               : {},
           );
-          setSelectedClientMockups([]);
-          setSelectedClientMockupNotes({});
-          setSelectedApprovedMockups([]);
-          setSelectedApprovedMockupNotes({});
+          setSelectedClientMockups(
+            normalizeDraftFiles(storedDraft.selectedClientMockups),
+          );
+          setSelectedClientMockupNotes(
+            storedDraft.selectedClientMockupNotes &&
+              typeof storedDraft.selectedClientMockupNotes === "object"
+              ? storedDraft.selectedClientMockupNotes
+              : {},
+          );
+          setSelectedApprovedMockups(
+            normalizeDraftFiles(storedDraft.selectedApprovedMockups),
+          );
+          setSelectedApprovedMockupNotes(
+            storedDraft.selectedApprovedMockupNotes &&
+              typeof storedDraft.selectedApprovedMockupNotes === "object"
+              ? storedDraft.selectedApprovedMockupNotes
+              : {},
+          );
           setExistingSampleImage(
             typeof storedDraft.existingSampleImage === "string"
               ? storedDraft.existingSampleImage
@@ -820,6 +985,7 @@ const NewOrders = ({ user = null }) => {
           setSelectedReferenceProjects(
             normalizeReferenceProjectList(storedDraft.selectedReferenceProjects || []),
           );
+          setPersistedDraftFiles(createEmptyPersistedDraftFiles());
         } else {
           setFormData(fallbackFormData);
           setSelectedFiles([]);
@@ -832,6 +998,7 @@ const NewOrders = ({ user = null }) => {
           setExistingSampleImageNote("");
           setExistingAttachments([]);
           setSelectedReferenceProjects([]);
+          setPersistedDraftFiles(createEmptyPersistedDraftFiles());
         }
       } catch (error) {
         console.error("Failed to restore New Order draft", error);
@@ -847,6 +1014,12 @@ const NewOrders = ({ user = null }) => {
         setExistingSampleImageNote("");
         setExistingAttachments([]);
         setSelectedReferenceProjects([]);
+        setPersistedDraftFiles(createEmptyPersistedDraftFiles());
+        if (requestedDraftId) {
+          setActiveDraftId("");
+          setActiveDraftRevision(null);
+          showToast(error?.message || "Unable to load the saved draft.", "error");
+        }
       }
 
       if (!isCancelled) {
@@ -886,6 +1059,7 @@ const NewOrders = ({ user = null }) => {
     hasResolvedCurrentUser,
     isFrontDeskUser,
     reopenedProject,
+    requestedDraftId,
     routePriority,
     routeProjectType,
   ]);
@@ -898,6 +1072,8 @@ const NewOrders = ({ user = null }) => {
     const payload = {
       formData,
       selectedFileNotes,
+      selectedClientMockupNotes,
+      selectedApprovedMockupNotes,
       existingSampleImage,
       existingSampleImageNote,
       existingAttachments,
@@ -929,6 +1105,8 @@ const NewOrders = ({ user = null }) => {
     isCreateMode,
     isDraftHydrated,
     selectedReferenceProjects,
+    selectedApprovedMockupNotes,
+    selectedClientMockupNotes,
     selectedFileNotes,
   ]);
 
@@ -942,7 +1120,11 @@ const NewOrders = ({ user = null }) => {
         .catch(() => {})
         .then(() => {
           if (draftPersistenceDisabledRef.current) return null;
-          return saveNewOrderDraftFiles(draftAccountKey, selectedFiles);
+          return saveNewOrderDraftFiles(draftAccountKey, {
+            selectedFiles,
+            selectedClientMockups,
+            selectedApprovedMockups,
+          });
         })
         .catch((error) => {
           console.error("Failed to save New Order draft files", error);
@@ -957,6 +1139,8 @@ const NewOrders = ({ user = null }) => {
     hasResolvedCurrentUser,
     isCreateMode,
     isDraftHydrated,
+    selectedApprovedMockups,
+    selectedClientMockups,
     selectedFiles,
   ]);
 
@@ -1041,6 +1225,158 @@ const NewOrders = ({ user = null }) => {
     setExistingSampleImageNote("");
   };
 
+  const updatePersistedDraftFileNote = (fieldName, fileId, note) => {
+    setPersistedDraftFiles((current) => ({
+      ...current,
+      [fieldName]: current[fieldName].map((file) =>
+        getPersistedDraftFileId(file) === fileId ? { ...file, note } : file,
+      ),
+    }));
+  };
+
+  const removePersistedDraftFile = (fieldName, fileId) => {
+    setPersistedDraftFiles((current) => ({
+      ...current,
+      [fieldName]: current[fieldName].filter(
+        (file) => getPersistedDraftFileId(file) !== fileId,
+      ),
+    }));
+  };
+
+  const saveCurrentServerDraft = async ({ navigateAfterSave = false } = {}) => {
+    if (!isCreateMode || !isDraftHydrated) {
+      throw new Error("The order form is not ready to save yet.");
+    }
+
+    if (draftSavePromiseRef.current) {
+      return draftSavePromiseRef.current;
+    }
+
+    const hasSavedSampleImage =
+      persistedDraftFiles.sampleImage.length > 0 || Boolean(existingSampleImage);
+    const pendingSampleImage = hasSavedSampleImage
+      ? null
+      : selectedFiles.find((file) => file.type.startsWith("image/")) || null;
+    const pendingAttachments = pendingSampleImage
+      ? selectedFiles.filter((file) => file !== pendingSampleImage)
+      : selectedFiles;
+    const readPendingNote = (file) =>
+      selectedFileNotes[buildFileKey(file)] || "";
+    const allPersistedFiles = Object.values(persistedDraftFiles).flat();
+    const retainedFileIds = Object.fromEntries(
+      Object.entries(persistedDraftFiles).map(([fieldName, files]) => [
+        fieldName,
+        files.map(getPersistedDraftFileId).filter(Boolean),
+      ]),
+    );
+    const fileMetadata = allPersistedFiles
+      .map((file, index) => ({
+        _id: getPersistedDraftFileId(file),
+        note: String(file.note || ""),
+        order: Number.isFinite(Number(file.order)) ? Number(file.order) : index,
+      }))
+      .filter((file) => file._id);
+    const payload = {
+      draftType: "project",
+      formData,
+      portalSource,
+      scrollY: typeof window !== "undefined" ? window.scrollY : 0,
+      selectedReferenceProjects,
+      existingSampleImage,
+      existingSampleImageNote,
+      existingAttachments,
+    };
+
+    setIsSavingDraft(true);
+    const savePromise = saveProjectDraft({
+      id: activeDraftId,
+      revision: activeDraftRevision,
+      payload,
+      retainedFileIds,
+      fileMetadata,
+      sampleImage: pendingSampleImage,
+      sampleImageNote: pendingSampleImage
+        ? readPendingNote(pendingSampleImage)
+        : "",
+      attachments: pendingAttachments,
+      attachmentNotes: pendingAttachments.map(readPendingNote),
+      clientMockups: selectedClientMockups,
+      clientMockupNotes: selectedClientMockups.map(
+        (file) => selectedClientMockupNotes[buildFileKey(file)] || "",
+      ),
+      approvedMockups: selectedApprovedMockups,
+      approvedMockupNotes: selectedApprovedMockups.map(
+        (file) => selectedApprovedMockupNotes[buildFileKey(file)] || "",
+      ),
+    });
+    draftSavePromiseRef.current = savePromise;
+
+    try {
+      const savedDraft = await savePromise;
+      const savedDraftId = String(
+        savedDraft?._id || savedDraft?.id || activeDraftId,
+      ).trim();
+      if (!savedDraftId) {
+        throw new Error("The server did not return a saved draft ID.");
+      }
+
+      setActiveDraftId(savedDraftId);
+      setActiveDraftRevision(Number(savedDraft?.revision) || null);
+      setPersistedDraftFiles(normalizePersistedDraftFiles(savedDraft));
+      setSelectedFiles([]);
+      setSelectedFileNotes({});
+      setSelectedClientMockups([]);
+      setSelectedClientMockupNotes({});
+      setSelectedApprovedMockups([]);
+      setSelectedApprovedMockupNotes({});
+
+      draftPersistenceDisabledRef.current = true;
+      await Promise.allSettled([
+        draftMetaSaveChainRef.current,
+        draftFileSaveChainRef.current,
+      ]);
+      try {
+        await clearNewOrderDraft(draftAccountKey);
+      } catch (localDraftError) {
+        // The server copy is authoritative once it has saved successfully.
+        console.warn(
+          "Saved the server draft but could not clear its legacy local copy",
+          localDraftError,
+        );
+      }
+
+      if (navigateAfterSave) {
+        navigate(
+          portalSource === "admin"
+            ? "/orders-management?tab=drafts"
+            : "/frontdesk/orders?tab=drafts",
+          {
+            state: { draftSaved: true, draftId: savedDraftId },
+          },
+        );
+      } else {
+        window.setTimeout(() => {
+          draftPersistenceDisabledRef.current = false;
+        }, 250);
+      }
+
+      return savedDraft;
+    } finally {
+      draftSavePromiseRef.current = null;
+      setIsSavingDraft(false);
+    }
+  };
+
+  const handleSaveToDraft = async () => {
+    try {
+      await saveCurrentServerDraft({ navigateAfterSave: true });
+    } catch (error) {
+      console.error("Failed to save order draft", error);
+      draftPersistenceDisabledRef.current = false;
+      showToast(error?.message || "Unable to save the draft.", "error");
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editingId && revisionBlockMessage) {
@@ -1082,12 +1418,15 @@ const NewOrders = ({ user = null }) => {
       setExistingSampleImage("");
       setExistingSampleImageNote("");
       setExistingAttachments([]);
+      setPersistedDraftFiles(createEmptyPersistedDraftFiles());
       setSelectedReferenceProjects([]);
       setReferenceProjectQuery("");
       setReferenceProjectSuggestions([]);
       setEditingProjectStatus("");
       setEditingProjectIsCancelled(false);
       setIsClientDropdownOpen(false);
+      setActiveDraftId("");
+      setActiveDraftRevision(null);
     },
     [routePriority, routeProjectType],
   );
@@ -1120,8 +1459,10 @@ const NewOrders = ({ user = null }) => {
     setIsLoading(true);
 
     if (
-      selectedClientMockups.length > 0 &&
-      selectedApprovedMockups.length > 0
+      (selectedClientMockups.length > 0 ||
+        persistedDraftFiles.clientMockup.length > 0) &&
+      (selectedApprovedMockups.length > 0 ||
+        persistedDraftFiles.approvedMockup.length > 0)
     ) {
       setIsLoading(false);
       showToast(
@@ -1131,7 +1472,37 @@ const NewOrders = ({ user = null }) => {
       return;
     }
 
+    let submissionDraftId = "";
+    let submissionDraftRevision = null;
+    if (!editingId && canManageCreationDrafts) {
+      try {
+        const savedDraft = await saveCurrentServerDraft();
+        submissionDraftId = String(
+          savedDraft?._id || savedDraft?.id || activeDraftId,
+        ).trim();
+        if (!submissionDraftId) {
+          throw new Error("Unable to resolve the saved draft ID.");
+        }
+        submissionDraftRevision = Number(savedDraft?.revision) || null;
+      } catch (error) {
+        console.error("Failed to save the latest order draft", error);
+        setIsLoading(false);
+        showToast(
+          error?.message ||
+            "The latest form details could not be saved. The order was not created.",
+          "error",
+        );
+        return;
+      }
+    }
+
     const formPayload = new FormData();
+    if (submissionDraftId) {
+      formPayload.append("draftId", submissionDraftId);
+      if (submissionDraftRevision) {
+        formPayload.append("draftRevision", String(submissionDraftRevision));
+      }
+    }
     formPayload.append("orderId", String(formData.orderNumber || "").trim());
     formPayload.append("orderDate", formData.orderDate);
     const canonicalClientName = resolveClientName(formData.clientName);
@@ -1188,20 +1559,22 @@ const NewOrders = ({ user = null }) => {
       ? selectedFiles.filter((f) => f !== imageFile)
       : selectedFiles;
 
-    attachmentFiles.forEach((file) => {
-      formPayload.append("attachments", file);
-    });
+    if (!submissionDraftId) {
+      attachmentFiles.forEach((file) => {
+        formPayload.append("attachments", file);
+      });
+    }
 
-    if (attachmentFiles.length > 0) {
+    if (!submissionDraftId && attachmentFiles.length > 0) {
       const attachmentNotes = attachmentFiles.map((file) => getFileNote(file));
       formPayload.append("attachmentNotes", JSON.stringify(attachmentNotes));
     }
 
-    if (imageFile) {
+    if (!submissionDraftId && imageFile) {
       formPayload.append("sampleImage", imageFile);
     }
 
-    if (selectedClientMockups.length > 0) {
+    if (!submissionDraftId && selectedClientMockups.length > 0) {
       selectedClientMockups.forEach((file) => {
         formPayload.append("clientMockup", file);
       });
@@ -1214,7 +1587,7 @@ const NewOrders = ({ user = null }) => {
       );
     }
 
-    if (selectedApprovedMockups.length > 0) {
+    if (!submissionDraftId && selectedApprovedMockups.length > 0) {
       selectedApprovedMockups.forEach((file) => {
         formPayload.append("approvedMockup", file);
       });
@@ -1232,7 +1605,9 @@ const NewOrders = ({ user = null }) => {
       : existingSampleImage
         ? existingSampleImageNote
         : "";
-    formPayload.append("sampleImageNote", sampleNote);
+    if (!submissionDraftId) {
+      formPayload.append("sampleImageNote", sampleNote);
+    }
 
     try {
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
@@ -1278,9 +1653,12 @@ const NewOrders = ({ user = null }) => {
           setExistingSampleImage("");
           setExistingSampleImageNote("");
           setExistingAttachments([]);
+          setPersistedDraftFiles(createEmptyPersistedDraftFiles());
           setSelectedReferenceProjects([]);
           setReferenceProjectQuery("");
           setReferenceProjectSuggestions([]);
+          setActiveDraftId("");
+          setActiveDraftRevision(null);
         }
 
         const nextPath =
@@ -1300,8 +1678,12 @@ const NewOrders = ({ user = null }) => {
 
   const isEmergency =
     formData.projectType === "Emergency" || formData.priority === "Urgent";
-  const clientMockupSectionLocked = selectedApprovedMockups.length > 0;
-  const approvedMockupSectionLocked = selectedClientMockups.length > 0;
+  const clientMockupSectionLocked =
+    selectedApprovedMockups.length > 0 ||
+    persistedDraftFiles.approvedMockup.length > 0;
+  const approvedMockupSectionLocked =
+    selectedClientMockups.length > 0 ||
+    persistedDraftFiles.clientMockup.length > 0;
 
   const isCorporate = formData.projectType === "Corporate Job";
   const currentUserDepartments = Array.isArray(currentUser?.department)
@@ -1313,6 +1695,53 @@ const NewOrders = ({ user = null }) => {
     currentUser?.role === "admin" ||
     currentUserDepartments.includes("Front Desk");
   const showCreateCancelAction = isCreateMode;
+
+  const renderPersistedDraftFileTile = (file, fieldName, fallbackName) => {
+    const fileId = getPersistedDraftFileId(file);
+    const fileUrl = String(file?.fileUrl || "");
+    const fileName = String(file?.fileName || fallbackName || "Saved file");
+    return (
+      <div
+        key={`${fieldName}-${fileId || fileUrl}`}
+        className="reference-file-tile existing draft-file"
+      >
+        <div className="file-icon">
+          {isImageFileRecord(file) && fileUrl ? (
+            <img src={fileUrl} alt={`${fileName} preview`} />
+          ) : (
+            <FolderIcon />
+          )}
+        </div>
+        <div className="file-info" title={fileName}>
+          <span className="file-name">{fileName}</span>
+          <span className="file-size">
+            {formatFileSize(file?.size) || "Saved in draft"}
+          </span>
+        </div>
+        <textarea
+          className="reference-file-note"
+          placeholder="Add note for this file..."
+          value={file?.note || ""}
+          onChange={(event) =>
+            updatePersistedDraftFileNote(
+              fieldName,
+              fileId,
+              event.target.value,
+            )
+          }
+          rows="2"
+        />
+        <button
+          type="button"
+          onClick={() => removePersistedDraftFile(fieldName, fileId)}
+          className="file-remove-btn"
+          aria-label={`Remove ${fileName}`}
+        >
+          &times;
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="new-orders-page">
@@ -1386,7 +1815,19 @@ const NewOrders = ({ user = null }) => {
         )}
 
         <div className="form-card">
-          <form onSubmit={handleSubmit} autoComplete="off">
+          {requestedDraftId && !isDraftHydrated && (
+            <div className="draft-load-status" role="status">
+              Loading your saved draft and files...
+            </div>
+          )}
+          <form
+            onSubmit={handleSubmit}
+            autoComplete="off"
+            aria-busy={!isDraftHydrated || isSavingDraft}
+            className={`${!isDraftHydrated ? "draft-hydrating" : ""} ${
+              isSavingDraft ? "draft-saving" : ""
+            }`.trim()}
+          >
             <div className="order-meta-card">
               <div className="order-meta-head">
                 <div>
@@ -1546,7 +1987,8 @@ const NewOrders = ({ user = null }) => {
                     </div>
                     <div>
                       <p>
-                        {selectedClientMockups.length > 0
+                        {selectedClientMockups.length > 0 ||
+                        persistedDraftFiles.clientMockup.length > 0
                           ? "Add client mockups"
                           : "Upload client mockups"}
                       </p>
@@ -1575,8 +2017,16 @@ const NewOrders = ({ user = null }) => {
                     }}
                   />
 
-                  {selectedClientMockups.length > 0 && (
+                  {(selectedClientMockups.length > 0 ||
+                    persistedDraftFiles.clientMockup.length > 0) && (
                     <div className="reference-files-grid">
+                      {persistedDraftFiles.clientMockup.map((file) =>
+                        renderPersistedDraftFileTile(
+                          file,
+                          "clientMockup",
+                          "Client mockup",
+                        ),
+                      )}
                       {selectedClientMockups.map((file) => {
                         const fileKey = buildFileKey(file);
                         return (
@@ -1660,7 +2110,8 @@ const NewOrders = ({ user = null }) => {
                     </div>
                     <div>
                       <p>
-                        {selectedApprovedMockups.length > 0
+                        {selectedApprovedMockups.length > 0 ||
+                        persistedDraftFiles.approvedMockup.length > 0
                           ? "Add approved mockups"
                           : "Upload approved mockups"}
                       </p>
@@ -1689,8 +2140,16 @@ const NewOrders = ({ user = null }) => {
                     }}
                   />
 
-                  {selectedApprovedMockups.length > 0 && (
+                  {(selectedApprovedMockups.length > 0 ||
+                    persistedDraftFiles.approvedMockup.length > 0) && (
                     <div className="reference-files-grid">
+                      {persistedDraftFiles.approvedMockup.map((file) =>
+                        renderPersistedDraftFileTile(
+                          file,
+                          "approvedMockup",
+                          "Approved mockup",
+                        ),
+                      )}
                       {selectedApprovedMockups.map((file) => {
                         const fileKey = buildFileKey(file);
                         return (
@@ -2222,7 +2681,9 @@ const NewOrders = ({ user = null }) => {
 
               {selectedFiles.length === 0 &&
                 !existingSampleImage &&
-                existingAttachments.length === 0 && (
+                existingAttachments.length === 0 &&
+                persistedDraftFiles.sampleImage.length === 0 &&
+                persistedDraftFiles.attachments.length === 0 && (
                   <div
                     className="reference-dropzone"
                     onClick={() =>
@@ -2256,8 +2717,24 @@ const NewOrders = ({ user = null }) => {
 
               {(selectedFiles.length > 0 ||
                 existingSampleImage ||
-                existingAttachments.length > 0) && (
+                existingAttachments.length > 0 ||
+                persistedDraftFiles.sampleImage.length > 0 ||
+                persistedDraftFiles.attachments.length > 0) && (
                 <div className="reference-files-grid">
+                  {persistedDraftFiles.sampleImage.map((file) =>
+                    renderPersistedDraftFileTile(
+                      file,
+                      "sampleImage",
+                      "Sample image",
+                    ),
+                  )}
+                  {persistedDraftFiles.attachments.map((file) =>
+                    renderPersistedDraftFileTile(
+                      file,
+                      "attachments",
+                      "Reference file",
+                    ),
+                  )}
                   {/* Existing Sample Image */}
                   {existingSampleImage && (
                     <div className="reference-file-tile existing">
@@ -2398,15 +2875,30 @@ const NewOrders = ({ user = null }) => {
                   type="button"
                   className="cancel-order-btn"
                   onClick={() => setShowCancelModal(true)}
-                  disabled={isLoading}
+                  disabled={isLoading || isSavingDraft}
                 >
                   Cancel
+                </button>
+              )}
+              {isCreateMode && canManageCreationDrafts && (
+                <button
+                  type="button"
+                  className="save-draft-btn"
+                  onClick={handleSaveToDraft}
+                  disabled={isLoading || isSavingDraft || !isDraftHydrated}
+                >
+                  {isSavingDraft ? "Saving Draft..." : "Save to Draft"}
                 </button>
               )}
               <button
                 type="submit"
                 className="submit-btn"
-                disabled={isLoading || Boolean(editingId && revisionBlockMessage)}
+                disabled={
+                  isLoading ||
+                  isSavingDraft ||
+                  !isDraftHydrated ||
+                  Boolean(editingId && revisionBlockMessage)
+                }
               >
                 {isLoading
                   ? editingId
@@ -2459,7 +2951,11 @@ const NewOrders = ({ user = null }) => {
         onConfirm={handleCancelOrderCreation}
         onCancel={() => setShowCancelModal(false)}
         title="Cancel New Order"
-        message="Cancel this new order, clear the current form and draft, and return to the dashboard?"
+        message={
+          activeDraftId
+            ? "Stop editing and return to the dashboard? Your last saved draft will remain available in Saved Drafts."
+            : "Cancel this new order, clear the current unsaved form, and return to the dashboard?"
+        }
         confirmText="Yes, Cancel Order"
         cancelText="Keep Editing"
       />

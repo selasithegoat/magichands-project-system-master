@@ -30,6 +30,7 @@ const enforceUploadAccess = require("./middleware/uploadAccessMiddleware");
 
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
+const projectCreationDraftRoutes = require("./routes/projectCreationDraftRoutes");
 const updateRoutes = require("./routes/updateRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
@@ -422,6 +423,7 @@ app.use(
   authRoutes,
 );
 app.use("/api/projects", projectRoutes);
+app.use("/api/project-drafts", projectCreationDraftRoutes);
 app.use("/api/updates", updateRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);

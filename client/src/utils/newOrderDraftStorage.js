@@ -94,7 +94,15 @@ export const loadNewOrderDraft = async (accountKey) => {
     existingSampleImage: normalizedMeta?.existingSampleImage || "",
     existingSampleImageNote: normalizedMeta?.existingSampleImageNote || "",
     existingAttachments: normalizedMeta?.existingAttachments || [],
+    selectedReferenceProjects:
+      normalizedMeta?.selectedReferenceProjects || [],
     selectedFiles: normalizedFiles?.selectedFiles || [],
+    selectedClientMockups: normalizedFiles?.selectedClientMockups || [],
+    selectedClientMockupNotes:
+      normalizedMeta?.selectedClientMockupNotes || {},
+    selectedApprovedMockups: normalizedFiles?.selectedApprovedMockups || [],
+    selectedApprovedMockupNotes:
+      normalizedMeta?.selectedApprovedMockupNotes || {},
   };
 };
 
@@ -110,17 +118,36 @@ export const saveNewOrderDraftMeta = async (accountKey, payload) =>
     ),
   );
 
-export const saveNewOrderDraftFiles = async (accountKey, selectedFiles) =>
-  runStoreRequest("readwrite", (store) =>
+export const saveNewOrderDraftFiles = async (accountKey, filesPayload) => {
+  const normalizedPayload = Array.isArray(filesPayload)
+    ? { selectedFiles: filesPayload }
+    : filesPayload && typeof filesPayload === "object"
+      ? filesPayload
+      : {};
+
+  return runStoreRequest("readwrite", (store) =>
     store.put(
       {
         version: DRAFT_VERSION,
         savedAt: Date.now(),
-        selectedFiles: Array.isArray(selectedFiles) ? selectedFiles : [],
+        selectedFiles: Array.isArray(normalizedPayload.selectedFiles)
+          ? normalizedPayload.selectedFiles
+          : [],
+        selectedClientMockups: Array.isArray(
+          normalizedPayload.selectedClientMockups,
+        )
+          ? normalizedPayload.selectedClientMockups
+          : [],
+        selectedApprovedMockups: Array.isArray(
+          normalizedPayload.selectedApprovedMockups,
+        )
+          ? normalizedPayload.selectedApprovedMockups
+          : [],
       },
       buildFilesKey(accountKey),
     ),
   );
+};
 
 export const clearNewOrderDraft = async (accountKey) => {
   await Promise.all([

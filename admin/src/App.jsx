@@ -208,7 +208,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminFrontDeskScope>
-                  <OrdersManagement />
+                  <OrdersManagement user={user} />
                 </AdminFrontDeskScope>
               </ProtectedRoute>
             }
@@ -226,7 +226,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminFrontDeskScope>
-                  <NewOrdersForm />
+                  <NewOrdersForm user={user} />
                 </AdminFrontDeskScope>
               </ProtectedRoute>
             }
@@ -246,7 +246,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminFrontDeskScope>
-                  <MinimalQuoteForm />
+                  <MinimalQuoteForm user={user} />
                 </AdminFrontDeskScope>
               </ProtectedRoute>
             }

@@ -274,7 +274,9 @@ const scanUploadedFile = async (filePath) => {
 };
 
 const scanRequestFiles = async (req) => {
-  const files = getUploadedFiles(req);
+  const files = getUploadedFiles(req).filter(
+    (file) => !file?.isPersistedProjectCreationDraftFile,
+  );
 
   for (const file of files) {
     const filePath = getUploadedFilePath(file);
@@ -289,7 +291,11 @@ const scanRequestFiles = async (req) => {
 };
 
 const cleanupRequestFiles = async (req) => {
-  const files = getUploadedFiles(req);
+  // Files synthesized from a saved creation draft already belong to the draft.
+  // Validation failures during final submission must never remove those files.
+  const files = getUploadedFiles(req).filter(
+    (file) => !file?.isPersistedProjectCreationDraftFile,
+  );
 
   await Promise.all(
     files.map(async (file) => {
@@ -444,6 +450,32 @@ const getRelativeDir = async (req, file) => {
   const day = String(now.getDate()).padStart(2, "0");
   const dateFolder = `${month}-${day}`;
   const category = getCategory(file);
+
+  if (req.projectCreationDraftUploadId) {
+    const ownerFolder = `user-${sanitizeSegment(
+      String(req.user?._id || req.user?.id || ""),
+      "user",
+    )}`;
+    const draftFolder = `draft-${sanitizeSegment(
+      String(req.projectCreationDraftUploadId),
+      "draft",
+    )}`;
+    const fieldFolder = sanitizeSegment(file.fieldname, "misc");
+    const relativeDirFs = path.join(
+      "project-drafts",
+      ownerFolder,
+      draftFolder,
+      fieldFolder,
+    );
+    const relativeDirUrl = path.posix.join(
+      "project-drafts",
+      ownerFolder,
+      draftFolder,
+      fieldFolder,
+    );
+
+    return { relativeDirFs, relativeDirUrl };
+  }
 
   if (category === "chat-media") {
     const threadFolder = `thread-${sanitizeSegment(getChatThreadId(req), "thread")}`;

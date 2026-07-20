@@ -4,6 +4,7 @@ const ChatMessage = require("../models/ChatMessage");
 const ChatAttachmentIndex = require("../models/ChatAttachmentIndex");
 const ChatThread = require("../models/ChatThread");
 const User = require("../models/User");
+const ProjectCreationDraft = require("../models/ProjectCreationDraft");
 
 const PROJECT_ACCESS_FIELDS =
   "createdBy projectLeadId assistantLeadId departments orderId details.projectName";
@@ -254,6 +255,28 @@ const findProjectForFileUrl = async (relativePath) => {
   return project || null;
 };
 
+const findCreationDraftForFileUrl = async (relativePath) => {
+  const candidateUrls = buildCandidateFileUrls(relativePath);
+  if (candidateUrls.length === 0) return null;
+
+  return ProjectCreationDraft.findOne({
+    $or: [
+      { "files.attachments.fileUrl": { $in: candidateUrls } },
+      { "files.sampleImage.fileUrl": { $in: candidateUrls } },
+      { "files.clientMockup.fileUrl": { $in: candidateUrls } },
+      { "files.approvedMockup.fileUrl": { $in: candidateUrls } },
+    ],
+  })
+    .select("owner status finalizedProject")
+    .lean();
+};
+
+const canAccessCreationDraftUpload = (requester, draft) => {
+  const requesterId = toObjectIdString(requester?._id || requester?.id);
+  const ownerId = toObjectIdString(draft?.owner);
+  return Boolean(requesterId && ownerId && requesterId === ownerId);
+};
+
 const findProjectForToken = async ({ token, projectSlug, requester }) => {
   if (!token) return null;
   if (OBJECT_ID_REGEX.test(token)) {
@@ -357,6 +380,33 @@ const enforceUploadAccess = async (req, res, next) => {
 
     const parts = relativePath.split("/");
     const category = parts[0];
+
+    if (category === "project-drafts") {
+      const draft = await findCreationDraftForFileUrl(relativePath);
+      if (["active", "finalizing"].includes(draft?.status)) {
+        if (canAccessCreationDraftUpload(req.user, draft)) return next();
+        return res
+          .status(403)
+          .json({ message: "Not authorized to access this project draft file." });
+      }
+
+      let project = null;
+      if (draft?.finalizedProject) {
+        project = await Project.findById(draft.finalizedProject)
+          .select(PROJECT_ACCESS_FIELDS)
+          .lean();
+      }
+      if (!project) {
+        project = await findProjectForFileUrl(relativePath);
+      }
+
+      if (!project || !canAccessProjectUpload(req.user, project)) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to access this project file." });
+      }
+      return next();
+    }
 
     if (category === "chat-media") {
       const thread = await findChatThreadForFileUrl(relativePath);

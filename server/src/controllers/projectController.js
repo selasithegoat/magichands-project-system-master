@@ -41,6 +41,12 @@ const {
   sendProjectRevisionEmail,
 } = require("../utils/projectCreationEmailService");
 const { sendEmailDetailed } = require("../utils/emailService");
+const {
+  prepareProjectCreationFromDraft,
+  markProjectCreationDraftFinalized,
+  releaseProjectCreationDraftFinalization,
+  attachDraftFinalizationMetadata,
+} = require("../services/projectCreationDraftService");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -7953,7 +7959,47 @@ const parseBottleneckThresholdDays = (value) => {
 // @route   POST /api/projects
 // @access  Private
 const createProject = async (req, res) => {
+  let draftContext = null;
+  let savedProjectForRequest = null;
+  const releaseDraftClaimSafely = async () => {
+    if (
+      !draftContext?.draft ||
+      draftContext.existingProject ||
+      savedProjectForRequest
+    ) return;
+    try {
+      await releaseProjectCreationDraftFinalization(draftContext.draft);
+    } catch (releaseError) {
+      console.error(
+        "Failed to release project creation draft finalization lock:",
+        releaseError,
+      );
+    }
+  };
   try {
+    if (!req.user) {
+      await cleanupUploadedFilesSafely(req);
+      return res
+        .status(401)
+        .json({ message: "User not found or not authorized" });
+    }
+
+    draftContext = await prepareProjectCreationFromDraft(req);
+    if (draftContext?.existingProject) {
+      await markProjectCreationDraftFinalized({
+        draft: draftContext.draft,
+        project: draftContext.existingProject,
+      });
+      await cleanupUploadedFilesSafely(req);
+      return res.status(200).json(
+        attachDraftFinalizationMetadata(
+          draftContext.existingProject,
+          draftContext.draft._id,
+          true,
+        ),
+      );
+    }
+
     const {
       orderId,
       orderRef,
@@ -7989,14 +8035,9 @@ const createProject = async (req, res) => {
 
     // Basic validation
     if (!projectName) {
+      await releaseDraftClaimSafely();
+      await cleanupUploadedFilesSafely(req);
       return res.status(400).json({ message: "Project name is required" });
-    }
-
-    // Verify user is authenticated
-    if (!req.user) {
-      return res
-        .status(401)
-        .json({ message: "User not found or not authorized" });
     }
 
     // Helper to extract value if object
@@ -8078,6 +8119,7 @@ const createProject = async (req, res) => {
       clientApprovedAtIntake: true,
     });
     if (clientMockupVersions.length > 0 && approvedMockupVersions.length > 0) {
+      await releaseDraftClaimSafely();
       await cleanupUploadedFilesSafely(req);
       return res.status(400).json({
         message:
@@ -8144,6 +8186,7 @@ const createProject = async (req, res) => {
     const normalizedProjectType = toText(req.body.projectType) || "Standard";
     const finalOrderId = normalizeOrderNumber(orderId);
     if (!finalOrderId) {
+      await releaseDraftClaimSafely();
       await cleanupUploadedFilesSafely(req);
       return res.status(400).json({
         message: "Order number is required. Front Desk must enter it manually.",
@@ -8151,6 +8194,8 @@ const createProject = async (req, res) => {
     }
     const normalizedDeliveryTime = toText(finalDeliveryTime);
     if (normalizedProjectType === "Quote" && !normalizedDeliveryTime) {
+      await releaseDraftClaimSafely();
+      await cleanupUploadedFilesSafely(req);
       return res.status(400).json({
         message: "Delivery time is required when creating a quote order.",
       });
@@ -8167,6 +8212,8 @@ const createProject = async (req, res) => {
     if (normalizedProjectType === "Quote") {
       const { mode } = getQuoteChecklistState(normalizedQuoteDetails);
       if (mode === "none") {
+        await releaseDraftClaimSafely();
+        await cleanupUploadedFilesSafely(req);
         return res.status(400).json({
           code: "QUOTE_REQUIREMENTS_BLOCKED",
           message:
@@ -8232,6 +8279,7 @@ const createProject = async (req, res) => {
           ? "Quote Created"
           : "Order Created"), // Default or Explicit
       createdBy: req.user._id,
+      creationDraftId: draftContext?.draft?._id || null,
       projectLeadId: projectLeadId || null,
       assistantLeadId: normalizedAssistantLeadId || null,
       workstreamCode: normalizeOptionalText(workstreamCode),
@@ -8300,14 +8348,41 @@ const createProject = async (req, res) => {
     project.versionState = "active";
 
     const savedProject = await project.save();
+    savedProjectForRequest = savedProject;
+    const postCreateWarnings = [];
+    const recordPostCreateWarning = (label, error) => {
+      console.error(`${label}:`, error);
+      postCreateWarnings.push(label);
+    };
+
+    if (draftContext?.draft) {
+      try {
+        await markProjectCreationDraftFinalized({
+          draft: draftContext.draft,
+          project: savedProject,
+        });
+      } catch (draftFinalizeError) {
+        recordPostCreateWarning(
+          "Project was created, but its draft finalization marker could not be updated",
+          draftFinalizeError,
+        );
+      }
+    }
 
     // Log Activity
-    await logActivity(
-      savedProject._id,
-      req.user.id,
-      "create",
-      `Created project #${savedProject.orderId || savedProject._id}`,
-    );
+    try {
+      await logActivity(
+        savedProject._id,
+        req.user.id,
+        "create",
+        `Created project #${savedProject.orderId || savedProject._id}`,
+      );
+    } catch (activityError) {
+      recordPostCreateWarning(
+        "Project was created, but its creation activity could not be recorded",
+        activityError,
+      );
+    }
 
     if (latestInitialMockupVersion) {
       const versionLabel = buildMockupVersionLabel(
@@ -8319,45 +8394,59 @@ const createProject = async (req, res) => {
       const intakeMockupUpdateLabel = latestInitialMockupVersion.clientApprovedAtIntake
         ? "Approved client mockup"
         : "Client mockup";
-      await logActivity(
-        savedProject._id,
-        req.user.id,
-        "mockup_upload",
-        `${intakeMockupLabel} ${versionLabel} at intake.`,
-        {
-          mockup: {
-            version: latestInitialMockupVersion.version,
-            source: latestInitialMockupVersion.source,
-            intakeUpload: true,
-            clientApprovedAtIntake: Boolean(
-              latestInitialMockupVersion.clientApprovedAtIntake,
-            ),
-            fileName: latestInitialMockupVersion.fileName,
-            fileUrl: latestInitialMockupVersion.fileUrl,
-            graphicsReviewStatus:
-              latestInitialMockupVersion.graphicsReview?.status || "pending",
+      try {
+        await logActivity(
+          savedProject._id,
+          req.user.id,
+          "mockup_upload",
+          `${intakeMockupLabel} ${versionLabel} at intake.`,
+          {
+            mockup: {
+              version: latestInitialMockupVersion.version,
+              source: latestInitialMockupVersion.source,
+              intakeUpload: true,
+              clientApprovedAtIntake: Boolean(
+                latestInitialMockupVersion.clientApprovedAtIntake,
+              ),
+              fileName: latestInitialMockupVersion.fileName,
+              fileUrl: latestInitialMockupVersion.fileUrl,
+              graphicsReviewStatus:
+                latestInitialMockupVersion.graphicsReview?.status || "pending",
+            },
           },
-        },
-      );
+        );
 
-      await createProjectSystemUpdateAndSnapshot({
-        project: savedProject,
-        authorId: req.user._id || req.user.id,
-        category: "Graphics",
-        content: `${intakeMockupUpdateLabel} ${versionLabel} uploaded at intake. Graphics review pending.`,
-      });
+        await createProjectSystemUpdateAndSnapshot({
+          project: savedProject,
+          authorId: req.user._id || req.user.id,
+          category: "Graphics",
+          content: `${intakeMockupUpdateLabel} ${versionLabel} uploaded at intake. Graphics review pending.`,
+        });
+      } catch (mockupActivityError) {
+        recordPostCreateWarning(
+          "Project was created, but its intake mockup activity could not be recorded",
+          mockupActivityError,
+        );
+      }
     }
 
     // [New] Notify Lead
     if (savedProject.projectLeadId) {
-      await createNotification(
-        savedProject.projectLeadId,
-        req.user._id,
-        savedProject._id,
-        "ASSIGNMENT",
-        "New Project Assigned",
-        `Project #${savedProject.orderId}: You have been assigned as the lead for project: ${savedProject.details.projectName}`,
-      );
+      try {
+        await createNotification(
+          savedProject.projectLeadId,
+          req.user._id,
+          savedProject._id,
+          "ASSIGNMENT",
+          "New Project Assigned",
+          `Project #${savedProject.orderId}: You have been assigned as the lead for project: ${savedProject.details.projectName}`,
+        );
+      } catch (leadNotificationError) {
+        recordPostCreateWarning(
+          "Project was created, but its lead notification could not be sent",
+          leadNotificationError,
+        );
+      }
     }
 
     // [New] Notify Assistant Lead (if provided and different from lead)
@@ -8367,14 +8456,21 @@ const createProject = async (req, res) => {
         savedProject.assistantLeadId.toString() !==
           savedProject.projectLeadId.toString())
     ) {
-      await createNotification(
-        savedProject.assistantLeadId,
-        req.user._id,
-        savedProject._id,
-        "ASSIGNMENT",
-        "Assistant Lead Assigned",
-        `Project #${savedProject.orderId}: You have been added as an assistant lead for project: ${savedProject.details.projectName}`,
-      );
+      try {
+        await createNotification(
+          savedProject.assistantLeadId,
+          req.user._id,
+          savedProject._id,
+          "ASSIGNMENT",
+          "Assistant Lead Assigned",
+          `Project #${savedProject.orderId}: You have been added as an assistant lead for project: ${savedProject.details.projectName}`,
+        );
+      } catch (assistantNotificationError) {
+        recordPostCreateWarning(
+          "Project was created, but its assistant lead notification could not be sent",
+          assistantNotificationError,
+        );
+      }
     }
 
     // [New] Notify Admins (if creator is not admin)
@@ -8384,14 +8480,21 @@ const createProject = async (req, res) => {
         savedProject.assistantLeadId?.toString(),
       ].filter(Boolean);
 
-      await notifyAdmins(
-        req.user._id,
-        savedProject._id,
-        "SYSTEM",
-        "New Project Created",
-        `${req.user.firstName} ${req.user.lastName} created a new project #${savedProject.orderId || savedProject._id}: ${savedProject.details.projectName}`,
-        { excludeUserIds: excludeAdminRecipientIds },
-      );
+      try {
+        await notifyAdmins(
+          req.user._id,
+          savedProject._id,
+          "SYSTEM",
+          "New Project Created",
+          `${req.user.firstName} ${req.user.lastName} created a new project #${savedProject.orderId || savedProject._id}: ${savedProject.details.projectName}`,
+          { excludeUserIds: excludeAdminRecipientIds },
+        );
+      } catch (adminNotificationError) {
+        recordPostCreateWarning(
+          "Project was created, but its admin notification could not be sent",
+          adminNotificationError,
+        );
+      }
     }
 
     const requestBaseUrl = getRequestBaseUrl(req);
@@ -8416,11 +8519,48 @@ const createProject = async (req, res) => {
       ? savedProject.toObject()
       : savedProject;
     responsePayload.emailNotification = emailNotification;
+    if (postCreateWarnings.length > 0) {
+      responsePayload.postCreateWarnings = postCreateWarnings;
+    }
+    if (draftContext?.draft) {
+      responsePayload.draftFinalization = {
+        draftId: String(draftContext.draft._id),
+        idempotent: false,
+      };
+    }
 
     res.status(201).json(responsePayload);
     return;
   } catch (error) {
     console.error("Error creating project:", error);
+    if (draftContext?.draft && error?.code === 11000) {
+      const existingProject = await Project.findOne({
+        creationDraftId: draftContext.draft._id,
+      });
+      if (existingProject) {
+        await markProjectCreationDraftFinalized({
+          draft: draftContext.draft,
+          project: existingProject,
+        }).catch((draftFinalizeError) => {
+          console.error(
+            "Failed to reconcile finalized project creation draft:",
+            draftFinalizeError,
+          );
+        });
+        await cleanupUploadedFilesSafely(req);
+        return res.status(200).json(
+          attachDraftFinalizationMetadata(
+            existingProject,
+            draftContext.draft._id,
+            true,
+          ),
+        );
+      }
+    }
+    if (!savedProjectForRequest) {
+      await releaseDraftClaimSafely();
+      await cleanupUploadedFilesSafely(req);
+    }
     if (error.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
@@ -17900,6 +18040,9 @@ const reopenProject = async (req, res) => {
     delete sourceObject.__v;
     delete sourceObject.createdAt;
     delete sourceObject.updatedAt;
+    // A creation draft identifies only the original project. Reopened revisions
+    // must not inherit it or collide with the idempotency uniqueness guard.
+    delete sourceObject.creationDraftId;
 
     // Reopened revision starts a fresh active cycle while preserving core details.
     const reopenedProject = new Project({

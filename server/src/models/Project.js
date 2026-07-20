@@ -789,6 +789,11 @@ const ProjectSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    creationDraftId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ProjectCreationDraft",
+      default: null,
+    },
     lineageId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
@@ -1353,6 +1358,13 @@ ProjectSchema.index({ priority: 1 });
 ProjectSchema.index({ projectLeadId: 1 });
 ProjectSchema.index({ assistantLeadId: 1 });
 ProjectSchema.index({ createdBy: 1 });
+ProjectSchema.index(
+  { creationDraftId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { creationDraftId: { $type: "objectId" } },
+  },
+);
 ProjectSchema.index({ orderRef: 1, createdAt: -1 });
 ProjectSchema.index({ orderId: 1, createdAt: -1 });
 ProjectSchema.index({ "details.client": 1 });

@@ -1,14 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
+import { canManageProjectCreationDrafts } from "../../utils/projectDraftApi";
 import "./CreateProjectLanding.css";
 
-const CreateProjectLanding = () => {
+const CreateProjectLanding = ({ user = null }) => {
   const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState(null);
+  const canManageCreationDrafts = canManageProjectCreationDrafts(user);
 
   const handleSelection = (type) => {
-    setSelectedType(type);
-
     // Slight delay for visual feedback if we add animation later
     setTimeout(() => {
       if (type === "Quote") {
@@ -27,9 +26,25 @@ const CreateProjectLanding = () => {
 
   return (
     <div className="create-project-landing-container">
-      <h1 className="create-project-landing-title">
+      <h1
+        className={`create-project-landing-title ${
+          canManageCreationDrafts ? "" : "without-draft-action"
+        }`}
+      >
         Select Project Type
       </h1>
+
+      {canManageCreationDrafts && (
+        <div className="create-project-landing-actions">
+          <button
+            type="button"
+            className="view-creation-drafts-btn"
+            onClick={() => navigate("/frontdesk/orders?tab=drafts")}
+          >
+            View Saved Drafts
+          </button>
+        </div>
+      )}
 
       <div className="project-type-grid">
         {/* Standard Project */}

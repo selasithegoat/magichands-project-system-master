@@ -6,10 +6,37 @@
 
 .create-project-landing-title {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 1rem;
   color: var(--text-primary);
   font-size: clamp(2rem, 3vw, 2.6rem);
   font-weight: 700;
+}
+
+.create-project-landing-title.without-draft-action {
+  margin-bottom: 3rem;
+}
+
+.create-project-landing-actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+}
+
+.view-creation-drafts-btn {
+  padding: 0.65rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 10px;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.view-creation-drafts-btn:hover,
+.view-creation-drafts-btn:focus-visible {
+  background: rgba(37, 99, 235, 0.1);
+  outline: none;
 }
 
 .project-type-grid {

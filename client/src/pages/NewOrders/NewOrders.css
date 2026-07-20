@@ -3837,6 +3837,26 @@
   flex-wrap: wrap;
 }
 
+.new-orders-page .draft-load-status {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  border-radius: 12px;
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--order-primary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.new-orders-page form.draft-hydrating,
+.new-orders-page form.draft-saving {
+  pointer-events: none;
+}
+
+.new-orders-page form.draft-hydrating {
+  opacity: 0.62;
+}
+
 .new-orders-page .revision-blocked-notice {
   width: 100%;
   margin-top: 1.25rem;
@@ -3863,6 +3883,29 @@
     border-color 0.2s ease;
 }
 
+.new-orders-page .save-draft-btn {
+  border: 1px solid rgba(15, 118, 110, 0.42);
+  background: var(--surface, #ffffff);
+  color: var(--order-primary);
+  padding: 0.95rem 1.4rem;
+  border-radius: 14px;
+  font-size: 0.96rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.new-orders-page .save-draft-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(15, 118, 110, 0.08);
+  border-color: rgba(15, 118, 110, 0.65);
+  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.12);
+}
+
 .new-orders-page .cancel-order-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   background: rgba(15, 118, 110, 0.14);
@@ -3870,6 +3913,7 @@
 }
 
 .new-orders-page .cancel-order-btn:disabled,
+.new-orders-page .save-draft-btn:disabled,
 .new-orders-page .submit-btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
@@ -3940,6 +3984,7 @@
   }
 
   .new-orders-page .cancel-order-btn,
+  .new-orders-page .save-draft-btn,
   .new-orders-page .submit-btn {
     width: 100% !important;
   }

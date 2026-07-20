@@ -503,7 +503,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <CreateProjectLanding />
+              <CreateProjectLanding user={user} />
             </ProtectedLayout>
           }
         />
@@ -517,7 +517,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <MinimalQuoteForm />
+              <MinimalQuoteForm user={user} />
             </ProtectedLayout>
           }
         />
@@ -620,7 +620,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <CreateProjectLanding />
+              <CreateProjectLanding user={user} />
             </ProtectedLayout>
           }
         />
@@ -634,7 +634,7 @@ function App() {
               projectCount={projectCount}
               engagedCount={engagedCount}
             >
-              <FrontDeskOrders />
+              <FrontDeskOrders user={user} />
             </ProtectedLayout>
           }
         />

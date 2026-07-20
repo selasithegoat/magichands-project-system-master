@@ -29,6 +29,11 @@ import {
   resolveProjectNameForForm,
 } from "../../../utils/projectName";
 import { resolvePortalSource } from "../../../utils/portalSource";
+import {
+  canManageProjectCreationDrafts,
+  getProjectDraft,
+  saveProjectDraft,
+} from "../../../utils/projectDraftApi";
 import "./MinimalQuoteForm.css";
 
 const REVISION_LOCKED_STATUSES = new Set([
@@ -123,14 +128,119 @@ const normalizeChecklist = (checklist) => {
   return next;
 };
 
-const MinimalQuoteForm = () => {
+const defaultQuoteItem = { description: "", breakdown: "", qty: 1 };
+
+const normalizeDraftItems = (items) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [{ ...defaultQuoteItem }];
+  }
+  return items.map((item) => ({
+    description: String(item?.description || ""),
+    breakdown: String(item?.breakdown || ""),
+    qty: item?.qty ?? 1,
+  }));
+};
+
+const normalizeDraftDate = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const directDate = raw.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  if (directDate) return directDate;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime())
+    ? ""
+    : parsed.toISOString().slice(0, 10);
+};
+
+const normalizeDraftFile = (file, fieldName) => {
+  if (!file || typeof file !== "object") return null;
+  const fileUrl = String(file.fileUrl || file.url || file.path || "").trim();
+  if (!fileUrl) return null;
+  return {
+    ...file,
+    _id: String(file._id || file.id || file.fileId || ""),
+    fileUrl,
+    fileName:
+      String(file.fileName || file.name || "").trim() ||
+      getReferenceFileName(fileUrl),
+    fileType: String(file.fileType || file.type || "").trim(),
+    size: Number(file.size) || 0,
+    note: String(file.note || file.notes || ""),
+    fieldName: String(file.fieldName || fieldName || ""),
+  };
+};
+
+const normalizeDraftFileGroup = (files, fieldName) => {
+  const values = Array.isArray(files) ? files : files ? [files] : [];
+  return values
+    .map((file) => normalizeDraftFile(file, fieldName))
+    .filter(Boolean);
+};
+
+const isImageReference = (file) => {
+  const mimeType = String(file?.fileType || file?.type || "").toLowerCase();
+  if (mimeType.startsWith("image/")) return true;
+  const source = String(
+    file?.fileUrl || file?.url || file?.path || file?.fileName || file?.name || "",
+  );
+  return /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)(?:$|[?#])/i.test(source);
+};
+
+const getDraftFileId = (file) => String(file?._id || file?.id || "").trim();
+
+const getSavedDraftFiles = (draft) => {
+  const savedFiles =
+    draft?.files && typeof draft.files === "object" ? draft.files : {};
+  return {
+    sampleImage:
+      normalizeDraftFileGroup(
+        savedFiles.sampleImage || draft?.sampleImage,
+        "sampleImage",
+      )[0] || null,
+    attachments: normalizeDraftFileGroup(
+      savedFiles.attachments || draft?.attachments,
+      "attachments",
+    ),
+    clientMockups: normalizeDraftFileGroup(
+      savedFiles.clientMockup || draft?.clientMockups,
+      "clientMockup",
+    ),
+    approvedMockups: normalizeDraftFileGroup(
+      savedFiles.approvedMockup || draft?.approvedMockups,
+      "approvedMockup",
+    ),
+  };
+};
+
+const MinimalQuoteForm = ({ user = null }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const portalSource = useMemo(() => resolvePortalSource(), []);
+  const canManageCreationDrafts = useMemo(
+    () => canManageProjectCreationDrafts(user),
+    [user],
+  );
   const dashboardPath = portalSource === "admin" ? "/dashboard" : "/client";
+  const draftsPath =
+    portalSource === "admin"
+      ? "/orders-management?tab=drafts"
+      : "/frontdesk/orders?tab=drafts";
+  const requestedDraftId = useMemo(
+    () => new URLSearchParams(location.search).get("draft") || "",
+    [location.search],
+  );
+  const requestedEditId = useMemo(
+    () => new URLSearchParams(location.search).get("edit") || "",
+    [location.search],
+  );
 
   const [isLoading, setIsLoading] = useState(false);
-  const [editingId, setEditingId] = useState("");
+  const [isDraftLoading, setIsDraftLoading] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSaveError, setDraftSaveError] = useState("");
+  const [activeDraftId, setActiveDraftId] = useState("");
+  const [activeDraftRevision, setActiveDraftRevision] = useState(null);
+  const [editingId, setEditingId] = useState(requestedEditId);
   const [editingProjectStatus, setEditingProjectStatus] = useState("");
   const [editingProjectIsCancelled, setEditingProjectIsCancelled] =
     useState(false);
@@ -144,6 +254,10 @@ const MinimalQuoteForm = () => {
   const [existingSampleImage, setExistingSampleImage] = useState("");
   const [existingSampleImageNote, setExistingSampleImageNote] = useState("");
   const [existingAttachments, setExistingAttachments] = useState([]);
+  const [draftSampleImage, setDraftSampleImage] = useState(null);
+  const [draftAttachments, setDraftAttachments] = useState([]);
+  const [draftClientMockups, setDraftClientMockups] = useState([]);
+  const [draftApprovedMockups, setDraftApprovedMockups] = useState([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showToast, setShowToast] = useState({
@@ -166,7 +280,7 @@ const MinimalQuoteForm = () => {
     assistantLeadId: "",
     quoteNumber: "",
     briefOverview: "",
-    items: [{ description: "", breakdown: "", qty: 1 }],
+    items: [{ ...defaultQuoteItem }],
     checklist: { ...defaultChecklist },
   });
   const isRevisionLocked =
@@ -223,10 +337,102 @@ const MinimalQuoteForm = () => {
     setSelectedClientMockupNotes({});
   };
 
+  const applyDraftToForm = (draft) => {
+    if (!draft || typeof draft !== "object") {
+      throw new Error("The saved quote draft is unavailable.");
+    }
+
+    const savedPayload =
+      draft.formData && typeof draft.formData === "object"
+        ? draft.formData
+        : {};
+    const savedForm =
+      savedPayload.formData && typeof savedPayload.formData === "object"
+        ? savedPayload.formData
+        : savedPayload;
+    const draftType = String(
+      savedPayload.draftType || draft.draftType || savedForm.projectType || "",
+    ).toLowerCase();
+    if (draftType && !draftType.includes("quote")) {
+      throw new Error("This saved draft belongs to a different order form.");
+    }
+
+    setFormData({
+      projectName: String(savedForm.projectName || ""),
+      projectIndicator: String(savedForm.projectIndicator || ""),
+      clientName: String(savedForm.clientName || savedForm.client || ""),
+      clientEmail: String(savedForm.clientEmail || ""),
+      clientPhone: String(savedForm.clientPhone || ""),
+      deliveryDate: normalizeDraftDate(savedForm.deliveryDate),
+      deliveryTime: normalizeTimeForInput(savedForm.deliveryTime),
+      projectLeadId: toEntityId(savedForm.projectLeadId),
+      assistantLeadId: toEntityId(savedForm.assistantLeadId),
+      quoteNumber: String(
+        savedForm.quoteNumber || savedForm.orderId || savedForm.orderNumber || "",
+      ),
+      briefOverview: String(savedForm.briefOverview || ""),
+      items: normalizeDraftItems(savedForm.items),
+      checklist: normalizeChecklist(
+        savedForm.checklist || savedForm.quoteDetails?.checklist,
+      ),
+    });
+
+    const savedFiles = getSavedDraftFiles(draft);
+    setDraftSampleImage(savedFiles.sampleImage);
+    setDraftAttachments(savedFiles.attachments);
+    setDraftClientMockups(savedFiles.clientMockups);
+    setDraftApprovedMockups(savedFiles.approvedMockups);
+    setSelectedFiles([]);
+    setSelectedFileNotes({});
+    setSelectedClientMockups([]);
+    setSelectedClientMockupNotes({});
+    setExistingSampleImage("");
+    setExistingSampleImageNote("");
+    setExistingAttachments([]);
+    setActiveDraftId(toEntityId(draft));
+    setActiveDraftRevision(
+      Number.isFinite(Number(draft.revision)) ? Number(draft.revision) : null,
+    );
+
+    const scrollY = Number(savedPayload.scrollY);
+    if (Number.isFinite(scrollY) && scrollY > 0) {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      });
+    }
+  };
+
   useEffect(() => {
-    const editParam = new URLSearchParams(location.search).get("edit");
-    setEditingId(editParam || "");
-  }, [location.search]);
+    setEditingId(requestedEditId);
+    if (requestedEditId) {
+      setActiveDraftId("");
+      setActiveDraftRevision(null);
+    }
+  }, [requestedEditId]);
+
+  useEffect(() => {
+    if (!requestedDraftId || requestedEditId) return undefined;
+
+    let cancelled = false;
+    setIsDraftLoading(true);
+    getProjectDraft(requestedDraftId)
+      .then((draft) => {
+        if (cancelled) return;
+        applyDraftToForm(draft);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Failed to load quote draft", error);
+        triggerToast(error.message || "Failed to load the quote draft.", "error");
+      })
+      .finally(() => {
+        if (!cancelled) setIsDraftLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedDraftId, requestedEditId]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -452,6 +658,119 @@ const MinimalQuoteForm = () => {
     setExistingSampleImageNote("");
   };
 
+  const updateDraftFileNote = (setter, fileId, note) => {
+    setter((current) =>
+      current.map((file) =>
+        getDraftFileId(file) === fileId ? { ...file, note } : file,
+      ),
+    );
+  };
+
+  const buildDraftFileMetadata = () => {
+    const groups = [
+      ...(draftSampleImage ? [draftSampleImage] : []),
+      ...draftAttachments,
+      ...draftClientMockups,
+      ...draftApprovedMockups,
+    ];
+    return groups
+      .map((file, index) => ({
+        _id: getDraftFileId(file),
+        note: String(file.note || ""),
+        order: Number.isFinite(Number(file.order)) ? Number(file.order) : index,
+      }))
+      .filter((file) => file._id);
+  };
+
+  const saveLatestQuoteDraft = async () => {
+    const selectedSampleImage = draftSampleImage
+      ? null
+      : selectedFiles.find((file) => isImageReference(file)) || null;
+    const attachmentFiles = selectedSampleImage
+      ? selectedFiles.filter((file) => file !== selectedSampleImage)
+      : selectedFiles;
+    const getFileNote = (file) =>
+      selectedFileNotes[buildFileKey(file)] || "";
+    const savedDraft = await saveProjectDraft({
+      id: activeDraftId,
+      revision: activeDraftRevision,
+      payload: {
+        draftType: "quote",
+        resumePath: "/create/quote",
+        portalSource,
+        scrollY: window.scrollY,
+        formData: {
+          ...formData,
+          projectType: "Quote",
+          items: normalizeDraftItems(formData.items),
+          checklist: normalizeChecklist(formData.checklist),
+        },
+      },
+      retainedFileIds: {
+        attachments: draftAttachments.map(getDraftFileId).filter(Boolean),
+        sampleImage: draftSampleImage
+          ? [getDraftFileId(draftSampleImage)].filter(Boolean)
+          : [],
+        clientMockup: draftClientMockups.map(getDraftFileId).filter(Boolean),
+        approvedMockup: draftApprovedMockups.map(getDraftFileId).filter(Boolean),
+      },
+      fileMetadata: buildDraftFileMetadata(),
+      sampleImage: selectedSampleImage,
+      sampleImageNote: selectedSampleImage
+        ? getFileNote(selectedSampleImage)
+        : draftSampleImage?.note || "",
+      attachments: attachmentFiles,
+      attachmentNotes: attachmentFiles.map(getFileNote),
+      clientMockups: selectedClientMockups,
+      clientMockupNotes: selectedClientMockups.map(
+        (file) => selectedClientMockupNotes[buildFileKey(file)] || "",
+      ),
+    });
+    const savedDraftId = toEntityId(savedDraft);
+    if (!savedDraftId) {
+      throw new Error("The server saved the draft without returning its ID.");
+    }
+    const savedFiles = getSavedDraftFiles(savedDraft);
+    setActiveDraftId(savedDraftId);
+    setActiveDraftRevision(
+      Number.isFinite(Number(savedDraft.revision))
+        ? Number(savedDraft.revision)
+        : null,
+    );
+    setDraftSampleImage(savedFiles.sampleImage);
+    setDraftAttachments(savedFiles.attachments);
+    setDraftClientMockups(savedFiles.clientMockups);
+    setDraftApprovedMockups(savedFiles.approvedMockups);
+    setSelectedFiles([]);
+    setSelectedFileNotes({});
+    setSelectedClientMockups([]);
+    setSelectedClientMockupNotes({});
+    return savedDraft;
+  };
+
+  const handleSaveDraft = async () => {
+    if (
+      editingId ||
+      !canManageCreationDrafts ||
+      isSavingDraft ||
+      isLoading
+    ) return;
+    setDraftSaveError("");
+    setIsSavingDraft(true);
+    try {
+      await saveLatestQuoteDraft();
+      triggerToast("Quote saved to drafts.", "success");
+      navigate(draftsPath);
+    } catch (error) {
+      console.error("Failed to save quote draft", error);
+      const message = error.message || "Failed to save the quote draft.";
+      setDraftSaveError(message);
+      triggerToast(message, "error");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editingId && revisionBlockMessage) {
@@ -502,6 +821,14 @@ const MinimalQuoteForm = () => {
         setIsLoading(false);
         return;
       }
+      let submissionDraftId = "";
+      let submissionDraftRevision = null;
+      if (!editingId && canManageCreationDrafts) {
+        setDraftSaveError("");
+        const savedDraft = await saveLatestQuoteDraft();
+        submissionDraftId = toEntityId(savedDraft);
+        submissionDraftRevision = Number(savedDraft?.revision) || null;
+      }
       const formPayload = new FormData();
       formPayload.append("projectType", "Quote");
       if (!editingId) {
@@ -528,57 +855,69 @@ const MinimalQuoteForm = () => {
           checklist: normalizeChecklist(formData.checklist),
         }),
       );
-
-      // Handle Existing Files
-      formPayload.append("existingSampleImage", existingSampleImage || "");
-      formPayload.append(
-        "existingAttachments",
-        JSON.stringify(existingAttachments || []),
-      );
-
-      const getFileNote = (file) =>
-        selectedFileNotes[buildFileKey(file)] || "";
-      const shouldUseSelectedImageAsSample =
-        !editingId || !existingSampleImage;
-      const imageFile = shouldUseSelectedImageAsSample
-        ? selectedFiles.find((f) => f.type.startsWith("image/"))
-        : null;
-      const attachmentFiles = imageFile
-        ? selectedFiles.filter((file) => file !== imageFile)
-        : selectedFiles;
-
-      attachmentFiles.forEach((file) => {
-        formPayload.append("attachments", file);
-      });
-
-      if (attachmentFiles.length > 0) {
-        const attachmentNotes = attachmentFiles.map((file) => getFileNote(file));
-        formPayload.append("attachmentNotes", JSON.stringify(attachmentNotes));
+      if (submissionDraftId) {
+        formPayload.append("draftId", submissionDraftId);
+        if (submissionDraftRevision) {
+          formPayload.append(
+            "draftRevision",
+            String(submissionDraftRevision),
+          );
+        }
       }
 
-      if (imageFile) {
-        formPayload.append("sampleImage", imageFile);
-      }
+      if (!submissionDraftId) {
+        // Revisions and non-Front Desk creation retain the existing direct-upload
+        // workflow. Front Desk/Admin creation submits the staged draft files.
+        if (editingId) {
+          formPayload.append("existingSampleImage", existingSampleImage || "");
+          formPayload.append(
+            "existingAttachments",
+            JSON.stringify(existingAttachments || []),
+          );
+        }
 
-      if (selectedClientMockups.length > 0) {
-        selectedClientMockups.forEach((file) => {
-          formPayload.append("clientMockup", file);
+        const getFileNote = (file) =>
+          selectedFileNotes[buildFileKey(file)] || "";
+        const imageFile = !editingId || !existingSampleImage
+          ? selectedFiles.find((file) => isImageReference(file))
+          : null;
+        const attachmentFiles = imageFile
+          ? selectedFiles.filter((file) => file !== imageFile)
+          : selectedFiles;
+
+        attachmentFiles.forEach((file) => {
+          formPayload.append("attachments", file);
         });
-        const clientMockupNotes = selectedClientMockups.map(
-          (file) => selectedClientMockupNotes[buildFileKey(file)] || "",
-        );
-        formPayload.append(
-          "clientMockupNotes",
-          JSON.stringify(clientMockupNotes),
-        );
-      }
+        if (attachmentFiles.length > 0) {
+          formPayload.append(
+            "attachmentNotes",
+            JSON.stringify(attachmentFiles.map((file) => getFileNote(file))),
+          );
+        }
+        if (imageFile) formPayload.append("sampleImage", imageFile);
 
-      const sampleNote = imageFile
-        ? getFileNote(imageFile)
-        : existingSampleImage
-          ? existingSampleImageNote
-          : "";
-      formPayload.append("sampleImageNote", sampleNote);
+        if (selectedClientMockups.length > 0) {
+          selectedClientMockups.forEach((file) => {
+            formPayload.append("clientMockup", file);
+          });
+          formPayload.append(
+            "clientMockupNotes",
+            JSON.stringify(
+              selectedClientMockups.map(
+                (file) =>
+                  selectedClientMockupNotes[buildFileKey(file)] || "",
+              ),
+            ),
+          );
+        }
+
+        const sampleNote = imageFile
+          ? getFileNote(imageFile)
+          : existingSampleImage
+            ? existingSampleImageNote
+            : "";
+        formPayload.append("sampleImageNote", sampleNote);
+      }
 
       const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
       const method = editingId ? "PUT" : "POST";
@@ -602,13 +941,15 @@ const MinimalQuoteForm = () => {
       }
     } catch (err) {
       console.error(err);
-      triggerToast("Error creating quote", "error");
+      const message = err.message || "Error creating quote";
+      if (!editingId && canManageCreationDrafts) setDraftSaveError(message);
+      triggerToast(message, "error");
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) return <Spinner />;
+  if (isLoading || isDraftLoading) return <Spinner />;
 
   return (
     <div className="minimal-quote-container">
@@ -627,8 +968,18 @@ const MinimalQuoteForm = () => {
             draggable="false"
           />
           <div>
-            <h1>{editingId ? "Edit Reopened Quote" : "Create New Quote"}</h1>
-            <p className="subtitle">Front Desk entry for new quote requests</p>
+            <h1>
+              {editingId
+                ? "Edit Reopened Quote"
+                : activeDraftId
+                  ? "Continue Quote Draft"
+                  : "Create New Quote"}
+            </h1>
+            <p className="subtitle">
+              {activeDraftId
+                ? "Continue from your last saved quote details"
+                : "Front Desk entry for new quote requests"}
+            </p>
           </div>
           <ContextualHelpLink
             label="Help with quote"
@@ -1022,7 +1373,8 @@ const MinimalQuoteForm = () => {
                   </div>
                   <div>
                     <p>
-                      {selectedClientMockups.length > 0
+                      {selectedClientMockups.length > 0 ||
+                      draftClientMockups.length > 0
                         ? "Add client mockups"
                         : "Upload client mockups"}
                     </p>
@@ -1030,14 +1382,70 @@ const MinimalQuoteForm = () => {
                   </div>
                 </div>
 
-                {selectedClientMockups.length > 0 && (
+                {(draftClientMockups.length > 0 ||
+                  selectedClientMockups.length > 0) && (
                   <div className="reference-files-grid">
+                    {draftClientMockups.map((file, index) => {
+                      const fileId = getDraftFileId(file);
+                      return (
+                        <div
+                          key={fileId || `draft-client-mockup-${index}`}
+                          className="reference-file-tile existing draft-file"
+                        >
+                          <div className="file-icon">
+                            {isImageReference(file) ? (
+                              <img
+                                src={file.fileUrl}
+                                alt={`${file.fileName || "Client mockup"} preview`}
+                              />
+                            ) : (
+                              <FolderIcon />
+                            )}
+                          </div>
+                          <div className="file-info" title={file.fileName}>
+                            <span className="file-name">
+                              {file.fileName || "Client mockup"}
+                            </span>
+                            <span className="file-size">
+                              {formatFileSize(file.size) || "Saved"}
+                            </span>
+                          </div>
+                          <textarea
+                            className="reference-file-note"
+                            placeholder="Add note for Graphics..."
+                            value={file.note || ""}
+                            onChange={(event) =>
+                              updateDraftFileNote(
+                                setDraftClientMockups,
+                                fileId,
+                                event.target.value,
+                              )
+                            }
+                            rows="2"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDraftClientMockups((current) =>
+                                current.filter(
+                                  (entry) => getDraftFileId(entry) !== fileId,
+                                ),
+                              )
+                            }
+                            className="file-remove-btn"
+                            aria-label={`Remove ${file.fileName || "client mockup"}`}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      );
+                    })}
                     {selectedClientMockups.map((file) => {
                       const fileKey = buildFileKey(file);
                       return (
                         <div key={fileKey} className="reference-file-tile">
                           <div className="file-icon">
-                            {file.type.startsWith("image/") &&
+                            {isImageReference(file) &&
                             clientMockupPreviewUrls[fileKey] ? (
                               <img
                                 src={clientMockupPreviewUrls[fileKey]}
@@ -1117,7 +1525,9 @@ const MinimalQuoteForm = () => {
 
             {selectedFiles.length === 0 &&
               !existingSampleImage &&
-              existingAttachments.length === 0 && (
+              existingAttachments.length === 0 &&
+              !draftSampleImage &&
+              draftAttachments.length === 0 && (
                 <div
                   className="reference-dropzone"
                   onClick={() =>
@@ -1137,8 +1547,109 @@ const MinimalQuoteForm = () => {
 
             {(selectedFiles.length > 0 ||
               existingSampleImage ||
-              existingAttachments.length > 0) && (
+              existingAttachments.length > 0 ||
+              draftSampleImage ||
+              draftAttachments.length > 0) && (
               <div className="reference-files-grid">
+                {draftSampleImage && (
+                  <div className="reference-file-tile existing draft-file">
+                    <div className="file-icon">
+                      <img
+                        src={draftSampleImage.fileUrl}
+                        alt={`${draftSampleImage.fileName || "Sample image"} preview`}
+                      />
+                    </div>
+                    <div
+                      className="file-info"
+                      title={draftSampleImage.fileName || "Sample image"}
+                    >
+                      <span className="file-name">
+                        {draftSampleImage.fileName || "Sample Image"}
+                      </span>
+                      <span className="file-size">
+                        {formatFileSize(draftSampleImage.size) || "Saved"}
+                      </span>
+                    </div>
+                    <textarea
+                      className="reference-file-note"
+                      placeholder="Add note for this reference..."
+                      value={draftSampleImage.note || ""}
+                      onChange={(event) =>
+                        setDraftSampleImage((current) =>
+                          current
+                            ? { ...current, note: event.target.value }
+                            : current,
+                        )
+                      }
+                      rows="2"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setDraftSampleImage(null)}
+                      className="file-remove-btn"
+                      aria-label={`Remove ${draftSampleImage.fileName || "sample image"}`}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
+
+                {draftAttachments.map((file, index) => {
+                  const fileId = getDraftFileId(file);
+                  return (
+                    <div
+                      key={fileId || `draft-attachment-${index}`}
+                      className="reference-file-tile existing draft-file"
+                    >
+                      <div className="file-icon">
+                        {isImageReference(file) ? (
+                          <img
+                            src={file.fileUrl}
+                            alt={`${file.fileName || "Attachment"} preview`}
+                          />
+                        ) : (
+                          <FolderIcon />
+                        )}
+                      </div>
+                      <div className="file-info" title={file.fileName}>
+                        <span className="file-name">
+                          {file.fileName || "Reference file"}
+                        </span>
+                        <span className="file-size">
+                          {formatFileSize(file.size) || "Saved"}
+                        </span>
+                      </div>
+                      <textarea
+                        className="reference-file-note"
+                        placeholder="Add note for this reference..."
+                        value={file.note || ""}
+                        onChange={(event) =>
+                          updateDraftFileNote(
+                            setDraftAttachments,
+                            fileId,
+                            event.target.value,
+                          )
+                        }
+                        rows="2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftAttachments((current) =>
+                            current.filter(
+                              (entry) => getDraftFileId(entry) !== fileId,
+                            ),
+                          )
+                        }
+                        className="file-remove-btn"
+                        aria-label={`Remove ${file.fileName || "reference file"}`}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  );
+                })}
+
                 {/* Existing Sample Image */}
                 {existingSampleImage && (
                   <div className="reference-file-tile existing">
@@ -1220,7 +1731,7 @@ const MinimalQuoteForm = () => {
                   return (
                   <div key={fileKey || idx} className="reference-file-tile">
                     <div className="file-icon">
-                      {file.type.startsWith("image/") &&
+                      {isImageReference(file) &&
                       filePreviewUrls[fileKey] ? (
                         <img src={filePreviewUrls[fileKey]} alt="preview" />
                       ) : (
@@ -1281,14 +1792,42 @@ const MinimalQuoteForm = () => {
             >
               Cancel
             </button>
+            {!editingId && canManageCreationDrafts && (
+              <button
+                type="button"
+                className="minimal-quote-btn-draft"
+                onClick={handleSaveDraft}
+                disabled={isLoading || isSavingDraft}
+              >
+                {isSavingDraft ? "Saving Draft..." : "Save to Draft"}
+              </button>
+            )}
             <button
               type="submit"
               className="minimal-quote-btn-submit"
-              disabled={isLoading || Boolean(editingId && revisionBlockMessage)}
+              disabled={
+                isLoading ||
+                isSavingDraft ||
+                Boolean(editingId && revisionBlockMessage)
+              }
             >
               {editingId ? "Save Reopened Quote" : "Create Quote Project"}
             </button>
           </div>
+          {!editingId && canManageCreationDrafts && (
+            <div
+              className={`quote-draft-status ${draftSaveError ? "error" : ""}`}
+              role={draftSaveError ? "alert" : "status"}
+              aria-live="polite"
+            >
+              {draftSaveError ||
+                (isSavingDraft
+                  ? "Uploading files and saving every quote detail..."
+                  : activeDraftId
+                    ? "This quote is backed by a saved draft."
+                    : "Drafts can be resumed later with all files and notes intact.")}
+            </div>
+          )}
         </form>
       </div>
 

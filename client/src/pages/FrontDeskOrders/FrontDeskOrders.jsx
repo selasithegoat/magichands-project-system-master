@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import OrdersList from "../NewOrders/OrdersList";
+import SavedCreationDrafts from "./SavedCreationDrafts";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
   CLOSED_ORDER_STATUSES,
@@ -9,6 +11,7 @@ import {
   resolveOrderManagementStatus,
 } from "../../utils/ordersManagementKpis";
 import usePersistedState from "../../hooks/usePersistedState";
+import { canManageProjectCreationDrafts } from "../../utils/projectDraftApi";
 import "./FrontDeskOrders.css";
 
 const FRONT_DESK_KPI_KEYS = [
@@ -22,7 +25,10 @@ const FRONT_DESK_KPI_KEYS = [
   "sample",
 ];
 
-const FrontDeskOrders = () => {
+const FrontDeskOrders = ({ user = null }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const canManageCreationDrafts = canManageProjectCreationDrafts(user);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeKpi, setActiveKpi] = usePersistedState(
@@ -171,6 +177,22 @@ const FrontDeskOrders = () => {
   ];
   const activeKpiLabel =
     kpiCards.find((card) => card.key === activeKpi)?.label || "All Orders";
+  const workspaceView =
+    canManageCreationDrafts &&
+    new URLSearchParams(location.search).get("tab") === "drafts"
+      ? "drafts"
+      : "orders";
+
+  const setWorkspaceView = (nextView) => {
+    const params = new URLSearchParams(location.search);
+    if (nextView === "drafts") {
+      params.set("tab", "drafts");
+    } else {
+      params.delete("tab");
+    }
+    const query = params.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ""}`);
+  };
 
   return (
     <div className="frontdesk-orders-page">
@@ -183,32 +205,63 @@ const FrontDeskOrders = () => {
           </p>
         </div>
         <div className="frontdesk-orders-chip">
-          {activeKpi === "all" ? "All Orders & History" : `Filtered: ${activeKpiLabel}`}
+          {workspaceView === "drafts"
+            ? "Saved Drafts"
+            : activeKpi === "all"
+              ? "All Orders & History"
+              : `Filtered: ${activeKpiLabel}`}
         </div>
       </div>
 
-      <div className="frontdesk-kpi-grid">
-        {kpiCards.map((card) => (
+      {canManageCreationDrafts && (
+        <div className="frontdesk-workspace-tabs" aria-label="Orders workspace">
           <button
             type="button"
-            key={card.key}
-            className={`frontdesk-kpi-card ${card.tone} ${activeKpi === card.key ? "active" : ""}`}
-            onClick={() =>
-              setActiveKpi((current) => (current === card.key ? "all" : card.key))
-            }
-            aria-pressed={activeKpi === card.key}
+            className={workspaceView === "orders" ? "active" : ""}
+            onClick={() => setWorkspaceView("orders")}
+            aria-pressed={workspaceView === "orders"}
           >
-            <div className="frontdesk-kpi-header">
-              <span>{card.label}</span>
-              <strong>{loading ? "..." : card.value}</strong>
-            </div>
-            <p>{card.description}</p>
+            Orders
           </button>
-        ))}
-      </div>
+          <button
+            type="button"
+            className={workspaceView === "drafts" ? "active" : ""}
+            onClick={() => setWorkspaceView("drafts")}
+            aria-pressed={workspaceView === "drafts"}
+          >
+            Saved Drafts
+          </button>
+        </div>
+      )}
+
+      {workspaceView === "orders" && (
+        <div className="frontdesk-kpi-grid">
+          {kpiCards.map((card) => (
+            <button
+              type="button"
+              key={card.key}
+              className={`frontdesk-kpi-card ${card.tone} ${activeKpi === card.key ? "active" : ""}`}
+              onClick={() =>
+                setActiveKpi((current) => (current === card.key ? "all" : card.key))
+              }
+              aria-pressed={activeKpi === card.key}
+            >
+              <div className="frontdesk-kpi-header">
+                <span>{card.label}</span>
+                <strong>{loading ? "..." : card.value}</strong>
+              </div>
+              <p>{card.description}</p>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="frontdesk-orders-content">
-        <OrdersList kpiFilter={activeKpi} />
+        {workspaceView === "drafts" ? (
+          <SavedCreationDrafts />
+        ) : (
+          <OrdersList kpiFilter={activeKpi} />
+        )}
       </div>
     </div>
   );
