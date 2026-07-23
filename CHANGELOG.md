@@ -5,7 +5,7 @@ All notable changes to this system should be documented here.
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
-## [3.3.0] - 2026-07-23
+## [4.0.0] - 2026-07-23
 
 - Added a complete material-request workflow across the Client and Inventory portals, including user submission, review, editing, and deletion.
 - Added order-item, multi-item, custom-item, and manual purchase requests for project materials.
