@@ -63,20 +63,31 @@ const getActorIdFromRequest = (req) => {
   }
 };
 
+const normalizeRealtimeClientId = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.length > 128) return "";
+  return /^[a-zA-Z0-9_-]+$/.test(normalized) ? normalized : "";
+};
+
 const buildRealtimeChangePayload = (req, extra = {}) => {
+  const { sourceClientId: extraSourceClientId, ...extraPayload } = extra;
   const path = normalizeRealtimePath(extra.path || req?.originalUrl || "");
   const method = String(extra.method || req?.method || "").trim().toUpperCase();
   const projectId = String(
     extra.projectId || extractProjectIdFromPath(path) || "",
   ).trim();
   const actorId = String(extra.actorId || getActorIdFromRequest(req) || "").trim();
+  const sourceClientId = normalizeRealtimeClientId(
+    extraSourceClientId || req?.get?.("x-mh-realtime-client") || "",
+  );
 
   return {
     ...(path ? { path } : {}),
     ...(method ? { method } : {}),
     ...(projectId ? { projectId } : {}),
     ...(actorId ? { actorId } : {}),
-    ...extra,
+    ...extraPayload,
+    ...(sourceClientId ? { sourceClientId } : {}),
   };
 };
 
@@ -84,5 +95,6 @@ module.exports = {
   normalizeRealtimePath,
   extractProjectIdFromPath,
   getActorIdFromRequest,
+  normalizeRealtimeClientId,
   buildRealtimeChangePayload,
 };

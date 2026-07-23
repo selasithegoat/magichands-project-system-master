@@ -828,7 +828,11 @@ const ProjectDetail = ({ user }) => {
   );
 
   // PDF payload and image conversion are prepared on demand in ProjectPdfDownload.
-  const fetchOrderGroupProjects = async (orderNumber, fallbackProject = null) => {
+  const fetchOrderGroupProjects = async (
+    orderNumber,
+    fallbackProject = null,
+    { silent = false } = {},
+  ) => {
     const normalizedOrder = String(orderNumber || "").trim();
     if (!normalizedOrder) {
       setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
@@ -851,11 +855,16 @@ const ProjectDetail = ({ user }) => {
       );
     } catch (groupError) {
       console.error("Failed to load grouped order projects", groupError);
-      setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+      if (!silent) {
+        setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
+      }
     }
   };
 
-  const fetchOrderMeeting = async (orderNumber) => {
+  const fetchOrderMeeting = async (
+    orderNumber,
+    { silent = false } = {},
+  ) => {
     const normalizedOrder = String(orderNumber || "").trim();
     if (!normalizedOrder) {
       setOrderMeeting(null);
@@ -863,8 +872,10 @@ const ProjectDetail = ({ user }) => {
       return;
     }
 
-    setMeetingLoading(true);
-    setMeetingError("");
+    if (!silent) {
+      setMeetingLoading(true);
+      setMeetingError("");
+    }
     try {
       const res = await fetch(
         `/api/meetings/order/${encodeURIComponent(normalizedOrder)}`,
@@ -881,14 +892,16 @@ const ProjectDetail = ({ user }) => {
       setOrderMeeting(data?.meeting || null);
     } catch (meetingFetchError) {
       console.error("Failed to load meeting:", meetingFetchError);
-      setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
-      setOrderMeeting(null);
+      if (!silent) {
+        setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
+        setOrderMeeting(null);
+      }
     } finally {
-      setMeetingLoading(false);
+      if (!silent) setMeetingLoading(false);
     }
   };
 
-  const fetchProject = async () => {
+  const fetchProject = async ({ silent = false } = {}) => {
     try {
       setIsAccessRedirecting(false);
       const projectParams = new URLSearchParams();
@@ -922,13 +935,16 @@ const ProjectDetail = ({ user }) => {
       }
       const data = await res.json();
       setProject(data);
-      await fetchOrderGroupProjects(data?.orderId, data);
-      await fetchOrderMeeting(data?.orderId || data?.orderRef?.orderNumber);
+      await fetchOrderGroupProjects(data?.orderId, data, { silent });
+      await fetchOrderMeeting(
+        data?.orderId || data?.orderRef?.orderNumber,
+        { silent },
+      );
     } catch (err) {
       console.error(err);
-      setError("Could not load project details");
+      if (!silent) setError("Could not load project details");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -988,7 +1004,7 @@ const ProjectDetail = ({ user }) => {
   useRealtimeRefresh(
     () => {
       if (id) {
-        fetchProject();
+        fetchProject({ silent: true });
         fetchUpdatesCount();
       }
     },

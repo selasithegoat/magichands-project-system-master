@@ -1,3 +1,9 @@
+import {
+  getRealtimeClientId,
+  isSameOriginRequest,
+  REALTIME_CLIENT_HEADER,
+} from "./realtimeClientIdentity";
+
 export const MUTATION_FEEDBACK_EVENT = "mh:mutation-feedback";
 
 const INSTALL_KEY = "__mhMutationFeedbackFetchInstalled";
@@ -21,6 +27,22 @@ const getFeedbackLabel = (method) => {
   if (method === "DELETE") return "Removing…";
   if (method === "PATCH" || method === "PUT") return "Applying changes…";
   return "Processing…";
+};
+
+const addRealtimeIdentity = (input, init, method, url) => {
+  if (
+    ["GET", "HEAD", "OPTIONS"].includes(method) ||
+    !isSameOriginRequest(url)
+  ) {
+    return init;
+  }
+
+  const headers = new Headers(input?.headers || undefined);
+  new Headers(init?.headers || undefined).forEach((value, key) => {
+    headers.set(key, value);
+  });
+  headers.set(REALTIME_CLIENT_HEADER, getRealtimeClientId());
+  return { ...(init || {}), headers };
 };
 
 const dispatchFeedback = (detail) => {
@@ -78,11 +100,12 @@ export const installMutationFeedback = () => {
       init?.method || input?.method || "GET",
     ).toUpperCase();
     const url = String(typeof input === "string" ? input : input?.url || "");
+    const requestInit = addRealtimeIdentity(input, init, method, url);
     if (
       ["GET", "HEAD", "OPTIONS"].includes(method) ||
       isPassiveMutation(url)
     ) {
-      return nativeFetch(input, init);
+      return nativeFetch(input, requestInit);
     }
 
     const feedback = {
@@ -97,7 +120,7 @@ export const installMutationFeedback = () => {
     await waitForNextPaint();
 
     try {
-      const response = await nativeFetch(input, init);
+      const response = await nativeFetch(input, requestInit);
       await finishFeedback(feedback);
       return response;
     } catch (error) {

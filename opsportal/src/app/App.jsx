@@ -188,6 +188,7 @@ const App = () => {
   useRealtimeRefresh(() => refreshOverview({ silent: true }), {
     enabled: Boolean(user),
     debounceMs: 550,
+    paths: ["/api/projects", "/api/updates"],
   });
 
   const handleLogin = async ({ employeeId, password }) => {

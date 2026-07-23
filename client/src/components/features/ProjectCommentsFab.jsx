@@ -161,23 +161,27 @@ const ProjectCommentsFab = ({ user }) => {
     }
   }, [countUrl, currentUserId, getAdjustedUnreadCount]);
 
-  const fetchComments = useCallback(async () => {
+  const fetchComments = useCallback(async ({ silent = false } = {}) => {
     if (!currentUserId) {
       setComments([]);
       setUnreadCount(0);
       return;
     }
 
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const response = await fetch(feedUrl, {
         credentials: "include",
         cache: "no-store",
       });
       if (!response.ok) {
-        setComments([]);
-        setError("Could not load project comments.");
+        if (!silent) {
+          setComments([]);
+          setError("Could not load project comments.");
+        }
         return;
       }
 
@@ -192,10 +196,12 @@ const ProjectCommentsFab = ({ user }) => {
       setUnreadCount(getAdjustedUnreadCount(payload.count));
     } catch (commentsError) {
       console.error("Failed to load project comment feed", commentsError);
-      setComments([]);
-      setError("Could not load project comments.");
+      if (!silent) {
+        setComments([]);
+        setError("Could not load project comments.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [currentUserId, feedUrl, getAdjustedUnreadCount]);
 
@@ -212,7 +218,7 @@ const ProjectCommentsFab = ({ user }) => {
   useRealtimeRefresh(
     () => {
       if (isOpen) {
-        fetchComments();
+        fetchComments({ silent: true });
       } else {
         fetchUnreadCount();
       }

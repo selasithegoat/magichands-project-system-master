@@ -1,6 +1,7 @@
 const clients = new Set();
 const clientsByUserId = new Map();
 const clientUserLookup = new Map();
+const clientRealtimeIdLookup = new Map();
 let heartbeat = null;
 
 const writeEvent = (eventName, payload = {}, options = {}) => {
@@ -64,6 +65,10 @@ const addClient = (res, options = {}) => {
     bucket.add(res);
     clientsByUserId.set(userId, bucket);
   }
+  const clientId = String(options?.clientId || "").trim();
+  if (clientId) {
+    clientRealtimeIdLookup.set(res, clientId);
+  }
   startHeartbeat();
 };
 
@@ -80,6 +85,7 @@ const removeClient = (res) => {
     }
     clientUserLookup.delete(res);
   }
+  clientRealtimeIdLookup.delete(res);
   if (clients.size === 0) {
     stopHeartbeat();
   }
@@ -89,7 +95,14 @@ const broadcastDataChange = (payload = {}) => {
   if (clients.size === 0) return;
   const data = JSON.stringify({ ts: Date.now(), ...payload });
   const message = `event: data_changed\ndata: ${data}\n\n`;
+  const sourceClientId = String(payload?.sourceClientId || "").trim();
   for (const res of clients) {
+    if (
+      sourceClientId &&
+      clientRealtimeIdLookup.get(res) === sourceClientId
+    ) {
+      continue;
+    }
     res.write(message);
   }
 };

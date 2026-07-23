@@ -1,3 +1,9 @@
+import {
+  getRealtimeClientId,
+  isSameOriginRequest,
+  REALTIME_CLIENT_HEADER,
+} from "./realtimeClientIdentity";
+
 export const MUTATION_FEEDBACK_EVENT = "mh:mutation-feedback";
 
 const FETCH_INSTALL_KEY = "__mhMutationFeedbackFetchInstalled";
@@ -26,6 +32,41 @@ const isPassiveMutation = (url = "") => {
 
 const shouldTrackMutation = (method, url) =>
   !["GET", "HEAD", "OPTIONS"].includes(method) && !isPassiveMutation(url);
+
+const addRealtimeIdentityToFetch = (input, init, method, url) => {
+  if (
+    ["GET", "HEAD", "OPTIONS"].includes(method) ||
+    !isSameOriginRequest(url)
+  ) {
+    return init;
+  }
+
+  const headers = new Headers(input?.headers || undefined);
+  new Headers(init?.headers || undefined).forEach((value, key) => {
+    headers.set(key, value);
+  });
+  headers.set(REALTIME_CLIENT_HEADER, getRealtimeClientId());
+  return { ...(init || {}), headers };
+};
+
+const addRealtimeIdentityToAxios = (config) => {
+  const method = String(config?.method || "GET").toUpperCase();
+  if (
+    ["GET", "HEAD", "OPTIONS"].includes(method) ||
+    !isSameOriginRequest(config?.url)
+  ) {
+    return;
+  }
+
+  if (typeof config.headers?.set === "function") {
+    config.headers.set(REALTIME_CLIENT_HEADER, getRealtimeClientId());
+  } else {
+    config.headers = {
+      ...(config.headers || {}),
+      [REALTIME_CLIENT_HEADER]: getRealtimeClientId(),
+    };
+  }
+};
 
 const getFeedbackLabel = (method) => {
   if (method === "DELETE") return "Removing…";
@@ -104,15 +145,16 @@ const installFetchFeedback = () => {
   window.fetch = async (input, init) => {
     const method = getMethod(input, init);
     const url = getRequestUrl(input);
+    const requestInit = addRealtimeIdentityToFetch(input, init, method, url);
     if (!shouldTrackMutation(method, url)) {
-      return nativeFetch(input, init);
+      return nativeFetch(input, requestInit);
     }
 
     const feedback = beginFeedback(method);
     await waitForNextPaint();
 
     try {
-      const response = await nativeFetch(input, init);
+      const response = await nativeFetch(input, requestInit);
       await finishFeedback(feedback);
       return response;
     } catch (error) {
@@ -129,6 +171,7 @@ const installAxiosFeedback = (axios) => {
 
   axios.interceptors.request.use(async (config) => {
     const method = String(config?.method || "GET").toUpperCase();
+    addRealtimeIdentityToAxios(config);
     if (!shouldTrackMutation(method, config?.url)) return config;
 
     const feedback = beginFeedback(method);

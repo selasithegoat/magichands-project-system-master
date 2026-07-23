@@ -26,9 +26,9 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
     setUnreadCount(unread);
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!enabled) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const data = await fetchInventory("/api/notifications?source=inventory");
       const list = Array.isArray(data) ? data : [];
@@ -59,7 +59,7 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
     } catch (error) {
       console.error("Failed to load notifications", error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [enabled, syncUnreadCount]);
 
@@ -128,7 +128,10 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
     }
 
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(
+      () => fetchNotifications({ silent: true }),
+      30000,
+    );
     return () => clearInterval(interval);
   }, [enabled, fetchNotifications]);
 
@@ -140,7 +143,7 @@ const useNotifications = ({ enabled = true, userId = "" } = {}) => {
       const portal = String(event?.detail?.portal || "");
       if (portal && portal !== "inventory") return;
       if (recipientId && recipientId !== currentUserId) return;
-      fetchNotifications();
+      fetchNotifications({ silent: true });
     };
 
     window.addEventListener(

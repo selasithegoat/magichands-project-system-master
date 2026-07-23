@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/authMiddleware");
 const { addClient, removeClient } = require("../utils/realtimeHub");
+const { normalizeRealtimeClientId } = require("../utils/realtimeChange");
 
 router.get("/", protect, (req, res) => {
   res.status(200);
@@ -14,7 +15,10 @@ router.get("/", protect, (req, res) => {
   }
 
   res.write(`event: connected\ndata: {"ok": true}\n\n`);
-  addClient(res, { userId: req.user?._id });
+  addClient(res, {
+    userId: req.user?._id,
+    clientId: normalizeRealtimeClientId(req.query?.clientId),
+  });
 
   req.on("close", () => {
     removeClient(res);

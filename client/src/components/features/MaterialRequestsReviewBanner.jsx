@@ -466,9 +466,11 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
     note: "",
   });
 
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const fetchRequests = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const params = new URLSearchParams({ limit: "160" });
       if (departmentFilter !== "all") params.set("department", departmentFilter);
@@ -488,10 +490,12 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
       setDepartments(Array.isArray(payload?.departments) ? payload.departments : []);
       setStatusCounts(payload?.statusCounts || {});
     } catch (requestError) {
-      setRequests([]);
-      setError(requestError.message || "Failed to load material requests.");
+      if (!silent) {
+        setRequests([]);
+        setError(requestError.message || "Failed to load material requests.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [departmentFilter, requestSource, statusFilter]);
 
@@ -503,7 +507,7 @@ const MaterialRequestsReviewBanner = ({ requestSource = "" }) => {
     const handleRealtime = (event) => {
       const path = String(event?.detail?.path || "");
       if (path.startsWith("/api/material-requests")) {
-        fetchRequests();
+        fetchRequests({ silent: true });
       }
     };
     window.addEventListener("mh:data-changed", handleRealtime);

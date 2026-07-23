@@ -422,7 +422,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
 
   useRealtimeRefresh(() => {
     fetchProjects();
-    fetchNextActions();
+    fetchNextActions({ silent: true });
   }, {
     paths: ["/api/projects", "/api/updates"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],
@@ -547,8 +547,8 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     }
   };
 
-  const fetchNextActions = async () => {
-    setNextActionsLoading(true);
+  const fetchNextActions = async ({ silent = false } = {}) => {
+    if (!silent) setNextActionsLoading(true);
     try {
       const res = await fetch("/api/projects/next-actions?limit=8", {
         credentials: "include",
@@ -567,7 +567,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       setNextActions([]);
       setNextActionsTotal(0);
     } finally {
-      setNextActionsLoading(false);
+      if (!silent) setNextActionsLoading(false);
     }
   };
 

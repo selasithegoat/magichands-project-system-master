@@ -67,8 +67,8 @@ const NextActions = ({ user }) => {
     "",
   );
 
-  const fetchActions = useCallback(async () => {
-    setLoading(true);
+  const fetchActions = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const response = await fetch(
         `/api/projects/next-actions?limit=${ACTION_FETCH_LIMIT}`,
@@ -84,14 +84,16 @@ const NextActions = ({ user }) => {
       setActions(Array.isArray(payload?.actions) ? payload.actions : []);
       setTotalActions(Number(payload?.total) || 0);
     } catch (error) {
-      setActions([]);
-      setTotalActions(0);
-      setToast({
-        type: "error",
-        message: error.message || "Failed to load next actions.",
-      });
+      if (!silent) {
+        setActions([]);
+        setTotalActions(0);
+        setToast({
+          type: "error",
+          message: error.message || "Failed to load next actions.",
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -99,7 +101,7 @@ const NextActions = ({ user }) => {
     fetchActions();
   }, [fetchActions]);
 
-  useRealtimeRefresh(() => fetchActions(), {
+  useRealtimeRefresh(() => fetchActions({ silent: true }), {
     paths: ["/api/projects", "/api/updates"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],
   });

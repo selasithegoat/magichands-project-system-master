@@ -1767,13 +1767,13 @@ const ProjectDetails = ({ user }) => {
     }
   };
 
-  const fetchSmsPrompts = async () => {
+  const fetchSmsPrompts = async ({ silent = false } = {}) => {
     if (!canManageSms || !project || project.projectType === "Quote") {
       setSmsPrompts([]);
       return;
     }
     try {
-      setSmsLoading(true);
+      if (!silent) setSmsLoading(true);
       const res = await fetch(`/api/projects/${id}/sms-prompts?source=admin`, {
         credentials: "include",
       });
@@ -1782,9 +1782,9 @@ const ProjectDetails = ({ user }) => {
       setSmsPrompts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching SMS prompts:", err);
-      setSmsPrompts([]);
+      if (!silent) setSmsPrompts([]);
     } finally {
-      setSmsLoading(false);
+      if (!silent) setSmsLoading(false);
     }
   };
 
@@ -1830,9 +1830,9 @@ const ProjectDetails = ({ user }) => {
 
   useRealtimeRefresh(
     () => {
-      fetchProject();
+      fetchProject({ showLoading: false, retries: 0 });
       fetchUpdates();
-      fetchSmsPrompts();
+      fetchSmsPrompts({ silent: true });
     },
     {
       enabled: Boolean(id),

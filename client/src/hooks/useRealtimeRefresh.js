@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { getRealtimeClientId } from "../utils/realtimeClientIdentity";
 
 const normalizePath = (value) => {
   const rawValue = String(value || "").trim();
@@ -59,6 +60,21 @@ const useRealtimeRefresh = (onRefresh, options = {}) => {
     if (!enabled) return undefined;
 
     let timerId;
+    let pendingHiddenDetail = null;
+    const scheduleRefresh = (detail) => {
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(() => {
+        timerId = null;
+        if (document.visibilityState === "hidden") {
+          pendingHiddenDetail = detail;
+          return;
+        }
+        if (callbackRef.current) {
+          callbackRef.current(detail);
+        }
+      }, debounceMs);
+    };
+
     const handler = (event) => {
       const {
         paths: activePaths,
@@ -72,6 +88,13 @@ const useRealtimeRefresh = (onRefresh, options = {}) => {
         path: normalizePath(detail?.path),
         actorId: String(detail?.actorId || "").trim(),
       };
+
+      if (
+        normalizedDetail.sourceClientId &&
+        normalizedDetail.sourceClientId === getRealtimeClientId()
+      ) {
+        return;
+      }
 
       if (
         activeIgnoreActorId &&
@@ -105,17 +128,32 @@ const useRealtimeRefresh = (onRefresh, options = {}) => {
         return;
       }
 
-      if (timerId) clearTimeout(timerId);
-      timerId = setTimeout(() => {
-        if (callbackRef.current) {
-          callbackRef.current(normalizedDetail);
-        }
-      }, debounceMs);
+      if (document.visibilityState === "hidden") {
+        pendingHiddenDetail = normalizedDetail;
+        return;
+      }
+
+      scheduleRefresh(normalizedDetail);
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState !== "visible" ||
+        !pendingHiddenDetail
+      ) {
+        return;
+      }
+
+      const detail = pendingHiddenDetail;
+      pendingHiddenDetail = null;
+      scheduleRefresh(detail);
     };
 
     window.addEventListener("mh:data-changed", handler);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.removeEventListener("mh:data-changed", handler);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (timerId) clearTimeout(timerId);
     };
   }, [enabled, debounceMs]);

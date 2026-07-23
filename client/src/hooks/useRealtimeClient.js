@@ -1,4 +1,8 @@
 import { useEffect, useRef } from "react";
+import {
+  addRealtimeClientIdToUrl,
+  getRealtimeClientId,
+} from "../utils/realtimeClientIdentity";
 
 const REALTIME_STATUS_EVENT = "mh:realtime-status";
 
@@ -33,7 +37,8 @@ const useRealtimeClient = (enabled = true) => {
 
     if (sourceRef.current) return;
 
-    const source = new EventSource("/api/realtime", {
+    const realtimeClientId = getRealtimeClientId();
+    const source = new EventSource(addRealtimeClientIdToUrl("/api/realtime"), {
       withCredentials: true,
     });
     sourceRef.current = source;
@@ -59,6 +64,7 @@ const useRealtimeClient = (enabled = true) => {
       } catch {
         detail = {};
       }
+      if (detail?.sourceClientId === realtimeClientId) return;
       window.dispatchEvent(
         new CustomEvent("mh:data-changed", { detail }),
       );

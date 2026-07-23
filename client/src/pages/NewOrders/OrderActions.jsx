@@ -857,9 +857,11 @@ const OrderActions = () => {
     }
   };
 
-  const fetchProject = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchProject = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetchWithPortal("/api/projects?mode=report");
       if (!res.ok) {
@@ -872,19 +874,19 @@ const OrderActions = () => {
       }
       setProject(match);
     } catch (err) {
-      setError(err.message || "Failed to load order.");
+      if (!silent) setError(err.message || "Failed to load order.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  const fetchProjectUpdates = async (projectId) => {
+  const fetchProjectUpdates = async (projectId, { silent = false } = {}) => {
     if (!projectId) {
       setProjectUpdates([]);
       return;
     }
 
-    setUpdatesLoading(true);
+    if (!silent) setUpdatesLoading(true);
     try {
       const res = await fetchWithPortal(`/api/updates/project/${projectId}`);
       if (!res.ok) {
@@ -895,17 +897,17 @@ const OrderActions = () => {
     } catch (err) {
       console.error("Error fetching project updates:", err);
     } finally {
-      setUpdatesLoading(false);
+      if (!silent) setUpdatesLoading(false);
     }
   };
 
-  const fetchSmsPrompts = async (projectId) => {
+  const fetchSmsPrompts = async (projectId, { silent = false } = {}) => {
     if (!projectId || !canManageSms) {
       setSmsPrompts([]);
       return;
     }
 
-    setSmsLoading(true);
+    if (!silent) setSmsLoading(true);
     try {
       const res = await fetch(
         `/api/projects/${projectId}/sms-prompts${smsSourceQuery}`,
@@ -915,9 +917,9 @@ const OrderActions = () => {
       setSmsPrompts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching SMS prompts:", err);
-      setSmsPrompts([]);
+      if (!silent) setSmsPrompts([]);
     } finally {
-      setSmsLoading(false);
+      if (!silent) setSmsLoading(false);
     }
   };
 
@@ -951,14 +953,16 @@ const OrderActions = () => {
       const thisProjectChanged = changedPath.includes(`/api/projects/${project._id}`);
 
       if (thisProjectChanged) {
-        fetchProject();
-        fetchProjectUpdates(project._id);
-        if (canManageSms) fetchSmsPrompts(project._id);
+        fetchProject({ silent: true });
+        fetchProjectUpdates(project._id, { silent: true });
+        if (canManageSms) {
+          fetchSmsPrompts(project._id, { silent: true });
+        }
         return;
       }
 
       if (updatesChanged) {
-        fetchProjectUpdates(project._id);
+        fetchProjectUpdates(project._id, { silent: true });
       }
     },
     {

@@ -40,21 +40,21 @@ const FrontDeskOrders = ({ user = null }) => {
     },
   );
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  const fetchOrders = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/projects?mode=report");
       if (res.ok) {
         const data = await res.json();
         setOrders(Array.isArray(data) ? data : []);
-      } else {
+      } else if (!silent) {
         setOrders([]);
       }
     } catch (error) {
       console.error("Failed to load orders summary", error);
-      setOrders([]);
+      if (!silent) setOrders([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -62,7 +62,7 @@ const FrontDeskOrders = ({ user = null }) => {
     fetchOrders();
   }, [fetchOrders]);
 
-  useRealtimeRefresh(() => fetchOrders(), {
+  useRealtimeRefresh(() => fetchOrders({ silent: true }), {
     paths: ["/api/projects"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],
   });

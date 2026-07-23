@@ -217,9 +217,9 @@ const ProjectComments = ({
     [requestSource],
   );
 
-  const fetchComments = useCallback(async () => {
+  const fetchComments = useCallback(async ({ silent = false } = {}) => {
     if (!projectId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const response = await fetch(
         buildUrl(`/api/projects/${projectId}/comments`),
@@ -229,7 +229,7 @@ const ProjectComments = ({
         },
       );
       if (!response.ok) {
-        setComments([]);
+        if (!silent) setComments([]);
         return;
       }
       const payload = await response.json().catch(() => ({}));
@@ -247,15 +247,15 @@ const ProjectComments = ({
       }
     } catch (error) {
       console.error("Failed to load project comments", error);
-      setComments([]);
+      if (!silent) setComments([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [buildUrl, currentUserId, projectId]);
 
-  const fetchMentionUsers = useCallback(async () => {
+  const fetchMentionUsers = useCallback(async ({ silent = false } = {}) => {
     if (!projectId) return;
-    setMentionLoading(true);
+    if (!silent) setMentionLoading(true);
     try {
       const response = await fetch(
         buildUrl(`/api/projects/${projectId}/comments/mentionable-users`),
@@ -265,16 +265,16 @@ const ProjectComments = ({
         },
       );
       if (!response.ok) {
-        setMentionUsers([]);
+        if (!silent) setMentionUsers([]);
         return;
       }
       const payload = await response.json().catch(() => ({}));
       setMentionUsers(Array.isArray(payload.users) ? payload.users : []);
     } catch (error) {
       console.error("Failed to load project comment mention users", error);
-      setMentionUsers([]);
+      if (!silent) setMentionUsers([]);
     } finally {
-      setMentionLoading(false);
+      if (!silent) setMentionLoading(false);
     }
   }, [buildUrl, projectId]);
 
@@ -288,8 +288,8 @@ const ProjectComments = ({
 
   useRealtimeRefresh(
     () => {
-      fetchComments();
-      fetchMentionUsers();
+      fetchComments({ silent: true });
+      fetchMentionUsers({ silent: true });
     },
     {
       enabled: Boolean(projectId),

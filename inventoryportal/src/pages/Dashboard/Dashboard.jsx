@@ -140,7 +140,7 @@ const computeRecordValue = (record) => {
 const Dashboard = () => {
   const { currency, rate } = useInventoryCurrency();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [, setError] = useState("");
   const [summary, setSummary] = useState({
     totalItems: 0,
     totalCategories: 0,
@@ -185,10 +185,10 @@ const Dashboard = () => {
 
   const isMountedRef = useRef(true);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async ({ silent = false } = {}) => {
     try {
       if (!isMountedRef.current) return;
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [settings, categoriesPayload, notifications] = await Promise.all([
         fetchInventory("/api/inventory/settings"),
         fetchInventory("/api/inventory/categories?page=1&limit=100"),
@@ -400,9 +400,11 @@ const Dashboard = () => {
       setError("");
     } catch (err) {
       if (!isMountedRef.current) return;
-      setError(err?.message || "Unable to load dashboard data.");
+      if (!silent) {
+        setError(err?.message || "Unable to load dashboard data.");
+      }
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (isMountedRef.current && !silent) setLoading(false);
     }
   }, [fetchAllPages]);
 
@@ -416,14 +418,34 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const handleRefresh = () => {
-      loadDashboard();
+    const handleDataRefresh = (event) => {
+      const path = String(event?.detail?.path || "");
+      const source = String(event?.detail?.source || "").toLowerCase();
+      if (
+        source !== "settings" &&
+        !path.startsWith("/api/inventory") &&
+        !path.startsWith("/api/material-requests")
+      ) {
+        return;
+      }
+      loadDashboard({ silent: true });
     };
-    window.addEventListener("mh:data-changed", handleRefresh);
-    window.addEventListener("mh:notifications-changed", handleRefresh);
+    const handleNotificationRefresh = (event) => {
+      const portal = String(event?.detail?.portal || "").toLowerCase();
+      if (portal && portal !== "inventory") return;
+      loadDashboard({ silent: true });
+    };
+    window.addEventListener("mh:data-changed", handleDataRefresh);
+    window.addEventListener(
+      "mh:notifications-changed",
+      handleNotificationRefresh,
+    );
     return () => {
-      window.removeEventListener("mh:data-changed", handleRefresh);
-      window.removeEventListener("mh:notifications-changed", handleRefresh);
+      window.removeEventListener("mh:data-changed", handleDataRefresh);
+      window.removeEventListener(
+        "mh:notifications-changed",
+        handleNotificationRefresh,
+      );
     };
   }, [loadDashboard]);
 

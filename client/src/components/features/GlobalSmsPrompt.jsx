@@ -95,9 +95,9 @@ const GlobalSmsPrompt = ({ user }) => {
     }
   }, [authSessionKey, canManageSms, clearPromptState]);
 
-  const fetchPrompts = useCallback(async () => {
+  const fetchPrompts = useCallback(async ({ silent = false } = {}) => {
     if (!canManageSms || authLost) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/projects/sms-prompts/pending?source=frontdesk", {
         credentials: "include",
@@ -116,7 +116,7 @@ const GlobalSmsPrompt = ({ user }) => {
     } catch (fetchError) {
       console.error("Failed to load global SMS prompts:", fetchError);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [authLost, canManageSms, clearPromptState]);
 
@@ -127,7 +127,7 @@ const GlobalSmsPrompt = ({ user }) => {
     pauseWhenRealtimeHealthy: true,
   });
 
-  useRealtimeRefresh(fetchPrompts, {
+  useRealtimeRefresh(() => fetchPrompts({ silent: true }), {
     enabled: canManageSms && !authLost,
     paths: ["/api/projects"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],

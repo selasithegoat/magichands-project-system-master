@@ -254,7 +254,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     [],
   );
 
-  useRealtimeRefresh(() => fetchOrders(), {
+  useRealtimeRefresh(() => fetchOrders({ silent: true }), {
     paths: ["/api/projects"],
     excludePaths: ["/api/projects/activities", "/api/projects/ai"],
   });
@@ -273,8 +273,8 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     }
   };
 
-  const fetchOrders = async () => {
-    setLoading(true);
+  const fetchOrders = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [projectsRes, groupedRes] = await Promise.all([
         fetchWithPortal("/api/projects?mode=report"),
@@ -284,22 +284,24 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       if (projectsRes.ok) {
         const data = await projectsRes.json();
         setAllOrders(Array.isArray(data) ? data : []);
-      } else {
+      } else if (!silent) {
         setAllOrders([]);
       }
 
       if (groupedRes.ok) {
         const data = await groupedRes.json();
         setGroupedOrders(Array.isArray(data) ? data : []);
-      } else {
+      } else if (!silent) {
         setGroupedOrders([]);
       }
     } catch (err) {
       console.error("Error fetching orders:", err);
-      setAllOrders([]);
-      setGroupedOrders([]);
+      if (!silent) {
+        setAllOrders([]);
+        setGroupedOrders([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

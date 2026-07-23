@@ -266,10 +266,12 @@ const DeliveryCalendarFab = ({
     [currentMonth],
   );
 
-  const fetchCalendar = useCallback(async () => {
+  const fetchCalendar = useCallback(async ({ silent = false } = {}) => {
     const { from, to } = getVisibleRange(currentMonth);
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const params = new URLSearchParams({
         from: from.toISOString(),
@@ -297,11 +299,13 @@ const DeliveryCalendarFab = ({
         today: Number(payload?.summary?.today) || 0,
       });
     } catch (calendarError) {
-      setEvents([]);
-      setSummary({ total: 0, overdue: 0, urgent: 0, corporate: 0, today: 0 });
-      setError(calendarError.message || "Failed to load calendar.");
+      if (!silent) {
+        setEvents([]);
+        setSummary({ total: 0, overdue: 0, urgent: 0, corporate: 0, today: 0 });
+        setError(calendarError.message || "Failed to load calendar.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [currentMonth, withPortalSource]);
 
@@ -320,7 +324,7 @@ const DeliveryCalendarFab = ({
 
   useRealtimeRefresh(
     () => {
-      if (isOpen) fetchCalendar();
+      if (isOpen) fetchCalendar({ silent: true });
     },
     {
       enabled: isOpen,
@@ -483,7 +487,7 @@ const DeliveryCalendarFab = ({
       shouldRefresh = true;
       resetActionModalState();
       showToast("Order delivered. Feedback is now pending.", "success");
-    } catch (calendarError) {
+    } catch {
       const message = "Network error. Please try again.";
       setActionError(message);
       showToast(message, "error");
@@ -552,7 +556,7 @@ const DeliveryCalendarFab = ({
       }
       resetActionModalState();
       showToast("Delivery schedule updated.", "success");
-    } catch (calendarError) {
+    } catch {
       const message = "Network error. Please try again.";
       setActionError(message);
       showToast(message, "error");
@@ -601,7 +605,7 @@ const DeliveryCalendarFab = ({
 
       resetActionModalState();
       showToast("Note added to project updates.", "success");
-    } catch (calendarError) {
+    } catch {
       const message = "Network error. Please try again.";
       setActionError(message);
       showToast(message, "error");
@@ -665,7 +669,7 @@ const DeliveryCalendarFab = ({
 
       resetActionModalState();
       showToast("Reminder created.", "success");
-    } catch (calendarError) {
+    } catch {
       const message = "Network error. Please try again.";
       setActionError(message);
       showToast(message, "error");

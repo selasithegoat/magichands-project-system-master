@@ -1127,10 +1127,12 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     [portalSource],
   );
 
-  const fetchDocuments = useCallback(async () => {
+  const fetchDocuments = useCallback(async ({ silent = false } = {}) => {
     if (!canAccess) return;
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const res = await fetch(
         makeApiUrl("", {
@@ -1156,10 +1158,12 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
         }
       }
     } catch (fetchError) {
-      setError(fetchError.message || "Failed to load billing documents.");
-      setDocuments([]);
+      if (!silent) {
+        setError(fetchError.message || "Failed to load billing documents.");
+        setDocuments([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [canAccess, makeApiUrl, search, selectedId, statusFilter, typeFilter]);
 
@@ -1303,7 +1307,7 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
     fetchLinkedWaybills(currentForm);
   }, [fetchLinkedWaybills, fetchReceipts, form._id, form.documentType]);
 
-  useRealtimeRefresh(fetchDocuments, {
+  useRealtimeRefresh(() => fetchDocuments({ silent: true }), {
     enabled: canAccess,
     paths: ["/api/billing-documents", "/api/billing-receipts"],
   });

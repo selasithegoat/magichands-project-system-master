@@ -1492,10 +1492,12 @@ const EngagedProjectActions = ({ user }) => {
     return projectValue?.orderRevisionMeta?.updatedAt ? 1 : 0;
   };
 
-  const fetchProject = async () => {
+  const fetchProject = async ({ silent = false } = {}) => {
     if (!id) return;
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       const res = await fetch("/api/projects?mode=engaged");
@@ -1518,15 +1520,23 @@ const EngagedProjectActions = ({ user }) => {
         throw new Error("Engaged project not found.");
       }
       setProject(match);
-      await fetchOrderMeeting(match?.orderId || match?.orderRef?.orderNumber);
+      await fetchOrderMeeting(
+        match?.orderId || match?.orderRef?.orderNumber,
+        { silent },
+      );
     } catch (err) {
-      setError(err.message || "Failed to load engaged project.");
+      if (!silent) {
+        setError(err.message || "Failed to load engaged project.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  const fetchOrderMeeting = async (orderNumber) => {
+  const fetchOrderMeeting = async (
+    orderNumber,
+    { silent = false } = {},
+  ) => {
     const normalizedOrder = String(orderNumber || "").trim();
     if (!normalizedOrder) {
       setOrderMeeting(null);
@@ -1535,8 +1545,10 @@ const EngagedProjectActions = ({ user }) => {
       return;
     }
 
-    setMeetingLoading(true);
-    setMeetingError("");
+    if (!silent) {
+      setMeetingLoading(true);
+      setMeetingError("");
+    }
     try {
       const res = await fetch(
         `/api/meetings/order/${encodeURIComponent(normalizedOrder)}?mode=engaged`,
@@ -1554,21 +1566,25 @@ const EngagedProjectActions = ({ user }) => {
       setMeetingGate(data?.meetingGate || null);
     } catch (meetingFetchError) {
       console.error("Failed to load meeting:", meetingFetchError);
-      setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
-      setOrderMeeting(null);
-      setMeetingGate(null);
+      if (!silent) {
+        setMeetingError(
+          meetingFetchError.message || "Failed to fetch meeting.",
+        );
+        setOrderMeeting(null);
+        setMeetingGate(null);
+      }
     } finally {
-      setMeetingLoading(false);
+      if (!silent) setMeetingLoading(false);
     }
   };
 
-  const fetchProjectUpdates = async (projectId) => {
+  const fetchProjectUpdates = async (projectId, { silent = false } = {}) => {
     if (!projectId) {
       setProjectUpdates([]);
       return;
     }
 
-    setUpdatesLoading(true);
+    if (!silent) setUpdatesLoading(true);
     try {
       const res = await fetch(`/api/updates/project/${projectId}`);
       if (!res.ok) throw new Error("Failed to fetch updates.");
@@ -1576,9 +1592,9 @@ const EngagedProjectActions = ({ user }) => {
       setProjectUpdates(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching project updates:", err);
-      setProjectUpdates([]);
+      if (!silent) setProjectUpdates([]);
     } finally {
-      setUpdatesLoading(false);
+      if (!silent) setUpdatesLoading(false);
     }
   };
 
@@ -1643,17 +1659,21 @@ const EngagedProjectActions = ({ user }) => {
     const updatesChanged = changedPath.startsWith("/api/updates");
 
     if (thisProjectChanged) {
-      fetchProject();
-      if (project?._id) fetchProjectUpdates(project._id);
+      fetchProject({ silent: true });
+      if (project?._id) {
+        fetchProjectUpdates(project._id, { silent: true });
+      }
       return;
     }
 
     if (updatesChanged) {
-      if (project?._id) fetchProjectUpdates(project._id);
+      if (project?._id) {
+        fetchProjectUpdates(project._id, { silent: true });
+      }
       return;
     }
 
-    fetchProject();
+    fetchProject({ silent: true });
   }, {
     enabled: Boolean(id) && engagedSubDepts.length > 0,
     paths: ["/api/projects", "/api/updates"],

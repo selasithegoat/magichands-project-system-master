@@ -143,9 +143,9 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
     successTimerRef.current = window.setTimeout(() => setSuccess(""), 6000);
   };
 
-  const fetchRecentRequests = useCallback(async () => {
+  const fetchRecentRequests = useCallback(async ({ silent = false } = {}) => {
     if (!isOpen) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const response = await fetch("/api/material-requests?mine=true&limit=8", {
         credentials: "include",
@@ -157,9 +157,11 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
       }
       setRequests(Array.isArray(payload?.requests) ? payload.requests : []);
     } catch (requestError) {
-      setError(requestError.message || "Failed to load material requests.");
+      if (!silent) {
+        setError(requestError.message || "Failed to load material requests.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [isOpen]);
 
@@ -172,7 +174,7 @@ const MaterialRequestsFab = ({ user, hasFrontDeskStack = false }) => {
     const handleRealtime = (event) => {
       const path = String(event?.detail?.path || "");
       if (path.startsWith("/api/material-requests")) {
-        fetchRecentRequests();
+        fetchRecentRequests({ silent: true });
       }
     };
     window.addEventListener("mh:data-changed", handleRealtime);
