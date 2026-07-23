@@ -36,12 +36,12 @@ const ConfirmationModal = ({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" aria-busy={isPending}>
-        <div className="modal-header">
-          <h3 className="modal-title">{title}</h3>
+    <div className="admin-confirmation-overlay">
+      <div className="admin-confirmation-content" aria-busy={isPending}>
+        <div className="admin-confirmation-header">
+          <h3 className="admin-confirmation-title">{title}</h3>
           <button
-            className="close-btn"
+            className="admin-confirmation-close"
             onClick={handleClose}
             disabled={isPending}
             aria-label="Close confirmation"
@@ -49,24 +49,29 @@ const ConfirmationModal = ({
             <XMarkIcon width="20" height="20" />
           </button>
         </div>
-        <div className="modal-body">
+        <div className="admin-confirmation-body">
           <p>{message}</p>
         </div>
-        <div className="modal-footer">
+        <div className="admin-confirmation-footer">
           <button
-            className="btn-cancel"
+            className="admin-confirmation-btn cancel"
             onClick={handleClose}
             disabled={isPending}
           >
             {cancelText}
           </button>
           <button
-            className={`btn-confirm ${isDangerous ? "danger" : "primary"}`}
+            className={`admin-confirmation-btn ${
+              isDangerous ? "danger" : "primary"
+            }`}
             onClick={handleConfirm}
             disabled={isPending}
           >
             {isPending && (
-              <span className="btn-confirm-spinner" aria-hidden="true" />
+              <span
+                className="admin-confirmation-spinner"
+                aria-hidden="true"
+              />
             )}
             {isPending ? pendingText : confirmText}
           </button>

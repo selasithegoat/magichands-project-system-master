@@ -1,6 +1,5 @@
 import React, { useEffect } from "react";
 import "./Modal.css";
-import { XMarkIcon } from "../../icons/Icons"; // Assuming you have an X icon, or use literal &times;
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = "600px" }) => {
   // Prevent body scroll when modal is open
@@ -18,23 +17,29 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = "600px" }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay" onClick={onClose}>
       <div
-        className="modal-content"
+        className="admin-modal-content"
         style={{ maxWidth }}
         onClick={(e) => e.stopPropagation()} // Prevent click from closing modal
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-modal-title"
       >
-        <div className="modal-header">
-          <h2 className="modal-title">{title}</h2>
+        <div className="admin-modal-header">
+          <h2 className="admin-modal-title" id="admin-modal-title">
+            {title}
+          </h2>
           <button
-            className="modal-close-btn"
+            type="button"
+            className="admin-modal-close-btn"
             onClick={onClose}
             aria-label="Close"
           >
             &times;
           </button>
         </div>
-        <div className="modal-body">{children}</div>
+        <div className="admin-modal-body">{children}</div>
       </div>
     </div>
   );

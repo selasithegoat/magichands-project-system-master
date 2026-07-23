@@ -1,153 +1,184 @@
-.modal-overlay {
+.admin-confirmation-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  z-index: 12010;
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(2, 6, 23, 0.76);
+  backdrop-filter: blur(8px);
 }
 
-.modal-content {
-  background-color: var(--bg-card, #1e293b);
+.admin-confirmation-content {
+  width: min(100%, 420px);
+  color: var(--text-primary, #f8fafc);
+  background: var(--bg-card, #1e293b);
   border: 1px solid var(--border-color, #334155);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 400px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  animation: modal-pop 0.2s ease-out;
+  border-radius: 14px;
+  box-shadow:
+    0 28px 70px rgba(2, 6, 23, 0.58),
+    0 10px 24px rgba(2, 6, 23, 0.38);
+  overflow: hidden;
+  color-scheme: dark;
+  animation: admin-confirmation-enter 180ms ease-out;
 }
 
-@keyframes modal-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.modal-header {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color, #334155);
+.admin-confirmation-header {
+  min-height: 64px;
+  padding: 1rem 1.2rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color, #334155);
 }
 
-.modal-title {
+.admin-confirmation-title {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
   color: var(--text-primary, #f8fafc);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary, #94a3b8);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
+.admin-confirmation-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary, #f8fafc);
-}
-
-.modal-body {
-  padding: 1.5rem;
+  flex: 0 0 32px;
   color: var(--text-secondary, #94a3b8);
-  font-size: 0.95rem;
-  line-height: 1.5;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 160ms ease;
 }
 
-.modal-footer {
-  padding: 1rem 1.5rem;
-  background-color: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid var(--border-color, #334155);
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+.admin-confirmation-close:hover:not(:disabled) {
+  color: var(--text-primary, #f8fafc);
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.admin-confirmation-body {
+  padding: 1.2rem;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.admin-confirmation-body p {
+  margin: 0;
+}
+
+.admin-confirmation-footer {
+  padding: 0.9rem 1.2rem 1.1rem;
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.72);
+  background: rgba(15, 23, 42, 0.3);
 }
 
-.btn-cancel {
-  padding: 0.5rem 1rem;
-  background-color: transparent;
-  border: 1px solid var(--border-color, #334155);
-  color: var(--text-primary, #f8fafc);
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-cancel:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.btn-confirm {
+.admin-confirmation-btn {
+  min-height: 38px;
+  padding: 0.5rem 0.9rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
   cursor: pointer;
-  font-weight: 600;
-  color: white;
-  transition: all 0.2s;
+  transition: 160ms ease;
 }
 
-.btn-cancel:disabled,
-.btn-confirm:disabled,
-.close-btn:disabled {
+.admin-confirmation-btn.cancel {
+  color: var(--text-primary, #f8fafc);
+  background: rgba(148, 163, 184, 0.1);
+  border-color: var(--border-color, #334155);
+}
+
+.admin-confirmation-btn.cancel:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.admin-confirmation-btn.primary {
+  background: #2563eb;
+  border-color: #3b82f6;
+}
+
+.admin-confirmation-btn.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.admin-confirmation-btn.danger {
+  background: #dc2626;
+  border-color: #ef4444;
+}
+
+.admin-confirmation-btn.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.admin-confirmation-btn:disabled,
+.admin-confirmation-close:disabled {
   cursor: not-allowed;
-  opacity: 0.68;
+  opacity: 0.6;
 }
 
-.btn-confirm-spinner {
+.admin-confirmation-spinner {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: currentColor;
   border-radius: 50%;
-  animation: btn-confirm-spin 650ms linear infinite;
+  animation: admin-confirmation-spin 650ms linear infinite;
 }
 
-.btn-confirm.primary {
-  background-color: #3b82f6;
+@keyframes admin-confirmation-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 
-.btn-confirm.primary:hover {
-  background-color: #2563eb;
-}
-
-.btn-confirm.danger {
-  background-color: #ef4444;
-}
-
-.btn-confirm.danger:hover {
-  background-color: #dc2626;
-}
-
-@keyframes btn-confirm-spin {
+@keyframes admin-confirmation-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-confirmation-overlay {
+    padding: 0.75rem;
+    align-items: flex-end;
+  }
+
+  .admin-confirmation-content {
+    border-radius: 14px;
+  }
+
+  .admin-confirmation-footer {
+    flex-direction: column-reverse;
+  }
+
+  .admin-confirmation-btn {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-confirmation-content,
+  .admin-confirmation-spinner {
+    animation-duration: 1ms;
   }
 }
