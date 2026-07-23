@@ -5,6 +5,26 @@ All notable changes to this system should be documented here.
 This project follows Semantic Versioning: `MAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
+## [3.3.0] - 2026-07-23
+
+- Added a complete material-request workflow across the Client and Inventory portals, including user submission, review, editing, and deletion.
+- Added order-item, multi-item, custom-item, and manual purchase requests for project materials.
+- Added live inventory matching, editable project materials, inventory-backed partial fulfilment, and clearer issued-versus-outstanding quantity tracking.
+- Added operational Stores queue lanes for new, ready-to-issue, purchasing, partial, and fulfilled requests.
+- Added detailed material-request drawers with inventory, project, requester, purchasing, fulfilment, and status information.
+- Added purchase tracking for material requests, including ordered and received quantities, supplier details, costs, notes, and purchasing statuses.
+- Added resumable project and quote drafts for Front Desk, preserving entered information, uploaded files, images, and progress between sessions.
+- Added cached page data and background refresh across the Client, Admin, Inventory, and Operations portals to reduce repeat loading.
+- Added an automated End-of-Day DOCX report containing active projects and Department Updates, scheduled Monday through Saturday at 7:00 PM Africa/Accra with email delivery, retry handling, empty-report skipping, and duplicate prevention.
+- Added consistent processing feedback for confirmations, submissions, and other mutations across all portals.
+- Improved realtime synchronization so changes from other devices update cached data without disruptive page reloads.
+- Improved quote mockup workflow handling across New Orders and Engaged Projects.
+- Added recovery production batches for projects with incomplete production quantities.
+- Improved Admin confirmation dialogs with consistent dark-theme styling and clearer processing states.
+- Improved Admin group project briefs by enlarging mockup and reference images and removing space-consuming preview frames.
+- Added order numbers to project brief PDF exports.
+- Fixed inventory item ID editing so registry records remain synchronized.
+- Fixed reopened frozen revisions so invalid save attempts are blocked cleanly with clear feedback.
 
 ## [3.2.1] - 2026-05-13
 
