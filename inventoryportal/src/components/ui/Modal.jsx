@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { waitForNextPaint } from "../../utils/mutationFeedback";
 
 const Modal = ({
   isOpen,
@@ -14,6 +15,23 @@ const Modal = ({
 }) => {
   const [isVisible, setIsVisible] = useState(isOpen);
   const [isActive, setIsActive] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+
+  const handleClose = useCallback(() => {
+    if (!isPending) onClose?.();
+  }, [isPending, onClose]);
+
+  const handleConfirm = async () => {
+    if (isPending) return;
+    setIsPending(true);
+    await waitForNextPaint();
+
+    try {
+      await onConfirm?.();
+    } finally {
+      setIsPending(false);
+    }
+  };
 
   useEffect(() => {
     let closeTimer;
@@ -47,13 +65,13 @@ const Modal = ({
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        onClose?.();
+        handleClose();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isVisible, onClose]);
+  }, [handleClose, isVisible]);
 
   if (!isVisible) return null;
 
@@ -63,13 +81,14 @@ const Modal = ({
         isActive ? " is-active" : ""
       }`}
       role="presentation"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className={`modal-card${variant === "side" ? " modal-card--side" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
+        aria-busy={isPending}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="modal-header">
@@ -77,22 +96,33 @@ const Modal = ({
             <h2 id="modal-title">{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
           </div>
-          <button type="button" className="ghost-button" onClick={onClose}>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={handleClose}
+            disabled={isPending}
+          >
             Close
           </button>
         </header>
         <div className="modal-body">{children}</div>
         {!hideFooter ? (
           <footer className="modal-footer">
-            <button type="button" className="ghost-button" onClick={onClose}>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleClose}
+              disabled={isPending}
+            >
               {secondaryText}
             </button>
             <button
               type="button"
               className="primary-button"
-              onClick={onConfirm}
+              onClick={handleConfirm}
+              disabled={isPending}
             >
-              {primaryText}
+              {isPending ? "Processing…" : primaryText}
             </button>
           </footer>
         ) : null}

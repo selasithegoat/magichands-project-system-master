@@ -44,6 +44,10 @@
 }
 
 .modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   font-weight: 600;
@@ -51,6 +55,20 @@
   border: none;
   transition: all 0.2s;
   font-size: 0.9375rem;
+}
+
+.modal-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.modal-btn-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: modal-btn-spin 650ms linear infinite;
 }
 
 .modal-btn.cancel {
@@ -90,5 +108,11 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes modal-btn-spin {
+  to {
+    transform: rotate(360deg);
   }
 }

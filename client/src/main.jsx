@@ -2,8 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
+import MutationFeedback from "./components/ui/MutationFeedback.jsx";
+import { installMutationFeedback } from "./utils/mutationFeedback.js";
 
 import { BrowserRouter } from "react-router-dom";
+
+installMutationFeedback();
 
 try {
   window.__MH_PORTAL__ = "client";
@@ -32,9 +36,12 @@ try {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <>
+      <MutationFeedback />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </>
   </React.StrictMode>,
 );
 

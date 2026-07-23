@@ -14,6 +14,7 @@ import RiskDeck from "../features/wallboard/components/RiskDeck";
 import TeamDeck from "../features/wallboard/components/TeamDeck";
 import useRealtimeClient from "../hooks/useRealtimeClient";
 import useRealtimeRefresh from "../hooks/useRealtimeRefresh";
+import { waitForNextPaint } from "../utils/mutationFeedback";
 import {
   getOpsWallboardSession,
   getOpsWallboardOverview,
@@ -64,6 +65,7 @@ const App = () => {
   const [rotationRestartToken, setRotationRestartToken] = useState(0);
   const [touchPauseActive, setTouchPauseActive] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const [disableDeckTransition, setDisableDeckTransition] = useState(false);
   const [touchDragOffsetPx, setTouchDragOffsetPx] = useState(0);
   const [isTouchDragging, setIsTouchDragging] = useState(false);
@@ -108,13 +110,20 @@ const App = () => {
   }, []);
 
   const closeLogoutDialog = useCallback(() => {
-    setShowLogoutDialog(false);
-  }, []);
+    if (!logoutLoading) setShowLogoutDialog(false);
+  }, [logoutLoading]);
 
-  const confirmLogout = useCallback(() => {
-    setShowLogoutDialog(false);
-    void logout();
-  }, [logout]);
+  const confirmLogout = useCallback(async () => {
+    if (logoutLoading) return;
+    setLogoutLoading(true);
+    await waitForNextPaint();
+    try {
+      await logout();
+      setShowLogoutDialog(false);
+    } finally {
+      setLogoutLoading(false);
+    }
+  }, [logout, logoutLoading]);
 
   const refreshOverview = useCallback(
     async ({ silent = false } = {}) => {
@@ -804,6 +813,7 @@ const App = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="logout-dialog-title"
+            aria-busy={logoutLoading}
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="logout-dialog-title">Confirm Logout</h2>
@@ -813,12 +823,18 @@ const App = () => {
                 type="button"
                 className="dialog-cancel"
                 onClick={closeLogoutDialog}
+                disabled={logoutLoading}
                 autoFocus
               >
                 Cancel
               </button>
-              <button type="button" className="danger" onClick={confirmLogout}>
-                Logout
+              <button
+                type="button"
+                className="danger"
+                onClick={confirmLogout}
+                disabled={logoutLoading}
+              >
+                {logoutLoading ? "Logging out…" : "Logout"}
               </button>
             </div>
           </div>

@@ -68,12 +68,31 @@
 }
 
 .confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.confirm-btn:disabled,
+.confirm-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.confirm-btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: confirm-btn-spin 650ms linear infinite;
 }
 
 .confirm-btn.cancel {
@@ -125,5 +144,11 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes confirm-btn-spin {
+  to {
+    transform: rotate(360deg);
   }
 }

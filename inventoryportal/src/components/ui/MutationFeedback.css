@@ -1,0 +1,58 @@
+.mh-mutation-feedback {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 2147483000;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 16px;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  box-shadow:
+    0 12px 30px rgba(15, 23, 42, 0.24),
+    0 2px 8px rgba(15, 23, 42, 0.16);
+  font-size: 0.875rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: mh-mutation-feedback-enter 160ms ease-out both;
+}
+
+.mh-mutation-feedback-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: mh-mutation-feedback-spin 700ms linear infinite;
+}
+
+@keyframes mh-mutation-feedback-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes mh-mutation-feedback-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mh-mutation-feedback,
+  .mh-mutation-feedback-spinner {
+    animation-duration: 1ms;
+  }
+}
