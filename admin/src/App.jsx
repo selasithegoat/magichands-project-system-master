@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
+import { queryClient } from "./utils/queryClient";
 // Lazy Load Components
 const Login = lazy(() => import("./pages/Login/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
@@ -122,11 +123,13 @@ function App() {
   }, []);
 
   const handleLoginSuccess = (userData) => {
+    queryClient.clear();
     clearPersistedFilterState();
     setUser(hasAdminPortalAccess(userData) ? userData : null);
   };
 
   const handleLogout = React.useCallback(async () => {
+    queryClient.clear();
     setUser(null);
     clearPersistedFilterState();
     try {
@@ -141,7 +144,14 @@ function App() {
   }, []);
 
   // Inactivity Timeout (5 minutes)
-  useInactivityLogout(5 * 60 * 1000, () => setUser(null), Boolean(user?._id));
+  useInactivityLogout(
+    5 * 60 * 1000,
+    () => {
+      queryClient.clear();
+      setUser(null);
+    },
+    Boolean(user?._id),
+  );
   useRealtimeClient(Boolean(user));
 
   const authContextValue = React.useMemo(

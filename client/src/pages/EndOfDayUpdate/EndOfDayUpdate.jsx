@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
 import { format, differenceInHours } from "date-fns";
 import Spinner from "../../components/ui/Spinner";
@@ -8,7 +9,6 @@ import SearchIcon from "../../components/icons/SearchIcon";
 import { PrinterIcon } from "../../components/icons/DeptIcons1";
 import "./EndOfDayUpdate.css";
 import usePersistedState from "../../hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { buildProjectNameRuns, renderProjectName } from "../../utils/projectName";
@@ -340,9 +340,25 @@ const buildDepartmentUpdateDocxTable = (board, docx) => {
 };
 
 const EndOfDayUpdate = ({ user }) => {
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate(); // Hook
+  const isFrontDesk = user?.department?.includes("Front Desk");
+  const { data: projects = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "end-of-day"],
+    queryFn: async () => {
+      const res = await fetch("/api/projects?mode=report");
+      if (!res.ok) throw new Error("Failed to fetch projects.");
+      const data = await res.json();
+      const nowMs = Date.now();
+      const activeProjects = (Array.isArray(data) ? data : []).filter(
+        (project) => shouldShowProjectInEndOfDay(project, nowMs),
+      );
+      return sortProjectsByLeadName(activeProjects);
+    },
+    enabled: Boolean(isFrontDesk),
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+    },
+  });
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -383,34 +399,12 @@ const EndOfDayUpdate = ({ user }) => {
     { sanitize: sanitizeDateFilter },
   );
 
-  const fetchProjects = useCallback(async () => {
-    try {
-      const res = await fetch("/api/projects?mode=report");
-      if (res.ok) {
-        const data = await res.json();
-        const nowMs = Date.now();
-        const activeProjects = data.filter((project) =>
-          shouldShowProjectInEndOfDay(project, nowMs),
-        );
-        setProjects(sortProjectsByLeadName(activeProjects));
-        setCurrentPage(1); // Reset to page 1 on new fetch
-      }
-    } catch (err) {
-      console.error("Failed to fetch projects", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     // Redirect if user is loaded but not Front Desk
     if (user && !user.department?.includes("Front Desk")) {
       navigate("/client", { replace: true });
-      return;
     }
-
-    fetchProjects();
-  }, [fetchProjects, user, navigate]);
+  }, [user, navigate]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -423,20 +417,6 @@ const EndOfDayUpdate = ({ user }) => {
     deliveryFrom,
     deliveryTo,
   ]);
-
-  const isFrontDesk = user?.department?.includes("Front Desk");
-  useRealtimeRefresh(() => fetchProjects(), {
-    enabled: Boolean(isFrontDesk),
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-    shouldRefresh: (detail) => {
-      if (detail.path.startsWith("/api/updates")) {
-        return projects.some((project) => project?._id === detail.projectId);
-      }
-
-      return true;
-    },
-  });
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";

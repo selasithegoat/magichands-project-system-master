@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import OrdersList from "../NewOrders/OrdersList";
 import SavedCreationDrafts from "./SavedCreationDrafts";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
   CLOSED_ORDER_STATUSES,
   hasPendingClientMockupApproval,
@@ -12,6 +12,7 @@ import {
 } from "../../utils/ordersManagementKpis";
 import usePersistedState from "../../hooks/usePersistedState";
 import { canManageProjectCreationDrafts } from "../../utils/projectDraftApi";
+import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import "./FrontDeskOrders.css";
 
 const FRONT_DESK_KPI_KEYS = [
@@ -29,8 +30,22 @@ const FrontDeskOrders = ({ user = null }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const canManageCreationDrafts = canManageProjectCreationDrafts(user);
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const { data: orders = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "report", portalSource],
+    queryFn: async () => {
+      const response = await fetch(
+        appendPortalSource("/api/projects?mode=report", portalSource),
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Failed to load orders summary.");
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
   const [activeKpi, setActiveKpi] = usePersistedState(
     "portal-frontdesk-orders-kpi",
     "all",
@@ -39,33 +54,6 @@ const FrontDeskOrders = ({ user = null }) => {
         FRONT_DESK_KPI_KEYS.includes(value) ? value : "all",
     },
   );
-
-  const fetchOrders = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const res = await fetch("/api/projects?mode=report");
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
-      } else if (!silent) {
-        setOrders([]);
-      }
-    } catch (error) {
-      console.error("Failed to load orders summary", error);
-      if (!silent) setOrders([]);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  useRealtimeRefresh(() => fetchOrders({ silent: true }), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
 
   const billingBlocks = useMemo(
     () =>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
@@ -626,19 +627,36 @@ const getCategoryForDepartment = (dept) => {
 const EngagedProjectActions = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const cachedProject =
+    (queryClient.getQueryData(["projects", "engaged"]) || []).find(
+      (item) => item?._id === id,
+    ) || null;
+  const cachedOrderNumber = String(
+    cachedProject?.orderId || cachedProject?.orderRef?.orderNumber || "",
+  ).trim();
+  const cachedMeetingPayload = cachedOrderNumber
+    ? queryClient.getQueryData(["meeting", "engaged", cachedOrderNumber])
+    : null;
+  const updatesCacheKey = ["project", id, "updates", "engaged"];
+  const [project, setProject] = useState(cachedProject);
+  const [loading, setLoading] = useState(!cachedProject);
   const [error, setError] = useState(null);
-  const [orderMeeting, setOrderMeeting] = useState(null);
+  const [orderMeeting, setOrderMeeting] = useState(
+    cachedMeetingPayload?.meeting || null,
+  );
   const [meetingLoading, setMeetingLoading] = useState(false);
   const [meetingError, setMeetingError] = useState("");
-  const [meetingGate, setMeetingGate] = useState(null);
+  const [meetingGate, setMeetingGate] = useState(
+    cachedMeetingPayload?.meetingGate || null,
+  );
   const [toast, setToast] = useState(null);
   const [statusUpdating, setStatusUpdating] = useState(null);
   const [quoteRequirementUpdating, setQuoteRequirementUpdating] = useState("");
 
-  const [projectUpdates, setProjectUpdates] = useState([]);
+  const [projectUpdates, setProjectUpdates] = useState(
+    () => queryClient.getQueryData(updatesCacheKey) || [],
+  );
   const [updatesLoading, setUpdatesLoading] = useState(false);
   const [updateForm, setUpdateForm] = useState({
     content: "",
@@ -1494,17 +1512,27 @@ const EngagedProjectActions = ({ user }) => {
 
   const fetchProject = async ({ silent = false } = {}) => {
     if (!id) return;
-    if (!silent) {
+    const showLoading = !silent && !project;
+    if (showLoading) {
       setLoading(true);
       setError(null);
     }
 
     try {
-      const res = await fetch("/api/projects?mode=engaged");
-      if (!res.ok) {
-        throw new Error("Failed to load engaged project.");
-      }
-      const data = await res.json();
+      const data = await queryClient.fetchQuery({
+        queryKey: ["projects", "engaged"],
+        queryFn: async () => {
+          const res = await fetch("/api/projects?mode=engaged", {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to load engaged project.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/projects", "/api/updates"],
+        },
+      });
       const engaged = data.filter((item) => {
         if (!item.departments || item.departments.length === 0) return false;
         return item.departments.some((dept) =>
@@ -1525,11 +1553,11 @@ const EngagedProjectActions = ({ user }) => {
         { silent },
       );
     } catch (err) {
-      if (!silent) {
+      if (showLoading) {
         setError(err.message || "Failed to load engaged project.");
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -1550,18 +1578,23 @@ const EngagedProjectActions = ({ user }) => {
       setMeetingError("");
     }
     try {
-      const res = await fetch(
-        `/api/meetings/order/${encodeURIComponent(normalizedOrder)}?mode=engaged`,
-      );
-      if (!res.ok) {
-        if (res.status === 404) {
-          setOrderMeeting(null);
-          return;
-        }
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to fetch meeting.");
-      }
-      const data = await res.json();
+      const data = await queryClient.fetchQuery({
+        queryKey: ["meeting", "engaged", normalizedOrder],
+        staleTime: 5 * 60_000,
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/meetings/order/${encodeURIComponent(normalizedOrder)}?mode=engaged`,
+          );
+          if (!res.ok) {
+            if (res.status === 404) {
+              return { meeting: null, meetingGate: null };
+            }
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to fetch meeting.");
+          }
+          return res.json();
+        },
+      });
       setOrderMeeting(data?.meeting || null);
       setMeetingGate(data?.meetingGate || null);
     } catch (meetingFetchError) {
@@ -1584,17 +1617,28 @@ const EngagedProjectActions = ({ user }) => {
       return;
     }
 
-    if (!silent) setUpdatesLoading(true);
+    const showLoading = !silent && projectUpdates.length === 0;
+    if (showLoading) setUpdatesLoading(true);
     try {
-      const res = await fetch(`/api/updates/project/${projectId}`);
-      if (!res.ok) throw new Error("Failed to fetch updates.");
-      const data = await res.json();
-      setProjectUpdates(Array.isArray(data) ? data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: ["project", projectId, "updates", "engaged"],
+        queryFn: async () => {
+          const res = await fetch(`/api/updates/project/${projectId}`);
+          if (!res.ok) throw new Error("Failed to fetch updates.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/updates"],
+          projectId,
+        },
+      });
+      setProjectUpdates(data);
     } catch (err) {
       console.error("Error fetching project updates:", err);
-      if (!silent) setProjectUpdates([]);
+      if (showLoading) setProjectUpdates([]);
     } finally {
-      if (!silent) setUpdatesLoading(false);
+      if (showLoading) setUpdatesLoading(false);
     }
   };
 

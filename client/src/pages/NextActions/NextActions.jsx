@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
 import ClipboardListIcon from "../../components/icons/ClipboardListIcon";
 import ChevronRightIcon from "../../components/icons/ChevronRightIcon";
 import SearchIcon from "../../components/icons/SearchIcon";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import usePersistedState from "../../hooks/usePersistedState";
 import "./NextActions.css";
@@ -50,10 +50,40 @@ const NextActions = ({ user }) => {
   const navigate = useNavigate();
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
-  const [actions, setActions] = useState([]);
-  const [totalActions, setTotalActions] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [dismissedQueryError, setDismissedQueryError] = useState(null);
+  const {
+    data: actionPayload,
+    error: actionsError,
+    isPending: loading,
+  } = useQuery({
+    queryKey: ["projects", "next-actions", ACTION_FETCH_LIMIT],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/projects/next-actions?limit=${ACTION_FETCH_LIMIT}`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to load next actions.");
+      }
+      return {
+        actions: Array.isArray(payload?.actions) ? payload.actions : [],
+        total: Number(payload?.total) || 0,
+      };
+    },
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+    },
+  });
+  const actions = useMemo(
+    () => actionPayload?.actions || [],
+    [actionPayload],
+  );
+  const totalActions = actionPayload?.total || 0;
   const [activePriority, setActivePriority] = usePersistedState(
     "client-next-actions-priority-filter",
     "all",
@@ -66,45 +96,6 @@ const NextActions = ({ user }) => {
     "client-next-actions-search",
     "",
   );
-
-  const fetchActions = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/projects/next-actions?limit=${ACTION_FETCH_LIMIT}`,
-        {
-          credentials: "include",
-          cache: "no-store",
-        },
-      );
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || "Failed to load next actions.");
-      }
-      setActions(Array.isArray(payload?.actions) ? payload.actions : []);
-      setTotalActions(Number(payload?.total) || 0);
-    } catch (error) {
-      if (!silent) {
-        setActions([]);
-        setTotalActions(0);
-        setToast({
-          type: "error",
-          message: error.message || "Failed to load next actions.",
-        });
-      }
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchActions();
-  }, [fetchActions]);
-
-  useRealtimeRefresh(() => fetchActions({ silent: true }), {
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
 
   const priorityCounts = useMemo(() => {
     return actions.reduce(
@@ -263,6 +254,13 @@ const NextActions = ({ user }) => {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+      {actionsError && actionsError !== dismissedQueryError && (
+        <Toast
+          type="error"
+          message={actionsError.message || "Failed to load next actions."}
+          onClose={() => setDismissedQueryError(actionsError)}
         />
       )}
     </div>

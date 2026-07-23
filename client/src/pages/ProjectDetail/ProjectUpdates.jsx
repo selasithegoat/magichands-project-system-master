@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import "./ProjectUpdates.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
@@ -7,7 +8,6 @@ import TrashIcon from "../../components/icons/TrashIcon";
 import EditIcon from "../../components/icons/EditIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import Toast from "../../components/ui/Toast";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const PlusIcon = ({ width = 16, height = 16, color = "currentColor" }) => (
   <svg
@@ -79,8 +79,27 @@ const normalizeUpdateCategory = (category) => {
 };
 
 const ProjectUpdates = ({ project, currentUser }) => {
-  const [updates, setUpdates] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const updatesQueryKey = ["project", project?._id, "updates"];
+  const { data: updates = [], isPending: loading } = useQuery({
+    queryKey: updatesQueryKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/updates/project/${project._id}`);
+      if (!res.ok) throw new Error("Failed to fetch project updates.");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: Boolean(project?._id),
+    meta: {
+      realtimePaths: ["/api/updates"],
+      projectId: project?._id,
+    },
+  });
+  const setUpdates = (updater) => {
+    queryClient.setQueryData(updatesQueryKey, (current = []) =>
+      typeof updater === "function" ? updater(current) : updater,
+    );
+  };
   const [showModal, setShowModal] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [updateToDelete, setUpdateToDelete] = useState(null);
@@ -99,39 +118,6 @@ const ProjectUpdates = ({ project, currentUser }) => {
   });
   const [submitting, setSubmitting] = useState(false);
   const [editingSubmitting, setEditingSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (project?._id) {
-      fetchUpdates();
-    }
-  }, [project?._id]);
-
-  useRealtimeRefresh(() => {
-    if (project?._id) {
-      fetchUpdates();
-    }
-  }, {
-    enabled: Boolean(project?._id),
-    paths: ["/api/updates"],
-    shouldRefresh: (detail) =>
-      Boolean(
-        project?._id && detail.projectId && detail.projectId === project._id,
-      ),
-  });
-
-  const fetchUpdates = async () => {
-    try {
-      const res = await fetch(`/api/updates/project/${project._id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setUpdates(data);
-      }
-    } catch (err) {
-      console.error("Error fetching updates:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -164,7 +150,6 @@ const ProjectUpdates = ({ project, currentUser }) => {
           attachment: null,
         });
         setShowModal(false);
-        fetchUpdates();
         setToast({ type: "success", message: "Update posted successfully!" });
       } else {
         const errorData = await res.json();

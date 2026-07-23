@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import "./OrderMeetingCard.css";
 
@@ -102,6 +103,7 @@ const OrderMeetingCard = ({
   manageHint = "",
   onMeetingOverrideChange,
 }) => {
+  const queryClient = useQueryClient();
   const orderNumber = String(
     orderNumberProp || project?.orderId || project?.orderRef?.orderNumber || "",
   ).trim();
@@ -119,14 +121,27 @@ const OrderMeetingCard = ({
     return false;
   }, [project, orderGroupProjects]);
 
-  const [meeting, setMeeting] = useState(null);
-  const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const meetingQueryKey = ["meeting", "order", "admin", orderNumber];
+  const cachedMeetingPayload =
+    queryClient.getQueryData(meetingQueryKey) || null;
+  const [meeting, setMeeting] = useState(
+    cachedMeetingPayload?.meeting || null,
+  );
+  const [meetings, setMeetings] = useState(() =>
+    Array.isArray(cachedMeetingPayload?.meetings)
+      ? cachedMeetingPayload.meetings
+      : [],
+  );
+  const [loading, setLoading] = useState(
+    Boolean(orderNumber) && !cachedMeetingPayload,
+  );
   const [saving, setSaving] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [actionId, setActionId] = useState("");
   const [error, setError] = useState("");
-  const [form, setForm] = useState(() => buildInitialForm(null));
+  const [form, setForm] = useState(() =>
+    buildInitialForm(cachedMeetingPayload?.meeting || null),
+  );
 
   const reminderLabels = useMemo(() => {
     const offsets = Array.isArray(meeting?.reminderOffsets)
@@ -146,25 +161,40 @@ const OrderMeetingCard = ({
       return;
     }
 
-    setLoading(true);
+    const targetQueryKey = [
+      "meeting",
+      "order",
+      "admin",
+      targetOrderNumber,
+    ];
+    const showLoading = !queryClient.getQueryData(targetQueryKey);
+    if (showLoading) setLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `/api/meetings/order/${encodeURIComponent(
-          targetOrderNumber,
-        )}?source=admin`,
-        { credentials: "include" },
-      );
-      if (!res.ok) {
-        if (res.status === 404) {
-          setMeeting(null);
-          setForm(buildInitialForm(null));
-          return;
-        }
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to load meeting.");
-      }
-      const data = await res.json();
+      const data = await queryClient.fetchQuery({
+        queryKey: targetQueryKey,
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/meetings/order/${encodeURIComponent(
+              targetOrderNumber,
+            )}?source=admin`,
+            { credentials: "include" },
+          );
+          if (!res.ok) {
+            if (res.status === 404) {
+              return { meeting: null, meetings: [] };
+            }
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(
+              errorData.message || "Failed to load meeting.",
+            );
+          }
+          return res.json();
+        },
+        meta: {
+          realtimePaths: ["/api/meetings", "/api/projects"],
+        },
+      });
       const meetingData = data?.meeting || null;
       const meetingList = Array.isArray(data?.meetings) ? data.meetings : [];
       setMeeting(meetingData);
@@ -177,7 +207,7 @@ const OrderMeetingCard = ({
       setMeetings([]);
       setForm(buildInitialForm(null));
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 

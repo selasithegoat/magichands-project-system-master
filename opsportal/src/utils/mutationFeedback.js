@@ -39,6 +39,15 @@ const dispatchFeedback = (detail) => {
   window.dispatchEvent(new CustomEvent(MUTATION_FEEDBACK_EVENT, { detail }));
 };
 
+const dispatchMutationSucceeded = (method, url) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(method)) return;
+  window.dispatchEvent(
+    new CustomEvent("mh:mutation-succeeded", {
+      detail: { method, path: url },
+    }),
+  );
+};
+
 export const waitForNextPaint = () =>
   new Promise((resolve) => {
     if (
@@ -108,6 +117,7 @@ export const installMutationFeedback = () => {
 
     try {
       const response = await nativeFetch(input, requestInit);
+      if (response?.ok) dispatchMutationSucceeded(method, url);
       await finishFeedback(feedback);
       return response;
     } catch (error) {

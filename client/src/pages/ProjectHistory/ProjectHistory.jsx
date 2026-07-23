@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./ProjectHistory.css";
 // Icons
 import ChevronLeftIcon from "../../components/icons/ChevronLeftIcon";
@@ -7,7 +8,6 @@ import FilterIcon from "../../components/icons/FilterIcon";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import HistoryProjectCard from "../../components/ui/HistoryProjectCard";
 import usePersistedState from "../../hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 
 const HISTORY_FILTER_OPTIONS = ["All", "This Month", "Last Month", "Older"];
@@ -74,35 +74,23 @@ const ProjectHistory = ({ onBack, user }) => {
     "client-project-history-search",
     "",
   );
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: projects = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "history"],
+    queryFn: async () => {
+      const res = await fetch("/api/projects");
+      if (!res.ok) throw new Error("Failed to load project history.");
+      const data = await res.json();
+      return Array.isArray(data)
+        ? data.filter((project) => project.status === "Finished")
+        : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
   const [visibleLimit, setVisibleLimit] = useState(HISTORY_RENDER_BATCH_SIZE);
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const res = await fetch("/api/projects");
-      if (res.ok) {
-        const data = await res.json();
-        const finished = data.filter((p) => p.status === "Finished");
-        setProjects(finished);
-      }
-    } catch (error) {
-      console.error("Error loading history:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  useRealtimeRefresh(fetchHistory, {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
 
   const handleViewDetails = useCallback(
     (project) => {
@@ -116,7 +104,7 @@ const ProjectHistory = ({ onBack, user }) => {
     [navigateToProject],
   );
 
-  const monthBoundaries = useMemo(buildMonthBoundaries, []);
+  const monthBoundaries = useMemo(() => buildMonthBoundaries(), []);
   const normalizedSearchQuery = useMemo(
     () => searchQuery.trim().toLowerCase(),
     [searchQuery],
@@ -129,16 +117,10 @@ const ProjectHistory = ({ onBack, user }) => {
       older: 0,
       unknown: 0,
     };
-    let latestDate = null;
-
     const projectEntries = projects.map((project) => {
       const projectDate = getProjectDate(project);
       const bucket = getDateBucket(projectDate, monthBoundaries);
       nextBucketCounts[bucket] += 1;
-
-      if (projectDate && (!latestDate || projectDate > latestDate)) {
-        latestDate = projectDate;
-      }
 
       return {
         bucket,
@@ -147,6 +129,13 @@ const ProjectHistory = ({ onBack, user }) => {
         searchText: buildHistorySearchText(project),
       };
     });
+    const latestDate = projectEntries.reduce(
+      (latest, entry) =>
+        entry.projectDate && (!latest || entry.projectDate > latest)
+          ? entry.projectDate
+          : latest,
+      null,
+    );
 
     return {
       bucketCounts: nextBucketCounts,
@@ -178,10 +167,6 @@ const ProjectHistory = ({ onBack, user }) => {
       })
       .map((entry) => entry.project);
   }, [filter, historyDerived.projectEntries, normalizedSearchQuery]);
-
-  useEffect(() => {
-    setVisibleLimit(HISTORY_RENDER_BATCH_SIZE);
-  }, [filter, searchQuery]);
 
   const visibleProjects = useMemo(
     () => filteredProjects.slice(0, visibleLimit),
@@ -258,7 +243,10 @@ const ProjectHistory = ({ onBack, user }) => {
             className="search-input"
             placeholder="Search by Order #, Client, or Project Name..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setVisibleLimit(HISTORY_RENDER_BATCH_SIZE);
+            }}
           />
           <FilterIcon className="filter-icon" />
         </div>
@@ -268,7 +256,10 @@ const ProjectHistory = ({ onBack, user }) => {
             <button
               key={f}
               className={`filter-pill ${filter === f ? "active" : "inactive"}`}
-              onClick={() => setFilter(f)}
+              onClick={() => {
+                setFilter(f);
+                setVisibleLimit(HISTORY_RENDER_BATCH_SIZE);
+              }}
             >
               {f}
             </button>

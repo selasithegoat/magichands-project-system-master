@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ProjectAnalytics.css";
 
@@ -232,50 +233,36 @@ const LineChart = ({ points, label }) => {
 const ProjectAnalytics = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const fetchProjectAnalytics = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/admin/analytics/project/${id}`, {
-          credentials: "include",
-        });
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.message || "Failed to load project analytics.");
-        }
-        const payload = await res.json();
-        if (isActive) {
-          setData(payload);
-        }
-      } catch (err) {
-        if (isActive) {
-          setError(err.message || "Failed to load project analytics.");
-        }
-      } finally {
-        if (isActive) {
-          setLoading(false);
-        }
+  const {
+    data,
+    error: analyticsError,
+    isPending: loading,
+  } = useQuery({
+    queryKey: ["admin", "analytics", "project", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/analytics/project/${id}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || "Failed to load project analytics.",
+        );
       }
-    };
-
-    fetchProjectAnalytics();
-
-    return () => {
-      isActive = false;
-    };
-  }, [id]);
+      return res.json();
+    },
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+      projectId: id,
+    },
+    enabled: Boolean(id),
+  });
+  const error = analyticsError?.message || "";
 
   const project = data?.project;
-  const stages = data?.stages || [];
-  const benchmarks = data?.benchmarks || [];
-  const timeline = data?.timeline || [];
+  const stages = useMemo(() => data?.stages || [], [data]);
+  const benchmarks = useMemo(() => data?.benchmarks || [], [data]);
+  const timeline = useMemo(() => data?.timeline || [], [data]);
   const endToEnd = data?.endToEnd || null;
 
   const benchmarkMap = useMemo(

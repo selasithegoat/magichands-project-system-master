@@ -1,4 +1,5 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./OngoingProjects.css";
 // Icons
 import ArrowLeftIcon from "../../components/icons/ArrowLeftIcon";
@@ -8,7 +9,6 @@ import FabButton from "../../components/ui/FabButton";
 import ProjectCard from "../../components/ui/ProjectCard";
 import Toast from "../../components/ui/Toast";
 import usePersistedState from "../../hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import { getLeadSearchText } from "../../utils/leadDisplay";
 import { useLocation } from "react-router-dom";
@@ -46,8 +46,6 @@ const OngoingProjects = ({
   const location = useLocation();
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
-  const [projects, setProjects] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = usePersistedState(
     "client-ongoing-projects-search",
     "",
@@ -81,31 +79,21 @@ const OngoingProjects = ({
     return `/api/projects?${params.toString()}`;
   }, [viewMode]);
 
-  const fetchProjects = React.useCallback(async () => {
-    try {
-      const res = await fetch(buildProjectsUrl(), {
+  const projectsUrl = buildProjectsUrl();
+  const { data: projects = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "cards", projectsUrl],
+    queryFn: async () => {
+      const res = await fetch(projectsUrl, {
         credentials: "include",
         cache: "no-store",
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error("Error loading projects:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [buildProjectsUrl]);
-
-  React.useEffect(() => {
-    setLoading(true);
-    fetchProjects();
-  }, [fetchProjects]);
-
-  useRealtimeRefresh(() => fetchProjects(), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+      if (!res.ok) throw new Error("Failed to load projects.");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
   });
 
   const [toast, setToast] = React.useState(null);
@@ -129,7 +117,6 @@ const OngoingProjects = ({
 
       if (res.ok) {
         setToast({ message: "Project marked as Finished!", type: "success" });
-        fetchProjects();
         if (onProjectChange) onProjectChange(); // Refresh global count
       } else {
         setToast({ message: "Failed to update status", type: "error" });

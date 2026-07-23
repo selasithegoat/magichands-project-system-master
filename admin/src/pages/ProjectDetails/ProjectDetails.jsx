@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -789,11 +790,34 @@ const ProjectDetails = ({ user }) => {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [orderGroupProjects, setOrderGroupProjects] = useState([]);
-  const [updates, setUpdates] = useState([]); // New state for updates
-  const [smsPrompts, setSmsPrompts] = useState([]);
+  const queryClient = useQueryClient();
+  const projectCacheKey = ["project", "admin", id];
+  const stateProject =
+    String(location.state?.project?._id || "") === String(id || "")
+      ? location.state.project
+      : null;
+  const cachedProject =
+    stateProject || queryClient.getQueryData(projectCacheKey) || null;
+  const cachedOrderNumber = String(
+    cachedProject?.orderRef?.orderNumber || cachedProject?.orderId || "",
+  ).trim();
+  const [project, setProject] = useState(cachedProject);
+  const [loading, setLoading] = useState(!cachedProject);
+  const [orderGroupProjects, setOrderGroupProjects] = useState(
+    () =>
+      queryClient.getQueryData([
+        "projects",
+        "order-group",
+        "admin",
+        cachedOrderNumber,
+      ]) || (cachedProject ? [cachedProject] : []),
+  );
+  const [updates, setUpdates] = useState(
+    () => queryClient.getQueryData(["project", id, "updates", "admin"]) || [],
+  ); // New state for updates
+  const [smsPrompts, setSmsPrompts] = useState(
+    () => queryClient.getQueryData(["project", id, "sms-prompts", "admin"]) || [],
+  );
   const [smsLoading, setSmsLoading] = useState(false);
   const [smsModal, setSmsModal] = useState({
     open: false,
@@ -1700,25 +1724,34 @@ const ProjectDetails = ({ user }) => {
     }
 
     try {
-      const res = await fetch(
-        `/api/projects/orders/${encodeURIComponent(normalizedOrder)}?source=admin&collapseRevisions=true`,
-        {
-          credentials: "include",
+      const projects = await queryClient.fetchQuery({
+        queryKey: ["projects", "order-group", "admin", normalizedOrder],
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/projects/orders/${encodeURIComponent(normalizedOrder)}?source=admin&collapseRevisions=true`,
+            {
+              credentials: "include",
+            },
+          );
+          if (!res.ok) {
+            if (res.status === 404) {
+              return fallbackProject ? [fallbackProject] : [];
+            }
+            throw new Error("Failed to fetch grouped order projects");
+          }
+          const group = await res.json();
+          const payload = Array.isArray(group?.projects) ? group.projects : [];
+          return payload.length > 0
+            ? payload
+            : fallbackProject
+              ? [fallbackProject]
+              : [];
         },
-      );
-      if (!res.ok) {
-        if (res.status === 404) {
-          setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
-          return;
-        }
-        throw new Error("Failed to fetch grouped order projects");
-      }
-
-      const group = await res.json();
-      const projects = Array.isArray(group?.projects) ? group.projects : [];
-      setOrderGroupProjects(
-        projects.length > 0 ? projects : fallbackProject ? [fallbackProject] : [],
-      );
+        meta: {
+          realtimePaths: ["/api/projects"],
+        },
+      });
+      setOrderGroupProjects(projects);
     } catch (error) {
       console.error("Failed to load grouped order projects:", error);
       setOrderGroupProjects(fallbackProject ? [fallbackProject] : []);
@@ -1726,17 +1759,25 @@ const ProjectDetails = ({ user }) => {
   };
 
   const fetchProject = async ({ showLoading = true, retries = 1 } = {}) => {
-    if (showLoading) setLoading(true);
+    const shouldShowLoading = showLoading && !project;
+    if (shouldShowLoading) setLoading(true);
 
     try {
-      const res = await fetch(`/api/projects/${id}`, {
-        credentials: "include",
+      const data = await queryClient.fetchQuery({
+        queryKey: projectCacheKey,
+        retry: false,
+        queryFn: async () => {
+          const res = await fetch(`/api/projects/${id}`, {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to fetch project");
+          return res.json();
+        },
+        meta: {
+          realtimePaths: ["/api/projects", "/api/updates"],
+          projectId: id,
+        },
       });
-      if (!res.ok) {
-        throw new Error("Failed to fetch project");
-      }
-
-      const data = await res.json();
       applyProjectToState(data);
       await fetchOrderGroupProjects(
         data?.orderRef?.orderNumber || data?.orderId,
@@ -1749,19 +1790,28 @@ const ProjectDetails = ({ user }) => {
         return fetchProject({ showLoading: false, retries: retries - 1 });
       }
     } finally {
-      if (showLoading) setLoading(false);
+      if (shouldShowLoading) setLoading(false);
     }
   };
 
   const fetchUpdates = async () => {
     try {
-      const res = await fetch(`/api/updates/project/${id}`, {
-        credentials: "include",
+      const data = await queryClient.fetchQuery({
+        queryKey: ["project", id, "updates", "admin"],
+        queryFn: async () => {
+          const res = await fetch(`/api/updates/project/${id}`, {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to fetch project updates.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/updates"],
+          projectId: id,
+        },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setUpdates(data);
-      }
+      setUpdates(data);
     } catch (err) {
       console.error("Error fetching updates:", err);
     }
@@ -1773,23 +1823,36 @@ const ProjectDetails = ({ user }) => {
       return;
     }
     try {
-      if (!silent) setSmsLoading(true);
-      const res = await fetch(`/api/projects/${id}/sms-prompts?source=admin`, {
-        credentials: "include",
+      const showLoading = !silent && smsPrompts.length === 0;
+      if (showLoading) setSmsLoading(true);
+      const data = await queryClient.fetchQuery({
+        queryKey: ["project", id, "sms-prompts", "admin"],
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/projects/${id}/sms-prompts?source=admin`,
+            {
+              credentials: "include",
+            },
+          );
+          if (!res.ok) throw new Error("Failed to fetch SMS prompts.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/projects"],
+          projectId: id,
+        },
       });
-      if (!res.ok) throw new Error("Failed to fetch SMS prompts.");
-      const data = await res.json();
-      setSmsPrompts(Array.isArray(data) ? data : []);
+      setSmsPrompts(data);
     } catch (err) {
       console.error("Error fetching SMS prompts:", err);
       if (!silent) setSmsPrompts([]);
     } finally {
-      if (!silent) setSmsLoading(false);
+      if (!silent && smsPrompts.length === 0) setSmsLoading(false);
     }
   };
 
   useEffect(() => {
-    const stateProject = location.state?.project;
     if (
       stateProject &&
       String(stateProject._id || "") === String(id || "")
@@ -1806,13 +1869,18 @@ const ProjectDetails = ({ user }) => {
     // Fetch users for Lead Edit
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/auth/users", {
-          credentials: "include",
+        const data = await queryClient.fetchQuery({
+          queryKey: ["auth", "users", "admin"],
+          staleTime: 5 * 60_000,
+          queryFn: async () => {
+            const res = await fetch("/api/auth/users", {
+              credentials: "include",
+            });
+            if (!res.ok) throw new Error("Failed to fetch users.");
+            return res.json();
+          },
         });
-        if (res.ok) {
-          const data = await res.json();
-          setAvailableUsers(data);
-        }
+        setAvailableUsers(data);
       } catch (err) {
         console.error("Failed to fetch users", err);
       }

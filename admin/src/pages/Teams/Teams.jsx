@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import "./Teams.css";
 import Modal from "../../components/Modal/Modal";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import { UserIcon, LockIcon, PencilIcon, TrashIcon } from "../../icons/Icons";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const normalizeDepartmentId = (value) =>
   ["outside-production", "outside production"].includes(
@@ -13,9 +13,28 @@ const normalizeDepartmentId = (value) =>
     ? "local-outsourcing"
     : value;
 
-const Teams = ({ user }) => {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+const Teams = () => {
+  const queryClient = useQueryClient();
+  const employeesQueryKey = ["admin", "employees"];
+  const { data: employees = [], isPending: loading } = useQuery({
+    queryKey: employeesQueryKey,
+    queryFn: async () => {
+      const response = await fetch("/api/admin/employees", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch employees.");
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+    meta: {
+      realtimePaths: ["/api/admin/employees"],
+    },
+  });
+  const setEmployees = (updater) => {
+    queryClient.setQueryData(employeesQueryKey, (previous = []) =>
+      typeof updater === "function" ? updater(previous) : updater,
+    );
+  };
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -81,31 +100,6 @@ const Teams = ({ user }) => {
   const productionSubDeptLabelMap = new Map(
     productionSubDepartments.map((d) => [d.id, d.label]),
   );
-
-  // Fetch Employees
-  const fetchEmployees = async () => {
-    try {
-      const res = await fetch("/api/admin/employees", {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(data);
-      }
-    } catch (err) {
-      console.error("Error fetching employees:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  useRealtimeRefresh(() => fetchEmployees(), {
-    paths: ["/api/admin/employees"],
-  });
 
   // Handle Input Changes
   const handleChange = (e) => {
@@ -300,7 +294,7 @@ const Teams = ({ user }) => {
         } else {
           alert(data.message || "Registration Failed");
         }
-      } catch (err) {
+      } catch {
         alert("Error registering employee");
       }
     } else {
@@ -336,7 +330,7 @@ const Teams = ({ user }) => {
         } else {
           alert(data.message || "Update Failed");
         }
-      } catch (err) {
+      } catch {
         alert("Error updating employee");
       }
     }
@@ -369,7 +363,7 @@ const Teams = ({ user }) => {
       } else {
         alert(data.message || "Failed to update password");
       }
-    } catch (err) {
+    } catch {
       alert("Error updating password");
     }
   };

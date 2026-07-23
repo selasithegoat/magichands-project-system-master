@@ -1,4 +1,6 @@
+/* global __UPLOAD_MAX_MB__ */
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import "./Profile.css";
 import EditIcon from "../../components/icons/EditIcon";
@@ -8,7 +10,6 @@ import ClockIcon from "../../components/icons/ClockIcon";
 import HelpIcon from "../../components/icons/HelpIcon";
 import LogOutIcon from "../../components/icons/LogOutIcon";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import {
   PASSWORD_STRENGTH_MESSAGE,
   getPasswordStrengthLabel,
@@ -29,6 +30,12 @@ const DEFAULT_FORM_DATA = {
   department: "",
   contact: "",
   avatarUrl: "",
+};
+
+const EMPTY_PROFILE_STATS = {
+  totalProjects: 0,
+  completedProjects: 0,
+  hoursLogged: 0,
 };
 
 const normalizeDepartmentInput = (value) => {
@@ -119,6 +126,41 @@ const validatePasswordForm = (passwordForm) => {
 };
 
 const Profile = ({ onSignOut, user, onUpdateProfile }) => {
+  const userId = String(user?._id || user?.id || "").trim();
+  const { data: stats = EMPTY_PROFILE_STATS } = useQuery({
+    queryKey: ["projects", "stats", "me", userId],
+    queryFn: async () => {
+      const res = await fetch("/api/projects/stats");
+      if (!res.ok) throw new Error("Failed to load project stats.");
+      return res.json();
+    },
+    enabled: Boolean(userId),
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+    },
+  });
+  const {
+    data: activities = [],
+    isPending: isLoadingActivities,
+  } = useQuery({
+    queryKey: ["projects", "activities", "me", userId, "preview"],
+    queryFn: async () => {
+      const res = await fetch("/api/projects/activities/me?limit=5", {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("Failed to load recent activities.");
+      const data = await res.json();
+      return Array.isArray(data?.activities) ? data.activities : [];
+    },
+    enabled: Boolean(userId),
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+      realtimeShouldRefresh: (detail) =>
+        !detail?.actorId || String(detail.actorId) === userId,
+    },
+  });
   const [emailNotif, setEmailNotif] = useState(
     user?.notificationSettings?.email ?? false,
   );
@@ -135,18 +177,10 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
   const [fieldTouched, setFieldTouched] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  const [stats, setStats] = useState({
-    totalProjects: 0,
-    completedProjects: 0,
-    hoursLogged: 0,
-  });
   const [loading, setLoading] = useState(!user);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
-
-  const [activities, setActivities] = useState([]);
-  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
 
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
@@ -247,22 +281,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     setLoading(false);
   }, [user]);
 
-  const fetchStats = async () => {
-    try {
-      const res = await fetch("/api/projects/stats");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
   useEffect(() => {
     if (!message) return undefined;
 
@@ -286,36 +304,6 @@ const Profile = ({ onSignOut, user, onUpdateProfile }) => {
     const timer = setTimeout(() => setPasswordMessage(null), 10000);
     return () => clearTimeout(timer);
   }, [passwordMessage]);
-
-  const fetchActivities = async () => {
-    try {
-      const res = await fetch("/api/projects/activities/me?limit=5", {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setActivities(data.activities || []);
-      }
-    } catch (error) {
-      console.error("Error fetching activities:", error);
-    } finally {
-      setIsLoadingActivities(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchActivities();
-  }, []);
-
-  useRealtimeRefresh(() => {
-    fetchStats();
-    fetchActivities();
-  }, {
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/ai"],
-  });
 
   const validationErrors = useMemo(() => validateProfile(formData), [formData]);
   const passwordErrors = useMemo(

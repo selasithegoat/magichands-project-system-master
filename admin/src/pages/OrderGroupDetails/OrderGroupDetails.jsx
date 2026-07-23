@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard";
 import { downloadGroupProjectBrief } from "../../utils/groupProjectBriefDownload";
@@ -343,23 +344,19 @@ const ProjectDetailBlock = ({ project, onViewDetails }) => {
 const OrderGroupDetails = ({ user }) => {
   const { orderNumber: orderNumberParam } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [group, setGroup] = useState(null);
   const [selectedLead, setSelectedLead] = useState("All");
   const [briefDownloading, setBriefDownloading] = useState(false);
 
   const orderNumber = String(orderNumberParam || "").trim();
 
-  const fetchGroup = useCallback(async () => {
-    if (!orderNumber) {
-      setError("Order number is missing.");
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
+  const {
+    data: group,
+    error: groupError,
+    isPending: loading,
+    refetch: refetchGroup,
+  } = useQuery({
+    queryKey: ["projects", "order-group", "admin", orderNumber],
+    queryFn: async () => {
       const res = await fetch(
         `/api/projects/orders/${encodeURIComponent(orderNumber)}?source=admin&collapseRevisions=true`,
         { credentials: "include" },
@@ -368,19 +365,16 @@ const OrderGroupDetails = ({ user }) => {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Failed to load order group.");
       }
-      const data = await res.json();
-      setGroup(data);
-    } catch (fetchError) {
-      console.error("Failed to load order group:", fetchError);
-      setError(fetchError.message || "Failed to load order group.");
-    } finally {
-      setLoading(false);
-    }
-  }, [orderNumber]);
-
-  useEffect(() => {
-    void fetchGroup();
-  }, [fetchGroup]);
+      return res.json();
+    },
+    enabled: Boolean(orderNumber),
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
+  const error = !orderNumber
+    ? "Order number is missing."
+    : groupError?.message || "";
 
   const projects = useMemo(
     () => (Array.isArray(group?.projects) ? group.projects : []),
@@ -497,7 +491,7 @@ const OrderGroupDetails = ({ user }) => {
           orderGroupProjects={projects}
           user={user}
           showHistory={true}
-          onMeetingOverrideChange={() => fetchGroup()}
+          onMeetingOverrideChange={() => refetchGroup()}
         />
       </section>
 

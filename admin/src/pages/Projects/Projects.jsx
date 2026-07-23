@@ -1,11 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import "./Projects.css";
 import { TrashIcon, ProjectsIcon } from "../../icons/Icons";
 import ConfirmationModal from "../../components/ConfirmationModal/ConfirmationModal";
 import usePersistedState from "@client/hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import {
@@ -214,11 +220,9 @@ const getPageConfig = (mode) =>
 const Projects = ({ user }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [groupedOrders, setGroupedOrders] = useState([]);
   const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
   const [collapsingOrderGroups, setCollapsingOrderGroups] = useState({});
   const collapseTimersRef = useRef({});
-  const [loading, setLoading] = useState(true);
 
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
@@ -314,8 +318,9 @@ const Projects = ({ user }) => {
     });
   };
 
-  const fetchProjects = async () => {
-    try {
+  const { data: groupedOrders = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "orders", "admin"],
+    queryFn: async () => {
       const groupedRes = await fetch(
         "/api/projects/orders?source=admin&collapseRevisions=true",
         {
@@ -325,29 +330,21 @@ const Projects = ({ user }) => {
 
       if (groupedRes.ok) {
         const groupedData = await groupedRes.json();
-        setGroupedOrders(Array.isArray(groupedData) ? groupedData : []);
-      } else {
-        const projectsRes = await fetch("/api/projects?source=admin", {
-          credentials: "include",
-        });
-        const projectsPayload = projectsRes.ok ? await projectsRes.json() : [];
-        const projectsData = Array.isArray(projectsPayload)
-          ? projectsPayload
-          : [];
-        setGroupedOrders(buildFallbackOrderGroups(projectsData));
-        console.error("Failed to fetch grouped orders");
+        return Array.isArray(groupedData) ? groupedData : [];
       }
-    } catch (err) {
-      console.error("Error fetching projects:", err);
-      setGroupedOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProjects();
-  }, []);
+      const projectsRes = await fetch("/api/projects?source=admin", {
+        credentials: "include",
+      });
+      const projectsPayload = projectsRes.ok ? await projectsRes.json() : [];
+      const projectsData = Array.isArray(projectsPayload)
+        ? projectsPayload
+        : [];
+      return buildFallbackOrderGroups(projectsData);
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
 
   useEffect(() => {
     const viewQuery = searchParams.get("view");
@@ -396,11 +393,6 @@ const Projects = ({ user }) => {
     [],
   );
 
-  useRealtimeRefresh(() => fetchProjects(), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
-
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -445,7 +437,7 @@ const Projects = ({ user }) => {
         credentials: "include",
       });
       if (res.ok) {
-        await fetchProjects();
+        setDeleteModal({ isOpen: false, projectId: null });
       } else {
         alert("Failed to delete project");
       }
@@ -511,7 +503,7 @@ const Projects = ({ user }) => {
     };
   };
 
-  const matchesStatusFilter = (project) => {
+  const matchesStatusFilter = useCallback((project) => {
     const projectStatus = getProjectStatusDisplay(project);
 
     if (filterStatus === "All") return true;
@@ -542,7 +534,7 @@ const Projects = ({ user }) => {
       return isUrgentProject(project);
     }
     return projectStatus === filterStatus;
-  };
+  }, [filterStatus, isFinishedView]);
 
   const modeScopedOrderGroups = useMemo(
     () =>
@@ -579,7 +571,7 @@ const Projects = ({ user }) => {
           };
         })
         .filter(Boolean),
-    [filterStatus, modeScopedOrderGroups],
+    [matchesStatusFilter, modeScopedOrderGroups],
   );
 
   const handleViewModeChange = (nextViewMode) => {
@@ -660,56 +652,6 @@ const Projects = ({ user }) => {
     indexOfLastItem,
   );
   const totalPages = Math.ceil(filteredOrderGroups.length / itemsPerPage);
-
-  useEffect(() => {
-    setExpandedOrderGroups((prev) => {
-      const next = {};
-      filteredOrderGroups.forEach((group) => {
-        const key = group?.id || group?.orderNumber;
-        if (!key) return;
-        next[key] = prev[key] || false;
-      });
-
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(next);
-      if (prevKeys.length !== nextKeys.length) {
-        return next;
-      }
-
-      for (const key of nextKeys) {
-        if (prev[key] !== next[key]) {
-          return next;
-        }
-      }
-
-      return prev;
-    });
-  }, [filteredOrderGroups]);
-
-  useEffect(() => {
-    setCollapsingOrderGroups((prev) => {
-      const next = {};
-      filteredOrderGroups.forEach((group) => {
-        const key = group?.id || group?.orderNumber;
-        if (!key) return;
-        if (prev[key]) next[key] = true;
-      });
-
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(next);
-      if (prevKeys.length !== nextKeys.length) {
-        return next;
-      }
-
-      for (const key of nextKeys) {
-        if (prev[key] !== next[key]) {
-          return next;
-        }
-      }
-
-      return prev;
-    });
-  }, [filteredOrderGroups]);
 
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {

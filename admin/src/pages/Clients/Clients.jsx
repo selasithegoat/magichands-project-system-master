@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import "./Clients.css";
 import usePersistedState from "@client/hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import {
@@ -11,10 +11,22 @@ import {
   getQuoteStatusDisplay,
 } from "@client/utils/quoteStatus";
 
-const Clients = ({ user }) => {
+const Clients = () => {
   const navigate = useNavigate();
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: clients = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "clients"],
+    queryFn: async () => {
+      const response = await fetch("/api/projects/clients", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch clients.");
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
   const [searchQuery, setSearchQuery] = usePersistedState(
     "admin-clients-search",
     "",
@@ -40,33 +52,6 @@ const Clients = ({ user }) => {
   );
   const pageSize = 15;
 
-  const fetchClients = async () => {
-    try {
-      const res = await fetch("/api/projects/clients", {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setClients(data);
-      } else {
-        console.error("Failed to fetch clients");
-      }
-    } catch (err) {
-      console.error("Error fetching clients:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
-
-  useRealtimeRefresh(() => fetchClients(), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
-
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -74,26 +59,6 @@ const Clients = ({ user }) => {
       day: "numeric",
       year: "numeric",
     });
-  };
-
-  const formatTime = (timeStr) => {
-    if (!timeStr) return "-";
-    if (timeStr.includes("T")) {
-      return new Date(timeStr).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-    }
-    const match = timeStr.match(/(\d{1,2}):(\d{2})\s?(AM|PM)/i);
-    if (match) {
-      let [_, h, m, period] = match;
-      h = parseInt(h);
-      if (period.toUpperCase() === "PM" && h < 12) h += 12;
-      if (period.toUpperCase() === "AM" && h === 12) h = 0;
-      return `${h.toString().padStart(2, "0")}:${m}`;
-    }
-    return timeStr;
   };
 
   const getStatusClass = (status) => {

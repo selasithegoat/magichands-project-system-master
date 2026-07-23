@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import "./PerformanceAnalytics.css";
 import usePersistedState from "@client/hooks/usePersistedState";
@@ -315,9 +316,32 @@ const PerformanceAnalytics = () => {
     "admin-performance-analytics-to-date",
     formatDateInput(today),
   );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [data, setData] = useState(null);
+  const {
+    data,
+    error: analyticsError,
+    isPending: loading,
+  } = useQuery({
+    queryKey: ["admin", "analytics", "stage-durations", fromDate, toDate],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        from: fromDate,
+        to: toDate,
+      });
+      const res = await fetch(
+        `/api/admin/analytics/stage-durations?${params}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to load analytics.");
+      }
+      return res.json();
+    },
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+    },
+  });
+  const error = analyticsError?.message || "";
   const [searchQuery, setSearchQuery] = usePersistedState(
     "admin-performance-analytics-search",
     "",
@@ -338,34 +362,8 @@ const PerformanceAnalytics = () => {
   );
   const itemsPerPage = 15;
 
-  const fetchAnalytics = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        from: fromDate,
-        to: toDate,
-      });
-      const res = await fetch(`/api/admin/analytics/stage-durations?${params}`, { credentials: "include" });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to load analytics.");
-      }
-      const payload = await res.json();
-      setData(payload);
-    } catch (err) {
-      setError(err.message || "Failed to load analytics.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, [fromDate, toDate]);
-
-  const stageStats = data?.stages || [];
-  const projectRows = data?.projects || [];
+  const stageStats = useMemo(() => data?.stages || [], [data]);
+  const projectRows = useMemo(() => data?.projects || [], [data]);
   const orderedStages = useMemo(() => {
     if (!stageStats.length) return [];
     const processStage = stageStats.find((stage) => stage.isProcess);

@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import "./PendingAssignments.css";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 
 const PENDING_ACCEPTANCE_STATUSES = new Set([
@@ -11,43 +11,28 @@ const PENDING_ACCEPTANCE_STATUSES = new Set([
 ]);
 
 const PendingAssignments = ({ onStartNew, user }) => {
-  const [adjustments, setAdjustments] = useState([]);
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-
-  const fetchAssignments = useCallback(async () => {
-    if (!user) return;
-    try {
+  const { data: adjustments = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "pending-assignments", user?._id],
+    queryFn: async () => {
       const res = await fetch("/api/projects?view=pending-acceptance&summary=card", {
         credentials: "include",
         cache: "no-store",
       });
-      if (res.ok) {
-        const data = await res.json();
-        const pending = data.filter((p) => {
-          const leadId = p.projectLeadId?._id || p.projectLeadId;
-          return (
-            leadId === user._id &&
-            PENDING_ACCEPTANCE_STATUSES.has(p.status)
-          );
-        });
-        setAdjustments(pending);
-      }
-    } catch (error) {
-      console.error("Failed to load assignments", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchAssignments();
-  }, [fetchAssignments]);
-
-  useRealtimeRefresh(() => fetchAssignments(), {
+      if (!res.ok) throw new Error("Failed to load assignments.");
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []).filter((project) => {
+        const leadId = project.projectLeadId?._id || project.projectLeadId;
+        return (
+          leadId === user._id &&
+          PENDING_ACCEPTANCE_STATUSES.has(project.status)
+        );
+      });
+    },
     enabled: Boolean(user),
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
   });
 
   const handleAccept = (project) => {

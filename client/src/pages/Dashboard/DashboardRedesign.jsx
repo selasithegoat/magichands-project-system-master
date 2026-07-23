@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./Dashboard.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import { getDepartmentLabel } from "../../constants/departments";
@@ -21,7 +22,6 @@ import Toast from "../../components/ui/Toast";
 import UserAvatar from "../../components/ui/UserAvatar";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import usePersistedState from "../../hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import { playNotificationSound } from "../../utils/notificationSound";
 import { getLeadAvatarUrl, getLeadDisplay } from "../../utils/leadDisplay";
@@ -372,11 +372,63 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const navigate = useNavigate();
   const { navigateToProject, projectRouteChoiceDialog } =
     useAuthorizedProjectNavigation(user);
-  const [dashboardSummary, setDashboardSummary] = useState(
-    EMPTY_DASHBOARD_SUMMARY,
-  );
-  const [projectLookup, setProjectLookup] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    data: dashboardSummary = EMPTY_DASHBOARD_SUMMARY,
+    dataUpdatedAt: dashboardUpdatedAt,
+    isPending: isLoading,
+  } = useQuery({
+      queryKey: ["projects", "dashboard-summary"],
+      queryFn: async () => {
+        const response = await fetch("/api/projects/dashboard-summary", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Failed to fetch dashboard summary.");
+        const payload = await response.json();
+        return {
+          ...EMPTY_DASHBOARD_SUMMARY,
+          ...(payload || {}),
+          stats: {
+            ...EMPTY_DASHBOARD_SUMMARY.stats,
+            ...(payload?.stats || {}),
+          },
+          projects: {
+            ...EMPTY_DASHBOARD_SUMMARY.projects,
+            ...(payload?.projects || {}),
+          },
+          workload: {
+            ...EMPTY_DASHBOARD_SUMMARY.workload,
+            ...(payload?.workload || {}),
+          },
+        };
+      },
+      meta: {
+        realtimePaths: ["/api/projects", "/api/updates"],
+      },
+    });
+  const { data: nextActionsPayload, isPending: nextActionsLoading } = useQuery({
+    queryKey: ["projects", "next-actions", 8],
+    queryFn: async () => {
+      const response = await fetch("/api/projects/next-actions?limit=8", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Failed to fetch next actions.");
+      const payload = await response.json();
+      return {
+        actions: Array.isArray(payload?.actions) ? payload.actions : [],
+        total: Number(payload?.total) || 0,
+      };
+    },
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+    },
+  });
+  const nextActions = nextActionsPayload?.actions || [];
+  const nextActionsTotal = nextActionsPayload?.total || 0;
   const [toast, setToast] = useState(null);
   const [projectViewMode, setProjectViewMode] = usePersistedState(
     "client-dashboard-project-view-mode",
@@ -402,9 +454,6 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   const [activeTimelineEvent, setActiveTimelineEvent] = useState(null);
   const [isDrawerMounted, setIsDrawerMounted] = useState(false);
   const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
-  const [nextActions, setNextActions] = useState([]);
-  const [nextActionsTotal, setNextActionsTotal] = useState(0);
-  const [nextActionsLoading, setNextActionsLoading] = useState(true);
 
   const previousLeadPendingIdsRef = useRef(new Set());
   const drawerCloseTimeoutRef = useRef(null);
@@ -414,19 +463,25 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     dashboardSummary.projects || EMPTY_DASHBOARD_SUMMARY.projects;
   const dashboardWorkload =
     dashboardSummary.workload || EMPTY_DASHBOARD_SUMMARY.workload;
-
-  useEffect(() => {
-    fetchProjects();
-    fetchNextActions();
-  }, []);
-
-  useRealtimeRefresh(() => {
-    fetchProjects();
-    fetchNextActions({ silent: true });
-  }, {
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
+  const projectLookup = useMemo(() => {
+    const byId = new Map();
+    const addProject = (project) => {
+      const projectId = toEntityId(project?._id || project?.id);
+      if (projectId && !byId.has(projectId)) byId.set(projectId, project);
+    };
+    [
+      dashboardProjects.recentActive,
+      dashboardProjects.upcomingDeadlines,
+      dashboardProjects.pendingAcceptancePreview,
+      dashboardProjects.quotePreview,
+      dashboardProjects.pendingDeliveryPreview,
+      dashboardProjects.leadPendingAssignments,
+      ...Object.values(dashboardProjects.recentActiveByDepartment || {}),
+    ].forEach((list) => {
+      if (Array.isArray(list)) list.forEach(addProject);
+    });
+    return Array.from(byId.values());
+  }, [dashboardProjects]);
 
   const openTimelineDrawer = useCallback(
     (eventItem) => {
@@ -491,86 +546,6 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     return () => window.removeEventListener("keydown", onEscape);
   }, [activeTimelineEvent, closeTimelineDrawer]);
 
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch("/api/projects/dashboard-summary", {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const nextSummary = {
-          ...EMPTY_DASHBOARD_SUMMARY,
-          ...(data || {}),
-          stats: {
-            ...EMPTY_DASHBOARD_SUMMARY.stats,
-            ...(data?.stats || {}),
-          },
-          projects: {
-            ...EMPTY_DASHBOARD_SUMMARY.projects,
-            ...(data?.projects || {}),
-          },
-          workload: {
-            ...EMPTY_DASHBOARD_SUMMARY.workload,
-            ...(data?.workload || {}),
-          },
-        };
-        setDashboardSummary(nextSummary);
-
-        const byId = new Map();
-        const addProject = (project) => {
-          const projectId = toEntityId(project?._id || project?.id);
-          if (projectId && !byId.has(projectId)) byId.set(projectId, project);
-        };
-        [
-          nextSummary.projects.recentActive,
-          nextSummary.projects.upcomingDeadlines,
-          nextSummary.projects.pendingAcceptancePreview,
-          nextSummary.projects.quotePreview,
-          nextSummary.projects.pendingDeliveryPreview,
-          nextSummary.projects.leadPendingAssignments,
-          ...Object.values(nextSummary.projects.recentActiveByDepartment || {}),
-        ].forEach((list) => {
-          if (Array.isArray(list)) list.forEach(addProject);
-        });
-        setProjectLookup(Array.from(byId.values()));
-      } else {
-        console.error("Failed to fetch dashboard summary");
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard summary:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchNextActions = async ({ silent = false } = {}) => {
-    if (!silent) setNextActionsLoading(true);
-    try {
-      const res = await fetch("/api/projects/next-actions?limit=8", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        setNextActions([]);
-        setNextActionsTotal(0);
-        return;
-      }
-      const payload = await res.json();
-      setNextActions(Array.isArray(payload?.actions) ? payload.actions : []);
-      setNextActionsTotal(Number(payload?.total) || 0);
-    } catch (error) {
-      console.error("Error fetching next actions:", error);
-      setNextActions([]);
-      setNextActionsTotal(0);
-    } finally {
-      if (!silent) setNextActionsLoading(false);
-    }
-  };
-
   const handleDetailsClick = (projectOrId) => {
     const projectValue =
       projectOrId && typeof projectOrId === "object"
@@ -634,7 +609,6 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
       if (res.ok) {
         setToast({ message: "Project marked as Finished.", type: "success" });
         closeTimelineDrawer();
-        fetchProjects();
         if (onProjectChange) onProjectChange();
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -846,7 +820,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
   }, [activeProjects, dashboardProjects.recentActiveByDepartment, selectedWorkloadDept]);
 
   const timelineEvents = useMemo(() => {
-    const now = Date.now();
+    const now = dashboardUpdatedAt;
     const windowEnd = now + TIMELINE_LOOKAHEAD_DAYS * DAY_IN_MS;
     const events = [];
 
@@ -885,7 +859,7 @@ const DashboardRedesign = ({ onCreateProject, user, onProjectChange }) => {
     return events
       .sort((left, right) => left.dueAt.getTime() - right.dueAt.getTime())
       .slice(0, 10);
-  }, [upcomingDeadlineProjects]);
+  }, [dashboardUpdatedAt, upcomingDeadlineProjects]);
 
   const activeTimelineProject = useMemo(() => {
     if (!activeTimelineEvent) return null;

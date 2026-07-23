@@ -15,6 +15,7 @@ import TeamDeck from "../features/wallboard/components/TeamDeck";
 import useRealtimeClient from "../hooks/useRealtimeClient";
 import useRealtimeRefresh from "../hooks/useRealtimeRefresh";
 import { waitForNextPaint } from "../utils/mutationFeedback";
+import { queryClient } from "../utils/queryClient";
 import {
   getOpsWallboardSession,
   getOpsWallboardOverview,
@@ -89,6 +90,7 @@ const App = () => {
     } catch {
       // Local logout still applies if API logout fails.
     } finally {
+      queryClient.clear();
       setUser(null);
       setOverview(null);
       setError("");
@@ -201,6 +203,7 @@ const App = () => {
         setLoginError("Only admin accounts can open this wallboard.");
         return;
       }
+      queryClient.clear();
       setUser(session);
     } catch (requestError) {
       setLoginError(requestError.message || "Invalid login credentials.");

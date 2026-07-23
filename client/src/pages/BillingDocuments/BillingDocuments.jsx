@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import TrashIcon from "../../components/icons/TrashIcon";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -1057,16 +1058,32 @@ const BillingWaybillPreview = ({ form }) => {
 
 const BillingDocuments = ({ user, requestSource = "" }) => {
   const portalSource = requestSource || resolvePortalSource();
-  const [documents, setDocuments] = useState([]);
+  const queryClient = useQueryClient();
+  const canAccess = userHasBillingAccess(user);
   const [form, setForm] = useState(() => createBlankForm());
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const defaultDocumentsQueryKey = [
+    "billing-documents",
+    portalSource,
+    "",
+    "all",
+    "all",
+  ];
+  const cachedDocuments = queryClient.getQueryData(
+    defaultDocumentsQueryKey,
+  );
+  const [documents, setDocuments] = useState(
+    () => cachedDocuments || [],
+  );
   const [documentListLimit, setDocumentListLimit] = useState(
     DOCUMENT_LIST_BATCH_SIZE,
   );
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(
+    canAccess && cachedDocuments === undefined,
+  );
   const [saving, setSaving] = useState(false);
   const [sourceLookupLoading, setSourceLookupLoading] = useState(false);
   const [receiptSaving, setReceiptSaving] = useState(false);
@@ -1079,7 +1096,6 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [activePreview, setActivePreview] = useState("invoice");
   const [confirmDialog, setConfirmDialog] = useState(EMPTY_CONFIRM_DIALOG);
-  const canAccess = userHasBillingAccess(user);
   const totals = useMemo(
     () => calculateTotals(form.lineItems, form.paymentEntries, form.taxEntries),
     [form.lineItems, form.paymentEntries, form.taxEntries],
@@ -1129,24 +1145,46 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
 
   const fetchDocuments = useCallback(async ({ silent = false } = {}) => {
     if (!canAccess) return;
-    if (!silent) {
+    const documentsQueryKey = [
+      "billing-documents",
+      portalSource,
+      search,
+      typeFilter,
+      statusFilter,
+    ];
+    const showLoading =
+      !silent && queryClient.getQueryData(documentsQueryKey) === undefined;
+    if (showLoading) {
       setLoading(true);
       setError("");
     }
     try {
-      const res = await fetch(
-        makeApiUrl("", {
-          search,
-          documentType: typeFilter,
-          status: statusFilter,
-        }),
-        { credentials: "include", cache: "no-store" },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to load billing documents.");
-      }
-      const nextDocuments = Array.isArray(data.documents) ? data.documents : [];
+      const nextDocuments = await queryClient.fetchQuery({
+        queryKey: documentsQueryKey,
+        queryFn: async () => {
+          const res = await fetch(
+            makeApiUrl("", {
+              search,
+              documentType: typeFilter,
+              status: statusFilter,
+            }),
+            { credentials: "include", cache: "no-store" },
+          );
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(
+              data.message || "Failed to load billing documents.",
+            );
+          }
+          return Array.isArray(data.documents) ? data.documents : [];
+        },
+        meta: {
+          realtimePaths: [
+            "/api/billing-documents",
+            "/api/billing-receipts",
+          ],
+        },
+      });
       setDocuments(nextDocuments);
 
       if (selectedId) {
@@ -1163,9 +1201,18 @@ const BillingDocuments = ({ user, requestSource = "" }) => {
         setDocuments([]);
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  }, [canAccess, makeApiUrl, search, selectedId, statusFilter, typeFilter]);
+  }, [
+    canAccess,
+    makeApiUrl,
+    portalSource,
+    queryClient,
+    search,
+    selectedId,
+    statusFilter,
+    typeFilter,
+  ]);
 
   const syncReceiptState = useCallback(
     (nextReceipts, invoiceId, { replacePayments = false, invoice = null } = {}) => {

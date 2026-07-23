@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import {
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import "./MyActivities.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import ArrowLeftIcon from "../../components/icons/ArrowLeftIcon";
@@ -13,7 +17,6 @@ import SearchIcon from "../../components/icons/SearchIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import { format, isToday, isYesterday } from "date-fns";
 import usePersistedState from "../../hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
 
 const ACTIVITY_FILTER_OPTIONS = [
@@ -28,11 +31,7 @@ const ACTIVITY_FILTER_OPTIONS = [
 ];
 
 const MyActivities = ({ onBack, user }) => {
-  const [activities, setActivities] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const queryClient = useQueryClient();
   const [isClearing, setIsClearing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedState(
@@ -55,59 +54,53 @@ const MyActivities = ({ onBack, user }) => {
     },
   );
   const userId = String(user?._id || user?.id || "").trim();
-
-  const fetchActivities = async (pageNum) => {
-    try {
+  const activitiesQueryKey = ["projects", "activities", "me", userId];
+  const {
+    data: activityPages,
+    fetchNextPage,
+    hasNextPage: hasMore,
+    isFetchingNextPage: isLoadingMore,
+    isPending: isLoading,
+  } = useInfiniteQuery({
+    queryKey: activitiesQueryKey,
+    queryFn: async ({ pageParam }) => {
       const res = await fetch(
-        `/api/projects/activities/me?page=${pageNum}&limit=20`,
+        `/api/projects/activities/me?page=${pageParam}&limit=20`,
         {
           headers: {
             "Content-Type": "application/json",
           },
-        }
+        },
       );
-      if (res.ok) {
-        const data = await res.json();
-        if (pageNum === 1) {
-          setActivities(data.activities);
-        } else {
-          setActivities((prev) => [...prev, ...data.activities]);
-        }
-        // If we received fewer items than limit, we've reached the end
-        if (data.activities.length < 20) {
-          setHasMore(false);
-        } else {
-          setHasMore(true);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching activities:", error);
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchActivities(1);
-  }, []);
-
-  useRealtimeRefresh(() => {
-    setPage(1);
-    setHasMore(true);
-    fetchActivities(1);
-  }, {
+      if (!res.ok) throw new Error("Failed to load activities.");
+      const payload = await res.json();
+      return {
+        ...payload,
+        activities: Array.isArray(payload?.activities)
+          ? payload.activities
+          : [],
+      };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.activities.length === 20 ? pages.length + 1 : undefined,
     enabled: Boolean(userId),
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/ai"],
-    shouldRefresh: (detail) => detail.actorId === userId,
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+      realtimeShouldRefresh: (detail) =>
+        !detail?.actorId || String(detail.actorId) === userId,
+    },
   });
+  const activities = useMemo(
+    () =>
+      (activityPages?.pages || []).flatMap((pageData) =>
+        Array.isArray(pageData?.activities) ? pageData.activities : [],
+      ),
+    [activityPages],
+  );
 
   const handleLoadMore = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    setIsLoadingMore(true);
-    fetchActivities(nextPage);
+    void fetchNextPage();
   };
 
   const handleClearHistory = () => {
@@ -122,10 +115,11 @@ const MyActivities = ({ onBack, user }) => {
         method: "DELETE",
       });
       if (res.ok) {
-        // Refresh list
-        setPage(1);
-        setHasMore(true);
-        fetchActivities(1);
+        await queryClient.cancelQueries({ queryKey: activitiesQueryKey });
+        queryClient.setQueryData(activitiesQueryKey, {
+          pages: [{ activities: [] }],
+          pageParams: [1],
+        });
       } else {
         alert("Failed to clear history.");
       }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   PRODUCTION_SUB_DEPARTMENTS,
@@ -13,7 +14,6 @@ import Toast from "../../components/ui/Toast";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import usePersistedState from "../../hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import useAuthorizedProjectNavigation from "../../hooks/useAuthorizedProjectNavigation.jsx";
 import {
   getFullName,
@@ -322,9 +322,6 @@ const EngagedProjects = ({ user }) => {
         ENGAGED_TAB_OPTIONS.includes(value) ? value : "active",
     },
   );
-  const [projects, setProjects] = useState([]);
-  const [historyProjects, setHistoryProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
   // Filter State
@@ -519,85 +516,69 @@ const EngagedProjects = ({ user }) => {
     setDepartmentFilter("All");
   }, [departmentFilter, setDepartmentFilter, userEngagedDepts]);
 
-  useEffect(() => {
-    fetchEngagedProjects();
-  }, [engagedSubDepts]);
-
-  useRealtimeRefresh(() => fetchEngagedProjects(), {
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-    shouldRefresh: (detail) => {
-      if (detail.path.startsWith("/api/updates")) {
-        return Boolean(
-          selectedProject?._id &&
-            detail.projectId &&
-            detail.projectId === selectedProject._id,
-        );
-      }
-
-      return true;
+  const { data: engagedProjectData = [], isPending: loading } = useQuery({
+    queryKey: ["projects", "engaged"],
+    queryFn: async () => {
+      const response = await fetch("/api/projects?mode=engaged", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to load engaged projects.");
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
     },
   });
 
-  const fetchEngagedProjects = async () => {
-    try {
-      // Use mode=engaged to bypass lead filtering and get all projects
-      const res = await fetch("/api/projects?mode=engaged");
-      if (res.ok) {
-        const data = await res.json();
-        // Filter projects that have at least one production sub-department engaged
-        const engaged = data.filter((project) => {
-          const hasDeptMatch =
-            Array.isArray(project?.departments) &&
-            project.departments.some((dept) =>
-              engagedSubDepts.includes(normalizeDepartmentId(dept)),
-            );
-          if (hasDeptMatch) return true;
-          if (
-            userEngagedDepts.includes("Graphics") &&
-            ["All", "Graphics"].includes(departmentFilter) &&
-            isQuoteGraphicsMockupWorkOpen(project)
-          ) {
-            return true;
-          }
-          if (
-            !hasPackagingRole ||
-            !["All", "Stores"].includes(departmentFilter)
-          )
-            return false;
-          const batches = Array.isArray(project?.batches) ? project.batches : [];
-          return batches.some((batch) =>
-            ["produced", "in_packaging"].includes(
-              normalizeBatchStatus(batch?.status),
-            ),
-          );
-        });
-        const completedStatuses = new Set(["Completed", "Finished"]);
-        const postDeliveryStatuses = new Set([
-          "Delivered",
-          "Pending Feedback",
-          "Feedback Completed",
-        ]);
-        // Active engaged (exclude completed/finished/post-delivery)
-        const activeEngaged = engaged.filter(
-          (p) =>
-            !completedStatuses.has(p.status) &&
-            !postDeliveryStatuses.has(p.status),
+  const { projects, historyProjects } = useMemo(() => {
+    const engaged = engagedProjectData.filter((project) => {
+      const hasDeptMatch =
+        Array.isArray(project?.departments) &&
+        project.departments.some((dept) =>
+          engagedSubDepts.includes(normalizeDepartmentId(dept)),
         );
-        // History engaged (completed/finished only)
-        const historyEngaged = engaged.filter((p) =>
-          completedStatuses.has(p.status),
-        );
-        setProjects(activeEngaged);
-        setHistoryProjects(historyEngaged);
+      if (hasDeptMatch) return true;
+      if (
+        userEngagedDepts.includes("Graphics") &&
+        ["All", "Graphics"].includes(departmentFilter) &&
+        isQuoteGraphicsMockupWorkOpen(project)
+      ) {
+        return true;
       }
-    } catch (err) {
-      console.error("Error fetching engaged projects:", err);
-      setToast({ type: "error", message: "Failed to load projects." });
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (!hasPackagingRole || !["All", "Stores"].includes(departmentFilter)) {
+        return false;
+      }
+      const batches = Array.isArray(project?.batches) ? project.batches : [];
+      return batches.some((batch) =>
+        ["produced", "in_packaging"].includes(
+          normalizeBatchStatus(batch?.status),
+        ),
+      );
+    });
+    const completedStatuses = new Set(["Completed", "Finished"]);
+    const postDeliveryStatuses = new Set([
+      "Delivered",
+      "Pending Feedback",
+      "Feedback Completed",
+    ]);
+    return {
+      projects: engaged.filter(
+        (project) =>
+          !completedStatuses.has(project.status) &&
+          !postDeliveryStatuses.has(project.status),
+      ),
+      historyProjects: engaged.filter((project) =>
+        completedStatuses.has(project.status),
+      ),
+    };
+  }, [
+    departmentFilter,
+    engagedProjectData,
+    engagedSubDepts,
+    hasPackagingRole,
+    userEngagedDepts,
+  ]);
 
   // Filter logic
   useEffect(() => {
@@ -1065,7 +1046,6 @@ const EngagedProjects = ({ user }) => {
           type: "success",
           message: `${action.label} recorded.`,
         });
-        fetchEngagedProjects();
         return true;
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -1111,7 +1091,6 @@ const EngagedProjects = ({ user }) => {
 
       if (res.ok) {
         setToast({ type: "success", message: "Update posted successfully!" });
-        await fetchEngagedProjects();
         setShowUpdateModal(false);
         setSelectedProject(null);
         setUpdateForm({ content: "", category: "Production", department: "" });
@@ -1143,7 +1122,6 @@ const EngagedProjects = ({ user }) => {
           type: "success",
           message: `${getDepartmentLabel(department)} acknowledged!`,
         });
-        fetchEngagedProjects(); // Refresh the list
         return true;
       } else {
         const errorData = await res.json();
@@ -1252,7 +1230,6 @@ const EngagedProjects = ({ user }) => {
               : "Mockup uploaded. Please confirm completion.",
         });
         closeMockupModal();
-        fetchEngagedProjects();
         openCompleteModal(updatedProject || target.project, target.action);
       } else {
         const errorData = await res.json().catch(() => ({}));

@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import usePersistedState from "@client/hooks/usePersistedState";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ProjectReactivateModal from "../../components/ProjectReactivateModal/ProjectReactivateModal";
 import "./CancelledOrders.css";
 import { renderProjectName } from "../../utils/projectName";
@@ -24,20 +24,13 @@ const formatDateTime = (value) => {
 
 const CancelledOrders = () => {
   const navigate = useNavigate();
-  const [orderGroups, setOrderGroups] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = usePersistedState(
-    "admin-cancelled-orders-search",
-    "",
-  );
-  const [reactivatingId, setReactivatingId] = useState("");
-  const [reactivateModalProject, setReactivateModalProject] = useState(null);
-  const [reactivateError, setReactivateError] = useState("");
-
-  const fetchCancelledOrders = async () => {
-    try {
-      setError("");
+  const {
+    data: orderGroups = [],
+    error: cancelledOrdersError,
+    isPending: loading,
+  } = useQuery({
+    queryKey: ["projects", "orders", "admin", "cancelled"],
+    queryFn: async () => {
       const res = await fetch(
         "/api/projects/orders?source=admin&collapseRevisions=true&cancelled=true",
         {
@@ -51,24 +44,20 @@ const CancelledOrders = () => {
       }
 
       const data = await res.json();
-      setOrderGroups(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Cancelled orders fetch error:", err);
-      setError(err.message || "Failed to load cancelled orders.");
-      setOrderGroups([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCancelledOrders();
-  }, []);
-
-  useRealtimeRefresh(() => fetchCancelledOrders(), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
+      return Array.isArray(data) ? data : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
   });
+  const error = cancelledOrdersError?.message || "";
+  const [searchQuery, setSearchQuery] = usePersistedState(
+    "admin-cancelled-orders-search",
+    "",
+  );
+  const [reactivatingId, setReactivatingId] = useState("");
+  const [reactivateModalProject, setReactivateModalProject] = useState(null);
+  const [reactivateError, setReactivateError] = useState("");
 
   const filteredGroups = useMemo(() => {
     const token = searchQuery.trim().toLowerCase();
@@ -138,7 +127,6 @@ const CancelledOrders = () => {
 
       setReactivateModalProject(null);
       setReactivateError("");
-      await fetchCancelledOrders();
     } catch (err) {
       console.error("Project reactivation error:", err);
       setReactivateError(err.message || "Failed to reactivate project.");

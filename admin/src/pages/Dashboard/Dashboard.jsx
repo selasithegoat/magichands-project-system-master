@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./Dashboard.css";
 import {
   ProjectsIcon,
@@ -7,7 +8,6 @@ import {
   ReportsIcon,
 } from "../../icons/Icons";
 import { useNavigate } from "react-router-dom";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
 import {
@@ -326,73 +326,50 @@ const ProjectStatusOverview = ({ overview }) => {
 
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
-  const [dashboardSummary, setDashboardSummary] = useState(
-    EMPTY_ADMIN_DASHBOARD_SUMMARY,
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    active: 0,
-    pending: 0,
-    completed: 0,
-    overdue: 0,
-    emergencies: 0,
-    pendingDelivery: 0,
-    quotes: 0,
-    corporate: 0,
-  });
-
-  useEffect(() => {
-    fetchGlobalProjects();
-  }, []);
-
-  useRealtimeRefresh(() => fetchGlobalProjects(), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
-
-  const fetchGlobalProjects = async () => {
-    try {
-      const res = await fetch("/api/projects/dashboard-summary?source=admin", {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const nextSummary = {
+  const { data: dashboardSummary = EMPTY_ADMIN_DASHBOARD_SUMMARY, isPending: isLoading } =
+    useQuery({
+      queryKey: ["projects", "dashboard-summary", "admin"],
+      queryFn: async () => {
+        const response = await fetch(
+          "/api/projects/dashboard-summary?source=admin",
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            cache: "no-store",
+          },
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch admin dashboard summary.");
+        }
+        const payload = await response.json();
+        return {
           ...EMPTY_ADMIN_DASHBOARD_SUMMARY,
-          ...(data || {}),
+          ...(payload || {}),
           stats: {
             ...EMPTY_ADMIN_DASHBOARD_SUMMARY.stats,
-            ...(data?.stats || {}),
+            ...(payload?.stats || {}),
           },
           projects: {
             ...EMPTY_ADMIN_DASHBOARD_SUMMARY.projects,
-            ...(data?.projects || {}),
+            ...(payload?.projects || {}),
           },
           workload: {
             ...EMPTY_ADMIN_DASHBOARD_SUMMARY.workload,
-            ...(data?.workload || {}),
+            ...(payload?.workload || {}),
           },
           statusOverview: {
             ...EMPTY_ADMIN_DASHBOARD_SUMMARY.statusOverview,
-            ...(data?.statusOverview || {}),
+            ...(payload?.statusOverview || {}),
           },
         };
-        setDashboardSummary(nextSummary);
-        setStats(nextSummary.stats);
-      } else {
-        console.error("Failed to fetch admin dashboard summary");
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard summary:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      },
+      meta: {
+        realtimePaths: ["/api/projects"],
+      },
+    });
+  const stats = dashboardSummary.stats || EMPTY_ADMIN_DASHBOARD_SUMMARY.stats;
 
   const getStatusPillClass = (status) => {
     if (["Completed", "Finished", "Declined"].includes(status)) return "completed";

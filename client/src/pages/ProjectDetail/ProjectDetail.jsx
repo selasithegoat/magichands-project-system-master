@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import {
   Link,
@@ -797,15 +798,39 @@ const ProjectDetail = ({ user }) => {
   const referenceFromParam = searchParams.get("referenceFrom") || "";
   const [activeTab, setActiveTab] = useState(tabParam || "Overview");
   const requestSource = resolvePortalSource();
-  const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const projectCacheKey = [
+    "project",
+    "detail",
+    requestSource,
+    id,
+    referenceFromParam,
+  ];
+  const cachedProject = queryClient.getQueryData(projectCacheKey) || null;
+  const cachedOrderNumber = String(
+    cachedProject?.orderId || cachedProject?.orderRef?.orderNumber || "",
+  ).trim();
+  const cachedGroupProjects = cachedOrderNumber
+    ? queryClient.getQueryData(["projects", "order-group", cachedOrderNumber])
+    : null;
+  const cachedMeeting = cachedOrderNumber
+    ? queryClient.getQueryData(["meeting", "order", cachedOrderNumber])
+    : null;
+  const [project, setProject] = useState(cachedProject);
+  const [loading, setLoading] = useState(!cachedProject);
   const [error, setError] = useState(null);
   const [isAccessRedirecting, setIsAccessRedirecting] = useState(false);
-  const [orderGroupProjects, setOrderGroupProjects] = useState([]);
-  const [orderMeeting, setOrderMeeting] = useState(null);
+  const [orderGroupProjects, setOrderGroupProjects] = useState(
+    cachedGroupProjects || (cachedProject ? [cachedProject] : []),
+  );
+  const [orderMeeting, setOrderMeeting] = useState(
+    cachedMeeting?.meeting || null,
+  );
   const [meetingLoading, setMeetingLoading] = useState(false);
   const [meetingError, setMeetingError] = useState("");
-  const [updatesCount, setUpdatesCount] = useState(0); // [New] Updates count for tab badge
+  const [updatesCount, setUpdatesCount] = useState(
+    () => queryClient.getQueryData(["project", id, "updates-count"]) || 0,
+  ); // [New] Updates count for tab badge
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
   const isProjectLead = Boolean(
@@ -840,19 +865,31 @@ const ProjectDetail = ({ user }) => {
     }
 
     try {
-      const res = await fetch(
-        `/api/projects/orders/${encodeURIComponent(normalizedOrder)}?collapseRevisions=true`,
-        {
-          credentials: "include",
+      const projects = await queryClient.fetchQuery({
+        queryKey: ["projects", "order-group", normalizedOrder],
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/projects/orders/${encodeURIComponent(normalizedOrder)}?collapseRevisions=true`,
+            {
+              credentials: "include",
+            },
+          );
+          if (!res.ok) {
+            throw new Error("Failed to fetch grouped order projects");
+          }
+          const group = await res.json();
+          const payload = Array.isArray(group?.projects) ? group.projects : [];
+          return payload.length > 0
+            ? payload
+            : fallbackProject
+              ? [fallbackProject]
+              : [];
         },
-      );
-      if (!res.ok) throw new Error("Failed to fetch grouped order projects");
-
-      const group = await res.json();
-      const projects = Array.isArray(group?.projects) ? group.projects : [];
-      setOrderGroupProjects(
-        projects.length > 0 ? projects : fallbackProject ? [fallbackProject] : [],
-      );
+        meta: {
+          realtimePaths: ["/api/projects"],
+        },
+      });
+      setOrderGroupProjects(projects);
     } catch (groupError) {
       console.error("Failed to load grouped order projects", groupError);
       if (!silent) {
@@ -872,36 +909,47 @@ const ProjectDetail = ({ user }) => {
       return;
     }
 
-    if (!silent) {
+    const meetingCacheKey = ["meeting", "order", normalizedOrder];
+    const showLoading =
+      !silent && !queryClient.getQueryData(meetingCacheKey);
+    if (showLoading) {
       setMeetingLoading(true);
       setMeetingError("");
     }
     try {
-      const res = await fetch(
-        `/api/meetings/order/${encodeURIComponent(normalizedOrder)}`,
-      );
-      if (!res.ok) {
-        if (res.status === 404) {
-          setOrderMeeting(null);
-          return;
-        }
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to fetch meeting.");
-      }
-      const data = await res.json();
+      const data = await queryClient.fetchQuery({
+        queryKey: meetingCacheKey,
+        staleTime: 5 * 60_000,
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/meetings/order/${encodeURIComponent(normalizedOrder)}`,
+          );
+          if (!res.ok) {
+            if (res.status === 404) return { meeting: null };
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to fetch meeting.");
+          }
+          return res.json();
+        },
+      });
       setOrderMeeting(data?.meeting || null);
     } catch (meetingFetchError) {
       console.error("Failed to load meeting:", meetingFetchError);
-      if (!silent) {
+      if (showLoading) {
         setMeetingError(meetingFetchError.message || "Failed to fetch meeting.");
         setOrderMeeting(null);
       }
     } finally {
-      if (!silent) setMeetingLoading(false);
+      if (showLoading) setMeetingLoading(false);
     }
   };
 
   const fetchProject = async ({ silent = false } = {}) => {
+    const showLoading = !silent && !project;
+    if (showLoading) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       setIsAccessRedirecting(false);
       const projectParams = new URLSearchParams();
@@ -912,28 +960,23 @@ const ProjectDetail = ({ user }) => {
         ? `/api/projects/${id}?${projectParams.toString()}`
         : `/api/projects/${id}`;
       const projectUrl = appendPortalSource(projectBaseUrl, requestSource);
-      const res = await fetch(projectUrl);
-      if (!res.ok) {
-        if (res.status === 403) {
-          setProject(null);
-          setError(null);
-          setIsAccessRedirecting(true);
-          navigateToProject(
-            { _id: id },
-            {
-              fallbackPath: "/client",
-              allowGenericEngaged: true,
-              replace: true,
-              title: "Choose Authorized Page",
-              message:
-                "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
-            },
-          );
-          return;
-        }
-        throw new Error("Failed to fetch project");
-      }
-      const data = await res.json();
+      const data = await queryClient.fetchQuery({
+        queryKey: projectCacheKey,
+        retry: false,
+        queryFn: async () => {
+          const res = await fetch(projectUrl);
+          if (!res.ok) {
+            const fetchError = new Error("Failed to fetch project");
+            fetchError.status = res.status;
+            throw fetchError;
+          }
+          return res.json();
+        },
+        meta: {
+          realtimePaths: ["/api/projects", "/api/updates"],
+          projectId: id,
+        },
+      });
       setProject(data);
       await fetchOrderGroupProjects(data?.orderId, data, { silent });
       await fetchOrderMeeting(
@@ -942,19 +985,45 @@ const ProjectDetail = ({ user }) => {
       );
     } catch (err) {
       console.error(err);
-      if (!silent) setError("Could not load project details");
+      if (err?.status === 403) {
+        setProject(null);
+        setError(null);
+        setIsAccessRedirecting(true);
+        navigateToProject(
+          { _id: id },
+          {
+            fallbackPath: "/client",
+            allowGenericEngaged: true,
+            replace: true,
+            title: "Choose Authorized Page",
+            message:
+              "Project Details is only available to the assigned lead for this project. Choose an authorized page instead.",
+          },
+        );
+        return;
+      }
+      if (showLoading) setError("Could not load project details");
     } finally {
-      if (!silent) setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   const fetchUpdatesCount = async () => {
     try {
-      const res = await fetch(`/api/updates/project/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setUpdatesCount(data.length);
-      }
+      const count = await queryClient.fetchQuery({
+        queryKey: ["project", id, "updates-count"],
+        queryFn: async () => {
+          const res = await fetch(`/api/updates/project/${id}`);
+          if (!res.ok) throw new Error("Failed to fetch updates count.");
+          const data = await res.json();
+          return Array.isArray(data) ? data.length : 0;
+        },
+        meta: {
+          realtimePaths: ["/api/updates"],
+          projectId: id,
+        },
+      });
+      setUpdatesCount(count);
     } catch (err) {
       console.error("Error fetching updates count:", err);
     }

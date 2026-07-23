@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import "./NewOrders.css";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
@@ -96,13 +96,9 @@ const OrdersList = ({ kpiFilter = "all" }) => {
         ORDER_LIST_TAB_OPTIONS.includes(value) ? value : "all",
     },
   );
-  const [allOrders, setAllOrders] = useState([]);
-  const [groupedOrders, setGroupedOrders] = useState([]);
   const [expandedOrderGroups, setExpandedOrderGroups] = useState({});
   const [collapsingOrderGroups, setCollapsingOrderGroups] = useState({});
   const collapseTimersRef = useRef({});
-  const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
   const [allFilters, setAllFilters] = usePersistedState(
     "portal-orders-list-all-filters",
     DEFAULT_ALL_FILTERS,
@@ -156,9 +152,50 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     type: "success",
   });
   const portalSource = useMemo(() => resolvePortalSource(), []);
+  const queryClient = useQueryClient();
   const withPortalSource = (url) => appendPortalSource(url, portalSource);
   const fetchWithPortal = (url, options) =>
     fetch(withPortalSource(url), options);
+  const reportProjectsKey = ["projects", "report", portalSource];
+  const groupedOrdersKey = ["projects", "orders", "report", portalSource];
+  const { data: allOrders = [], isPending: projectsPending } = useQuery({
+    queryKey: reportProjectsKey,
+    queryFn: async () => {
+      const response = await fetchWithPortal("/api/projects?mode=report");
+      if (!response.ok) throw new Error("Failed to load orders.");
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
+  const { data: groupedOrders = [], isPending: groupsPending } = useQuery({
+    queryKey: groupedOrdersKey,
+    queryFn: async () => {
+      const response = await fetchWithPortal(
+        "/api/projects/orders?mode=report&collapseRevisions=true",
+      );
+      if (!response.ok) throw new Error("Failed to load grouped orders.");
+      const payload = await response.json();
+      return Array.isArray(payload) ? payload : [];
+    },
+    meta: {
+      realtimePaths: ["/api/projects"],
+    },
+  });
+  const { data: currentUser = null } = useQuery({
+    queryKey: ["auth", "me", portalSource],
+    queryFn: async () => {
+      const response = await fetchWithPortal("/api/auth/me", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to load current user.");
+      return response.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+  const loading = projectsPending || groupsPending;
   const toastTimeoutRef = useRef(null);
 
   const [feedbackModal, setFeedbackModal] = useState({
@@ -209,11 +246,6 @@ const OrdersList = ({ kpiFilter = "all" }) => {
   );
 
   useEffect(() => {
-    fetchOrders();
-    fetchCurrentUser();
-  }, []);
-
-  useEffect(() => {
     if (feedbackModal.open && feedbackModal.project) {
       const updated = allOrders.find(
         (order) => order._id === feedbackModal.project._id,
@@ -254,55 +286,15 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     [],
   );
 
-  useRealtimeRefresh(() => fetchOrders({ silent: true }), {
-    paths: ["/api/projects"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-  });
-
-  const fetchCurrentUser = async () => {
-    try {
-      const res = await fetchWithPortal("/api/auth/me", {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentUser(data);
-      }
-    } catch (err) {
-      console.error("Error fetching current user:", err);
-    }
-  };
-
-  const fetchOrders = async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const [projectsRes, groupedRes] = await Promise.all([
-        fetchWithPortal("/api/projects?mode=report"),
-        fetchWithPortal("/api/projects/orders?mode=report&collapseRevisions=true"),
-      ]);
-
-      if (projectsRes.ok) {
-        const data = await projectsRes.json();
-        setAllOrders(Array.isArray(data) ? data : []);
-      } else if (!silent) {
-        setAllOrders([]);
-      }
-
-      if (groupedRes.ok) {
-        const data = await groupedRes.json();
-        setGroupedOrders(Array.isArray(data) ? data : []);
-      } else if (!silent) {
-        setGroupedOrders([]);
-      }
-    } catch (err) {
-      console.error("Error fetching orders:", err);
-      if (!silent) {
-        setAllOrders([]);
-        setGroupedOrders([]);
-      }
-    } finally {
-      if (!silent) setLoading(false);
-    }
+  const updateCachedProject = (updatedProject) => {
+    queryClient.setQueryData(reportProjectsKey, (previous = []) =>
+      previous.map((project) =>
+        project._id === updatedProject._id ? updatedProject : project,
+      ),
+    );
+    queryClient.setQueryData(groupedOrdersKey, (previous = []) =>
+      updateProjectInGroups(previous, updatedProject),
+    );
   };
 
   const handleReopenProject = async (projectId) => {
@@ -816,7 +808,6 @@ const OrdersList = ({ kpiFilter = "all" }) => {
       });
       if (res.ok) {
         showToast("Order delivered. Feedback is now pending.", "success");
-        fetchOrders();
         return true;
       } else {
         const errorData = await res.json();
@@ -918,10 +909,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
 
       if (res.ok) {
         const updatedProject = await res.json();
-        setAllOrders((prev) =>
-          prev.map((p) => (p._id === updatedProject._id ? updatedProject : p)),
-        );
-        setGroupedOrders((prev) => updateProjectInGroups(prev, updatedProject));
+        updateCachedProject(updatedProject);
         setFeedbackModal({ open: true, project: updatedProject });
         setFeedbackNotes("");
         setFeedbackFiles([]);
@@ -953,10 +941,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
 
       if (res.ok) {
         const updatedProject = await res.json();
-        setAllOrders((prev) =>
-          prev.map((p) => (p._id === updatedProject._id ? updatedProject : p)),
-        );
-        setGroupedOrders((prev) => updateProjectInGroups(prev, updatedProject));
+        updateCachedProject(updatedProject);
         setFeedbackModal({ open: true, project: updatedProject });
         showToast("Feedback deleted.", "success");
       } else {

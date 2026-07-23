@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import Spinner from "../../components/ui/Spinner";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
@@ -14,6 +15,8 @@ const toEditableText = (value) =>
   value === null || value === undefined ? "" : String(value);
 const cloneBoard = (value) =>
   value ? JSON.parse(JSON.stringify(value)) : value;
+const BOARD_QUERY_KEY = ["projects", "department-updates"];
+const EMPLOYEES_QUERY_KEY = ["auth", "users", "client"];
 
 const getUserDisplayName = (user) => {
   const firstName = toText(user?.firstName);
@@ -76,29 +79,45 @@ const buildComparableBoard = (board) => ({
 
 const DepartmentUpdates = ({ user }) => {
   const navigate = useNavigate();
-  const [board, setBoard] = useState(null);
-  const [draftBoard, setDraftBoard] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const cachedBoard = queryClient.getQueryData(BOARD_QUERY_KEY) || null;
+  const [board, setBoard] = useState(cachedBoard);
+  const [draftBoard, setDraftBoard] = useState(() => cloneBoard(cachedBoard));
+  const [loading, setLoading] = useState(!cachedBoard);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
-  const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] = useState(
+    () => queryClient.getQueryData(EMPLOYEES_QUERY_KEY) || [],
+  );
 
   const isFrontDesk = Array.isArray(user?.department)
     ? user.department.includes("Front Desk")
     : user?.department === "Front Desk";
 
   const fetchBoard = useCallback(async () => {
+    const showLoading = !queryClient.getQueryData(BOARD_QUERY_KEY);
     try {
       setError("");
-      const response = await fetch("/api/projects/department-updates", {
-        credentials: "include",
-        cache: "no-store",
+      const payload = await queryClient.fetchQuery({
+        queryKey: BOARD_QUERY_KEY,
+        queryFn: async () => {
+          const response = await fetch("/api/projects/department-updates", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(
+              data?.message || "Failed to load Department Updates.",
+            );
+          }
+          return data;
+        },
+        meta: {
+          realtimePaths: ["/api/projects/department-updates"],
+        },
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || "Failed to load Department Updates.");
-      }
       setBoard(payload);
       setDraftBoard((currentDraft) =>
         isEditing ? currentDraft : cloneBoard(payload),
@@ -107,25 +126,34 @@ const DepartmentUpdates = ({ user }) => {
       console.error("Failed to load Department Updates board:", fetchError);
       setError(fetchError.message || "Failed to load Department Updates.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  }, [isEditing]);
+  }, [isEditing, queryClient]);
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const response = await fetch("/api/auth/users", {
-        credentials: "include",
-        cache: "no-store",
+      const payload = await queryClient.fetchQuery({
+        queryKey: EMPLOYEES_QUERY_KEY,
+        staleTime: 5 * 60_000,
+        queryFn: async () => {
+          const response = await fetch("/api/auth/users", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const data = await response.json().catch(() => []);
+          if (!response.ok) {
+            throw new Error(
+              data?.message || "Failed to load employee directory.",
+            );
+          }
+          return Array.isArray(data) ? data : [];
+        },
       });
-      const payload = await response.json().catch(() => []);
-      if (!response.ok) {
-        throw new Error(payload?.message || "Failed to load employee directory.");
-      }
-      setEmployees(Array.isArray(payload) ? payload : []);
+      setEmployees(payload);
     } catch (fetchError) {
       console.error("Failed to load employee directory:", fetchError);
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     if (user && !isFrontDesk) {
@@ -375,6 +403,7 @@ const DepartmentUpdates = ({ user }) => {
       }
       setBoard(payload);
       setDraftBoard(cloneBoard(payload));
+      queryClient.setQueryData(BOARD_QUERY_KEY, payload);
       setIsEditing(false);
     } catch (saveError) {
       console.error("Failed to save Department Updates:", saveError);

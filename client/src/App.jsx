@@ -10,6 +10,7 @@ import useRealtimeClient from "./hooks/useRealtimeClient";
 import useTheme from "./hooks/useTheme";
 import { clearPersistedFilterState } from "./utils/filterPersistence";
 import { buildPortalUrl } from "./utils/portalNavigation";
+import { queryClient } from "./utils/queryClient";
 import {
   fetchSystemVersionInfo,
   formatVersionDisplay,
@@ -240,7 +241,14 @@ function App() {
   }, [accountKey, syncThemePreference, theme, toggleTheme]);
 
   // Initialize auto-logout (5 minutes)
-  useInactivityLogout(5 * 60 * 1000, () => setUser(null), Boolean(user?._id));
+  useInactivityLogout(
+    5 * 60 * 1000,
+    () => {
+      queryClient.clear();
+      setUser(null);
+    },
+    Boolean(user?._id),
+  );
   useRealtimeClient(Boolean(user));
 
   React.useEffect(() => {
@@ -358,6 +366,7 @@ function App() {
   }, [showPostLoginSplash]);
 
   const performLogout = async () => {
+    queryClient.clear();
     setUser(null);
     clearPersistedFilterState();
     try {
@@ -435,6 +444,7 @@ function App() {
           element={
             <Login
               onLogin={() => {
+                queryClient.clear();
                 clearPersistedFilterState();
                 fetchUser({ showSplash: true });
               }}

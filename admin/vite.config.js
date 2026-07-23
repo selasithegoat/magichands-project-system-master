@@ -22,6 +22,10 @@ export default defineConfig(({ command }) => ({
         "node_modules/emoji-picker-react",
       ),
       "@twemoji/api": resolve(adminRoot, "node_modules/@twemoji/api"),
+      "@tanstack/react-query": resolve(
+        adminRoot,
+        "node_modules/@tanstack/react-query",
+      ),
     },
     dedupe: [
       "react",
@@ -29,6 +33,7 @@ export default defineConfig(({ command }) => ({
       "react-router-dom",
       "emoji-picker-react",
       "@twemoji/api",
+      "@tanstack/react-query",
     ],
   },
   server: {

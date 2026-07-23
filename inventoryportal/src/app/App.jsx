@@ -36,6 +36,7 @@ import { quickActions } from "../data/quickActions";
 import useNotifications from "../hooks/useNotifications";
 import useRealtimeClient from "../hooks/useRealtimeClient";
 import useInactivityLogout from "../hooks/useInactivityLogout";
+import { queryClient } from "../utils/queryClient";
 
 const APP_NAME = "MagicHands Inventory";
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -115,6 +116,9 @@ const App = () => {
     if (typeof window === "undefined") return "dashboard";
     return window.localStorage.getItem(PAGE_STORAGE_KEY) || "dashboard";
   });
+  const [visitedPages, setVisitedPages] = useState(
+    () => new Set([activePage]),
+  );
   const [theme, setTheme] = useState(() => getPreferredTheme());
   const [tableDensity, setTableDensity] = useState(() => getPreferredDensity());
 
@@ -177,6 +181,12 @@ const App = () => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(PAGE_STORAGE_KEY, activePage);
     }
+    setVisitedPages((currentPages) => {
+      if (currentPages.has(activePage)) return currentPages;
+      const nextPages = new Set(currentPages);
+      nextPages.add(activePage);
+      return nextPages;
+    });
   }, [activePage]);
 
   useEffect(() => {
@@ -282,6 +292,9 @@ const App = () => {
       clearSessionTimeoutNotice();
       setSessionNotice("");
     }
+    queryClient.clear();
+    setActivePage("dashboard");
+    setVisitedPages(new Set(["dashboard"]));
     setUser(null);
     try {
       await fetch("/api/auth/logout", {
@@ -410,6 +423,7 @@ const App = () => {
         return;
       }
 
+      queryClient.clear();
       setUser(data);
       setSessionNotice("");
     } catch (error) {
@@ -434,8 +448,8 @@ const App = () => {
     );
   }
 
-  const renderActivePage = () => {
-    switch (activePage) {
+  const renderPage = (page) => {
+    switch (page) {
       case "dashboard":
         return <Dashboard />;
       case "stock-transactions":
@@ -498,7 +512,20 @@ const App = () => {
         theme={theme}
         onToggleTheme={toggleTheme}
       >
-        {renderActivePage()}
+        {Array.from(visitedPages).map((page) => {
+          const isActive = page === activePage;
+          return (
+            <div
+              key={page}
+              hidden={!isActive}
+              aria-hidden={!isActive}
+              data-inventory-page={page}
+              style={isActive ? { display: "contents" } : undefined}
+            >
+              {renderPage(page)}
+            </div>
+          );
+        })}
       </InventoryLayout>
       <QuickActionModal
         isOpen={quickActionOpen}

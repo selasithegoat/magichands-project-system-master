@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 import { renderProjectName } from "../../utils/projectName";
@@ -613,10 +614,19 @@ const getSampleApprovalStatus = (sampleApproval = {}) => {
 const OrderActions = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const portalSource = useMemo(() => resolvePortalSource(), []);
+  const updatesCacheKey = ["project", id, "updates", portalSource];
+  const cachedProject =
+    (
+      queryClient.getQueryData(["projects", "report", portalSource]) || []
+    ).find((item) => item?._id === id) || null;
+  const [project, setProject] = useState(cachedProject);
+  const [loading, setLoading] = useState(!cachedProject);
   const [error, setError] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(
+    () => queryClient.getQueryData(["auth", "me", portalSource]) || null,
+  );
 
   const [toast, setToast] = useState({
     show: false,
@@ -632,7 +642,9 @@ const OrderActions = () => {
   const [feedbackNotes, setFeedbackNotes] = useState("");
   const [feedbackFiles, setFeedbackFiles] = useState([]);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
-  const [projectUpdates, setProjectUpdates] = useState([]);
+  const [projectUpdates, setProjectUpdates] = useState(
+    () => queryClient.getQueryData(updatesCacheKey) || [],
+  );
   const [updatesLoading, setUpdatesLoading] = useState(false);
   const [updateCategory, setUpdateCategory] = useState("General");
   const [updateContent, setUpdateContent] = useState("");
@@ -770,7 +782,6 @@ const OrderActions = () => {
   const [mockupCarouselIndex, setMockupCarouselIndex] = useState(0);
   const [mockupLightboxVersion, setMockupLightboxVersion] = useState(null);
 
-  const portalSource = useMemo(() => resolvePortalSource(), []);
   const withPortalSource = (url) => appendPortalSource(url, portalSource);
   const fetchWithPortal = (url, options) =>
     fetch(withPortalSource(url), options);
@@ -845,38 +856,51 @@ const OrderActions = () => {
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await fetchWithPortal("/api/auth/me", {
-        credentials: "include",
+      const data = await queryClient.fetchQuery({
+        queryKey: ["auth", "me", portalSource],
+        staleTime: 5 * 60_000,
+        queryFn: async () => {
+          const res = await fetchWithPortal("/api/auth/me", {
+            credentials: "include",
+          });
+          if (!res.ok) throw new Error("Failed to load current user.");
+          return res.json();
+        },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentUser(data);
-      }
+      setCurrentUser(data);
     } catch (err) {
       console.error("Error fetching current user:", err);
     }
   };
 
   const fetchProject = async ({ silent = false } = {}) => {
-    if (!silent) {
+    const showLoading = !silent && !project;
+    if (showLoading) {
       setLoading(true);
       setError(null);
     }
     try {
-      const res = await fetchWithPortal("/api/projects?mode=report");
-      if (!res.ok) {
-        throw new Error("Failed to load order.");
-      }
-      const data = await res.json();
+      const data = await queryClient.fetchQuery({
+        queryKey: ["projects", "report", portalSource],
+        queryFn: async () => {
+          const res = await fetchWithPortal("/api/projects?mode=report");
+          if (!res.ok) throw new Error("Failed to load order.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/projects"],
+        },
+      });
       const match = data.find((item) => item._id === id);
       if (!match) {
         throw new Error("Order not found.");
       }
       setProject(match);
     } catch (err) {
-      if (!silent) setError(err.message || "Failed to load order.");
+      if (showLoading) setError(err.message || "Failed to load order.");
     } finally {
-      if (!silent) setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -886,18 +910,27 @@ const OrderActions = () => {
       return;
     }
 
-    if (!silent) setUpdatesLoading(true);
+    const showLoading = !silent && projectUpdates.length === 0;
+    if (showLoading) setUpdatesLoading(true);
     try {
-      const res = await fetchWithPortal(`/api/updates/project/${projectId}`);
-      if (!res.ok) {
-        throw new Error("Failed to load project updates.");
-      }
-      const data = await res.json();
-      setProjectUpdates(Array.isArray(data) ? data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: ["project", projectId, "updates", portalSource],
+        queryFn: async () => {
+          const res = await fetchWithPortal(`/api/updates/project/${projectId}`);
+          if (!res.ok) throw new Error("Failed to load project updates.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/updates"],
+          projectId,
+        },
+      });
+      setProjectUpdates(data);
     } catch (err) {
       console.error("Error fetching project updates:", err);
     } finally {
-      if (!silent) setUpdatesLoading(false);
+      if (showLoading) setUpdatesLoading(false);
     }
   };
 
@@ -907,19 +940,30 @@ const OrderActions = () => {
       return;
     }
 
-    if (!silent) setSmsLoading(true);
+    const showLoading = !silent && smsPrompts.length === 0;
+    if (showLoading) setSmsLoading(true);
     try {
-      const res = await fetch(
-        `/api/projects/${projectId}/sms-prompts${smsSourceQuery}`,
-      );
-      if (!res.ok) throw new Error("Failed to load SMS prompts.");
-      const data = await res.json();
-      setSmsPrompts(Array.isArray(data) ? data : []);
+      const data = await queryClient.fetchQuery({
+        queryKey: ["project", projectId, "sms-prompts", smsSource],
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/projects/${projectId}/sms-prompts${smsSourceQuery}`,
+          );
+          if (!res.ok) throw new Error("Failed to load SMS prompts.");
+          const payload = await res.json();
+          return Array.isArray(payload) ? payload : [];
+        },
+        meta: {
+          realtimePaths: ["/api/projects"],
+          projectId,
+        },
+      });
+      setSmsPrompts(data);
     } catch (err) {
       console.error("Error fetching SMS prompts:", err);
-      if (!silent) setSmsPrompts([]);
+      if (showLoading) setSmsPrompts([]);
     } finally {
-      if (!silent) setSmsLoading(false);
+      if (showLoading) setSmsLoading(false);
     }
   };
 

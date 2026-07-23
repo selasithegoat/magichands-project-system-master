@@ -79,6 +79,20 @@ const dispatchFeedback = (detail) => {
   window.dispatchEvent(new CustomEvent(MUTATION_FEEDBACK_EVENT, { detail }));
 };
 
+const dispatchMutationSucceeded = (method, url) => {
+  if (
+    typeof window === "undefined" ||
+    ["GET", "HEAD", "OPTIONS"].includes(method)
+  ) {
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("mh:mutation-succeeded", {
+      detail: { method, path: url },
+    }),
+  );
+};
+
 const waitForRemainingVisibility = async (startedAt) => {
   const elapsed = getNow() - startedAt;
   const remaining = Math.max(0, MINIMUM_VISIBLE_MS - elapsed);
@@ -155,6 +169,7 @@ const installFetchFeedback = () => {
 
     try {
       const response = await nativeFetch(input, requestInit);
+      if (response?.ok) dispatchMutationSucceeded(method, url);
       await finishFeedback(feedback);
       return response;
     } catch (error) {
@@ -181,6 +196,10 @@ const installAxiosFeedback = (axios) => {
   });
 
   const finishAxiosFeedback = async (value) => {
+    const method = String(value?.config?.method || "GET").toUpperCase();
+    if (Number(value?.status) >= 200 && Number(value?.status) < 300) {
+      dispatchMutationSucceeded(method, value?.config?.url);
+    }
     const feedback = value?.config?.mhMutationFeedback;
     if (feedback) await finishFeedback(feedback);
     return value;

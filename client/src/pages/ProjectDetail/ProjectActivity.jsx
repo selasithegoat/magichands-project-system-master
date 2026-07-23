@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./ProjectActivity.css";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 // Icons
@@ -8,49 +9,24 @@ import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import AlertTriangleIcon from "../../components/icons/AlertTriangleIcon";
 import SystemIcon from "../../components/icons/SystemIcon";
 import CreateIcon from "../../components/icons/CreateIcon";
-import useRealtimeRefresh from "../../hooks/useRealtimeRefresh";
 
 const ProjectActivity = ({ project }) => {
   const [filter, setFilter] = useState("All Activity");
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-
-  useEffect(() => {
-    if (project?._id) {
-      fetchActivities();
-    }
-  }, [project?._id]);
-
-  useRealtimeRefresh(() => {
-    if (project?._id) {
-      fetchActivities();
-    }
-  }, {
+  const { data: activities = [], isPending: loading } = useQuery({
+    queryKey: ["project", project?._id, "activity"],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${project._id}/activity`);
+      if (!res.ok) throw new Error("Failed to fetch activity log.");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: Boolean(project?._id),
-    paths: ["/api/projects", "/api/updates"],
-    excludePaths: ["/api/projects/activities", "/api/projects/ai"],
-    shouldRefresh: (detail) => {
-      if (!project?._id) return false;
-      if (detail.path.startsWith("/api/updates")) {
-        return detail.projectId === project._id;
-      }
-
-      return detail.projectId === project._id;
+    meta: {
+      realtimePaths: ["/api/projects", "/api/updates"],
+      projectId: project?._id,
     },
   });
-
-  const fetchActivities = async () => {
-    try {
-      const res = await fetch(`/api/projects/${project._id}/activity`);
-      const data = await res.json();
-      setActivities(data);
-    } catch (err) {
-      console.error("Failed to fetch activity log", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getFilteredActivities = () => {
     let filtered = activities;

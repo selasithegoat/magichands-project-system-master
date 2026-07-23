@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import HelpIcon from "../../components/icons/HelpIcon";
 import SearchIcon from "../../components/icons/SearchIcon";
@@ -243,11 +244,38 @@ const FAQ = ({ user }) => {
   const location = useLocation();
   const questionRef = useRef(null);
   const chatWindowRef = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [categories, setCategories] = useState(["All"]);
-  const [articles, setArticles] = useState([]);
-  const [featuredArticleIds, setFeaturedArticleIds] = useState([]);
+  const {
+    data: helpData,
+    error: helpError,
+    isPending: loading,
+  } = useQuery({
+    queryKey: ["help", "articles"],
+    queryFn: async () => {
+      const response = await fetch("/api/help/articles", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Unable to load help articles.");
+      }
+      return payload;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const loadError = helpError?.message || "";
+  const articles = useMemo(
+    () => toArray(helpData?.articles),
+    [helpData],
+  );
+  const categories = useMemo(() => {
+    const nextCategories = toArray(helpData?.categories);
+    return nextCategories.length ? nextCategories : ["All"];
+  }, [helpData]);
+  const featuredArticleIds = useMemo(
+    () => toArray(helpData?.featuredArticleIds),
+    [helpData],
+  );
   const [activeCategory, setActiveCategory] = usePersistedState(
     "client-faq-active-category",
     "All",
@@ -256,7 +284,9 @@ const FAQ = ({ user }) => {
     "client-faq-search-term",
     "",
   );
-  const [expandedIds, setExpandedIds] = useState(() => new Set());
+  const [expandedIds, setExpandedIds] = useState(
+    () => new Set(articles.slice(0, 1).map((article) => article.id)),
+  );
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState("");
@@ -272,8 +302,9 @@ const FAQ = ({ user }) => {
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [conversation, setConversation] = useState([]);
-  const [helpCapabilities, setHelpCapabilities] = useState(() =>
-    normalizeHelpCapabilities(),
+  const helpCapabilities = useMemo(
+    () => normalizeHelpCapabilities(helpData?.capabilities),
+    [helpData],
   );
   const [replyTarget, setReplyTarget] = useState(null);
 
@@ -320,34 +351,6 @@ const FAQ = ({ user }) => {
     const answerSuggestions = toArray(answer?.followUpSuggestions).filter(Boolean);
     return unique(answerSuggestions.length ? answerSuggestions : QUICK_QUESTIONS).slice(0, 5);
   }, [answer]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadArticles = async () => {
-      setLoading(true);
-      setLoadError("");
-      try {
-        const response = await fetch("/api/help/articles", { credentials: "include", cache: "no-store" });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload?.message || "Unable to load help articles.");
-        if (!mounted) return;
-        const nextArticles = toArray(payload?.articles);
-        setHelpCapabilities(normalizeHelpCapabilities(payload?.capabilities));
-        setArticles(nextArticles);
-        setCategories(toArray(payload?.categories).length ? payload.categories : ["All"]);
-        setFeaturedArticleIds(toArray(payload?.featuredArticleIds));
-        setExpandedIds(new Set(nextArticles.slice(0, 1).map((article) => article.id)));
-      } catch (error) {
-        if (mounted) setLoadError(error.message || "Unable to load help articles.");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    loadArticles();
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!categories.length || categories.includes(activeCategory)) {
