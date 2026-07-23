@@ -336,6 +336,7 @@ const sendEmailDetailed = async (
       to,
       subject,
       text: toText(text) || toText(subject),
+      messageId: toText(options.messageId) || undefined,
       html:
         options.html || buildDefaultEmailHtml(subject, text, { includeLogo }),
       inReplyTo: toText(options.inReplyTo) || undefined,

@@ -84,57 +84,6 @@ const stripDepartmentNudge = (content) =>
 const getDisplayUpdateContent = (content) =>
   stripDepartmentNudge(normalizeProjectUpdateText(content));
 
-const DOCX_COLUMN_WEIGHT_MAP = {
-  dept: 18,
-  lead: 14,
-  deliveryDate: 18,
-  itemInformation: 28,
-  statusUpdate: 22,
-};
-
-const getDepartmentColumnWidth = (column, columns = []) => {
-  const totalWeight = columns.reduce(
-    (sum, currentColumn) =>
-      sum + (DOCX_COLUMN_WEIGHT_MAP[currentColumn.id] || 18),
-    0,
-  );
-  const columnWeight = DOCX_COLUMN_WEIGHT_MAP[column.id] || 18;
-  return Math.max(8, Math.round((columnWeight / Math.max(totalWeight, 1)) * 100));
-};
-
-const getDepartmentCellValue = (row, column) => {
-  if (column.id === "dept") return toText(row?.dept);
-  if (column.id === "lead") return toText(row?.leadName);
-  return toText(row?.values?.[column.id]);
-};
-
-const normalizeDocxCellText = (value) =>
-  toText(value)
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(" | ");
-
-const formatDepartmentDocxValue = (column, value) => {
-  const normalizedValue = toText(value);
-  if (!normalizedValue) return "";
-  if (column.kind !== "date") {
-    return normalizeDocxCellText(normalizedValue);
-  }
-
-  const parsedDate = new Date(normalizedValue);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return normalizedValue;
-  }
-
-  return parsedDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
-
 const getLatestProjectFeedbackTimestamp = (feedbackEntries = []) =>
   feedbackEntries.reduce((latest, feedback) => {
     const rawDate = feedback?.createdAt || feedback?.date;
@@ -189,159 +138,10 @@ const sortProjectsByLeadName = (list) =>
     });
   });
 
-const fetchDepartmentUpdateBoardForExport = async () => {
-  const response = await fetch("/api/projects/department-updates", {
-    credentials: "include",
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.message || "Failed to load Department Updates.");
-  }
-  return payload;
-};
-
-const buildDepartmentUpdateDocxTable = (board, docx) => {
-  const columns = Array.isArray(board?.columns) ? board.columns : [];
-  const sections = Array.isArray(board?.sections) ? board.sections : [];
-
-  if (columns.length === 0 || sections.length === 0) {
-    return null;
-  }
-
-  const {
-    Paragraph,
-    TextRun,
-    Table,
-    TableRow,
-    TableCell,
-    WidthType,
-    BorderStyle,
-    AlignmentType,
-  } = docx;
-
-  const createDataCell = (text, column) =>
-    new TableCell({
-      children: [
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: text || "",
-              font: "Calibri",
-              size: 22,
-              color: "000000",
-            }),
-          ],
-          alignment: AlignmentType.LEFT,
-        }),
-      ],
-      width: {
-        size: getDepartmentColumnWidth(column, columns),
-        type: WidthType.PERCENTAGE,
-      },
-      margins: { top: 90, bottom: 90, left: 90, right: 90 },
-      shading: { fill: "FFFFFF" },
-    });
-
-  const rows = [];
-
-  sections.forEach((section, sectionIndex) => {
-    rows.push(
-      new TableRow({
-        children: [
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: toText(section?.title),
-                    bold: true,
-                    size: 24,
-                    color: "000000",
-                    font: "Calibri",
-                  }),
-                ],
-                alignment: AlignmentType.CENTER,
-              }),
-            ],
-            columnSpan: Math.max(columns.length, 1),
-            shading: { fill: "A3A3A3" },
-            margins: { top: 90, bottom: 90, left: 90, right: 90 },
-          }),
-        ],
-      }),
-    );
-
-    if (sectionIndex === 0) {
-      rows.push(
-        new TableRow({
-          children: columns.map((column) =>
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: toText(column?.label),
-                      bold: true,
-                      size: 22,
-                      color: "000000",
-                      font: "Calibri",
-                    }),
-                  ],
-                  alignment: AlignmentType.LEFT,
-                }),
-              ],
-              width: {
-                size: getDepartmentColumnWidth(column, columns),
-                type: WidthType.PERCENTAGE,
-              },
-              shading: { fill: "F4F4F4" },
-              margins: { top: 90, bottom: 90, left: 90, right: 90 },
-            }),
-          ),
-        }),
-      );
-    }
-
-    (Array.isArray(section?.rows) ? section.rows : []).forEach((row) => {
-      rows.push(
-        new TableRow({
-          children: columns.map((column) =>
-            createDataCell(
-              formatDepartmentDocxValue(column, getDepartmentCellValue(row, column)),
-              column,
-            ),
-          ),
-        }),
-      );
-    });
-  });
-
-  return new Table({
-    rows,
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: {
-      top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-      bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-      left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-      right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
-      insideHorizontal: {
-        style: BorderStyle.SINGLE,
-        size: 1,
-        color: "000000",
-      },
-      insideVertical: {
-        style: BorderStyle.SINGLE,
-        size: 1,
-        color: "000000",
-      },
-    },
-  });
-};
-
 const EndOfDayUpdate = ({ user }) => {
   const navigate = useNavigate(); // Hook
   const isFrontDesk = user?.department?.includes("Front Desk");
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const { data: projects = [], isPending: loading } = useQuery({
     queryKey: ["projects", "end-of-day"],
     queryFn: async () => {
@@ -596,350 +396,36 @@ const EndOfDayUpdate = ({ user }) => {
     setDeliveryTo("");
   };
 
-  const handleDownload = async () => {
-    if (!filteredProjects.length) return;
+  const handleServerDownload = async () => {
+    if (!projects.length || downloadingReport) return;
 
     try {
-      const departmentBoardPromise = fetchDepartmentUpdateBoardForExport();
-      const {
-        Document,
-        Packer,
-        Paragraph,
-        TextRun,
-        Table,
-        TableRow,
-        TableCell,
-        WidthType,
-        BorderStyle,
-        PageOrientation,
-        AlignmentType,
-        Footer,
-        Header,
-      } = await import("docx");
+      setDownloadingReport(true);
+      const response = await fetch("/api/reports/end-of-day.docx", {
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(
+          payload?.message || "Failed to generate the End of Day report.",
+        );
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") || "";
+      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const filename =
+        filenameMatch?.[1] ||
+        `SCRUM UPDATE - ${format(new Date(), "yyyy-MM-dd")}.docx`;
       const { saveAs } = await import("file-saver");
-      const departmentBoard = await departmentBoardPromise;
-      const userName = user
-        ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
-        : "User";
-      // Refinement: Month in words (MMMM)
-      const dateStr = format(new Date(), "EEEE. dd MMMM yy");
-      // Title text is now used in Header, not body
-
-      const tableRows = [
-        new TableRow({
-          children: [
-            "Lead Name",
-            "Order Number",
-            "Order Name",
-            "Delivery Date & Time",
-            "Status",
-            "Latest Update",
-          ].map(
-            (text) =>
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text,
-                        bold: true,
-                        size: 24,
-                        color: "000000",
-                        font: "Calibri",
-                      }),
-                    ],
-                    alignment: AlignmentType.CENTER,
-                  }),
-                ],
-                width: { size: 16, type: WidthType.PERCENTAGE },
-                shading: { fill: "ffffff" },
-                margins: { top: 100, bottom: 100, left: 100, right: 100 },
-              }),
-          ),
-        }),
-      ];
-
-      filteredProjects.forEach((project) => {
-        const leadName = getLeadDisplay(project, "Unassigned");
-        const projectVersion = getProjectVersion(project);
-        const orderNumber = project.orderId || "N/A";
-        const orderNumberWithVersion =
-          projectVersion > 1 ? `${orderNumber} (v${projectVersion})` : orderNumber;
-
-        const deliveryContent = `${formatDate(
-          project.details?.deliveryDate,
-        )} ${formatTime(project.details?.deliveryTime)}`;
-
-        const updateContent = project.endOfDayUpdate
-          ? getDisplayUpdateContent(project.endOfDayUpdate)
-          : "No updates yet";
-
-        // Urgency Check
-        const isEmergency = isEmergencyProject(project);
-        let isUrgent = false;
-        if (project.details?.deliveryDate) {
-          const deliveryDate = new Date(project.details.deliveryDate);
-          const hoursDiff = differenceInHours(deliveryDate, new Date());
-          if (hoursDiff <= 72) {
-            isUrgent = true;
-          }
-        }
-
-        const textColor = isUrgent || isEmergency ? "FF0000" : "000000";
-
-        const getRowColor = (type) => {
-          switch (type) {
-            case "Emergency":
-              return "FEF2F2";
-            case "Corporate Job":
-              return "F0FDF4";
-            case "Quote":
-              return "FFFBEB";
-            default:
-              return "EFF6FF";
-          }
-        };
-
-        const rowColor = getRowColor(project.projectType);
-        const buildCell = (runs) =>
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: runs,
-                alignment: AlignmentType.LEFT,
-              }),
-            ],
-            width: { size: 16, type: WidthType.PERCENTAGE },
-            shading: { fill: rowColor },
-            margins: { top: 100, bottom: 100, left: 100, right: 100 },
-          });
-
-        const buildTextCell = (text) =>
-          buildCell([
-            new TextRun({
-              text: text || "",
-              color: textColor,
-              font: "Calibri",
-            }),
-          ]);
-
-        const projectNameRuns = buildProjectNameRuns(
-          project.details,
-          null,
-          "Untitled",
-        ).map(
-          (run) =>
-            new TextRun({
-              text: run.text || "",
-              bold: run.bold,
-              color: textColor,
-              font: "Calibri",
-            }),
-        );
-
-        tableRows.push(
-          new TableRow({
-            children: [
-              buildTextCell(leadName),
-              buildTextCell(orderNumberWithVersion),
-              buildCell(projectNameRuns),
-              buildTextCell(deliveryContent),
-              buildTextCell(project.status || "N/A"),
-              buildTextCell(updateContent),
-            ],
-          }),
-        );
-      });
-
-      // Custom Header Table (Invisible Borders)
-      const headerTable = new Table({
-        rows: [
-          new TableRow({
-            children: [
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: userName,
-                        bold: true,
-                        font: "Calibri",
-                      }),
-                    ],
-                    alignment: AlignmentType.LEFT,
-                  }),
-                ],
-                width: { size: 30, type: WidthType.PERCENTAGE },
-                borders: {
-                  top: { style: BorderStyle.NONE },
-                  bottom: { style: BorderStyle.NONE },
-                  left: { style: BorderStyle.NONE },
-                  right: { style: BorderStyle.NONE },
-                  insideVertical: { style: BorderStyle.NONE },
-                },
-              }),
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: "SCRUM UPDATE",
-                        bold: true,
-                        size: 28,
-                        font: "Calibri",
-                      }),
-                    ],
-                    alignment: AlignmentType.CENTER,
-                  }),
-                ],
-                width: { size: 40, type: WidthType.PERCENTAGE },
-                borders: {
-                  top: { style: BorderStyle.NONE },
-                  bottom: { style: BorderStyle.NONE },
-                  left: { style: BorderStyle.NONE },
-                  right: { style: BorderStyle.NONE },
-                  insideVertical: { style: BorderStyle.NONE },
-                },
-              }),
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: dateStr,
-                        bold: true,
-                        font: "Calibri",
-                      }),
-                    ],
-                    alignment: AlignmentType.RIGHT,
-                  }),
-                ],
-                width: { size: 30, type: WidthType.PERCENTAGE },
-                borders: {
-                  top: { style: BorderStyle.NONE },
-                  bottom: { style: BorderStyle.NONE },
-                  left: { style: BorderStyle.NONE },
-                  right: { style: BorderStyle.NONE },
-                  insideVertical: { style: BorderStyle.NONE },
-                },
-              }),
-            ],
-          }),
-        ],
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        borders: {
-          top: { style: BorderStyle.NONE },
-          bottom: { style: BorderStyle.NONE },
-          left: { style: BorderStyle.NONE },
-          right: { style: BorderStyle.NONE },
-          insideVertical: { style: BorderStyle.NONE },
-        },
-      });
-
-      const departmentUpdatesTable = buildDepartmentUpdateDocxTable(
-        departmentBoard,
-        {
-          Paragraph,
-          TextRun,
-          Table,
-          TableRow,
-          TableCell,
-          WidthType,
-          BorderStyle,
-          AlignmentType,
-        },
-      );
-
-      const doc = new Document({
-        styles: {
-          default: {
-            document: {
-              run: {
-                font: "Calibri",
-              },
-            },
-          },
-        },
-        sections: [
-          {
-            properties: {
-              page: {
-                size: {
-                  orientation: PageOrientation.LANDSCAPE,
-                },
-              },
-            },
-            headers: {
-              default: new Header({
-                children: [headerTable],
-              }),
-            },
-            footers: {
-              default: new Footer({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: "OFFICIAL DOCUMENT OF MAGICHANDS CO. LTD.",
-                        bold: true,
-                        size: 20, // 10pt
-                        color: "64748B",
-                        font: "Calibri",
-                      }),
-                    ],
-                    alignment: AlignmentType.CENTER,
-                  }),
-                ],
-              }),
-            },
-            children: [
-              // No Title Paragraph here anymore
-              new Table({
-                rows: tableRows,
-                width: { size: 100, type: WidthType.PERCENTAGE },
-                borders: {
-                  top: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
-                  bottom: {
-                    style: BorderStyle.SINGLE,
-                    size: 1,
-                    color: "E2E8F0",
-                  },
-                  left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
-                  right: {
-                    style: BorderStyle.SINGLE,
-                    size: 1,
-                    color: "E2E8F0",
-                  },
-                  insideHorizontal: {
-                    style: BorderStyle.SINGLE,
-                    size: 1,
-                    color: "E2E8F0",
-                  },
-                  insideVertical: {
-                    style: BorderStyle.SINGLE,
-                    size: 1,
-                    color: "E2E8F0",
-                  },
-                },
-              }),
-              ...(departmentUpdatesTable
-                ? [
-                    new Paragraph({
-                      children: [new TextRun({ text: "" })],
-                    }),
-                    departmentUpdatesTable,
-                  ]
-                : []),
-            ],
-          },
-        ],
-      });
-
-      const blob = await Packer.toBlob(doc);
-      saveAs(blob, `SCRUM UPDATE - ${userName} - ${dateStr}.docx`);
+      saveAs(blob, filename);
     } catch (error) {
-      console.error("Error generating document:", error);
-      alert("Failed to generate document.");
+      console.error("Error downloading End of Day report:", error);
+      alert(error.message || "Failed to download the End of Day report.");
+    } finally {
+      setDownloadingReport(false);
     }
   };
 
@@ -1184,11 +670,11 @@ const EndOfDayUpdate = ({ user }) => {
           <button
             type="button"
             className="download-btn"
-            onClick={handleDownload}
-            disabled={filteredProjects.length === 0}
+            onClick={handleServerDownload}
+            disabled={projects.length === 0 || downloadingReport}
           >
             <DownloadIcon width={18} height={18} />
-            Download Report
+            {downloadingReport ? "Preparing Report..." : "Download Report"}
           </button>
         </div>
       </div>

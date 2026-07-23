@@ -149,7 +149,21 @@ COOKIE_SAMESITE=lax
 SMTP_USER=your-smtp-user
 SMTP_PASS=your-smtp-pass
 ORDER_CREATION_NOTIFICATION_EMAIL=ops@example.com
+
+# Automated End of Day DOCX report (defaults shown)
+EOD_REPORT_ENABLED=true
+EOD_REPORT_RECIPIENTS=scrum.mh@gmail.com
+EOD_REPORT_TIME=19:00
+EOD_REPORT_TIMEZONE=Africa/Accra
+# 0=Sunday through 6=Saturday; this schedule runs Monday-Saturday
+EOD_REPORT_DAYS=1,2,3,4,5,6
+EOD_REPORT_AUTHOR=Front Desk
 ```
+
+The End of Day scheduler runs inside the API server, so the server must be
+running at the scheduled time. It records each date/recipient delivery in
+MongoDB to prevent duplicates, retries temporary failures, and does not send
+when there are no active End of Day projects.
 
 ## LAN Hostnames (Optional)
 

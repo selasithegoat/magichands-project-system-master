@@ -39,6 +39,7 @@ const meetingRoutes = require("./routes/meetingRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const digestRoutes = require("./routes/digestRoutes");
+const reportRoutes = require("./routes/reportRoutes");
 const opsWallboardRoutes = require("./routes/opsWallboardRoutes");
 const portalRoutes = require("./routes/portalRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
@@ -52,6 +53,9 @@ const { buildRealtimeChangePayload } = require("./utils/realtimeChange");
 const { startChatArchiveScheduler } = require("./utils/chatArchiveScheduler");
 const { startWeeklyDigestScheduler } = require("./utils/weeklyDigestService");
 const { startReminderScheduler } = require("./utils/reminderScheduler");
+const {
+  startEndOfDayReportScheduler,
+} = require("./utils/endOfDayReportScheduler");
 
 // Connect to database
 connectDB();
@@ -432,6 +436,7 @@ app.use("/api/meetings", meetingRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/digests", digestRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/api/ops/wallboard", opsWallboardRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/inventory", inventoryRoutes);
@@ -601,5 +606,6 @@ app.listen(PORT, HOST, () => {
   startChatArchiveScheduler();
   startWeeklyDigestScheduler();
   startReminderScheduler();
+  startEndOfDayReportScheduler();
 });
 // Trigger restart to rebuild indexes
