@@ -4,6 +4,7 @@ const {
   Document,
   Footer,
   Header,
+  HeightRule,
   PageOrientation,
   Packer,
   Paragraph,
@@ -11,6 +12,7 @@ const {
   TableCell,
   TableRow,
   TextRun,
+  VerticalAlign,
   WidthType,
 } = require("docx");
 const DepartmentUpdateBoard = require("../models/DepartmentUpdateBoard");
@@ -24,6 +26,13 @@ const DEPARTMENT_BOARD_KEY = "frontdesk-department-updates";
 const DEFAULT_TIME_ZONE = "Africa/Accra";
 const DOCX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOCX_FONT = "Aptos";
+const DOCX_PARAGRAPH_SPACING = { before: 0, after: 0, line: 200 };
+const DOCX_CELL_MARGINS = { top: 35, bottom: 35, left: 55, right: 55 };
+const DOCX_TABLE_ROW_HEIGHT = {
+  value: 432,
+  rule: HeightRule.ATLEAST,
+};
 
 const PAYMENT_STATUS_TAGS = {
   full_payment: {
@@ -351,26 +360,29 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
           children: [
             new TextRun({
               text: text || "",
-              font: "Calibri",
-              size: 22,
+              font: DOCX_FONT,
+              size: 18,
               color: "000000",
             }),
           ],
           alignment: AlignmentType.LEFT,
+          spacing: DOCX_PARAGRAPH_SPACING,
         }),
       ],
       width: {
         size: getDepartmentColumnWidth(column, columns),
         type: WidthType.PERCENTAGE,
       },
-      margins: { top: 90, bottom: 90, left: 90, right: 90 },
+      margins: DOCX_CELL_MARGINS,
       shading: { fill: "FFFFFF" },
+      verticalAlign: VerticalAlign.CENTER,
     });
 
   const rows = [];
   sections.forEach((section, sectionIndex) => {
     rows.push(
       new TableRow({
+        height: DOCX_TABLE_ROW_HEIGHT,
         children: [
           new TableCell({
             children: [
@@ -379,17 +391,19 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
                   new TextRun({
                     text: toText(section?.title),
                     bold: true,
-                    size: 24,
+                    size: 20,
                     color: "000000",
-                    font: "Calibri",
+                    font: DOCX_FONT,
                   }),
                 ],
-                alignment: AlignmentType.CENTER,
+                alignment: AlignmentType.LEFT,
+                spacing: DOCX_PARAGRAPH_SPACING,
               }),
             ],
             columnSpan: Math.max(columns.length, 1),
             shading: { fill: "A3A3A3" },
-            margins: { top: 90, bottom: 90, left: 90, right: 90 },
+            margins: DOCX_CELL_MARGINS,
+            verticalAlign: VerticalAlign.CENTER,
           }),
         ],
       }),
@@ -398,6 +412,7 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
     if (sectionIndex === 0) {
       rows.push(
         new TableRow({
+          height: DOCX_TABLE_ROW_HEIGHT,
           children: columns.map(
             (column) =>
               new TableCell({
@@ -407,12 +422,13 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
                       new TextRun({
                         text: toText(column?.label),
                         bold: true,
-                        size: 22,
+                        size: 18,
                         color: "000000",
-                        font: "Calibri",
+                        font: DOCX_FONT,
                       }),
                     ],
                     alignment: AlignmentType.LEFT,
+                    spacing: DOCX_PARAGRAPH_SPACING,
                   }),
                 ],
                 width: {
@@ -420,7 +436,8 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
                   type: WidthType.PERCENTAGE,
                 },
                 shading: { fill: "F4F4F4" },
-                margins: { top: 90, bottom: 90, left: 90, right: 90 },
+                margins: DOCX_CELL_MARGINS,
+                verticalAlign: VerticalAlign.CENTER,
               }),
           ),
         }),
@@ -430,6 +447,7 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
     (Array.isArray(section?.rows) ? section.rows : []).forEach((row) => {
       rows.push(
         new TableRow({
+          height: DOCX_TABLE_ROW_HEIGHT,
           children: columns.map((column) =>
             createDataCell(
               formatDepartmentValue(
@@ -479,10 +497,12 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
                   new TextRun({
                     text: generatedBy,
                     bold: true,
-                    font: "Calibri",
+                    size: 18,
+                    font: DOCX_FONT,
                   }),
                 ],
                 alignment: AlignmentType.LEFT,
+                spacing: DOCX_PARAGRAPH_SPACING,
               }),
             ],
             width: { size: 30, type: WidthType.PERCENTAGE },
@@ -500,11 +520,12 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
                   new TextRun({
                     text: "SCRUM UPDATE",
                     bold: true,
-                    size: 28,
-                    font: "Calibri",
+                    size: 22,
+                    font: DOCX_FONT,
                   }),
                 ],
                 alignment: AlignmentType.CENTER,
+                spacing: DOCX_PARAGRAPH_SPACING,
               }),
             ],
             width: { size: 40, type: WidthType.PERCENTAGE },
@@ -522,10 +543,12 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
                   new TextRun({
                     text: reportDate,
                     bold: true,
-                    font: "Calibri",
+                    size: 18,
+                    font: DOCX_FONT,
                   }),
                 ],
                 alignment: AlignmentType.RIGHT,
+                spacing: DOCX_PARAGRAPH_SPACING,
               }),
             ],
             width: { size: 30, type: WidthType.PERCENTAGE },
@@ -552,6 +575,7 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
 const buildProjectTable = (projects, now, timeZone) => {
   const rows = [
     new TableRow({
+      height: DOCX_TABLE_ROW_HEIGHT,
       children: [
         "Lead Name",
         "Order Number",
@@ -568,17 +592,19 @@ const buildProjectTable = (projects, now, timeZone) => {
                   new TextRun({
                     text,
                     bold: true,
-                    size: 24,
+                    size: 18,
                     color: "000000",
-                    font: "Calibri",
+                    font: DOCX_FONT,
                   }),
                 ],
-                alignment: AlignmentType.CENTER,
+                alignment: AlignmentType.LEFT,
+                spacing: DOCX_PARAGRAPH_SPACING,
               }),
             ],
             width: { size: 16, type: WidthType.PERCENTAGE },
             shading: { fill: "FFFFFF" },
-            margins: { top: 100, bottom: 100, left: 100, right: 100 },
+            margins: DOCX_CELL_MARGINS,
+            verticalAlign: VerticalAlign.CENTER,
           }),
       ),
     }),
@@ -620,11 +646,13 @@ const buildProjectTable = (projects, now, timeZone) => {
           new Paragraph({
             children: runs,
             alignment: AlignmentType.LEFT,
+            spacing: DOCX_PARAGRAPH_SPACING,
           }),
         ],
         width: { size: 16, type: WidthType.PERCENTAGE },
         shading: { fill: rowColor },
-        margins: { top: 100, bottom: 100, left: 100, right: 100 },
+        margins: DOCX_CELL_MARGINS,
+        verticalAlign: VerticalAlign.CENTER,
       });
 
     const buildTextCell = (text) =>
@@ -632,28 +660,31 @@ const buildProjectTable = (projects, now, timeZone) => {
         new TextRun({
           text: text || "",
           color: textColor,
-          font: "Calibri",
+          font: DOCX_FONT,
+          size: 18,
         }),
       ]);
 
     rows.push(
       new TableRow({
+        height: DOCX_TABLE_ROW_HEIGHT,
         children: [
           buildTextCell(getLeadDisplay(project)),
           buildCell([
             new TextRun({
               text: versionedOrderNumber,
               color: textColor,
-              font: "Calibri",
+              font: DOCX_FONT,
+              size: 18,
             }),
             ...(paymentStatus
               ? [
                   new TextRun({
                     text: `  ${paymentStatus.label}  `,
                     bold: true,
-                    size: 16,
+                    size: 14,
                     color: paymentStatus.color,
-                    font: "Calibri",
+                    font: DOCX_FONT,
                     shading: { fill: paymentStatus.fill },
                   }),
                 ]
@@ -666,7 +697,8 @@ const buildProjectTable = (projects, now, timeZone) => {
                   text: run.text,
                   bold: run.bold,
                   color: textColor,
-                  font: "Calibri",
+                  font: DOCX_FONT,
+                  size: 18,
                 }),
             ),
           ),
@@ -716,7 +748,10 @@ const generateEndOfDayReport = async ({
 
   if (departmentTable) {
     children.push(
-      new Paragraph({ children: [new TextRun({ text: "" })] }),
+      new Paragraph({
+        children: [new TextRun({ text: "", size: 2 })],
+        spacing: { before: 0, after: 0, line: 40 },
+      }),
       departmentTable,
     );
   }
@@ -725,7 +760,7 @@ const generateEndOfDayReport = async ({
     styles: {
       default: {
         document: {
-          run: { font: "Calibri" },
+          run: { font: DOCX_FONT },
         },
       },
     },
@@ -734,6 +769,15 @@ const generateEndOfDayReport = async ({
         properties: {
           page: {
             size: { orientation: PageOrientation.LANDSCAPE },
+            margin: {
+              top: 360,
+              right: 360,
+              bottom: 360,
+              left: 360,
+              header: 120,
+              footer: 120,
+              gutter: 0,
+            },
           },
         },
         headers: {
@@ -754,12 +798,13 @@ const generateEndOfDayReport = async ({
                   new TextRun({
                     text: "OFFICIAL DOCUMENT OF MAGICHANDS CO. LTD.",
                     bold: true,
-                    size: 20,
+                    size: 16,
                     color: "64748B",
-                    font: "Calibri",
+                    font: DOCX_FONT,
                   }),
                 ],
                 alignment: AlignmentType.CENTER,
+                spacing: DOCX_PARAGRAPH_SPACING,
               }),
             ],
           }),

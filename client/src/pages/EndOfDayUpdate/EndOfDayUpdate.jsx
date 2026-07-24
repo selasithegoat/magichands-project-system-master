@@ -537,53 +537,55 @@ const EndOfDayUpdate = ({ user }) => {
         <head>
           <title>End of Day Update - ${escapeHtml(dateStr)}</title>
           <style>
-            @page { size: landscape; margin: 0.42in; }
+            @page { size: landscape; margin: 0.25in; }
             * { box-sizing: border-box; }
             body {
               margin: 0;
               color: #111827;
-              font-family: Calibri, Arial, sans-serif;
-              font-size: 11px;
-              line-height: 1.35;
+              font-family: Aptos, Arial, sans-serif;
+              font-size: 9px;
+              line-height: 1.15;
             }
             .report-header {
               display: grid;
               grid-template-columns: 1fr auto 1fr;
-              gap: 16px;
+              gap: 10px;
               align-items: end;
-              margin-bottom: 14px;
-              border-bottom: 2px solid #111827;
-              padding-bottom: 8px;
+              margin-bottom: 6px;
+              border-bottom: 1px solid #111827;
+              padding-bottom: 4px;
             }
             .report-title {
               text-align: center;
-              font-size: 18px;
+              font-size: 14px;
               font-weight: 700;
               letter-spacing: 0.04em;
             }
             .report-date { text-align: right; font-weight: 700; }
             .report-user { font-weight: 700; }
             .report-summary {
-              margin: 0 0 12px;
+              margin: 0 0 5px;
               color: #475569;
-              font-size: 10px;
+              font-size: 8px;
             }
             table {
               width: 100%;
               border-collapse: collapse;
               table-layout: fixed;
             }
+            tr { height: 0.3in; }
             th,
             td {
               border: 1px solid #cbd5e1;
-              padding: 6px 7px;
-              vertical-align: top;
+              padding: 3px 4px;
+              vertical-align: middle;
+              text-align: left;
               overflow-wrap: anywhere;
             }
             th {
               background: #f1f5f9;
               text-transform: uppercase;
-              font-size: 9px;
+              font-size: 8px;
               letter-spacing: 0.04em;
               text-align: left;
             }
@@ -602,9 +604,9 @@ const EndOfDayUpdate = ({ user }) => {
               color: #dc2626;
             }
             .update-meta {
-              margin-top: 3px;
+              margin-top: 1px;
               color: #64748b;
-              font-size: 9px;
+              font-size: 8px;
             }
             tr.urgent .update-meta,
             tr.emergency .update-meta {
@@ -613,12 +615,12 @@ const EndOfDayUpdate = ({ user }) => {
             .print-order-reference {
               display: flex;
               align-items: center;
-              gap: 4px;
+              gap: 2px;
               flex-wrap: wrap;
             }
             .print-payment-tag {
               display: inline-block;
-              padding: 1px 5px;
+              padding: 0 4px;
               border: 1px solid #cbd5e1;
               border-radius: 999px;
               background: #f1f5f9;
