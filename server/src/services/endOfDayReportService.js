@@ -25,6 +25,33 @@ const DEFAULT_TIME_ZONE = "Africa/Accra";
 const DOCX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+const PAYMENT_STATUS_TAGS = {
+  full_payment: {
+    key: "full-payment",
+    label: "Full Payment",
+    fill: "DCFCE7",
+    color: "166534",
+  },
+  authorized: {
+    key: "authorized",
+    label: "Authorized",
+    fill: "DCFCE7",
+    color: "166534",
+  },
+  po: {
+    key: "po",
+    label: "P.O",
+    fill: "DBEAFE",
+    color: "1E40AF",
+  },
+  part_payment: {
+    key: "part-payment",
+    label: "Part Payment",
+    fill: "FEF3C7",
+    color: "92400E",
+  },
+};
+
 const DOCX_COLUMN_WEIGHT_MAP = {
   dept: 18,
   lead: 14,
@@ -108,6 +135,33 @@ const shouldIncludeProject = (project, nowMs = Date.now()) => {
   return (nowMs - latestFeedbackMs) / (1000 * 60 * 60) < 24;
 };
 
+const getPaymentStatusTag = (project) => {
+  if (project?.projectType === "Quote") {
+    return null;
+  }
+
+  const paymentTypes = new Set(
+    (Array.isArray(project?.paymentVerifications)
+      ? project.paymentVerifications
+      : []
+    )
+      .map((entry) => entry?.type)
+      .filter(Boolean),
+  );
+  const activeType = ["full_payment", "authorized", "po", "part_payment"].find(
+    (type) => paymentTypes.has(type),
+  );
+
+  return activeType
+    ? PAYMENT_STATUS_TAGS[activeType]
+    : {
+        key: "pending",
+        label: "Payment Pending",
+        fill: "FEE2E2",
+        color: "991B1B",
+      };
+};
+
 const sortProjectsByLead = (projects = []) =>
   [...projects].sort((left, right) => {
     const leftLead = getLeadDisplay(left);
@@ -152,6 +206,7 @@ const loadEndOfDayReportData = async ({ now = new Date() } = {}) => {
           "projectLeadId",
           "assistantLeadId",
           "endOfDayUpdate",
+          "paymentVerifications.type",
           "feedbacks.createdAt",
           "cancellation.isCancelled",
           "includeInEndOfDayUpdates",
@@ -557,6 +612,7 @@ const buildProjectTable = (projects, now, timeZone) => {
       Quote: "FFFBEB",
     };
     const rowColor = rowColors[project.projectType] || "EFF6FF";
+    const paymentStatus = getPaymentStatusTag(project);
 
     const buildCell = (runs) =>
       new TableCell({
@@ -584,7 +640,25 @@ const buildProjectTable = (projects, now, timeZone) => {
       new TableRow({
         children: [
           buildTextCell(getLeadDisplay(project)),
-          buildTextCell(versionedOrderNumber),
+          buildCell([
+            new TextRun({
+              text: versionedOrderNumber,
+              color: textColor,
+              font: "Calibri",
+            }),
+            ...(paymentStatus
+              ? [
+                  new TextRun({
+                    text: `  ${paymentStatus.label}  `,
+                    bold: true,
+                    size: 16,
+                    color: paymentStatus.color,
+                    font: "Calibri",
+                    shading: { fill: paymentStatus.fill },
+                  }),
+                ]
+              : []),
+          ]),
           buildCell(
             buildProjectNameRuns(project.details).map(
               (run) =>
@@ -711,6 +785,7 @@ module.exports = {
   formatFileDate,
   formatReportDate,
   generateEndOfDayReport,
+  getPaymentStatusTag,
   loadEndOfDayReportData,
   shouldIncludeProject,
 };

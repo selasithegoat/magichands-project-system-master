@@ -382,7 +382,54 @@
 .order-number-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+}
+
+.order-number-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.payment-status-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 9999px;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.payment-status-tag.full-payment,
+.payment-status-tag.authorized {
+  border-color: color-mix(in srgb, #22c55e 48%, var(--border-color));
+  background: color-mix(in srgb, #22c55e 17%, var(--bg-card));
+  color: #16a34a;
+}
+
+.payment-status-tag.part-payment {
+  border-color: color-mix(in srgb, #f59e0b 52%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 18%, var(--bg-card));
+  color: #d97706;
+}
+
+.payment-status-tag.po {
+  border-color: color-mix(in srgb, #3b82f6 48%, var(--border-color));
+  background: color-mix(in srgb, #3b82f6 17%, var(--bg-card));
+  color: #3b82f6;
+}
+
+.payment-status-tag.pending {
+  border-color: color-mix(in srgb, #ef4444 48%, var(--border-color));
+  background: color-mix(in srgb, #ef4444 14%, var(--bg-card));
+  color: #ef4444;
 }
 
 .order-version-sub {

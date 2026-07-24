@@ -23,6 +23,35 @@ const UPDATE_FILTER_OPTIONS = [
 ];
 const UPDATE_FILTER_VALUES = UPDATE_FILTER_OPTIONS.map((option) => option.value);
 
+const PAYMENT_STATUS_TAGS = {
+  full_payment: { key: "full-payment", label: "Full Payment" },
+  authorized: { key: "authorized", label: "Authorized" },
+  po: { key: "po", label: "P.O" },
+  part_payment: { key: "part-payment", label: "Part Payment" },
+};
+
+const getPaymentStatusTag = (project) => {
+  if (project?.projectType === "Quote") {
+    return null;
+  }
+
+  const paymentTypes = new Set(
+    (Array.isArray(project?.paymentVerifications)
+      ? project.paymentVerifications
+      : []
+    )
+      .map((entry) => entry?.type)
+      .filter(Boolean),
+  );
+
+  const activeType = ["full_payment", "authorized", "po", "part_payment"].find(
+    (type) => paymentTypes.has(type),
+  );
+  return activeType
+    ? PAYMENT_STATUS_TAGS[activeType]
+    : { key: "pending", label: "Payment Pending" };
+};
+
 const sanitizeTextFilter = (value, fallback) =>
   typeof value === "string" ? value : fallback;
 
@@ -326,6 +355,7 @@ const EndOfDayUpdate = ({ user }) => {
           project.status,
           projectType,
           project.priority,
+          getPaymentStatusTag(project)?.label,
           getDisplayUpdateContent(project.endOfDayUpdate),
           getUpdateSourceName(project),
         ]
@@ -445,6 +475,7 @@ const EndOfDayUpdate = ({ user }) => {
         const orderNumber = project.orderId || "N/A";
         const orderNumberWithVersion =
           projectVersion > 1 ? `${orderNumber} (v${projectVersion})` : orderNumber;
+        const paymentStatus = getPaymentStatusTag(project);
         const deliveryContent = `${formatDate(
           project.details?.deliveryDate,
         )} ${formatTime(project.details?.deliveryTime)}`.trim();
@@ -467,7 +498,18 @@ const EndOfDayUpdate = ({ user }) => {
         return `
           <tr class="row-${projectTypeClass}${isUrgent ? " urgent" : ""}${isEmergency ? " emergency" : ""}">
             <td>${escapeHtml(leadName)}</td>
-            <td>${escapeHtml(orderNumberWithVersion)}</td>
+            <td>
+              <div class="print-order-reference">
+                <span>${escapeHtml(orderNumberWithVersion)}</span>
+                ${
+                  paymentStatus
+                    ? `<span class="print-payment-tag ${paymentStatus.key}">
+                        ${escapeHtml(paymentStatus.label)}
+                      </span>`
+                    : ""
+                }
+              </div>
+            </td>
             <td>${escapeHtml(getProjectNameText(project))}</td>
             <td>${escapeHtml(deliveryContent || "N/A")}</td>
             <td>${escapeHtml(project.status || "N/A")}</td>
@@ -567,6 +609,45 @@ const EndOfDayUpdate = ({ user }) => {
             tr.urgent .update-meta,
             tr.emergency .update-meta {
               color: #dc2626;
+            }
+            .print-order-reference {
+              display: flex;
+              align-items: center;
+              gap: 4px;
+              flex-wrap: wrap;
+            }
+            .print-payment-tag {
+              display: inline-block;
+              padding: 1px 5px;
+              border: 1px solid #cbd5e1;
+              border-radius: 999px;
+              background: #f1f5f9;
+              color: #475569;
+              font-size: 7px;
+              font-weight: 700;
+              line-height: 1.4;
+              white-space: nowrap;
+            }
+            .print-payment-tag.full-payment,
+            .print-payment-tag.authorized {
+              border-color: #86efac;
+              background: #dcfce7;
+              color: #166534;
+            }
+            .print-payment-tag.part-payment {
+              border-color: #fcd34d;
+              background: #fef3c7;
+              color: #92400e;
+            }
+            .print-payment-tag.po {
+              border-color: #93c5fd;
+              background: #dbeafe;
+              color: #1e40af;
+            }
+            .print-payment-tag.pending {
+              border-color: #fca5a5;
+              background: #fee2e2;
+              color: #991b1b;
             }
           </style>
         </head>
@@ -834,6 +915,7 @@ const EndOfDayUpdate = ({ user }) => {
                 const isEmergency = isEmergencyProject(project);
                 const projectVersion = getProjectVersion(project);
                 const updateSourceName = getUpdateSourceName(project);
+                const paymentStatus = getPaymentStatusTag(project);
 
                 return (
                   <tr
@@ -845,7 +927,16 @@ const EndOfDayUpdate = ({ user }) => {
                     </td>
                     <td>
                       <div className="order-number-cell">
-                        <span>{project.orderId || "N/A"}</span>
+                        <div className="order-number-line">
+                          <span>{project.orderId || "N/A"}</span>
+                          {paymentStatus && (
+                            <span
+                              className={`payment-status-tag ${paymentStatus.key}`}
+                            >
+                              {paymentStatus.label}
+                            </span>
+                          )}
+                        </div>
                         {projectVersion > 1 && (
                           <span className="order-version-sub">
                             Version v{projectVersion}
