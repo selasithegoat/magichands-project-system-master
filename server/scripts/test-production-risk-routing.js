@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const {
   __riskRoutingTestUtils: {
+    PRODUCTION_DEPARTMENT_PROFILES,
     buildProductionItemSubjectsByDepartment,
     buildFallbackRiskSuggestions,
     filterRiskSuggestionsToItemAssignments,
@@ -9,10 +10,10 @@ const {
 
 const woodenPortrait = {
   description: "Wooden Portrait",
-  breakdown: "Engraved hardwood portrait",
+  breakdown: "Hardwood portrait",
   quantity: 1,
   productionAssignments: [
-    { department: "woodme", scope: "Cut, engrave, and finish" },
+    { department: "woodme", scope: "Cut, sand, polish, and finish" },
   ],
 };
 
@@ -38,7 +39,7 @@ const context = {
         {
           department: "woodme",
           departmentLabel: "Woodme",
-          scope: "Cut, engrave, and finish",
+          scope: "Cut, sand, polish, and finish",
         },
       ],
       quantity: 1,
@@ -60,6 +61,18 @@ assert.equal(
 assert.equal(
   fallback.some((suggestion) => /\[DTF Printing\]/i.test(suggestion.description)),
   false,
+);
+assert.equal(
+  fallback.some((suggestion) =>
+    /\b(dtf|screen print|heat press|ink adhesion|printhead|icc profile|engraving)\b/i.test(
+      `${suggestion.description} ${suggestion.preventive}`,
+    ),
+  ),
+  false,
+);
+assert.match(
+  PRODUCTION_DEPARTMENT_PROFILES.woodme.description,
+  /wooden items/i,
 );
 
 const invalidAiSuggestion = {
@@ -85,6 +98,82 @@ assert.deepEqual(
     context,
   ).map((suggestion) => suggestion.department),
   ["woodme"],
+);
+
+const semanticSuggestions = [
+  {
+    department: "woodme",
+    itemRef: "Wooden Portrait",
+    description:
+      '[Woodme] DTF ink adhesion may fail on "Wooden Portrait".',
+    preventive: "Calibrate the heat press.",
+    facet: "quality",
+  },
+  validAiSuggestion,
+  {
+    department: "local-outsourcing",
+    itemRef: "Branded Mug",
+    description:
+      '[Local Outsourcing] Our machine operator shift may delay "Branded Mug".',
+    preventive: "Calibrate our machine before the shift.",
+    facet: "capacity",
+  },
+  {
+    department: "local-outsourcing",
+    itemRef: "Branded Mug",
+    description:
+      '[Local Outsourcing] Vendor material substitution may affect "Branded Mug".',
+    preventive: "Approve a sample and lock the vendor specification.",
+    facet: "supplier",
+  },
+  {
+    department: "overseas",
+    itemRef: "Custom Bottle",
+    description:
+      '[Overseas] Machine operator shift changes may affect "Custom Bottle".',
+    preventive: "Brief our machine operator.",
+    facet: "capacity",
+  },
+  {
+    department: "overseas",
+    itemRef: "Custom Bottle",
+    description:
+      '[Overseas] Customs clearance may delay "Custom Bottle".',
+    preventive: "Verify import documents before shipment.",
+    facet: "logistics",
+  },
+];
+const multiDepartmentContext = {
+  ...context,
+  productionDepartments: ["woodme", "local-outsourcing", "overseas"],
+  items: [
+    woodenPortrait,
+    {
+      description: "Branded Mug",
+      productionAssignments: [
+        {
+          department: "local-outsourcing",
+          scope: "External local vendor production and delivery",
+        },
+      ],
+    },
+    {
+      description: "Custom Bottle",
+      productionAssignments: [
+        {
+          department: "overseas",
+          scope: "International supplier production and import",
+        },
+      ],
+    },
+  ],
+};
+assert.deepEqual(
+  filterRiskSuggestionsToItemAssignments(
+    semanticSuggestions,
+    multiDepartmentContext,
+  ).map((suggestion) => suggestion.department),
+  ["woodme", "local-outsourcing", "overseas"],
 );
 
 console.log("Production risk item-routing regression checks passed.");

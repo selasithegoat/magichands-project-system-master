@@ -3063,6 +3063,97 @@ const PRODUCTION_DEPARTMENT_LABELS = {
   "local-outsourcing": "Local Outsourcing",
 };
 
+const PRODUCTION_DEPARTMENT_PROFILES = {
+  woodme: {
+    category: "internal-specialist-subsidiary",
+    description:
+      "Woodme is a Magic Hands sub-company that operates as an internal production department for wooden items.",
+    capabilities: [
+      "wood cutting",
+      "wood fabrication and assembly",
+      "shaping and preparation",
+      "sanding and surface preparation",
+      "polishing",
+      "wood finishing",
+    ],
+    exclusions: [
+      "printing",
+      "engraving unless explicitly stated in the assigned scope",
+      "external vendor production",
+      "international sourcing",
+    ],
+    riskFocus: [
+      "wood moisture and warping",
+      "splitting and chipping",
+      "cutting dimensions and tolerances",
+      "assembly fit",
+      "sanding and surface readiness",
+      "polish and finish consistency",
+      "drying and curing time",
+      "handoff readiness for engraving or printing",
+    ],
+    useSharedTemplates: false,
+  },
+  "local-outsourcing": {
+    category: "external-local-vendor",
+    description:
+      "Local Outsourcing means sending an item to an independent company within the country because Magic Hands will not produce that item internally.",
+    capabilities: [
+      "third-party local production",
+      "vendor-managed manufacturing",
+      "locally contracted specialist processes",
+    ],
+    exclusions: [
+      "Magic Hands internal machine operation",
+      "internal shift or operator risks",
+      "international shipping and customs",
+    ],
+    riskFocus: [
+      "vendor capacity and availability",
+      "specification interpretation",
+      "approval samples and proofs",
+      "quality consistency",
+      "unauthorized material substitution",
+      "vendor milestone visibility",
+      "local transport and collection",
+      "rework turnaround",
+      "price or quotation changes",
+      "artwork and client-data confidentiality",
+    ],
+    useSharedTemplates: false,
+  },
+  overseas: {
+    category: "external-international-production",
+    description:
+      "Overseas means producing or sourcing an item outside the country through an international supplier or manufacturer.",
+    capabilities: [
+      "international contract manufacturing",
+      "overseas product sourcing",
+      "international supplier production",
+    ],
+    exclusions: [
+      "Magic Hands internal machine operation",
+      "internal shift or operator risks",
+      "local-only vendor collection",
+    ],
+    riskFocus: [
+      "long manufacturing lead time",
+      "remote sample and quality approval",
+      "specification and colour interpretation",
+      "minimum order quantities",
+      "exchange-rate and price changes",
+      "export packaging",
+      "international freight delays",
+      "customs clearance and import documentation",
+      "duties and unexpected charges",
+      "time-zone communication",
+      "cost and difficulty of rework",
+      "port, carrier, or geopolitical disruption",
+    ],
+    useSharedTemplates: false,
+  },
+};
+
 const PRODUCTION_DEPARTMENT_ALIASES = {
   graphics: "graphics",
   design: "graphics",
@@ -5783,6 +5874,13 @@ const buildRiskSuggestionContext = (projectData = {}, requestMeta = {}) => {
     productionDepartmentLabels: productionDepartments.map(
       (deptId) => PRODUCTION_DEPARTMENT_LABELS[deptId] || deptId,
     ),
+    productionDepartmentProfiles: productionDepartments
+      .filter((deptId) => PRODUCTION_DEPARTMENT_PROFILES[deptId])
+      .map((deptId) => ({
+        id: deptId,
+        label: PRODUCTION_DEPARTMENT_LABELS[deptId] || deptId,
+        ...PRODUCTION_DEPARTMENT_PROFILES[deptId],
+      })),
     items,
     itemInsights,
     itemFamilyIds: Array.from(
@@ -5879,6 +5977,11 @@ const buildRiskContextKeywordSet = (context = {}) => {
   toSafeArray(context.productionDepartmentLabels).forEach((entry) =>
     addTokens(entry, 3),
   );
+  toSafeArray(context.productionDepartmentProfiles).forEach((profile) => {
+    addTokens(profile?.description, 4);
+    toSafeArray(profile?.capabilities).forEach((entry) => addTokens(entry, 3));
+    toSafeArray(profile?.riskFocus).forEach((entry) => addTokens(entry, 3));
+  });
 
   toSafeArray(context.items).forEach((item) => {
     addTokens(item?.description, 4);
@@ -6260,6 +6363,30 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
       preventive:
         "Prepare sanding/finishing sequence and approve sample finish panels.",
     },
+    {
+      description:
+        "Cutting dimensions or tool calibration may create poor fit between wooden components.",
+      preventive:
+        "Verify cutting files, tool calibration, and first-piece dimensions before full fabrication.",
+    },
+    {
+      description:
+        "Wood may split or chip during cutting, shaping, or edge preparation.",
+      preventive:
+        "Inspect grain direction and stock condition, then test cutting parameters on an offcut.",
+    },
+    {
+      description:
+        "Uneven sanding may remain visible after polishing or final coating.",
+      preventive:
+        "Use a documented grit sequence and inspect surfaces under raking light before polishing.",
+    },
+    {
+      description:
+        "Insufficient drying time may leave polish or finish vulnerable during the next production handoff.",
+      preventive:
+        "Define finish-specific drying hold points and confirm surface readiness before release.",
+    },
   ],
   signage: [
     {
@@ -6285,6 +6412,30 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
       description: "International shipment handling may damage finished goods.",
       preventive:
         "Define export-grade packaging specs and confirm them with supplier QA.",
+    },
+    {
+      description:
+        "Customs clearance or incomplete import documents may delay final delivery.",
+      preventive:
+        "Confirm tariff classification, permits, invoices, and clearing-agent requirements before shipment.",
+    },
+    {
+      description:
+        "Remote quality control may allow colour, material, or dimensional defects to ship.",
+      preventive:
+        "Approve a pre-production sample and require documented pre-shipment inspection evidence.",
+    },
+    {
+      description:
+        "Exchange-rate, freight, or duty changes may increase the landed project cost.",
+      preventive:
+        "Lock commercial terms where possible and maintain a landed-cost contingency before approval.",
+    },
+    {
+      description:
+        "International rework may be too slow or expensive to protect the project deadline.",
+      preventive:
+        "Set measurable acceptance criteria and retain delivery buffer for replacement or local recovery.",
     },
   ],
   "in-house-production": [
@@ -6325,6 +6476,30 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Specification interpretation differences may trigger rework.",
       preventive:
         "Use a signed production brief with measurable acceptance criteria.",
+    },
+    {
+      description:
+        "The local vendor may substitute material or finishing methods without approval.",
+      preventive:
+        "Require written approval for substitutions and verify materials against the approved sample.",
+    },
+    {
+      description:
+        "Limited visibility into vendor progress may hide delays until collection day.",
+      preventive:
+        "Set dated production milestones with evidence-based progress checks and escalation contacts.",
+    },
+    {
+      description:
+        "Locally outsourced goods may be damaged during collection or transport.",
+      preventive:
+        "Agree packaging and handling requirements, then inspect and document goods at vendor handover.",
+    },
+    {
+      description:
+        "Vendor quotation changes or rework charges may increase project cost.",
+      preventive:
+        "Confirm scope, price validity, rework terms, and approval responsibilities in writing before release.",
     },
   ],
 };
@@ -6422,12 +6597,74 @@ const hasItemLevelProductionRouting = (items = []) =>
     (item) => toSafeArray(item?.productionAssignments).length > 0,
   );
 
+const isRiskSuggestionCompatibleWithDepartmentProfile = (
+  suggestion,
+  context = {},
+) => {
+  const departmentId = normalizeProductionDepartment(suggestion?.department);
+  if (!departmentId) return true;
+
+  const suggestionText = `${toText(suggestion?.description)} ${toText(
+    suggestion?.preventive,
+  )}`.toLowerCase();
+  const assignedScopeText = toSafeArray(context.items)
+    .flatMap((item) => toSafeArray(item?.productionAssignments))
+    .filter(
+      (assignment) =>
+        normalizeProductionDepartment(assignment?.department) === departmentId,
+    )
+    .map((assignment) => toText(assignment?.scope).toLowerCase())
+    .join(" ");
+
+  if (
+    ["local-outsourcing", "overseas"].includes(departmentId) &&
+    /\b(internal machine|machine operator|operator shift|shift change|in-house machine|our machine)\b/.test(
+      suggestionText,
+    )
+  ) {
+    return false;
+  }
+  if (
+    departmentId === "local-outsourcing" &&
+    /\b(customs|import document|international freight|overseas shipment|exchange rate)\b/.test(
+      suggestionText,
+    )
+  ) {
+    return false;
+  }
+  if (
+    departmentId === "woodme" &&
+    /\b(dtf|screen print|heat press|ink adhesion|printhead|icc profile)\b/.test(
+      suggestionText,
+    ) &&
+    !/\b(print|printing)\b/.test(assignedScopeText)
+  ) {
+    return false;
+  }
+  if (
+    departmentId === "woodme" &&
+    /\bengraving\b/.test(suggestionText) &&
+    !/\bengrav/.test(assignedScopeText)
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 const filterRiskSuggestionsToItemAssignments = (
   suggestions = [],
   context = {},
 ) => {
+  const profileCompatibleSuggestions = sanitizeRiskSuggestions(
+    suggestions,
+    Number.POSITIVE_INFINITY,
+  ).filter((suggestion) =>
+    isRiskSuggestionCompatibleWithDepartmentProfile(suggestion, context),
+  );
+
   if (!hasItemLevelProductionRouting(context.items)) {
-    return sanitizeRiskSuggestions(suggestions, Number.POSITIVE_INFINITY);
+    return profileCompatibleSuggestions;
   }
 
   const subjectsByDepartment = buildProductionItemSubjectsByDepartment(
@@ -6435,10 +6672,7 @@ const filterRiskSuggestionsToItemAssignments = (
   );
   const allItemSubjects = buildGlobalItemSubjects(context.items);
 
-  return sanitizeRiskSuggestions(
-    suggestions,
-    Number.POSITIVE_INFINITY,
-  ).filter((suggestion) => {
+  return profileCompatibleSuggestions.filter((suggestion) => {
     const departmentId = normalizeProductionDepartment(
       suggestion?.department,
     );
@@ -6698,9 +6932,12 @@ const buildFallbackRiskSuggestions = (context) => {
   context.productionDepartments.forEach((departmentId) => {
     const departmentTemplates =
       PRODUCTION_DEPARTMENT_RISK_TEMPLATES[departmentId] || [];
+    const departmentProfile = PRODUCTION_DEPARTMENT_PROFILES[departmentId];
     const templates = shuffleArray([
       ...departmentTemplates,
-      ...SHARED_DEPARTMENT_RISK_TEMPLATES,
+      ...(departmentProfile?.useSharedTemplates === false
+        ? []
+        : SHARED_DEPARTMENT_RISK_TEMPLATES),
     ]);
     const label = PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId;
     const departmentItemSubjects =
@@ -6819,6 +7056,9 @@ const buildAiRiskPrompt = (context = {}) => {
       0,
       12,
     ),
+    productionDepartmentProfiles: toSafeArray(
+      context.productionDepartmentProfiles,
+    ).slice(0, 12),
     items: toSafeArray(context.items)
       .slice(0, 12)
       .map((item) => ({
@@ -6878,6 +7118,12 @@ const buildAiRiskPrompt = (context = {}) => {
     "- A department may only be paired with an item when that department appears in that item's productionAssignments.",
     "- Never apply a project-level department to every item. Respect each item's productionAssignments exactly.",
     "- Set department and itemRef on every department-specific suggestion.",
+    "- Treat productionDepartmentProfiles as authoritative operational definitions.",
+    "- Use the assigned scope as the specific task; use the department profile to interpret that task and its likely risks.",
+    "- Respect profile exclusions. Do not invent capabilities that the department does not perform.",
+    "- Woodme risks must concern wooden-item fabrication, cutting, preparation, sanding, polishing, finishing, or a relevant handoff.",
+    "- Local Outsourcing risks must concern an external local vendor; do not describe Magic Hands internal machine or shift operation.",
+    "- Overseas risks must concern international production, supplier QA, freight, customs, currency, documentation, or international rework.",
     "- Each description must be specific to this project (items, departments, timeline, or constraints).",
     "- Each preventive measure must be actionable and directly mitigate its paired risk.",
     "- Keep description <= 160 chars and preventive <= 220 chars.",
@@ -20063,9 +20309,11 @@ module.exports = {
   completeOrderMeeting,
   getOrderMeetingByNumber,
   __riskRoutingTestUtils: {
+    PRODUCTION_DEPARTMENT_PROFILES,
     buildProductionItemSubjectsByDepartment,
     buildFallbackRiskSuggestions,
     filterRiskSuggestionsToItemAssignments,
+    isRiskSuggestionCompatibleWithDepartmentProfile,
   },
 };
 
