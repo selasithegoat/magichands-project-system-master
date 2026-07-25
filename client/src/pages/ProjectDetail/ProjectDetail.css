@@ -2846,7 +2846,9 @@ textarea.input-field {
   margin-top: 0.25rem;
   padding: 0.25rem 0.45rem;
   border-radius: 6px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  border: 1px solid
+    color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+  background: var(--primary-soft);
+  color: var(--primary-color);
   font-weight: 600;
 }

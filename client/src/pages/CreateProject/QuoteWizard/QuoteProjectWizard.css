@@ -75,12 +75,24 @@
 
 .item-row,
 .factor-row {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-card);
   padding: 1.25rem;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   margin-bottom: 1rem;
   transition: border-color 0.2s ease;
+}
+
+.quote-item-row-no-department .input-field:disabled {
+  opacity: 1;
+  cursor: default;
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+}
+
+.quote-item-row-no-department .input-label {
+  color: var(--text-secondary);
 }
 
 .item-row:hover {

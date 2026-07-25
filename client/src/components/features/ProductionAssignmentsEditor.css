@@ -1,7 +1,7 @@
 .production-assignment-editor {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .production-assignment-heading {
@@ -12,14 +12,14 @@
 }
 
 .production-assignment-heading strong {
-  color: #334155;
+  color: var(--text-primary);
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .production-assignment-heading span {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.78rem;
 }
 
@@ -30,10 +30,10 @@
 }
 
 .production-assignment-options button {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: #fff;
-  color: #475569;
+  background: var(--bg-input);
+  color: var(--text-secondary);
   padding: 0.42rem 0.7rem;
   font: inherit;
   font-size: 0.78rem;
@@ -41,9 +41,9 @@
 }
 
 .production-assignment-options button.selected {
-  border-color: #2563eb;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--primary-color);
+  background: var(--primary-soft);
+  color: var(--primary-color);
   font-weight: 600;
 }
 
@@ -58,19 +58,29 @@
   grid-template-columns: minmax(120px, 0.3fr) 1fr;
   align-items: center;
   gap: 0.6rem;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 0.78rem;
 }
 
 .production-assignment-scopes input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-color);
   border-radius: 7px;
   padding: 0.55rem 0.65rem;
-  background: #fff;
-  color: #0f172a;
+  background: var(--bg-input);
+  color: var(--text-primary);
   font: inherit;
+}
+
+.production-assignment-scopes input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.production-assignment-scopes input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
 .production-assignment-editor.compact {

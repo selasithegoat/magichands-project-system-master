@@ -2775,13 +2775,13 @@
 }
 .engaged-your-work-summary {
   margin-top: 0.3rem;
-  color: #1d4ed8;
+  color: var(--primary-color);
   font-size: 0.75rem;
   font-weight: 600;
 }
 
 .engaged-your-work-summary.legacy {
-  color: #92400e;
+  color: color-mix(in srgb, #f59e0b 72%, var(--text-primary));
 }
 
 .engaged-production-work-grid {
@@ -2794,9 +2794,15 @@
   display: grid;
   gap: 0.55rem;
   padding: 1rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid
+    color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
   border-radius: 10px;
-  background: #f8fbff;
+  background: color-mix(
+    in srgb,
+    var(--primary-color) 5%,
+    var(--bg-card)
+  );
+  box-shadow: var(--shadow-sm);
 }
 
 .engaged-production-work-card > div {
@@ -2805,20 +2811,25 @@
   gap: 0.75rem;
 }
 
+.engaged-production-work-card strong,
+.engaged-production-work-card b {
+  color: var(--text-primary);
+}
+
 .engaged-production-work-card span {
-  color: #1d4ed8;
+  color: var(--primary-color);
   font-size: 0.78rem;
   font-weight: 600;
 }
 
 .engaged-production-work-card p {
   margin: 0;
-  color: #475569;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
 .engaged-production-work-card .engaged-production-scope {
-  color: #0f172a;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -2827,9 +2838,10 @@
   gap: 0.45rem;
   margin: 0.85rem 0;
   padding: 0.75rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid
+    color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--primary-soft);
 }
 
 .engaged-ack-work-item {
@@ -2838,10 +2850,10 @@
 }
 
 .engaged-ack-work-item span {
-  color: #1e3a8a;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
 .engaged-ack-work-item small {
-  color: #475569;
+  color: var(--text-secondary);
 }

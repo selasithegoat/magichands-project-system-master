@@ -10,6 +10,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
 .item-card-header {
@@ -21,7 +22,7 @@
 .item-number-badge {
   width: 24px;
   height: 24px;
-  background-color: #dbeafe; /* Light Blue */
+  background-color: var(--primary-soft);
   color: var(--primary-blue);
   border-radius: 50%;
   display: flex;
@@ -30,6 +31,18 @@
   font-size: 0.875rem;
   font-weight: 600;
   margin-right: 8px;
+}
+
+.item-card .input-field:disabled {
+  opacity: 1;
+  cursor: default;
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+}
+
+.item-card .input-label {
+  color: var(--text-secondary);
 }
 
 .item-card-title {
@@ -71,8 +84,9 @@
 .add-item-btn {
   width: 100%;
   padding: 16px;
-  border: 1px dashed #bfdbfe; /* Light blue dashed */
-  background-color: #eff6ff;
+  border: 1px dashed
+    color-mix(in srgb, var(--primary-color) 40%, var(--border-color));
+  background-color: var(--primary-soft);
   border-radius: var(--radius-lg);
   color: var(--primary-blue);
   font-weight: 600;
@@ -85,7 +99,11 @@
 }
 
 .add-item-btn:hover {
-  background-color: #dbeafe;
+  background-color: color-mix(
+    in srgb,
+    var(--primary-color) 20%,
+    var(--bg-card)
+  );
   border-color: var(--primary-blue);
 }
 
