@@ -2773,3 +2773,75 @@
     padding: 1rem;
   }
 }
+.engaged-your-work-summary {
+  margin-top: 0.3rem;
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.engaged-your-work-summary.legacy {
+  color: #92400e;
+}
+
+.engaged-production-work-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.8rem;
+}
+
+.engaged-production-work-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.engaged-production-work-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.engaged-production-work-card span {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.engaged-production-work-card p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.engaged-production-work-card .engaged-production-scope {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.engaged-ack-work-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.85rem 0;
+  padding: 0.75rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.engaged-ack-work-item {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.engaged-ack-work-item span {
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.engaged-ack-work-item small {
+  color: #475569;
+}

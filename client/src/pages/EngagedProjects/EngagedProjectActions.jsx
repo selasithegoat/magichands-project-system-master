@@ -19,6 +19,11 @@ import { getFullName, getLeadDisplay } from "../../utils/leadDisplay";
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
 import {
+  getProductionWorkForDepartments,
+  getUserProductionWork,
+  hasItemLevelProductionAssignments,
+} from "../../utils/productionWork";
+import {
   getQuoteRequirementSummary,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
@@ -1091,6 +1096,10 @@ const EngagedProjectActions = ({ user }) => {
   const activeBatches = useMemo(
     () => batches.filter((batch) => batch?.status !== "cancelled"),
     [batches],
+  );
+  const userProductionWork = useMemo(
+    () => getUserProductionWork(project, user),
+    [project, user],
   );
   const hasExistingProjectBatches = useMemo(() => {
     const activeCount = Number(batchAccessSummary?.activeCount);
@@ -3303,6 +3312,51 @@ const EngagedProjectActions = ({ user }) => {
         </section>
       )}
 
+      {(hasProductionParent || productionSubDepts.length > 0) && (
+        <section className="engaged-section engaged-your-production-work">
+          <div className="engaged-section-header">
+            <div>
+              <h2 className="engaged-section-title">Your Production Work</h2>
+              <p className="engaged-section-subtitle">
+                Items and scopes assigned to your production department.
+              </p>
+            </div>
+            <div className="engaged-section-tags">
+              <span className="engaged-section-chip">
+                {userProductionWork.length}{" "}
+                {userProductionWork.length === 1 ? "assignment" : "assignments"}
+              </span>
+            </div>
+          </div>
+          <div className="engaged-production-work-grid">
+            {userProductionWork.length > 0 ? (
+              userProductionWork.map((entry) => (
+                <article
+                  className="engaged-production-work-card"
+                  key={`${entry.itemId}-${entry.department}`}
+                >
+                  <div>
+                    <strong>{entry.description}</strong>
+                    <span>{entry.departmentLabel}</span>
+                  </div>
+                  <b>Qty {entry.qty}</b>
+                  {entry.breakdown && <p>Specs: {entry.breakdown}</p>}
+                  <p className="engaged-production-scope">
+                    Scope: {entry.scope || "No scope specified"}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <div className="engaged-warning-banner">
+                {hasItemLevelProductionAssignments(projectItems)
+                  ? "No project items are assigned to your production department."
+                  : "Production scope has not been assigned per item for this legacy project."}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {shouldShowItemBreakdownSection && (
         <section className="engaged-section">
           <div className="engaged-section-header">
@@ -5047,6 +5101,28 @@ const EngagedProjectActions = ({ user }) => {
               <strong>{getDepartmentLabel(acknowledgeTarget.department)}</strong>{" "}
               on project <strong>{projectId}</strong>.
             </p>
+            {(() => {
+              const work = getProductionWorkForDepartments(projectItems, [
+                acknowledgeTarget.department,
+              ]);
+              if (!work.length) return null;
+              return (
+                <div className="engaged-ack-work-list">
+                  <strong>Work you are acknowledging</strong>
+                  {work.map((entry) => (
+                    <div
+                      key={`${entry.itemId}-${entry.department}`}
+                      className="engaged-ack-work-item"
+                    >
+                      <span>
+                        {entry.description} · Qty {entry.qty}
+                      </span>
+                      <small>{entry.scope || "No scope specified"}</small>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <p className="acknowledge-confirm-text">
               Type the phrase below to confirm:
             </p>

@@ -23,6 +23,12 @@ import {
 import { normalizeProjectUpdateText } from "../../utils/projectUpdateText";
 import { renderProjectName } from "../../utils/projectName";
 import {
+  formatProductionWorkSummary,
+  getProductionWorkForDepartments,
+  getUserProductionWork,
+  hasItemLevelProductionAssignments,
+} from "../../utils/productionWork";
+import {
   getQuoteRequirementSummary,
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
@@ -1559,6 +1565,12 @@ const EngagedProjects = ({ user }) => {
                     const showVersionTag = projectVersion > 1;
                     const acknowledgementRows =
                       getProjectAcknowledgementRows(project);
+                    const userProductionWork = getUserProductionWork(
+                      project,
+                      user,
+                    );
+                    const productionWorkSummary =
+                      formatProductionWorkSummary(userProductionWork);
 
                     return (
                       <tr
@@ -1626,6 +1638,18 @@ const EngagedProjects = ({ user }) => {
                         <td className="project-name-cell">
                           <div className="project-name-stack">
                             <div className="project-name-text">{projectName}</div>
+                            {productionWorkSummary && (
+                              <div className="engaged-your-work-summary">
+                                Your work: {productionWorkSummary}
+                              </div>
+                            )}
+                            {!productionWorkSummary &&
+                              hasProductionParent &&
+                              !hasItemLevelProductionAssignments(project.items) && (
+                                <div className="engaged-your-work-summary legacy">
+                                  Production scope not assigned per item
+                                </div>
+                              )}
                             {revisionCount > 0 && (
                               <div className="revision-badge">
                                 Revision v{revisionCount}
@@ -2070,6 +2094,29 @@ const EngagedProjects = ({ user }) => {
               </strong>
               .
             </p>
+            {(() => {
+              const work = getProductionWorkForDepartments(
+                acknowledgeTarget.project?.items,
+                [acknowledgeTarget.department],
+              );
+              if (!work.length) return null;
+              return (
+                <div className="engaged-ack-work-list">
+                  <strong>Work you are acknowledging</strong>
+                  {work.map((entry) => (
+                    <div
+                      key={`${entry.itemId}-${entry.department}`}
+                      className="engaged-ack-work-item"
+                    >
+                      <span>
+                        {entry.description} · Qty {entry.qty}
+                      </span>
+                      <small>{entry.scope || "No scope specified"}</small>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <p className="acknowledge-confirm-text">
               Type the phrase below to confirm:
             </p>

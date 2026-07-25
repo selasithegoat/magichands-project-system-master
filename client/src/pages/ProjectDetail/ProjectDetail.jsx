@@ -77,6 +77,10 @@ import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
+import {
+  getUserProductionDepartmentIds,
+  isProductionParentUser,
+} from "../../utils/productionWork";
 import ProjectPdfDownload from "../../components/features/ProjectPdfDownload";
 import PaintbrushIcon from "../../components/icons/PaintbrushIcon";
 import FactoryIcon from "../../components/icons/FactoryIcon";
@@ -1485,6 +1489,10 @@ const ProjectDetail = ({ user }) => {
                 }
                 assignmentOnly={isProjectLead}
                 canRequestFromStores={isProjectLead}
+                viewerProductionDepartments={getUserProductionDepartmentIds(
+                  user,
+                )}
+                viewerHasProductionParent={isProductionParentUser(user)}
               />
               <ReferenceMaterialsCard project={project} />
               <ApprovedMockupCard
@@ -2589,6 +2597,8 @@ const OrderItemsCard = ({
   readOnly = false,
   assignmentOnly = false,
   canRequestFromStores = false,
+  viewerProductionDepartments = [],
+  viewerHasProductionParent = false,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // Track item being edited
@@ -2618,6 +2628,10 @@ const OrderItemsCard = ({
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestError, setRequestError] = useState("");
   const [inventoryError, setInventoryError] = useState("");
+  const viewerProductionDepartmentSet = useMemo(
+    () => new Set(viewerProductionDepartments),
+    [viewerProductionDepartments],
+  );
 
   const activeInventoryLine = useMemo(
     () =>
@@ -3534,9 +3548,24 @@ const OrderItemsCard = ({
                     <span className="item-name">{item.description}</span>
                     <span className="item-sub">{item.breakdown}</span>
                     {(item.productionAssignments || []).map((assignment) => (
-                      <span className="item-sub" key={assignment.department}>
+                      <span
+                        className={`item-sub ${
+                          viewerHasProductionParent ||
+                          viewerProductionDepartmentSet.has(
+                            normalizeDepartmentId(assignment.department),
+                          )
+                            ? "viewer-production-work"
+                            : ""
+                        }`}
+                        key={assignment.department}
+                      >
                         {getDepartmentLabel(assignment.department)}
                         {assignment.scope ? ` — ${assignment.scope}` : ""}
+                        {(viewerHasProductionParent ||
+                          viewerProductionDepartmentSet.has(
+                            normalizeDepartmentId(assignment.department),
+                          )) &&
+                          " · Your work"}
                       </span>
                     ))}
                   </div>

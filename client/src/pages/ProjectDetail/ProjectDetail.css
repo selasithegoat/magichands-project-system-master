@@ -2840,3 +2840,13 @@ textarea.input-field {
   line-height: 1.35;
   white-space: pre-wrap;
 }
+.item-sub.viewer-production-work {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.45rem;
+  border-radius: 6px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 600;
+}
