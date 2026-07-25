@@ -385,3 +385,27 @@
   text-align: center;
   color: var(--text-secondary);
 }
+.group-item-production-list {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.group-item-production-assignment {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #dbeafe;
+  border-radius: 7px;
+  background: #eff6ff;
+}
+
+.group-item-production-assignment strong {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+}
+
+.group-item-production-assignment span {
+  color: #64748b;
+  font-size: 0.75rem;
+}

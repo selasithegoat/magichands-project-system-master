@@ -2246,3 +2246,28 @@
     width: 100%;
   }
 }
+.admin-item-production-list {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 180px;
+}
+
+.admin-item-production-assignment {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #dbeafe;
+  border-radius: 7px;
+  background: #eff6ff;
+}
+
+.admin-item-production-assignment strong {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+}
+
+.admin-item-production-assignment span,
+.admin-item-production-unassigned {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}

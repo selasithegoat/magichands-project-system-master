@@ -5,6 +5,7 @@ import OrderMeetingCard from "../../components/OrderMeetingCard/OrderMeetingCard
 import { downloadGroupProjectBrief } from "../../utils/groupProjectBriefDownload";
 import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
+import { getDepartmentLabel } from "@client/constants/departments";
 import "./OrderGroupDetails.css";
 
 const toEntityId = (value) => {
@@ -269,6 +270,7 @@ const ProjectDetailBlock = ({ project, onViewDetails }) => {
               <tr>
                 <th>Description</th>
                 <th>Detailed Specs</th>
+                <th>Production Type &amp; Scope</th>
                 <th>Qty</th>
               </tr>
             </thead>
@@ -277,6 +279,27 @@ const ProjectDetailBlock = ({ project, onViewDetails }) => {
                 <tr key={`${item.description || "item"}-${index}`}>
                   <td>{item.description || "-"}</td>
                   <td>{item.breakdown || "-"}</td>
+                  <td>
+                    {(item.productionAssignments || []).length > 0 ? (
+                      <div className="group-item-production-list">
+                        {item.productionAssignments.map((assignment) => (
+                          <div
+                            className="group-item-production-assignment"
+                            key={assignment.department}
+                          >
+                            <strong>
+                              {getDepartmentLabel(assignment.department)}
+                            </strong>
+                            <span>
+                              {assignment.scope || "No scope specified"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="group-muted">Not assigned</span>
+                    )}
+                  </td>
                   <td>{item.qty || "-"}</td>
                 </tr>
               ))}

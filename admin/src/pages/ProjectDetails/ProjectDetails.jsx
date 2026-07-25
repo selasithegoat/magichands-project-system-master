@@ -24,6 +24,7 @@ import Modal from "../../components/Modal/Modal";
 import DeliveryCountdownBadge from "@client/components/features/DeliveryCountdownBadge";
 import ProjectComments from "@client/components/features/ProjectComments";
 import { buildFileKey } from "@client/utils/referenceAttachments";
+import { getDepartmentLabel } from "@client/constants/departments";
 import {
   getQuoteRequirementSummary,
   getQuoteStatusDisplay,
@@ -4580,6 +4581,7 @@ const ProjectDetails = ({ user }) => {
                     <tr>
                       <th>Description</th>
                       <th>Detailed Specs</th>
+                      <th>Production Type &amp; Scope</th>
                       <th>Qty</th>
                     </tr>
                   </thead>
@@ -4588,6 +4590,29 @@ const ProjectDetails = ({ user }) => {
                       <tr key={i}>
                         <td>{item.description}</td>
                         <td>{item.breakdown || "-"}</td>
+                        <td>
+                          {(item.productionAssignments || []).length > 0 ? (
+                            <div className="admin-item-production-list">
+                              {item.productionAssignments.map((assignment) => (
+                                <div
+                                  className="admin-item-production-assignment"
+                                  key={assignment.department}
+                                >
+                                  <strong>
+                                    {getDepartmentLabel(assignment.department)}
+                                  </strong>
+                                  <span>
+                                    {assignment.scope || "No scope specified"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="admin-item-production-unassigned">
+                              Not assigned
+                            </span>
+                          )}
+                        </td>
                         <td>{item.qty}</td>
                       </tr>
                     ))}
