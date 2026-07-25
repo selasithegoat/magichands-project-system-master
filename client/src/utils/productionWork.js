@@ -73,11 +73,13 @@ export const getProductionWorkForDepartments = (
 };
 
 export const getUserProductionWork = (project, user) =>
-  getProductionWorkForDepartments(
-    project?.items,
-    getUserProductionDepartmentIds(user),
-    isProductionParentUser(user),
-  );
+  project?.projectType === "Quote"
+    ? []
+    : getProductionWorkForDepartments(
+        project?.items,
+        getUserProductionDepartmentIds(user),
+        isProductionParentUser(user),
+      );
 
 export const hasItemLevelProductionAssignments = (items = []) =>
   (Array.isArray(items) ? items : []).some(

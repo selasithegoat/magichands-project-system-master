@@ -26,7 +26,6 @@ import {
   SignIcon,
   FactoryIcon,
 } from "../../../components/icons/DeptIcons3";
-import { getDepartmentLabel } from "../../../constants/departments";
 
 const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   const selectedDepts = Array.from(
@@ -37,16 +36,6 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
     ),
   ).filter(Boolean);
   const [searchTerm, setSearchTerm] = useState("");
-  const itemProductionDepartments = Array.from(
-    new Set(
-      (formData.items || []).flatMap((item) =>
-        (item.productionAssignments || []).map(
-          (assignment) => assignment.department,
-        ),
-      ),
-    ),
-  ).filter(Boolean);
-
   const allDepartments = [
     { id: "graphics", label: "Graphics", icon: <GraphicsIcon /> },
     { id: "stock", label: "Stock", icon: <StockIcon /> },
@@ -97,7 +86,6 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   );
 
   const toggleDept = (id) => {
-    if (itemProductionDepartments.includes(id)) return;
     const newDepts = selectedDepts.includes(id)
       ? selectedDepts.filter((item) => item !== id)
       : [...selectedDepts, id];
@@ -122,8 +110,7 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         <div className="page-title-section">
           <h2 className="page-title">Select Engaged Departments</h2>
           <p className="page-subtitle">
-            Select the other teams required for this quote. Production teams
-            assigned to items are included automatically.
+            Select the departments required for this quote.
           </p>
         </div>
 
@@ -172,21 +159,11 @@ const QuoteStep3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
               key={dept.id}
               label={dept.label}
               icon={dept.icon}
-              selected={
-                selectedDepts.includes(dept.id) ||
-                itemProductionDepartments.includes(dept.id)
-              }
-              disabled={itemProductionDepartments.includes(dept.id)}
+              selected={selectedDepts.includes(dept.id)}
               onClick={() => toggleDept(dept.id)}
             />
           ))}
         </div>
-        {itemProductionDepartments.length > 0 && (
-          <p className="page-subtitle" style={{ marginTop: "1rem" }}>
-            Item production:{" "}
-            {itemProductionDepartments.map(getDepartmentLabel).join(", ")}
-          </p>
-        )}
       </div>
 
       <div

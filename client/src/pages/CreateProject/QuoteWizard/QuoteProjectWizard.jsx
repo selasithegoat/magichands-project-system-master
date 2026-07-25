@@ -252,7 +252,10 @@ const QuoteProjectWizard = () => {
                 data.quoteDetails?.checklist || prev.quoteDetails?.checklist,
               ),
             },
-            items: data.items || [],
+            items: (data.items || []).map((item) => ({
+              ...item,
+              productionAssignments: [],
+            })),
             receivedTime: data.receivedTime || prev.receivedTime,
             client: data.details?.client || "",
             briefOverview: data.details?.briefOverview || "",
@@ -396,6 +399,10 @@ const QuoteProjectWizard = () => {
     try {
       const payload = {
         ...formData,
+        items: (formData.items || []).map((item) => ({
+          ...item,
+          productionAssignments: [],
+        })),
         projectType: formData.projectType || "Quote",
         // Lead acceptance moves Quote Created -> Pending Scope Approval.
         status: editingId
@@ -481,7 +488,6 @@ const QuoteProjectWizard = () => {
           onBack={handleBack}
           onCancel={handleCancelProject}
           assignmentOnly={!!editingId}
-          showAssignments={!!editingId}
         />
       )}
       {currentStep === 3 && (

@@ -893,6 +893,14 @@ const mergeDepartmentsWithItemAssignments = (departments, items) =>
     ]),
   );
 
+const withoutProductionResponsibilities = (departments, items) => ({
+  departments: normalizeProjectDepartmentSelections(departments),
+  items: normalizeProjectItems(items).map((item) => ({
+    ...item,
+    productionAssignments: [],
+  })),
+});
+
 const syncAssignedProductionDepartments = (
   project,
   removableDepartments = [],
@@ -1353,7 +1361,9 @@ const buildProjectAccessQuery = (req) => {
   }
 
   if (isEngagedMode && !(hasAdminPortalAccess(req.user) && isAdminPortal)) {
-    const engagedConditions = [{ departments: { $in: engagedDepartmentFilters } }];
+    const engagedConditions = [
+      { departments: { $in: engagedDepartmentFilters } },
+    ];
     if (engagedDepartmentFilters.includes("graphics")) {
       engagedConditions.push(buildQuoteGraphicsMockupEngagementCondition());
     }
@@ -8697,6 +8707,17 @@ const createProject = async (req, res) => {
 
     const resolvedOrderId = linkedOrder?.orderNumber || finalOrderId;
 
+    const projectResponsibilities =
+      normalizedProjectType === "Quote"
+        ? withoutProductionResponsibilities(departments, finalItems)
+        : {
+            departments: mergeDepartmentsWithItemAssignments(
+              departments,
+              finalItems,
+            ),
+            items: normalizeProjectItems(finalItems),
+          };
+
     // Create project
     const project = new Project({
       orderId: resolvedOrderId,
@@ -8722,8 +8743,8 @@ const createProject = async (req, res) => {
         sampleImageNote: resolvedSampleImageNote, // [NEW]
         attachments: normalizedExistingAttachments, // [NEW]
       },
-      departments: mergeDepartmentsWithItemAssignments(departments, finalItems),
-      items: normalizeProjectItems(finalItems),
+      departments: projectResponsibilities.departments,
+      items: projectResponsibilities.items,
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
       currentStep: status ? 1 : 2, // If assigned status provided, likely Step 1 needs completion. Else Step 2.
@@ -9579,11 +9600,22 @@ const addItemToProject = async (req, res) => {
       description,
       breakdown: breakdown || "",
       qty: Number(qty),
-      productionAssignments: normalizeProductionAssignments(productionAssignments),
+      productionAssignments: isQuoteProject(project)
+        ? []
+        : normalizeProductionAssignments(productionAssignments),
     };
 
     project.items.push(newItem);
-    syncAssignedProductionDepartments(project);
+    if (isQuoteProject(project)) {
+      const responsibilities = withoutProductionResponsibilities(
+        project.departments,
+        project.items,
+      );
+      project.departments = responsibilities.departments;
+      project.items = responsibilities.items;
+    } else {
+      syncAssignedProductionDepartments(project);
+    }
     project.sectionUpdates = project.sectionUpdates || {};
     project.sectionUpdates.items = new Date();
     project.orderRevisionMeta = {
@@ -9653,7 +9685,7 @@ const updateItemInProject = async (req, res) => {
     const { id, itemId } = req.params;
 
     const projectForAccess = await Project.findById(id).select(
-      `${PROJECT_MUTATION_ACCESS_FIELDS} items`,
+      `${PROJECT_MUTATION_ACCESS_FIELDS} items projectType`,
     );
     if (!ensureProjectMutationAccess(req, res, projectForAccess, "manage")) return;
     const existingItem = Array.isArray(projectForAccess?.items)
@@ -9680,12 +9712,14 @@ const updateItemInProject = async (req, res) => {
       ? breakdown
       : existingItem?.breakdown;
     const resolvedQty = canReviseItem ? Number(qty) : Number(existingItem?.qty);
-    const resolvedAssignments = Object.prototype.hasOwnProperty.call(
-      req.body || {},
-      "productionAssignments",
-    )
-      ? normalizeProductionAssignments(productionAssignments)
-      : normalizeProductionAssignments(existingItem?.productionAssignments);
+    const resolvedAssignments = isQuoteProject(projectForAccess)
+      ? []
+      : Object.prototype.hasOwnProperty.call(
+            req.body || {},
+            "productionAssignments",
+          )
+        ? normalizeProductionAssignments(productionAssignments)
+        : normalizeProductionAssignments(existingItem?.productionAssignments);
     const nextItemSummary = formatRevisionItemSummary({
       description: resolvedDescription,
       breakdown: resolvedBreakdown,
@@ -16939,8 +16973,11 @@ const updateProject = async (req, res) => {
     }
 
     if (isLeadAcceptance) {
-      items = mergeItemProductionAssignments(project.items, items);
+      items = isQuoteProject(project)
+        ? withoutProductionResponsibilities([], project.items).items
+        : mergeItemProductionAssignments(project.items, items);
       if (
+        !isQuoteProject(project) &&
         items.length > 0 &&
         items.some((item) => item.productionAssignments.length === 0)
       ) {
@@ -16949,9 +16986,11 @@ const updateProject = async (req, res) => {
             "Assign at least one production department to every order item before accepting the project.",
         });
       }
-      departments = normalizeProjectDepartmentSelections(departments).filter(
-        (department) => !PRODUCTION_SUB_DEPARTMENT_TOKENS.has(department),
-      );
+      departments = isQuoteProject(project)
+        ? normalizeProjectDepartmentSelections(departments)
+        : normalizeProjectDepartmentSelections(departments).filter(
+            (department) => !PRODUCTION_SUB_DEPARTMENT_TOKENS.has(department),
+          );
       orderId = undefined;
       orderRef = undefined;
       orderDate = undefined;
@@ -17339,10 +17378,19 @@ const updateProject = async (req, res) => {
       project.sectionUpdates.items = new Date();
     }
     if (departments || items) {
-      project.departments = mergeDepartmentsWithItemAssignments(
-        project.departments,
-        project.items,
-      );
+      if (isQuoteProject(project)) {
+        const responsibilities = withoutProductionResponsibilities(
+          project.departments,
+          project.items,
+        );
+        project.departments = responsibilities.departments;
+        project.items = responsibilities.items;
+      } else {
+        project.departments = mergeDepartmentsWithItemAssignments(
+          project.departments,
+          project.items,
+        );
+      }
       project.sectionUpdates.departments = new Date();
     }
     if (uncontrollableFactors) {

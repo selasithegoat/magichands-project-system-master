@@ -3,7 +3,6 @@ import Input from "../../../components/ui/Input";
 import ProgressBar from "../../../components/ui/ProgressBar";
 import BackArrow from "../../../components/icons/BackArrow";
 import TrashIcon from "../../../components/icons/TrashIcon";
-import ProductionAssignmentsEditor from "../../../components/features/ProductionAssignmentsEditor";
 
 const QuoteStep2 = ({
   formData,
@@ -12,24 +11,7 @@ const QuoteStep2 = ({
   onBack,
   onCancel,
   assignmentOnly = false,
-  showAssignments = true,
 }) => {
-  const [assignmentError, setAssignmentError] = React.useState("");
-  const continueToNextStep = () => {
-    if (
-      assignmentOnly &&
-      (formData.items || []).some(
-        (item) => !(item.productionAssignments || []).length,
-      )
-    ) {
-      setAssignmentError(
-        "Assign at least one production department to every quote item.",
-      );
-      return;
-    }
-    setAssignmentError("");
-    onNext();
-  };
   const addItem = () => {
     const newItems = [
       ...(formData.items || []),
@@ -37,7 +19,6 @@ const QuoteStep2 = ({
         description: "",
         qty: 1,
         breakdown: "",
-        productionAssignments: [],
       },
     ];
     setFormData({ items: newItems });
@@ -128,15 +109,6 @@ const QuoteStep2 = ({
               >
                 <TrashIcon />
               </button>}
-              {showAssignments && <div style={{ gridColumn: "1 / -1", width: "100%" }}>
-                <ProductionAssignmentsEditor
-                  assignments={item.productionAssignments}
-                  compact
-                  onChange={(productionAssignments) =>
-                    updateItem(idx, "productionAssignments", productionAssignments)
-                  }
-                />
-              </div>}
             </div>
           ))}
 
@@ -160,11 +132,6 @@ const QuoteStep2 = ({
           >
             + Add Item
           </button>}
-          {assignmentError && (
-            <p style={{ color: "#b91c1c", fontWeight: 600 }}>
-              {assignmentError}
-            </p>
-          )}
         </div>
       </div>
 
@@ -194,7 +161,7 @@ const QuoteStep2 = ({
         </button>
         <button
           className="next-btn"
-          onClick={continueToNextStep}
+          onClick={onNext}
           style={{
             background: "var(--primary-color)",
             color: "white",
