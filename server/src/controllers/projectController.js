@@ -6383,25 +6383,93 @@ const buildProductionItemSubjectsByDepartment = (items = []) => {
   const map = new Map();
 
   items.forEach((item) => {
-    const departmentId = normalizeProductionDepartment(
-      item?.department || item?.departmentRaw,
-    );
-    if (!departmentId) return;
-
     const subject = normalizeRiskItemSubject(item);
     if (!subject) return;
 
-    if (!map.has(departmentId)) {
-      map.set(departmentId, []);
-    }
+    const assignmentDepartments = toSafeArray(item?.productionAssignments)
+      .map((assignment) =>
+        normalizeProductionDepartment(
+          assignment?.department || assignment?.departmentId,
+        ),
+      )
+      .filter(Boolean);
+    const legacyDepartment = normalizeProductionDepartment(
+      item?.department || item?.departmentRaw,
+    );
+    const departmentIds = Array.from(
+      new Set([
+        ...assignmentDepartments,
+        ...(legacyDepartment ? [legacyDepartment] : []),
+      ]),
+    );
 
-    const existing = map.get(departmentId);
-    if (existing.includes(subject)) return;
-    if (existing.length >= 3) return;
-    existing.push(subject);
+    departmentIds.forEach((departmentId) => {
+      if (!map.has(departmentId)) {
+        map.set(departmentId, []);
+      }
+
+      const existing = map.get(departmentId);
+      if (existing.includes(subject) || existing.length >= 3) return;
+      existing.push(subject);
+    });
   });
 
   return map;
+};
+
+const hasItemLevelProductionRouting = (items = []) =>
+  toSafeArray(items).some(
+    (item) => toSafeArray(item?.productionAssignments).length > 0,
+  );
+
+const filterRiskSuggestionsToItemAssignments = (
+  suggestions = [],
+  context = {},
+) => {
+  if (!hasItemLevelProductionRouting(context.items)) {
+    return sanitizeRiskSuggestions(suggestions, Number.POSITIVE_INFINITY);
+  }
+
+  const subjectsByDepartment = buildProductionItemSubjectsByDepartment(
+    context.items,
+  );
+  const allItemSubjects = buildGlobalItemSubjects(context.items);
+
+  return sanitizeRiskSuggestions(
+    suggestions,
+    Number.POSITIVE_INFINITY,
+  ).filter((suggestion) => {
+    const departmentId = normalizeProductionDepartment(
+      suggestion?.department,
+    );
+    if (!departmentId) return true;
+
+    const assignedSubjects = subjectsByDepartment.get(departmentId) || [];
+    if (assignedSubjects.length === 0) return false;
+
+    const itemRef = toText(suggestion?.itemRef).toLowerCase();
+    if (
+      itemRef &&
+      !assignedSubjects.some((subject) => {
+        const subjectTokens = buildRiskTokenSet(subject, 3);
+        const itemRefTokens = buildRiskTokenSet(itemRef, 3);
+        return (
+          subject.toLowerCase() === itemRef ||
+          computeTokenOverlapRatio(subjectTokens, itemRefTokens) >= 0.5
+        );
+      })
+    ) {
+      return false;
+    }
+
+    const description = toText(suggestion?.description).toLowerCase();
+    const mentionedSubjects = allItemSubjects.filter((subject) =>
+      description.includes(subject.toLowerCase()),
+    );
+    return mentionedSubjects.every((subject) =>
+      assignedSubjects.includes(subject),
+    );
+  });
 };
 
 const buildGlobalItemSubjects = (items = []) => {
@@ -6622,6 +6690,7 @@ const buildFallbackRiskSuggestions = (context) => {
     context.items,
   );
   const globalItemSubjects = buildGlobalItemSubjects(context.items);
+  const hasItemRouting = hasItemLevelProductionRouting(context.items);
   const globalItemSubjectPool = globalItemSubjects.length
     ? shuffleArray(globalItemSubjects)
     : [];
@@ -6636,9 +6705,12 @@ const buildFallbackRiskSuggestions = (context) => {
     const label = PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId;
     const departmentItemSubjects =
       itemSubjectsByDepartment.get(departmentId) || [];
+    if (hasItemRouting && departmentItemSubjects.length === 0) return;
     const itemSubjectPool = departmentItemSubjects.length
       ? shuffleArray(departmentItemSubjects)
-      : globalItemSubjectPool;
+      : hasItemRouting
+        ? []
+        : globalItemSubjectPool;
 
     templates.forEach((template, index) => {
       const itemSubject =
@@ -6647,7 +6719,11 @@ const buildFallbackRiskSuggestions = (context) => {
           : "";
       const matchingInsight = toSafeArray(context.itemInsights).find(
         (item) =>
-          item.department === departmentId && item.subject === itemSubject,
+          (item.department === departmentId ||
+            toSafeArray(item.productionAssignments).some(
+              (assignment) => assignment.department === departmentId,
+            )) &&
+          item.subject === itemSubject,
       );
 
       fallbackSuggestions.push(
@@ -6799,6 +6875,9 @@ const buildAiRiskPrompt = (context = {}) => {
     "- Return 4 to 5 suggestions.",
     `- Use only these facet values: ${RISK_FACETS.join(", ")}.`,
     "- Each description must mention the relevant item or production type for this project.",
+    "- A department may only be paired with an item when that department appears in that item's productionAssignments.",
+    "- Never apply a project-level department to every item. Respect each item's productionAssignments exactly.",
+    "- Set department and itemRef on every department-specific suggestion.",
     "- Each description must be specific to this project (items, departments, timeline, or constraints).",
     "- Each preventive measure must be actionable and directly mitigate its paired risk.",
     "- Keep description <= 160 chars and preventive <= 220 chars.",
@@ -15978,9 +16057,9 @@ const suggestProductionRisks = async (req, res) => {
 
     try {
       const aiSuggestions = await requestAiRiskSuggestions(context);
-      suggestions = filterExistingRiskSuggestions(
-        aiSuggestions,
-        blockedDescriptions,
+      suggestions = filterRiskSuggestionsToItemAssignments(
+        filterExistingRiskSuggestions(aiSuggestions, blockedDescriptions),
+        context,
       );
       if (suggestions.length > 0) {
         usedOpenAi = true;
@@ -15997,13 +16076,14 @@ const suggestProductionRisks = async (req, res) => {
     if (openAiError || suggestions.length < MIN_RISK_SUGGESTIONS) {
       try {
         const ollamaSuggestions = await requestOllamaRiskSuggestions(context);
-        const filteredOllamaSuggestions = filterExistingRiskSuggestions(
-          ollamaSuggestions,
-          [
-            ...blockedDescriptions,
-            ...suggestions.map((entry) => entry.description),
-          ],
-        );
+        const filteredOllamaSuggestions =
+          filterRiskSuggestionsToItemAssignments(
+            filterExistingRiskSuggestions(ollamaSuggestions, [
+              ...blockedDescriptions,
+              ...suggestions.map((entry) => entry.description),
+            ]),
+            context,
+          );
 
         if (filteredOllamaSuggestions.length > 0) {
           suggestions = mergeRiskSuggestions(
@@ -16032,6 +16112,10 @@ const suggestProductionRisks = async (req, res) => {
       suggestions = filterExistingRiskSuggestions(
         suggestions,
         blockedDescriptions,
+      );
+      suggestions = filterRiskSuggestionsToItemAssignments(
+        suggestions,
+        context,
       );
       suggestions = prioritizeRiskSuggestions(
         suggestions,
@@ -19978,5 +20062,10 @@ module.exports = {
   cancelOrderMeeting,
   completeOrderMeeting,
   getOrderMeetingByNumber,
+  __riskRoutingTestUtils: {
+    buildProductionItemSubjectsByDepartment,
+    buildFallbackRiskSuggestions,
+    filterRiskSuggestionsToItemAssignments,
+  },
 };
 
