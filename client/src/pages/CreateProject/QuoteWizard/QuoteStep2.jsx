@@ -3,12 +3,42 @@ import Input from "../../../components/ui/Input";
 import ProgressBar from "../../../components/ui/ProgressBar";
 import BackArrow from "../../../components/icons/BackArrow";
 import TrashIcon from "../../../components/icons/TrashIcon";
+import ProductionAssignmentsEditor from "../../../components/features/ProductionAssignmentsEditor";
 
-const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+const QuoteStep2 = ({
+  formData,
+  setFormData,
+  onNext,
+  onBack,
+  onCancel,
+  assignmentOnly = false,
+  showAssignments = true,
+}) => {
+  const [assignmentError, setAssignmentError] = React.useState("");
+  const continueToNextStep = () => {
+    if (
+      assignmentOnly &&
+      (formData.items || []).some(
+        (item) => !(item.productionAssignments || []).length,
+      )
+    ) {
+      setAssignmentError(
+        "Assign at least one production department to every quote item.",
+      );
+      return;
+    }
+    setAssignmentError("");
+    onNext();
+  };
   const addItem = () => {
     const newItems = [
       ...(formData.items || []),
-      { description: "", qty: 1, breakdown: "" },
+      {
+        description: "",
+        qty: 1,
+        breakdown: "",
+        productionAssignments: [],
+      },
     ];
     setFormData({ items: newItems });
   };
@@ -59,23 +89,26 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
               <Input
                 label={idx === 0 ? "Description" : ""}
                 placeholder="Item Description"
-                value={item.description}
-                onChange={(e) => updateItem(idx, "description", e.target.value)}
+              value={item.description}
+              onChange={(e) => updateItem(idx, "description", e.target.value)}
+              disabled={assignmentOnly}
               />
               <Input
                 type="number"
                 label={idx === 0 ? "Qty" : ""}
                 placeholder="Qty"
-                value={item.qty}
-                onChange={(e) => updateItem(idx, "qty", e.target.value)}
+              value={item.qty}
+              onChange={(e) => updateItem(idx, "qty", e.target.value)}
+              disabled={assignmentOnly}
               />
               <Input
                 label={idx === 0 ? "Breakdown" : ""}
                 placeholder="Size/Style breakdown"
-                value={item.breakdown}
-                onChange={(e) => updateItem(idx, "breakdown", e.target.value)}
+              value={item.breakdown}
+              onChange={(e) => updateItem(idx, "breakdown", e.target.value)}
+              disabled={assignmentOnly}
               />
-              <button
+              {!assignmentOnly && <button
                 type="button"
                 onClick={() => removeItem(idx)}
                 className="btn-remove"
@@ -94,11 +127,20 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                 }}
               >
                 <TrashIcon />
-              </button>
+              </button>}
+              {showAssignments && <div style={{ gridColumn: "1 / -1", width: "100%" }}>
+                <ProductionAssignmentsEditor
+                  assignments={item.productionAssignments}
+                  compact
+                  onChange={(productionAssignments) =>
+                    updateItem(idx, "productionAssignments", productionAssignments)
+                  }
+                />
+              </div>}
             </div>
           ))}
 
-          <button
+          {!assignmentOnly && <button
             type="button"
             onClick={addItem}
             className="btn-add"
@@ -117,7 +159,12 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
             }}
           >
             + Add Item
-          </button>
+          </button>}
+          {assignmentError && (
+            <p style={{ color: "#b91c1c", fontWeight: 600 }}>
+              {assignmentError}
+            </p>
+          )}
         </div>
       </div>
 
@@ -147,7 +194,7 @@ const QuoteStep2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         </button>
         <button
           className="next-btn"
-          onClick={onNext}
+          onClick={continueToNextStep}
           style={{
             background: "var(--primary-color)",
             color: "white",

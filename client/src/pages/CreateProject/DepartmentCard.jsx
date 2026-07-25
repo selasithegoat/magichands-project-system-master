@@ -1,11 +1,21 @@
 import React from "react";
 import "./DepartmentCard.css";
 
-const DepartmentCard = ({ icon, label, selected, onClick }) => {
+const DepartmentCard = ({
+  icon,
+  label,
+  selected,
+  onClick,
+  disabled = false,
+}) => {
   return (
     <div
-      className={`dept-card ${selected ? "selected" : ""}`}
-      onClick={onClick}
+      className={`dept-card ${selected ? "selected" : ""} ${
+        disabled ? "disabled" : ""
+      }`}
+      onClick={disabled ? undefined : onClick}
+      aria-disabled={disabled}
+      title={disabled ? "Assigned to an order item" : undefined}
     >
       <div className="dept-icon-container">{icon}</div>
       <span className="dept-label">{label}</span>

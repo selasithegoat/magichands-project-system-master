@@ -5,9 +5,34 @@ import TrashIcon from "../../components/icons/TrashIcon";
 import PlusCircleIcon from "../../components/icons/PlusCircleIcon";
 import "./Step3.css";
 import ProgressBar from "../../components/ui/ProgressBar";
+import ProductionAssignmentsEditor from "../../components/features/ProductionAssignmentsEditor";
 
-const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+const Step3 = ({
+  formData,
+  setFormData,
+  onNext,
+  onBack,
+  onCancel,
+  assignmentOnly = false,
+  showAssignments = true,
+  stepNumber = 3,
+}) => {
   const items = formData.items || [];
+  const [assignmentError, setAssignmentError] = useState("");
+
+  const continueToNextStep = () => {
+    if (
+      assignmentOnly &&
+      items.some((item) => !(item.productionAssignments || []).length)
+    ) {
+      setAssignmentError(
+        "Assign at least one production department to every order item.",
+      );
+      return;
+    }
+    setAssignmentError("");
+    onNext();
+  };
 
   // Initialize with default items if empty (optional, but good for demo)
   // React.useEffect(() => {
@@ -21,7 +46,13 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
       Date.now().toString() + Math.random().toString(36).substr(2, 5);
     const newItems = [
       ...items,
-      { id: newId, description: "", breakdown: "", qty: 1 },
+      {
+        id: newId,
+        description: "",
+        breakdown: "",
+        qty: 1,
+        productionAssignments: [],
+      },
     ];
     setFormData({ items: newItems });
   };
@@ -58,13 +89,19 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
       <div className="step-scrollable-content">
         {/* Progress Bar */}
-        <ProgressBar currentStep={3} />
+        <ProgressBar currentStep={stepNumber} />
 
         {/* Title */}
         <div className="page-title-section">
-          <h2 className="page-title">Order Quantity Breakdown</h2>
+          <h2 className="page-title">
+            {assignmentOnly
+              ? "Assign Production Departments"
+              : "Order Quantity Breakdown"}
+          </h2>
           <p className="page-subtitle">
-            Please list all items, their breakdown, and quantities required.
+            {assignmentOnly
+              ? "Review each order item and select every production team responsible for it."
+              : "Please list all items, their breakdown, and quantities required."}
           </p>
         </div>
 
@@ -75,12 +112,14 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
               <div className="item-card-header">
                 <div className="item-number-badge">{index + 1}</div>
                 <span className="item-card-title">Item Details</span>
-                <button
-                  className="delete-btn"
-                  onClick={() => deleteItem(item.id)}
-                >
-                  <TrashIcon />
-                </button>
+                {!assignmentOnly && (
+                  <button
+                    className="delete-btn"
+                    onClick={() => deleteItem(item.id)}
+                  >
+                    <TrashIcon />
+                  </button>
+                )}
               </div>
 
               <div className="item-card-body">
@@ -91,6 +130,7 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                     updateItem(item.id, "description", e.target.value)
                   }
                   placeholder="e.g. Office Chairs"
+                  disabled={assignmentOnly}
                 />
 
                 <div className="item-row-split">
@@ -102,6 +142,7 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                         updateItem(item.id, "breakdown", e.target.value)
                       }
                       placeholder="e.g. Lobby Area"
+                      disabled={assignmentOnly}
                     />
                   </div>
                   <div style={{ flex: 3 }}>
@@ -113,24 +154,44 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
                         updateItem(item.id, "qty", e.target.value)
                       }
                       className="qty-input"
+                      disabled={assignmentOnly}
                     />
                   </div>
                 </div>
+                {showAssignments && (
+                  <ProductionAssignmentsEditor
+                    assignments={item.productionAssignments}
+                    onChange={(productionAssignments) =>
+                      updateItem(
+                        item.id,
+                        "productionAssignments",
+                        productionAssignments,
+                      )
+                    }
+                  />
+                )}
               </div>
             </div>
           ))}
         </div>
 
         {/* Add Button */}
-        <button className="add-item-btn" onClick={addItem}>
-          <PlusCircleIcon />
-          <span>Add Another Item</span>
-        </button>
+        {!assignmentOnly && (
+          <button className="add-item-btn" onClick={addItem}>
+            <PlusCircleIcon />
+            <span>Add Another Item</span>
+          </button>
+        )}
 
         <div className="total-items-display">
           <span>Total Items:</span>
           <span className="total-count">{totalItems}</span>
         </div>
+        {assignmentError && (
+          <p style={{ color: "#b91c1c", fontWeight: 600 }}>
+            {assignmentError}
+          </p>
+        )}
       </div>
 
       {/* Footer */}
@@ -138,7 +199,7 @@ const Step3 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         <button className="back-text-btn" onClick={onBack}>
           Back
         </button>
-        <button className="next-btn-small" onClick={onNext}>
+        <button className="next-btn-small" onClick={continueToNextStep}>
           Next Step
           <svg
             width="20"

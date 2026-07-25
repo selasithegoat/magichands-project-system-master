@@ -68,7 +68,12 @@ const formatFileSize = (bytes) => {
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 };
 
-const createEmptyItem = () => ({ description: "", breakdown: "", qty: 1 });
+const createEmptyItem = () => ({
+  description: "",
+  breakdown: "",
+  qty: 1,
+  productionAssignments: [],
+});
 
 const createEmptyPersistedDraftFiles = () => ({
   attachments: [],
@@ -249,6 +254,9 @@ const normalizeDraftItems = (items) => {
     description: String(item?.description || ""),
     breakdown: String(item?.breakdown || ""),
     qty: item?.qty === undefined || item?.qty === null ? 1 : item.qty,
+    productionAssignments: Array.isArray(item?.productionAssignments)
+      ? item.productionAssignments
+      : [],
   }));
 };
 
@@ -1163,7 +1171,7 @@ const NewOrders = ({ user = null }) => {
   const addItem = () => {
     setFormData((prev) => ({
       ...prev,
-      items: [...prev.items, { description: "", breakdown: "", qty: 1 }],
+      items: [...prev.items, createEmptyItem()],
     }));
   };
 

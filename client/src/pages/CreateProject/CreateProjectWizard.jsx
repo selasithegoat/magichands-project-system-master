@@ -581,21 +581,25 @@ const CreateProjectWizard = ({ onProjectCreate }) => {
         />
       )}
       {currentStep === 2 && (
-        <Step2
-          formData={formData}
-          setFormData={handleUpdateFormData}
-          onNext={handleNext}
-          onBack={handleBack}
-          onCancel={handleCancelProject}
-        />
-      )}
-      {currentStep === 3 && (
         <Step3
           formData={formData}
           setFormData={handleUpdateFormData}
           onNext={handleNext}
           onBack={handleBack}
           onCancel={handleCancelProject}
+          assignmentOnly={!!editingId}
+          showAssignments={!!editingId}
+          stepNumber={2}
+        />
+      )}
+      {currentStep === 3 && (
+        <Step2
+          formData={formData}
+          setFormData={handleUpdateFormData}
+          onNext={handleNext}
+          onBack={handleBack}
+          onCancel={handleCancelProject}
+          stepNumber={3}
         />
       )}
       {currentStep === 4 && (

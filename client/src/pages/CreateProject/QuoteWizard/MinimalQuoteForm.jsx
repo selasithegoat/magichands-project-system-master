@@ -128,7 +128,12 @@ const normalizeChecklist = (checklist) => {
   return next;
 };
 
-const defaultQuoteItem = { description: "", breakdown: "", qty: 1 };
+const defaultQuoteItem = {
+  description: "",
+  breakdown: "",
+  qty: 1,
+  productionAssignments: [],
+};
 
 const normalizeDraftItems = (items) => {
   if (!Array.isArray(items) || items.length === 0) {
@@ -138,6 +143,9 @@ const normalizeDraftItems = (items) => {
     description: String(item?.description || ""),
     breakdown: String(item?.breakdown || ""),
     qty: item?.qty ?? 1,
+    productionAssignments: Array.isArray(item?.productionAssignments)
+      ? item.productionAssignments
+      : [],
   }));
 };
 
@@ -544,7 +552,7 @@ const MinimalQuoteForm = ({ user = null }) => {
   const addItem = () => {
     setFormData((prev) => ({
       ...prev,
-      items: [...prev.items, { description: "", breakdown: "", qty: 1 }],
+      items: [...prev.items, { ...defaultQuoteItem }],
     }));
   };
 

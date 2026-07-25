@@ -25,10 +25,18 @@ import {
   SignIcon,
   FactoryIcon,
 } from "../../components/icons/DeptIcons3";
+import { getDepartmentLabel } from "../../constants/departments";
 import "./Step2.css";
 import ProgressBar from "../../components/ui/ProgressBar";
 
-const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
+const Step2 = ({
+  formData,
+  setFormData,
+  onNext,
+  onBack,
+  onCancel,
+  stepNumber = 2,
+}) => {
   // Use formData.departments (default to [])
   const selectedDepts = Array.from(
     new Set(
@@ -38,6 +46,15 @@ const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
     ),
   ).filter(Boolean);
   const [searchTerm, setSearchTerm] = useState("");
+  const itemProductionDepartments = Array.from(
+    new Set(
+      (formData.items || []).flatMap((item) =>
+        (item.productionAssignments || []).map(
+          (assignment) => assignment.department,
+        ),
+      ),
+    ),
+  ).filter(Boolean);
 
   const allDepartments = [
     { id: "graphics", label: "Graphics", icon: <GraphicsIcon /> },
@@ -83,6 +100,7 @@ const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
   );
 
   const toggleDept = (id) => {
+    if (itemProductionDepartments.includes(id)) return;
     const newDepts = selectedDepts.includes(id)
       ? selectedDepts.filter((item) => item !== id)
       : [...selectedDepts, id];
@@ -104,13 +122,14 @@ const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
       <div className="step-scrollable-content">
         {/* Progress Bar */}
-        <ProgressBar currentStep={2} />
+        <ProgressBar currentStep={stepNumber} />
 
         {/* Title */}
         <div className="page-title-section">
           <h2 className="page-title">Select Engaged Departments</h2>
           <p className="page-subtitle">
-            Tap to select the teams required for this project.
+            Select the other teams required for this project. Production teams
+            assigned to items are included automatically.
           </p>
         </div>
 
@@ -154,11 +173,21 @@ const Step2 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
               key={dept.id}
               label={dept.label}
               icon={dept.icon}
-              selected={selectedDepts.includes(dept.id)}
+              selected={
+                selectedDepts.includes(dept.id) ||
+                itemProductionDepartments.includes(dept.id)
+              }
+              disabled={itemProductionDepartments.includes(dept.id)}
               onClick={() => toggleDept(dept.id)}
             />
           ))}
         </div>
+        {itemProductionDepartments.length > 0 && (
+          <p className="page-subtitle" style={{ marginTop: "1rem" }}>
+            Item production:{" "}
+            {itemProductionDepartments.map(getDepartmentLabel).join(", ")}
+          </p>
+        )}
       </div>
 
       {/* Footer */}

@@ -85,6 +85,7 @@ import TruckIcon from "../../components/icons/TruckIcon";
 import CheckCircleIcon from "../../components/icons/CheckCircleIcon";
 import CartIcon from "../../components/icons/CartIcon";
 import XIcon from "../../components/icons/XIcon";
+import ProductionAssignmentsEditor from "../../components/features/ProductionAssignmentsEditor";
 
 const STATUS_STEPS = [
   { label: "Order Created", statuses: ["Order Created"] },
@@ -1477,7 +1478,12 @@ const ProjectDetail = ({ user }) => {
                 project={project}
                 projectId={project._id}
                 onUpdate={fetchProject}
-                readOnly={true}
+                readOnly={
+                  !isProjectLead ||
+                  project.status === "Finished" ||
+                  isPendingAcceptanceStatus
+                }
+                assignmentOnly={isProjectLead}
                 canRequestFromStores={isProjectLead}
               />
               <ReferenceMaterialsCard project={project} />
@@ -2581,6 +2587,7 @@ const OrderItemsCard = ({
   projectId,
   onUpdate,
   readOnly = false,
+  assignmentOnly = false,
   canRequestFromStores = false,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
@@ -2589,6 +2596,7 @@ const OrderItemsCard = ({
     description: "",
     breakdown: "",
     qty: 1,
+    productionAssignments: [],
   });
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -2695,7 +2703,12 @@ const OrderItemsCard = ({
 
       if (res.ok) {
         setIsAdding(false);
-        setNewItem({ description: "", breakdown: "", qty: 1 });
+        setNewItem({
+          description: "",
+          breakdown: "",
+          qty: 1,
+          productionAssignments: [],
+        });
         showToast("Item added successfully", "success");
         if (onUpdate) onUpdate();
       } else {
@@ -2728,7 +2741,12 @@ const OrderItemsCard = ({
 
       if (res.ok) {
         setEditingItem(null);
-        setNewItem({ description: "", breakdown: "", qty: 1 });
+        setNewItem({
+          description: "",
+          breakdown: "",
+          qty: 1,
+          productionAssignments: [],
+        });
         showToast("Item updated successfully", "success");
         if (onUpdate) onUpdate();
       } else {
@@ -2748,6 +2766,7 @@ const OrderItemsCard = ({
       description: item.description,
       breakdown: item.breakdown,
       qty: item.qty,
+      productionAssignments: item.productionAssignments || [],
     });
     setIsAdding(true); // Reuse the adding UI for editing
   };
@@ -2755,7 +2774,12 @@ const OrderItemsCard = ({
   const cancelEditing = () => {
     setIsAdding(false);
     setEditingItem(null);
-    setNewItem({ description: "", breakdown: "", qty: 1 });
+    setNewItem({
+      description: "",
+      breakdown: "",
+      qty: 1,
+      productionAssignments: [],
+    });
   };
 
   const handleDeleteItem = (itemId) => {
@@ -3410,7 +3434,7 @@ const OrderItemsCard = ({
                 + Manual Purchase
               </button>
             ) : null}
-            {!readOnly && !isAdding ? (
+            {!readOnly && !assignmentOnly && !isAdding ? (
               <button
                 className="edit-link"
                 onClick={() => setIsAdding(true)}
@@ -3440,6 +3464,7 @@ const OrderItemsCard = ({
                 setNewItem({ ...newItem, description: e.target.value })
               }
               autoFocus
+              disabled={assignmentOnly}
             />
             <input
               type="text"
@@ -3449,6 +3474,7 @@ const OrderItemsCard = ({
               onChange={(e) =>
                 setNewItem({ ...newItem, breakdown: e.target.value })
               }
+              disabled={assignmentOnly}
             />
             <div className="edit-item-row">
               <label style={{ fontSize: "0.875rem", fontWeight: 500 }}>
@@ -3463,6 +3489,7 @@ const OrderItemsCard = ({
                 onChange={(e) =>
                   setNewItem({ ...newItem, qty: e.target.value })
                 }
+                disabled={assignmentOnly}
               />
               <div
                 style={{ marginLeft: "auto", display: "flex", gap: "0.5rem" }}
@@ -3479,6 +3506,13 @@ const OrderItemsCard = ({
                 </button>
               </div>
             </div>
+            <ProductionAssignmentsEditor
+              assignments={newItem.productionAssignments}
+              compact
+              onChange={(productionAssignments) =>
+                setNewItem({ ...newItem, productionAssignments })
+              }
+            />
           </div>
         </div>
       )}
@@ -3499,6 +3533,12 @@ const OrderItemsCard = ({
                   <div className="item-desc">
                     <span className="item-name">{item.description}</span>
                     <span className="item-sub">{item.breakdown}</span>
+                    {(item.productionAssignments || []).map((assignment) => (
+                      <span className="item-sub" key={assignment.department}>
+                        {getDepartmentLabel(assignment.department)}
+                        {assignment.scope ? ` — ${assignment.scope}` : ""}
+                      </span>
+                    ))}
                   </div>
                 </td>
                 <td className="item-qty">{item.qty}</td>
@@ -3522,19 +3562,25 @@ const OrderItemsCard = ({
                       <button
                         className="btn-icon-small"
                         onClick={() => startEditing(item)}
-                        aria-label={`Edit ${item.description || "item"}`}
-                        title="Edit item"
+                        aria-label={`Edit production routing for ${
+                          item.description || "item"
+                        }`}
+                        title={
+                          assignmentOnly
+                            ? "Edit production departments and scope"
+                            : "Edit item"
+                        }
                       >
                         <EditIcon width="14" height="14" color="#64748b" />
                       </button>
-                      <button
+                      {!assignmentOnly && <button
                         className="btn-icon-small delete"
                         onClick={() => handleDeleteItem(item._id)}
                         aria-label={`Delete ${item.description || "item"}`}
                         title="Delete item"
                       >
                         <TrashIcon width="14" height="14" color="#ef4444" />
-                      </button>
+                      </button>}
                         </>
                       )}
                     </div>

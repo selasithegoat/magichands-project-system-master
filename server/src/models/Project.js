@@ -621,6 +621,12 @@ const ProjectSchema = new mongoose.Schema(
         description: String,
         breakdown: String,
         qty: Number,
+        productionAssignments: [
+          {
+            department: { type: String, trim: true },
+            scope: { type: String, trim: true, default: "" },
+          },
+        ],
       },
     ], // Step 3: List of items
     batches: {

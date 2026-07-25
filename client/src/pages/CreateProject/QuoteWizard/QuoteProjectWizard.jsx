@@ -480,6 +480,8 @@ const QuoteProjectWizard = () => {
           onNext={handleNext}
           onBack={handleBack}
           onCancel={handleCancelProject}
+          assignmentOnly={!!editingId}
+          showAssignments={!!editingId}
         />
       )}
       {currentStep === 3 && (

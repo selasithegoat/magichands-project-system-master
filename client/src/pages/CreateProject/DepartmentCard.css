@@ -13,6 +13,11 @@
   padding: 12px;
 }
 
+.dept-card.disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
 .dept-card:hover {
   border-color: var(--primary-blue);
   background-color: var(--surface-alt);

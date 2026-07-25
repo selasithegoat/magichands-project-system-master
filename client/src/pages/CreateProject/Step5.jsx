@@ -9,6 +9,7 @@ import WarningIcon from "../../components/icons/WarningIcon";
 import ConfirmationModal from "../../components/ui/ConfirmationModal";
 import FloatingMessageToast from "../../components/ui/FloatingMessageToast";
 import { formatProjectDisplayName, renderProjectName } from "../../utils/projectName";
+import { getDepartmentLabel } from "../../constants/departments";
 
 import "./Step5.css";
 
@@ -356,6 +357,14 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
                     const itemDetails =
                       String(item?.breakdown || "").trim() ||
                       "No additional details";
+                    const productionDetails = (item.productionAssignments || [])
+                      .map(
+                        (assignment) =>
+                          `${getDepartmentLabel(assignment.department)}${
+                            assignment.scope ? `: ${assignment.scope}` : ""
+                          }`,
+                      )
+                      .join("; ");
 
                     return (
                       <div className="items-breakdown-row" role="row" key={idx}>
@@ -367,6 +376,7 @@ const Step5 = ({ formData, onCreate, onBack, onCancel, onComplete }) => {
                         </span>
                         <span className="items-cell items-col-detail" role="cell">
                           {itemDetails}
+                          {productionDetails ? ` · ${productionDetails}` : ""}
                         </span>
                       </div>
                     );

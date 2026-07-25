@@ -17,6 +17,7 @@ import {
   getReferenceFileName,
 } from "../../../utils/referenceAttachments";
 import { formatProjectDisplayName, renderProjectName } from "../../../utils/projectName";
+import { getDepartmentLabel } from "../../../constants/departments";
 import "./QuoteStep5.css"; // We'll create this or use Step5.css if shared
 
 const QuoteStep5 = ({
@@ -253,6 +254,17 @@ const QuoteStep5 = ({
                     <div key={idx} className="review-item-row-simple">
                       • {item.qty}x {item.description}{" "}
                       {item.breakdown && `(${item.breakdown})`}
+                      {(item.productionAssignments || []).length > 0 &&
+                        ` — ${item.productionAssignments
+                          .map(
+                            (assignment) =>
+                              `${getDepartmentLabel(assignment.department)}${
+                                assignment.scope
+                                  ? `: ${assignment.scope}`
+                                  : ""
+                              }`,
+                          )
+                          .join("; ")}`}
                     </div>
                   ))}
               </div>

@@ -271,12 +271,21 @@ const buildProjectPayload = (formData = {}) => {
   const items = toSafeArray(formData?.items)
     .map((item) => {
       const department = normalizeDepartmentId(item?.department);
+      const productionAssignments = toSafeArray(item?.productionAssignments)
+        .map((assignment) => ({
+          department: normalizeDepartmentId(
+            assignment?.department || assignment?.departmentId,
+          ),
+          scope: normalizeText(assignment?.scope),
+        }))
+        .filter((assignment) => assignment.department);
       return {
         description: normalizeText(item?.description),
         breakdown: normalizeText(item?.breakdown),
         quantity: toNumberOrNull(item?.qty ?? item?.quantity),
         department,
         departmentRaw: normalizeText(item?.department),
+        productionAssignments,
       };
     })
     .filter(
@@ -285,7 +294,8 @@ const buildProjectPayload = (formData = {}) => {
         item.breakdown ||
         item.department ||
         item.departmentRaw ||
-        item.quantity !== null,
+        item.quantity !== null ||
+        item.productionAssignments.length,
     );
 
   const checklistProductionDepartments = collectChecklistProductionDepartments(
@@ -296,7 +306,12 @@ const buildProjectPayload = (formData = {}) => {
   const productionDepartments = dedupe([
     ...departments.filter((dept) => PRODUCTION_DEPARTMENT_SET.has(dept)),
     ...items
-      .map((item) => item.department)
+      .flatMap((item) => [
+        item.department,
+        ...item.productionAssignments.map(
+          (assignment) => assignment.department,
+        ),
+      ])
       .filter((dept) => PRODUCTION_DEPARTMENT_SET.has(dept)),
     ...checklistProductionDepartments,
   ]);
@@ -378,6 +393,7 @@ export const buildProductionRiskInputSignature = (formData = {}) => {
       quantity: item.quantity,
       department: item.department,
       departmentRaw: item.departmentRaw,
+      productionAssignments: item.productionAssignments,
     })),
   };
 

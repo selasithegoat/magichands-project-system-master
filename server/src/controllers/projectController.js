@@ -829,6 +829,94 @@ const normalizeProjectDepartmentSelections = (value) =>
     ),
   );
 
+const normalizeProductionAssignments = (value) => {
+  const seen = new Set();
+  return (Array.isArray(value) ? value : [])
+    .map((assignment) => ({
+      department: normalizeDepartmentValue(
+        assignment?.department || assignment?.departmentId || assignment,
+      ),
+      scope: toText(assignment?.scope),
+    }))
+    .filter((assignment) => {
+      if (
+        !PRODUCTION_SUB_DEPARTMENT_TOKENS.has(assignment.department) ||
+        seen.has(assignment.department)
+      ) {
+        return false;
+      }
+      seen.add(assignment.department);
+      return true;
+    });
+};
+
+const normalizeProjectItems = (value) =>
+  (Array.isArray(value) ? value : []).map((item) => ({
+    description: toText(item?.description),
+    breakdown: toText(item?.breakdown),
+    qty: Number.isFinite(Number(item?.qty)) ? Number(item.qty) : 0,
+    productionAssignments: normalizeProductionAssignments(
+      item?.productionAssignments,
+    ),
+  }));
+
+const mergeItemProductionAssignments = (existingItems, incomingItems) => {
+  const existing = Array.isArray(existingItems) ? existingItems : [];
+  const incoming = Array.isArray(incomingItems) ? incomingItems : [];
+  const incomingById = new Map(
+    incoming
+      .filter((item) => item?._id || item?.id)
+      .map((item) => [String(item._id || item.id), item]),
+  );
+
+  return existing.map((item, index) => {
+    const incomingItem =
+      incomingById.get(String(item?._id || "")) || incoming[index] || {};
+    return {
+      description: toText(item?.description),
+      breakdown: toText(item?.breakdown),
+      qty: Number.isFinite(Number(item?.qty)) ? Number(item.qty) : 0,
+      productionAssignments: normalizeProductionAssignments(
+        incomingItem?.productionAssignments,
+      ),
+    };
+  });
+};
+
+const mergeDepartmentsWithItemAssignments = (departments, items) =>
+  Array.from(
+    new Set([
+      ...normalizeProjectDepartmentSelections(departments),
+      ...normalizeProjectItems(items).flatMap((item) =>
+        item.productionAssignments.map((assignment) => assignment.department),
+      ),
+    ]),
+  );
+
+const syncAssignedProductionDepartments = (
+  project,
+  removableDepartments = [],
+) => {
+  const assignedDepartments = new Set(
+    normalizeProjectItems(project?.items).flatMap((item) =>
+      item.productionAssignments.map((assignment) => assignment.department),
+    ),
+  );
+  const removable = new Set(
+    normalizeProjectDepartmentSelections(removableDepartments),
+  );
+  const retainedDepartments = normalizeProjectDepartmentSelections(
+    project?.departments,
+  ).filter(
+    (department) =>
+      !removable.has(department) || assignedDepartments.has(department),
+  );
+  project.departments = mergeDepartmentsWithItemAssignments(
+    retainedDepartments,
+    project?.items,
+  );
+};
+
 const hasDepartmentOverlap = (userDepartments, projectDepartments) => {
   const userCanonical = new Set(
     toDepartmentArray(userDepartments)
@@ -5320,18 +5408,25 @@ const resolveItemFamilyRule = (value = "") => {
 
 const buildRiskItemInsight = (item = {}, index = 0) => {
   const subject = normalizeRiskItemSubject(item);
+  const productionAssignments = toSafeArray(item?.productionAssignments);
   const combinedText = [
     subject,
     toText(item?.description),
     toText(item?.breakdown),
     toText(item?.department),
     toText(item?.departmentRaw),
+    ...productionAssignments.flatMap((assignment) => [
+      toText(assignment?.department),
+      toText(assignment?.scope),
+    ]),
   ]
     .filter(Boolean)
     .join(" ");
   const familyRule = resolveItemFamilyRule(combinedText);
   const departmentId = normalizeProductionDepartment(
-    item?.department || item?.departmentRaw,
+    item?.department ||
+      item?.departmentRaw ||
+      productionAssignments[0]?.department,
   );
   const quantity =
     typeof item?.quantity === "number"
@@ -5347,6 +5442,14 @@ const buildRiskItemInsight = (item = {}, index = 0) => {
     familyLabel: familyRule?.label || "",
     department: departmentId,
     departmentLabel: PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId,
+    productionAssignments: productionAssignments.map((assignment) => ({
+      department: normalizeProductionDepartment(assignment?.department),
+      departmentLabel:
+        PRODUCTION_DEPARTMENT_LABELS[
+          normalizeProductionDepartment(assignment?.department)
+        ] || toText(assignment?.department),
+      scope: toText(assignment?.scope),
+    })),
     quantity,
   };
 };
@@ -5558,6 +5661,14 @@ const buildRiskSuggestionContext = (projectData = {}, requestMeta = {}) => {
             : null,
       department: toOptionValue(item?.department),
       departmentRaw: toText(item?.departmentRaw),
+      productionAssignments: toSafeArray(item?.productionAssignments)
+        .map((assignment) => ({
+          department: normalizeProductionDepartment(
+            assignment?.department || assignment?.departmentId,
+          ),
+          scope: toText(assignment?.scope),
+        }))
+        .filter((assignment) => assignment.department),
     }))
     .filter(
       (item) =>
@@ -5565,7 +5676,8 @@ const buildRiskSuggestionContext = (projectData = {}, requestMeta = {}) => {
         item.breakdown ||
         item.department ||
         item.departmentRaw ||
-        item.quantity,
+        item.quantity ||
+        item.productionAssignments.length,
     )
     .slice(0, 30);
 
@@ -5583,6 +5695,13 @@ const buildRiskSuggestionContext = (projectData = {}, requestMeta = {}) => {
     ...items
       .map((item) => normalizeProductionDepartment(item.departmentRaw))
       .filter(Boolean),
+    ...items.flatMap((item) =>
+      item.productionAssignments
+        .map((assignment) =>
+          normalizeProductionDepartment(assignment.department),
+        )
+        .filter(Boolean),
+    ),
   ];
 
   const productionDepartments = Array.from(
@@ -6634,12 +6753,27 @@ const buildAiRiskPrompt = (context = {}) => {
             ? item.quantity
             : null,
         department: toText(item?.departmentRaw || item?.department),
+        productionAssignments: toSafeArray(item?.productionAssignments).map(
+          (assignment) => ({
+            department:
+              PRODUCTION_DEPARTMENT_LABELS[assignment?.department] ||
+              toText(assignment?.department),
+            scope: toText(assignment?.scope),
+          }),
+        ),
       })),
     itemInsights: toSafeArray(context.itemInsights).slice(0, 12).map((item) => ({
       itemRef: item.itemRef,
       subject: item.subject,
       family: item.familyLabel || item.familyId || "",
       department: item.departmentLabel || item.department || "",
+      productionAssignments: toSafeArray(item.productionAssignments).map(
+        (assignment) => ({
+          department:
+            assignment.departmentLabel || assignment.department || "",
+          scope: assignment.scope || "",
+        }),
+      ),
       quantity: Number.isFinite(item.quantity) ? item.quantity : null,
     })),
     constraints: toSafeArray(context.constraintTags).slice(0, 10),
@@ -7033,14 +7167,7 @@ const notifyLeadFromAdminOrderManagement = async ({
     );
   }
 };
-const normalizeOrderItems = (items = []) => {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    description: String(item?.description || "").trim(),
-    breakdown: String(item?.breakdown || "").trim(),
-    qty: Number.isFinite(Number(item?.qty)) ? Number(item?.qty) : 0,
-  }));
-};
+const normalizeOrderItems = (items = []) => normalizeProjectItems(items);
 const hasItemListChanged = (previousItems = [], nextItems = []) => {
   const normalizedPrevious = normalizeOrderItems(previousItems);
   const normalizedNext = normalizeOrderItems(nextItems);
@@ -7051,7 +7178,9 @@ const hasItemListChanged = (previousItems = [], nextItems = []) => {
     return (
       item.description !== next.description ||
       item.breakdown !== next.breakdown ||
-      item.qty !== next.qty
+      item.qty !== next.qty ||
+      JSON.stringify(item.productionAssignments) !==
+        JSON.stringify(next.productionAssignments)
     );
   });
 };
@@ -8268,8 +8397,8 @@ const createProject = async (req, res) => {
         sampleImageNote: resolvedSampleImageNote, // [NEW]
         attachments: normalizedExistingAttachments, // [NEW]
       },
-      departments: normalizeProjectDepartmentSelections(departments),
-      items: finalItems || [], // [NEW] Use parsed items
+      departments: mergeDepartmentsWithItemAssignments(departments, finalItems),
+      items: normalizeProjectItems(finalItems),
       uncontrollableFactors: uncontrollableFactors || [],
       productionRisks: productionRisks || [],
       currentStep: status ? 1 : 2, // If assigned status provided, likely Step 1 needs completion. Else Step 2.
@@ -9103,7 +9232,7 @@ const getProjectById = async (req, res) => {
 // @access  Private
 const addItemToProject = async (req, res) => {
   try {
-    const { description, breakdown, qty } = req.body;
+    const { description, breakdown, qty, productionAssignments } = req.body;
 
     // Basic validation
     if (!description || !qty) {
@@ -9114,15 +9243,22 @@ const addItemToProject = async (req, res) => {
 
     const project = await Project.findById(req.params.id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Only Front Desk and Admin can add order items.",
+      });
+    }
     const previousItemTotals = getOrderItemTotalsSummary(project?.items);
 
     const newItem = {
       description,
       breakdown: breakdown || "",
       qty: Number(qty),
+      productionAssignments: normalizeProductionAssignments(productionAssignments),
     };
 
     project.items.push(newItem);
+    syncAssignedProductionDepartments(project);
     project.sectionUpdates = project.sectionUpdates || {};
     project.sectionUpdates.items = new Date();
     project.orderRevisionMeta = {
@@ -9188,7 +9324,7 @@ const addItemToProject = async (req, res) => {
 // @access  Private
 const updateItemInProject = async (req, res) => {
   try {
-    const { description, breakdown, qty } = req.body;
+    const { description, breakdown, qty, productionAssignments } = req.body;
     const { id, itemId } = req.params;
 
     const projectForAccess = await Project.findById(id).select(
@@ -9201,10 +9337,35 @@ const updateItemInProject = async (req, res) => {
         )
       : null;
     const previousItemTotals = getOrderItemTotalsSummary(projectForAccess?.items);
+    const canReviseItem = canManageBilling(req.user);
+    const canEditAssignments = isUserAssignedProjectLead(
+      req.user,
+      projectForAccess,
+    );
+    if (!canReviseItem && !canEditAssignments) {
+      return res.status(403).json({
+        message:
+          "Only Front Desk can revise order items; the assigned Project Lead may edit production assignments.",
+      });
+    }
+    const resolvedDescription = canReviseItem
+      ? description
+      : existingItem?.description;
+    const resolvedBreakdown = canReviseItem
+      ? breakdown
+      : existingItem?.breakdown;
+    const resolvedQty = canReviseItem ? Number(qty) : Number(existingItem?.qty);
+    const resolvedAssignments = Object.prototype.hasOwnProperty.call(
+      req.body || {},
+      "productionAssignments",
+    )
+      ? normalizeProductionAssignments(productionAssignments)
+      : normalizeProductionAssignments(existingItem?.productionAssignments);
     const nextItemSummary = formatRevisionItemSummary({
-      description,
-      breakdown,
-      qty: Number(qty),
+      description: resolvedDescription,
+      breakdown: resolvedBreakdown,
+      qty: resolvedQty,
+      productionAssignments: resolvedAssignments,
     });
 
     const revisionMetaUpdate = {
@@ -9219,9 +9380,10 @@ const updateItemInProject = async (req, res) => {
       { _id: id, "items._id": itemId },
       {
         $set: {
-          "items.$.description": description,
-          "items.$.breakdown": breakdown,
-          "items.$.qty": Number(qty),
+          "items.$.description": resolvedDescription,
+          "items.$.breakdown": resolvedBreakdown,
+          "items.$.qty": resolvedQty,
+          "items.$.productionAssignments": resolvedAssignments,
           "sectionUpdates.items": new Date(),
           ...revisionMetaUpdate,
         },
@@ -9233,13 +9395,20 @@ const updateItemInProject = async (req, res) => {
     if (!project) {
       return res.status(404).json({ message: "Project or Item not found" });
     }
+    syncAssignedProductionDepartments(
+      project,
+      existingItem?.productionAssignments?.map(
+        (assignment) => assignment.department,
+      ),
+    );
+    await project.save();
 
     await logActivity(
       id,
       req.user.id,
       "item_update",
-      `Updated order item: ${description}`,
-      { itemId, description, qty },
+      `Updated order item production routing: ${resolvedDescription}`,
+      { itemId, description: resolvedDescription, qty: resolvedQty },
     );
 
     if (canManageBilling(req.user)) {
@@ -9293,6 +9462,11 @@ const deleteItemFromProject = async (req, res) => {
 
     const project = await Project.findById(id);
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
+    if (!canManageBilling(req.user)) {
+      return res.status(403).json({
+        message: "Only Front Desk and Admin can remove order items.",
+      });
+    }
     const removedItem = Array.isArray(project?.items)
       ? project.items.find((item) => item?._id?.toString?.() === String(itemId))
       : null;
@@ -9300,6 +9474,12 @@ const deleteItemFromProject = async (req, res) => {
 
     // Pull item from array
     project.items.pull({ _id: itemId });
+    syncAssignedProductionDepartments(
+      project,
+      removedItem?.productionAssignments?.map(
+        (assignment) => assignment.department,
+      ),
+    );
     project.sectionUpdates = project.sectionUpdates || {};
     project.sectionUpdates.items = new Date();
     project.orderRevisionMeta = {
@@ -16429,6 +16609,19 @@ const updateProject = async (req, res) => {
     }
 
     if (isLeadAcceptance) {
+      items = mergeItemProductionAssignments(project.items, items);
+      if (
+        items.length > 0 &&
+        items.some((item) => item.productionAssignments.length === 0)
+      ) {
+        return res.status(400).json({
+          message:
+            "Assign at least one production department to every order item before accepting the project.",
+        });
+      }
+      departments = normalizeProjectDepartmentSelections(departments).filter(
+        (department) => !PRODUCTION_SUB_DEPARTMENT_TOKENS.has(department),
+      );
       orderId = undefined;
       orderRef = undefined;
       orderDate = undefined;
@@ -16812,8 +17005,15 @@ const updateProject = async (req, res) => {
       project.sectionUpdates.departments = new Date();
     }
     if (items) {
-      project.items = items;
+      project.items = normalizeProjectItems(items);
       project.sectionUpdates.items = new Date();
+    }
+    if (departments || items) {
+      project.departments = mergeDepartmentsWithItemAssignments(
+        project.departments,
+        project.items,
+      );
+      project.sectionUpdates.departments = new Date();
     }
     if (uncontrollableFactors) {
       project.uncontrollableFactors = uncontrollableFactors;

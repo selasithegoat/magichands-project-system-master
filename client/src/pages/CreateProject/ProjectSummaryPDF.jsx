@@ -13,6 +13,7 @@ import {
   buildProjectNameRuns,
   formatProjectDisplayName,
 } from "../../utils/projectName";
+import { getDepartmentLabel } from "../../constants/departments";
 
 // Register fonts if needed (optional, using standard fonts for now)
 // Font.register({
@@ -467,7 +468,19 @@ const ProjectSummaryPDF = ({
               <View key={index} style={styles.itemRow}>
                 <Text style={styles.colQtyVal}>{item.qty}</Text>
                 <Text style={styles.colDescVal}>{item.description}</Text>
-                <Text style={styles.colLocVal}>{item.breakdown}</Text>
+                <Text style={styles.colLocVal}>
+                  {[
+                    item.breakdown,
+                    ...(item.productionAssignments || []).map(
+                      (assignment) =>
+                        `${getDepartmentLabel(assignment.department)}${
+                          assignment.scope ? `: ${assignment.scope}` : ""
+                        }`,
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join(" | ")}
+                </Text>
               </View>
             ))}
           {(!formData.items || formData.items.length === 0) && (
