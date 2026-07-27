@@ -27,6 +27,7 @@ const DEFAULT_TIME_ZONE = "Africa/Accra";
 const DOCX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOCX_FONT = "Aptos";
+const DOCX_FONT_SIZE = 20;
 const DOCX_PARAGRAPH_SPACING = { before: 0, after: 0, line: 200 };
 const DOCX_CELL_MARGINS = { top: 35, bottom: 35, left: 55, right: 55 };
 const DOCX_TABLE_ROW_HEIGHT = {
@@ -300,10 +301,10 @@ const buildProjectNameRuns = (details = {}) => {
     toText(details.projectName) ||
     "Untitled";
   const indicator = toText(details.projectIndicator).toUpperCase();
-  if (!indicator) return [{ text: base, bold: false }];
+  if (!indicator) return [{ text: base }];
   return [
-    { text: `${base} for `, bold: false },
-    { text: indicator, bold: true },
+    { text: `${base} for ` },
+    { text: indicator },
   ];
 };
 
@@ -361,7 +362,7 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
             new TextRun({
               text: text || "",
               font: DOCX_FONT,
-              size: 18,
+              size: DOCX_FONT_SIZE,
               color: "000000",
             }),
           ],
@@ -390,8 +391,7 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
                 children: [
                   new TextRun({
                     text: toText(section?.title),
-                    bold: true,
-                    size: 20,
+                    size: DOCX_FONT_SIZE,
                     color: "000000",
                     font: DOCX_FONT,
                   }),
@@ -421,8 +421,7 @@ const buildDepartmentUpdateTable = (board, timeZone) => {
                     children: [
                       new TextRun({
                         text: toText(column?.label),
-                        bold: true,
-                        size: 18,
+                        size: DOCX_FONT_SIZE,
                         color: "000000",
                         font: DOCX_FONT,
                       }),
@@ -496,8 +495,7 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
                 children: [
                   new TextRun({
                     text: generatedBy,
-                    bold: true,
-                    size: 18,
+                    size: DOCX_FONT_SIZE,
                     font: DOCX_FONT,
                   }),
                 ],
@@ -519,8 +517,7 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
                 children: [
                   new TextRun({
                     text: "SCRUM UPDATE",
-                    bold: true,
-                    size: 22,
+                    size: DOCX_FONT_SIZE,
                     font: DOCX_FONT,
                   }),
                 ],
@@ -542,8 +539,7 @@ const buildHeaderTable = ({ generatedBy, reportDate }) =>
                 children: [
                   new TextRun({
                     text: reportDate,
-                    bold: true,
-                    size: 18,
+                    size: DOCX_FONT_SIZE,
                     font: DOCX_FONT,
                   }),
                 ],
@@ -591,8 +587,7 @@ const buildProjectTable = (projects, now, timeZone) => {
                 children: [
                   new TextRun({
                     text,
-                    bold: true,
-                    size: 18,
+                    size: DOCX_FONT_SIZE,
                     color: "000000",
                     font: DOCX_FONT,
                   }),
@@ -661,7 +656,7 @@ const buildProjectTable = (projects, now, timeZone) => {
           text: text || "",
           color: textColor,
           font: DOCX_FONT,
-          size: 18,
+          size: DOCX_FONT_SIZE,
         }),
       ]);
 
@@ -675,14 +670,13 @@ const buildProjectTable = (projects, now, timeZone) => {
               text: versionedOrderNumber,
               color: textColor,
               font: DOCX_FONT,
-              size: 18,
+              size: DOCX_FONT_SIZE,
             }),
             ...(paymentStatus
               ? [
                   new TextRun({
                     text: `  ${paymentStatus.label}  `,
-                    bold: true,
-                    size: 14,
+                    size: DOCX_FONT_SIZE,
                     color: paymentStatus.color,
                     font: DOCX_FONT,
                     shading: { fill: paymentStatus.fill },
@@ -695,10 +689,9 @@ const buildProjectTable = (projects, now, timeZone) => {
               (run) =>
                 new TextRun({
                   text: run.text,
-                  bold: run.bold,
                   color: textColor,
                   font: DOCX_FONT,
-                  size: 18,
+                  size: DOCX_FONT_SIZE,
                 }),
             ),
           ),
@@ -770,12 +763,12 @@ const generateEndOfDayReport = async ({
           page: {
             size: { orientation: PageOrientation.LANDSCAPE },
             margin: {
-              top: 360,
+              top: 720,
               right: 360,
-              bottom: 360,
+              bottom: 720,
               left: 360,
-              header: 120,
-              footer: 120,
+              header: 360,
+              footer: 360,
               gutter: 0,
             },
           },
@@ -797,8 +790,7 @@ const generateEndOfDayReport = async ({
                 children: [
                   new TextRun({
                     text: "OFFICIAL DOCUMENT OF MAGICHANDS CO. LTD.",
-                    bold: true,
-                    size: 16,
+                    size: DOCX_FONT_SIZE,
                     color: "64748B",
                     font: DOCX_FONT,
                   }),
