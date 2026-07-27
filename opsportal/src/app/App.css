@@ -1129,6 +1129,83 @@ button.dialog-cancel:hover {
   align-items: center;
 }
 
+/*
+ * Wallboard viewport layout
+ * Desktop decks should use the screen that is already available before
+ * introducing scroll. Individual data regions scroll only when their content
+ * genuinely exceeds the panel.
+ */
+@media (min-width: 861px) {
+  .ops-wall .deck-page {
+    overflow: hidden;
+  }
+
+  .ops-wall .deck-page > .deck-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .ops-wall .deck-page-overview .content-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .ops-wall .deck-grid-risk {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .ops-wall .deck-grid-flow,
+  .ops-wall .deck-grid-team,
+  .ops-wall .deck-grid-forecast,
+  .ops-wall .deck-grid-handoff {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-wall .panel-stack {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-wall .panel {
+    min-height: 0;
+  }
+
+  .ops-wall .panel .table-wrap {
+    max-height: none;
+    flex: 1 1 auto;
+  }
+
+  .ops-wall .panel > .alerts-list,
+  .ops-wall .panel > .capacity-list,
+  .ops-wall .panel > .action-list,
+  .ops-wall .panel > .heatmap-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(54, 91, 110, 0.45) transparent;
+  }
+
+  .ops-wall .panel > .alerts-list::-webkit-scrollbar,
+  .ops-wall .panel > .capacity-list::-webkit-scrollbar,
+  .ops-wall .panel > .action-list::-webkit-scrollbar,
+  .ops-wall .panel > .heatmap-list::-webkit-scrollbar,
+  .ops-wall .panel .table-wrap::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+
+  .ops-wall .panel > .alerts-list::-webkit-scrollbar-thumb,
+  .ops-wall .panel > .capacity-list::-webkit-scrollbar-thumb,
+  .ops-wall .panel > .action-list::-webkit-scrollbar-thumb,
+  .ops-wall .panel > .heatmap-list::-webkit-scrollbar-thumb,
+  .ops-wall .panel .table-wrap::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(54, 91, 110, 0.35);
+  }
+}
+
 @keyframes riseIn {
   from {
     opacity: 0;
@@ -1176,7 +1253,7 @@ button.dialog-cancel:hover {
 
   .content-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto auto;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 
   .deck-page-overview .content-grid > .panel-deadlines {
@@ -1185,11 +1262,43 @@ button.dialog-cancel:hover {
 
   .deck-grid-risk {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto auto;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 
   .deck-grid-risk .panel-deadlines {
     grid-column: span 2;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1250px) {
+  .ops-wall .deck-page-overview .content-grid > .panel-stack:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ops-wall .deck-page-overview .content-grid > .panel-stack:last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ops-wall .deck-page-overview .content-grid > .panel-deadlines {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .ops-wall .deck-grid-risk > .panel:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .ops-wall .deck-grid-risk > .panel:last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .ops-wall .deck-grid-risk > .panel-deadlines {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
 
@@ -1263,7 +1372,7 @@ button.dialog-cancel:hover {
 
   .deck-grid-risk {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto auto;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
   }
 
   .deck-grid-risk .panel-deadlines {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LoginScreen from "../features/auth/components/LoginScreen";
+import CommandCenter from "./CommandCenter";
 import AlertsPanel from "../features/wallboard/components/AlertsPanel";
 import CapacityPanel from "../features/wallboard/components/CapacityPanel";
 import DeadlinesPanel from "../features/wallboard/components/DeadlinesPanel";
@@ -67,6 +68,7 @@ const App = () => {
   const [touchPauseActive, setTouchPauseActive] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState("command");
   const [disableDeckTransition, setDisableDeckTransition] = useState(false);
   const [touchDragOffsetPx, setTouchDragOffsetPx] = useState(0);
   const [isTouchDragging, setIsTouchDragging] = useState(false);
@@ -103,6 +105,7 @@ const App = () => {
       setTouchPauseActive(false);
       setTouchDragOffsetPx(0);
       setIsTouchDragging(false);
+      setWorkspaceMode("command");
       hadCriticalAlertRef.current = false;
     }
   }, []);
@@ -677,6 +680,43 @@ const App = () => {
     );
   }
 
+  if (workspaceMode === "command") {
+    return (
+      <>
+        <CommandCenter
+          overview={overview}
+          loading={loading}
+          error={error}
+          user={user}
+          onRefresh={() => refreshOverview()}
+          onLogout={handleLogoutClick}
+          onOpenWallboard={() => setWorkspaceMode("wallboard")}
+        />
+        {showLogoutDialog ? (
+          <div className="dialog-overlay" onClick={closeLogoutDialog}>
+            <div
+              className="dialog-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="logout-dialog-title"
+              aria-busy={logoutLoading}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2 id="logout-dialog-title">Confirm Logout</h2>
+              <p>Are you sure you want to log out?</p>
+              <div className="dialog-actions">
+                <button type="button" className="dialog-cancel" onClick={closeLogoutDialog} disabled={logoutLoading} autoFocus>Cancel</button>
+                <button type="button" className="danger" onClick={confirmLogout} disabled={logoutLoading}>
+                  {logoutLoading ? "Logging out…" : "Logout"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <div
       className="ops-wall"
@@ -710,6 +750,9 @@ const App = () => {
             </div>
           </div>
           <div className="header-actions">
+            <button onClick={() => setWorkspaceMode("command")}>
+              <span className="btn-label">Command Center</span>
+            </button>
             <button onClick={() => refreshOverview()} disabled={loading}>
               <span className="btn-icon" aria-hidden="true">&#8635;</span>
               <span className="btn-label">{loading ? "Refreshing..." : "Refresh"}</span>
