@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import Input from "../../components/ui/Input";
 import BackArrow from "../../components/icons/BackArrow";
 import TrashIcon from "../../components/icons/TrashIcon";
@@ -18,21 +18,6 @@ const Step3 = ({
   stepNumber = 3,
 }) => {
   const items = formData.items || [];
-  const [assignmentError, setAssignmentError] = useState("");
-
-  const continueToNextStep = () => {
-    if (
-      assignmentOnly &&
-      items.some((item) => !(item.productionAssignments || []).length)
-    ) {
-      setAssignmentError(
-        "Assign at least one production department to every order item.",
-      );
-      return;
-    }
-    setAssignmentError("");
-    onNext();
-  };
 
   // Initialize with default items if empty (optional, but good for demo)
   // React.useEffect(() => {
@@ -100,7 +85,7 @@ const Step3 = ({
           </h2>
           <p className="page-subtitle">
             {assignmentOnly
-              ? "Review each order item and select every production team responsible for it."
+              ? "Production department assignments are optional and can be completed after the project is accepted."
               : "Please list all items, their breakdown, and quantities required."}
           </p>
         </div>
@@ -187,11 +172,6 @@ const Step3 = ({
           <span>Total Items:</span>
           <span className="total-count">{totalItems}</span>
         </div>
-        {assignmentError && (
-          <p style={{ color: "#b91c1c", fontWeight: 600 }}>
-            {assignmentError}
-          </p>
-        )}
       </div>
 
       {/* Footer */}
@@ -199,7 +179,7 @@ const Step3 = ({
         <button className="back-text-btn" onClick={onBack}>
           Back
         </button>
-        <button className="next-btn-small" onClick={continueToNextStep}>
+        <button className="next-btn-small" onClick={onNext}>
           Next Step
           <svg
             width="20"

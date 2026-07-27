@@ -16976,16 +16976,6 @@ const updateProject = async (req, res) => {
       items = isQuoteProject(project)
         ? withoutProductionResponsibilities([], project.items).items
         : mergeItemProductionAssignments(project.items, items);
-      if (
-        !isQuoteProject(project) &&
-        items.length > 0 &&
-        items.some((item) => item.productionAssignments.length === 0)
-      ) {
-        return res.status(400).json({
-          message:
-            "Assign at least one production department to every order item before accepting the project.",
-        });
-      }
       departments = isQuoteProject(project)
         ? normalizeProjectDepartmentSelections(departments)
         : normalizeProjectDepartmentSelections(departments).filter(
