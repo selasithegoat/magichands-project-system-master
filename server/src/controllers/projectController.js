@@ -9907,7 +9907,15 @@ const updateProjectDepartments = async (req, res) => {
     if (!ensureProjectMutationAccess(req, res, project, "manage")) return;
 
     const oldDepartments = normalizeProjectDepartmentSelections(project.departments);
-    const newDepartments = normalizeProjectDepartmentSelections(departments);
+    const directlyManagedDepartments = normalizeProjectDepartmentSelections(
+      departments,
+    ).filter(
+      (department) => !PRODUCTION_SUB_DEPARTMENT_TOKENS.has(department),
+    );
+    const newDepartments = mergeDepartmentsWithItemAssignments(
+      directlyManagedDepartments,
+      project.items,
+    );
 
     // Reset acknowledgements for removed departments
     // If a department is no longer in the engaged list, remove its acknowledgement

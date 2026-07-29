@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import {
   DEPARTMENTS,
+  PRODUCTION_SUB_DEPARTMENTS,
   getDepartmentLabel,
   normalizeDepartmentId,
 } from "../../constants/departments";
@@ -2336,6 +2337,14 @@ const DepartmentsCard = ({
   onUpdate,
   readOnly = false,
 }) => {
+  const directlyManagedDepartments = useMemo(
+    () =>
+      DEPARTMENTS.filter(
+        (department) =>
+          !PRODUCTION_SUB_DEPARTMENTS.includes(department.id),
+      ),
+    [],
+  );
   const [showModal, setShowModal] = useState(false);
   const [selectedDepts, setSelectedDepts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -2495,7 +2504,7 @@ const DepartmentsCard = ({
                 paddingRight: "0.5rem",
               }}
             >
-              {DEPARTMENTS.map((dept) => (
+              {directlyManagedDepartments.map((dept) => (
                 <label
                   key={dept.id}
                   style={{
