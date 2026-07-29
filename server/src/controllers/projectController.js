@@ -2999,7 +2999,7 @@ const notifyClearedBillingGuardTargets = async ({
 
 const AI_RISK_MODEL = process.env.OPENAI_RISK_MODEL || "gpt-4o-mini";
 const AI_RISK_TIMEOUT_MS = 12000;
-const AI_RISK_TEMPERATURE = 0.55;
+const AI_RISK_TEMPERATURE = 0.7;
 const OLLAMA_RISK_URL =
   process.env.OLLAMA_RISK_URL || "http://localhost:11434/api/generate";
 const OLLAMA_RISK_MODEL = process.env.OLLAMA_RISK_MODEL || "llama3.1:8b";
@@ -3013,13 +3013,14 @@ const OLLAMA_RISK_TEMPERATURE = Number.isFinite(
 )
   ? Number.parseFloat(process.env.OLLAMA_RISK_TEMPERATURE)
   : 0.7;
-const MIN_RISK_SUGGESTIONS = 3;
-const MAX_RISK_SUGGESTIONS = 5;
+const MIN_RISK_SUGGESTIONS = 4;
+const MAX_RISK_SUGGESTIONS = 7;
 const DEFAULT_AI_PREVENTIVE_MEASURE =
   "Run a pilot sample and QA preflight before full production.";
 
 const PRODUCTION_SUGGESTION_DEPARTMENTS = [
   "graphics",
+  "packaging",
   "dtf",
   "uv-dtf",
   "uv-printing",
@@ -3049,6 +3050,7 @@ const PRODUCTION_SUGGESTION_DEPARTMENT_SET = new Set(
 
 const PRODUCTION_DEPARTMENT_LABELS = {
   graphics: "Mockup / Graphics / Design",
+  packaging: "Packaging",
   dtf: "DTF Printing",
   "uv-dtf": "UV DTF Printing",
   "uv-printing": "UV Printing",
@@ -3074,6 +3076,55 @@ const PRODUCTION_DEPARTMENT_LABELS = {
 };
 
 const PRODUCTION_DEPARTMENT_PROFILES = {
+  graphics: {
+    category: "pre-production-design-and-approval",
+    description:
+      "Graphics owns artwork preparation, mockups, visual accuracy, production-ready files, revision control, and approval handoff.",
+    capabilities: [
+      "artwork preflight",
+      "mockup preparation",
+      "layout and dimension validation",
+      "colour and brand checks",
+      "revision control",
+      "production-file release",
+    ],
+    exclusions: ["physical production", "material conversion", "final packing"],
+    riskFocus: [
+      "incomplete briefs and missing assets",
+      "incorrect dimensions or dielines",
+      "low-resolution artwork and missing fonts",
+      "brand, copy, spelling, and colour errors",
+      "slow or ambiguous mockup approval",
+      "uncontrolled revisions after approval",
+      "wrong file version released downstream",
+    ],
+    useSharedTemplates: false,
+  },
+  packaging: {
+    category: "post-production-protection-and-fulfilment",
+    description:
+      "Packaging owns finished-item protection, counting, sorting, labelling, presentation, consolidation, and dispatch readiness.",
+    capabilities: [
+      "finished-goods inspection",
+      "counting and sorting",
+      "protective wrapping",
+      "carton and insert selection",
+      "labelling",
+      "order consolidation",
+      "dispatch preparation",
+    ],
+    exclusions: ["artwork creation", "printing", "fabrication"],
+    riskFocus: [
+      "insufficient protection for fragile or finished surfaces",
+      "scratching, crushing, moisture, and transit damage",
+      "quantity, size, variant, and address mix-ups",
+      "missing components across multi-item orders",
+      "pack dimensions that do not fit the product",
+      "late packaging-material availability",
+      "unclear labels and dispatch handoff",
+    ],
+    useSharedTemplates: false,
+  },
   woodme: {
     category: "internal-specialist-subsidiary",
     description:
@@ -3172,6 +3223,8 @@ const PRODUCTION_DEPARTMENT_ALIASES = {
   mockup: "graphics",
   "mock up": "graphics",
   "mockup design": "graphics",
+  packaging: "packaging",
+  packing: "packaging",
   "uv dtf": "uv-dtf",
   "uv dtf printing": "uv-dtf",
   "dtf printing": "dtf",
@@ -5146,29 +5199,47 @@ const normalizeProductionDepartment = (value) => {
 };
 
 const RISK_FACETS = [
+  "brief",
   "artwork",
+  "approval",
   "setup",
   "material",
+  "quality",
   "finishing",
+  "packaging",
   "installation",
   "schedule",
   "handoff",
+  "delivery",
+  "client",
   "vendor",
 ];
 
 const RISK_FACET_LOOKUP = {
   artwork: "artwork",
   art: "artwork",
+  brief: "brief",
+  requirements: "brief",
+  approval: "approval",
+  approvals: "approval",
   setup: "setup",
   material: "material",
   finishing: "finishing",
   finish: "finishing",
+  quality: "quality",
+  qc: "quality",
+  packaging: "packaging",
+  packing: "packaging",
   installation: "installation",
   install: "installation",
   schedule: "schedule",
   timeline: "schedule",
   handoff: "handoff",
   handoffs: "handoff",
+  delivery: "delivery",
+  logistics: "delivery",
+  client: "client",
+  commercial: "client",
   vendor: "vendor",
   supplier: "vendor",
 };
@@ -5468,6 +5539,12 @@ const inferRiskFacetFromSuggestion = (suggestion = {}) => {
 
   const text = `${toText(suggestion?.description)} ${toText(suggestion?.preventive)}`.toLowerCase();
 
+  if (/brief|requirement|missing asset|specification gap|ambiguous scope/.test(text)) {
+    return "brief";
+  }
+  if (/approval|sign-off|signoff|client decision|revision after approval/.test(text)) {
+    return "approval";
+  }
   if (/artwork|file|mockup|font|proof|approval|icc|profile/.test(text)) {
     return "artwork";
   }
@@ -5478,7 +5555,12 @@ const inferRiskFacetFromSuggestion = (suggestion = {}) => {
     return "material";
   }
   if (/finish|packing|packaging|trim|lamination|fold|stitch|stack|scuff/.test(text)) {
-    return "finishing";
+    return /packing|packaging|carton|wrap|label|boxing/.test(text)
+      ? "packaging"
+      : "finishing";
+  }
+  if (/quality|defect|inspection|qc|consistency|rework/.test(text)) {
+    return "quality";
   }
   if (/install|mount|site|dispatch|hardware|fitment/.test(text)) {
     return "installation";
@@ -5488,6 +5570,12 @@ const inferRiskFacetFromSuggestion = (suggestion = {}) => {
   }
   if (/handoff|handover|between departments|release|upstream|downstream/.test(text)) {
     return "handoff";
+  }
+  if (/delivery|courier|transport|transit|route|collection/.test(text)) {
+    return "delivery";
+  }
+  if (/client|budget|scope change|expectation|commercial/.test(text)) {
+    return "client";
   }
   if (/vendor|supplier|third-party|third party|outsource|external/.test(text)) {
     return "vendor";
@@ -5618,15 +5706,28 @@ const buildRequiredRiskFacets = (context = {}, itemInsights = [], constraintTags
     }
   };
 
-  addFacet("setup");
-  addFacet("material");
+  addFacet("brief");
   addFacet("schedule");
 
-  if (
-    context.productionDepartments.includes("graphics") ||
-    itemInsights.some((item) => ["flag-banner", "sticker-label", "garment-apparel", "card"].includes(item.familyId))
-  ) {
+  if (context.productionDepartments.includes("graphics")) {
     addFacet("artwork");
+    addFacet("approval");
+  }
+
+  if (
+    context.productionDepartments.some(
+      (department) => !["graphics", "packaging"].includes(department),
+    )
+  ) {
+    addFacet("setup");
+    addFacet("material");
+    addFacet("quality");
+  }
+
+  if (context.productionDepartments.includes("packaging")) {
+    addFacet("packaging");
+    addFacet("quality");
+    addFacet("delivery");
   }
 
   if (
@@ -5710,6 +5811,8 @@ const sanitizeRiskSuggestions = (value, limit = Number.POSITIVE_INFINITY) => {
       (entry) =>
         computeTokenOverlapRatio(descriptionTokens, entry.descriptionTokens) >=
           0.78 ||
+        computeTokenOverlapRatio(preventiveTokens, entry.preventiveTokens) >=
+          0.82 ||
         (computeTokenOverlapRatio(descriptionTokens, entry.descriptionTokens) >=
           0.62 &&
           computeTokenOverlapRatio(preventiveTokens, entry.preventiveTokens) >=
@@ -6057,11 +6160,11 @@ const scoreRiskSuggestionAgainstContext = (
   if (/^\[[^\]]+\]/.test(description)) score += 1;
   if (description.length >= 48) score += 0.5;
   if (
-    /\b(generic|general|quality issue|unexpected delay|communication gap)\b/i.test(
+    /\b(generic|general|quality issues?|unexpected delay|communication (?:gap|problem)|human error|machine failure|material shortage)\b/i.test(
       description,
     )
   ) {
-    score -= 2;
+    score -= 4;
   }
 
   return score;
@@ -6153,6 +6256,36 @@ const PRODUCTION_DEPARTMENT_RISK_TEMPLATES = {
         "Low-resolution linked assets may pixelate at final production scale.",
       preventive:
         "Run preflight for minimum DPI at actual size and replace weak assets before release.",
+    },
+  ],
+  packaging: [
+    {
+      facet: "packaging",
+      description:
+        "Finished items may scratch, crush, or shift if packaging is chosen without checking their size, finish, and fragility.",
+      preventive:
+        "Approve a pack-out sample using the finished item, suitable separators, edge protection, and a movement test before packing the order.",
+    },
+    {
+      facet: "quality",
+      description:
+        "Sizes, variants, components, or quantities may be mixed up while the order is sorted and packed.",
+      preventive:
+        "Use item-level count sheets, variant labels, and a second-person reconciliation before cartons are sealed.",
+    },
+    {
+      facet: "delivery",
+      description:
+        "Package labels or carton grouping may not match the delivery sequence, recipient, or installation plan.",
+      preventive:
+        "Match every package to the dispatch manifest, destination, contact, and unloading sequence before release.",
+    },
+    {
+      facet: "schedule",
+      description:
+        "Cartons, wraps, inserts, or protective materials may be unavailable when finished goods become ready.",
+      preventive:
+        "Confirm packaging specifications and reserve required packing materials before production completion.",
     },
   ],
   dtf: [
@@ -6607,6 +6740,8 @@ const hasItemLevelProductionRouting = (items = []) =>
     (item) => toSafeArray(item?.productionAssignments).length > 0,
   );
 
+const PROJECT_LEVEL_RISK_DEPARTMENTS = new Set(["graphics", "packaging"]);
+
 const isRiskSuggestionCompatibleWithDepartmentProfile = (
   suggestion,
   context = {},
@@ -6687,6 +6822,7 @@ const filterRiskSuggestionsToItemAssignments = (
       suggestion?.department,
     );
     if (!departmentId) return true;
+    if (PROJECT_LEVEL_RISK_DEPARTMENTS.has(departmentId)) return true;
 
     const assignedSubjects = subjectsByDepartment.get(departmentId) || [];
     if (assignedSubjects.length === 0) return false;
@@ -6924,12 +7060,63 @@ const fetchHistoricalRiskExamples = async (context = {}) => {
     }));
 };
 
-const buildFallbackRiskSuggestions = (context) => {
-  if (context.productionDepartments.length === 0) {
-    return [];
-  }
+const PROJECT_LIFECYCLE_RISK_TEMPLATES = [
+  {
+    facet: "brief",
+    description:
+      "Unresolved specifications or missing client assets can force assumptions that surface as rework later.",
+    preventive:
+      "Create an owner-based brief checklist and block artwork release until every required specification and asset is confirmed.",
+  },
+  {
+    facet: "approval",
+    description:
+      "A mockup may be treated as approved without a clear revision number, decision owner, or recorded sign-off.",
+    preventive:
+      "Issue one numbered approval proof and record the approver, timestamp, and accepted revision before downstream release.",
+  },
+  {
+    facet: "handoff",
+    description:
+      "Item-specific dimensions, finishes, or quantities can be lost between design, production, packaging, and dispatch.",
+    preventive:
+      "Use a stage-gate job ticket whose measurable acceptance fields are signed by both releasing and receiving owners.",
+  },
+  {
+    facet: "packaging",
+    description:
+      "Packaging may be planned after completion and fail to protect the actual dimensions, finish, or item mix.",
+    preventive:
+      "Define the pack-out method from the approved item specification and validate one complete packed unit before fulfilment.",
+  },
+  {
+    facet: "delivery",
+    description:
+      "Finished work may miss its delivery window when packing, loading, route, site access, and recipient availability are not sequenced.",
+    preventive:
+      "Confirm a dispatch plan with pack-ready time, vehicle needs, route buffer, site access, and receiving contact.",
+  },
+  {
+    facet: "client",
+    description:
+      "Late client changes can alter scope, cost, artwork, or delivery expectations after work has already been released.",
+    preventive:
+      "Set a documented change-control cutoff requiring impact approval for cost, rework, and revised delivery dates.",
+  },
+];
 
-  const fallbackSuggestions = [];
+const buildFallbackRiskSuggestions = (context) => {
+  const primaryItem = toSafeArray(context.itemInsights)[0];
+  const fallbackSuggestions = PROJECT_LIFECYCLE_RISK_TEMPLATES.map(
+    (template) => ({
+      ...template,
+      description: primaryItem?.subject
+        ? `${stripSentencePeriod(template.description)} for "${primaryItem.subject}".`
+        : template.description,
+      itemRef: primaryItem?.itemRef || "",
+      department: "",
+    }),
+  );
   const itemSubjectsByDepartment = buildProductionItemSubjectsByDepartment(
     context.items,
   );
@@ -6952,10 +7139,16 @@ const buildFallbackRiskSuggestions = (context) => {
     const label = PRODUCTION_DEPARTMENT_LABELS[departmentId] || departmentId;
     const departmentItemSubjects =
       itemSubjectsByDepartment.get(departmentId) || [];
-    if (hasItemRouting && departmentItemSubjects.length === 0) return;
+    if (
+      hasItemRouting &&
+      departmentItemSubjects.length === 0 &&
+      !PROJECT_LEVEL_RISK_DEPARTMENTS.has(departmentId)
+    ) {
+      return;
+    }
     const itemSubjectPool = departmentItemSubjects.length
       ? shuffleArray(departmentItemSubjects)
-      : hasItemRouting
+      : hasItemRouting && !PROJECT_LEVEL_RISK_DEPARTMENTS.has(departmentId)
         ? []
         : globalItemSubjectPool;
 
@@ -7003,18 +7196,18 @@ const buildFallbackRiskSuggestions = (context) => {
 
   toSafeArray(context.constraintTags).forEach((tag) => {
     const templates = CONSTRAINT_RISK_TEMPLATES[tag] || [];
-    const primaryItem = toSafeArray(context.itemInsights)[0];
+    const constraintItem = toSafeArray(context.itemInsights)[0];
     templates.forEach((template) => {
       fallbackSuggestions.push({
-        description: primaryItem?.subject
-          ? `${stripSentencePeriod(template.description)} for "${primaryItem.subject}".`
+        description: constraintItem?.subject
+          ? `${stripSentencePeriod(template.description)} for "${constraintItem.subject}".`
           : template.description,
-        preventive: primaryItem?.subject
-          ? `${stripSentencePeriod(template.preventive)} for "${primaryItem.subject}".`
+        preventive: constraintItem?.subject
+          ? `${stripSentencePeriod(template.preventive)} for "${constraintItem.subject}".`
           : template.preventive,
         facet: normalizeRiskFacet(template?.facet) || inferRiskFacetFromSuggestion(template),
-        department: primaryItem?.department || "",
-        itemRef: primaryItem?.itemRef || "",
+        department: constraintItem?.department || "",
+        itemRef: constraintItem?.itemRef || "",
       });
     });
   });
@@ -7116,16 +7309,18 @@ const buildAiRiskPrompt = (context = {}) => {
   };
 
   return [
-    "Analyze the project snapshot and suggest production execution risks.",
+    "Analyze the project snapshot and suggest risks across the complete project lifecycle.",
     "Return STRICT JSON only. Do not wrap in markdown.",
     "Required format:",
     '{"suggestions":[{"facet":"...","department":"...","itemRef":"...","description":"...","preventive":"..."}]}',
     "",
     "Rules:",
-    "- Return 4 to 5 suggestions.",
+    "- Return 6 to 7 suggestions when the context supports them; never pad the list with generic risks.",
     `- Use only these facet values: ${RISK_FACETS.join(", ")}.`,
-    "- Each description must mention the relevant item or production type for this project.",
-    "- A department may only be paired with an item when that department appears in that item's productionAssignments.",
+    "- Cover materially different stages: brief/requirements, Graphics/Design/Mockups and approval, production/setup/material, quality, Packaging, handoffs, schedule/delivery, client, and vendor risks as applicable.",
+    "- Each description must identify a concrete project detail, item, decision, dependency, department, deadline, location, quantity, or failure mechanism.",
+    "- For production departments, pair a department with an item only when that department appears in that item's productionAssignments.",
+    "- Graphics and Packaging are project-level departments and may raise risks for any applicable project item even when absent from productionAssignments.",
     "- Never apply a project-level department to every item. Respect each item's productionAssignments exactly.",
     "- Set department and itemRef on every department-specific suggestion.",
     "- Treat productionDepartmentProfiles as authoritative operational definitions.",
@@ -7137,8 +7332,10 @@ const buildAiRiskPrompt = (context = {}) => {
     "- Each description must be specific to this project (items, departments, timeline, or constraints).",
     "- Each preventive measure must be actionable and directly mitigate its paired risk.",
     "- Keep description <= 160 chars and preventive <= 220 chars.",
-    "- Spread suggestions across different facets instead of repeating one failure mode.",
-    "- Avoid generic wording and avoid repeating/paraphrasing any existing risk.",
+    "- Use a different failure mechanism and lifecycle stage for each suggestion; do not produce several variants of delay, quality, artwork, or material risk.",
+    "- Avoid generic phrases such as quality issues, communication problems, production delays, human error, machine failure, or material shortage unless tied to a named project-specific cause and consequence.",
+    "- Do not reuse the same preventive action. Give a distinct owner/checkpoint, evidence, test, approval, or escalation action for each risk.",
+    "- Avoid repeating or paraphrasing any existing risk.",
     "- Avoid repeating or closely paraphrasing prior session suggestions.",
     "- Use similar project patterns only as inspiration. Do not copy their wording.",
     "",
@@ -7272,7 +7469,7 @@ const parseAiRiskBulletSuggestions = (value = "") => {
 
 const requestAiRiskSuggestions = async (context) => {
   const apiKey = toText(process.env.OPENAI_API_KEY);
-  if (!apiKey || context.productionDepartments.length === 0) return [];
+  if (!apiKey) return [];
 
   const fetchClient = await getFetchClient();
   const controller = new AbortController();
@@ -7296,7 +7493,7 @@ const requestAiRiskSuggestions = async (context) => {
             {
               role: "system",
               content:
-                "You are a senior production planner for print and fabrication workflows. Return only valid JSON with concrete, project-specific, facet-diverse risk and preventive pairs.",
+                "You are a senior end-to-end project risk planner for creative, mockup, print, fabrication, packaging, fulfilment, and delivery workflows. Return only valid JSON with specific, non-repetitive risks and distinct preventive actions.",
             },
             {
               role: "user",
@@ -7341,8 +7538,7 @@ const requestAiRiskSuggestions = async (context) => {
 const requestOllamaRiskSuggestions = async (context) => {
   if (
     !toText(OLLAMA_RISK_URL) ||
-    !toText(OLLAMA_RISK_MODEL) ||
-    context.productionDepartments.length === 0
+    !toText(OLLAMA_RISK_MODEL)
   ) {
     return [];
   }
@@ -16311,13 +16507,6 @@ const suggestProductionRisks = async (req, res) => {
       });
     }
 
-    if (context.productionDepartments.length === 0) {
-      return res.status(400).json({
-        message:
-          "Select at least one production engagement/sub-department first so Magic AI can suggest production-specific risks.",
-      });
-    }
-
     let historyExamples = [];
     try {
       historyExamples = await fetchHistoricalRiskExamples(context);
@@ -16356,7 +16545,7 @@ const suggestProductionRisks = async (req, res) => {
     } catch (error) {
       openAiError = error;
       console.error(
-        "OpenAI production risk suggestion failed, trying Ollama backup:",
+        "OpenAI project risk suggestion failed, trying Ollama backup:",
         error?.message || error,
       );
     }
@@ -16383,7 +16572,7 @@ const suggestProductionRisks = async (req, res) => {
       } catch (error) {
         ollamaError = error;
         console.error(
-          "Ollama production risk backup failed, using template fallback:",
+          "Ollama project risk backup failed, using template fallback:",
           error?.message || error,
         );
       }
@@ -16441,7 +16630,7 @@ const suggestProductionRisks = async (req, res) => {
     if (suggestions.length === 0) {
       return res.status(400).json({
         message:
-          "Not enough production context to generate risk suggestions. Add more item and department details, then try again.",
+          "Not enough project context to generate risk suggestions. Add more project or item details, then try again.",
       });
     }
 

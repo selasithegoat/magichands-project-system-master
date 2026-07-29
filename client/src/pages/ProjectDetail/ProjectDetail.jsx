@@ -4656,7 +4656,7 @@ const ProductionRisksCard = ({
         style={{ borderBottom: isOpen ? "1px solid var(--border-color)" : "none" }}
       >
         <div className="risk-title" style={{ color: "var(--text-primary)" }}>
-          <span style={{ color: "#eab308" }}>⚠️</span> Production Risks
+          <span style={{ color: "#eab308" }}>⚠️</span> Project Risks
         </div>
         <div
           className="risk-count"
@@ -4705,7 +4705,7 @@ const ProductionRisksCard = ({
             ) : (
               <div style={{ padding: "1.5rem", textAlign: "center" }}>
                 <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
-                  No production risks reported.
+                  No project risks reported.
                 </p>
               </div>
             )}
@@ -4731,7 +4731,7 @@ const ProductionRisksCard = ({
                   setShowModal(true);
                 }}
               >
-                + Add Production Risk
+                + Add Project Risk
               </button>
             </div>
           )}
@@ -4743,7 +4743,7 @@ const ProductionRisksCard = ({
         <div className="modal-overlay">
           <div className="modal-content" style={{ width: "400px" }}>
             <h3 className="modal-title">
-              {editingRisk ? "Edit Production Risk" : "Add Production Risk"}
+              {editingRisk ? "Edit Project Risk" : "Add Project Risk"}
             </h3>
             <form onSubmit={handleSave}>
               <div className="form-group">
@@ -4793,7 +4793,7 @@ const ProductionRisksCard = ({
       <ConfirmationModal
         isOpen={isDeleteModalOpen}
         title="Delete Risk"
-        message="Are you sure you want to delete this production risk? This action cannot be undone."
+        message="Are you sure you want to delete this project risk? This action cannot be undone."
         confirmText="Yes, Delete"
         cancelText="No, Keep"
         onConfirm={confirmDelete}

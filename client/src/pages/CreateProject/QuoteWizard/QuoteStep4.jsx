@@ -207,7 +207,7 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
         setFormData({ productionRisks: mergedRisks });
         setAiNotice({
           type: "success",
-          text: `Added ${addedCount} reviewed suggestion${addedCount === 1 ? "" : "s"} to Production Risks.`,
+          text: `Added ${addedCount} reviewed suggestion${addedCount === 1 ? "" : "s"} to Project Risks.`,
         });
       }
     } finally {
@@ -322,7 +322,7 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
           <div className="risk-section-header">
             <RobotArmIcon />
             <div>
-              <h3 className="risk-section-title">Production Risk Factors</h3>
+              <h3 className="risk-section-title">Project Risk Factors</h3>
               <p className="risk-section-subtitle">
                 Pre-production hazards & preventive measures
               </p>
@@ -390,8 +390,8 @@ const QuoteStep4 = ({ formData, setFormData, onNext, onBack, onCancel }) => {
 
       <ConfirmationModal
         isOpen={showRiskModal}
-        title="Production Risk Required"
-        message="Please add at least one Production Risk before proceeding to the next step."
+        title="Project Risk Required"
+        message="Please add at least one Project Risk before proceeding to the next step."
         confirmText="OK"
         cancelText="Close"
         onConfirm={() => setShowRiskModal(false)}

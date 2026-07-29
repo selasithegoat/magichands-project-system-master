@@ -176,4 +176,50 @@ assert.deepEqual(
   ["woodme", "local-outsourcing", "overseas"],
 );
 
+const lifecycleContext = {
+  ...context,
+  productionDepartments: ["graphics", "packaging"],
+  productionDepartmentLabels: [
+    "Mockup / Graphics / Design",
+    "Packaging",
+  ],
+  requiredFacets: ["artwork", "approval", "packaging", "delivery"],
+};
+const lifecycleFallback = buildFallbackRiskSuggestions(lifecycleContext);
+const lifecycleFacets = new Set(
+  lifecycleFallback.map((suggestion) => suggestion.facet),
+);
+assert.ok(lifecycleFacets.has("artwork") || lifecycleFacets.has("approval"));
+assert.ok(lifecycleFacets.has("packaging") || lifecycleFacets.has("delivery"));
+assert.ok(PRODUCTION_DEPARTMENT_PROFILES.graphics);
+assert.ok(PRODUCTION_DEPARTMENT_PROFILES.packaging);
+
+const projectLevelSuggestions = filterRiskSuggestionsToItemAssignments(
+  [
+    {
+      department: "graphics",
+      itemRef: "Wooden Portrait",
+      description:
+        "The approved Wooden Portrait mockup may use incorrect final dimensions.",
+      preventive:
+        "Record final dimensions on the numbered approval proof before release.",
+      facet: "approval",
+    },
+    {
+      department: "packaging",
+      itemRef: "Wooden Portrait",
+      description:
+        "The polished Wooden Portrait surface may scratch inside an unlined carton.",
+      preventive:
+        "Approve a wrapped pack-out sample with separators before dispatch.",
+      facet: "packaging",
+    },
+  ],
+  lifecycleContext,
+);
+assert.deepEqual(
+  projectLevelSuggestions.map((suggestion) => suggestion.department),
+  ["graphics", "packaging"],
+);
+
 console.log("Production risk item-routing regression checks passed.");
