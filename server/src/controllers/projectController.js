@@ -635,33 +635,40 @@ const parseCorporateEmergencyFlag = (value, fallback = false) => {
   return parseBooleanFlag(value, fallback);
 };
 
-const getLatestProjectFeedbackTimestamp = (feedbackEntries = []) =>
-  feedbackEntries.reduce((latest, feedback) => {
-    const rawDate = feedback?.createdAt || feedback?.date;
-    if (!rawDate) return latest;
-    const parsedMs = new Date(rawDate).getTime();
-    if (Number.isNaN(parsedMs)) return latest;
-    return Math.max(latest, parsedMs);
-  }, 0);
+const END_OF_DAY_TERMINAL_STATUSES = new Set(["Completed", "Finished"]);
+const END_OF_DAY_TERMINAL_RETENTION_MS = 12 * 60 * 60 * 1000;
+
+const getProjectStatusChangedTimestamp = (project = {}) => {
+  const directTimestamp = new Date(project?.statusChangedAt || 0).getTime();
+  if (Number.isFinite(directTimestamp) && directTimestamp > 0) {
+    return directTimestamp;
+  }
+
+  const statusHistory = Array.isArray(project?.statusHistory)
+    ? project.statusHistory
+    : [];
+  const matchingEntry = [...statusHistory]
+    .reverse()
+    .find(
+      (entry) =>
+        entry?.toStatus === project?.status &&
+        Number.isFinite(new Date(entry?.changedAt || 0).getTime()),
+    );
+  const fallback = matchingEntry?.changedAt || project?.updatedAt || project?.createdAt;
+  const fallbackTimestamp = new Date(fallback || 0).getTime();
+  return Number.isFinite(fallbackTimestamp) ? fallbackTimestamp : 0;
+};
 
 const shouldProjectAppearInEndOfDayByDefault = (
   project,
   nowMs = Date.now(),
 ) => {
   if (!project || project?.cancellation?.isCancelled) return false;
-  if (project?.status === "Completed") return false;
-  if (project?.status !== "Finished") return true;
+  if (!END_OF_DAY_TERMINAL_STATUSES.has(project?.status)) return true;
 
-  const feedbackEntries = Array.isArray(project?.feedbacks)
-    ? project.feedbacks
-    : [];
-  if (feedbackEntries.length === 0) return true;
-
-  const latestFeedbackMs = getLatestProjectFeedbackTimestamp(feedbackEntries);
-  if (!latestFeedbackMs) return true;
-
-  const elapsedHours = (nowMs - latestFeedbackMs) / (1000 * 60 * 60);
-  return elapsedHours < 24;
+  const statusChangedMs = getProjectStatusChangedTimestamp(project);
+  if (!statusChangedMs) return true;
+  return nowMs - statusChangedMs < END_OF_DAY_TERMINAL_RETENTION_MS;
 };
 
 const shouldProjectAppearInEndOfDay = (project, nowMs = Date.now()) => {
@@ -9287,11 +9294,17 @@ const getProjects = async (req, res) => {
       projectQuery = projectQuery.limit(limit);
     }
 
-    const projects = await populateProjectReferences(
+    let projects = await populateProjectReferences(
       populateMockupUploaders(projectQuery),
     ).lean();
 
     projects.forEach(normalizeProjectStatusFields);
+    if (String(req.query.mode || "").toLowerCase() === "report") {
+      const nowMs = Date.now();
+      projects = projects.filter((project) =>
+        shouldProjectAppearInEndOfDay(project, nowMs),
+      );
+    }
     if (String(req.query.mode || "").toLowerCase() === "engaged") {
       projects.forEach((project) => applyVisibleProjectBatchesForUser(project, req.user));
     }

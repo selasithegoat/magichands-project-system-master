@@ -121,28 +121,39 @@ const getLeadDisplay = (project, fallback = "Unassigned") => {
   return leadFull || (samePerson ? "" : assistantFull) || leadFirst || assistantFirst || fallback;
 };
 
-const getLatestFeedbackTimestamp = (feedbackEntries = []) =>
-  feedbackEntries.reduce((latest, feedback) => {
-    const rawDate = feedback?.createdAt || feedback?.date;
-    const parsedMs = rawDate ? new Date(rawDate).getTime() : Number.NaN;
-    return Number.isFinite(parsedMs) ? Math.max(latest, parsedMs) : latest;
-  }, 0);
+const END_OF_DAY_TERMINAL_STATUSES = new Set(["Completed", "Finished"]);
+const END_OF_DAY_TERMINAL_RETENTION_MS = 12 * 60 * 60 * 1000;
+
+const getStatusChangedTimestamp = (project = {}) => {
+  const directTimestamp = new Date(project?.statusChangedAt || 0).getTime();
+  if (Number.isFinite(directTimestamp) && directTimestamp > 0) {
+    return directTimestamp;
+  }
+
+  const statusHistory = Array.isArray(project?.statusHistory)
+    ? project.statusHistory
+    : [];
+  const matchingEntry = [...statusHistory]
+    .reverse()
+    .find(
+      (entry) =>
+        entry?.toStatus === project?.status &&
+        Number.isFinite(new Date(entry?.changedAt || 0).getTime()),
+    );
+  const fallback = matchingEntry?.changedAt || project?.updatedAt || project?.createdAt;
+  const fallbackTimestamp = new Date(fallback || 0).getTime();
+  return Number.isFinite(fallbackTimestamp) ? fallbackTimestamp : 0;
+};
 
 const shouldIncludeProject = (project, nowMs = Date.now()) => {
   if (!project || project?.cancellation?.isCancelled) return false;
   if (project?.includeInEndOfDayUpdates) return true;
   if (project?.excludeFromEndOfDayUpdates) return false;
-  if (project?.status === "Completed") return false;
-  if (project?.status !== "Finished") return true;
+  if (!END_OF_DAY_TERMINAL_STATUSES.has(project?.status)) return true;
 
-  const feedbackEntries = Array.isArray(project.feedbacks)
-    ? project.feedbacks
-    : [];
-  if (feedbackEntries.length === 0) return true;
-
-  const latestFeedbackMs = getLatestFeedbackTimestamp(feedbackEntries);
-  if (!latestFeedbackMs) return true;
-  return (nowMs - latestFeedbackMs) / (1000 * 60 * 60) < 24;
+  const statusChangedMs = getStatusChangedTimestamp(project);
+  if (!statusChangedMs) return true;
+  return nowMs - statusChangedMs < END_OF_DAY_TERMINAL_RETENTION_MS;
 };
 
 const getPaymentStatusTag = (project) => {
@@ -212,12 +223,16 @@ const loadEndOfDayReportData = async ({ now = new Date() } = {}) => {
           "details.assistantLead",
           "projectType",
           "priority",
-          "status",
+           "status",
+          "statusChangedAt",
+          "statusHistory.toStatus",
+          "statusHistory.changedAt",
+          "createdAt",
+          "updatedAt",
           "projectLeadId",
           "assistantLeadId",
           "endOfDayUpdate",
           "paymentVerifications.type",
-          "feedbacks.createdAt",
           "cancellation.isCancelled",
           "includeInEndOfDayUpdates",
           "excludeFromEndOfDayUpdates",
