@@ -177,7 +177,7 @@ const StockTransactions = () => {
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    limit: 5,
+    limit: 15,
     total: 0,
     totalPages: 0,
   });

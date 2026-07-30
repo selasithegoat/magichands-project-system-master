@@ -35,7 +35,7 @@ const resolveOpenPOLabel = (openPO) => {
   return statusLabel || "-";
 };
 
-const DEFAULT_LIMIT = 4;
+const DEFAULT_LIMIT = 12;
 
 const Suppliers = () => {
   const [rows, setRows] = useState([]);

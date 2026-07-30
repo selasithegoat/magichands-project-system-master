@@ -568,6 +568,7 @@ const parseVariants = (value, fallbackStatus = "") => {
         name: parseStringValue(
           variant?.name || variant?.variantName || variant?.variation,
         ),
+        image: parseStringValue(variant?.image),
         color: parseStringValue(variant?.color) || colors[0]?.name || "",
         colors,
         sku: parseStringValue(variant?.sku),
@@ -582,6 +583,7 @@ const parseVariants = (value, fallbackStatus = "") => {
       (variant) =>
         variant.name ||
         variant.color ||
+        variant.image ||
         variant.sku ||
         Number.isFinite(variant.qtyValue),
     );
@@ -592,11 +594,12 @@ const parseBrandGroups = (value, fallbackStatus = "") => {
   return value
     .map((group) => ({
       name: parseStringValue(group?.name || group?.brand || group?.label),
+      image: parseStringValue(group?.image),
       price: parseStringValue(group?.price),
       priceValue: parseCurrencyNumber(group?.price),
       variants: parseVariants(group?.variants || group?.items, fallbackStatus),
     }))
-    .filter((group) => group.name || group.variants.length);
+    .filter((group) => group.name || group.image || group.variants.length);
 };
 
 const flattenBrandGroups = (groups) =>

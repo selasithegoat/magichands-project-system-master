@@ -245,6 +245,7 @@ const normalizeVariants = (variants = [], fallbackStatus = "In Stock") =>
     ? variants.map((variant, index) => ({
         id: variant._id || variant.id || `${index}`,
         name: variant.name || variant.variantName || "",
+        image: variant.image || "",
         color: variant.color || "",
         colors: Array.isArray(variant.colors)
           ? variant.colors.map((color, colorIndex) => ({
@@ -279,6 +280,7 @@ const normalizeBrandGroups = (brandGroups = [], fallbackStatus = "In Stock") =>
     ? brandGroups.map((group, index) => ({
         id: group._id || group.id || `brand-${index}`,
         name: group.name || group.brand || "",
+        image: group.image || "",
         price: group.price || "",
         priceValue: Number.isFinite(group.priceValue)
           ? group.priceValue
@@ -561,7 +563,7 @@ const InventoryRecords = () => {
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    limit: 10,
+    limit: 20,
     total: 0,
     totalPages: 0,
   });
@@ -1198,6 +1200,7 @@ const InventoryRecords = () => {
               {
                 id: `brand-${Date.now()}`,
                 name: "",
+                image: "",
                 price: "",
                 variants: [],
               },
@@ -1211,6 +1214,7 @@ const InventoryRecords = () => {
             {
               id: `brand-${Date.now()}`,
               name: "",
+              image: "",
               price: "",
               variants: [],
             },
@@ -1224,6 +1228,7 @@ const InventoryRecords = () => {
           {
             id: `brand-${Date.now()}`,
             name: "",
+            image: "",
             price: "",
             variants: [],
           },
@@ -1262,6 +1267,7 @@ const InventoryRecords = () => {
         {
           id: `brand-${Date.now()}`,
           name: record?.brand || "",
+          image: "",
           price: record?.price || "",
           priceValue: record?.price ? parsePriceValue(record.price) : null,
           variants: fallbackVariants,
@@ -1335,6 +1341,7 @@ const InventoryRecords = () => {
         {
           id: `brand-${Date.now()}-${prev.brandGroups.length}`,
           name: "",
+          image: "",
           price: "",
           variants: [],
         },
@@ -1380,6 +1387,7 @@ const InventoryRecords = () => {
         {
           id: `variant-${Date.now()}-${current.variants?.length || 0}`,
           name: "",
+          image: "",
           colors: [],
           sku: "",
           price: "",
@@ -1403,6 +1411,51 @@ const InventoryRecords = () => {
       nextGroups[groupIndex] = { ...currentGroup, variants: nextVariants };
       return { ...prev, brandGroups: nextGroups };
     });
+  };
+
+  const setBrandGroupImage = (groupIndex, image) => {
+    setFormData((prev) => {
+      const nextGroups = [...(prev.brandGroups || [])];
+      const current = nextGroups[groupIndex] || {};
+      nextGroups[groupIndex] = { ...current, image };
+      return { ...prev, brandGroups: nextGroups };
+    });
+  };
+
+  const setBrandVariantImage = (groupIndex, variantIndex, image) => {
+    setFormData((prev) => {
+      const nextGroups = [...(prev.brandGroups || [])];
+      const currentGroup = nextGroups[groupIndex] || { variants: [] };
+      const nextVariants = [...(currentGroup.variants || [])];
+      const currentVariant = nextVariants[variantIndex] || {};
+      nextVariants[variantIndex] = { ...currentVariant, image };
+      nextGroups[groupIndex] = { ...currentGroup, variants: nextVariants };
+      return { ...prev, brandGroups: nextGroups };
+    });
+  };
+
+  const readOptionalImage = (event, onRead) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) onRead(reader.result);
+    };
+    reader.onerror = () => {
+      setActionError("Unable to read the selected image.");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
+  const handleBrandImageSelected = (groupIndex) => (event) => {
+    readOptionalImage(event, (image) => setBrandGroupImage(groupIndex, image));
+  };
+
+  const handleVariantImageSelected = (groupIndex, variantIndex) => (event) => {
+    readOptionalImage(event, (image) =>
+      setBrandVariantImage(groupIndex, variantIndex, image),
+    );
   };
 
   const addVariantColor = (groupIndex, variantIndex) => {
@@ -1525,6 +1578,7 @@ const InventoryRecords = () => {
 
               return {
                 name: variant.name?.trim() || "",
+                image: variant.image || "",
                 color: colorsPayload[0]?.name || "",
                 colors: colorsPayload,
                 sku: variant.sku?.trim() || "",
@@ -1536,6 +1590,7 @@ const InventoryRecords = () => {
             .filter(
               (variant) =>
                 variant.name ||
+                variant.image ||
                 variant.color ||
                 (variant.colors || []).length ||
                 variant.sku ||
@@ -1544,11 +1599,12 @@ const InventoryRecords = () => {
             );
           return {
             name: group.name?.trim() || "",
+            image: group.image || "",
             price: String(group.price || "").trim(),
             variants: variantsPayload,
           };
         })
-        .filter((group) => group.name || group.variants.length);
+        .filter((group) => group.name || group.image || group.variants.length);
 
       const payload = {
         item: formData.item,
@@ -2487,6 +2543,31 @@ const InventoryRecords = () => {
                           </button>
                         </div>
                       </div>
+                      <div className="nested-image-input">
+                        <label>
+                          <span>Brand Image (optional)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleBrandImageSelected(groupIndex)}
+                          />
+                        </label>
+                        {group.image ? (
+                          <div className="nested-image-preview">
+                            <img
+                              src={group.image}
+                              alt={`${group.name || "Brand"} preview`}
+                            />
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => setBrandGroupImage(groupIndex, "")}
+                            >
+                              Remove Image
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                       {group.variants?.length ? (
                         <div className="variant-list">
                           {group.variants.map((variant, variantIndex) => {
@@ -2579,6 +2660,40 @@ const InventoryRecords = () => {
                                   >
                                     <TrashIcon />
                                   </button>
+                                </div>
+                                <div className="nested-image-input variant-image-input">
+                                  <label>
+                                    <span>Variant Image (optional)</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={handleVariantImageSelected(
+                                        groupIndex,
+                                        variantIndex,
+                                      )}
+                                    />
+                                  </label>
+                                  {variant.image ? (
+                                    <div className="nested-image-preview">
+                                      <img
+                                        src={variant.image}
+                                        alt={`${variant.name || "Variant"} preview`}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="ghost-button"
+                                        onClick={() =>
+                                          setBrandVariantImage(
+                                            groupIndex,
+                                            variantIndex,
+                                            "",
+                                          )
+                                        }
+                                      >
+                                        Remove Image
+                                      </button>
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <div className="variant-colors">
                                   <div className="variant-colors-header">

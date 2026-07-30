@@ -18,12 +18,70 @@
 .main {
   margin-left: calc(var(--sidebar-collapsed) + 12px);
   padding: 7px;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 26px;
   position: relative;
   z-index: 1;
   transition: margin-left 0.2s ease;
+}
+
+.main > section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Keep data tables as full-height panels instead of detached row stacks. */
+.main :is(
+    .records-table-card,
+    .table-card,
+    .orders-table-card,
+    .reports-table-card,
+    .suppliers-table,
+    .client-items-table,
+    .types-table
+  ) {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.main .records-table-card > .records-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.main :is(
+    .records-table-card,
+    .table-card,
+    .orders-table-card,
+    .reports-table-card,
+    .suppliers-table,
+    .client-items-table,
+    .types-table
+  ) > .table-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.main :is(
+    .records-table-card,
+    .table-card,
+    .orders-table-card,
+    .reports-table-card,
+    .suppliers-table,
+    .client-items-table,
+    .types-table
+  ) > .table-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  background: var(--bg-alt);
 }
 
 .sidebar-backdrop {
@@ -52,5 +110,17 @@
   .main {
     margin-left: 0;
     padding: 10px;
+  }
+
+  .main :is(
+      .records-table-card,
+      .table-card,
+      .orders-table-card,
+      .reports-table-card,
+      .suppliers-table,
+      .client-items-table,
+      .types-table
+    ) {
+    min-height: 420px;
   }
 }

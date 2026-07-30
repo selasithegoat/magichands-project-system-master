@@ -17,7 +17,7 @@ import { buildPaginationRange } from "../../utils/pagination";
 import useInventoryGlobalSearch from "../../hooks/useInventoryGlobalSearch";
 import "./InventoryTypes.css";
 
-const DEFAULT_LIMIT = 6;
+const DEFAULT_LIMIT = 12;
 const DEFAULT_FORM = {
   name: "",
   description: "",

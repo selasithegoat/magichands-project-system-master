@@ -30,7 +30,7 @@ import "./PurchaseOrders.css";
 const getStatusClass = (status) =>
   `status-${String(status || "").toLowerCase().replace(/\s+/g, "-")}`;
 
-const DEFAULT_LIMIT = 5;
+const DEFAULT_LIMIT = 12;
 const SUPPLIER_TONES = [
   "blue",
   "amber",

@@ -7,6 +7,11 @@ const InventoryVariantSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    image: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     color: {
       type: String,
       trim: true,
@@ -73,6 +78,11 @@ const InventoryVariantSchema = new mongoose.Schema(
 const InventoryBrandGroupSchema = new mongoose.Schema(
   {
     name: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    image: {
       type: String,
       trim: true,
       default: "",

@@ -277,7 +277,7 @@ const Reports = () => {
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [meta, setMeta] = useState({
-    limit: 4,
+    limit: 10,
     total: 0,
     totalPages: 0,
   });
