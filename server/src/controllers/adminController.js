@@ -15,6 +15,7 @@ const registerEmployee = async (req, res) => {
       department,
       position,
       employeeType,
+      productionAccess,
     } = req.body;
 
     // Validation
@@ -60,6 +61,11 @@ const registerEmployee = async (req, res) => {
       department: deptArray,
       position,
       employeeType,
+      productionAccess:
+        deptArray.includes("Production") &&
+        productionAccess === "Production Trainee"
+          ? "Production Trainee"
+          : "Departmental Production",
       role, // Dynamic role assignment
     });
 
@@ -71,6 +77,7 @@ const registerEmployee = async (req, res) => {
         department: user.department,
         position: user.position,
         employeeType: user.employeeType,
+        productionAccess: user.productionAccess,
       });
     } else {
       res.status(400).json({ message: "Invalid user data" });
@@ -123,6 +130,11 @@ const updateEmployee = async (req, res) => {
         ? req.body.department
         : [req.body.department];
       user.department = depts;
+      user.productionAccess =
+        depts.includes("Production") &&
+        req.body.productionAccess === "Production Trainee"
+          ? "Production Trainee"
+          : "Departmental Production";
 
       // Automatically promote to admin if department changed to Administration
       if (depts.includes("Administration")) {
@@ -139,6 +151,7 @@ const updateEmployee = async (req, res) => {
       department: updatedUser.department,
       position: updatedUser.position,
       employeeType: updatedUser.employeeType,
+      productionAccess: updatedUser.productionAccess,
     });
   } catch (error) {
     console.error("Error updating employee:", error);

@@ -349,6 +349,7 @@ function App() {
     Array.isArray(user?.department)
       ? user.department.join("|")
       : user?.department || "",
+    user?.productionAccess || "",
   ]);
 
   React.useEffect(() => {
@@ -721,29 +722,37 @@ function App() {
         <Route
           path="/engaged-projects"
           element={
-            <ProtectedLayout
-              activeView="engaged-projects"
-              user={user}
-              navigate={navigate}
-              projectCount={projectCount}
-              engagedCount={engagedCount}
-            >
-              <EngagedProjects user={user} />
-            </ProtectedLayout>
+            user?.productionAccess === "Production Trainee" ? (
+              <Navigate to="/client" replace />
+            ) : (
+              <ProtectedLayout
+                activeView="engaged-projects"
+                user={user}
+                navigate={navigate}
+                projectCount={projectCount}
+                engagedCount={engagedCount}
+              >
+                <EngagedProjects user={user} />
+              </ProtectedLayout>
+            )
           }
         />
         <Route
           path="/engaged-projects/actions/:id"
           element={
-            <ProtectedLayout
-              activeView="engaged-projects"
-              user={user}
-              navigate={navigate}
-              projectCount={projectCount}
-              engagedCount={engagedCount}
-            >
-              <EngagedProjectActions user={user} />
-            </ProtectedLayout>
+            user?.productionAccess === "Production Trainee" ? (
+              <Navigate to="/client" replace />
+            ) : (
+              <ProtectedLayout
+                activeView="engaged-projects"
+                user={user}
+                navigate={navigate}
+                projectCount={projectCount}
+                engagedCount={engagedCount}
+              >
+                <EngagedProjectActions user={user} />
+              </ProtectedLayout>
+            )
           }
         />
         <Route

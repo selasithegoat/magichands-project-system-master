@@ -66,7 +66,8 @@ const Header = ({
     userDepartments.includes("Photography") ||
     userDepartments.some((d) => PHOTOGRAPHY_SUB_DEPARTMENTS.includes(d));
   const showEngagedProjects =
-    hasProduction || hasGraphics || hasStores || hasPhotography;
+    user?.productionAccess !== "Production Trainee" &&
+    (hasProduction || hasGraphics || hasStores || hasPhotography);
 
   return (
     <header className="main-header">

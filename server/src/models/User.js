@@ -73,6 +73,11 @@ const UserSchema = new mongoose.Schema({
     type: String,
     enum: ["Staff", "NSP", "Intern", "Trainee"],
   },
+  productionAccess: {
+    type: String,
+    enum: ["Departmental Production", "Production Trainee"],
+    default: "Departmental Production",
+  },
   contact: String,
   bio: String,
   avatarUrl: String,

@@ -55,6 +55,7 @@ const Teams = () => {
     department: [],
     position: "Member",
     employeeType: "Staff",
+    productionAccess: "Departmental Production",
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -191,6 +192,7 @@ const Teams = () => {
       department: [],
       position: "Member",
       employeeType: "Staff",
+      productionAccess: "Departmental Production",
     });
     setPwdStrength(0);
     setSelectedEmployee(null);
@@ -215,6 +217,7 @@ const Teams = () => {
       ),
       position: emp.position,
       employeeType: emp.employeeType,
+      productionAccess: emp.productionAccess || "Departmental Production",
     });
     setShowAddModal(true);
   };
@@ -314,6 +317,7 @@ const Teams = () => {
               department: normalizedDepartments,
               position: formData.position,
               employeeType: formData.employeeType,
+              productionAccess: formData.productionAccess,
             }),
           },
         );
@@ -466,6 +470,17 @@ const Teams = () => {
                   {emp.employeeType}
                 </span>
               </div>
+              {(Array.isArray(emp.department)
+                ? emp.department
+                : [emp.department]
+              ).includes("Production") && (
+                <div className="info-row">
+                  <span className="info-label">Production Access</span>
+                  <span className="role-badge">
+                    {emp.productionAccess || "Departmental Production"}
+                  </span>
+                </div>
+              )}
 
               <div className="card-actions">
                 <button
@@ -624,6 +639,26 @@ const Teams = () => {
                 </select>
               </div>
             </div>
+            {formData.department.includes("Production") && (
+              <div className="form-group">
+                <label>Production Access</label>
+                <select
+                  className="input-field"
+                  name="productionAccess"
+                  value={formData.productionAccess}
+                  onChange={handleChange}
+                >
+                  <option value="Departmental Production">
+                    Departmental Production
+                  </option>
+                  <option value="Production Trainee">Production Trainee</option>
+                </select>
+                <p className="helper-text">
+                  Production Trainees can assist with general production work
+                  but cannot access departmental engagement projects or actions.
+                </p>
+              </div>
+            )}
           </div>
 
           {!selectedEmployee && (

@@ -1139,7 +1139,9 @@ const canMutateProject = (user, project, action = "default") => {
   const isFrontDesk = userDepartmentTokens.includes(
     normalizeDepartmentValue(FRONT_DESK_DEPARTMENT),
   );
-  const hasDeptScope = hasDepartmentOverlap(user.department, project.departments);
+  const hasDeptScope =
+    !isProductionTrainee(user) &&
+    hasDepartmentOverlap(user.department, project.departments);
 
   switch (action) {
     case "revision":
@@ -1181,6 +1183,17 @@ const ensureProjectMutationAccess = (req, res, project, action = "default") => {
   }
   const engagedActionTypes = new Set(["acknowledge", "status", "mockup"]);
   const isEngagedPortalMutation = isEngagedPortalRequest(req);
+  if (
+    isProductionTrainee(req.user) &&
+    (action === "acknowledge" ||
+      (isEngagedPortalMutation && engagedActionTypes.has(action)))
+  ) {
+    res.status(403).json({
+      message:
+        "Production Trainees cannot perform departmental engagement actions.",
+    });
+    return false;
+  }
   const isGraphicsLeadOwnEngagedAction =
     isEngagedPortalMutation &&
     isUserAssignedProjectLead(req.user, project) &&
@@ -1220,6 +1233,9 @@ const mergeQueryWithCondition = (baseQuery = {}, condition = {}) => {
   if (!baseQuery || Object.keys(baseQuery).length === 0) return { ...condition };
   return { $and: [baseQuery, condition] };
 };
+
+const isProductionTrainee = (user) =>
+  toText(user?.productionAccess).toLowerCase() === "production trainee";
 
 const resolveEngagedDepartmentFilters = (departments = []) => {
   const tokens = toDepartmentArray(departments)
@@ -1340,9 +1356,10 @@ const buildProjectAccessQuery = (req) => {
     : req.user.department
     ? [req.user.department]
       : [];
-  const engagedDepartmentFilters = isEngagedMode
-    ? resolveEngagedDepartmentFilters(userDepartments)
-    : [];
+  const engagedDepartmentFilters =
+    isEngagedMode && !isProductionTrainee(req.user)
+      ? resolveEngagedDepartmentFilters(userDepartments)
+      : [];
   const isEngagedDept = engagedDepartmentFilters.length > 0;
 
   const canSeeAll =
@@ -11858,9 +11875,9 @@ const getDeliveryCalendarAccessQuery = (req) => {
     );
   }
 
-  const engagedDepartmentFilters = resolveEngagedDepartmentFilters(
-    req.user?.department,
-  );
+  const engagedDepartmentFilters = isProductionTrainee(req.user)
+    ? []
+    : resolveEngagedDepartmentFilters(req.user?.department);
   if (engagedDepartmentFilters.length > 0) {
     queries.push(
       buildProjectAccessQuery({
@@ -12061,9 +12078,9 @@ const getNextActionProjectQuery = (req) => {
     queries.push(buildProjectAccessQuery(reportRequest).query);
   }
 
-  const engagedDepartmentFilters = resolveEngagedDepartmentFilters(
-    req.user?.department,
-  );
+  const engagedDepartmentFilters = isProductionTrainee(req.user)
+    ? []
+    : resolveEngagedDepartmentFilters(req.user?.department);
   if (engagedDepartmentFilters.length > 0) {
     const engagedRequest = {
       ...req,
@@ -12093,6 +12110,7 @@ const getNextActionProjectQuery = (req) => {
 };
 
 const getNextActionDepartmentMatches = (project, user) => {
+  if (isProductionTrainee(user)) return [];
   const userDepartmentTokens = toDepartmentArray(user?.department)
     .map(normalizeDepartmentValue)
     .filter(Boolean);
@@ -12703,9 +12721,9 @@ const getDashboardCounts = async (req, res) => {
         mode: "engaged",
       },
     };
-    const engagedDepartmentFilters = resolveEngagedDepartmentFilters(
-      req.user?.department,
-    );
+    const engagedDepartmentFilters = isProductionTrainee(req.user)
+      ? []
+      : resolveEngagedDepartmentFilters(req.user?.department);
     const engagedProjectsQuery =
       engagedDepartmentFilters.length > 0
         ? mergeQueryWithCondition(buildProjectAccessQuery(engagedRequest).query, {
