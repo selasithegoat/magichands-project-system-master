@@ -1022,6 +1022,25 @@
   margin-left: 1.5rem; /* Indent under icon */
 }
 
+.client-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.client-contact-list a {
+  color: var(--primary-blue);
+  text-decoration: none;
+}
+
+.client-contact-list a:hover {
+  text-decoration: underline;
+}
+
 .quote-requirements-summary {
   margin-bottom: 0.75rem;
 }

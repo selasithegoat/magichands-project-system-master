@@ -2621,8 +2621,19 @@ const ProjectDetails = ({ user }) => {
   };
 
   const details = project.details || {};
-  const clientEmail = (details.clientEmail || "").trim();
-  const clientPhone = (details.clientPhone || "").trim();
+  const clientName = String(
+    details.client || project.orderRef?.client || "",
+  ).trim();
+  const clientEmail = String(
+    details.clientEmail || project.orderRef?.clientEmail || "",
+  ).trim();
+  const clientPhone = String(
+    details.clientPhone || project.orderRef?.clientPhone || "",
+  ).trim();
+  const projectLeadName =
+    getPersonName(project.projectLeadId) ||
+    String(details.lead || "").trim() ||
+    "Unassigned";
   const clientContactDisplay =
     clientEmail && clientPhone
       ? `${clientEmail} / ${clientPhone}`
@@ -3487,6 +3498,10 @@ const ProjectDetails = ({ user }) => {
                 )}
               </div>
               <div className="info-item">
+                <label>Project Lead</label>
+                <p>{projectLeadName}</p>
+              </div>
+              <div className="info-item">
                 <label>Client</label>
                 {isEditing ? (
                   <input
@@ -3496,7 +3511,7 @@ const ProjectDetails = ({ user }) => {
                     onChange={handleChange}
                   />
                 ) : (
-                  <p>{details.client || "N/A"}</p>
+                  <p>{clientName || "N/A"}</p>
                 )}
               </div>
               <div className="info-item">

@@ -182,6 +182,9 @@ const ProjectPdfDownload = ({ project }) => {
       orderNumber,
       projectName: resolveProjectNameForForm(details) || details.projectName,
       projectIndicator: details.projectIndicator || "",
+      clientName: details.client || project.orderRef?.client || "",
+      clientEmail: details.clientEmail || project.orderRef?.clientEmail || "",
+      clientPhone: details.clientPhone || project.orderRef?.clientPhone || "",
       contactType: details.contactType,
       supplySource: details.supplySource,
       deliveryDate: details.deliveryDate

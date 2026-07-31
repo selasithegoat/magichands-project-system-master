@@ -1674,6 +1674,15 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
     leadRows.length > 1 ? "ORDER GROUP LEADS" : "PROJECT LEAD";
   const briefOverview = String(details.briefOverview || "").trim();
   const lastUpdatedAt = project.sectionUpdates?.details;
+  const clientName = String(
+    details.client || project.orderRef?.client || "",
+  ).trim();
+  const clientEmail = String(
+    details.clientEmail || project.orderRef?.clientEmail || "",
+  ).trim();
+  const clientPhone = String(
+    details.clientPhone || project.orderRef?.clientPhone || "",
+  ).trim();
 
   // Format Date
   const formatDate = (d) => {
@@ -1757,6 +1766,22 @@ const ProjectInfoCard = ({ project, orderGroupProjects = [], currentUserId = "" 
                 </span>
               ))}
             </div>
+          </div>
+        </div>
+        <div className="info-item">
+          <h4>CLIENT</h4>
+          <div className="info-text-bold">{clientName || "N/A"}</div>
+          <div className="client-contact-list">
+            {clientEmail ? (
+              <a href={`mailto:${clientEmail}`}>{clientEmail}</a>
+            ) : (
+              <span>Email: N/A</span>
+            )}
+            {clientPhone ? (
+              <a href={`tel:${clientPhone}`}>{clientPhone}</a>
+            ) : (
+              <span>Phone: N/A</span>
+            )}
           </div>
         </div>
         <div className="info-item">

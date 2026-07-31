@@ -342,6 +342,27 @@ const ProjectSummaryPDF = ({
             <Text style={styles.value}>{formData.orderNumber || "N/A"}</Text>
           </View>
           <View style={styles.row}>
+            <Text style={styles.label}>Client Name:</Text>
+            <Text style={styles.value}>
+              {formData.clientName ||
+                formData.client ||
+                formData.details?.client ||
+                "N/A"}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Client Email:</Text>
+            <Text style={styles.value}>
+              {formData.clientEmail || formData.details?.clientEmail || "N/A"}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Client Phone:</Text>
+            <Text style={styles.value}>
+              {formData.clientPhone || formData.details?.clientPhone || "N/A"}
+            </Text>
+          </View>
+          <View style={styles.row}>
             <Text style={styles.label}>Contact Type:</Text>
             <Text style={styles.value}>
               {formData.contactType || "None"}
