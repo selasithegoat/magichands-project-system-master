@@ -14,6 +14,7 @@ import {
   getQuoteRequirementMode,
   getQuoteStatusDisplay,
 } from "@client/utils/quoteStatus";
+import BillingAttentionPanel from "@client/components/features/BillingAttentionPanel";
 
 // Inline Icons for those not in Icons.jsx
 const ClockIcon = () => (
@@ -120,6 +121,10 @@ const EMPTY_ADMIN_DASHBOARD_SUMMARY = {
         },
       },
     ],
+  },
+  billingAttention: {
+    counts: { total: 0, blocked: 0, override_active: 0, delivered_unresolved: 0 },
+    projects: [],
   },
 };
 
@@ -537,6 +542,12 @@ const Dashboard = ({ user }) => {
           </p>
         </div>
       </div>
+
+      <BillingAttentionPanel
+        summary={dashboardSummary.billingAttention}
+        loading={isLoading}
+        onOpenProject={(project) => navigate(`/projects/${project._id}`)}
+      />
 
       {/* Stats Grid */}
       <div className="admin-stats-panel">

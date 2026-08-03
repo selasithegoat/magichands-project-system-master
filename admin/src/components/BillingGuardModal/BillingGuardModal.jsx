@@ -13,6 +13,8 @@ const BillingGuardModal = ({
   missingLabels = [],
   orderId = "",
   projectName = "",
+  overrideReason = "",
+  onOverrideReasonChange,
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -49,6 +51,20 @@ const BillingGuardModal = ({
             <strong>Missing:</strong> {missingLabels.join(", ")}
           </p>
         )}
+        {canOverride && (
+          <label className="billing-guard-reason">
+            <span>Reason for override</span>
+            <textarea
+              value={overrideReason}
+              onChange={(event) => onOverrideReasonChange?.(event.target.value)}
+              placeholder="Explain why this project may continue before billing is cleared"
+              maxLength={500}
+              rows={3}
+              disabled={isSubmitting}
+            />
+            <small>This reason stays visible in the billing attention queue.</small>
+          </label>
+        )}
         <div className="billing-guard-modal-actions">
           <button
             type="button"
@@ -63,7 +79,7 @@ const BillingGuardModal = ({
               type="button"
               className="billing-guard-btn override"
               onClick={onOverride}
-              disabled={isSubmitting}
+              disabled={isSubmitting || overrideReason.trim().length < 5}
             >
               {isSubmitting ? "Applying..." : overrideButtonText}
             </button>

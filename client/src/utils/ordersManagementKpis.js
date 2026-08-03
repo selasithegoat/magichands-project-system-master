@@ -74,6 +74,19 @@ export const hasOrderBillingBlock = (project) => {
   const hasAnyPayment = paymentTypes.size > 0;
   const hasFullOrAuthorized =
     paymentTypes.has("full_payment") || paymentTypes.has("authorized");
+  const hasCompletionPayment =
+    hasFullOrAuthorized || paymentTypes.has("po");
+  const hasUnresolvedOverride = (project.billingOverrides || []).some((entry) => {
+    if (entry?.targetStatus === "Pending Production") {
+      return !invoiceSent || !hasAnyPayment;
+    }
+    if (entry?.targetStatus === "Pending Delivery/Pickup") {
+      return !hasFullOrAuthorized;
+    }
+    return false;
+  });
+
+  if (hasUnresolvedOverride) return true;
 
   if (["Pending Master Approval", "Pending Production"].includes(status)) {
     return !invoiceSent || !hasAnyPayment;
@@ -81,6 +94,12 @@ export const hasOrderBillingBlock = (project) => {
 
   if (["Pending Packaging", "Pending Delivery/Pickup"].includes(status)) {
     return !hasFullOrAuthorized;
+  }
+
+  if (
+    ["Delivered", "Pending Feedback", "Feedback Completed", "Completed", "Finished"].includes(status)
+  ) {
+    return !hasCompletionPayment;
   }
 
   return false;
@@ -101,7 +120,7 @@ export const matchesOrdersManagementKpi = (project, kpiKey) => {
 
   switch (kpiKey) {
     case "billing":
-      return !CLOSED_ORDER_STATUSES.has(status) && hasOrderBillingBlock(project);
+      return hasOrderBillingBlock(project);
     case "actions":
       return !CLOSED_ORDER_STATUSES.has(status) && ACTION_ORDER_STATUSES.has(status);
     case "delivery":

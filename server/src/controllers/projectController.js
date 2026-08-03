@@ -1526,6 +1526,13 @@ const DASHBOARD_META_PROJECT_SELECT = [
   "details.assistantLead",
   "details.deliveryDate",
   "details.deliveryTime",
+  "details.projectName",
+  "details.projectNameRaw",
+  "details.projectIndicator",
+  "details.client",
+  "invoice",
+  "paymentVerifications",
+  "billingOverrides",
 ].join(" ");
 
 const startOfToday = () => {
@@ -1982,6 +1989,7 @@ const buildClientDashboardSummary = async (req) => {
     workload: {
       departments: departmentWorkload,
     },
+    billingAttention: buildBillingAttentionSummary(allMetaProjects),
   };
 };
 
@@ -2053,6 +2061,7 @@ const buildAdminDashboardSummary = async (req) => {
       leads: buildLeadWorkloadRows(activeWorkloadProjects),
     },
     statusOverview: buildAdminStatusOverview(allMetaProjects),
+    billingAttention: buildBillingAttentionSummary(allMetaProjects),
   };
 };
 
@@ -3763,6 +3772,116 @@ const buildProjectBatchAccessSummary = (project = {}) => {
     productionComplete: areAllBatchesProduced(project),
     deliveryComplete: areAllBatchesDelivered(project),
     allocationByItem,
+  };
+};
+
+const BILLING_ATTENTION_DELIVERED_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+
+const buildBillingAttentionSummary = (projects = [], previewLimit = 8) => {
+  const items = [];
+
+  for (const project of projects) {
+    if (!project || project.projectType === "Quote") continue;
+
+    const status = project.status || "";
+    let missing = [];
+    let targetStatus = "";
+    const overrides = Array.isArray(project.billingOverrides)
+      ? project.billingOverrides
+      : [];
+    let activeOverride = null;
+
+    for (const entry of [...overrides].reverse()) {
+      const overrideMissing =
+        entry?.targetStatus === "Pending Production"
+          ? getPendingProductionBillingMissing(project)
+          : entry?.targetStatus === "Pending Delivery/Pickup"
+            ? getPendingDeliveryBillingMissing(project)
+            : [];
+      if (overrideMissing.length > 0) {
+        activeOverride = entry;
+        targetStatus = entry.targetStatus;
+        missing = overrideMissing;
+        break;
+      }
+    }
+
+    if (missing.length === 0 && ["Pending Master Approval", "Pending Production"].includes(status)) {
+      targetStatus = "Pending Production";
+      missing = getPendingProductionBillingMissing(project);
+    } else if (missing.length === 0 && ["Pending Packaging", "Pending Delivery/Pickup"].includes(status)) {
+      targetStatus = "Pending Delivery/Pickup";
+      missing = getPendingDeliveryBillingMissing(project);
+    } else if (BILLING_ATTENTION_DELIVERED_STATUSES.has(status)) {
+      targetStatus = "Completed";
+      missing = getCompletionBillingMissing(project);
+    }
+
+    if (missing.length === 0) continue;
+
+    const deliveredUnresolved = BILLING_ATTENTION_DELIVERED_STATUSES.has(status);
+    const category = deliveredUnresolved
+      ? "delivered_unresolved"
+      : activeOverride
+        ? "override_active"
+        : "blocked";
+
+    items.push({
+      _id: project._id,
+      orderId: project.orderId,
+      status,
+      projectType: project.projectType,
+      details: {
+        projectName: project.details?.projectName,
+        projectNameRaw: project.details?.projectNameRaw,
+        projectIndicator: project.details?.projectIndicator,
+        client: project.details?.client,
+        deliveryDate: project.details?.deliveryDate,
+        deliveryTime: project.details?.deliveryTime,
+      },
+      category,
+      targetStatus,
+      missing,
+      missingLabels: formatBillingRequirementLabels(missing),
+      override: activeOverride
+        ? {
+            reason: activeOverride.reason || "",
+            approvedAt: activeOverride.approvedAt || null,
+            approvedBy: activeOverride.approvedBy || null,
+          }
+        : null,
+    });
+  }
+
+  const categoryRank = {
+    delivered_unresolved: 0,
+    blocked: 1,
+    override_active: 2,
+  };
+  items.sort((left, right) => {
+    const rankDiff = categoryRank[left.category] - categoryRank[right.category];
+    if (rankDiff !== 0) return rankDiff;
+    const leftDate = new Date(left.details?.deliveryDate || 8640000000000000).getTime();
+    const rightDate = new Date(right.details?.deliveryDate || 8640000000000000).getTime();
+    return leftDate - rightDate;
+  });
+
+  return {
+    counts: items.reduce(
+      (counts, item) => {
+        counts.total += 1;
+        counts[item.category] += 1;
+        return counts;
+      },
+      { total: 0, blocked: 0, override_active: 0, delivered_unresolved: 0 },
+    ),
+    projects: items.slice(0, previewLimit),
   };
 };
 const normalizeBatchItemsPayload = (items = []) =>
@@ -10670,6 +10789,19 @@ const updateProjectStatus = async (req, res) => {
     const isAdmin = req.user.role === "admin";
     const allowBillingOverride =
       Boolean(req.body?.allowBillingOverride) && isAdmin;
+    const billingOverrideReason = toText(req.body?.billingOverrideReason);
+    if (allowBillingOverride && billingOverrideReason.length < 5) {
+      return res.status(400).json({
+        code: "BILLING_OVERRIDE_REASON_REQUIRED",
+        message: "Enter a brief reason (at least 5 characters) for the billing override.",
+      });
+    }
+    if (allowBillingOverride && billingOverrideReason.length > 500) {
+      return res.status(400).json({
+        code: "BILLING_OVERRIDE_REASON_TOO_LONG",
+        message: "Billing override reasons cannot exceed 500 characters.",
+      });
+    }
     const newStatus = normalizeStatusForStorageByProjectType(
       requestedStatus,
       normalizeProjectType(project?.projectType, "Standard"),
@@ -11018,6 +11150,16 @@ const updateProjectStatus = async (req, res) => {
           targetStatus: "Pending Production",
           missing,
         });
+        project.billingOverrides = Array.isArray(project.billingOverrides)
+          ? project.billingOverrides
+          : [];
+        project.billingOverrides.push({
+          targetStatus: "Pending Production",
+          missing,
+          reason: billingOverrideReason,
+          approvedAt: new Date(),
+          approvedBy: req.user._id || req.user.id,
+        });
       }
     }
 
@@ -11066,6 +11208,16 @@ const updateProjectStatus = async (req, res) => {
           senderId: req.user._id || req.user.id,
           targetStatus: "Pending Delivery/Pickup",
           missing,
+        });
+        project.billingOverrides = Array.isArray(project.billingOverrides)
+          ? project.billingOverrides
+          : [];
+        project.billingOverrides.push({
+          targetStatus: "Pending Delivery/Pickup",
+          missing,
+          reason: billingOverrideReason,
+          approvedAt: new Date(),
+          approvedBy: req.user._id || req.user.id,
         });
       }
     }

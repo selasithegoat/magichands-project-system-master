@@ -4,15 +4,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import OrdersList from "../NewOrders/OrdersList";
 import SavedCreationDrafts from "./SavedCreationDrafts";
 import {
-  CLOSED_ORDER_STATUSES,
   hasPendingClientMockupApproval,
-  hasOrderBillingBlock,
   matchesOrdersManagementKpi,
-  resolveOrderManagementStatus,
 } from "../../utils/ordersManagementKpis";
 import usePersistedState from "../../hooks/usePersistedState";
 import { canManageProjectCreationDrafts } from "../../utils/projectDraftApi";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
+import BillingAttentionPanel from "../../components/features/BillingAttentionPanel";
 import "./FrontDeskOrders.css";
 
 const FRONT_DESK_KPI_KEYS = [
@@ -46,6 +44,23 @@ const FrontDeskOrders = ({ user = null }) => {
       realtimePaths: ["/api/projects"],
     },
   });
+  const { data: billingAttention = null, isPending: billingAttentionLoading } =
+    useQuery({
+      queryKey: ["projects", "dashboard-summary", portalSource, "billing-attention"],
+      queryFn: async () => {
+        const response = await fetch(
+          appendPortalSource(
+            "/api/projects/dashboard-summary?mode=report",
+            portalSource,
+          ),
+          { credentials: "include", cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("Failed to load billing attention.");
+        const payload = await response.json();
+        return payload?.billingAttention || null;
+      },
+      meta: { realtimePaths: ["/api/projects"] },
+    });
   const [activeKpi, setActiveKpi] = usePersistedState(
     "portal-frontdesk-orders-kpi",
     "all",
@@ -56,12 +71,8 @@ const FrontDeskOrders = ({ user = null }) => {
   );
 
   const billingBlocks = useMemo(
-    () =>
-      orders.filter((project) => {
-        const status = resolveOrderManagementStatus(project);
-        return !CLOSED_ORDER_STATUSES.has(status) && hasOrderBillingBlock(project);
-      }).length,
-    [orders],
+    () => Number(billingAttention?.counts?.total) || 0,
+    [billingAttention],
   );
   const actionNeeded = useMemo(
     () =>
@@ -220,6 +231,16 @@ const FrontDeskOrders = ({ user = null }) => {
             Saved Drafts
           </button>
         </div>
+      )}
+
+      {workspaceView === "orders" && (
+        <BillingAttentionPanel
+          summary={billingAttention}
+          loading={billingAttentionLoading}
+          onOpenProject={(project) =>
+            navigate(appendPortalSource(`/projects/${project._id}`, portalSource))
+          }
+        />
       )}
 
       {workspaceView === "orders" && (

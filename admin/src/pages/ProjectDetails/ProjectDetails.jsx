@@ -854,6 +854,7 @@ const ProjectDetails = ({ user }) => {
     nextStatus: "",
     canOverride: false,
     overrideButtonText: "Continue with Override",
+    overrideReason: "",
   });
   const [billingGuardSubmitting, setBillingGuardSubmitting] = useState(false);
   const [dismissedGuardKey, setDismissedGuardKey] = useState("");
@@ -1105,6 +1106,7 @@ const ProjectDetails = ({ user }) => {
       nextStatus: "",
       canOverride: false,
       overrideButtonText: "Continue with Override",
+      overrideReason: "",
     });
   };
 
@@ -1177,12 +1179,13 @@ const ProjectDetails = ({ user }) => {
       canOverride: allowOverride,
       overrideButtonText:
         options.overrideButtonText || "Continue with Override",
+      overrideReason: "",
     });
   };
 
   const submitStatusChange = async (
     newStatus,
-    { allowBillingOverride = false } = {},
+    { allowBillingOverride = false, billingOverrideReason = "" } = {},
   ) => {
     if (!project) return false;
     const normalizedStatusForApi =
@@ -1202,6 +1205,7 @@ const ProjectDetails = ({ user }) => {
         body: JSON.stringify({
           status: normalizedStatusForApi,
           allowBillingOverride: allowBillingOverride && user?.role === "admin",
+          billingOverrideReason,
         }),
       });
 
@@ -1351,6 +1355,7 @@ const ProjectDetails = ({ user }) => {
     setBillingGuardSubmitting(true);
     const changed = await submitStatusChange(billingGuardModal.nextStatus, {
       allowBillingOverride: true,
+      billingOverrideReason: billingGuardModal.overrideReason,
     });
     setBillingGuardSubmitting(false);
     if (changed) {
@@ -5687,6 +5692,10 @@ const ProjectDetails = ({ user }) => {
         missingLabels={billingGuardModal.missingLabels}
         orderId={project?.orderId}
         projectName={renderProjectName(details, null, "Untitled Project")}
+        overrideReason={billingGuardModal.overrideReason}
+        onOverrideReasonChange={(overrideReason) =>
+          setBillingGuardModal((current) => ({ ...current, overrideReason }))
+        }
       />
 
       <ProjectHoldModal

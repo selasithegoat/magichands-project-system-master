@@ -33,6 +33,10 @@
   color: var(--text-primary);
 }
 
+.billing-guard-reason { display: grid; gap: .35rem; margin-top: .8rem; color: var(--text-primary); font-size: .86rem; font-weight: 700; }
+.billing-guard-reason textarea { width: 100%; box-sizing: border-box; resize: vertical; border: 1px solid var(--border-color); border-radius: 8px; padding: .65rem; background: var(--bg-card); color: var(--text-primary); font: inherit; font-weight: 400; }
+.billing-guard-reason small { color: var(--text-secondary); font-weight: 400; }
+
 .billing-guard-modal-actions {
   display: flex;
   justify-content: flex-end;

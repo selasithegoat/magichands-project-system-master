@@ -1,0 +1,27 @@
+.billing-attention-panel { margin: 1rem 0 1.25rem; padding: 1rem; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; border-radius: 14px; background: var(--bg-card, #fff); box-shadow: 0 10px 30px rgba(127, 29, 29, .08); }
+.billing-attention-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.billing-attention-heading h2 { margin: .15rem 0; color: var(--text-primary, #172033); font-size: 1.2rem; }
+.billing-attention-heading p, .billing-attention-more { margin: 0; color: var(--text-secondary, #64748b); font-size: .86rem; }
+.billing-attention-eyebrow { color: #b91c1c; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.billing-attention-total { min-width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border-radius: 999px; color: #fff; background: #dc2626; font-size: 1.15rem; font-weight: 800; }
+.billing-attention-counts { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0; }
+.billing-attention-counts span { padding: .25rem .55rem; border-radius: 999px; background: rgba(220, 38, 38, .08); color: #991b1b; font-size: .75rem; font-weight: 700; }
+.billing-attention-list { display: grid; gap: .45rem; margin-top: .8rem; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; padding-right: .25rem; scrollbar-gutter: stable; }
+.billing-attention-list::-webkit-scrollbar { width: 7px; }
+.billing-attention-list::-webkit-scrollbar-track { background: transparent; }
+.billing-attention-list::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, .55); border-radius: 999px; }
+.billing-attention-list::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, .75); }
+.billing-attention-row { width: 100%; display: grid; grid-template-columns: 9rem minmax(12rem, 1fr) minmax(13rem, 1.2fr) auto; gap: .8rem; align-items: center; padding: .75rem; border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.billing-attention-row:hover { border-color: #f87171; background: rgba(254, 226, 226, .32); }
+.billing-attention-status { width: fit-content; padding: .25rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 800; }
+.billing-attention-status.danger { color: #b91c1c; background: #fee2e2; }
+.billing-attention-status.warning { color: #92400e; background: #fef3c7; }
+.billing-attention-status.critical { color: #fff; background: #991b1b; }
+.billing-attention-project, .billing-attention-missing { display: grid; gap: .18rem; min-width: 0; }
+.billing-attention-project strong, .billing-attention-project small, .billing-attention-missing small, .billing-attention-missing em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.billing-attention-project strong, .billing-attention-missing strong { color: var(--text-primary, #1e293b); font-size: .86rem; }
+.billing-attention-project small, .billing-attention-missing small { color: var(--text-secondary, #64748b); font-size: .78rem; }
+.billing-attention-missing em { color: #92400e; font-size: .73rem; }
+.billing-attention-arrow { color: #dc2626; font-size: 1.5rem; }
+.billing-attention-more { margin-top: .7rem; }
+@media (max-width: 760px) { .billing-attention-list { max-height: 420px; } .billing-attention-row { grid-template-columns: 1fr auto; } .billing-attention-status, .billing-attention-missing { grid-column: 1; } .billing-attention-arrow { grid-column: 2; grid-row: 1 / span 3; } }

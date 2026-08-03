@@ -1107,6 +1107,19 @@ const ProjectSchema = new mongoose.Schema(
         verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       },
     ],
+    billingOverrides: [
+      {
+        targetStatus: {
+          type: String,
+          enum: ["Pending Production", "Pending Delivery/Pickup"],
+          required: true,
+        },
+        missing: [{ type: String }],
+        reason: { type: String, required: true, trim: true, maxlength: 500 },
+        approvedAt: { type: Date, default: Date.now },
+        approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
     sampleRequirement: {
       isRequired: {
         type: Boolean,
