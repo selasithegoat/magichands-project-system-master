@@ -20950,6 +20950,7 @@ module.exports = {
   updateProject, // Full Update
   deleteProject, // [NEW]
   getClients, // [NEW]
+  getClientIntelligence,
   reopenProject, // [NEW]
   acknowledgeProject,
   undoAcknowledgeProject,
@@ -20966,6 +20967,145 @@ module.exports = {
     isRiskSuggestionCompatibleWithDepartmentProfile,
   },
 };
+
+// @desc    Get account-level project intelligence for every client
+// @route   GET /api/projects/client-intelligence
+// @access  Private (Admin)
+async function getClientIntelligence(req, res) {
+  try {
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Admin access is required." });
+    }
+
+    const projects = await Project.find({
+      $or: [{ isLatestVersion: true }, { isLatestVersion: { $exists: false } }],
+    })
+      .select([
+        "_id", "orderId", "orderDate", "createdAt", "updatedAt", "status",
+        "projectType", "details.client", "details.clientEmail", "details.clientPhone",
+        "details.projectName", "details.projectNameRaw", "details.projectIndicator",
+        "details.deliveryDate", "projectLeadId", "invoice", "paymentVerifications",
+        "billingOverrides", "feedbacks", "challenges", "productionRisks", "hold",
+        "statusChangedAt", "statusHistory", "orderRevisionCount", "versionNumber",
+        "departments", "acknowledgements",
+      ].join(" "))
+      .populate("projectLeadId", "firstName lastName name employeeId")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    projects.forEach(normalizeProjectStatusFields);
+    const activeStatuses = new Set(["Completed", "Finished", "Feedback Completed", "Declined", "Draft"]);
+    const buckets = new Map();
+
+    projects.forEach((project) => {
+      const clientName = toText(project?.details?.client) || "Unknown Client";
+      const clientEmail = toText(project?.details?.clientEmail);
+      const key = `${clientName.toLowerCase()}|${clientEmail.toLowerCase()}`;
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          name: clientName,
+          email: clientEmail,
+          phone: toText(project?.details?.clientPhone),
+          projects: [],
+        });
+      }
+      const account = buckets.get(key);
+      if (!account.email && clientEmail) account.email = clientEmail;
+      if (!account.phone) account.phone = toText(project?.details?.clientPhone);
+      account.projects.push(project);
+    });
+
+    const accounts = Array.from(buckets.values()).map((account) => {
+      const projectCount = account.projects.length;
+      const activeProjects = account.projects.filter((project) => !activeStatuses.has(project.status));
+      const completedProjects = account.projects.filter((project) => ["Completed", "Finished", "Feedback Completed"].includes(project.status));
+      const deliveredProjects = account.projects.filter((project) => project.postProjectReview?.metrics?.deliveredOnTime !== null && project.postProjectReview?.metrics?.deliveredOnTime !== undefined);
+      const onTimeProjects = deliveredProjects.filter((project) => project.postProjectReview.metrics.deliveredOnTime === true);
+      const positiveFeedback = account.projects.reduce((sum, project) => sum + (project.feedbacks || []).filter((item) => item?.type === "Positive").length, 0);
+      const negativeFeedback = account.projects.reduce((sum, project) => sum + (project.feedbacks || []).filter((item) => item?.type === "Negative").length, 0);
+      const revisions = account.projects.reduce((sum, project) => sum + Math.max(Number(project.orderRevisionCount) || 0, (Number(project.versionNumber) || 1) - 1), 0);
+      const billingExceptions = account.projects.filter((project) => (project.billingOverrides || []).length > 0).length;
+      const billingCleared = account.projects.filter((project) => {
+        if (project.projectType === "Quote") return true;
+        const types = new Set((project.paymentVerifications || []).map((entry) => entry?.type));
+        return types.has("full_payment") || types.has("authorized") || types.has("po");
+      }).length;
+      const averageHealth = activeProjects.length
+        ? Math.round(activeProjects.reduce((sum, project) => sum + (Number(project.health?.score) || 0), 0) / activeProjects.length)
+        : 100;
+      const atRiskProjects = activeProjects.filter((project) => ["at_risk", "critical"].includes(project.health?.level)).length;
+      const leadCounts = new Map();
+      account.projects.forEach((project) => {
+        const lead = project.projectLeadId;
+        const id = toObjectIdString(lead?._id);
+        if (!id) return;
+        const name = toUserDisplayName(lead) || lead?.name || lead?.employeeId || "Unknown lead";
+        const current = leadCounts.get(id) || { _id: id, name, projects: 0 };
+        current.projects += 1;
+        leadCounts.set(id, current);
+      });
+      const primaryLead = Array.from(leadCounts.values()).sort((a, b) => b.projects - a.projects)[0] || null;
+
+      let retentionRisk = "low";
+      const riskReasons = [];
+      if (atRiskProjects > 0) riskReasons.push(`${atRiskProjects} active project${atRiskProjects === 1 ? "" : "s"} at risk`);
+      if (negativeFeedback > 0) riskReasons.push(`${negativeFeedback} negative feedback record${negativeFeedback === 1 ? "" : "s"}`);
+      if (billingExceptions > 0) riskReasons.push(`${billingExceptions} billing override${billingExceptions === 1 ? "" : "s"}`);
+      const onTimeRate = deliveredProjects.length ? Math.round((onTimeProjects.length / deliveredProjects.length) * 100) : null;
+      if (onTimeRate !== null && onTimeRate < 70) riskReasons.push("Delivery reliability is below 70%");
+      if (atRiskProjects > 1 || negativeFeedback > 1 || (onTimeRate !== null && onTimeRate < 50)) retentionRisk = "high";
+      else if (riskReasons.length > 0) retentionRisk = "medium";
+
+      return {
+        name: account.name,
+        email: account.email,
+        phone: account.phone,
+        projectCount,
+        activeProjectCount: activeProjects.length,
+        completedProjectCount: completedProjects.length,
+        averageHealth,
+        atRiskProjectCount: atRiskProjects,
+        onTimeDeliveryRate: onTimeRate,
+        billingClearanceRate: projectCount ? Math.round((billingCleared / projectCount) * 100) : 0,
+        billingExceptions,
+        revisions,
+        feedback: { positive: positiveFeedback, negative: negativeFeedback },
+        primaryLead,
+        retentionRisk,
+        riskReasons,
+        lastProjectAt: account.projects[0]?.createdAt || null,
+        projects: account.projects.map((project) => ({
+          _id: project._id,
+          orderId: project.orderId,
+          status: project.status,
+          projectType: project.projectType,
+          details: project.details,
+          createdAt: project.createdAt,
+          orderDate: project.orderDate,
+          lead: project.projectLeadId || null,
+          health: project.health,
+        })),
+      };
+    }).sort((left, right) => {
+      const riskOrder = { high: 0, medium: 1, low: 2 };
+      return riskOrder[left.retentionRisk] - riskOrder[right.retentionRisk] || right.activeProjectCount - left.activeProjectCount || left.name.localeCompare(right.name);
+    });
+
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      summary: {
+        accounts: accounts.length,
+        activeAccounts: accounts.filter((account) => account.activeProjectCount > 0).length,
+        highRiskAccounts: accounts.filter((account) => account.retentionRisk === "high").length,
+        totalActiveProjects: accounts.reduce((sum, account) => sum + account.activeProjectCount, 0),
+      },
+      accounts,
+    });
+  } catch (error) {
+    console.error("Error fetching client account intelligence:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+}
 
 // @desc    Rank active projects and leads by explainable project health
 // @route   GET /api/projects/health-performance

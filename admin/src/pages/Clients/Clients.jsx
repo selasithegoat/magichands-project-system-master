@@ -1,336 +1,110 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-
-import "./Clients.css";
+import ProjectHealthBadge from "@client/components/ui/ProjectHealthBadge";
 import usePersistedState from "@client/hooks/usePersistedState";
-import { getLeadDisplay } from "../../utils/leadDisplay";
 import { renderProjectName } from "../../utils/projectName";
-import {
-  getQuoteRequirementMode,
-  getQuoteStatusDisplay,
-} from "@client/utils/quoteStatus";
+import "./Clients.css";
+
+const formatDate = (value) => {
+  if (!value) return "No project date";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "No project date" : date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+};
+
+const metricValue = (value, suffix = "") => value === null || value === undefined ? "Not enough data" : `${value}${suffix}`;
 
 const Clients = () => {
   const navigate = useNavigate();
-  const { data: clients = [], isPending: loading } = useQuery({
-    queryKey: ["projects", "clients"],
-    queryFn: async () => {
-      const response = await fetch("/api/projects/clients", {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to fetch clients.");
-      const payload = await response.json();
-      return Array.isArray(payload) ? payload : [];
-    },
-    meta: {
-      realtimePaths: ["/api/projects"],
-    },
+  const [expanded, setExpanded] = useState(new Set());
+  const [search, setSearch] = usePersistedState("admin-client-intelligence-search", "");
+  const [risk, setRisk] = usePersistedState("admin-client-intelligence-risk", "all", {
+    sanitize: (value) => ["all", "high", "medium", "low"].includes(value) ? value : "all",
   });
-  const [searchQuery, setSearchQuery] = usePersistedState(
-    "admin-clients-search",
-    "",
-  );
-  const [projectStatusFilter, setProjectStatusFilter] = usePersistedState(
-    "admin-clients-project-status-filter",
-    "all",
-    {
-      sanitize: (value) =>
-        ["all", "ongoing", "completed"].includes(value) ? value : "all",
+
+  const { data, isPending, error } = useQuery({
+    queryKey: ["projects", "client-intelligence", "admin"],
+    queryFn: async () => {
+      const response = await fetch("/api/projects/client-intelligence?source=admin", { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to load client account intelligence.");
+      return response.json();
     },
-  );
-  const [expandedClients, setExpandedClients] = useState(new Set());
-  const [currentPage, setCurrentPage] = usePersistedState(
-    "admin-clients-page",
-    1,
-    {
-      sanitize: (value) => {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
-      },
-    },
-  );
-  const pageSize = 15;
+    meta: { realtimePaths: ["/api/projects"] },
+  });
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
+  const accounts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (Array.isArray(data?.accounts) ? data.accounts : []).filter((account) => {
+      if (risk !== "all" && account.retentionRisk !== risk) return false;
+      if (!query) return true;
+      return [account.name, account.email, account.phone, account.primaryLead?.name].some((value) => String(value || "").toLowerCase().includes(query));
     });
-  };
+  }, [data, risk, search]);
 
-  const getStatusClass = (status) => {
-    if (!status) return "draft";
-    const lower = status.toLowerCase();
-    if (lower.includes("feedback")) return "in-progress";
-    if (lower.includes("pending")) return "pending";
-    if (lower.includes("finished")) return "completed";
-    if (lower.includes("completed")) return "completed";
-    if (lower.includes("delivered") || lower.includes("progress"))
-      return "in-progress";
-    return "draft";
-  };
+  const toggle = (name) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
 
-  const getProjectStatusDisplay = (project) =>
-    project?.projectType === "Quote"
-      ? getQuoteStatusDisplay(
-          project.status,
-          getQuoteRequirementMode(project?.quoteDetails?.checklist || {}),
-        )
-      : project.status;
-
-  const getContactOrEmail = (project) => {
-    const email = (project?.details?.clientEmail || "").trim();
-    const phone = (project?.details?.clientPhone || "").trim();
-
-    if (email && phone) return `${email} / ${phone}`;
-    return email || phone || "-";
-  };
-
-  const toggleClientExpand = (clientName) => {
-    const newExpanded = new Set(expandedClients);
-    if (newExpanded.has(clientName)) {
-      newExpanded.delete(clientName);
-    } else {
-      newExpanded.add(clientName);
-    }
-    setExpandedClients(newExpanded);
-  };
-
-  // Filter clients by search query and project status
-  const filteredClients = clients
-    .map((client) => {
-      // Filter projects within each client based on status filter
-      let filteredProjects = client.projects;
-
-      if (projectStatusFilter === "ongoing") {
-        filteredProjects = client.projects.filter(
-          (p) =>
-            getProjectStatusDisplay(p) !== "Completed" &&
-            getProjectStatusDisplay(p) !== "Finished",
-        );
-      } else if (projectStatusFilter === "completed") {
-        filteredProjects = client.projects.filter(
-          (p) =>
-            getProjectStatusDisplay(p) === "Completed" ||
-            getProjectStatusDisplay(p) === "Finished",
-        );
-      }
-
-      return {
-        ...client,
-        projects: filteredProjects,
-        projectCount: filteredProjects.length,
-      };
-    })
-    .filter((client) => {
-      // Filter out clients with no projects after status filter
-      if (client.projectCount === 0) return false;
-      // Filter by client name search
-      return client.name.toLowerCase().includes(searchQuery.toLowerCase());
-    });
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, projectStatusFilter, clients.length]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * pageSize;
-  const pagedClients = filteredClients.slice(startIndex, startIndex + pageSize);
+  if (isPending) return <div className="client-intelligence-state">Loading client intelligence...</div>;
+  if (error) return <div className="client-intelligence-state error">{error.message}</div>;
 
   return (
-    <div className="clients-page">
-      <div className="clients-header">
-        <h1>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="clients-icon"
-          >
-            <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
-          </svg>
-          Clients
-        </h1>
+    <div className="client-intelligence-page">
+      <header className="client-intelligence-hero">
+        <div><span>Portfolio intelligence</span><h1>Client Account Intelligence</h1><p>Relationship health, delivery reliability, billing behavior, feedback, and portfolio risk in one view.</p></div>
+        <div className="client-intelligence-hero-note"><strong>Retention risk</strong><span>Calculated from active project health, delivery reliability, billing exceptions, and negative feedback.</span></div>
+      </header>
+
+      <section className="client-intelligence-summary">
+        <div><strong>{data?.summary?.accounts || 0}</strong><span>Client accounts</span></div>
+        <div><strong>{data?.summary?.activeAccounts || 0}</strong><span>Active accounts</span></div>
+        <div className="danger"><strong>{data?.summary?.highRiskAccounts || 0}</strong><span>High retention risk</span></div>
+        <div><strong>{data?.summary?.totalActiveProjects || 0}</strong><span>Active projects</span></div>
+      </section>
+
+      <div className="client-intelligence-controls">
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search client, contact, or lead..." />
+        <select value={risk} onChange={(event) => setRisk(event.target.value)}><option value="all">All risk levels</option><option value="high">High risk</option><option value="medium">Medium risk</option><option value="low">Low risk</option></select>
+        <span>{accounts.length} account{accounts.length === 1 ? "" : "s"}</span>
       </div>
 
-      <div className="clients-container">
-        <div className="clients-controls">
-          <div className="filter-bar">
-            <div className="search-pill-wrapper">
-              <input
-                type="text"
-                placeholder="Search clients..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-pill"
-              />
-              <div className="search-icon-small">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-4 h-4"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10.5 3.75a6.75 6.75 0 100 13.5 6.75 6.75 0 000-13.5zM2.25 10.5a8.25 8.25 0 1114.59 5.28l4.69 4.69a.75.75 0 11-1.06 1.06l-4.69-4.69A8.25 8.25 0 012.25 10.5z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
+      <div className="client-intelligence-list">
+        {accounts.map((account) => {
+          const accountKey = `${account.name}|${account.email}`;
+          const isOpen = expanded.has(accountKey);
+          return <article key={`${account.name}-${account.email}`} className={`client-intelligence-card risk-${account.retentionRisk} ${isOpen ? "is-expanded" : ""}`}>
+            <button type="button" className="client-intelligence-card-header" onClick={() => toggle(accountKey)} aria-expanded={isOpen}>
+              <div className="client-account-name"><span className={`client-risk-badge ${account.retentionRisk}`}>{account.retentionRisk} risk</span><h2>{account.name}</h2><small>{account.email || account.phone || "No contact details recorded"}</small></div>
+              <div className="client-account-primary"><strong>{account.activeProjectCount}</strong><span>active of {account.projectCount}</span></div>
+              <div className="client-account-primary"><strong>{account.averageHealth}</strong><span>average health</span></div>
+              <div className="client-account-lead"><span>Primary lead</span><strong>{account.primaryLead?.name || "Unassigned"}</strong></div>
+              <span className="client-account-toggle">{isOpen ? "−" : "+"}</span>
+            </button>
+
+            <div className="client-account-metrics">
+              <div><strong>{metricValue(account.onTimeDeliveryRate, "%")}</strong><span>On-time delivery</span></div>
+              <div><strong>{account.billingClearanceRate}%</strong><span>Billing clearance</span></div>
+              <div><strong>{account.revisions}</strong><span>Total revisions</span></div>
+              <div><strong>{account.feedback?.positive || 0} / {account.feedback?.negative || 0}</strong><span>Positive / negative feedback</span></div>
+              <div><strong>{account.atRiskProjectCount}</strong><span>Projects at risk</span></div>
+              <div><strong>{formatDate(account.lastProjectAt)}</strong><span>Latest project</span></div>
             </div>
 
-            <select
-              value={projectStatusFilter}
-              onChange={(e) => setProjectStatusFilter(e.target.value)}
-              className="filter-pill"
-            >
-              <option value="all">All Projects</option>
-              <option value="ongoing">Ongoing Projects</option>
-              <option value="completed">Completed Projects</option>
-            </select>
-          </div>
-          <div className="result-count">
-            Showing {filteredClients.length} of {clients.length} clients
-          </div>
-        </div>
+            {account.riskReasons?.length > 0 && <div className="client-risk-reasons"><strong>Why this account needs attention</strong>{account.riskReasons.map((reason) => <span key={reason}>{reason}</span>)}</div>}
 
-        {loading ? (
-          <div className="loading-state">Loading clients...</div>
-        ) : filteredClients.length === 0 ? (
-          <div className="empty-state">
-            {searchQuery
-              ? "No clients found matching your search."
-              : "No clients found."}
-          </div>
-        ) : (
-          <div className="clients-list">
-            {pagedClients.map((client) => (
-              <div key={client.name} className="client-card">
-                <div
-                  className="client-header"
-                  onClick={() => toggleClientExpand(client.name)}
-                >
-                  <div className="client-info">
-                    <h3 className="client-name">{client.name}</h3>
-                    <span className="project-count">
-                      {client.projectCount}{" "}
-                      {client.projectCount === 1 ? "project" : "projects"}
-                    </span>
-                  </div>
-                  <div className="expand-icon">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className={`chevron ${
-                        expandedClients.has(client.name) ? "expanded" : ""
-                      }`}
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M12.53 16.28a.75.75 0 01-1.06 0l-7.5-7.5a.75.75 0 011.06-1.06L12 14.69l6.97-6.97a.75.75 0 111.06 1.06l-7.5 7.5z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                {expandedClients.has(client.name) && (
-                  <div className="client-projects">
-                    <table className="projects-table">
-                      <thead>
-                        <tr>
-                          <th>Order ID</th>
-                          <th>Project Name</th>
-                          <th>Lead</th>
-                          <th>Assigned Date</th>
-                          <th>Contact / Email</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {client.projects.map((project) => (
-                          <tr key={project._id}>
-                            <td>
-                              <span style={{ fontWeight: 600 }}>
-                                {project.orderId || "N/A"}
-                              </span>
-                            </td>
-                            <td>
-                              {renderProjectName(
-                                project.details,
-                                null,
-                                "Untitled",
-                              )}
-                            </td>
-                            <td>
-                              {getLeadDisplay(project, "Unassigned")}
-                            </td>
-                            <td>
-                              {formatDate(
-                                project.orderDate || project.createdAt,
-                              )}
-                            </td>
-                            <td>{getContactOrEmail(project)}</td>
-                            <td>
-                              <span
-                                className={`status-badge ${getStatusClass(
-                                  getProjectStatusDisplay(project),
-                                )}`}
-                              >
-                                {getProjectStatusDisplay(project)}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                className="action-btn"
-                                onClick={() => navigate(`/projects/${project._id}`)}
-                              >
-                                View
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && filteredClients.length > 0 && totalPages > 1 && (
-          <div className="clients-pagination">
-            <button
-              type="button"
-              className="clients-page-btn"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={safePage === 1}
-            >
-              Previous
-            </button>
-            <span className="clients-page-info">
-              Page {safePage} of {totalPages}
-            </span>
-            <button
-              type="button"
-              className="clients-page-btn"
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-              }
-              disabled={safePage === totalPages}
-            >
-              Next
-            </button>
-          </div>
-        )}
+            {isOpen && <div className="client-account-projects">
+              <div className="client-account-projects-heading"><strong>Project portfolio</strong><span>{account.completedProjectCount} completed</span></div>
+              {account.projects.map((project) => <button key={project._id} type="button" className="client-account-project-row" onClick={() => navigate(`/projects/${project._id}`)}>
+                <span><strong>{project.orderId || "Order"} · {renderProjectName(project.details, null, "Untitled Project")}</strong><small>{project.status} · {project.lead?.firstName || project.lead?.name || "Unassigned"} {project.lead?.lastName || ""}</small></span>
+                <ProjectHealthBadge health={project.health} />
+                <b>View</b>
+              </button>)}
+            </div>}
+          </article>;
+        })}
+        {accounts.length === 0 && <div className="client-intelligence-empty">No client accounts match these filters.</div>}
       </div>
     </div>
   );

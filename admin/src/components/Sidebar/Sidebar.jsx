@@ -101,7 +101,7 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
             <ClientsIcon className="nav-icon" />
-            Clients
+            Client Intelligence
           </NavLink>
           <NavLink
             to="/teams"

@@ -57,6 +57,7 @@ const {
   updateProject, // [NEW] - Full Update
   deleteProject, // [NEW]
   getClients, // [NEW]
+  getClientIntelligence,
   reopenProject, // [NEW]
   acknowledgeProject,
   undoAcknowledgeProject,
@@ -246,6 +247,7 @@ router.get("/stats", protect, getUserStats);
 router.get("/dashboard-summary", protect, getDashboardSummary);
 router.get("/dashboard-counts", protect, getDashboardCounts);
 router.get("/health-performance", protect, getHealthPerformance);
+router.get("/client-intelligence", protect, getClientIntelligence);
 router.get("/next-actions", protect, getNextActions);
 router.get("/delivery-calendar", protect, getDeliveryCalendar);
 router.get("/reference-search", protect, searchReferenceProjects);
