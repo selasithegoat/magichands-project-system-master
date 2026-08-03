@@ -1509,6 +1509,10 @@ const DASHBOARD_CARD_PROJECT_SELECT = [
   "quoteDetails.checklist",
   "cancellation",
   "hold",
+  "challenges",
+  "productionRisks",
+  "invoice",
+  "paymentVerifications",
 ].join(" ");
 const DASHBOARD_META_PROJECT_SELECT = [
   "_id",
@@ -5134,6 +5138,100 @@ const getAllowedStatusesForProjectType = (projectType) => {
     .filter((status) => isStatusCompatibleWithProjectType(status, projectType));
   return Array.from(new Set(normalized));
 };
+const PROJECT_HEALTH_CLOSED_STATUSES = new Set([
+  "Completed",
+  "Finished",
+  "Declined",
+]);
+const PROJECT_HEALTH_POST_DELIVERY_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+const buildProjectHealth = (project = {}, now = new Date()) => {
+  const status = project?.status || "";
+  if (PROJECT_HEALTH_CLOSED_STATUSES.has(status)) {
+    return { score: 100, level: "healthy", label: "Healthy", reasons: [] };
+  }
+
+  let score = 100;
+  const reasons = [];
+  const addReason = (deduction, code, label) => {
+    score -= deduction;
+    reasons.push({ code, label, deduction });
+  };
+
+  if (project?.hold?.isOnHold || status === "On Hold") {
+    addReason(70, "on_hold", project?.hold?.reason
+      ? `Project is on hold: ${project.hold.reason}`
+      : "Project is on hold");
+  }
+
+  const deliveryDate = project?.details?.deliveryDate
+    ? new Date(project.details.deliveryDate)
+    : null;
+  if (
+    deliveryDate &&
+    !Number.isNaN(deliveryDate.getTime()) &&
+    !PROJECT_HEALTH_POST_DELIVERY_STATUSES.has(status)
+  ) {
+    const hoursUntilDelivery =
+      (deliveryDate.getTime() - now.getTime()) / (DAY_IN_MS / 24);
+    if (hoursUntilDelivery < 0) {
+      addReason(45, "delivery_overdue", "Delivery date is overdue");
+    } else if (hoursUntilDelivery <= 48) {
+      addReason(25, "delivery_imminent", "Delivery is due within 48 hours");
+    } else if (hoursUntilDelivery <= 168) {
+      addReason(10, "delivery_soon", "Delivery is due within 7 days");
+    }
+  }
+
+  const sla = project?.sla ||
+    (typeof Project.buildStatusSla === "function" ? Project.buildStatusSla(project, now) : null);
+  if (sla?.severity === "red") {
+    addReason(35, "stage_sla_red", `${sla.status} has exceeded its stage SLA`);
+  } else if (sla?.severity === "yellow") {
+    addReason(18, "stage_sla_yellow", `${sla.status} is approaching its stage SLA`);
+  }
+
+  const challenges = Array.isArray(project?.challenges) ? project.challenges : [];
+  const escalatedChallenges = challenges.filter((item) => item?.status === "Escalated").length;
+  const openChallenges = challenges.filter((item) => !["Resolved", "Escalated"].includes(item?.status)).length;
+  if (escalatedChallenges > 0) {
+    addReason(Math.min(40, escalatedChallenges * 20), "escalated_challenges", `${escalatedChallenges} escalated challenge${escalatedChallenges === 1 ? "" : "s"}`);
+  }
+  if (openChallenges > 0) {
+    addReason(Math.min(30, openChallenges * 10), "open_challenges", `${openChallenges} unresolved challenge${openChallenges === 1 ? "" : "s"}`);
+  }
+
+  const productionRiskCount = Array.isArray(project?.productionRisks)
+    ? project.productionRisks.length
+    : 0;
+  if (productionRiskCount > 0) {
+    addReason(Math.min(12, productionRiskCount * 3), "production_risks", `${productionRiskCount} identified production risk${productionRiskCount === 1 ? "" : "s"}`);
+  }
+
+  const paymentTypes = new Set(
+    (Array.isArray(project?.paymentVerifications) ? project.paymentVerifications : [])
+      .map((entry) => entry?.type)
+      .filter(Boolean),
+  );
+  const hasAnyPayment = paymentTypes.size > 0;
+  const hasFullOrAuthorized = paymentTypes.has("full_payment") || paymentTypes.has("authorized");
+  if (["Pending Master Approval", "Pending Production"].includes(status) &&
+      (!project?.invoice?.sent || !hasAnyPayment)) {
+    addReason(20, "billing_pending", "Invoice or payment verification is still pending");
+  } else if (["Pending Packaging", "Pending Delivery/Pickup"].includes(status) && !hasFullOrAuthorized) {
+    addReason(25, "billing_delivery_block", "Delivery payment requirement is unresolved");
+  }
+
+  score = Math.max(0, Math.round(score));
+  const level = score <= 39 ? "critical" : score <= 69 ? "at_risk" : score <= 84 ? "watch" : "healthy";
+  const labels = { critical: "Critical", at_risk: "At Risk", watch: "Watch", healthy: "Healthy" };
+  return { score, level, label: labels[level], reasons: reasons.slice(0, 5) };
+};
 const normalizeProjectStatusFields = (project) => {
   if (!project) return project;
   const normalizedStatus = normalizeMasterApprovalStatus(project.status);
@@ -5159,6 +5257,12 @@ const normalizeProjectStatusFields = (project) => {
     if (normalizedPrevious && normalizedPrevious !== project.hold.previousStatus) {
       project.hold.previousStatus = normalizedPrevious;
     }
+  }
+  const health = buildProjectHealth(project);
+  if (typeof project.set === "function") {
+    project.set("health", health, { strict: false });
+  } else {
+    project.health = health;
   }
   return project;
 };

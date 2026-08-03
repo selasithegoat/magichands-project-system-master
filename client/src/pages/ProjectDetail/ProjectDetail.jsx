@@ -76,6 +76,7 @@ import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
 import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
+import ProjectHealthBadge from "../../components/ui/ProjectHealthBadge";
 import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import {
@@ -1419,6 +1420,7 @@ const ProjectDetail = ({ user }) => {
         <div className="project-subtitle">
           {renderProjectName(project.details, null, "Untitled Project")}
         </div>
+        <ProjectHealthBadge health={project.health} expanded />
         <nav className="header-nav">
           {["Overview", "Updates", "Comments", "Challenges", "Activities"].map((tab) => (
             <Link
