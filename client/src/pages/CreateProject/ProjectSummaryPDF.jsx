@@ -169,6 +169,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 1.4,
   },
+  referencePreviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 5,
+  },
+  referencePreviewItem: {
+    width: 112,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  referencePreviewImage: {
+    width: 100,
+    height: 100,
+    objectFit: "contain",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 4,
+  },
+  referencePreviewNote: {
+    width: 100,
+    marginTop: 3,
+    fontSize: 7,
+    color: "#64748B",
+  },
   referencePageBody: {
     flexGrow: 1,
     paddingTop: 10,
@@ -238,8 +263,25 @@ const ProjectSummaryPDF = ({
   const attachmentItems = normalizeReferenceAttachments(
     formData.attachments ||
       (formData.details && formData.details.attachments) ||
-      [],
+    [],
   );
+  const referencePreviewItems = [];
+  const referencePreviewUrls = new Set();
+  if (sampleImage && imageUrls[sampleImage]) {
+    referencePreviewItems.push({
+      fileUrl: sampleImage,
+      note: sampleImageNote,
+    });
+    referencePreviewUrls.add(sampleImage);
+  }
+  attachmentItems.forEach((attachment) => {
+    const fileUrl = attachment.fileUrl;
+    if (!fileUrl || !imageUrls[fileUrl] || referencePreviewUrls.has(fileUrl)) return;
+    referencePreviewItems.push({
+      ...attachment,
+    });
+    referencePreviewUrls.add(fileUrl);
+  });
   const acknowledgedDepartments = new Set(
     (formData.acknowledgements || []).map((ack) => ack.department),
   );
@@ -386,25 +428,32 @@ const ProjectSummaryPDF = ({
               </Text>
             </View>
           )}
-          {/* Sample Image */}
-          {sampleImage && imageUrls[sampleImage] && (
+          {/* Reference material previews */}
+          {referencePreviewItems.length > 0 && (
             <View style={{ marginTop: 10 }}>
-              <Text style={styles.label}>Reference Image:</Text>
-              <Image
-                style={{
-                  width: 100,
-                  height: 100,
-                  objectFit: "contain",
-                  marginTop: 5,
-                }}
-                format="png"
-                src={imageUrls[sampleImage]}
-              />
-              {sampleImageNote && (
-                <Text style={styles.referenceCaption}>
-                  Note: {sampleImageNote}
-                </Text>
-              )}
+              <Text style={styles.label}>
+                Reference Materials ({referencePreviewItems.length}):
+              </Text>
+              <View style={styles.referencePreviewGrid}>
+                {referencePreviewItems.map((reference, index) => (
+                  <View
+                    key={`${reference.fileUrl}-${index}`}
+                    style={styles.referencePreviewItem}
+                    wrap={false}
+                  >
+                    <Image
+                      style={styles.referencePreviewImage}
+                      format="png"
+                      src={imageUrls[reference.fileUrl]}
+                    />
+                    {reference.note && (
+                      <Text style={styles.referencePreviewNote}>
+                        Note: {reference.note}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
             </View>
           )}
         </View>
@@ -439,7 +488,7 @@ const ProjectSummaryPDF = ({
         </View>
 
         {/* Departments */}
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text
             style={[styles.sectionTitle, { borderBottomColor: themeColor }]}
           >
