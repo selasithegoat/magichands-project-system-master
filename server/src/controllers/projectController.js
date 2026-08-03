@@ -5232,6 +5232,125 @@ const buildProjectHealth = (project = {}, now = new Date()) => {
   const labels = { critical: "Critical", at_risk: "At Risk", watch: "Watch", healthy: "Healthy" };
   return { score, level, label: labels[level], reasons: reasons.slice(0, 5) };
 };
+const POST_PROJECT_REVIEW_STATUSES = new Set([
+  "Delivered",
+  "Pending Feedback",
+  "Feedback Completed",
+  "Completed",
+  "Finished",
+]);
+const buildPostProjectReview = (project = {}) => {
+  const status = project?.status || "";
+  if (!POST_PROJECT_REVIEW_STATUSES.has(status)) return null;
+
+  const history = Array.isArray(project?.statusHistory) ? project.statusHistory : [];
+  const findTransitionAt = (statuses) => {
+    const entry = [...history].reverse().find(
+      (item) => statuses.includes(item?.toStatus) && item?.changedAt,
+    );
+    return entry?.changedAt ? new Date(entry.changedAt) : null;
+  };
+  const deliveredAt = findTransitionAt(["Delivered", "Pending Feedback"]);
+  const completedAt = findTransitionAt(["Finished", "Completed", "Feedback Completed"]) || deliveredAt;
+  const startedAt = project?.createdAt ? new Date(project.createdAt) : null;
+  const durationDays = startedAt && completedAt && !Number.isNaN(startedAt.getTime())
+    ? Math.max(0, Math.round((completedAt.getTime() - startedAt.getTime()) / DAY_IN_MS))
+    : null;
+
+  const promisedDelivery = project?.details?.deliveryDate
+    ? new Date(project.details.deliveryDate)
+    : null;
+  if (promisedDelivery && !Number.isNaN(promisedDelivery.getTime())) {
+    promisedDelivery.setHours(23, 59, 59, 999);
+  }
+  const deliveredOnTime = deliveredAt && promisedDelivery
+    ? deliveredAt.getTime() <= promisedDelivery.getTime()
+    : null;
+
+  const challenges = Array.isArray(project?.challenges) ? project.challenges : [];
+  const resolvedChallenges = challenges.filter((item) => item?.status === "Resolved").length;
+  const escalatedChallenges = challenges.filter((item) => item?.status === "Escalated").length;
+  const unresolvedChallenges = challenges.length - resolvedChallenges;
+  const feedbacks = Array.isArray(project?.feedbacks) ? project.feedbacks : [];
+  const positiveFeedback = feedbacks.filter((item) => item?.type === "Positive").length;
+  const negativeFeedback = feedbacks.filter((item) => item?.type === "Negative").length;
+  const departments = new Set(
+    (Array.isArray(project?.departments) ? project.departments : [])
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const acknowledgedDepartments = new Set(
+    (Array.isArray(project?.acknowledgements) ? project.acknowledgements : [])
+      .map((entry) => String(entry?.department || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const missingAcknowledgements = [...departments].filter(
+    (department) => !acknowledgedDepartments.has(department),
+  );
+  const paymentTypes = new Set(
+    (Array.isArray(project?.paymentVerifications) ? project.paymentVerifications : [])
+      .map((entry) => entry?.type)
+      .filter(Boolean),
+  );
+  const billingCleared =
+    project?.projectType === "Quote" ||
+    paymentTypes.has("full_payment") ||
+    paymentTypes.has("authorized") ||
+    paymentTypes.has("po");
+  const revisionCount = Math.max(
+    Number(project?.orderRevisionCount) || 0,
+    (Number(project?.versionNumber) || 1) - 1,
+  );
+
+  let score = 100;
+  const lessons = [];
+  const strengths = [];
+  const deduct = (points, message) => {
+    score -= points;
+    lessons.push(message);
+  };
+  if (deliveredOnTime === false) deduct(25, "Review the schedule and handoff delays that caused late delivery.");
+  if (deliveredOnTime === true) strengths.push("Delivered within the promised date.");
+  if (escalatedChallenges > 0) deduct(Math.min(30, escalatedChallenges * 15), "Review escalated challenges and add preventive steps to the next similar project.");
+  if (unresolvedChallenges > escalatedChallenges) deduct(Math.min(20, (unresolvedChallenges - escalatedChallenges) * 8), "Close remaining challenges and document their resolution.");
+  if (challenges.length > 0 && resolvedChallenges === challenges.length) strengths.push("All reported challenges were resolved.");
+  if (negativeFeedback > 0) deduct(Math.min(30, negativeFeedback * 20), "Review negative client feedback before reusing this project approach.");
+  if (positiveFeedback > 0) strengths.push("Positive client feedback was recorded.");
+  if (revisionCount > 0) deduct(Math.min(15, revisionCount * 5), "Confirm the original brief earlier to reduce project revisions.");
+  if (missingAcknowledgements.length > 0) deduct(Math.min(20, missingAcknowledgements.length * 5), "Improve departmental acknowledgement before execution starts.");
+  if (missingAcknowledgements.length === 0 && departments.size > 0) strengths.push("Every engaged department acknowledged the project.");
+  if (!billingCleared) deduct(15, "Resolve the outstanding billing verification after closeout.");
+  if (billingCleared) strengths.push("Completion billing requirement was verified.");
+  if ((project?.productionRisks || []).length > 0) strengths.push("Production risks were documented before closeout.");
+  if (lessons.length === 0) lessons.push("Reuse this project as a healthy delivery reference for similar work.");
+
+  score = Math.max(0, Math.round(score));
+  const rating = score >= 85 ? "Excellent" : score >= 70 ? "Good" : score >= 50 ? "Needs Review" : "Critical Review";
+  const isFinal = ["Feedback Completed", "Completed", "Finished"].includes(status);
+  return {
+    phase: isFinal ? "final" : "preliminary",
+    score,
+    rating,
+    generatedAt: (completedAt || new Date()).toISOString(),
+    metrics: {
+      durationDays,
+      deliveredOnTime,
+      challenges: challenges.length,
+      resolvedChallenges,
+      escalatedChallenges,
+      productionRisks: Array.isArray(project?.productionRisks) ? project.productionRisks.length : 0,
+      revisions: revisionCount,
+      positiveFeedback,
+      negativeFeedback,
+      departmentAcknowledgement: departments.size
+        ? Math.round((acknowledgedDepartments.size / departments.size) * 100)
+        : 100,
+      billingCleared,
+    },
+    strengths: strengths.slice(0, 5),
+    lessons: lessons.slice(0, 5),
+  };
+};
 const normalizeProjectStatusFields = (project) => {
   if (!project) return project;
   const normalizedStatus = normalizeMasterApprovalStatus(project.status);
@@ -5263,6 +5382,14 @@ const normalizeProjectStatusFields = (project) => {
     project.set("health", health, { strict: false });
   } else {
     project.health = health;
+  }
+  const postProjectReview = buildPostProjectReview(project);
+  if (postProjectReview) {
+    if (typeof project.set === "function") {
+      project.set("postProjectReview", postProjectReview, { strict: false });
+    } else {
+      project.postProjectReview = postProjectReview;
+    }
   }
   return project;
 };

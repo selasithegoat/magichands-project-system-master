@@ -72,6 +72,7 @@ import {
 } from "../../utils/referenceAttachments";
 import ProductionRiskSuggestionModal from "../../components/features/ProductionRiskSuggestionModal";
 import ProjectReminderPanel from "../../components/features/ProjectReminderPanel";
+import PostProjectReviewCard from "../../components/features/PostProjectReviewCard";
 import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import ReferenceProjectsCard from "../../components/features/ReferenceProjectsCard";
 import ProjectComments from "../../components/features/ProjectComments";
@@ -1530,6 +1531,7 @@ const ProjectDetail = ({ user }) => {
                 error={meetingError}
               />
               <ProjectReminderPanel project={project} user={user} />
+              <PostProjectReviewCard review={project.postProjectReview} />
               <ProgressCard
                 project={project}
                 workflowStatus={workflowStatus}
