@@ -22,21 +22,16 @@ import {
   getQuoteStatusDisplay,
 } from "../../utils/quoteStatus";
 import { matchesOrdersManagementKpi } from "../../utils/ordersManagementKpis";
+import {
+  FEEDBACK_MEDIA_FILE_ACCEPT,
+  FEEDBACK_MEDIA_FILE_EXTENSIONS,
+  partitionFilesByExtension,
+} from "../../utils/uploadFilePolicy";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
 const ALL_ORDERS_PAGE_SIZE = 15;
 const GROUP_ROW_TRANSITION_MS = 220;
-const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
-
-const isFeedbackMediaFile = (file) => {
-  const mimeType = String(file?.type || "").toLowerCase();
-  return (
-    mimeType.startsWith("image/") ||
-    mimeType.startsWith("audio/") ||
-    mimeType.startsWith("video/")
-  );
-};
 
 const getFeedbackAttachmentName = (attachment) => {
   if (attachment?.fileName) return attachment.fileName;
@@ -854,10 +849,11 @@ const OrdersList = ({ kpiFilter = "all" }) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
 
-    const acceptedFiles = selectedFiles.filter((file) =>
-      isFeedbackMediaFile(file),
+    const { acceptedFiles, rejectedFiles } = partitionFilesByExtension(
+      selectedFiles,
+      FEEDBACK_MEDIA_FILE_EXTENSIONS,
     );
-    if (acceptedFiles.length !== selectedFiles.length) {
+    if (rejectedFiles.length > 0) {
       showToast(
         "Only photos, audio, and video files can be attached to feedback.",
         "error",
@@ -1628,7 +1624,7 @@ const OrdersList = ({ kpiFilter = "all" }) => {
               </label>
               <input
                 type="file"
-                accept={FEEDBACK_MEDIA_ACCEPT}
+                accept={FEEDBACK_MEDIA_FILE_ACCEPT}
                 multiple
                 onChange={handleFeedbackFileChange}
                 className="feedback-media-input"

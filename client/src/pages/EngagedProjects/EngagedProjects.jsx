@@ -41,6 +41,11 @@ import {
   isMockupAwaitingGraphicsValidation,
   isMockupClientRejected,
 } from "../../utils/mockupWorkflow";
+import {
+  MOCKUP_FILE_ACCEPT,
+  MOCKUP_FILE_EXTENSIONS,
+  partitionFilesByExtension,
+} from "../../utils/uploadFilePolicy";
 import "./EngagedProjects.css";
 
 const STATUS_OPTIONS = [
@@ -1975,18 +1980,31 @@ const EngagedProjects = ({ user }) => {
                 <input
                   type="file"
                   className="input-field"
+                  accept={MOCKUP_FILE_ACCEPT}
                   multiple
-                  onChange={(e) =>
-                    setMockupFiles(Array.from(e.target.files || []))
-                  }
+                  onChange={(e) => {
+                    const { acceptedFiles, rejectedFiles } =
+                      partitionFilesByExtension(
+                        e.target.files,
+                        MOCKUP_FILE_EXTENSIONS,
+                      );
+                    setMockupFiles(acceptedFiles);
+                    if (rejectedFiles.length > 0) {
+                      setToast({
+                        type: "error",
+                        message:
+                          "Unsupported mockup skipped. Use JPG, PNG, WEBP, GIF, PDF, or CDR.",
+                      });
+                    }
+                  }}
                   required
                 />
                 <div
                   className="file-hint"
                   style={{ marginTop: "0.5rem" }}
                 >
-                  Any file type allowed (e.g., .cdr, .pdf, .png). Select multiple
-                  files to upload several mockups at once.
+                  JPG, PNG, WEBP, GIF, PDF, or CDR. Select multiple files to
+                  upload several mockups at once.
                 </div>
                 {mockupFiles.length > 0 && (
                   <div className="file-hint" style={{ marginTop: "0.25rem" }}>

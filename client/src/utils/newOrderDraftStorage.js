@@ -1,7 +1,9 @@
 const DB_NAME = "mh-client-drafts";
 const STORE_NAME = "new-order-drafts";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DRAFT_VERSION = 1;
+const MAX_CACHED_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_CACHED_FILES_TOTAL_BYTES = 16 * 1024 * 1024;
 
 const supportsIndexedDb = () =>
   typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
@@ -19,6 +21,22 @@ const openDraftDatabase = () =>
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
+        return;
+      }
+
+      // Version 1 cached every selected Blob, which could make the browser
+      // unresponsive when a large design file was selected or restored.
+      if (request.oldVersion < 2) {
+        const store = request.transaction.objectStore(STORE_NAME);
+        const cursorRequest = store.openCursor();
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          if (String(cursor.key || "").endsWith(":files")) {
+            cursor.delete();
+          }
+          cursor.continue();
+        };
       }
     };
 
@@ -125,24 +143,37 @@ export const saveNewOrderDraftFiles = async (accountKey, filesPayload) => {
       ? filesPayload
       : {};
 
+  let cachedBytes = 0;
+  const selectCacheableFiles = (files) =>
+    (Array.isArray(files) ? files : []).filter((file) => {
+      const fileSize = Number(file?.size) || 0;
+      if (
+        fileSize <= 0 ||
+        fileSize > MAX_CACHED_FILE_BYTES ||
+        cachedBytes + fileSize > MAX_CACHED_FILES_TOTAL_BYTES
+      ) {
+        return false;
+      }
+      cachedBytes += fileSize;
+      return true;
+    });
+
+  const selectedFiles = selectCacheableFiles(normalizedPayload.selectedFiles);
+  const selectedClientMockups = selectCacheableFiles(
+    normalizedPayload.selectedClientMockups,
+  );
+  const selectedApprovedMockups = selectCacheableFiles(
+    normalizedPayload.selectedApprovedMockups,
+  );
+
   return runStoreRequest("readwrite", (store) =>
     store.put(
       {
         version: DRAFT_VERSION,
         savedAt: Date.now(),
-        selectedFiles: Array.isArray(normalizedPayload.selectedFiles)
-          ? normalizedPayload.selectedFiles
-          : [],
-        selectedClientMockups: Array.isArray(
-          normalizedPayload.selectedClientMockups,
-        )
-          ? normalizedPayload.selectedClientMockups
-          : [],
-        selectedApprovedMockups: Array.isArray(
-          normalizedPayload.selectedApprovedMockups,
-        )
-          ? normalizedPayload.selectedApprovedMockups
-          : [],
+        selectedFiles,
+        selectedClientMockups,
+        selectedApprovedMockups,
       },
       buildFilesKey(accountKey),
     ),

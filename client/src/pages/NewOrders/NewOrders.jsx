@@ -40,6 +40,13 @@ import {
   saveProjectDraft,
 } from "../../utils/projectDraftApi";
 import { resolvePortalSource } from "../../utils/portalSource";
+import {
+  GENERAL_UPLOAD_FILE_ACCEPT,
+  GENERAL_UPLOAD_FILE_EXTENSIONS,
+  MOCKUP_FILE_ACCEPT,
+  MOCKUP_FILE_EXTENSIONS,
+  partitionFilesByExtension,
+} from "../../utils/uploadFilePolicy";
 import "./NewOrders.css";
 
 const REVISION_LOCKED_STATUSES = new Set([
@@ -617,6 +624,22 @@ const NewOrders = ({ user = null }) => {
     }, 9500);
   };
 
+  const getSupportedFiles = (fileList, allowedExtensions, description) => {
+    const { acceptedFiles, rejectedFiles } = partitionFilesByExtension(
+      fileList,
+      allowedExtensions,
+    );
+    if (rejectedFiles.length > 0) {
+      showToast(
+        `${rejectedFiles.length} unsupported ${
+          rejectedFiles.length === 1 ? "file was" : "files were"
+        } skipped. ${description}`,
+        "error",
+      );
+    }
+    return acceptedFiles;
+  };
+
   const renderLeadOption = (option) => (
     <div className="lead-option">
       <span
@@ -1123,7 +1146,8 @@ const NewOrders = ({ user = null }) => {
       return undefined;
     }
 
-    const timerId = window.setTimeout(() => {
+    let idleId = null;
+    const persistFiles = () => {
       draftFileSaveChainRef.current = draftFileSaveChainRef.current
         .catch(() => {})
         .then(() => {
@@ -1137,10 +1161,21 @@ const NewOrders = ({ user = null }) => {
         .catch((error) => {
           console.error("Failed to save New Order draft files", error);
         });
-    }, 150);
+    };
+
+    const timerId = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === "function") {
+        idleId = window.requestIdleCallback(persistFiles, { timeout: 2500 });
+      } else {
+        persistFiles();
+      }
+    }, 750);
 
     return () => {
       window.clearTimeout(timerId);
+      if (idleId !== null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
     };
   }, [
     draftAccountKey,
@@ -2012,10 +2047,15 @@ const NewOrders = ({ user = null }) => {
                     type="file"
                     id="new-order-client-mockup"
                     style={{ display: "none" }}
+                    accept={MOCKUP_FILE_ACCEPT}
                     multiple
                     disabled={clientMockupSectionLocked}
                     onChange={(e) => {
-                      const nextFiles = Array.from(e.target.files || []);
+                      const nextFiles = getSupportedFiles(
+                        e.target.files,
+                        MOCKUP_FILE_EXTENSIONS,
+                        "Use JPG, PNG, WEBP, GIF, PDF, or CDR.",
+                      );
                       if (nextFiles.length > 0) {
                         setSelectedClientMockups((current) =>
                           mergeUniqueFiles(current, nextFiles),
@@ -2045,6 +2085,8 @@ const NewOrders = ({ user = null }) => {
                                 <img
                                   src={clientMockupPreviewUrls[fileKey]}
                                   alt="client mockup preview"
+                                  loading="lazy"
+                                  decoding="async"
                                 />
                               ) : (
                                 <FolderIcon />
@@ -2135,10 +2177,15 @@ const NewOrders = ({ user = null }) => {
                     type="file"
                     id="new-order-approved-mockup"
                     style={{ display: "none" }}
+                    accept={MOCKUP_FILE_ACCEPT}
                     multiple
                     disabled={approvedMockupSectionLocked}
                     onChange={(e) => {
-                      const nextFiles = Array.from(e.target.files || []);
+                      const nextFiles = getSupportedFiles(
+                        e.target.files,
+                        MOCKUP_FILE_EXTENSIONS,
+                        "Use JPG, PNG, WEBP, GIF, PDF, or CDR.",
+                      );
                       if (nextFiles.length > 0) {
                         setSelectedApprovedMockups((current) =>
                           mergeUniqueFiles(current, nextFiles),
@@ -2168,6 +2215,8 @@ const NewOrders = ({ user = null }) => {
                                 <img
                                   src={approvedMockupPreviewUrls[fileKey]}
                                   alt="approved mockup preview"
+                                  loading="lazy"
+                                  decoding="async"
                                 />
                               ) : (
                                 <FolderIcon />
@@ -2714,9 +2763,14 @@ const NewOrders = ({ user = null }) => {
                 multiple
                 id="new-order-attachments"
                 style={{ display: "none" }}
+                accept={GENERAL_UPLOAD_FILE_ACCEPT}
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
-                    const filesArray = Array.from(e.target.files);
+                    const filesArray = getSupportedFiles(
+                      e.target.files,
+                      GENERAL_UPLOAD_FILE_EXTENSIONS,
+                      "Choose an image, document, archive, design, audio, or video file.",
+                    );
                     setSelectedFiles((prev) => [...prev, ...filesArray]);
                     e.target.value = null;
                   }
@@ -2826,7 +2880,12 @@ const NewOrders = ({ user = null }) => {
                       <div className="file-icon">
                         {file.type.startsWith("image/") &&
                         filePreviewUrls[fileKey] ? (
-                          <img src={filePreviewUrls[fileKey]} alt="preview" />
+                          <img
+                            src={filePreviewUrls[fileKey]}
+                            alt="preview"
+                            loading="lazy"
+                            decoding="async"
+                          />
                         ) : (
                           <FolderIcon />
                         )}

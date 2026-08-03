@@ -38,6 +38,15 @@ import ContextualHelpLink from "../../components/features/ContextualHelpLink";
 import ProjectComments from "../../components/features/ProjectComments";
 import StatusSlaBadge from "../../components/ui/StatusSlaBadge";
 import useObjectUrls from "../../hooks/useObjectUrls";
+import {
+  DOCUMENT_FILE_ACCEPT,
+  DOCUMENT_FILE_EXTENSIONS,
+  FEEDBACK_MEDIA_FILE_ACCEPT,
+  FEEDBACK_MEDIA_FILE_EXTENSIONS,
+  GENERAL_UPLOAD_FILE_ACCEPT,
+  GENERAL_UPLOAD_FILE_EXTENSIONS,
+  partitionFilesByExtension,
+} from "../../utils/uploadFilePolicy";
 import "./NewOrders.css";
 
 const DELIVERY_CONFIRM_PHRASE = "I confirm this order has been delivered";
@@ -55,7 +64,6 @@ const SAMPLE_APPROVAL_CONFIRM_PHRASE =
   "I confirm the client approved the production sample";
 const SAMPLE_APPROVAL_RESET_PHRASE =
   "I confirm sample approval should be reset to pending";
-const FEEDBACK_MEDIA_ACCEPT = "image/*,audio/*,video/*";
 const FEEDBACK_MEDIA_MAX_FILES = 6;
 const MOCKUP_REJECTION_MAX_FILES = 10;
 const REVISION_LOCKED_STATUSES = new Set([
@@ -580,15 +588,6 @@ const normalizeUpdateCategory = (category) => {
     return "Graphics";
   }
   return category || "General";
-};
-
-const isFeedbackMediaFile = (file) => {
-  const mimeType = String(file?.type || "").toLowerCase();
-  return (
-    mimeType.startsWith("image/") ||
-    mimeType.startsWith("audio/") ||
-    mimeType.startsWith("video/")
-  );
 };
 
 const getFeedbackAttachmentName = (attachment) => {
@@ -1961,10 +1960,11 @@ const OrderActions = () => {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) return;
 
-    const acceptedFiles = selectedFiles.filter((file) =>
-      isFeedbackMediaFile(file),
+    const { acceptedFiles, rejectedFiles } = partitionFilesByExtension(
+      selectedFiles,
+      FEEDBACK_MEDIA_FILE_EXTENSIONS,
     );
-    if (acceptedFiles.length !== selectedFiles.length) {
+    if (rejectedFiles.length > 0) {
       showToast(
         "Only photos, audio, and video files can be attached to feedback.",
         "error",
@@ -2599,9 +2599,18 @@ const OrderActions = () => {
   };
 
   const handleBidDocsFileChange = (event) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) return;
-    setQuoteBidDocsFiles((prev) => [...prev, ...files]);
+    const { acceptedFiles, rejectedFiles } = partitionFilesByExtension(
+      event.target.files,
+      DOCUMENT_FILE_EXTENSIONS,
+    );
+    if (rejectedFiles.length > 0) {
+      showToast("Unsupported document skipped.", "error");
+    }
+    if (acceptedFiles.length === 0) {
+      event.target.value = null;
+      return;
+    }
+    setQuoteBidDocsFiles((prev) => [...prev, ...acceptedFiles]);
     event.target.value = null;
   };
 
@@ -2812,8 +2821,18 @@ const OrderActions = () => {
   };
 
   const handleMockupRejectionFileChange = (event) => {
-    const selectedFiles = Array.from(event.target.files || []);
-    if (selectedFiles.length === 0) return;
+    const { acceptedFiles: selectedFiles, rejectedFiles } =
+      partitionFilesByExtension(
+        event.target.files,
+        GENERAL_UPLOAD_FILE_EXTENSIONS,
+      );
+    if (rejectedFiles.length > 0) {
+      showToast("Unsupported attachment skipped.", "error");
+    }
+    if (selectedFiles.length === 0) {
+      event.target.value = "";
+      return;
+    }
 
     setMockupRejectionFiles((prev) => {
       const merged = [...prev, ...selectedFiles];
@@ -4367,6 +4386,7 @@ const OrderActions = () => {
                     <input
                       type="file"
                       id="quote-bid-docs-input"
+                      accept={DOCUMENT_FILE_ACCEPT}
                       multiple
                       style={{ display: "none" }}
                       onChange={handleBidDocsFileChange}
@@ -5794,6 +5814,7 @@ const OrderActions = () => {
               <input
                 type="file"
                 className="feedback-media-input"
+                accept={GENERAL_UPLOAD_FILE_ACCEPT}
                 multiple
                 onChange={handleMockupRejectionFileChange}
               />
@@ -6328,7 +6349,7 @@ const OrderActions = () => {
               </label>
               <input
                 type="file"
-                accept={FEEDBACK_MEDIA_ACCEPT}
+                accept={FEEDBACK_MEDIA_FILE_ACCEPT}
                 multiple
                 onChange={handleFeedbackFileChange}
                 className="feedback-media-input"
