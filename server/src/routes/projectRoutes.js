@@ -5,6 +5,7 @@ const {
   getProjects,
   getDashboardSummary,
   getDashboardCounts,
+  getHealthPerformance,
   getNextActions,
   getDeliveryCalendar,
   searchReferenceProjects,
@@ -244,6 +245,7 @@ router.get("/orders/:orderNumber", protect, getOrderGroupByNumber);
 router.get("/stats", protect, getUserStats);
 router.get("/dashboard-summary", protect, getDashboardSummary);
 router.get("/dashboard-counts", protect, getDashboardCounts);
+router.get("/health-performance", protect, getHealthPerformance);
 router.get("/next-actions", protect, getNextActions);
 router.get("/delivery-calendar", protect, getDeliveryCalendar);
 router.get("/reference-search", protect, searchReferenceProjects);

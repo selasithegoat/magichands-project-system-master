@@ -117,6 +117,13 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
             <ReportsIcon className="nav-icon" />
             Analytics
           </NavLink>
+          <NavLink
+            to="/health-performance"
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+          >
+            <ReportsIcon className="nav-icon" />
+            Project Performance
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">

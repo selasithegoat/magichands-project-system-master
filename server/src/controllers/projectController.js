@@ -20751,6 +20751,7 @@ module.exports = {
   createProject,
   getProjects,
   getDashboardSummary,
+  getHealthPerformance,
   getDashboardCounts,
   getNextActions,
   getDeliveryCalendar,
@@ -20838,4 +20839,109 @@ module.exports = {
     isRiskSuggestionCompatibleWithDepartmentProfile,
   },
 };
+
+// @desc    Rank active projects and leads by explainable project health
+// @route   GET /api/projects/health-performance
+// @access  Private (Admin)
+async function getHealthPerformance(req, res) {
+  try {
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Admin access is required." });
+    }
+
+    const projects = await Project.find({
+      status: { $nin: ["Completed", "Finished", "Declined", "Draft"] },
+      $or: [{ isLatestVersion: true }, { isLatestVersion: { $exists: false } }],
+    })
+      .select([
+        "_id", "orderId", "projectType", "priority", "status", "statusChangedAt",
+        "statusHistory", "createdAt", "updatedAt", "projectLeadId",
+        "details.projectName", "details.projectNameRaw", "details.projectIndicator",
+        "details.client", "details.deliveryDate", "hold", "challenges",
+        "productionRisks", "invoice", "paymentVerifications",
+      ].join(" "))
+      .populate("projectLeadId", "firstName lastName name employeeId avatarUrl")
+      .lean();
+
+    projects.forEach(normalizeProjectStatusFields);
+    const rankedProjects = projects
+      .map((project) => ({
+        _id: project._id,
+        orderId: project.orderId,
+        status: project.status,
+        projectType: project.projectType,
+        priority: project.priority,
+        details: project.details,
+        lead: project.projectLeadId || null,
+        health: project.health,
+      }))
+      .sort((left, right) => (right.health?.score || 0) - (left.health?.score || 0));
+
+    const leadBuckets = new Map();
+    rankedProjects.forEach((project) => {
+      const lead = project.lead;
+      const leadId = toObjectIdString(lead?._id);
+      if (!leadId) return;
+      if (!leadBuckets.has(leadId)) {
+        leadBuckets.set(leadId, {
+          lead: {
+            _id: lead._id,
+            name: toUserDisplayName(lead) || lead.name || lead.employeeId || "Unknown lead",
+            avatarUrl: lead.avatarUrl || "",
+          },
+          scores: [],
+          healthy: 0,
+          watch: 0,
+          atRisk: 0,
+          critical: 0,
+        });
+      }
+      const bucket = leadBuckets.get(leadId);
+      bucket.scores.push(Number(project.health?.score) || 0);
+      if (project.health?.level === "healthy") bucket.healthy += 1;
+      if (project.health?.level === "watch") bucket.watch += 1;
+      if (project.health?.level === "at_risk") bucket.atRisk += 1;
+      if (project.health?.level === "critical") bucket.critical += 1;
+    });
+
+    const leads = Array.from(leadBuckets.values())
+      .map((bucket) => {
+        const projectCount = bucket.scores.length;
+        const averageHealth = projectCount
+          ? Math.round(bucket.scores.reduce((sum, score) => sum + score, 0) / projectCount)
+          : 0;
+        return {
+          ...bucket,
+          scores: undefined,
+          projectCount,
+          averageHealth,
+          rankingEligible: projectCount >= 3,
+        };
+      })
+      .sort((left, right) => {
+        if (left.rankingEligible !== right.rankingEligible) return left.rankingEligible ? -1 : 1;
+        if (right.averageHealth !== left.averageHealth) return right.averageHealth - left.averageHealth;
+        return right.projectCount - left.projectCount;
+      });
+
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      methodology: {
+        projectScope: "Active latest-version projects",
+        minimumLeadProjects: 3,
+        note: "Lead ranking uses average explainable project health; leads below the minimum sample are shown but marked provisional.",
+      },
+      summary: {
+        activeProjects: rankedProjects.length,
+        rankedLeads: leads.filter((lead) => lead.rankingEligible).length,
+        provisionalLeads: leads.filter((lead) => !lead.rankingEligible).length,
+      },
+      projects: rankedProjects.slice(0, 25),
+      leads,
+    });
+  } catch (error) {
+    console.error("Error fetching health performance:", error);
+    return res.status(500).json({ message: "Server Error" });
+  }
+}
 
