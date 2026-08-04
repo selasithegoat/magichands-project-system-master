@@ -17,6 +17,7 @@ router.get("/", protect, (req, res) => {
   res.write(`event: connected\ndata: {"ok": true}\n\n`);
   addClient(res, {
     userId: req.user?._id,
+    sessionId: req.authSession?.sessionId,
     clientId: normalizeRealtimeClientId(req.query?.clientId),
   });
 

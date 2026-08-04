@@ -10,6 +10,8 @@ const SOUND_SRC = {
 
 let hasUserInteraction = false;
 let unlockListenersAttached = false;
+let notificationSessionActive = false;
+const activeSounds = new Set();
 
 const lastPlayedAt = {
   notification: 0,
@@ -43,8 +45,31 @@ const createPlaybackSound = (kind) => {
   return audio;
 };
 
+const stopSound = (sound) => {
+  if (!sound) return;
+
+  try {
+    sound.pause();
+    sound.currentTime = 0;
+  } catch {
+    // The sound may already have ended or may not have started loading yet.
+  }
+  activeSounds.delete(sound);
+};
+
+export const setNotificationSoundSessionActive = (active) => {
+  notificationSessionActive = Boolean(active);
+  if (notificationSessionActive) return;
+
+  for (const sound of Array.from(activeSounds)) {
+    stopSound(sound);
+  }
+};
+
 const playSoundKind = async (kind, enabled = true) => {
-  if (!enabled || !hasUserInteraction) return false;
+  if (!notificationSessionActive || !enabled || !hasUserInteraction) {
+    return false;
+  }
 
   const now = Date.now();
   if (now - (lastPlayedAt[kind] || 0) < SOUND_COOLDOWN_MS) {
@@ -55,11 +80,21 @@ const playSoundKind = async (kind, enabled = true) => {
   if (!sound) return false;
 
   lastPlayedAt[kind] = now;
+  activeSounds.add(sound);
+
+  const releaseSound = () => activeSounds.delete(sound);
+  sound.addEventListener("ended", releaseSound, { once: true });
+  sound.addEventListener("error", releaseSound, { once: true });
 
   try {
     await sound.play();
+    if (!notificationSessionActive) {
+      stopSound(sound);
+      return false;
+    }
     return true;
   } catch {
+    activeSounds.delete(sound);
     return false;
   }
 };
@@ -105,6 +140,7 @@ export const playMessageSound = async (enabled = true) =>
 
 export const triggerNotificationVibration = (pattern = [200, 100, 200]) => {
   if (
+    !notificationSessionActive ||
     !hasUserInteraction ||
     typeof navigator === "undefined" ||
     typeof navigator.vibrate !== "function"

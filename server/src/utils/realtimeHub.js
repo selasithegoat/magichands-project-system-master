@@ -1,6 +1,8 @@
 const clients = new Set();
 const clientsByUserId = new Map();
+const clientsBySessionId = new Map();
 const clientUserLookup = new Map();
+const clientSessionLookup = new Map();
 const clientRealtimeIdLookup = new Map();
 let heartbeat = null;
 
@@ -65,6 +67,13 @@ const addClient = (res, options = {}) => {
     bucket.add(res);
     clientsByUserId.set(userId, bucket);
   }
+  const sessionId = String(options?.sessionId || "").trim();
+  if (sessionId) {
+    clientSessionLookup.set(res, sessionId);
+    const bucket = clientsBySessionId.get(sessionId) || new Set();
+    bucket.add(res);
+    clientsBySessionId.set(sessionId, bucket);
+  }
   const clientId = String(options?.clientId || "").trim();
   if (clientId) {
     clientRealtimeIdLookup.set(res, clientId);
@@ -85,10 +94,46 @@ const removeClient = (res) => {
     }
     clientUserLookup.delete(res);
   }
+  const sessionId = clientSessionLookup.get(res);
+  if (sessionId) {
+    const bucket = clientsBySessionId.get(sessionId);
+    if (bucket) {
+      bucket.delete(res);
+      if (bucket.size === 0) {
+        clientsBySessionId.delete(sessionId);
+      }
+    }
+    clientSessionLookup.delete(res);
+  }
   clientRealtimeIdLookup.delete(res);
   if (clients.size === 0) {
     stopHeartbeat();
   }
+};
+
+const disconnectSessionClients = (sessionId) => {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId) return 0;
+
+  const bucket = clientsBySessionId.get(normalizedSessionId);
+  if (!bucket?.size) return 0;
+
+  const sessionClients = Array.from(bucket);
+  const data = JSON.stringify({ ts: Date.now(), reason: "logout" });
+  const message = `event: session_ended\ndata: ${data}\n\n`;
+
+  for (const res of sessionClients) {
+    try {
+      res.write(message);
+      res.end();
+    } catch {
+      // A disconnected response is still removed from the realtime registry.
+    } finally {
+      removeClient(res);
+    }
+  }
+
+  return sessionClients.length;
 };
 
 const broadcastDataChange = (payload = {}) => {
@@ -141,4 +186,5 @@ module.exports = {
   broadcastChatChange,
   broadcastChatTyping,
   broadcastPresenceChange,
+  disconnectSessionClients,
 };

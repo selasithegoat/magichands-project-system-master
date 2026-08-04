@@ -11,11 +11,14 @@ import useTheme from "./hooks/useTheme";
 import { clearPersistedFilterState } from "./utils/filterPersistence";
 import { buildPortalUrl } from "./utils/portalNavigation";
 import { queryClient } from "./utils/queryClient";
+import { setNotificationSoundSessionActive } from "./utils/notificationSound";
 import {
   fetchSystemVersionInfo,
   formatVersionDisplay,
   getCachedSystemVersionInfo,
 } from "./utils/systemVersionInfo";
+
+const CLIENT_LOGOUT_STORAGE_KEY = "mh:client-session-logout";
 
 // Lazy Loaded Pages
 const Login = lazy(() => import("./pages/Login/Login"));
@@ -191,6 +194,42 @@ function App() {
     forcedTheme: isLoginRoute ? "light" : "",
   });
 
+  const clearLocalAuthSession = React.useCallback(() => {
+    setNotificationSoundSessionActive(false);
+    queryClient.clear();
+    setUser(null);
+    clearPersistedFilterState();
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+  }, []);
+
+  const broadcastAndClearLocalAuthSession = React.useCallback(() => {
+    clearLocalAuthSession();
+    try {
+      localStorage.setItem(CLIENT_LOGOUT_STORAGE_KEY, String(Date.now()));
+    } catch {
+      // Server-side session termination remains the cross-tab fallback.
+    }
+  }, [clearLocalAuthSession]);
+
+  React.useEffect(() => {
+    setNotificationSoundSessionActive(Boolean(user?._id));
+  }, [user?._id]);
+
+  React.useEffect(() => {
+    window.addEventListener("mh:auth-session-ended", clearLocalAuthSession);
+    const handleStorageLogout = (event) => {
+      if (event.key === CLIENT_LOGOUT_STORAGE_KEY && event.newValue) {
+        clearLocalAuthSession();
+      }
+    };
+    window.addEventListener("storage", handleStorageLogout);
+    return () => {
+      window.removeEventListener("mh:auth-session-ended", clearLocalAuthSession);
+      window.removeEventListener("storage", handleStorageLogout);
+    };
+  }, [clearLocalAuthSession]);
+
   const syncThemePreference = React.useCallback(
     async (nextTheme, { silent = false } = {}) => {
       if (!accountKey) return;
@@ -243,10 +282,7 @@ function App() {
   // Initialize auto-logout (5 minutes)
   useInactivityLogout(
     5 * 60 * 1000,
-    () => {
-      queryClient.clear();
-      setUser(null);
-    },
+    broadcastAndClearLocalAuthSession,
     Boolean(user?._id),
   );
   useRealtimeClient(Boolean(user));
@@ -367,9 +403,7 @@ function App() {
   }, [showPostLoginSplash]);
 
   const performLogout = async () => {
-    queryClient.clear();
-    setUser(null);
-    clearPersistedFilterState();
+    broadcastAndClearLocalAuthSession();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",

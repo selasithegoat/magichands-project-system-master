@@ -71,6 +71,14 @@ const useInactivityLogout = (
         setSessionTimeoutNotice(timeout);
       }
 
+      if (typeof onLoggedOutRef.current === "function") {
+        onLoggedOutRef.current({ reason });
+      }
+
+      clearPersistedFilterState();
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
       try {
         await fetch("/api/auth/logout", {
           method: "POST",
@@ -80,14 +88,6 @@ const useInactivityLogout = (
       } catch (error) {
         console.error("Logout failed", error);
       }
-
-      if (typeof onLoggedOutRef.current === "function") {
-        onLoggedOutRef.current({ reason });
-      }
-
-      clearPersistedFilterState();
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
 
       if (locationPathRef.current !== "/login") {
         navigate("/login", { replace: true });

@@ -1,5 +1,11 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import { queryClient } from "./utils/queryClient";
+import {
+  setNotificationSoundSessionActive as setAdminNotificationSessionActive,
+} from "./utils/notificationSound";
+import {
+  setNotificationSoundSessionActive as setSharedNotificationSessionActive,
+} from "@client/utils/notificationSound";
 // Lazy Load Components
 const Login = lazy(() => import("./pages/Login/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
@@ -54,6 +60,8 @@ import {
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 
+const ADMIN_LOGOUT_STORAGE_KEY = "mh:admin-session-logout";
+
 const normalizeDepartments = (value) => {
   const list = Array.isArray(value) ? value : value ? [value] : [];
   return list
@@ -104,6 +112,45 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const clearLocalAuthSession = React.useCallback(() => {
+    setAdminNotificationSessionActive(false);
+    setSharedNotificationSessionActive(false);
+    queryClient.clear();
+    setUser(null);
+    clearPersistedFilterState();
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+  }, []);
+
+  const broadcastAndClearLocalAuthSession = React.useCallback(() => {
+    clearLocalAuthSession();
+    try {
+      localStorage.setItem(ADMIN_LOGOUT_STORAGE_KEY, String(Date.now()));
+    } catch {
+      // Server-side session termination remains the cross-tab fallback.
+    }
+  }, [clearLocalAuthSession]);
+
+  useEffect(() => {
+    const active = Boolean(user?._id);
+    setAdminNotificationSessionActive(active);
+    setSharedNotificationSessionActive(active);
+  }, [user?._id]);
+
+  useEffect(() => {
+    window.addEventListener("mh:auth-session-ended", clearLocalAuthSession);
+    const handleStorageLogout = (event) => {
+      if (event.key === ADMIN_LOGOUT_STORAGE_KEY && event.newValue) {
+        clearLocalAuthSession();
+      }
+    };
+    window.addEventListener("storage", handleStorageLogout);
+    return () => {
+      window.removeEventListener("mh:auth-session-ended", clearLocalAuthSession);
+      window.removeEventListener("storage", handleStorageLogout);
+    };
+  }, [clearLocalAuthSession]);
+
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -132,9 +179,7 @@ function App() {
   };
 
   const handleLogout = React.useCallback(async () => {
-    queryClient.clear();
-    setUser(null);
-    clearPersistedFilterState();
+    broadcastAndClearLocalAuthSession();
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -144,15 +189,12 @@ function App() {
     } catch (err) {
       console.error("Logout failed", err);
     }
-  }, []);
+  }, [broadcastAndClearLocalAuthSession]);
 
   // Inactivity Timeout (5 minutes)
   useInactivityLogout(
     5 * 60 * 1000,
-    () => {
-      queryClient.clear();
-      setUser(null);
-    },
+    broadcastAndClearLocalAuthSession,
     Boolean(user?._id),
   );
   useRealtimeClient(Boolean(user));

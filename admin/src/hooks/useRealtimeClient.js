@@ -57,6 +57,27 @@ const useRealtimeClient = (enabled = true) => {
       });
     };
 
+    const handleSessionEnded = (event) => {
+      let detail = {};
+      try {
+        detail = event?.data ? JSON.parse(event.data) : {};
+      } catch {
+        detail = {};
+      }
+
+      source.close();
+      if (sourceRef.current === source) {
+        sourceRef.current = null;
+      }
+      publishRealtimeStatus({
+        connected: false,
+        lastDisconnectedAt: Date.now(),
+      });
+      window.dispatchEvent(
+        new CustomEvent("mh:auth-session-ended", { detail }),
+      );
+    };
+
     const handleChange = (event) => {
       let detail = {};
       try {
@@ -108,6 +129,7 @@ const useRealtimeClient = (enabled = true) => {
 
     source.addEventListener("open", handleOpen);
     source.addEventListener("error", handleError);
+    source.addEventListener("session_ended", handleSessionEnded);
     source.addEventListener("data_changed", handleChange);
     source.addEventListener("notification_changed", handleNotificationChange);
     source.addEventListener("chat_changed", handleChatChange);
@@ -116,6 +138,7 @@ const useRealtimeClient = (enabled = true) => {
     return () => {
       source.removeEventListener("open", handleOpen);
       source.removeEventListener("error", handleError);
+      source.removeEventListener("session_ended", handleSessionEnded);
       source.removeEventListener("data_changed", handleChange);
       source.removeEventListener("notification_changed", handleNotificationChange);
       source.removeEventListener("chat_changed", handleChatChange);

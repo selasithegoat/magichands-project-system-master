@@ -13,7 +13,10 @@ const {
   createUserSession,
   markUserSessionLoggedOut,
 } = require("../utils/userSessionService");
-const { broadcastPresenceChange } = require("../utils/realtimeHub");
+const {
+  broadcastPresenceChange,
+  disconnectSessionClients,
+} = require("../utils/realtimeHub");
 const {
   selectAuthCookie,
   getSessionPortalSource,
@@ -218,12 +221,14 @@ const logoutUser = async (req, res) => {
   const now = new Date();
 
   let broadcastUserId = "";
+  let logoutSessionId = "";
 
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const sessionId =
         typeof decoded?.sid === "string" ? decoded.sid.trim() : "";
+      logoutSessionId = sessionId;
 
       if (sessionId) {
         const session = await markUserSessionLoggedOut(sessionId, now);
@@ -248,6 +253,10 @@ const logoutUser = async (req, res) => {
 
   res.clearCookie("token", clearOptions);
   res.cookie("token", "", clearOptions);
+
+  if (logoutSessionId) {
+    disconnectSessionClients(logoutSessionId);
+  }
 
   if (broadcastUserId) {
     broadcastPresenceChange({
