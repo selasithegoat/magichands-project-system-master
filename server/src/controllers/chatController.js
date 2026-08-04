@@ -25,6 +25,9 @@ const {
 } = require("../utils/chatTypingService");
 const { createNotification } = require("../utils/notificationService");
 const { resolvePresenceMap } = require("../utils/presenceService");
+const {
+  resolveProductionSubDepartmentTokens,
+} = require("../utils/productionDepartmentAccess");
 
 const TEAM_ROOM_SLUG = "team-room";
 const TEAM_ROOM_NAME = "Team Room";
@@ -61,28 +64,6 @@ const CHAT_REACTION_EMOJI_ORDER = new Map(
 const CHAT_REACTION_BLOCKED_TEXT_REGEX = /[\p{Control}\p{White_Space}]/u;
 const CHAT_REACTION_EMOJI_SIGNAL_REGEX =
   /\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Regional_Indicator}|[#*0-9]\ufe0f?\u20e3/u;
-const PRODUCTION_SUB_DEPARTMENTS = new Set([
-  "dtf",
-  "uv-dtf",
-  "uv-printing",
-  "engraving",
-  "large-format",
-  "digital-press",
-  "digital-heat-press",
-  "offset-press",
-  "screen-printing",
-  "embroidery",
-  "sublimation",
-  "digital-cutting",
-  "pvc-id",
-  "business-cards",
-  "installation",
-  "overseas",
-  "woodme",
-  "fabrication",
-  "signage",
-  "local-outsourcing",
-]);
 const GRAPHICS_SUB_DEPARTMENTS = new Set(["graphics"]);
 const STORES_SUB_DEPARTMENTS = new Set(["stock", "packaging"]);
 const PHOTOGRAPHY_SUB_DEPARTMENTS = new Set(["photography"]);
@@ -145,13 +126,13 @@ const resolveEngagedRouteDepartments = (departments = []) => {
     .map((entry) => normalizeDepartmentValue(entry))
     .filter(Boolean);
 
-  const hasProductionParent = normalizedDepartments.includes("production");
   const hasGraphicsParent = normalizedDepartments.includes("graphics/design");
   const hasStoresParent = normalizedDepartments.includes("stores");
   const hasPhotographyParent = normalizedDepartments.includes("photography");
-  const productionSubDepartments = hasProductionParent
-    ? Array.from(PRODUCTION_SUB_DEPARTMENTS)
-    : normalizedDepartments.filter((entry) => PRODUCTION_SUB_DEPARTMENTS.has(entry));
+  const productionSubDepartments = resolveProductionSubDepartmentTokens(
+    normalizedDepartments,
+    (entry) => entry,
+  );
   const hasGraphics =
     hasGraphicsParent ||
     normalizedDepartments.some((entry) => GRAPHICS_SUB_DEPARTMENTS.has(entry));

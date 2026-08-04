@@ -2,6 +2,7 @@ import {
   PRODUCTION_SUB_DEPARTMENTS,
   getDepartmentLabel,
   normalizeDepartmentId,
+  resolveProductionSubDepartmentAccess,
 } from "../constants/departments";
 
 export const getUserProductionDepartmentIds = (user) => {
@@ -21,16 +22,17 @@ export const getUserProductionDepartmentIds = (user) => {
   );
 };
 
-export const isProductionParentUser = (user) => {
+export const hasUnrestrictedProductionAccess = (user) => {
   const departments = Array.isArray(user?.department)
     ? user.department
     : user?.department
       ? [user.department]
       : [];
-  return departments.some(
+  const hasProductionParent = departments.some(
     (department) =>
       String(department || "").trim().toLowerCase() === "production",
   );
+  return hasProductionParent && getUserProductionDepartmentIds(user).length === 0;
 };
 
 export const getProductionWorkForDepartments = (
@@ -77,8 +79,8 @@ export const getUserProductionWork = (project, user) =>
     ? []
     : getProductionWorkForDepartments(
         project?.items,
-        getUserProductionDepartmentIds(user),
-        isProductionParentUser(user),
+        resolveProductionSubDepartmentAccess(user?.department),
+        false,
       );
 
 export const hasItemLevelProductionAssignments = (items = []) =>

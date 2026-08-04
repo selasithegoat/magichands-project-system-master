@@ -57,6 +57,31 @@ export const GRAPHICS_SUB_DEPARTMENTS = ["graphics"];
 export const STORES_SUB_DEPARTMENTS = ["stock", "packaging"];
 export const PHOTOGRAPHY_SUB_DEPARTMENTS = ["photography"];
 
+export const resolveProductionSubDepartmentAccess = (departments = []) => {
+  const normalizedDepartments = (Array.isArray(departments)
+    ? departments
+    : departments
+      ? [departments]
+      : []
+  )
+    .map(normalizeDepartmentId)
+    .filter(Boolean);
+  const explicitSubDepartments = Array.from(
+    new Set(
+      normalizedDepartments.filter((department) =>
+        PRODUCTION_SUB_DEPARTMENTS.includes(department),
+      ),
+    ),
+  );
+
+  // User records include the Production parent alongside selected
+  // subdepartments. The explicit selections are the user's actual scope.
+  if (explicitSubDepartments.length > 0) return explicitSubDepartments;
+  return normalizedDepartments.includes("Production")
+    ? [...PRODUCTION_SUB_DEPARTMENTS]
+    : [];
+};
+
 export const ALL_ENGAGED_DEPARTMENTS = [
   "Production",
   "Graphics",

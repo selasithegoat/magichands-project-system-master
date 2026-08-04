@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
   getDepartmentLabel,
   normalizeDepartmentId,
+  resolveProductionSubDepartmentAccess,
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
@@ -426,17 +426,9 @@ const EngagedProjects = ({ user }) => {
     hasStoresParent ||
     userDepartments.some((dept) => STORES_SUB_DEPARTMENTS.includes(dept));
 
-  const productionSubDepts = useMemo(() => {
-    return userDepartments.filter((d) =>
-      PRODUCTION_SUB_DEPARTMENTS.includes(d),
-    );
-  }, [userDepartments]);
   const effectiveProductionSubDepts = useMemo(
-    () =>
-      hasProductionParent
-        ? PRODUCTION_SUB_DEPARTMENTS
-        : productionSubDepts,
-    [hasProductionParent, productionSubDepts],
+    () => resolveProductionSubDepartmentAccess(userDepartments),
+    [userDepartments],
   );
   const effectiveGraphicsSubDepts = useMemo(
     () =>

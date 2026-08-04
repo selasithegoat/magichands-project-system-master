@@ -47,6 +47,12 @@ const {
   releaseProjectCreationDraftFinalization,
   attachDraftFinalizationMetadata,
 } = require("../services/projectCreationDraftService");
+const {
+  PRODUCTION_SUB_DEPARTMENT_TOKENS,
+  getExplicitProductionSubDepartmentTokens,
+  hasProductionDepartmentOverlap,
+  resolveProductionSubDepartmentTokens,
+} = require("../utils/productionDepartmentAccess");
 
 const ENGAGED_PARENT_DEPARTMENTS = new Set([
   "Production",
@@ -798,12 +804,6 @@ const normalizeDepartmentValue = (value) => {
     : normalized;
 };
 
-const PRODUCTION_SUB_DEPARTMENT_TOKENS = new Set(
-  Array.from(PRODUCTION_DEPARTMENTS)
-    .map(normalizeDepartmentValue)
-    .filter((token) => token && token !== "production"),
-);
-
 const PRODUCTION_DEPARTMENT_TOKENS = new Set(
   Array.from(PRODUCTION_DEPARTMENTS)
     .map(normalizeDepartmentValue)
@@ -936,37 +936,43 @@ const hasDepartmentOverlap = (userDepartments, projectDepartments) => {
   const userCanonical = new Set(
     toDepartmentArray(userDepartments)
       .map(canonicalizeDepartment)
-      .filter(Boolean),
+      .filter((department) => department && department !== "production"),
   );
-  if (userCanonical.size === 0) return false;
 
   const projectCanonical = new Set(
     toDepartmentArray(projectDepartments)
       .map(canonicalizeDepartment)
-      .filter(Boolean),
+      .filter((department) => department && department !== "production"),
   );
-  if (projectCanonical.size === 0) return false;
 
   for (const dept of userCanonical) {
     if (projectCanonical.has(dept)) return true;
   }
-  return false;
+  return hasProductionDepartmentOverlap(
+    userDepartments,
+    projectDepartments,
+    normalizeDepartmentValue,
+  );
 };
 
 const userHasDepartmentMatch = (userDepartments, targetDepartment) => {
-  const targetCanonical = canonicalizeDepartment(targetDepartment);
-  if (!targetCanonical) return false;
-  return toDepartmentArray(userDepartments)
-    .map(canonicalizeDepartment)
-    .some((dept) => dept === targetCanonical);
+  return hasDepartmentOverlap(userDepartments, [targetDepartment]);
 };
 
 const projectHasDepartment = (projectDepartments, targetDepartment) => {
+  const targetToken = normalizeDepartmentValue(targetDepartment);
+  if (!targetToken) return false;
+  const projectTokens = toDepartmentArray(projectDepartments)
+    .map(normalizeDepartmentValue)
+    .filter(Boolean);
+  if (PRODUCTION_SUB_DEPARTMENT_TOKENS.has(targetToken)) {
+    return projectTokens.includes(targetToken);
+  }
   const targetCanonical = canonicalizeDepartment(targetDepartment);
   if (!targetCanonical) return false;
-  return toDepartmentArray(projectDepartments)
-    .map(canonicalizeDepartment)
-    .some((dept) => dept === targetCanonical);
+  return projectTokens.some(
+    (department) => canonicalizeDepartment(department) === targetCanonical,
+  );
 };
 
 const getMissingDepartmentAcknowledgements = (project) => {
@@ -1014,6 +1020,12 @@ const getMatchedProjectDepartmentTokensForUser = ({
   const userTokens = toDepartmentArray(user?.department)
     .map(normalizeDepartmentValue)
     .filter(Boolean);
+  const explicitUserProductionTokens = new Set(
+    getExplicitProductionSubDepartmentTokens(
+      userTokens,
+      (department) => department,
+    ),
+  );
 
   if (!projectTokens.length || !userTokens.length) return [];
 
@@ -1043,7 +1055,11 @@ const getMatchedProjectDepartmentTokensForUser = ({
           }
 
           if (userCanonical === "production") {
-            return userToken === "production" || projectToken === "production";
+            if (projectToken === "production") return true;
+            if (explicitUserProductionTokens.size > 0) {
+              return explicitUserProductionTokens.has(projectToken);
+            }
+            return userToken === "production";
           }
 
           return true;
@@ -1243,6 +1259,9 @@ const resolveEngagedDepartmentFilters = (departments = []) => {
     .filter(Boolean);
 
   const filters = new Set();
+  const explicitProductionTokens = new Set(
+    getExplicitProductionSubDepartmentTokens(tokens, (token) => token),
+  );
 
   tokens.forEach((token) => {
     if (PRODUCTION_SUB_DEPARTMENT_TOKENS.has(token)) {
@@ -1271,10 +1290,12 @@ const resolveEngagedDepartmentFilters = (departments = []) => {
     }
 
     if (token === "production") {
-      filters.add("production");
-      PRODUCTION_SUB_DEPARTMENT_TOKENS.forEach((subDeptToken) =>
-        filters.add(subDeptToken),
-      );
+      if (explicitProductionTokens.size === 0) {
+        filters.add("production");
+        resolveProductionSubDepartmentTokens(tokens, (value) => value).forEach(
+          (subDeptToken) => filters.add(subDeptToken),
+        );
+      }
     }
   });
 

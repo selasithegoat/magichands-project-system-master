@@ -1,9 +1,9 @@
 import {
-  PRODUCTION_SUB_DEPARTMENTS,
   GRAPHICS_SUB_DEPARTMENTS,
   STORES_SUB_DEPARTMENTS,
   PHOTOGRAPHY_SUB_DEPARTMENTS,
   normalizeDepartmentId,
+  resolveProductionSubDepartmentAccess,
 } from "../constants/departments";
 
 export const toEntityId = (value) => {
@@ -27,14 +27,11 @@ export const isFrontDeskUser = (user) =>
 
 export const resolveEngagedSubDepartments = (user) => {
   const userDepts = toArray(user?.department).map(normalizeDepartmentId);
-  const hasProductionParent = userDepts.includes("Production");
   const hasGraphicsParent = userDepts.includes("Graphics/Design");
   const hasStoresParent = userDepts.includes("Stores");
   const hasPhotographyParent = userDepts.includes("Photography");
 
-  const productionSubDepts = hasProductionParent
-    ? PRODUCTION_SUB_DEPARTMENTS
-    : userDepts.filter((dept) => PRODUCTION_SUB_DEPARTMENTS.includes(dept));
+  const productionSubDepts = resolveProductionSubDepartmentAccess(userDepts);
 
   const hasGraphics =
     hasGraphicsParent ||

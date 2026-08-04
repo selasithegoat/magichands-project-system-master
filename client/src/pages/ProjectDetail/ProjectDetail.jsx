@@ -82,7 +82,7 @@ import { canAccessProjectDetails } from "../../utils/projectAccessRouting";
 import { appendPortalSource, resolvePortalSource } from "../../utils/portalSource";
 import {
   getUserProductionDepartmentIds,
-  isProductionParentUser,
+  hasUnrestrictedProductionAccess,
 } from "../../utils/productionWork";
 import ProjectPdfDownload from "../../components/features/ProjectPdfDownload";
 import PaintbrushIcon from "../../components/icons/PaintbrushIcon";
@@ -1496,7 +1496,9 @@ const ProjectDetail = ({ user }) => {
                 viewerProductionDepartments={getUserProductionDepartmentIds(
                   user,
                 )}
-                viewerHasProductionParent={isProductionParentUser(user)}
+                viewerHasAllProductionAccess={hasUnrestrictedProductionAccess(
+                  user,
+                )}
               />
               <ReferenceMaterialsCard project={project} />
               <ApprovedMockupCard
@@ -2636,7 +2638,7 @@ const OrderItemsCard = ({
   assignmentOnly = false,
   canRequestFromStores = false,
   viewerProductionDepartments = [],
-  viewerHasProductionParent = false,
+  viewerHasAllProductionAccess = false,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // Track item being edited
@@ -3588,7 +3590,7 @@ const OrderItemsCard = ({
                     {(item.productionAssignments || []).map((assignment) => (
                       <span
                         className={`item-sub ${
-                          viewerHasProductionParent ||
+                          viewerHasAllProductionAccess ||
                           viewerProductionDepartmentSet.has(
                             normalizeDepartmentId(assignment.department),
                           )
@@ -3599,7 +3601,7 @@ const OrderItemsCard = ({
                       >
                         {getDepartmentLabel(assignment.department)}
                         {assignment.scope ? ` — ${assignment.scope}` : ""}
-                        {(viewerHasProductionParent ||
+                        {(viewerHasAllProductionAccess ||
                           viewerProductionDepartmentSet.has(
                             normalizeDepartmentId(assignment.department),
                           )) &&

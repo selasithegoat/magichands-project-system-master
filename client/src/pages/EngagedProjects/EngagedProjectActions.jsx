@@ -8,6 +8,7 @@ import {
   PHOTOGRAPHY_SUB_DEPARTMENTS,
   getDepartmentLabel,
   normalizeDepartmentId,
+  resolveProductionSubDepartmentAccess,
 } from "../../constants/departments";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import Toast from "../../components/ui/Toast";
@@ -739,11 +740,8 @@ const EngagedProjectActions = ({ user }) => {
     return userDepartments.filter((d) => PRODUCTION_SUB_DEPARTMENTS.includes(d));
   }, [userDepartments]);
   const effectiveProductionSubDepts = useMemo(
-    () =>
-      hasProductionParent
-        ? PRODUCTION_SUB_DEPARTMENTS
-        : productionSubDepts,
-    [hasProductionParent, productionSubDepts],
+    () => resolveProductionSubDepartmentAccess(userDepartments),
+    [userDepartments],
   );
 
   const userEngagedDepts = useMemo(() => {
