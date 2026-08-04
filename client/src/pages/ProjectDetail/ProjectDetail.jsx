@@ -841,8 +841,12 @@ const ProjectDetail = ({ user }) => {
   ); // [New] Updates count for tab badge
   const currentUserId = toEntityId(user?._id || user?.id);
   const projectLeadUserId = toEntityId(project?.projectLeadId);
-  const isProjectLead = Boolean(
-    currentUserId && projectLeadUserId && currentUserId === projectLeadUserId,
+  const assistantLeadUserId = toEntityId(project?.assistantLeadId);
+  const isProjectLeadTeamMember = Boolean(
+    currentUserId &&
+      [projectLeadUserId, assistantLeadUserId]
+        .filter(Boolean)
+        .includes(currentUserId),
   );
   const canViewProjectDetails = useMemo(
     () => canAccessProjectDetails(user, project),
@@ -1487,12 +1491,12 @@ const ProjectDetail = ({ user }) => {
                 projectId={project._id}
                 onUpdate={fetchProject}
                 readOnly={
-                  !isProjectLead ||
+                  !isProjectLeadTeamMember ||
                   project.status === "Finished" ||
                   isPendingAcceptanceStatus
                 }
-                assignmentOnly={isProjectLead}
-                canRequestFromStores={isProjectLead}
+                assignmentOnly={isProjectLeadTeamMember}
+                canRequestFromStores={isProjectLeadTeamMember}
                 viewerProductionDepartments={getUserProductionDepartmentIds(
                   user,
                 )}
@@ -1503,7 +1507,7 @@ const ProjectDetail = ({ user }) => {
               <ReferenceMaterialsCard project={project} />
               <ApprovedMockupCard
                 project={project}
-                hideRejected={isProjectLead}
+                hideRejected={isProjectLeadTeamMember}
               />
               <RisksCard
                 risks={project.uncontrollableFactors}

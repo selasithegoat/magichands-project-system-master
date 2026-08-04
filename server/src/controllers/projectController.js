@@ -10292,14 +10292,13 @@ const updateItemInProject = async (req, res) => {
       : null;
     const previousItemTotals = getOrderItemTotalsSummary(projectForAccess?.items);
     const canReviseItem = canManageBilling(req.user);
-    const canEditAssignments = isUserAssignedProjectLead(
-      req.user,
-      projectForAccess,
-    );
+    const canEditAssignments =
+      isUserAssignedProjectLead(req.user, projectForAccess) ||
+      isUserAssignedAssistantLead(req.user, projectForAccess);
     if (!canReviseItem && !canEditAssignments) {
       return res.status(403).json({
         message:
-          "Only Front Desk can revise order items; the assigned Project Lead may edit production assignments.",
+          "Only Front Desk can revise order items; the assigned Project Lead or Assistant Lead may edit production assignments.",
       });
     }
     const resolvedDescription = canReviseItem
