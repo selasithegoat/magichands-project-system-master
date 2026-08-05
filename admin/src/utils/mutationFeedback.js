@@ -22,11 +22,16 @@ const getRequestUrl = (input) =>
 
 const isPassiveMutation = (url = "") => {
   const normalizedUrl = String(url).toLowerCase();
+  const isChatReadAcknowledgement =
+    normalizedUrl.includes("/api/chat/threads/") &&
+    /\/read(?:[?#]|$)/.test(normalizedUrl);
+
   return (
     normalizedUrl.includes("/api/notifications/") ||
     normalizedUrl.endsWith("/api/notifications") ||
     normalizedUrl.includes("/typing") ||
-    normalizedUrl.includes("/read-receipt")
+    normalizedUrl.includes("/read-receipt") ||
+    isChatReadAcknowledgement
   );
 };
 
