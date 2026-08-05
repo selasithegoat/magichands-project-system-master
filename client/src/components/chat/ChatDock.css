@@ -4886,7 +4886,14 @@ html body .chat-dock-shell .chat-dock-message-bubble > .chat-dock-message-footer
   }
 
   html body .chat-dock-shell .chat-dock-message-bubble:not(.mine) {
+    min-width: min(220px, calc(100vw - 88px));
     max-width: min(320px, calc(100vw - 76px));
+  }
+
+  html body .chat-dock-shell .chat-dock-message-bubble:not(.mine):has(.chat-dock-reply-quote),
+  html body .chat-dock-shell .chat-dock-message-bubble:not(.mine):has(.chat-dock-reference-card),
+  html body .chat-dock-shell .chat-dock-message-bubble:not(.mine):has(.chat-dock-attachment-card) {
+    min-width: min(260px, calc(100vw - 88px));
   }
 
   html body .chat-dock-shell .chat-dock-message-bubble.mine {
